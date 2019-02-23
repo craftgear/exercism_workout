@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881757</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj21.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj23.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>非決定性</h3>
+<p> リストの中から要素をひとつ選ぶ処理を考えます。たとえば、List.nth(a, n) はリスト a の n 番目の要素を取り出しますが、選ぶ要素を番号 n で指定する必要があります。これに対して、特別な指定をしないで無作為に要素を選ぶことを考えます。このような選択を「非決定的選択」といいます。
+</p>
+
+<p> ここで、非決定的選択は問題を解くのに都合のいい選択が行われると仮定します。つまり、複数の選択肢の中で解に導くものがいくつか存在するならば、そのうちの一つを選択するのです。たとえば、迷路で分かれ道にきた場合、その中から出口につながる道を一つ選ぶわけです。このような非決定的選択を含む処理 (計算) を「非決定性計算」とか「非決定性」といいます。
+</p>
+
+<p> このような都合のいい処理を現在のコンピュータで実現することは不可能ですが、バックトラックを使って近似的に実現することは可能です。つまり、ある要素を選んで条件を満たさない場合は、バックトラックして異なる要素を選択すればいいわけです。今回は継続を使って非決定性計算を行う関数 amb を作ってみましょう。
+</p>
+<p> なお、本ドキュメントは拙作のページ <a href="abcscm28.html#chap02">Scheme 入門: 非決定性 (1)</a> <a href="abcscm29.html">(2)</a> を SML/NJ 用に加筆・修正したものです。内容は重複していますが、あしからずご了承くださいませ。
+</p>
+
+<h4>●amb の動作</h4>
+<p> 関数 amb はリストを引数に受け取り、リストから要素を一つを選んで返します。今回は先頭から順番に要素を選んでいくことにしましょう。次の例を見てください。
+</p>
+<pre>
+- let val a = amb(["a", "b", "c"]) in print a; fail() end;
+stdIn:2.1-2.56 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+abc
+uncaught exception AMB_error
+</pre>
+<p> Warning がありますが気にしないでください。amb は要素を 1 つを選んで返します。関数 fail を実行すると、バックトラックして次の要素を選びます。もうバックトラックできない場合、fail はエラー AMB_error を送出します。
+</p>
+
+<p> amb は要素を選ぶだけの単純な動作ですが、複数の amb を組み合わせると複雑な動作が可能になります。[1, 2, 3] と [4, 5, 6] から要素をひとつずつ取り出して、その組を求める処理は次のようになります。
+</p>
+<pre>
+- let val x = (amb([1,2,3]), amb([4,5,6])) in 
+= print(Int.toString(#1(x)) ^ " " ^ Int.toString(#2(x)) ^ "\n"); fail() end;
+stdIn:1.2-2.103 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+1 4
+1 5
+1 6
+2 4
+2 5
+2 6
+3 4
+3 5
+3 6
+
+uncaught exception AMB_error
+</pre>
+<p> 最初の amb で 1 を選び、次の amb で 4 が選ばれるので、最初の値は (1, 4) になります。次に、fail を評価すると、2 番目の amb がバックトラックして、次の要素 5 を選びます。したがって、値は (1, 5) になります。そして、その次の値は (1, 6) になります。
+</p>
+<p> 2 番目の amb で要素がなくなると、最初の amb にバックトラックします。すると、次の要素 2 を選び、2 番目の amb を評価します。ここで 2 番目の amb は新しく評価されることに注意してください。引数 4, 5, 6 を順番に選んでいくので、返り値は (2, 4) になります。あとはバックトラックするたびに組が生成され、全ての組み合わせを求めることができます。
+</p>
+<p> 非決定性のプログラムはバックトラックすることで全ての解を求めることができます。このとき、見つけた解をリストに格納して返す関数 bag_of があると便利です。簡単な実行例を示しましょう。
+</p>
+<pre>
+- bag_of(fn () =&gt; (amb([1,2,3]), amb([4,5,6])));
+val it = [(1,4),(1,5),(1,6),(2,4),(2,5),(2,6),(3,4),(3,5),(3,6)] : (int * int) list
+</pre>
+<p> このように bag_of を使って全ての解を求めることができます。
+</p>
+
+<h4>●amb の作成</h4>
+<p> それでは関数 amb を作りましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 非決定性
+
+open SMLofNJ.Cont
+
+(* 例外の定義 *)
+exception AMB_error
+
+(* バックトラック用の継続を格納する *)
+val amb_fail : bool cont list ref = ref []
+
+(* バックトラック *)
+fun fail () =
+    case !amb_fail of
+         [] =&gt; raise AMB_error
+       | (k::ks) =&gt; (amb_fail := ks; throw k false)
+
+(* リストの要素をひとつ選んで返す *)
+fun amb(xs) =
+    let
+      fun iter([], _) = fail()
+      |   iter(x::xs, ret) = (
+            callcc(fn k =&gt; (
+                    amb_fail := k :: (!amb_fail);
+                    throw ret x ));
+            iter(xs, ret) )
+    in
+      callcc(fn k =&gt; iter(xs, k))
+    end
+</pre>
+<pre class="item">
+val fail = fn : unit -&gt; 'a
+val amb = fn : 'a list -&gt; 'a
+</pre>
+<p> amb_fail はバックトラックするときの継続を格納するリストです。これをスタックとして使用します。つまり、継続を amb_fail にプッシュしておいて、バットラックするときは amb_fail から継続をポップして実行します。これで深さ優先探索と同様にバックトラックすることができます。継続のデータ型は関数 bag_of を実装するため bool cont とします。bag_of が不要な場合は unit cont でもかまいません。
+</p>
+<p> 関数 fail は amb_fail の先頭から継続 k を取り出し、それを throw に渡して実行します。このとき、throw の引数には false を渡します。amb_fail が空リストの場合はエラー AMB_error を送出します。
+</p>
+
+<p> 関数 amb は局所関数 iter を呼び出してリストの要素を順番に取り出していきます。このとき、callcc で脱出先継続 k を取り出して、iter の引数 ret に渡します。amb はバックトラックしないといけないので、ジェネレータやコルーチンのように脱出先継続を書き換えてはいけません。最初に amb を呼び出したときに取り出した継続を使って値を返します。
+</p>
+
+<p> iter では、バックトラックするときの継続を callcc で取り出して amb_fail にプッシュします。そして、脱出先継続 ret を使って要素 x を返します。fail でバックトラックすると iter の処理に戻るので、要素をひとつずつ取り出すことができます。要素がなくなったら、fail を呼び出すことに注意してください。これで、以前に実行した amb にバックトラックすることができます。
+</p>
+
+<h4>●順列の生成</h4>
+<p> 簡単な例として、順列を生成するプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 順列の生成
+
+(* 述語 pred を満たさない場合はバックトラックする *)
+fun assert pred = if not(pred()) then fail() else ()
+
+(* x と同じ要素があるか *)
+fun mem(_, []) = false
+|   mem(x, y::ys) = if x = y then true else mem(x, ys)
+
+(* 順列の生成 *)
+fun perm(n, ls) =
+    let
+      fun iter(0, a) = rev a
+      |   iter(n, a) =
+          let
+            val x = amb(ls)
+          in
+            assert(fn () =&gt; not(mem(x, a)));
+            iter(n - 1, x::a)
+           end
+    in
+      iter(n, [])
+    end
+
+(* リストの表示 *)
+fun print_intlist([]) = print("\n")
+|   print_intlist(x::xs) =
+    (print(Int.toString(x) ^ " "); print_intlist(xs))
+
+(* テスト *)
+fun test0(n, xs) =
+    let
+      val ps = perm(n, xs)
+    in
+      print_intlist(ps);
+      fail()
+    end
+</pre>
+<p> 関数 assert は pred が偽の場合は fail を実行してバックトラックします。amb を使うと順列を生成する関数 perm は簡単に実現できます。amb で 1 から n までの要素を 1 つ選び、それが順列 a に含まれていないことを assert で確認します。同じ要素が含まれていれば、バックトラックして異なる要素を選びます。n 個の要素を選んだらリスト a を逆順にして返します。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+- test0(3, [1,2,3]);
+stdIn:4.1-4.18 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+1 2 3
+1 3 2
+2 1 3
+2 3 1
+3 1 2
+3 2 1
+
+uncaught exception AMB_error
+
+- test0(4, [1,2,3,4]);
+stdIn:1.2-2.5 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+1 2 3 4
+1 2 4 3
+1 3 2 4
+1 3 4 2
+1 4 2 3
+1 4 3 2
+2 1 3 4
+2 1 4 3
+2 3 1 4
+2 3 4 1
+2 4 1 3
+2 4 3 1
+3 1 2 4
+3 1 4 2
+3 2 1 4
+3 2 4 1
+3 4 1 2
+3 4 2 1
+4 1 2 3
+4 1 3 2
+4 2 1 3
+4 2 3 1
+4 3 1 2
+4 3 2 1
+
+uncaught exception AMB_error
+</pre>
+
+<p> このように、バックトラックするたびに順列を一つずつ生成することができます。
+</p>
+<h4>●解をすべて求める</h4>
+<p> 非決定性のプログラムはバックトラックすることで全ての解を求めることができます。このとき、見つけた解をリストに格納して返す関数があると便利です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 見つけた解をリストに格納して返す
+
+fun bag_of f =
+    let
+      val result = ref []
+    in
+      if callcc(fn k =&gt; (
+           amb_fail := k :: (!amb_fail);
+           result := f() :: (!result);
+           throw k true ))
+      then fail ()
+      else rev (!result)
+    end
+</pre>
+<pre class="item">
+val bag_of = fn : (unit -&gt; 'a) -&gt; 'a list
+</pre>
+<p> 関数 bag_of は与えられた関数 f を実行して、その結果をリスト result に格納して返します。関数 f の中で非決定性計算を行う関数を呼び出します。最初に callcc で継続 k を取り出して、amb_fail にプッシュします。次に、関数 f を実行してその返り値を result に追加します。
+</p>
+<p> throw k true を実行すると、callcc の返り値が true となり、if の then 節にある fail が実行されます。ここで関数 f の処理にバックトラックして、解が見つかればその値を返します。つまり、解が存在する限り次の処理が繰り返されます。
+</p>
+<pre class="item">
+result := f() :: (!result) -&gt; throw k true -&gt; fail() -&gt; result := f() :: (!result)  -&gt; ...
+</pre>
+<p> これで複数の解を result に格納することができます。関数 f で解が見つからない場合、最初に amb_fail にセットした継続 k が実行されます。この継続には false が渡されるので、if 条件が偽と判定され、バックトラックを終了します。rev で result を反転してから返します。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+- bag_of(fn () =&gt; amb([1,2,3,4]));
+val it = [1,2,3,4] : int list
+- bag_of(fn () =&gt; (amb([1,2,3]), amb([4,5,6])));
+val it = [(1,4),(1,5),(1,6),(2,4),(2,5),(2,6),(3,4),(3,5),(3,6)]
+  : (int * int) list
+- bag_of(fn () =&gt; perm(3, [1,2,3]));
+val it = [[1,2,3],[1,3,2],[2,1,3],[2,3,1],[3,1,2],[3,2,1]] : int list list
+</pre>
+<p> このように bag_of を使って全ての解を求めることができます。
+</p>
+
+<h4>●論理パズル</h4>
+<p> それでは簡単な例題として論理パズルを解いてみましょう。
+</p>
+<div class="question">
+<b>[問題]</b>
+<p> ３人の友達が、あるプログラミング競技会で１位、２位、３位になった。この３人は、名前も、好きなスポーツも、国籍も異なる。Michael はバスケットが好きで、アメリカ人よりも上位であった。イスラエル人の Simon はテニスをする者よりも上位であった。クリケットをするものが１位であった。誰がオーストラリア人か？ Richard はどのようなスポーツをするか？
+</p>
+<ul>
+<li>出典：Leon Sterling, Ehud Shapiro (著), 松田利夫 (訳), 『Prolog の技芸』, 共立出版, 1988, (278頁より)
+</ul>
+</div>
+<p> 簡単な論理パズルなので、プログラムを作る前に考えてみてください。
+</p>
+
+<h4>●データ構造の定義</h4>
+<p> 最初にデータ構造とアクセス関数を定義します。
+</p>
+<pre class="list">
+リスト : データの定義
+
+datatype nation = US | IL | AU
+datatype sports = Basket | Cricket | Tennis
+datatype name   = Michael | Simon | Richard
+datatype person = P of name * int * nation * sports
+</pre>
+<p> このデータを amb で作成します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの生成とアクセス関数の定義
+
+(* データの生成 *)
+fun make_person(x) =
+    P(x, amb([1, 2, 3]), amb([US, IL, AU]), amb([Basket, Cricket, Tennis]))
+
+(* アクセス関数 *)
+fun get_sports(P(_,_,_,x)) = x
+fun get_nation(P(_,_,x,_)) = x
+fun get_rank(P(_,x,_,_)) = x
+</pre>
+<p> amb で順位 (1, 2, 3)、国籍 (US, IL, AU)、スポーツ (Basket, Cricket, Tennis) の中から要素を一つ選びます。バックトラックすると異なる要素が選ばれて、新しいデータが生成されます。
+</p>
+<h4>●補助関数の作成</h4>
+<p> 次は問題を解くための補助関数を作ります。
+</p>
+<pre class="list">
+リスト : 補助関数の定義
+
+(* 国籍 x を探す *)
+fun find_nation(_, []) = raise Puzzle_err
+|   find_nation(x, (y as P(_, _, n, _))::ys) =
+    if x = n then y else find_nation(x, ys)
+
+(* スポーツ x を探す *)
+fun find_sports(_, []) = raise Puzzle_err
+|   find_sports(x, (y as P(_, _, _, n))::ys) =
+    if x = n then y else find_sports(x, ys)
+
+(* 重複した要素があるか *)
+fun isDuplicate(P(_, r0, n0, s0), P(_, r1, n1, s1)) =
+    r0 = r1 orelse n0 = n1 orelse s0 = s1
+
+(* 同じ要素があるか *)
+fun check(a, b, c) =
+    isDuplicate(a, b) orelse isDuplicate(a, c) orelse isDuplicate(b, c)
+</pre>
+<p> find_nation は引数のリスト中から国籍が x と等しい要素を返します。find_sports は好きなスポーツが x と等しい要素を返します。isDuplicate は引数 a と b に重複した要素があれば true を返します。要素が全て異なる場合は false を返します。関数 check は isDuplicate を呼び出して、引数 a, b, c に重複した要素があれば true を返します。
+</p>
+<h4>●論理パズルの解法</h4>
+<p> 論理パズルの解法プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 論理パズルの解法
+
+fun puzzle () =
+    let
+      val m = make_person(Michael)
+      val s = make_person(Simon)
+      val r = make_person(Richard)
+    in
+      assert(fn () =&gt; not(check(m, s, r)));
+      assert(fn () =&gt; get_sports(m) = Basket);
+      assert(fn () =&gt; get_nation(m) &lt;&gt; US);
+      assert(fn () =&gt; get_nation(s) = IL);
+      assert(fn () =&gt; get_rank(m) &lt; get_rank(find_nation(US, [m, s, r])));
+      assert(fn () =&gt; get_rank(s) &lt; get_rank(find_sports(Tennis, [m, s, r])));
+      assert(fn () =&gt; get_rank(find_sports(Cricket, [m, s, r])) = 1);
+      [m, s, r]
+    end
+</pre>
+<p> 最初に make_person でデータを作成し、局所変数 m, s, r にセットします。そして、check で順位、国籍、スポーツで要素が重複していないかチェックします。あとは問題の条件を assert でチェックしていくだけです。
+</p>
+<ol>
+  <li> Michael の好きなスポーツはバスケットである。
+  <li> Michael の国籍はアメリカではない。
+  <li> Simon の国籍はイスラエルである。
+  <li> Michael は国籍がアメリカの人よりも上位である。
+  <li> Simon はテニスが好きな人よりも上位である。
+  <li> クリケットが好きな人が１位である。
+</ol>
+<p> 条件を満たさない場合はバックトラックして新しいデータを生成します。最後に、見つけた解を出力します。とても簡単ですね。実行結果は次のようになります。
+</p>
+<pre>
+- bag_of(puzzle);
+val it = [[P (Michael,2,AU,Basket),P (Simon,1,IL,Cricket),P (Richard,3,US,Tennis)]] : person list list
+</pre>
+<p> 解は 1 通りで、１位が Simon, ２位が Michael, ３位が Richard になります。ちなみに、最後の条件がない場合は 2 通りの解が出力されます。興味のある方は試してみてください。
+</p>
+
+
+<h4>●経路の探索</h4>
+<p> もうひとつ簡単な例題として、拙作のページ <a href="smlnj09.html">経路の探索</a> で取り上げた問題を解いてみましょう。経路図を再掲します。
+</p>
+<pre class="fig">
+     Ｂ───Ｄ───Ｆ 
+   ／│      │
+ Ａ  │      │
+   ＼│      │
+     Ｃ───Ｅ───Ｇ
+
+    図 : 経路図
+</pre>
+<p> amb を使わずに深さ優先探索でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 経路の探索
+
+(* 隣接リスト *)
+val adjacent = [
+  [1, 2],     (* A *)  
+  [0, 2, 3],  (* B *)
+  [0, 1, 4],  (* C *)
+  [1, 4, 5],  (* D *)
+  [2, 3, 6],  (* E *)
+  [3],        (* F *)
+  [4]]        (* G *)
+
+(* 深さ優先探索 *)
+fun dfs(goal, path as x::xs) = 
+    if x = goal then print_intlist(rev path)
+    else app (fn y =&gt; if not(mem(y, path)) then dfs(goal, y::path) else ())
+             (List.nth(adjacent, x))
+</pre>
+<pre class="item">
+val dfs = fn : int * int list -&gt; unit
+</pre>
+<p> 隣接リスト adjacent はリストで表しています。関数 dfs は経路をリスト path で管理します。先頭の要素 x が現在いる地点になります。x が goal であれば、経路 path を表示します。そうでなければ、adjacent から隣接リストを取り出し、隣の地点 y を求めます。y が path に含まれていると巡回経路 (閉路) になるので、その地点へは進みません。そうでなければ、path に y を追加して dfs を再帰呼び出しします。
+</p>
+
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+- dfs(6, [0]);
+0 1 2 4 6
+0 1 3 4 6
+0 2 1 3 4 6
+0 2 4 6
+val it = () : unit
+</pre>
+<p> amb を使ったプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 経路の探索
+
+fun dfs_amb(goal, path as x::xs) =
+    if x = goal then rev path
+    else
+      let
+        val y = amb(List.nth(adjacent, x))
+      in
+        assert(fn () =&gt; not(mem(y, path)));
+        dfs_amb(goal, y::path)
+      end
+</pre>
+<pre class="item">
+val dfs_amb = fn : int * int list -&gt; int list
+</pre>
+<p> goal に到達していない場合、amb で隣接リストから要素を一つ選びます。そして、選んだ要素 y が path に含まれていないことを assert で確認します。最後に、path の先頭に y を追加して探索を続行します。
+</p>
+
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+- bag_of(fn () =&gt; dfs_amb(6, [0]));
+val it = [[0,1,2,4,6],[0,1,3,4,6],[0,2,1,3,4,6],[0,2,4,6]] : int list list
+</pre>
+<p> amb は深さ優先探索なので、最初に見つかる経路が最短経路とは限りません。最短経路を求めるには「幅優先探索」のほうが適しています。
+</p>
+
+<h4>●幅優先探索版 amb の作成</h4>
+<p> それでは、amb のアルゴリズムを幅優先探索に変更しましょう。基本的には amb_fail をスタックからキューに変更するだけですが、それだけでは bag_of の動作が実現できないので、ちょっとした工夫が必要になります。
+</p>
+
+<p> まず最初にキューからプログラムを作りましょう。今回はリストを使って実装します。
+</p>
+<pre class="list">
+リスト : リストによるキューの実装
+
+(* 例外の定義 *)
+exception Queue_empty
+
+(* キューの定義 *)
+datatype 'a queue = Q of 'a list ref * 'a list ref
+
+(* キューの生成 *)
+fun make_queue() = Q(ref [], ref [])
+
+(* データの追加 *)
+fun enqueue(Q(front, rear), x) = rear := x :: (!rear)
+
+(* データの取り出し *)
+fun dequeue(Q(ref [], ref [])) = raise Queue_empty
+|   dequeue(q as Q(front as ref [], rear)) = (
+      front := rev (!rear);
+      rear := [];
+      dequeue(q)
+    )
+|   dequeue(Q(front as ref (x::xs), _)) = (
+      front := xs;
+      x
+    )
+
+(* キューは空か *)
+fun empty_queue(Q(ref [], ref [])) = true
+|   empty_queue(Q(_, _)) = false
+</pre>
+<pre class="item">
+val make_queue = fn : unit -&gt; 'a queue
+val enqueue = fn : 'a queue * 'a -&gt; unit
+val dequeue = fn : 'a queue -&gt; 'a
+val empty_queue = fn : 'a queue -&gt; bool
+</pre>
+<p> 基本的な考え方は拙作のページ <a href="smlnj09.html">モジュール (3)</a> で取り上げたキューと同じです。2 つのリスト front と rear を使ってキューを構成しますが、front と rear を ref 変数に格納するところが異なります。したがて、キューの定義は Q of 'a list ref * 'a list ref となります。
+</p>
+<p> 関数 make_queue は空のキューを生成して返します。関数 enqueue はデータ x をキューに追加します。これは rear の先頭に x をプッシュするだけです。関数 dequeue はキューからデータを取り出します。front と rear が空リストの場合、キューは空なのでエラー Queue_empty を送出します。front が空リストで rear にデータがある場合、rear のデータを逆順にして front に移し、それから dequeue を再度呼び出しします。front にデータがある場合は、先頭の要素 x を取り出して返します。関数 empty_queue はキューが空のときに true を、そうでなければ false を返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+- val q : int queue = make_queue();
+val q = Q (ref [],ref []) : int queue
+- enqueue(q, 1);
+val it = () : unit
+- enqueue(q, 2);
+val it = () : unit
+- enqueue(q, 3);
+val it = () : unit
+- q;
+val it = Q (ref [],ref [3,2,1]) : int queue
+- dequeue(q);
+val it = 1 : int
+- q;
+val it = Q (ref [2,3],ref []) : int queue
+- enqueue(q, 4);
+val it = () : unit
+- q;
+val it = Q (ref [2,3],ref [4]) : int queue
+- dequeue(q);
+val it = 2 : int
+- dequeue(q);
+val it = 3 : int
+- dequeue(q);
+val it = 4 : int
+- empty_queue(q);
+val it = true : bool
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> それでは amb を修正しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 非決定性 amb (幅優先探索)
+
+open SMLofNJ.Cont
+
+(* 例外 *)
+exception AMB_error
+
+(* 継続を格納するキュー *)
+val amb_fail : bool cont queue ref = ref (make_queue())
+
+(* bag_of 用のスタック *)
+val bag_fail = ref [] : bool cont list ref
+
+(* バックトラック *)
+fun fail () =
+    if empty_queue(!amb_fail) then
+       case !bag_fail of
+            [] =&gt; raise AMB_error
+          | (k::ks) =&gt; (bag_fail := ks; throw k false)
+    else throw (dequeue(!amb_fail)) false
+
+(* 非決定性 *)
+fun amb(xs) =
+    let
+      val ys = ref xs
+      fun iter(ret) = (
+          (* 要素の個数だけ継続をキューに追加 *)
+          callcc(fn k =&gt; (app (fn _ =&gt; enqueue(!amb_fail, k)) xs; fail() ));
+          (* 要素を返す *)
+          case !ys of
+               [] =&gt; fail()
+             | (z::zs) =&gt; (ys := zs; throw ret z) )
+    in
+      callcc(fn k =&gt; iter(k))
+    end
+
+(* 見つけた解をリストに格納して返す *)
+fun bag_of f =
+    let
+      val result = ref []
+      val prev_fail = !amb_fail
+    in
+      if callcc(fn k =&gt; (
+           amb_fail := make_queue();
+           bag_fail := k :: (!bag_fail);
+           result := f() :: (!result);
+           throw k true ))
+      then fail ()
+      else (amb_fail := prev_fail; rev (!result))
+    end
+</pre>
+<pre class="item">
+val fail = fn : unit -&gt; 'a
+val amb = fn : 'a list -&gt; 'a
+val bag_of = fn : (unit -&gt; 'a) -&gt; 'a list
+</pre>
+
+<p> 関数 amb は簡単です。局所関数 iter の中で継続 k を取り出し、それを app でリストの要素の個数分だけキューに追加します。この場合、継続は要素を取り出して返す処理になります。そして、fail() を評価してキューに格納した継続を取り出して実行します。つまり、キューの先頭から継続の処理を行うわけです。ここでリストの要素を返すと幅優先探索にはなりません。
+</p>
+<p> 要素を返す処理は簡単です。引数 xs を ref 変数 ys にセットし、リストの要素 z をひとつずつ取り出して throw ret z で返していくだけです。リストの要素がなくなったら fail() を呼び出してバックトラックします。
+</p>
+
+<p> 関数 bag_of はちょっと複雑になります。amb_fail はキューなので、bag_of の処理を終了するための継続をキューに追加しても動作しません。そこで、新しいキューを生成して amb_fail にセットし、関数 f の処理で発生したバックトラックはそのキューに格納します。そして、bag_of の処理を終了するための継続を大域変数 bag_fail にセットします。関数 f を実行したあと、trow k true を実行すると if 文の then 節 の fail が実行され、関数 f の処理にバックトラックします。これで、関数 f の評価結果を result に格納していくことができます。
+</p>
+
+<p> 関数 fail は amb_fail が空でも bag_fail が空でなければ、bag_fail から継続を取り出して実行します。bag_fail はスタックとして使用することに注意してください。要素がなくなると、最初に bag_fail に格納した継続 k が取り出されて throw k false が実行されます。これで bag_of の callcc( ... ) の処理が終了し、amb_fail を元のキューに戻して result を返します。
+</p>
+
+<p> それでは、簡単な実行例を示しましょう。
+</p>
+<pre>
+- let val a = amb([1,2,3]) val b = amb([4,5,6]) in
+= print(Int.toString(a) ^ Int.toString(b) ^ "\n"); fail() end;
+stdIn:2.1-3.60 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+14
+15
+16
+24
+25
+26
+34
+35
+36
+
+uncaught exception AMB_error
+
+- bag_of(fn () =&gt; (amb([1,2,3]), amb([4,5,6])));
+val it = [(1,4),(1,5),(1,6),(2,4),(2,5),(2,6),(3,4),(3,5),(3,6)]
+  : (int * int) list
+</pre>
+<p> amb は幅優先探索なので (amb([1, 2, 3]), amb([4, 5, 6])) を評価すると、先頭要素が 1 の組から順番に生成されます。
+</p>
+
+<h4>●経路の探索 (2)</h4>
+<p> それでは簡単な例題として、経路の探索を「幅優先探索」で行ってみましょう。amb を使わない場合は次のようになります。
+</p>
+<pre class="list">
+リスト : 経路の探索 (幅優先探索)
+
+fun bfs(start, goal) =
+    let
+      val q = make_queue()
+    in
+      enqueue(q, [start]);
+      while not(empty_queue(q)) do 
+        let
+          val (path as x::xs) = dequeue(q)
+        in
+          if x = goal then print_intlist(rev path)
+          else
+            app (fn y =&gt; if mem(y, path) then () else enqueue(q, y::path))
+                (List.nth(adjacent, x))
+        end
+    end
+</pre>
+<pre class="item">
+val bfs = fn : int * int -&gt; unit
+</pre>
+<p> 関数 bfs (breadth-first-search) は start から goal までの経路を幅優先で探索します。変数 q にキュー (配列) をセットします。キューから経路を取り出し、経路をのばしてキューに格納します。これで幅優先で経路を探索することができます。
+</p>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+- bfs(0, 6);
+0 2 4 6
+0 1 2 4 6
+0 1 3 4 6
+0 2 1 3 4 6
+val it = () : unit
+</pre>
+<p> amb を使ったプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 経路の探索 (幅優先探索: amb 版)
+
+fun bfs_amb(goal, path as x::xs) =
+    if x = goal then rev path
+    else
+      let
+        val y = amb(List.nth(adjacent, x))
+      in
+        assert(fn () =&gt; not(mem(y, path)));
+        bfs_amb(goal, y::path)
+      end
+</pre>
+<p> プログラムは dfs_amb とまったく同じで、名前を bfs_amb に変えただけです。amb が幅優先で動作するので、これで幅優先で経路を探索することができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+- bag_of(fn () =&gt; bfs_amb(6, [0]));
+val it = [[0,2,4,6],[0,1,2,4,6],[0,1,3,4,6],[0,2,1,3,4,6]] : int list list
+- bag_of(fn () =&gt; bfs_amb(0, [6]));
+val it = [[6,4,2,0],[6,4,2,1,0],[6,4,3,1,0],[6,4,3,1,2,0]] : int list list
+</pre>
+<p> このように、amb が幅優先探索しているので、最初に見つかる経路が最短経路になります。
+</p>
+
+<h4>●水差し問題</h4>
+<p> もうひとつ簡単な例題としてパズルを解いてみましょう。「水差し問題」はいろいろな呼び方があって、「水をはかる問題」とか「水を測り出す問題」と呼ばれることもあります。それでは問題です。
+</p>
+<div class="question">
+<b>[問題]</b> 水差し問題
+<p> 大きな容器に水が入っています。目盛の付いていない 8 リットルと 5 リットルの容器を使って、大きな容器から 4 リットルの水を汲み出してください。4 リットルの水は、どちらの容器に入れてもかまいません。水をはかる最短手順を求めてください。なお、水の総量に制限はありません。
+</p>
+</div>
+<p> なお、この問題は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/water_jug.html">水差し問題</a> と同じです。内容は重複しましが、あしからずご了承ください。
+</p>
+
+<p> 水差し問題の場合、次に示す 3 通りの操作があります。
+</p>
+<ol>
+  <li>容器いっぱいに水を満たす。
+  <li>容器を空にする。
+  <li>他の容器に水を移す。
+</ol>
+<p> 3 の操作は、容器が空になるまで水を移す場合と、もう一方の容器が満杯になるまで水を移す場合があります。容器は 2 つあるので、全部で 6 通りの操作があります。最初に、これらの操作を行う関数を定義します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 容器の操作
+
+(* 容器の大きさ *)
+val max_a = 8
+val max_b = 5
+
+fun get_a(a, b) = a
+fun get_b(a, b) = b
+
+(* 容器の操作 *)
+val action = [
+    (* A を満杯にする *)
+    fn state =&gt; (max_a, get_b(state)),
+    (* A を空にする *)
+    fn state =&gt; (0, get_b(state)),
+    (* A -&gt; B *)
+    fn state =&gt; let val w = max_b - get_b(state) in
+                  if get_a(state) &lt;= w
+                  then (0, get_a(state) + get_b(state))
+                  else (get_a(state) - w, get_b(state) + w)
+                end,
+    (* B を満杯にする *)
+    fn state =&gt; (get_a(state), max_b),
+    (* B を空にする *)
+    fn state =&gt; (get_a(state), 0),
+    (* B -&gt; A *)
+    fn state =&gt; let val w = max_a - get_a(state) in
+                  if get_b(state) &lt;= w
+                  then (get_a(state) + get_b(state), 0)
+                  else (get_a(state) + w, get_b(state) - w)
+                end
+]
+</pre>
+<p> 状態はタプル (A, B) で表します。A は 8 リットルの容器の水の量、B は 5 リットルの容器の水の量を表します。容器を水で満たす、または空にする操作は簡単ですね。他の容器へ移す場合、たとえば A -&gt; B では、B の空き容量と A の水の量を比較して、少ない方が移す水の量 w になります。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 水差し問題の解法
+
+fun print_answer([]) = print("\n")
+|   print_answer((x, y)::zs) = (
+      print("(" ^ Int.toString(x) ^ "," ^ Int.toString(y) ^ ")");
+      print_answer(zs) )
+
+fun solve(goal) =
+    callcc(fn k =&gt;
+      let
+        val q = make_queue()
+      in
+        enqueue(q, [(0, 0)]);
+        while not(empty_queue(q)) do
+          let
+            val (move as x::xs) = dequeue(q)
+          in
+            if get_a(x) = goal orelse get_b(x) = goal
+            then (print_answer(rev move); throw k ())
+            else
+              app (fn act =&gt;
+                     let val s = act(x) in
+                       if mem(s, move) then () else enqueue(q, s::move)
+                     end )
+                  action
+          end
+      end)
+
+fun solve_amb(goal, move as x::xs) =
+    if get_a(x) = goal orelse get_b(x) = goal then rev move
+    else
+      let
+        val act = amb(action)
+        val s = act(x)
+      in
+        assert(fn () =&gt; not(mem(s, move)));
+        solve_amb(goal, s::move)
+      end
+</pre>
+<p> 関数 solve は amb を使わないで幅優先探索を行います。手順は状態をリストに格納することで表します。最初に初期状態を格納した手順 [(0, 0)] をキュー q に格納します。次に、キューからデータをひとつ取り出して move にセットします。先頭の状態 x の容器 A または B に水が goal リットルあれば解を見つけることができました。関数 print_answer で move を表示し、継続を使ってループを脱出します。
+</p>
+
+<p> そうでなければ、action から操作関数を取り出します。匿名関数の引数 act に操作関数がセットされます。状態 x に act を適用して新しい状態を生成して変数 s にセットします。move に同じ状態がなければ、s を追加した新しい手順をキューに追加します。
+</p>
+
+<p> solve_amb の場合、ゴールに到達したら move を反転して返します。そうでなければ、amb で操作関数を一つ選んで act にセットし、act(x) で新しい状態を生成して変数 s にセットします。move に同じ状態が見つかった場合はバックトラックします。新しい状態であれば move に追加して solve_amb を再帰呼び出しします。
+</p>
+
+<p> solve を実行すると次のようになります。
+</p>
+<pre>
+- solve(4);
+(0,0)(0,5)(5,0)(5,5)(8,2)(0,2)(2,0)(2,5)(7,0)(7,5)(8,4)
+val it = () : unit
+</pre>
+<p> このように、最短手順は 10 手になります。solve_amb で実行すると、最短手順以外の解も求めることができます。
+</p>
+<pre>
+- let val move = solve_amb(4, [(0,0)]) in
+= if length(move) &lt;= 13 then (print_answer(move); fail()) else () end;
+(0,0)(0,5)(5,0)(5,5)(8,2)(0,2)(2,0)(2,5)(7,0)(7,5)(8,4)
+(0,0)(8,0)(3,5)(0,5)(5,0)(5,5)(8,2)(0,2)(2,0)(2,5)(7,0)(7,5)(8,4)
+(0,0)(8,0)(3,5)(3,0)(0,3)(8,3)(6,5)(6,0)(1,5)(1,0)(0,1)(8,1)(4,5)
+(0,0)(8,0)(8,5)(0,5)(5,0)(5,5)(8,2)(0,2)(2,0)(2,5)(7,0)(7,5)(8,4)
+val it = () : unit
+</pre>
+<p> 最短手数の手順は 1 通りしかなく、次に短い手順は 12 手になりました。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj21.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj23.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

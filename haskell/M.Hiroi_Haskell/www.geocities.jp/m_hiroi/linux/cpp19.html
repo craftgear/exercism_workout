@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ++プログラミング超入門</title>
+  <meta name="description" content="Ｃ++,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881812</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ++プログラミング超入門</h2>
+<div class="small">
+[ <a href="cpp18.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp20.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>標準ライブラリの基礎知識 (list 編)</h3>
+<p> 今回は標準ライブラリ (Standard Template Library) の中から list の基本的な使い方を説明します。
+</p>
+<h4>●双方向リストとは？</h4>
+<p> STL の list は「双方向リスト (doubley-linked list)」を実装したコンテナクラスです。単方向リストのセル (Cell) は、データを格納するメンバ変数と、直後のセルへのポインタを格納するメンバ変数から構成されています。双方向リストは名前が示すように、直後のセルだけでなく直前のセルへのポインタを持たせたデータ構造です。双方向リストは「重連結リスト」と呼ばれることもあります。
+<pre class="fig">
+     prev    next      prev    next      prev    next
+    ┌─┬─┬─┐    ┌─┬─┬─┐    ┌─┬─┬─┐
+←─┼・│  │・│←─┼・│  │・│←─┼・│  │・│←─
+─→│・│  │・┼─→│・│  │・┼─→│・│  │・┼─→
+    └─┴─┴─┘    └─┴─┴─┘    └─┴─┴─┘
+         data              data              data
+
+                図 : 双方向リストのセル
+</pre>
+<p> 単方向リストは末尾の方向にしかセルをたどることができませんが、双方向リストでは前後どちらの方向へもセルをたどることができます。セルを削除する場合も、前後のセルがわかるので簡単に削除することができます。
+</p>
+<p> 双方向リストを使う場合、下図のようにヘッダセルを用意して、双方向リストを環状に構成する方法が一般的です。
+</p>
+<pre class="fig">
+ head ──┐
+          ↓
+          ヘッダセル
+        ┌─┬─┬─┐
+  ┌←─┼  │  │  │←───────────────────┐  
+  │┌→│  │  │  ┼─→─────────────────┐│
+  ││  └─┴─┴─┘                                      ││
+  ││   next    prev                                       ││
+  ││                                                      ││
+  ││   Cell A            Cell B            Cell C         ││
+  ││  ┌─┬─┬─┐    ┌─┬─┬─┐    ┌─┬─┬─┐  ││
+  │└←┼  │Ａ│  │←─┼  │Ｂ│  │←─┼  │Ｃ│  │←┘│
+  └─→│  │  │  ┼─→│  │  │  ┼─→│  │  │  ┼─→┘
+        └─┴─┴─┘    └─┴─┴─┘    └─┴─┴─┘
+         prev    next      prev    next      prev    next
+
+                     図：双方向リストの構造
+</pre>
+<p> ヘッダセルにはデータを格納しません。ヘッダセルの next が指し示すセルが先頭で、prev が指し示すセルが最後尾になります。ヘッダセルが先頭と最後尾のセルを参照しているので、両端でのデータ操作が簡単にできます。
+</p>
+<p> データがない空リストの場合は、下図に示すようにポインタ変数 next と prev の値はヘッダセル自身になります。
+</p>
+<pre class="fig">
+    ┌───────────┐
+    │    ┌─┬─┬─┐    │
+    └←─┼  │  │  │←─┘
+    ┌─→│  │  │  ┼─→┐
+    │    └─┴─┴─┘    │
+    └───────────┘
+
+データがない場合はヘッダセル自身を格納
+
+      図：空の双方向リスト
+</pre>
+<p> なお、これは一般的な話であり、お使いのＣ++標準ライブラリがこのような構造になっているとは限りません。ここでは、双方向リストのセルは前後のセルへのポインタを持っていることを理解してもらえれば十分です。
+</p>
+<h4>●list の宣言と初期化</h4>
+<p> list を使用するときは、ヘッダファイル list をインクルードしてください。変数の宣言は次のように行います。
+</p>
+<pre class="item">
+list&lt;データ型&gt; 変数名;
+</pre>
+<p> list はテンプレートなので、&lt; &gt; の中に格納する要素のデータ型を指定してください。この場合、空 (要素数が 0) のリストが生成されます。list のコンストラクタを下表に示します。
+</p>
+<table border=1>
+<caption>表 : list の主なコンストラクタ</caption>
+<thead>
+  <tr><th>書式</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>list(n)</td><td>大きさ n のリストを生成</td></tr>
+  <tr><td>list(n, m)</td><td>大きさ n のリストを生成して値 m で初期化する</td></tr>
+  <tr><td>list(const list&amp; v)</td><td>コピーコンストラクタ</td></tr>
+  <tr><td>list(s, e)</td><td>イテレータ s から e の手前までの要素を格納したリストを生成する</td></tr>
+</tbody>
+</table>
+<p> 初期値を指定しない場合、list&lt;T&gt; の要素は T() で初期化されます。代入演算子 = による list の代入も可能です。また、最近の規格 (C++11) では、配列と同様に { ... } を使って list を初期化することができるようになりました。
+</p>
+<pre class="item">
+list&lt;int&gt; a{1, 2, 3, 4, 5};
+list&lt;int&gt; b = {1, 2, 3, 4, 5};
+</pre>
+<p> この方法は list を簡単に初期化できるので、とても便利だと思います。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : list の簡単な使用例
+
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+using namespace std;
+
+int main()
+{
+  list&lt;int&gt; a(10);
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  list&lt;double&gt; b(10, 1.2345);
+  for (double x : b) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  list&lt;string&gt; c {"foo", "bar", "baz", "oops"};
+  for (string x : c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<p> list は vector と違って添字演算子 [] やメンバ関数 at() で要素にアクセスすることはできません。範囲 for 文で要素を順番に取り出していくことはできます。プログラムは簡単なので説明は割愛します。実行結果は次のようになります。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0 0 0 0 0 0 0 0 0 0 
+1.2345 1.2345 1.2345 1.2345 1.2345 1.2345 1.2345 1.2345 1.2345 1.2345 
+foo bar baz oops 
+</pre>
+<h4>●データの追加と取り出し</h4>
+<p> list は先頭と末尾に対する操作を定数時間 (O(1)) で行うことができます。データの追加と取得を行うメンバ関数を下表に示します。
+</p>
+<table border=1>
+<caption>表 : データの追加と取得</caption>
+<thead>
+  <tr><th>メンバ関数</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>void push_front(const T&amp; x)</td><td>データ x をリストの先頭に追加</td></tr>
+  <tr><td>void push_back(const T&amp; x)</td><td>データ x をリストの末尾に追加</td></tr>
+  <tr><td>T&amp; front()</td><td>リストの先頭要素の参照を返す</td></tr>
+  <tr><td>T&amp; back()</td><td>リストの末尾要素の参照を返す</td></tr>
+  <tr><td>void pop_front()</td><td>リストの先頭要素を取り除く</td></tr>
+  <tr><td>void pop_back()</td><td>リストの末尾要素を取り除く</td></tr>
+</tbody>
+</table>
+<p> vector は末尾にデータを追加する push_back() と末尾からデータを取り除く pop_back() だけでしたが、list はそれだけではなく、先頭にデータを追加する push_front() と先頭要素を取り除く pop_front() があります。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : データの追加と取り出し
+
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+using namespace std;
+
+int main()
+{
+  list&lt;int&gt; a;
+  for (int i = 0; i &lt; 5; i++) {
+    a.push_front(i);
+    a.push_back(i + 10);
+  }
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  int&amp; x1 = a.front();
+  int&amp; x2 = a.back();
+  cout &lt;&lt; x1 &lt;&lt; endl;
+  cout &lt;&lt; x2 &lt;&lt; endl;
+  x1 = 100;
+  x2 = 200;
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (int i = 0; i &lt; 4; i++) {
+    cout &lt;&lt; a.front() &lt;&lt; " ";
+    a.pop_front();
+  }
+  cout &lt;&lt; endl;
+  for (int i = 0; i &lt; 4; i++) {
+    cout &lt;&lt; a.back() &lt;&lt; " ";
+    a.pop_back();
+  }
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+4 3 2 1 0 10 11 12 13 14 
+4
+14
+100 3 2 1 0 10 11 12 13 200 
+100 3 2 1 
+200 13 12 11 
+</pre>
+<h4>●list のイテレータ</h4>
+<p> list は双方向イテレータをサポートしています。++ 演算子で次の要素に進み、-- 演算子で一つ前の要素に戻ることができます。イテレータを生成するメンバ関数を下表に示します。
+</p>
+<table border=1>
+<caption>表 : イテレータの生成 (list)</caption>
+<thead>
+  <tr><th>メンバ関数</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>begin()</td><td>先頭要素を指し示すイテレータを返す</td></tr>
+  <tr><td>end()</td><td>終端を指し示すイテレータを返す</td></tr>
+  <tr><td>cbegin()</td><td>先頭要素を指し示す const イテレータを返す</td></tr>
+  <tr><td>cend()</td><td>終端を指し示す const イテレータを返す</td></tr>
+  <tr><td>rbegin()</td><td>先頭要素を指し示すリバースイテレータを返す</td></tr>
+  <tr><td>rend()</td><td>終端を指し示すリバースイテレータを返す</td></tr>
+  <tr><td>crbegin()</td><td>先頭要素を指し示す const リバースイテレータを返す</td></tr>
+  <tr><td>crend()</td><td>終端を指し示す const リバースイテレータを返す</td></tr>
+</tbody>
+</table>
+<p> const イテレータは要素を更新することができません。リバースイテレータは末尾要素が先頭で、先頭要素が末尾になります。要素が n 個ある場合、n - 1 番目の要素が先頭で、0 番目の要素が末尾になります。
+</p>
+<p> イテレータのデータ型は次のようになります。
+</p>
+<pre class="item">
+list&lt;T&gt;::iterator               // 通常のイテレータ
+list&lt;T&gt;::const_iterator         // const イテレータ
+list&lt;T&gt;::reverse_iterator       // リバースイテレータ
+list&lt;T&gt;::const_reverse_iterator // const リバースイテレータ
+</pre>
+<p> 最近の規格 (C++11) を利用できるコンパイラでは auto を使ったほうが簡単でしょう。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : イテレータの使用例
+
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+using namespace std;
+
+int main()
+{
+  list&lt;int&gt; a = {1,2,3,4,5,6,7,8};
+  for (list&lt;int&gt;::const_iterator iter = a.cbegin(); iter != a.cend(); ++iter)
+    cout &lt;&lt; *iter &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (auto iter = a.begin(); iter != a.end(); ++iter) *iter *= 2;
+  for (auto iter = a.rbegin(); iter != a.rend(); ++iter)
+    cout &lt;&lt; *iter &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1 2 3 4 5 6 7 8 
+16 14 12 10 8 6 4 2 
+</pre>
+<p> iter が const イテレータの場合、*iter でデータを参照することはできても、*iter = 10 のように書き換えることはできません。コンパイルエラーになります。
+</p>
+<h4>●データの挿入と削除</h4>
+<p> list はメンバ関数 insert() でリストの途中にデータを挿入したり、メンバ関数 erase() でリストの途中の要素を取り除くことができます。
+</p>
+<table border=1>
+<caption>表 : データの挿入と削除</caption>
+<thead>
+  <tr><th>メンバ関数</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>insert(it, x)</td><td>イテレータ it の位置にデータ x を挿入する</td></tr>
+  <tr><td>insert(it, n, x)</td><td>イテレータ it の位置にデータ x を n 個挿入する</td></tr>
+  <tr><td>insert(it, s, e)</td><td>イテレータ it の位置にイテレータ s から e の手前までの要素を挿入する</td></tr>
+  <tr><td>erase(it)</td><td>イテレータ it の位置の要素を削除する</td></tr>
+  <tr><td>erase(s, e)</td><td>イテレータ s から e の手前までの要素を削除する</td></tr>
+</tbody>
+</table>
+<p> list の場合、イテレータの位置に対するデータの挿入 (または削除) は、セルを挿入 (または削除) するだけです。vector のように要素を移動する必要がないので、操作は定数時間で行うことができます。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : insert と erase の使用例
+
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+using namespace std;
+
+int main()
+{
+  list&lt;int&gt; a = {1, 2, 3, 4, 5};
+  list&lt;int&gt; b = {10, 20, 30, 40, 50};
+  a.insert(a.begin(), 0);
+  auto iter1 = a.begin();
+  advance(iter1, 1);
+  a.insert(iter1, 5, 1);
+  a.insert(a.end(), b.begin(), b.end());
+  for (int x: a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  a.erase(a.begin());
+  auto iter2 = a.begin();
+  advance(iter2, 5);
+  a.erase(a.begin(), iter2);
+  for (int x: a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0 1 1 1 1 1 1 2 3 4 5 10 20 30 40 50 
+1 2 3 4 5 10 20 30 40 50 
+</pre>
+<p> イテレータの移動は関数 advance(it, n) を使って行うことができます。advance() は引数のイテレータ it を n だけ移動します。ランダムイテレータと違って、イテレータの移動は n に比例する時間がかかります。また、関数 distance() でイテレータの距離を求めることもできますが、これも距離に比例した時間がかかります。ご注意くださいませ。
+</p>
+<p> vector と同様に、a.insert(a.end(), b.begin(), b.end()) は list a に list b を連結することになります。
+</p>
+<h4>●リスト操作に適した関数</h4>
+<p> erase() のほかにも、リストの要素を削除する関数に remove() と remove_if() があります。remove() は引数と等しい要素をすべて削除します。remove_if() は叙述関数が真を返す要素をすべて削除します。Common Lisp にも関数 remove と remove-if がありますが、これらの関数は新しいリストを生成して返すのに対し、list の remove(), remove_if() はリストを破壊的に修正することに注意してください。Common Lisp の delete, delete-if とほぼ同じ動作になります。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : remove と remove_if の使用例
+
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+using namespace std;
+
+bool is_even(int x) { return x % 2 == 0; }
+bool is_odd(int x) { return x % 2 != 0; }
+
+int main()
+{
+  list&lt;int&gt; a = {1,2,1,2,3,1,2,3,4};
+  a.remove(1);
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  cout &lt;&lt; a.size() &lt;&lt; endl;
+  list&lt;int&gt; b = {1,2,3,4,5,6,7,8,9,10};
+  b.remove_if(is_even);
+  for (int x : b) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  cout &lt;&lt; b.size() &lt;&lt; endl;
+  b.remove_if(is_odd);
+  cout &lt;&lt; b.size() &lt;&lt; endl;
+  cout &lt;&lt; b.empty() &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+2 2 3 2 3 4 
+6
+1 3 5 7 9 
+5
+0
+1
+</pre>
+<p> メンバ関数 size() はリストの要素数を返します。empty() はリストが空であれば true を返します。リストを空にするメンバ関数 clear() もあります。
+</p>
+<p> メンバ関数 splice() はイテレータで指定した位置に引数のリストを挿入します。このとき、引数のリストから要素が取り除かれます。
+</p>
+<ol>
+  <li>splice(iterator p, list&amp; x);
+  <li>splice(iterator p, list&amp; x, iterator s);
+  <li>splice(iterator p, list&amp; x, iterator s, iterator e);
+</ol>
+<p> 1 は x の要素がすべて p の位置に挿入されて、x は空リストになります。2 は x の s にある位置の要素を p の位置に挿入します。s が指し示す要素は削除されます。3 は x の s から e の一つ手前までの要素を p の位置に挿入します。挿入した要素は x から削除されます。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : splice の使用例
+
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+using namespace std;
+
+int main()
+{
+  list&lt;int&gt; a = {1,2,3,4,5,6,7,8};
+  list&lt;int&gt; b = {10, 20, 30, 40, 50};
+  a.splice(a.begin(), b, b.begin());
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (int x : b) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  a.splice(a.begin(), b);
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (int x : b) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+10 1 2 3 4 5 6 7 8 
+20 30 40 50 
+20 30 40 50 10 1 2 3 4 5 6 7 8 
+
+</pre>
+
+<p> list はランダムアクセスができないので、algorithm の関数 sort() を利用することができません。このため、list のメンバ関数にリストをソートする sort() が用意されています。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : sort の使用例
+
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+using namespace std;
+
+int main()
+{
+  list&lt;int&gt; a = {5,6,4,7,3,8,2,9,1,0};
+  a.sort();
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  a.sort(greater&lt;int&gt;());
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}  
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0 1 2 3 4 5 6 7 8 9 
+9 8 7 6 5 4 3 2 1 0 
+</pre>
+
+<h4>●リストのマージ</h4>
+<p> マージ (merge : 併合) とは、複数のソート済みのリストを一つのソート済みのリストにまとめる操作です。次の図を見てください。
+<pre class="fig">
+      ┌─ [1, 3, 5]  : リスト a 
+ [] ←┤
+      └─ [2, 4, 6]  : リスト b 
+
+    小さい方をセットする
+
+       ┌─ [3, 5]    : リスト a 
+ [1] ←┘
+            [2, 4, 6] : リスト b 
+
+    1 をセットする
+
+               [3, 5] : リスト a 
+ [1, 2] ←┐
+          └─ [4, 6] : リスト b 
+
+    2 をセットする
+
+ データがなくなるまで繰り返す 
+
+    図 : リストのマージ
+</pre>
+<p> 2 つのリスト a と b があります。これらのリストはソート済みとしましょう。これらのリストをソート済みのリストにまとめることを考えます。a と b はソート済みなので先頭のデータがいちばん小さな値です。したがって、上図のように先頭のデータを比較し、小さい方のデータを取り出して順番に並べていけば、ソート済みのリストにまとめることができます。途中でどちらかのリストが空になったら、残ったリストのデータをそのまま追加します。
+</p>
+<p> 上図は 2 つのリストをマージして新しいリストを生成しますが、list のメンバ関数 merge() は引数のリストの要素を取り出して、それを自分自身のリストに挿入していくことでマージを行います。引数のリストは空リストになります。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : merge の使用例
+
+#include &lt;iostream&gt;
+#include &lt;list&gt;
+using namespace std;
+
+int main()
+{
+  list&lt;int&gt; a = {2,4,6,8};
+  list&lt;int&gt; b = {1,3,5,7,9};
+  a.merge(b);
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  cout &lt;&lt; b.size() &lt;&lt; endl;
+  list&lt;int&gt; c = {9,7,5,3,1};
+  list&lt;int&gt; d = {8, 6, 4, 2};
+  c.merge(d, greater&lt;int&gt;());
+  for (int x : c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1 2 3 4 5 6 7 8 9 
+0
+9 8 7 6 5 4 3 2 1 
+</pre>
+<p> このほかにも便利なメンバ関数がありますし、vector と同様に algorithm の関数を利用することができます。興味のある方は標準ライブラリのリファレンスをお読みくださいませ。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">標準ライブラリの基礎知識 (map 編)</h3>
+<p> 今回は標準ライブラリ (Standard Template Library) の中から map の基本的な使い方を説明します。
+</p>
+<h4>●連想配列とは？</h4>
+<p> 一般に、キー (key) と値 (value) を関連付けて格納するデータ構造を「連想配列 (assocative array)」といいます。連想配列は多くのプログラミング言語でサポートされていて、プログラミング言語によっては、ハッシュ (hash), 辞書 (dictonary), マップ (map) などと呼ばれています。Ｃ++の場合、STL の map が連想配列で、実装には平衡二分木が使われています。スクリプト言語では連想配列の実装に「ハッシュ法」を用いることが多く、連想配列のことを「ハッシュ」と呼ぶようになりました。
+</p>
+<h4>●map の宣言と初期化</h4>
+<p> map を使用するときは、ヘッダファイル map をインクルードしてください。変数の宣言は次のように行います。
+</p>
+<pre class="item">
+map&lt;キーのデータ型, 値のデータ型&gt; 変数名;
+</pre>
+<p> map はテンプレートなので、&lt; &gt; の中にキーのデータ型と値のデータ型を指定してください。この場合、空 (要素数が 0) の連想配列が生成されます。キーの比較にはデフォルトで演算子 &lt; が用いられます。キーを表すデータ型に bool operator&lt;() が定義されていないとコンパイルエラーになります。ご注意くださいませ。
+</p>
+<p> map のコンストラクタを下表に示します。
+</p>
+<table border=1>
+<caption>表 : list の主なコンストラクタ</caption>
+<thead>
+  <tr><th>書式</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>map&lt;K, V&gt;(const map&lt;K, V&gt;&amp; v)</td><td>コピーコンストラクタ</td></tr>
+  <tr><td>map&lt;K, V&gt;(s, e)</td><td>イテレータ s から e の手前までの要素を格納したマップを生成する</td></tr>
+</tbody>
+</table>
+<p> コピーコンストラクタのほかにも代入演算子 = による map の代入も可能です。イテレータを使って map&lt;K, V&gt; を初期化する場合、その要素は構造体 pair&lt;K, V&gt; でなければいけません。また、最近の規格 (C++11) では、配列と同様に { ... } を使って map を初期化することができるようになりました。このときも要素は構造体 pair&lt;K, V&gt; になります。
+</p>
+<p> 要素のアクセスは添字演算子 [] で行うことができます。map は平衡二分木を使って実装されています。要素数を N とすると、map はデータの探索、挿入、削除を log<sub>2</sub> N に比例する時間で実行することができます。拙作のページで作成した単純な二分探索木は、左右の部分木のバランスが崩れることがあるので、最悪の場合は N に比例する時間がかかります。平衡木は最悪の場合でも log<sub>2</sub> N に比例する時間で実行することができます。
+</p>
+<p> たとえば、マップが map&lt;string, int&gt; a と宣言されている場合、a["foo"] = 10 でマップ a のキー "foo" に 10 をセットすることができます。キーが存在しない場合は、マップにキーが登録されます。キーが存在する場合、キーに対応する値が書き換えられます。a["foo"] でキー "foo" の値を求めることができます。キーが存在しない場合、値のデフォルト値 V() が返されます。なお、キーの有無はメンバ関数 find() で判定することができます。これはあとで説明します。
+</p>
+<p> それでは簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : map の簡単な使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;map&gt;
+using namespace std;
+
+int main()
+{
+  map&lt;string, int&gt; a;
+  a["foo"] = 1;
+  a["bar"] = 2;
+  a["baz"] = 3;
+  cout &lt;&lt; a["foo"] &lt;&lt; endl;
+  cout &lt;&lt; a["oops"] &lt;&lt; endl;
+  for (pair&lt;string, int&gt; x : a)
+    cout &lt;&lt; "(" &lt;&lt; x.first &lt;&lt; "," &lt;&lt; x.second &lt;&lt; ")\n";
+
+  vector&lt;pair&lt;string, int&gt;&gt; b = {
+    {"Foo", 10}, {"Bar", 20}, {"Baz", 30}
+  };
+  map&lt;string, int&gt; c(b.begin(), b.end());
+  for (pair&lt;string, int&gt; x : c)
+    cout &lt;&lt; "(" &lt;&lt; x.first &lt;&lt; "," &lt;&lt; x.second &lt;&lt; ")\n";
+
+  map&lt;string, int&gt; d = {
+    {"FOO", 10}, {"BAR", 20}, {"BAZ", 30}
+  };
+  for (pair&lt;string, int&gt; x : c)
+    cout &lt;&lt; "(" &lt;&lt; x.first &lt;&lt; "," &lt;&lt; x.second &lt;&lt; ")\n";
+}
+</pre>
+<p> 構造体 pair のメンバ変数 (public) は first と second の 2 つがあります。map で pair を使用する場合、first にキーを、second に値をセットします。pair は構造体なので、{ ... } でメンバ変数を初期化することができます。map は範囲 for 文で要素を順番に取り出していくこともできます。プログラムは簡単なので説明は割愛します。実行結果は次のようになります。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+0
+(bar,2)
+(baz,3)
+(foo,1)
+(oops,0)
+(Bar,20)
+(Baz,30)
+(Foo,10)
+(Bar,20)
+(Baz,30)
+(Foo,10)
+</pre>
+
+<h4>●map のイテレータ</h4>
+<p> map は双方向イテレータをサポートしています。++ 演算子で次の要素に進み、-- 演算子で一つ前の要素に戻ることができます。イテレータを生成するメンバ関数を下表に示します。
+</p>
+<table border=1>
+<caption>表 : イテレータの生成 (list)</caption>
+<thead>
+  <tr><th>メンバ関数</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>begin()</td><td>先頭要素を指し示すイテレータを返す</td></tr>
+  <tr><td>end()</td><td>終端を指し示すイテレータを返す</td></tr>
+  <tr><td>cbegin()</td><td>先頭要素を指し示す const イテレータを返す</td></tr>
+  <tr><td>cend()</td><td>終端を指し示す const イテレータを返す</td></tr>
+  <tr><td>rbegin()</td><td>先頭要素を指し示すリバースイテレータを返す</td></tr>
+  <tr><td>rend()</td><td>終端を指し示すリバースイテレータを返す</td></tr>
+  <tr><td>crbegin()</td><td>先頭要素を指し示す const リバースイテレータを返す</td></tr>
+  <tr><td>crend()</td><td>終端を指し示す const リバースイテレータを返す</td></tr>
+</tbody>
+</table>
+<p> const イテレータは要素を更新することができません。map の場合、先頭要素が一番小さなキーで、末尾の要素が一番大きなキーになります。マップの要素をイテレータで順番に取り出すと、キーは昇順に出力されます。つまり、二分木を通りがけ順で巡回するわけです。リバースイテレータはその逆になります。
+</p>
+<p> イテレータのデータ型は次のようになります。
+</p>
+<pre class="item">
+map&lt;K, V&gt;::iterator               // 通常のイテレータ
+map&lt;K, V&gt;::const_iterator         // const イテレータ
+map&lt;K, V&gt;::reverse_iterator       // リバースイテレータ
+map&lt;K, V&gt;::const_reverse_iterator // const リバースイテレータ
+</pre>
+<p> 最近の規格 (C++11) を利用できるコンパイラでは auto を使ったほうが簡単でしょう。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : イテレータの使用例
+
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+using namespace std;
+
+int main()
+{
+  map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}, {"oops", 4}, {"hello", 5}
+  };
+  for (map&lt;string, int&gt;::const_iterator iter = a.cbegin(); iter != a.end(); ++iter)
+    cout &lt;&lt; "(" &lt;&lt; iter-&gt;first &lt;&lt; "," &lt;&lt; iter-&gt;second &lt;&lt; ")\n";
+  for (auto iter = a.begin(); iter != a.end(); ++iter)
+    iter-&gt;second *= 10;
+  for (auto iter = a.rbegin(); iter != a.rend(); ++iter)
+    cout &lt;&lt; "(" &lt;&lt; iter-&gt;first &lt;&lt; "," &lt;&lt; iter-&gt;second &lt;&lt; ")\n";
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+(bar,2)
+(baz,3)
+(foo,1)
+(hello,5)
+(oops,4)
+(oops,40)
+(hello,50)
+(foo,10)
+(baz,30)
+(bar,20)
+</pre>
+<p> イテレータが指し示す要素のデータ型は pair&lt;const K, V&gt; です。値は書き換えることができますが、キーは参照することしかできません。
+</p>
+<h4>●データの探索</h4>
+<p> map は添字演算子 [] でキーの有無をチェックすることはできません。この場合、メンバ関数 find() を使います。find() はキーを見つけたらそれを指し示すイテレータを返します。見つからない場合は終端を指し示すイテレータを返します。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : find の使用例
+
+#include &lt;iostream&gt;
+#include &lt;map&g;
+using namespace std;
+
+int main()
+{
+  map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}, {"oops", 4}, {"hello", 5}
+  };
+  auto iter = a.find("baz");
+  if (iter != a.end()) {
+    cout &lt;&lt; iter->second &lt;&lt; endl;
+  } else{
+    cout &lt;&lt; "not found\n";
+  }
+  iter = a.find("world");
+  if (iter != a.end()) {
+    cout &lt;&lt; iter->second &lt;&lt; endl;
+  } else{
+    cout &lt;&lt; "not found\n";
+  }
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+3
+not found
+</pre>
+<p> このほかにも、マップの最初の要素 (最小値) を求めるメンバ関数 lower_bound() や最後の要素 (最大値) を求める upper_bound() があります。これらの関数の返り値は find() と同じです。
+</p>
+<h4>●データの挿入</h4>
+<p> データの挿入はメンバ関数 insert() でも行うことができます。引数のデータ型は pair&lt;K, V&gt; で、返り値のデータ型は pair&lt;iterator, bool&gt; です。実際にデータを挿入した場合、bool は true になります。同じキーが存在している場合、値は書き換えられずに、bool は false になります。iterator は要素へのイテレータです。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : insert の使用例
+
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+using namespace std;
+
+int main()
+{
+  map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}
+  };
+  auto r = a.insert(pair&lt;string, int&gt;("oops", 4));
+  cout &lt;&lt; r.second &lt;&lt; endl;
+  r = a.insert(pair&lt;string, int&gt;("foo", 10));
+  cout &lt;&lt; r.second &lt;&lt; endl;
+  for (auto p : a)
+    cout &lt;&lt; "(" &lt;&lt; p.first &lt;&lt; "," &lt;&lt; p.second &lt;&lt; ")\n";
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+0
+(bar,2)
+(baz,3)
+(foo,1)
+(oops,4)
+</pre>
+<h4>●データの削除</h4>
+<p> データの削除はメンバ関数 erase() で行います。引数はキーで返り値は削除した要素の個数です。map の場合、キーと値の組は一つしかないので、要素を削除したら 1 を返し、キーが見つからない場合は 0 を返します。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : erase の使用例
+
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+using namespace std;
+
+int main()
+{
+  map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}
+  };
+  string key[] = {
+    "oops", "foo", "bar", "baz"
+  };
+  for (string k : key) {
+    cout &lt;&lt; a.erase(k) &lt;&lt; endl;
+    cout &lt;&lt; a.size() &lt;&lt; endl;
+  }
+  cout &lt;&lt; a.empty() &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0
+3
+1
+2
+1
+1
+1
+0
+1
+</pre>
+<p> メンバ関数 size() は map の要素数を返します。empty() は map が空であれば true を、そうでなければ false を返します。また、map を空にするメンバ関数 clear() も用意されています。
+</p>
+<h4>●テンプレートで比較関数を指定する</h4>
+<p> キーの比較関数はテンプレートの第 3 引数で指定することができます。たとえば、比較関数 greater&lt;string&gt; を渡すと、キーを取り出すときは降順になります。簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : 比較関数を指定する
+
+#include &lt;iostream&gt;
+#include &lt;map&gt;
+using namespace std;
+
+int main()
+{
+  map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}, {"oops", 4}
+  };
+  for (auto p : a)
+    cout &lt;&lt; p.first &lt;&lt; endl;
+  map&lt;string, int, greater&lt;string&gt;&gt; b = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}, {"oops", 4}
+  };
+  for (auto p : b)
+    cout &lt;&lt; p.first &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+bar
+baz
+foo
+oops
+oops
+foo
+baz
+bar
+</pre>
+<p> このほかにも便利なメンバ関数がありますし、algorithm の関数で map に適用できるものもあります。興味のある方は標準ライブラリのリファレンスをお読みくださいませ。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="cpp18.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp20.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

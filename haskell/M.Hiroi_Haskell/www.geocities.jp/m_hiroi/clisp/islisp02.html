@@ -1,0 +1,1173 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 ISLisp プログラミング超入門</title>
+  <meta name="description" content="Lisp,ISLisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881772</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>お気楽 ISLisp プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <A href="../index.html">Home</a> | <a href="index.html">Common Lisp</a> | <a href="islisp.html">ISLisp</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>簡単なプログラム</h3>
+<h4 id="chap07">●素数</h4>
+<pre class="list">
+リスト : エラトステネスの篩
+
+(load "list.l")
+
+;; n 以下の素数
+(defun primes (n)
+  (for ((xs (iota 2 n))
+        (ps nil))
+       ((&gt;= (car xs) (sqrt n))
+        (append-reverse ps xs))
+       (let ((p (car xs)))
+         (setq ps (cons p ps))
+         (setq xs (remove-if (lambda (x) (= (mod x p) 0)) (cdr xs))))))
+</pre>
+<pre>
+ISLisp&gt;(primes 100)
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+ISLisp&gt;(primes 500)
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211
+223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331
+337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449
+457 461 463 467 479 487 491 499)
+ISLisp&gt;(length (primes 500))
+95
+</pre>
+<pre class="list">
+リスト : エラトステネスの篩 (配列版)
+
+(defun primes1 (n)
+  (let ((ps nil)
+        (xs (create-vector (+ n 1) t))
+        (x 2))
+    (while (&lt;= (* x x) n)
+      (cond ((aref xs x)
+             (setq ps (cons x ps))
+             (for ((i (+ x x) (+ i x)))
+                  ((&gt; i n))
+                  (setf (aref xs i) nil))))
+      (setq x (+ x 1)))
+    (while (&lt;= x n)
+      (if (aref xs x)
+          (setq ps (cons x ps)))
+      (setq x (+ x 1)))
+    (nreverse ps)))
+</pre>
+<pre>
+ISLisp&gt;(primes1 100)
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+ISLisp&gt;(primes1 500)
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211
+223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331
+337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449
+457 461 463 467 479 487 491 499)
+</pre>
+<ul>
+  <li>1 次元配列 (ベクタ) は (create-vector size init-value) で生成する。
+  <li>多次元配列は (create-array '(size1 size2 ...) init-value) で生成する。
+  <li>配列のアクセスは Common Lisp と同じく aref と setf を使う。
+  <li>上記のプログラムは無駄が多いので、興味のある方は改良してほしい。
+</ul>
+<h4 id="chap08">●素因数分解</h4>
+<pre class="list">
+リスト : 素因数分解
+
+(defun factor-sub (n m)
+  (for ((i 0 (+ i 1))
+        (n n))
+       ((/= (mod n m) 0) (cons i n))
+    (setq n (quotient n m))))
+
+(defun factorization (n)
+  (let* ((xs (factor-sub n 2))
+         (c (car xs)))
+    (setq n (cdr xs))
+    (for ((i 3 (+ i 2))
+          (a (if (= c 0) nil (list (cons 2 c)))))
+         ((or (= n 1) (&lt; n (* i i)))
+          (nreverse (if (= n 1) a (cons (cons n 1) a))))
+         (setq xs (factor-sub n i))
+         (setq c (car xs))
+         (setq n (cdr xs))
+         (if (&lt; 0 (car xs))
+             (setq a (cons (cons i c) a))))))
+</pre>
+<pre>
+ISLisp&gt;(factorization 6)
+((2 . 1) (3 . 1))
+ISLisp&gt;(factorization 12345678)
+((2 . 1) (3 . 2) (47 . 1) (14593 . 1))
+ISLisp&gt;(factorization 1234567890)
+((2 . 1) (3 . 2) (5 . 1) (3607 . 1) (3803 . 1))
+ISLisp&gt;(factorization 1111111111)
+((11 . 1) (41 . 1) (271 . 1) (9091 . 1))
+</pre>
+<p> quotient は整数同士の割り算で割り切れるときは整数を返します。factor-sub で quotient を評価するときは割り切れることが保証されているので正常に動作します。もちろん、quotient のかわりに div を使ってもかまいません。(補足 2017/04/29)
+</p>
+<h4 id="chap09">●小町算</h4>
+<p> 1 から 9 までの数字を順番に並べ、間に + と - を補って 100 になる式を作ってください。ただし、1 の前に - 符号はつけないものとします。
+</p>
+<pre class="item">
+例：1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 = 100
+</pre>
+<pre class="list">
+リスト : 小町算
+
+;; 式の計算
+(defun calc-expr (expr)
+  (for ((v (car expr))
+        (xs (cdr expr) (cdr (cdr xs))))
+       ((null xs) v)
+       (if (eq '+ (car xs))
+           (setq v (+ v (car (cdr xs))))
+         (setq v (- v (car (cdr xs)))))))
+
+;; 式のチェック
+(defun check-expr (expr)
+  (if (= (calc-expr expr) 100)
+      (for ((xs expr (cdr xs)))
+           ((null xs)
+            (format (standard-output) "= 100~%"))
+           (format (standard-output) "~A " (car xs)))))
+
+;; 式の生成
+(defun make-expr (n expr)
+  (cond ((= n 10)
+         (check-expr (reverse expr)))
+        (t
+         (make-expr (+ n 1) (cons n (cons '+ expr)))
+         (make-expr (+ n 1) (cons n (cons '- expr)))
+         (make-expr (+ n 1) (cons (+ (* (car expr) 10) n)
+                                     (cdr expr))))))
+
+(defun komachi () (make-expr 2 (list 1)))
+</pre>
+<pre>
+ISLisp&gt;(komachi)
+1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 = 100
+1 + 2 + 34 - 5 + 67 - 8 + 9 = 100
+1 + 23 - 4 + 5 + 6 + 78 - 9 = 100
+1 + 23 - 4 + 56 + 7 + 8 + 9 = 100
+12 + 3 + 4 + 5 - 6 - 7 + 89 = 100
+12 + 3 - 4 + 5 + 67 + 8 + 9 = 100
+12 - 3 - 4 + 5 - 6 + 7 + 89 = 100
+123 + 4 - 5 + 67 - 89 = 100
+123 + 45 - 67 + 8 - 9 = 100
+123 - 4 - 5 - 6 - 7 + 8 - 9 = 100
+123 - 45 - 67 + 89 = 100
+NIL
+</pre>
+<h4 id="chap10">●N Queens Problem</h4>
+<p> 「8 クイーン」はコンピュータに解かせるパズルの中でも特に有名な問題です。このパズルは 8 行 8 列のチェス盤の升目に、8 個のクイーンを互いの利き筋が重ならないように配置する問題です。クイーンは将棋の飛車と角をあわせた駒で、縦横斜めに任意に動くことができます。解答の一例を下図に示します。
+</p>
+<pre class="fig">
+               列           
+         1 2 3 4 5 6 7 8    
+       *-----------------*  
+     1 | Q . . . . . . . |  
+     2 | . . . . Q . . . |  
+     3 | . . . . . . . Q |  
+  行 4 | . . . . . Q . . |  
+     5 | . . Q . . . . . |  
+     6 | . . . . . . Q . |  
+     7 | . Q . . . . . . |  
+     8 | . . . Q . . . . |  
+       *-----------------*  
+
+    図 : 8 クイーンの解答例
+</pre>
+<p> N Queens Problem は「8 クイーン」の拡張バージョンで、N 行 N 列の盤面に N 個のクイーンを互いの利き筋が重ならないように配置する問題です。詳しい説明は拙作のページ <a href="index.html">Common Lisp 入門 番外編</a> <a href="clispb21.html">N Queens Problem</a> をお読みください。
+</p>
+<pre class="list">
+リスト : N Queens Problem
+
+(load "list.l")
+
+;; 衝突の検出
+(defun attack (x xs)
+  (labels ((attack-sub (x n ys)
+             (cond ((null ys) t)
+                   ((or (= (+ (car ys) n) x)
+                        (= (- (car ys) n) x))
+                    nil)
+                   (t (attack-sub x (+ n 1) (cdr ys))))))
+    (attack-sub x 1 xs)))
+
+;; 解法
+(defun nqueens (nums board)
+  (if (null nums)
+      (format (standard-output) "~A~%" board)
+    (for ((xs nums (cdr xs)))
+         ((null xs))
+         (if (attack (car xs) board)
+             (nqueens (remove (car xs) nums)
+                      (cons (car xs) board))))))
+</pre>
+<pre>
+ISLisp&gt;(nqueens '(1 2 3 4) nil)
+(3 1 4 2)
+(2 4 1 3)
+NIL
+ISLisp&gt;(nqueens '(1 2 3 4 5 6) nil)
+(5 3 1 6 4 2)
+(4 1 5 2 6 3)
+(3 6 2 5 1 4)
+(2 4 6 1 3 5)
+NIL
+ISLisp&gt;(nqueens '(1 2 3 4 5 6 7 8) nil)
+(4 2 7 3 6 8 5 1)
+(5 2 4 7 3 8 6 1)
+(3 5 2 8 6 4 7 1)
+
+・・・省略・・・
+
+(6 4 7 1 3 5 2 8)
+(4 7 5 2 6 1 3 8)
+(5 7 2 6 3 1 4 8)
+NIL
+</pre>
+
+<h4 id="chap11">●ナンバープレース</h4>
+<pre class="list">
+リスト : ナンバープレースの解法
+
+;; 縦横枠のチェック
+(defun check (board x y n)
+  (block exit
+    ; 縦横のチェック
+    (for ((i 0 (+ i 1)))
+         ((&gt;= i 9))
+         (if (or (= (aref board x i) n)
+                 (= (aref board i y) n))
+             (return-from exit nil)))
+    ; 枠のチェック
+    (let ((x1 (* (div x 3) 3))
+          (y1 (* (div y 3) 3)))
+      (for ((i 0 (+ i 1)))
+           ((&gt;= i 3) t)
+           (for ((j 0 (+ j 1)))
+                ((&gt;= j 3))
+                (if (= (aref board (+ x1 i) (+ y1 j)) n)
+                    (return-from exit nil)))))))
+
+;; 盤面の表示
+(defun print-board (board)
+  (for ((x 0 (+ x 1)))
+       ((&gt;= x 9))
+       (for ((y 0 (+ y 1)))
+            ((>= y 9) (format (standard-output) "~%"))
+            (format (standard-output) "~D " (aref board x y)))))
+
+;; 深さ優先探索
+(defun solver (board x y)
+  (cond ((= y 9)
+         (print-board board))
+        ((= x 9)
+         (solver board 0 (+ y 1)))
+        ((/= (aref board x y) 0)
+         (solver board (+ x 1) y))
+        (t
+         (for ((n 1 (+ n 1)))
+              ((&gt; n 9))
+              (cond ((check board x y n)
+                     (setf (aref board x y) n)
+                     (solver board (+ x 1) y)
+                     (setf (aref board x y) 0)))))))
+
+(defun test ()
+  (solver q00 0 0))
+
+;; 問題 (出典: 数独 - Wikipedia の問題例)
+(defglobal q00 #2a((5 3 0  0 7 0  0 0 0)
+                   (6 0 0  1 9 5  0 0 0)
+                   (0 9 8  0 0 0  0 6 0)
+
+                   (8 0 0  0 6 0  0 0 3)
+                   (4 0 0  8 0 3  0 0 1)
+                   (7 0 0  0 2 0  0 0 6)
+
+                   (0 6 0  0 0 0  2 8 0)
+                   (0 0 0  4 1 9  0 0 5)
+                   (0 0 0  0 8 0  0 7 9)))
+</pre>
+<pre>
+ISLisp&gt;(test)
+5 3 4 6 7 8 9 1 2
+6 7 2 1 9 5 3 4 8
+1 9 8 3 4 2 5 6 7
+8 5 9 7 6 1 4 2 3
+4 2 6 8 5 3 7 9 1
+7 1 3 9 2 4 8 5 6
+9 6 1 5 3 7 2 8 4
+2 8 7 4 1 9 6 3 5
+3 4 5 2 8 6 1 7 9
+NIL
+</pre>
+<h4 id="chap12">●二分探索木 (immutable)</h4>
+<p> 構造体のかわりにクラスを使い、メソッドのかわりに通常の関数で操作関数を定義しています。オブジェクト指向は大変難しいと思われている方が多いようですが、ISLisp (ILOS) の場合、もっと気楽に考えて構造体のかわりにクラスを使ってもよいのではないでしょうか。これでもクラスのメリットは十分に享受できると思います。
+</p>
+<pre class="list">
+;;
+;; tree.l : 二分探索木 (immutable)
+;;
+;;          Copyright (C) 2016 Makoto Hiroi
+;;
+
+;; リスト操作関数をロード
+(load "list.l")
+
+;; 節
+;; 空の木 は nil で表す
+(defclass &lt;Node&gt; ()
+  ((item  :reader get-item  :initarg item)
+   (left  :reader get-left  :initform nil :initarg left)
+   (right :reader get-right :initform nil :initarg right)))
+
+;; 挿入
+(defun insert-tree (node x)
+  (cond ((null node)
+         (create (class &lt;Node&gt;) 'item x))
+        ((= (get-item node) x) node)
+        ((&lt; x (get-item node))
+         (create (class &lt;Node&gt;)
+                 'item (get-item node)
+                 'left (insert-tree (get-left node) x)
+                 'right (get-right node)))
+        (t
+         (create (class &lt;Node&gt;)
+                 'item (get-item node)
+                 'left (get-left node)
+                 'right (insert-tree (get-right node) x)))))
+
+;; 探索
+(defun search-tree (node x)
+  (block exit
+    (while (not (null node))
+      (cond ((= (get-item node) x)
+             (return-from exit t))
+            ((&lt; x (get-item node))
+             (setq node (get-left node)))
+            (t (setq node (get-right node)))))
+    nil))
+
+;; 最小値の探索
+(defun search-min (node)
+  (while (get-left node)
+    (setq node (get-left node)))
+  (get-item node))
+
+;; 最小値の削除
+(defun delete-min (node)
+  (cond ((null (get-left node))
+         (get-right node))
+        (t (create (class &lt;Node&gt;)
+                   'item (get-item node)
+                   'left (delete-min (get-left) node)
+                   'right (get-right node)))))
+
+;; 削除
+(defun delete-tree (node x)
+  (cond ((null node) node)
+        ((= (get-item node) x)
+         (cond ((null (get-left node)) (get-right node))
+               ((null (get-right node)) (get-left node))
+               (t (create (class &lt;Node&gt;)
+                          'item (search-min (get-right node))
+                          'left (get-left node)
+                          'right (delete-min (get-right node))))))
+        ((&lt; x (get-item node))
+         (create (class &lt;Node&gt;)
+                 'item (get-item node)
+                 'left (delete-tree (get-left node) x)
+                 'right (get-right node)))
+        (t
+         (create (class &lt;Node&gt;)
+                 'item (get-item node)
+                 'left (get-left left)
+                 'right (delete-tree (get-right node) x)))))
+
+;; 巡回
+(defun foreach-tree (f node)
+  (cond ((not (null node))
+         (foreach-tree f (get-left node))
+         (funcall f (get-item node))
+         (foreach-tree f (get-right node)))))
+
+;;
+;; 簡単な入出力
+;;
+(defun print (xs)
+  (format (standard-output) "~A~%" xs))
+
+(defun princ (xs)
+  (format (standard-output) "~A " xs))
+
+(defun terpri ()
+  (format (standard-output) "~%"))
+
+(defun make-tree (xs)
+  (fold-left (lambda (a x) (insert-tree a x)) nil xs))
+
+;; 簡単なテスト
+(defun test ()
+  (let ((root (make-tree '(5 3 4 2 1 7 6 8 9 10))))
+    (for ((n 0 (+ n 1)))
+         ((&gt; n 11))
+         (format (standard-output) "~D ~A~%" n (search-tree root n)))
+    (for ((n 0 (+ n 1)))
+         ((&gt; n 11))
+         (setq root (delete-tree root n))
+         (format (standard-output) "delete ~D " n)
+         (foreach-tree #'princ root)
+         (terpri))))
+</pre>
+<pre>
+ISLisp>(load "tree.l")
+T
+ISLisp>(test)
+0 NIL
+1 T
+2 T
+3 T
+4 T
+5 T
+6 T
+7 T
+8 T
+9 T
+10 T
+11 NIL
+delete 0 1 2 3 4 5 6 7 8 9 10
+delete 1 2 3 4 5 6 7 8 9 10
+delete 2 3 4 5 6 7 8 9 10
+delete 3 4 5 6 7 8 9 10
+delete 4 5 6 7 8 9 10
+delete 5 6 7 8 9 10
+delete 6 7 8 9 10
+delete 7 8 9 10
+delete 8 9 10
+delete 9 10
+delete 10
+delete 11
+NIL
+</pre>
+<h4 id="chap13">●最小の Lisp</h4>
+<p> 小さな小さな Scheme ライクの Lisp インタプリタです。最小の Lisp については、拙作のページ <a href="index.html">Common Lisp 入門 番外編</a> <a href="clispb12.html">Common Lisp で作る micro Scheme</a> をお読みください。
+</p>
+<ul>
+  <li>真偽値は #t, #f ではなく true, false
+  <li>空リストは nil
+  <li>car, cdr, cons, eq?, pair?, quote, if, lambda, define
+  <li>+, -, *, /, =, &lt;. &lt;=, &gt;, &gt;=
+  <li>関数定義は (define 名前 (lambda (...) ...))
+  <li>再帰定義もできる
+  <li>マクロ、継続、末尾再帰最適化といった Scheme らしい機能はない
+</ul>
+<pre class="list">
+;;;
+;;; micro.l : micro Scheme with ISLisp
+;;;
+;;;           Copyright (C) 2016 Makoto Hiroi
+;;;
+
+;; ライブラリのロード
+(load "list.l")
+
+;; 大域変数
+(defglobal global-environment nil)
+
+;; 変数束縛
+(defun add-binding (vars vals env)
+  (cond ((null vars) env)
+        ((symbolp vars)
+         (cons (cons vars vals) env))
+        (t
+         (cons (cons (car vars) (car vals))
+               (add-binding (cdr vars) (cdr vals) env)))))
+
+;; 変数の値を取得
+(defun lookup (var env)
+  (let ((value (assoc var env)))
+    (if value
+        value
+      (assoc var global-environment))))
+
+;; 自己評価フォームか
+(defun self-eval-p (expr)
+  (and (not (consp expr)) (not (symbolp expr))))
+
+;; 真か？
+(defun truep (x) (not (eq x 'false)))
+
+;; クロージャか？
+(defun closurep (xs)
+  (and (consp xs) (eq (car xs) 'closure)))
+
+;;
+;; apply
+;;
+(defun m-apply (expr env)
+  (let ((proc (m-eval (car expr) env))
+        (actuals (mapcar (lambda (x) (m-eval x env)) (cdr expr))))
+    (cond ((functionp proc)
+           (apply proc actuals))
+          ((closurep proc)
+           ; (closure (lambda (args ..) body ...)) env)
+           (let* ((result nil)
+                  (args (second (second proc)))
+                  (body (drop (second proc) 2))
+                  (env1 (add-binding args actuals (third proc))))
+             (while (consp body)
+               (setq result (m-eval (car body) env1))
+               (setq body (cdr body)))
+             result))
+          (t
+           (error "unknown procedure type: ~A" proc)))))
+
+;;
+;; eval
+;;
+(defun m-eval (expr env)
+  (cond ((self-eval-p expr) expr)  ; 自己評価フォーム
+        ((symbolp expr)            ; 変数
+         (let ((cell (lookup expr env)))
+           (if cell
+               (cdr cell)
+             (error "unbound variable: ~A" expr))))
+        ((consp expr)
+         (cond ((eq (car expr) 'quote)
+                (second expr))
+               ((eq (car expr) 'if)
+                (if (truep (m-eval (second expr) env))
+                    (m-eval (third expr) env)
+                  (and (drop expr 3)
+                       (m-eval (fourth expr) env))))
+               ((eq (car expr) 'lambda)
+                (list 'closure expr env))
+               ((eq (car expr) 'define)
+                (setf global-environment
+                      (cons (cons (second expr)
+                                  (m-eval (third expr) env))
+                            global-environment))
+                (second expr))
+               (t (m-apply expr env))))
+        (t
+         (error "unknown expression type -- m-eval: ~A" expr))))
+
+; 初期化
+(setf global-environment
+      (list
+       (cons 'true  'true)
+       (cons 'false 'false)
+       (cons 'nil   'nil)
+       (cons 'quit  'quit)
+       (cons 'car   #'car)
+       (cons 'cdr   #'cdr)
+       (cons 'cons  #'cons)
+       (cons 'eq?   (lambda (x y) (if (eq x y) 'true 'false)))
+       (cons 'pair? (lambda (x) (if (consp x) 'true 'false)))
+       (cons '+     #'+)
+       (cons '-     #'-)
+       (cons '*     #'*)
+       (cons '/     #'quotient)
+       (cons '=     (lambda (x y) (if (=  x y) 'true 'false)))
+       (cons '/=    (lambda (x y) (if (/= x y) 'true 'false)))
+       (cons '&lt;     (lambda (x y) (if (&lt;  x y) 'true 'false)))
+       (cons '&lt;=    (lambda (x y) (if (&lt;= x y) 'true 'false)))
+       (cons '&gt;     (lambda (x y) (if (&gt;  x y) 'true 'false)))
+       (cons '&gt;=    (lambda (x y) (if (&gt;= x y) 'true 'false)))
+       ))
+
+(defun print (xs)
+  (format (standard-output) "~A~%" xs))
+
+(defun princ (xs)
+  (format (standard-output) "~A" xs))
+
+;;; read-eval-print-loop
+(defun repl ()
+  (for ((result nil))
+       ((eq result 'quit))
+       (princ "&gt;&gt;&gt; ")
+       (setq result (m-eval (read) '()))
+       (print result)))
+</pre>
+<pre>
+&gt;&gt;&gt; (quote a)
+A
+&gt;&gt;&gt; (if true 'a 'b)
+A
+&gt;&gt;&gt; (if false 'a 'b)
+B
+&gt;&gt;&gt; (car '(a b c))
+A
+&gt;&gt;&gt; (cdr '(a b c))
+(B C)
+&gt;&gt;&gt; (cons 'a 'b)
+(A . B)
+&gt;&gt;&gt; (eq? 'a 'a)
+TRUE
+&gt;&gt;&gt; (eq? 'a 'b)
+FALSE
+&gt;&gt;&gt; (pair? 'a)
+FALSE
+&gt;&gt;&gt; (pair? '(a b c))
+TRUE
+
+&gt;&gt;&gt; (define a 'b)
+A
+&gt;&gt;&gt; a
+B
+&gt;&gt;&gt; (lambda (x) x)
+(CLOSURE (LAMBDA (X) X) NIL)
+&gt;&gt;&gt; ((lambda (x) x) 'a)
+A
+&gt;&gt;&gt; (define list (lambda x x))
+LIST
+&gt;&gt;&gt; (list 'a 'b 'c 'd 'e)
+(A B C D E)
+
+&gt;&gt;&gt; (define x 'a)
+X
+&gt;&gt;&gt; x
+A
+&gt;&gt;&gt; (define foo (lambda () x))
+FOO
+&gt;&gt;&gt; (foo)
+A
+&gt;&gt;&gt; (define bar (lambda (x) (foo)))
+BAR
+&gt;&gt;&gt; (bar 'b)
+A
+
+&gt;&gt;&gt; (define baz (lambda (x) (lambda (y) (cons x y)))
+)
+BAZ
+&gt;&gt;&gt; (define baz-a (baz 'a))
+BAZ-A
+&gt;&gt;&gt; (baz-a 'b)
+(A . B)
+&gt;&gt;&gt; (baz-a 'c)
+(A . C)
+&gt;&gt;&gt; baz
+(CLOSURE (LAMBDA (X) (LAMBDA (Y) (CONS X Y))) NIL)
+&gt;&gt;&gt; baz-a
+(CLOSURE (LAMBDA (Y) (CONS X Y)) ((X . A)))
+
+&gt;&gt;&gt; (define null? (lambda (x) (eq? x nil)))
+NULL?
+&gt;&gt;&gt; (define not (lambda (x) (if (eq? x 'false) true false)))
+NOT
+&gt;&gt;&gt; (not true)
+FALSE
+&gt;&gt;&gt; (not false)
+TRUE
+&gt;&gt;&gt; (define append (lambda (xs ys) (if (null? xs) ys (cons (car xs) (append (cdr
+ xs) ys)))))
+APPEND
+&gt;&gt;&gt; (append '(a b c) '(d e f))
+(A B C D E F)
+&gt;&gt;&gt; (append '((a b) (c d)) '(e f g))
+((A B) (C D) E F G)
+
+&gt;&gt;&gt; (define reverse (lambda (ls) (if (null? ls) nil (append (reverse (cdr ls)) (
+list (car ls))))))
+REVERSE
+&gt;&gt;&gt; (reverse '(a b c d e))
+(E D C B A)
+&gt;&gt;&gt; (reverse '((a b) c (d e)))
+((D E) C (A B))
+
+&gt;&gt;&gt; (define map (lambda (f xs) (if (null? xs) nil (cons (f (car xs)) (map f (cdr
+ xs))))))
+MAP
+&gt;&gt;&gt; (map (lambda (x) (* x x)) '(1 2 3 4 5 6))
+(1 4 9 16 25 36)
+&gt;&gt;&gt; (filter (lambda (x) (not (eq? x 'a))) '(a b c a b c a b c))
+(B C B C B C)
+&gt;&gt;&gt; (define fold-left (lambda (f a xs) (if (null? xs) a (fold-left f (f a (car x
+s)) (cdr xs)))))
+FOLD-LEFT
+&gt;&gt;&gt; (fold-left + 0 '(1 2 3 4 5 6))
+21
+
+&gt;&gt;&gt; (define sum (lambda (n a) (if (= n 0) a (sum (- n 1) (+ a n)))))
+SUM
+&gt;&gt;&gt; (sum 10 0)
+55
+&gt;&gt;&gt; (sum 20 0)
+210
+&gt;&gt;&gt; (sum 30 0)
+&gt;Error: Stack Overflow!!
+&gt;       Return to top level.
+</pre>
+<hr>
+<h4 id="chap14">●最小の Lisp (末尾再帰最適化版)</h4>
+<p> 使用している ISLisp 処理系が末尾再帰最適化を行っている場合、ある条件で m-eval が末尾再帰していれば、micro Scheme も末尾再帰最適化が行われます。たとえば、次に示すような関数呼び出しにおいて、スタックを消費せずに実行することができます。
+</p>
+<pre>
+&gt;&gt;&gt; (define foo (lambda () (foo)))
+foo
+
+&gt;&gt;&gt; (foo)
+=&gt; 無限ループになる
+</pre>
+<p> 末尾再帰最適化が行われる場合、foo を評価すると無限ループになります。末尾再帰の末尾とは最後に行われる処理のことで、一般に末尾で関数を呼び出すことを「末尾呼び出し」といいます。関数を呼び出す場合、返ってきた後に行う処理のために、必要な情報を保存しておかなければいけません。ところが、末尾呼び出しはそのあと実行する処理がないので、情報を保存しておく必要がありません。このため、末尾再帰は繰り返しに変換することができるのです。
+</p>
+
+<p> 簡単な例として、ISLisp で階乗を計算する関数 fact を作ってみましょう。
+</p>
+
+<pre class="list">
+リスト : 末尾再帰を繰り返しに変換する
+
+(defun fact (x a)
+  (if (= x 0)
+      a
+    (fact (- x 1) (* a x))))
+
+(defun facti (x a)
+  (block facti
+    (tagbody
+      loop
+      (if (= x 0)
+          (return-from facti a))
+      (setq a (* a x))
+      (setq x (- x 1))
+      (go loop))))
+</pre>
+
+<p> fact は末尾再帰になっています。これを繰り返しに変換すると facti のようになります。引数 x と a の値を保存する必要が無いので、値を書き換えてから先頭の処理へジャンプします。tagbody はジャンプ命令 go を使うための特殊形式です。
+</p>
+
+<p> Common Lisp や ISLisp の場合、tagbody と go を使って末尾再帰最適化を行うことは可能です。この方法は <a href="islisp02.html#cite">参考文献 [1]</a> に示されています。micro Scheme で S 式を評価するとき、末尾呼び出しが行われる場所は if の then 節と else 節、関数本体の最後の式を評価するところの 3 か所しかありません。m-apply を m-eval に埋め込み、m-eval の引数 expr と env を書き換えてから、tagbody と go を使って先頭に戻れば末尾再帰最適化を実装することができます。詳細はプログラムリストをお読みください。
+</p>
+<pre class="list">
+;;;
+;;; micro1.l : micro Scheme with ISLisp
+;;;
+;;;            tagbody, go による末尾再帰の実装
+;;;
+;;;           Copyright (C) 2016 Makoto Hiroi
+;;;
+
+;; ライブラリのロード
+(load "list.l")
+
+;; 大域変数
+(defglobal global-environment nil)
+
+;; 変数束縛
+(defun add-binding (vars vals env)
+  (cond ((null vars) env)
+        ((symbolp vars)
+         (cons (cons vars vals) env))
+        (t
+         (cons (cons (car vars) (car vals))
+               (add-binding (cdr vars) (cdr vals) env)))))
+
+;; 変数の値を取得
+(defun lookup (var env)
+  (let ((value (assoc var env)))
+    (if value
+        value
+      (assoc var global-environment))))
+
+;; 自己評価フォームか
+(defun self-eval-p (expr)
+  (and (not (consp expr)) (not (symbolp expr))))
+
+;; 真か？
+(defun truep (x) (not (eq x 'false)))
+
+;; クロージャか？
+(defun closurep (xs)
+  (and (consp xs) (eq (car xs) 'closure)))
+
+;;
+;; eval
+;;
+(defun m-eval (expr env)
+  (block exit
+   (tagbody loop
+     (cond ((self-eval-p expr)        ; 自己評価フォーム
+            (return-from exit expr))
+           ((symbolp expr)            ; 変数
+            (let ((cell (lookup expr env)))
+              (if cell
+                  (return-from exit (cdr cell))
+                (error "unbound variable: ~A" expr))))
+           ((consp expr)
+            (cond ((eq (car expr) 'quote)
+                   (return-from exit (second expr)))
+                  ((eq (car expr) 'if)
+                   (if (truep (m-eval (second expr) env))
+                       (progn
+                         (setq expr (third expr))
+                         (go loop))
+                     (and (drop expr 3)
+                          (progn
+                            (setq expr (fourth expr))
+                            (go loop)))))
+                  ((eq (car expr) 'lambda)
+                   (return-from exit (list 'closure expr env)))
+                  ((eq (car expr) 'define)
+                   (setf global-environment
+                         (cons (cons (second expr)
+                                     (m-eval (third expr) env))
+                               global-environment))
+                   (return-from exit (second expr)))
+                  (t
+                   ; apply
+                   (let ((proc (m-eval (car expr) env))
+                         (actuals (mapcar (lambda (x) (m-eval x env)) (cdr expr))))
+                     (cond ((functionp proc)
+                            (return-from exit (apply proc actuals)))
+                           ((closurep proc)
+                            ; (closure (lambda (args ..) body ...)) env)
+                            (let* ((args (second (second proc)))
+                                   (body (drop (second proc) 2))
+                                   (env1 (add-binding args actuals (third proc))))
+                              (while (consp (cdr body))
+                                (m-eval (car body) env1)
+                                (setq body (cdr body)))
+                              (setq expr (car body))
+                              (setq env env1)
+                              (go loop)))
+                           (t
+                            (error "unknown procedure type: ~A" proc)))))))
+           (t
+            (error "unknown expression type -- m-eval: ~A" expr))))))
+
+; 初期化
+(setf global-environment
+      (list
+       (cons 'true  'true)
+       (cons 'false 'false)
+       (cons 'nil   'nil)
+       (cons 'quit  'quit)
+       (cons 'car   #'car)
+       (cons 'cdr   #'cdr)
+       (cons 'cons  #'cons)
+       (cons 'eq?   (lambda (x y) (if (eq x y) 'true 'false)))
+       (cons 'pair? (lambda (x) (if (consp x) 'true 'false)))
+       (cons '+     #'+)
+       (cons '-     #'-)
+       (cons '*     #'*)
+       (cons '/     #'quotient)
+       (cons '=     (lambda (x y) (if (=  x y) 'true 'false)))
+       (cons '/=    (lambda (x y) (if (/= x y) 'true 'false)))
+       (cons '&lt;     (lambda (x y) (if (&lt;  x y) 'true 'false)))
+       (cons '&lt;=    (lambda (x y) (if (&lt;= x y) 'true 'false)))
+       (cons '&gt;     (lambda (x y) (if (&gt;  x y) 'true 'false)))
+       (cons '&gt;=    (lambda (x y) (if (&gt;= x y) 'true 'false)))
+       ))
+
+(defun print (xs)
+  (format (standard-output) "~A~%" xs))
+
+(defun princ (xs)
+  (format (standard-output) "~A" xs))
+
+;;; read-eval-print-loop
+(defun repl ()
+  (for ((result nil))
+       ((eq result 'quit))
+       (princ "&gt;&gt;&gt; ")
+       (setq result (m-eval (read) '()))
+       (print result)))
+</pre>
+<pre>
+&gt;&gt;&gt; (define sum (lambda (n a) (if (= n 0) a (sum (- n 1) (+ a n)))))
+SUM
+&gt;&gt;&gt; (sum 30 0)
+465
+&gt;&gt;&gt; (sum 100 0)
+5050
+&gt;&gt;&gt; (sum 1000 0)
+500500
+&gt;&gt;&gt; (sum 10000 0)
+50005000
+&gt;&gt;&gt; (sum 100000 0)
+5000050000
+
+&gt;&gt;&gt; (define fact (lambda (n a) (if (= n 0) a (fact (- n 1) (* a n)))))
+FACT
+&gt;&gt;&gt; (fact 10 1)
+3628800
+&gt;&gt;&gt; (fact 20 1)
+2432902008176640000
+&gt;&gt;&gt; (fact 50 1)
+30414093201713378043612608166064768844377641568960512000000000000
+&gt;&gt;&gt; (fact 100 1)
+93326215443944152681699238856266700490715968264381621468592963895217599993229915
+608941463976156518286253697920827223758251185210916864000000000000000000000000
+&gt;&gt;&gt; (fact 200 1)
+78865786736479050355236321393218506229513597768717326329474253324435944996340334
+29203042840119846239041772121389196388302576427902426371050619266249528299311134
+62857270763317237396988943922445621451664240254033291864131227428294853277524242
+40757390324032125740557956866022603190417032406235170085879617892222278962370389
+7374720000000000000000000000000000000000000000000000000
+
+&gt;&gt;&gt; (define foo (lambda () (foo)))
+FOO
+&gt;&gt;&gt; (foo)  ;; 無限ループ (CTRL-C で中断してください)
+</pre>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/index-j.html">稲葉雅幸</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/index-j.html">ソフトウェア特論</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/soft4-scheme-interp/index.html">Scheme インタプリタ</a>
+</ol>
+<hr>
+<h4 id="chap15">●キュー</h4>
+<p> キューは「待ち行列」といわれるデータ構造です。たとえば、チケットを買う場合窓口に長い列ができますが、それと同じだと考えてください。チケットを買うときは、列の途中に割り込むことはできませんね。いちばん後ろに並んで順番を待たなければいけません。列の先頭まで進むと、チケットを購入することができます。
+</p>
+<pre class="fig">
+ out                            in
+    ──────────────
+&lt;=  A  B  C  D  E  .  .  .  Z    &lt;=
+    ──────────────
+
+       図 : キューの動作
+</pre>
+<p> このように、要素を取り出す場合は列の先頭から行い、要素を追加する場合は列の後ろに行うデータ構造がキューなのです。キューは「先入れ先出し (FIFO : first-in, first-out)」とも呼ばれます。
+</p>
+<p> キューは連結リストを使って簡単に実装することができますが、大きな欠点もあります。連結リストをキューとして使う場合、データを追加するときに最後尾までセルをたどっていく操作が必要になるため、要素数が多くなるとデータの追加に時間がかかってしまうのです。
+</p>
+<p>そこで、先頭のセルを参照する変数のほかに、最後尾のセルを参照する変数を用意します。こうすると、先頭からセルをたどらなくても、最後尾にデータを追加することができます。下図を見てください。
+</p>
+<pre class="fig">
+rear  ─→ nil
+front ─→ nil
+
+(1) キューが空の状態
+
+rear  ─────────────────────┐
+                                                ↓
+          ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+front ─→│・│・┼→│・│・┼→│・│・┼→│・│・┼→ nil
+          └┼┴─┘  └┼┴─┘  └┼┴─┘  └┼┴─┘
+            ↓          ↓          ↓          ↓
+           data1       data2       data3       data4
+
+(2) キューにデータがある場合
+
+                     図 : キューの構造
+</pre>
+<p> この変数を front と rear としましょう。キューにデータがない場合は、(1) のように front と rear は nil になっています。データがある場合は、(2) のように front は先頭のセルを参照し、rear は最後尾のセルを参照しています。これで、データの追加を効率的に行うことができます。
+</p>
+<table border=1>
+<caption>表 : キューのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>enqueue(q, x)</td><td>キューにデータを追加する</td></tr>
+  <tr><td>dequeue(q) </td><td>キューからデータを取り出す</td></tr>
+  <tr><td>emptyp(q) </td><td>キューが空ならば真を返す</td></tr>
+</tbody>
+</table>
+<pre class="list">
+;;;
+;;; queue.l : キュー
+;;;
+;;;           Copyright (C) 2016 Makoto Hiroi
+;;;
+
+;; データ構造の定義
+(defclass &lt;queue&gt; ()
+  ((front :accessor queue-front :initform nil)
+   (rear  :accessor queue-rear  :initform nil)))
+
+(defgeneric enqueue (q x))
+(defgeneric dequeue (q))
+(defgeneric emptyp (q))
+
+;; キューは空か？
+(defmethod emptyp ((q &lt;queue&gt;))
+  (null (queue-front q)))
+
+;; データの挿入
+(defmethod enqueue ((q &lt;queue&gt;) x)
+  (let ((cell (list x)))
+    (cond ((emptyp q)
+           (setf (queue-front q) cell)
+           (setf (queue-rear  q) cell))
+          (t
+           (setf (cdr (queue-rear q)) cell)
+           (setf (queue-rear q) cell)))))
+
+;; データの取り出し
+(defmethod dequeue ((q &lt;queue&gt;))
+  (cond ((null (queue-front q))
+         (error "empty Queue"))
+        (t
+         (let ((x (car (queue-front q))))
+           (setf (queue-front q) (cdr (queue-front q)))
+           (if (null (queue-front q))
+               (setf (queue-rear q) nil))
+           x))))
+</pre>
+<pre>
+ISLisp&gt;(load "queue.l")
+T
+ISLisp&gt;(defglobal q (create (class &lt;queue&gt;)))
+Q
+ISLisp&gt;(emptyp q)
+T
+ISLisp&gt;(enqueue q 1)
+(1)
+ISLisp&gt;(enqueue q 2)
+(2)
+ISLisp&gt;(enqueue q 3)
+(3)
+ISLisp&gt;(enqueue q 4)
+(4)
+ISLisp&gt;(emptyp q)
+NIL
+ISLisp&gt;(dequeue q)
+1
+ISLisp&gt;(dequeue q)
+2
+ISLisp&gt;(dequeue q)
+3
+ISLisp&gt;(dequeue q)
+4
+ISLisp&gt;(dequeue q)
+&gt; Error at ERROR
+&gt; empty Queue
+
+ISLisp&gt;(emptyp q)
+T
+</pre>
+<hr>
+<h4 id="chap16">●経路の探索</h4>
+<p> アルゴリズムの説明は拙作のページ Common Lisp 入門 <a href="../xyzzy_lisp/abclisp12.html">経路の探索</a> をお読みください。
+</p>
+<pre class="fig">
+     Ｂ───Ｄ───Ｆ 
+   ／│      │
+ Ａ  │      │
+   ＼│      │
+     Ｃ───Ｅ───Ｇ
+
+        経路図
+</pre>
+<pre class="list">
+;;
+;; keiro.l : 経路の探索
+;;
+;;           Copyright (C) 2016 Makoto Hiroi
+;;
+
+;; ライブラリのロード
+(load "list.l")
+(load "queue.l")
+
+;; 隣接リスト (連想リスト)
+(defglobal adjacent
+           '((a b c)
+             (b a c d)
+             (c a b e)
+             (d b e f)
+             (e c d g)
+             (f d)
+             (g e)))
+
+(defun print (x)
+  (format (standard-output) "~A~%" x))
+
+;; 深さ優先探索
+(defun depth-first-search (goal path)
+  (if (eq goal (car path))
+      (print (reverse path))
+    (for-each
+     (lambda (x)
+       (if (not (member x path))
+           (depth-first-search goal (cons x path))))
+     (cdr (assoc (car path) adjacent)))))
+
+;; 幅優先探索
+(defun breadth-first-search (start goal)
+  (let ((q (create (class &lt;queue&gt;))))
+    (enqueue q (list start))
+    (while (not (emptyp q))
+      (let ((path (dequeue q)))
+        (if (eq (car path) goal)
+            (print (reverse path))
+          (for-each
+           (lambda (x)
+             (if (not (member x path))
+                 (enqueue q (cons x path))))
+           (cdr (assoc (car path) adjacent))))))))
+
+;; 反復進化
+(defun id-search (start goal)
+  (labels ((dfs (limit path)
+             (if (= limit (length path))
+                 (if (eq (car path) goal)
+                     (print (reverse path)))
+               (for-each
+                (lambda (x)
+                  (if (not (member x path))
+                      (dfs limit (cons x path))))
+                (cdr (assoc (car path) adjacent))))))
+    (for ((limit 1 (+ limit 1)))
+         ((= limit 7))
+         (format (standard-output) "----- ~D -----~%" limit)
+         (dfs limit (list start)))))
+</pre>
+<pre>
+ISLisp&gt;(depth-first-search 'g '(a))
+(A B C E G)
+(A B D E G)
+(A C B D E G)
+(A C E G)
+NIL
+ISLisp&gt;(breadth-first-search 'a 'g)
+(A C E G)
+(A B C E G)
+(A B D E G)
+(A C B D E G)
+NIL
+ISLisp&gt;(id-search 'a 'g)
+----- 1 -----
+----- 2 -----
+----- 3 -----
+----- 4 -----
+(A C E G)
+----- 5 -----
+(A B C E G)
+(A B D E G)
+----- 6 -----
+(A C B D E G)
+NIL
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<hr>
+<div class="small">
+[ <A href="../index.html">Home</a> | <a href="index.html">Common Lisp</a> | <a href="islisp.html">ISLisp</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881785</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm40.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm42.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>パズルの解法 [6]</h3>
+<p> 前回に引き続き「数独」のお話です。今回は「確定サーチ」の強化に挑戦してみましょう。確定サーチのアルゴリズム (手筋) は、deepgreen さんがご自身の Web サイト <a href="http://deepgreen.game.coocan.jp/">Computer Puzzle Solution</a> の <a href="http://deepgreen.game.coocan.jp/old/shortnotes/numberplace/index.htm">ナンバープレース(数独)</a> <a href="http://deepgreen.game.coocan.jp/old/shortnotes/numberplace/algorithm.htm">解法アルゴリズム</a> で詳しく解説されています。このなかで、deepgreen さんはいろいろな手筋を Intersection, Enclosure, Negation という 3 つの方法に集約しています。Intersection は Negation で代用できるとのことなので、今回は Enclosure と Negation を使って解法プログラムを作ってみましょう。
+</p>
+
+<h4>●データ構造の変更</h4>
+<p> 今まではバックトラックに適したデータ構造として、「縦、横、枠のそれぞれについて、置くことができる数字をビットで管理する」という方法を使っています。ところが、この方法は Enclosure と Negation には適していません。そこで、今回はオーソドックスに各マスごとに置くことができる数字を持たせることにします。数字は今までと同じくビットで表します。
+</p>
+
+<p> 盤面とフラグを格納するグローバル変数は次のようになります。
+</p>
+<pre class="list">
+リスト : グローバル変数の定義
+
+; 盤面
+(define *board* #f)
+
+; フラグ
+(define *flag* #f)
+
+; 盤面とフラグのアクセス関数
+(define (get-number  k)   (vector-ref *board* k))
+(define (put-number! n k) (vector-set! *board* k n))
+
+(define (get-flag  k)   (vector-ref *flag* k))
+(define (put-flag! n k) (vector-set! *flag* k n))
+</pre>
+
+<p> 今までは 3 つのベクタにフラグを格納しましたが、今回はひとつのベクタ *flag* にフラグを格納します。関数 get-flag は k 番目の枡のフラグを取り出します。関数 put-flag! は k 番目のマスにフラグ n を書き込みます。マスごとにフラグを持たせるので、マスに置くことができる数字は *flag* からフラグを取り出すだけで求めることができます。*flag* の初期化は関数 init-flag で行います。
+</p>
+
+<p> 次はフラグを削除する関数 delete-flag! を作ります。
+</p>
+<pre class="list">
+リスト : フラグの削除
+
+(define (delete-flag! n ls)
+  (let ((m (lognot n)))
+    (fold
+     (lambda (k a)
+       (cond ((and (space? k)
+                   (positive? (logand (get-flag k) n)))
+              (put-flag! (logand (get-flag k) m) k)
+              (+ a 1))
+             (else a)))
+     0
+     ls)))
+</pre>
+<p> 引数 n がクリアするフラグ、ls はマスの位置を格納したリストです。今回は確定サーチで複数のフラグをクリアする処理が必要になります。このとき、クリアするフラグがすべてオンではない場合もあるので、ビットの値を反転する排他的論理和 (logxor) を使うことはできません。lognot でビットを反転してクリアパターンを作り、論理積 (logand) で該当ビットをクリアします。
+</p>
+<p> delete-flag! の返り値は、実際にフラグを削除したマスの個数です。この値は Enclosure の処理で使用します。フラグと n の論理積を求め、その値が正であれば実際にフラグを削除します。
+</p>
+
+<p> 次はフラグを初期化する関数 init-flag を作ります。
+</p>
+<pre class="list">
+リスト : フラグの初期化
+
+(define (init-flag)
+  (set! *flag* (make-vector SIZE2 #x3fe))
+  (dotimes (i SIZE2)
+    (let ((n (get-number i)))
+      (when (positive? n)
+        (put-flag! 0 i)
+        (delete-flag! n (get-cell i))))))
+</pre>
+<p> init-flag は簡単です。数字 n が正であれば、put-flag! で i 番目のマスのフラグを 0 にクリアして、delete-flag! で縦横枠のマスのフラグを削除します。
+</p>
+
+<h4>●バックトラックによる解法</h4>
+<p> ちょっと横道にそれますが、ここでバックトラックによる解法プログラムを作ってみましょう。最初に、フラグのセーブとリストアを行う関数を作ります。
+</p>
+
+<pre class="list">
+リスト : フラグのセーブとリストア
+
+(define (save-flag k)
+  (fold
+   (lambda (x a) (cons (cons (get-flag x) x) a))
+   '()
+   (get-cell k)))
+
+(define (restore-flag xs)
+  (for-each
+   (lambda (x) (put-flag! (car x) (cdr x)))
+   xs))
+
+</pre>
+<p> 関数 save-flag は k 番目のマスが属する縦横枠のマスのフラグをリストに格納して返します。これは fold を使うと簡単ですね。リストの要素はコンスセルで CAR 部にフラグを、CDR 部に位置を格納します。関数 restor-flag は save-flag でセーブしたフラグを元に戻します。for-each でリスト xs の要素を順番に取り出して、put-flag! で値を *flag* に書き込むだけです。
+</p>
+
+<p> バックトラックで解を求める関数 solver は次のようになります。
+</p>
+<pre class="list">
+リスト : バックトラックによる解法
+
+; 数字を決定する
+(define (decide-number! n k)
+  (put-number! n k)
+  (put-flag! 0 k)
+  (delete-flag! n (get-cell k)))
+
+; 置ける数字が最も少ないマスを探す
+(define (search-min-cell)
+  (vector-fold
+   (lambda (k a n)
+     (if (positive? n)
+         a
+       (let ((c (logcount (get-flag k))))
+         (if (&lt; c (cdr a))
+             (cons k c)
+           a))))
+   '(#f . 10)
+   *board*))
+
+; 深さ優先探索
+(define (dfs1)
+  (let ((k (car (search-min-cell))))
+    (if (not k)
+        (print-bit-board)
+      (let ((xs (save-flag k)))
+        (bit-for-each
+         (lambda (n)
+           (decide-number! n k)
+           (dfs1)
+           (restore-flag xs)
+           (put-number! 0 k))
+         (get-flag k))))))
+
+; 解法
+(define (solver qs)
+  (set! *board* (make-bit-board qs))
+  (init-flag)
+  (dfs1))
+</pre>
+<p> 実際の処理は関数 dfs1 で行います。dfs1 は前回の <a href="abcscm40.html#appendix">追記</a> で説明したように、候補の数字が最小のマスを search-min-cell で求めます。最初に save-flag で該当するマスのフラグをセーブします。関数 decide-number! は数字を盤面に書き込み、該当するセルのフラグを delete-flag! で削除します。dfs1 を再帰呼び出ししたあと、restore-flag でフラグの値を元に戻し、put-number! で k 番目のマスを空き場所に戻します。
+</p>
+
+<h4>●実行例 (4)</h4>
+<p> それでは実際にバックトラックだけで数独を解いてみましょう。 <a href="http://puzzle.gr.jp/show/Japanese">Puzzle Generater Japan</a> にある <a href="http://puzzle.gr.jp/show/Japanese/NPProblems/Java">Java版標準問題集</a> より問題 8-a, 8-b, 9-a, 9-b, 10-a, 10-b を試してみたところ、実行時間は次のようになりました。
+</p>
+<pre>
+  表 : 実行結果 (単位 : 秒)
+
+  問題 : Hint : (1)  : (2a)  : (4)
+ ------+------+------+-------+-------
+   8-a :  20  : 1.04 : 0.27  : 0.24
+   8-b :  20  : 2.78 : 0.061 : 0.094
+   9-a :  20  : 3.44 : 0.25  : 0.21
+   9-b :  21  : 1.31 : 0.12  : 0.11
+  10-a :  22  : 0.29 : 0.027 : 0.020
+  10-b :  22  : 0.61 : 0.013 : 0.011
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, Gauche ver 0.9.2
+</pre>
+<p> (1) と (2a) は前々回作成したバックトラックによる解法プログラムの結果で、(4) が今回作成したプログラムの結果です。search-min-cell を用いて最小の候補数のマスから探索することで、今回のプログラム (4) も高速に解を求めることができました。ちなみに、search-min-cell を使わないで単純に深さ優先探索を行うと、(1) の結果よりも遅くなります。
+</p>
+
+<h4>●Enclosure と Negation</h4>
+<p> それでは本題に戻って、確定サーチの方法を説明します。Enclosure は基本的な確定サーチを拡張した方法で、Negation は「背理法」を使った方法です。次の例を見てください。
+</p>
+<pre class="fig">
+      置くことができる数字
+--------------------------
+  ８
+  Ａ  [4, 5, 7, 9]
+  Ｂ  [4, 5, 7]
+  ６
+  ２
+  Ｃ  [3, 5, 7]
+  １
+  Ｄ  [4, 5, 9]
+  Ｅ  [4, 9]
+</pre>
+<p> これは縦 1 列を抜き出したものです。5 つの空き場所がありますが、置くことができる数字の候補 (集合演算の和) を求めると、3, 4, 5, 7, 9 の 5 つになります。この個数を数字の候補数と呼ぶことにします。5 つあるのは当然のことですが、数字の候補数が 5 つよりも少ないとその問題は解くことができないことに注意してください。
+</p>
+<p> 次は、4 つのマスを選びます。A, B, D, E のマスを選ぶと数字の候補は 4, 5, 7, 9 の 4 つになります。この場合、4, 5, 7, 9 が入るマスは A, B, D, E のいずれかであり、他のマスに入ることはありません。したがって、他のマスの数字の候補から 4, 5, 7, 9 を削除することができます。この場合、マス C の 5, 7 を削除して、C の数字を 3 に決定することができます。
+</p>
+<p> 一般に、n 個の空き場所から m 個のマスを選んで数字の候補数 k を求めると、次の 3 通りのパターンになります。
+</p>
+<OL>
+  <LI>k &lt; m : 解無し
+  <LI>k = m : 数字は選んだマス以外には入らない (Enclosure)
+  <LI>k &gt; m : 何も決定できない
+</OL>
+<p> deepgreen さんは 2 の場合を Enclosure と呼んでいます。Enclosure が成立するとき、選択しなかったマスの候補から該当する数字を削除することができます。なお、Enclosure が成立したからといって、数字を必ず決定できるわけではありません。数字を決定できない場合でも、数字の候補数を減らすことができれば、他方向で Enclosure が成立したときに数字を決定できるようになります。また、今までの確定サーチは m = 1 と m = n - 1 の場合に該当します。
+</p>
+
+<p> Enclosure で解けない場合は Negation を使います。Negation は「背理法」のことで、Enclosure の条件 1 を使って判定します。Negation は二通りの方法が考えられます。一つは、あるマスから数字の候補をひとつ削除して Enclosure を適用します。ここで条件 1 が発生すると解ける問題が解けなくなる、つまり矛盾が生じたことになります。したがって、そのマスは削除した数字に決定することができます。これは背理法の考え方そのものですね。
+</p>
+
+<p> 簡単な例を示しましょう。もう一度、上の例を見てください。マス C の候補から数字 3 を削除します。次に、Enclosure を適用すると、n = 5, m = 5 で数字の候補数 k は 4 になります。条件 1 に該当するので、このままでは解くことができません。つまり、マス C から数字 3 を削除したのが間違いで、マス C の数字は 3 と決定することができるのです。
+</p>
+
+<p> なお、この方法で数字が決定できるのは矛盾を導けた場合だけです。矛盾が導けない場合、その数字が正しいか誤りか判断することはできません。また、あるマスで候補となる数字を Negation で全てチェックしても、矛盾を導けない可能性もあります。この場合、そのマスで数字を決定することはできません。ご注意くださいませ。
+</p>
+
+<p> もう一つは、実際に数字を書き込んでみる方法です。これで矛盾が生じたら、そのマスにその数字は入らないことがわかります。可能性のある数字をすべてチェックして、矛盾しない数字が一つしかない場合、そのマスはその数字に決定することができます。もし、矛盾しない数字が複数ある場合、そのマスで数字を決定することはできません。ただし、矛盾した数字はそのマスから該当するフラグを削除することができます。
+</p>
+
+<p> 今回は二通りの方法を試してみましょう。
+</p>
+
+<h4>●Enclosure の実装</h4>
+<p> それではプログラムを作りましょう。最初に、置ける数字がひとつしかないマスを探して確定する関数 search-cell を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 置ける数字がひとつしかないマスを探す
+
+(define (search-cell failure)
+  (vector-fold
+   (lambda (k a n)
+     (if (positive? n)
+         a
+       (let ((m (get-flag k)))
+         (cond ((zero? m)
+                (failure #f))
+               ((= (logcount m) 1)
+                (decide-number! m k)
+                (+ a 1))
+               (else a)))))
+   0
+   *board*))
+</pre>
+<p> 引数 failure は矛盾が生じたときに処理を中断するための継続です。vector-fold で *board* から要素を取り出してラムダ式に渡します。ラムダ式の引数 k が添字、a が累積変数 (確定した数字の個数)、n が数字です。
+</p>
+<p> n が 0 でなければ a をそのまま返します。そうでなければ、get-flag で k 番目のマスのフラグを求めます。それが 0 であれば解はありません。failure で #f を返します。オンビットの個数が 1 の場合、そのマスはその数字で確定することができます。decide-number! で数字 m を書き込み、a を +1 して返します。
+</p>
+
+<p> 次は縦、横、枠で Enclosure をチェックする関数 enclosure を作ります。
+</p>
+<pre class="list">
+リスト : 縦、横、枠で Enclosure をチェックする
+
+(define (enclosure getpos failure)
+  (fold
+    (lambda (i a)
+      (let ((ls (filter space? (getpos i))))
+        (let loop ((j (length ls)) (b a))
+          (if (zero? j)
+              b
+            (loop (- j 1) (+ (enclosure-sub j ls failure) b))))))
+    0
+    '(0 1 2 3 4 5 6 7 8)))
+</pre>
+<p> 関数 enclosure の引数 getpos はマスの位置を求める関数で、failure は矛盾が生じたときに脱出するための継続です。実際の処理は関数 enclosure-sub で行います。この関数は空き場所から j 個のマスを選び、Enclosure が成立しているかチェックします。enclosure の返り値は Enclosure が成立して実際にフラグをクリアした回数になります。
+</p>
+
+<p> 次は Enclosure をチェックする関数 enclosure-sub を作ります。
+</p>
+<pre class="list">
+リスト : Enclosure のチェック
+
+(define (collect-numbers xs)
+  (fold (lambda (x a) (logior (get-flag x) a)) 0 xs))
+
+(define (enclosure-sub n ls failure)
+  (fold
+    (lambda (xs a)
+      (let* ((m (collect-numbers xs))
+             (c (logcount m)))
+          (cond ((&lt; c n) (failure #f))
+                ((= c n)
+                 (+ a (delete-flag! m (lset-difference eqv? ls xs))))
+                (else a))))
+    0
+    (combinations n ls)))
+</pre>
+<p> enclosure-sub はリスト ls から n 個の空き場所を選び、Enclosure が成立しているかチェックします。空き場所の組み合わせは関数 combinations で生成します。この関数は拙作のページ <a href="abcscm11.html">順列と組み合わせ</a> で作成したプログラムと同じで、組み合わせをリストに格納して返します。
+</p>
+
+<p> ラムダ式の引数 xs が n 個の空き場所を格納したリストです。各マスの数字の候補は関数 collect-numbers で求めます。get-flag でフラグを求め、それら全ての論理和を計算するだけです。そして、logcount で数字を数えて変数 c にセットします。c が n よりも小さい場合、矛盾が発生して解くことができません。failure で #f を返します。
+</p>
+<p> c と n が等しい場合は Enclosure が成立しています。xs 以外のマスで、数字に対応するフラグをクリアします。xs 以外のマスは集合の差を求める関数 lset-difference で簡単に求めることができます。あとは delete-flag! を呼び出してフラグをクリアするだけです。
+</p>
+
+<p> 次は search-cell と enclosure を呼び出して、Enclosure のチェックを繰り返し行う関数 enclosure-loop を作ります。
+</p>
+<pre class="list">
+リスト : Enclosure のチェックを繰り返し行う
+
+(define (enclosure-loop)
+  (call/cc
+    (lambda (failure)
+      (let loop ()
+        (if (zero? (+ (search-cell failure)
+                      (enclosure get-x-cell failure)
+                      (enclosure get-y-cell failure)
+                      (enclosure get-g-cell failure)))
+            #t
+          (loop))))))
+</pre>
+<p> call/cc で脱出先の継続 failure を設定し、それを search-cell と enclosure に渡して呼び出します。search-cell と enclosure の合計値が 0 ならば、これ以上数字を確定できないので #t を返します。そうでなければ、数字を確定できる可能性があるので、Enclosure のチェックを繰り返します。
+</p>
+
+<h4>●Negation の実装</h4>
+<p> 次は Negation を行う関数 negation1 を作ります。
+</p>
+<pre class="list">
+リスト : 背理法 (1)
+
+; 空き場所を求める
+(define (get-space)
+  (vector-fold
+   (lambda (i a n) (if (zero? n) (cons i a) a))
+   '()
+   *board*))
+
+; 候補の数字が少ない順に並べる
+(define (get-space-sort)
+  (map car
+       (sort (map (lambda (x) (cons x (logcount (get-flag x))))
+                  (get-space))
+             (lambda (x y) (&lt; (cdr x) (cdr y))))))
+
+; 背理法 (1)
+(define (negation1 ls)
+  (let ((save1 *board*) (save2 *flag*))
+    (call/cc
+      (lambda (break)
+        (for-each
+          (lambda (k)
+            (bit-for-each
+              (lambda (n)
+                (set! *board* (vector-copy save1))
+                (set! *flag*  (vector-copy save2))
+                (delete-flag! n (list k))
+                (cond ((not (enclosure-loop))
+                       (set! *board* save1)
+                       (set! *flag*  save2)
+                       (decide-number! n k)
+                       (break #t))
+                      (else
+                       (set! *board* save1)
+                       (set! *flag* save2))))
+              (get-flag k)))
+          ls)
+        #f))))
+</pre>
+<p> 引数 ls は空き場所を格納したリストです。Negation の処理は、数字の候補数が少ない方が効率的です。このため、関数 get-space で空き場所を求め、それを関数 get-space-sort でソートし、そのリストを negation1 に渡します。まず最初に、*board* と *flag* を save1 と save2 に保存します。次に、call/cc で脱出用の継続を break に設定します。そして、for-each で ls から空き場所を取り出して、背理法で数字を決定できるかチェックします。
+</p>
+<p> bit-for-each で候補の数字をひとつずつ取り出します。Enclosure のチェックは *board* と *flag* の値を書き換えるので、vector-copy で save1 と save2 のベクタをコピーします。次に、delete-flag! でその数字を候補から削除して、enclosure-loop を呼び出します。矛盾が発生した場合、enclosure-loop は #f を返します。その場合は、位置 k の数字を n に確定することができます。*board* と *flag* の値を元に戻してから decide-number! で数字を書き込み、break を評価して #t を返します。
+</p>
+<p> 次は、もう一つの背理法を行う関数 negation2 を作ります。
+</p>
+<pre class="list">
+リスト : 背理法 (2)
+
+(define (negation2 ls)
+  (let ((save1 *board*) (save2 *flag*) (result #f))
+    (call/cc
+      (lambda (break)
+        (for-each
+          (lambda (k)
+            (let ((a '()) (b '()))
+              (bit-for-each
+               (lambda (n)
+                 (set! *board* (vector-copy save1))
+                 (set! *flag*  (vector-copy save2))
+                 ; 仮置きする
+                 (decide-number! n k)
+                 (if (enclosure-loop)
+                     ; 矛盾しない
+                     (push! a n)
+                   ; 矛盾する
+                   (push! b n)))
+               (get-flag k))
+              ; 元に戻す
+              (set! *board* save1)
+              (set! *flag* save2)
+              (cond ((single? a)
+                     ; 決定
+                     (decide-number! (car a) k)
+                     (break #t))
+                    ((pair? b)
+                     ; 矛盾した数字のフラグを消す
+                     (for-each (lambda (n) (delete-flag! n (list k))) b)
+                     (set! result #t)))))
+          ls)
+        result))))
+</pre>
+<p> プログラムの基本的な構造は negation1 と同じです。bit-for-each のラムダ式で数字を仮置きして、矛盾しない場合は変数 a のリストに、矛盾する場合は変数 b のリストに数字を追加します。
+</p>
+<p> そのあと、*board* と *flag* を元に戻して、変数 a, b をチェックします。リスト a の要素が一つしかない場合、そのマスはその数字で確定することができます。decide-number! で数字を書き込み、継続 break で #t を返します。リスト b に要素がある場合、delete-flag! で対応するフラグを削除して、result を #t に書き換えます。このあと、確定できる数字がないかチェックするため処理を続けます。最後に、result を返します。
+</p>
+
+<h4>●確定的アルゴリズムによる解法</h4>
+<p> 最後に確定的アルゴリズムで数独を解く関数 solver1 を作ります。
+</p>
+<pre class="list">
+リスト :  確定的アルゴリズムによる解法
+
+(define (solver1 qs)
+  (set! *board* (make-bit-board qs))
+  (init-flag)
+  (let loop ()
+    (cond ((not (enclosure-loop))
+           (error "data error"))
+          ((finish?)
+           (print "kakutei")
+           (print-bit-board))
+          ((negation2 (get-space-sort))
+           (print "Negation")
+           (loop))
+          (else
+           (print "backtrack")
+           (dfs1)))))
+</pre>
+<p> *board* と *flag* を初期化したあと、enclosure-loop を呼び出して、Enclosure のチェックを行います。ここで矛盾が生じた場合、問題に誤りがあります。error でエラーを送出します。
+</p>
+
+<p> 次に、finish? を呼び出して問題が解けたかチェックします。解けた場合は print-bit-board で解を出力します。そうでなければ、背理法の出番です。negation1 または negation2 を呼び出して、数字を決定する、またはフラグを削除することができたら、Enclosure のチェックを繰り返します。そうでなければ、dfs1 を呼び出してバックトラックで解を求めます。
+</p>
+
+<h4>●実行例 (5)</h4>
+<p> それでは、実際に数独を解いてみましょう。<a href="http://puzzle.gr.jp/show/Japanese">Puzzle Generater Japan</a> にある <a href="http://puzzle.gr.jp/show/Japanese/NPProblems/Java">Java版標準問題集</a> より問題 8-a, 8-b, 9-a, 9-b, 10-a, 10-b と <a href="http://puzzle.gr.jp/show/Japanese/NPProblems/JavaFiendish">Java版超難問集</a> の超難問 849 と 1122 を試してみたところ、実行時間は次のようになりました。
+</p>
+<pre>
+  表 : 実行結果 (単位 : 秒)
+
+  問題 : Hint : (3a)       : (5)
+ ------+------+------------+-------
+   8-a :  20  : 0.025      : 0.020
+   8-b :  20  : 0.013 (確) : 0.017
+   9-a :  20  : 0.021      : 0.016
+   9-b :  21  : 0.013 (確) : 0.023
+  10-a :  22  : 0.016      : 0.016
+  10-b :  22  : 0.011 (確) : 0.017
+
+  問題 : Hint : (3a)  : (5a) : (5b)
+ ------+------+-------+------+------
+   849 :  24  : 0.098 : 0.13 : 0.12  (Negation : 3 回)
+  1122 :  24  : 0.081 : 0.14 : 0.12  (Negation : 2 回)
+
+ (5a) negation1
+ (5b) negation2
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, Gauche ver 0.9.2
+</pre>
+<p> 問題 849 と 1122 以外は、Enclosure だけで解くことができました。実行時間も高速です。849 と 1122 は Negation <a href="abcscm41.html#note1">[*1]</a> を複数回適用しないと解くことができません。Negation の処理は時間がかかるので、適用回数が多くなると実行時間は遅くなってしまいます。今回は Negation が複数回適用されたので、(3a) よりも少し遅くなりました。negation1 と negation2 で実行時間の差はほとんどありませんでした。
+</p>
+
+<p> 今回はここまでです。次回は Intersection を実装してみましょう。
+</p>
+
+<div class="note">
+<a name="note1">-- note --------</a><br>
+[*1] deepgreen さんの<a href="http://deepgreen.game.coocan.jp/old/shortnotes/numberplace/algorithm.htm">ドキュメント</a>で Intersection と呼ばれているアルゴリズムを追加すると、Negation を適用しなくても解くことができます。
+</div>
+<h4>●謝辞</h4>
+<p> 今回のプログラムを作成するにあたり、deepgreen さんの Web サイト <a href="http://deepgreen.game.coocan.jp/">Computer Puzzle Solution</a> で公開されているドキュメント <a href="http://deepgreen.game.coocan.jp/old/shortnotes/numberplace/index.htm">ナンバープレース(数独)</a> <a href="http://deepgreen.game.coocan.jp/old/shortnotes/numberplace/algorithm.htm">解法アルゴリズム</a> を参考にさせていただきました。素晴らしいドキュメントを公開されている deepgreen さんに深く感謝いたします。 
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; nplace.scm : 数独の解法
+;              (Enclosure と Negation)
+;
+;              Copyright (C) 2013 Makoto Hiroi
+;
+(use srfi-1)
+(use srfi-43)
+
+; ビット用高階関数
+(define (bit-for-each func n)
+  (let loop ((n n))
+    (if (positive? n)
+        (let ((m (logand (- n) n)))
+          (func m)
+          (loop (logxor n m))))))
+
+; ビットの畳み込み
+(define (bit-fold func init n)
+  (let loop ((n n) (a init))
+    (if (&lt;= n 0)
+        a
+      (let ((m (logand (- n) n)))
+        (loop (logxor n m) (func m a))))))
+
+; 定数
+(define SIZE 9)
+(define SIZE2 (* SIZE SIZE))
+
+; 盤面
+(define *board* #f)
+
+; フラグ
+(define *flag* #f)
+
+; 縦、横、枠の位置を格納する
+(define *xyg-tbl* #f)
+(define *x-tbl* #f)
+(define *y-tbl* #f)
+(define *g-tbl* #f)
+
+; 盤面とフラグのアクセス関数
+(define (get-number  k)   (vector-ref *board* k))
+(define (put-number! n k) (vector-set! *board* k n))
+
+(define (get-flag  k)   (vector-ref *flag* k))
+(define (put-flag! n k) (vector-set! *flag* k n))
+
+
+; 縦横枠のマスを求める
+(define (get-cell k) (vector-ref *xyg-tbl* k))
+
+; 縦方向のマスを求める
+(define (get-x-cell k) (vector-ref *x-tbl* k))
+
+; 横方向のマスを求める
+(define (get-y-cell k) (vector-ref *y-tbl* k))
+
+; 枠内のマスを求める
+(define (get-g-cell k) (vector-ref *g-tbl* k))
+
+; 添字 -&gt; 座標
+(define (get-x k) (modulo k SIZE))
+(define (get-y k) (quotient k SIZE))
+(define (get-g k)
+    (+ (quotient (get-x k) 3) (* (quotient (get-y k) 3) 3)))
+
+; 空き場所か？
+(define (space? k) (zero? (get-number k)))
+
+; テーブルの初期化
+(define (init-tbl)
+  (set! *x-tbl*
+        (list-&gt;vector (map (lambda (k) (iota SIZE k SIZE))
+                           (iota SIZE 0))))
+  (set! *y-tbl*
+        (list-&gt;vector (map (lambda (k) (iota SIZE (* k SIZE)))
+                           (iota SIZE 0))))
+  (set! *g-tbl*
+        (list-&gt;vector
+         (map (lambda (k)
+                (let ((start (vector-ref #(0 3 6 27 30 33 54 57 60) k)))
+                  (map (lambda (x) (+ start x))
+                       '(0 1 2 9 10 11 18 19 20))))
+              (iota SIZE 0))))
+  (set! *xyg-tbl*
+        (list-&gt;vector (map (lambda (p)
+                             (sort (lset-union eqv?
+                                               (get-x-cell (get-x p))
+                                               (get-y-cell (get-y p))
+                                               (get-g-cell (get-g p)))))
+                           (iota SIZE2 0)))))
+
+; フラグを消す
+(define (delete-flag! n ls)
+  (let ((m (lognot n)))
+    (fold
+     (lambda (k a)
+       (cond ((and (space? k)
+                   (positive? (logand (get-flag k) n)))
+              (put-flag! (logand (get-flag k) m) k)
+              (+ a 1))
+             (else a)))
+     0
+     ls)))
+
+; フラグの初期化
+(define (init-flag)
+  (set! *flag* (make-vector SIZE2 #x3fe))
+  (dotimes (i SIZE2)
+    (let ((n (get-number i)))
+      (when (positive? n)
+        (put-flag! 0 i)
+        (delete-flag! n (get-cell i))))))
+
+; 数字を決定する
+(define (decide-number! n k)
+  (put-number! n k)
+  (put-flag! 0 k)
+  (delete-flag! n (get-cell k)))
+
+; 数字をビットに変換する
+(define (make-bit-board qs)
+  (list-&gt;vector (map (lambda (x) (if (zero? x) x (ash 1 x))) qs)))
+
+; 盤面の表示
+(define (print-bit-board)
+  (dotimes (x SIZE2)
+    (display (logcount (- (get-number x) 1)))
+    (display " ")
+    (if (= (modulo x SIZE) 8) (newline))))
+
+;;
+;; バックトラックによる解法
+;;
+
+; フラグのセーブ
+(define (save-flag k)
+  (fold
+   (lambda (x a) (cons (cons (get-flag x) x) a))
+   '()
+   (get-cell k)))
+
+; フラグのリストア
+(define (restore-flag xs)
+  (for-each
+   (lambda (x) (put-flag! (car x) (cdr x)))
+   xs))
+
+; 置ける数字が最も少ないマスを探す
+(define (search-min-cell)
+  (vector-fold
+   (lambda (k a n)
+     (if (positive? n)
+         a
+       (let ((c (logcount (get-flag k))))
+         (if (&lt; c (cdr a))
+             (cons k c)
+           a))))
+   '(#f . 10)
+   *board*))
+
+
+; 深さ優先探索
+(define (dfs1)
+  (let ((k (car (search-min-cell))))
+    (if (not k)
+        (print-bit-board)
+      (let ((xs (save-flag k)))
+        (bit-for-each
+         (lambda (n)
+           (decide-number! n k)
+           (dfs1)
+           (restore-flag xs)
+           (put-number! 0 k))
+         (get-flag k))))))
+
+; バックトラックによる解法
+(define (solver qs)
+  (set! *board* (make-bit-board qs))
+  (init-flag)
+  (dfs1))
+
+;;
+;; Enclosure
+;;
+
+; 組み合わせの生成
+(define (combinations n ls)
+  (define (comb n ls a b)
+    (cond ((zero? n)
+           (cons (reverse a) b))
+          ((= (length ls) n)
+           (cons (append (reverse a) ls) b))
+          (else
+           (comb (- n 1)
+                 (cdr ls)
+                 (cons (car ls) a)
+                 (comb n (cdr ls) a b)))))
+  ;
+  (comb n ls '() '()))
+
+; 要素が一つのリストか
+(define (single? ls)
+  (and (pair? ls) (null? (cdr ls))))
+
+; 置くことができる数字が一つしかないマスを探す
+(define (search-cell failure)
+  (vector-fold
+   (lambda (k a n)
+     (if (positive? n)
+         a
+       (let ((m (get-flag k)))
+         (cond ((zero? m)
+                (failure #f))
+               ((= (logcount m) 1)
+                (decide-number! m k)
+                (+ a 1))
+               (else a)))))
+   0
+   *board*))
+
+; 候補の数字を集める
+(define (collect-numbers xs)
+  (fold (lambda (x a) (logior (get-flag x) a)) 0 xs))
+
+; Enclosure のチェック
+(define (enclosure-sub n ls failure)
+  (fold
+    (lambda (xs a)
+      (let* ((m (collect-numbers xs))
+             (c (logcount m)))
+          (cond ((&lt; c n) (failure #f))
+                ((= c n)
+                 (+ a (delete-flag! m (lset-difference eqv? ls xs))))
+                (else a))))
+    0
+    (combinations n ls)))
+
+; 縦、横、枠で Enclosure をチェックする
+(define (enclosure getpos failure)
+  (fold
+    (lambda (i a)
+      (let ((ls (filter space? (getpos i))))
+        (let loop ((j (length ls)) (b a))
+          (if (zero? j)
+              b
+            (loop (- j 1) (+ (enclosure-sub j ls failure) b))))))
+    0
+    '(0 1 2 3 4 5 6 7 8)))
+
+; Enclosure のチェックを繰り返し行う
+(define (enclosure-loop)
+  (call/cc
+    (lambda (failure)
+      (let loop ()
+        (if (zero? (+ (search-cell failure)
+                      (enclosure get-x-cell failure)
+                      (enclosure get-y-cell failure)
+                      (enclosure get-g-cell failure)))
+            #t
+          (loop))))))
+
+;;
+;; Negation
+;;
+
+; 空き場所を求める
+(define (get-space)
+  (vector-fold
+   (lambda (i a n) (if (zero? n) (cons i a) a))
+   '()
+   *board*))
+
+; 候補の数字が少ない順に並べる
+(define (get-space-sort)
+  (map car
+       (sort (map (lambda (x) (cons x (logcount (get-flag x))))
+                  (get-space))
+             (lambda (x y) (&lt; (cdr x) (cdr y))))))
+
+; 背理法
+(define (negation1 ls)
+  (let ((save1 *board*) (save2 *flag*))
+    (call/cc
+      (lambda (break)
+        (for-each
+          (lambda (k)
+            (bit-for-each
+              (lambda (n)
+                (set! *board* (vector-copy save1))
+                (set! *flag*  (vector-copy save2))
+                (delete-flag! n (list k))
+                (cond ((not (enclosure-loop))
+                       (set! *board* save1)
+                       (set! *flag*  save2)
+                       (decide-number! n k)
+                       (break #t))
+                      (else
+                       (set! *board* save1)
+                       (set! *flag* save2))))
+              (get-flag k)))
+          ls)
+        #f))))
+
+(define (negation2 ls)
+  (let ((save1 *board*) (save2 *flag*) (result #f))
+    (call/cc
+      (lambda (break)
+        (for-each
+          (lambda (k)
+            (let ((a '()) (b '()))
+              (bit-for-each
+               (lambda (n)
+                 (set! *board* (vector-copy save1))
+                 (set! *flag*  (vector-copy save2))
+                 ; 仮置きする
+                 (decide-number! n k)
+                 (if (enclosure-loop)
+                     ; 矛盾しない
+                     (push! a n)
+                   ; 矛盾する
+                   (push! b n)))
+               (get-flag k))
+              ; 元に戻す
+              (set! *board* save1)
+              (set! *flag* save2)
+              (cond ((single? a)
+                     ; 決定
+                     (decide-number! (car a) k)
+                     (break #t))
+                    ((pair? b)
+                     ; 矛盾した数字のフラグを消す
+                     (for-each (lambda (n) (delete-flag! n (list k))) b)
+                     (set! result #t)))))
+          ls)
+        result))))
+
+
+; 解けたか？
+(define (finish?)
+  (not (vector-index zero? *board*)))
+
+; 解法
+(define (solver1 qs)
+  (set! *board* (make-bit-board qs))
+  (init-flag)
+  (let loop ()
+    (cond ((not (enclosure-loop))
+           (error "data error"))
+          ((finish?)
+           (print "kakutei")
+           (print-bit-board))
+          ((negation2 (get-space-sort))
+           (print "Negation")
+           (loop))
+          (else
+           (print "backtrack")
+           (dfs1)))))
+
+; 表の初期化
+; 最初に１回だけ実行する
+(init-tbl)
+</pre>
+<div align="right">
+初出 2010/06/19<br>
+改訂 2013/11/30
+</div>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2010-2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm40.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm42.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

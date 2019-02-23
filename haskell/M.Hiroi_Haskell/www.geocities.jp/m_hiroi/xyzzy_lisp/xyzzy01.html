@@ -1,0 +1,762 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>xyzzy Lisp Progoramming</title>
+  <meta name="description" content="xyzzy,xyzzy Lisp,Common Lisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881767</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>xyzzy Lisp Programming</h1>
+<div class="small">
+[ PrevPage | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="xyzzy02.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">まずは動かしてみよう</h3>
+<p> xyzzy は Emacs 系エディタと同じく、起動時から存在する *scratch* バッファで Lisp プログラムを入力し、CTRL キーと j キーを同時に押すと(C-j と記述する)、それを実行してくれます。では、さっそく次のプログラムを入力してください。
+</p>
+<pre>
+(defun fact (n)
+  (if (= n 0)
+      1
+    (* n (fact (1- n)))))  ; ここで C-j を押すこと
+fact                       ; fact という関数が定義された
+</pre>
+<p> Lisp の場合、; から行末までがコメントになります。コメントを入力する必要はありません。defun は関数を定義し、if は条件分岐を実行する関数です。詳しい説明は Common Lisp 入門 <a href="abclisp02.html#chap04">関数定義</a> と <a href="abclisp03.html">条件分岐</a> をお読みください。(1- n) は (- n 1) と同じ意味です。fact は階乗を求める関数です。それでは実行してみましょう。
+</p>
+<pre>
+(fact 10)
+3628800
+(fact 20)
+2432902008176640000
+(fact 30)
+265252859812191058636308480000000
+(fact 40)
+815915283247897734345611269596115894272000000000
+(fact 50)
+30414093201713378043612608166064768844377641568960512000000000000
+</pre>
+<p> このように、xyzzy Lisp は多倍長整数をサポートしています。とてもエディタに搭載されている Lisp とは思えませんね。ちなみに、Emacs Lisp はほとんどの処理系で -134217728 から 134217727 まで、つまり 28 bit 長です。
+</p>
+<p> fact は定義の中で自分自身を呼び出しています。これを<b>再帰呼び出し</b>といいます。Lisp では、再帰呼び出しを積極的に活用してプログラミングを行います。再帰呼び出しは、Common Lisp 入門 <a href="abclisp03.html#chap06">再帰定義</a> で詳しく説明しています。
+</p>
+<p> 再帰呼び出しを使えば、フィボナッチ数列も簡単に求めることができます。
+</p>
+<pre>
+(defun fibo (n)
+  (if (&lt;= 0 n 1)
+      1
+    (+ (fibo (1- n)) (fibo (- n 2)))))
+fibo
+
+(dotimes (x 10) (print (fibo x)))
+
+1 
+1 
+2 
+3 
+5 
+8 
+13 
+21 
+34 
+55 
+nil
+</pre>
+<p> dotimes は繰り返しを行う関数 <sup><a href="xyzzy01.html#note1">[*1]</a></sup> で、print はデータを出力する関数です。dotimes のほかによく使う繰り返し関数には dolist や while があります。これらの関数は Common Lisp 入門 <a href="abclisp04.html">繰り返し</a> をお読みください。
+</p>
+<p> 関数 fibo は自分自身を 2 回呼び出しています。これを「二重再帰」といいます。この場合、同じ値を何回も求めることになるため、効率はとても悪くなります。私のオンボロマシン (Pentium 166 MHz) では (fibo 20) でさえ数秒かかります。この関数で大きな数を計算させるのはやめましょう。
+</p>
+<p> もうひとつ数値計算の例を示します。xyzzy Lisp では分数（有理数）も扱えます。
+</p>
+<pre>
+(/ 10 3)
+10/3
+(/ 10 6)
+5/3
+(* 3/2 3/4)
+9/8
+</pre>
+<p> うーん、凄いのひとことです。有理数を浮動小数点数に変換するには float を使います。
+</p>
+<pre>
+(float 1/3)
+0.3333333
+</pre>
+<p>このほかにも、xyzzy Lisp では複素数を扱うことができます。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 正確にいうと dotimes は関数ではなくマクロです。dolist や while もマクロですが、ここではわかりやすさを優先しました。
+</div>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">マクロとコンパイラの怪しい関係</h3>
+<p> Common Lisp の場合、関数は 3 種類に分類することができます。
+</p>
+<ul>
+  <li>関数<br>
+      通常の関数です。引数は左から右へ順番に評価され、その結果を関数本体へ渡します。
+  <li>特殊形式<br>
+      引数を評価せずに関数本体へ渡します。渡された引数は、関数自身が持っている規則により処理されます。Lisp の基本的な関数が特殊形式として定義されています。
+  <li>マクロ<br>
+      引数を評価せずに関数本体へ渡します。マクロは与えられた引数を使って新しい S 式を組み立て、それを評価した結果を返します。
+</ul>
+<p> 昔の Lisp 処理系では、引数を評価するタイプを EXPR や SUBR型、引数を評価しないタイプを NEXPR や FSUBR 型と呼び、ユーザーが NEXPR 型の関数を定義することができました。Common Lisp の場合、ユーザーが定義できるのは関数とマクロです。特殊形式を定義することはできないので、引数を評価したくない場合はマクロを使うことになります。
+</p>
+<p> マクロを定義するには defmacro を使います。
+</p>
+<pre class="item">
+(defmacro マクロ名 (&lt;仮引数&gt; ...) Ｓ式 ...)
+</pre>
+
+<p> defmacro の構文は defun と同じです。マクロの動作は次のようになります。
+</p>
+
+<pre class="fig">
+  [Ｓ式] ─  評価  → [新しいＳ式] ─ 評価 → [マクロの返り値]  
+        （マクロ展開）
+
+                    図 1 ：マクロの動作
+</pre>
+<p> S 式を評価することで新しい S 式を組み立てます。この部分がマクロ展開に相当します。そして、その S 式を評価した値がマクロの返り値となります。マクロを定義する場合、バッククオートを使うと簡単です。詳しい説明は Common Lisp 入門 <a href="abclisp08.html#chap16">マクロ</a> をお読みください。
+</p>
+<p> マクロの実行は、マクロ展開の分だけ確実に通常の関数よりも遅くなります。だったら、NEXPR 型の関数を定義できるようにした方が実行速度の点で有利なはずです。ところが、Common Lisp では必要最低限の特殊形式を定義し、よく使われる制御構造、たとえば dotimes, dolist, while などもマクロで定義されています。これではインタプリタでの動作が遅くなります。
+</p>
+<p> では、なぜ実行速度が遅くなるのにマクロを使っているのでしょう。それは、Common Lisp がコンパイラの使用を前提とした処理系だからです。プログラムでマクロを呼び出している場所は、コンパイル時にマクロ展開されるため、コンパイル済みのコードにはマクロ呼び出しがなくなってしまうのです。つまり、コンパイル済みのコードは、マクロ展開しない分だけ確実にインタプリタよりも高速に実行することができるのです。Common Lisp はインタプリタの柔軟性とコンパイラの高速性を兼ね備えた処理系なのです。
+</p>
+<p> xyzzy Lisp には<b>バイトコンパイル</b>の機能があります。したがって、xyzzy Lisp でもプログラムをコンパイルした方が高速に実行できるのです。そこで、パズル「8 クイーン」を解くプログラムを使って、実行速度を比較してみましょう。
+</p>
+<p> 8 クイーンはコンピュータに解かせるパズルの中でもとくに有名です。8 行 8 列のチェス盤のマス目に、8 個のクイーンを互いの利き筋が重ならないように配置する問題です。解答例を図 2 に示します。
+</p>
+
+<pre class="fig">
+    *-----------------*    
+    | Q . . . . . . . |
+    | . . . . Q . . . |
+    | . . . . . . . Q |
+    | . . . . . Q . . |
+    | . . Q . . . . . |
+    | . . . . . . Q . |
+    | . Q . . . . . . |
+    | . . . Q . . . . |
+    *-----------------*
+
+ 図 2 : 8 クイーンの解答例
+</pre>
+
+<p> 解は全部で 92 通りあります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 1 : 8 クイーンの解法
+
+; 衝突するか
+(defun conflict (column line board)
+  (let ((x (1- column)))
+    (dolist (y board)
+      (if (or (= (- column line) (- x y))
+              (= (+ column line) (+ x y)))
+          (return t))
+      (decf x))))
+
+; チェックする
+(defun check (line board)
+  (cond
+   ((null board) nil)
+   ((conflict (length board) line board) t)
+   (t (check (car board) (cdr board)))))
+
+; 本体
+(defun queen (num board)
+  (if num
+      (dolist (x num)
+        (unless (conflict (length board) x board)
+          (queen (remove x num) (cons x board))))
+      (print board)))
+</pre>
+
+<p> このプログラムは Lisp らしくリストを使っていますが、配列を使った方が高速になるかもしれません。また、解はリストを出力しているだけです。興味のある人は、クイーンの配置を図 2 のように出力するプログラムを作ってみるといいでしょう。
+</p>
+<p> プログラムをコンパイルするときは、コマンド byte-compile-file を使います。ファイル名を queen.l としましょう。M-x byte-compile-file と入力するとファイル名を聞いてくるので、queen.l と入力します。コンパイルが正常に終了すると queen.lc というファイルが出力されます。プログラムのロードはコマンド load-file を使います。
+</p>
+<p> 時間の計測には get-internal-real-time を使います。*scratch* で次のプログラムを実行しました。
+</p>
+<pre>
+(progn
+  (setq a (get-internal-real-time))
+  (queen '(0 1 2 3 4 5 6 7) nil)
+  (print (- (get-internal-real-time) a)))
+</pre>
+<p> それでは実行結果を示しましょう。Pentium 166 MHz, Windows 95 という貧弱な環境での評価です。
+</p>
+<table border=1>
+<tbody>
+  <tr><td>queen.l</td><td>52 秒</td></tr>
+  <tr><td>queen.lc</td><td>0.7 秒</td></tr>
+</tbody>
+</table>
+<p> インタプリタの 52 秒は相当に遅いですね。ところが、コンパイルしてみると 0.7 秒、約 70 倍も高速化しています。ちなみに 0.7 秒は相当に高速です。Perl では 1 秒程度かかります。Perl よりも速いのですから、マクロというよりもコンパイラ自体が優秀なのだと思います。予想を上回る結果にとても驚いています。
+</p>
+<p> このような結果を見ると、Lisp 好きのプログラマとしては、いろいろなプログラムを作りたくなりますね。ますます xyzzy Lisp にはまりそうです。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap03">８クイーンふたたび</h3>
+<h4>●配列を使ってみる</h4>
+<p> パズル「8 クイーン」の解法プログラムを作りましたが、インタプリタでの動作は相当に遅いものでした。このプログラムでは Lisp らしくリストを使いましたが、今度は配列を使ってみましょう。配列の詳しい説明は Common Lisp 入門 <a href="abclisp05.html#chap10">配列</a> をお読みください。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 2 : 8 クイーンの解法 配列版 (1)
+
+; スペシャル変数定義
+(defvar *use_table* (make-array 8))
+(defvar *board* (make-array 8))
+
+; 衝突するか
+(defun conflict (i n)
+  (dotimes (j n t)
+    (if (or (= (- (aref *board* j) j) (- i n))
+            (= (+ (aref *board* j) j) (+ i n)))
+        (return))))
+
+; 8 クイーンの解法
+(defun queen (n)
+  (dotimes (i 8)
+    (when (and (not (aref *use_table* i)) (conflict i n))
+      (setf (aref *board* n) i)
+      (if (&gt;= n 7)
+        (print *board*)
+        (progn
+          (setf (aref *use_table* i) t)
+          (queen (1+ n))
+          (setf (aref *use_table* i) nil))))))
+</pre>
+<p> さっそく実行してみたところ、なんと <b>83 秒</b>もかかってしまいました。配列にすれば速くなるというものではないんですね。反省です。
+</p>
+<p> 原因を考えてみましょう。配列にデータを書き込むのに setf を使っていますが、実はこの setf はマクロなのです。どうやらリストを使ったプログラムよりも、マクロ展開によるオーバーヘッドが増えてしまったようです。とくに *use_table* はフラグとして使っているため、ひんぱんに書き込みが行われます。ここを改良すると少しは速くなりそうです。
+</p>
+
+<h4>●プログラムの改良</h4>
+<p> そこで、配列ではなく整数値の論理演算を使って、フラグをビットで表すことにします。 Common Lisp には、論理演算を行う関数が用意されています。詳細は Common Lisp 入門 <a href="abclisp13.html">整数の論理演算とビット操作</a> をお読みください。
+</p>
+<p> フラグを表す変数は used とします。used をグローバル変数にすると、ビットをオフにする処理が必要ですが、引数として関数 queen に渡せば、ビットオフの処理は不用になります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 3 : 8 クイーンの解法 配列版(2)
+
+; 大域変数定義
+(defvar *board* (make-array 8))
+
+; 衝突するか
+(defun conflict (i n)
+  (dotimes (j n t)
+    (if (or (= (- (aref *board* j) j) (- i n))
+            (= (+ (aref *board* j) j) (+ i n)))
+        (return))))
+
+; 8 クイーンの解法
+(defun queen (n used)
+  (dotimes (i 8)
+    (when (and (not (logbitp i used)) (conflict i n))
+      (setf (aref *board* n) i)
+      (if (&gt;= n 7)
+        (print *board*)
+        (queen (1+ n) (logior used (ash 1 i)))))))
+</pre>
+<p> 関数 queen で used を操作しています。まず logbitp を使って used をチェックし、再帰呼び出しするところで used のビットをオンにしています。さっそく実行したところ、今度は <b>41 秒</b>に短縮しました。これはリストを使ったプログラムよりも速いですね。
+</p>
+<p> 次に、バイトコンパイルしてみました。結果は<b> 1.4 秒</b>と速くなりましたが、リストを使ったプログラムには負けてしまいました。うーん、やっぱり Lisp は<b>リストが主役</b>ということですね。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap04">エディタ用のデータ型</h3>
+<p> エディタのプログラムでよく使われる主なデータ型を説明します。
+</p>
+<h4>●バッファ型</h4>
+<p> おなじみのバッファを表すデータです。各バッファには<b>ポイント (point)</b> と<b>マーカー (marker)</b> という位置を表すデータがあります。カレントバッファであれば、ポイントの位置にカーソルが表示されます。位置は 1 から始まる整数で表します。ほとんどの編集コマンドが、カレントバッファのポイント付近の内容を操作するようになっています。また、各バッファには<b>ローカルキーマップ</b>や<b>バッファローカルな変数</b>などのデータが関連付けられています。
+</p>
+<pre>
+; カレントバッファを求める
+(selected-buffer)
+#&lt;buffer: *scratch*&gt;
+</pre>
+
+<h4>●マーカー型</h4>
+<p>マーカーを表すデータ型です。ひとつのバッファで複数のマーカーを設定することができます。
+</p>
+<pre>
+; 空のマーカーを作る
+(setq m (make-marker))
+#&lt;marker: *scratch*: -&gt;
+; 位置をセット
+(set-marker m 1)
+#&lt;marker: *scratch*: 1&gt;
+; マーカーの位置を求める
+(marker-point m)
+1
+</pre>
+<h4>●ウィンドウ型</h4>
+<p> バッファを表示するための画面を<b>ウィンドウ (window)</b> と呼びます。ウィンドウにはバッファがひとつ表示されます。
+</p>
+<pre>
+; ウィンドウの操作
+(split-window)              ; ウィンドウを 2 分割
+(split-window-vertically)   ; ウィンドウを縦に 2 分割
+</pre>
+<h4>●キーマップ型</h4>
+<p> ユーザーが入力したキーとコマンドを対応づけるデータです。このデータは、先頭の要素がシンボル keymap のリストで表されています。ローカルキーマップはバッファをカスタマイズするときに使用します。
+</p>
+<pre class="list">
+; xyzzy calc.l からの抜粋
+(unless *calc-mode-map*
+  (setq *calc-mode-map* (make-sparse-keymap))          ; 1.
+  (define-key *calc-mode-map* #\RET 'calc-eval-line))  ; 2.
+</pre>
+<ol>
+  <li>make-sparse-keymap で空の疎なキーマップを作成する。<br>
+      make-keymap は完全なキーマップを作成する。
+  <li>define-key でキーバインディングを設定する。<br>
+      この場合、RET キーを押すと calc-eval-line が評価される。
+  <li>バッファにキーマップをセットするには use-keymap を使う。<br>
+      (use-keymap *calc-mode-map*) とすると、カレントバッファにセットされる。
+</ol>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap05">バッファ内のデータ操作</h3>
+<h4>●テキストの操作</h4>
+<p> バッファ内のテキストを操作（取得、削除、挿入）する主な関数を表に示します。
+</p>
+<table border=1>
+<CAPTION>表 1 : テキストの取得、削除、挿入を行う関数
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>buffer-substring start end</td><td>指定された範囲を文字列として取り出す</td></tr>
+  <tr><td>delete-region start end</td><td>指定された範囲を削除する</td></tr>
+  <tr><td>insert &amp;rest string-or-char</td><td>カレントバッファのポイント位置に文字列や文字を挿入する</td></tr>
+</tbody>
+</table>
+
+<h4>●ポイントの操作</h4>
+<p> ポイント（カーソル）を操作する関数を表に示します。
+</p>
+<table border=1>
+<caption>表 2 : ポイントの操作</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>point</td><td>ポイントの位置を返す</td></tr>
+  <tr><td>point-max</td><td>最大のポイント値 (カレントバッファの大きさ) を返す</td></tr>
+  <tr><td>point-min</td><td>最小のポイント値 (通常は 0) を返す</td></tr>
+  <tr><td>goto-char 位置</td><td>ポイントを指定した位置に設定</td></tr>
+  <tr><td>backward-char 数</td><td>ポイントを指定した数だけ左へ移動</td></tr>
+  <tr><td>forward-char 数</td><td>ポイントを指定した数だけ右へ移動</td></tr>
+</tbody>
+</table>
+
+<h4>●テキストの検索</h4>
+<p> テキストの検索には scan-buffer を使います。Emacs Lisp では search-forward や search-backward などいくつかありますが、xyzzy Lisp では scan-buffer ひとつにまとめられています。
+</p>
+<pre class="item">
+scan-buffer 検索文字列 &amp;key (表を参照)
+</pre>
+<p> 検索に成功したら t を、失敗したら nil を返します。検索文字列には、コンパイルした正規表現を渡すことができます。使用できるキーワードを表に示します（xyzzy リファレンスより抜粋）。
+</p>
+<table border=1>
+<caption>表 3 : scan-buffer のキーワード</caption>
+<thead>
+  <tr><th>キーワード</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>:no-dup</td><td>non-nilならポイントの次の文字から検索する</td></tr>
+  <tr><td>:case-fold</td><td>non-nilなら大文字小文字を区別しない</td></tr>
+  <tr><td>:reverse</td><td>non-nilならポイントからバッファの先頭に向かって検索する</td></tr>
+  <tr><td>:word-search</td><td>non-nilなら単語単位で検索する</td></tr>
+  <tr><td>:tail</td><td>non-nilならポイントを一致した文字列の次の文字へ移動する</td></tr>
+  <tr><td>:limit N</td><td>検索する範囲を位置で指定する（文字数ではない）</td></tr>
+  <tr><td>:regexp</td><td>non-nilなら正規表現</td></tr>
+</tbody>
+</table>
+
+<h4>●検索結果の取得</h4>
+<p> 一致した文字列を取り出すには、次の関数を使います。
+</p>
+<table border=1>
+<caption>表 4 : 文字列の取り出し</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>match-string group</td><td>一致した文字列を取り出す</td></tr>
+  <tr><td>match-biginning group</td><td>一致した文字列の開始位置を返す</td></tr>
+  <tr><td>match-end group</td><td>一致した文字列の終了位置を返す</td></tr>
+  <tr><td>[注] group</td><td>カッコ ( ) でまとめたグループの番号<br>0 が一致した文字列全体を表す</td></tr>
+</tbody>
+</table>
+
+<h4>●簡単な使用例</h4>
+<p> *scratch* で次のプログラムを実行します。
+</p>
+<pre>
+---- *scratch* の先頭 ----
+123abc456DEF7890
+
+(progn 
+  (goto-char 0)   ; <STRIKE>(goto-char 1)</STRIKE> 修正 2009/12/19 
+  (scan-buffer "\\([a-z]+\\)\\([0-9]+\\)" :regexp t)
+  (print (match-string 0))
+  (print (match-string 1))
+  (print (match-string 2)))
+
+"abc456" 
+"abc" 
+"456" 
+"456"
+</pre>
+<div class="note">
+-- <a name="update"><b>[修正]</b> (2009/12/19)</a> --------<br>
+(goto-char 1) ではポインタをバッファの先頭に移動することはできません。修正するとともにお詫び申しあげます。
+</div>
+<p> Lisp プログラムでグループ ( ) を記述する場合は \\( \\) としてください。goto-char でスクラッチバッファの先頭にポインタを移動し、そこから scan-buffer でバッファを検索します。"456" が 2 回出力されていますが、最後は progn の返り値です。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap06">コマンド作成の基礎知識(1)</h3>
+<h4>●interactive の使い方</h4>
+<p> エディタのコマンドを Lisp で作成する場合、関数本体のトップレベルに interactive を定義します。interactive は特殊形式で、関数が対話的に呼び出せることを表し、関数に与える引数をミニバッファで指定することができます。
+</p>
+<pre class="item">
+interacrive arg-descriptor
+</pre>
+<p> arg-descriptor はコマンドに与える引数のタイプを宣言します。引数が不用の場合は省略します。arg-descriptor が文字列の場合は、最初の 1 文字で引数のタイプを指定します。
+</p>
+<table border=1>
+<caption>表 5 : interactive で使用する主なコード文字(リファレンスより抜粋)</caption>
+<thead>
+  <tr><th>文字</th><th>引数のタイプ</th></tr>
+</thead>
+<tbody>
+  <tr><td>*</td><td>カレントバッファが読み出し専用だとエラーを通知「スペシャル」</td></tr>
+  <tr><td>b</td><td>既に存在するバッファの名前</td></tr>
+  <tr><td>B</td><td>バッファーの名前（存在しなくてもよい）</td></tr>
+  <tr><td>f</td><td>既に存在するファイルの名前</td></tr>
+  <tr><td>F</td><td>ファイルの名前（存在しなくてもよい）</td></tr>
+  <tr><td>n</td><td>数字（整数）</td></tr>
+  <tr><td>N</td><td>数字。コマンドがプレフィックス付きで起動された場合はそれを用いる</td></tr>
+  <tr><td>p</td><td>数字（整数）「入出力なし」</td></tr>
+  <tr><td>P</td><td>数字。コマンドがプレフィックス付きで起動された場合はそれを用いる「入出力なし」</td></tr>
+  <tr><td>s</td><td>文字列</td></tr>
+  <tr><td>S</td><td>シンボル</td></tr>
+  <tr><td>D</td><td>ディレクトリ</td></tr>
+  <tr><td>l</td><td>ファイルの複数選択です。ファイル名のリストが取れます。</td></tr>
+</tbody>
+</table>
+
+<p> 「スペシャル」は特別なコードで、文字列の先頭でのみ意味を持ち、その後ろにタイプを指定するコードを指定します。残りの文字列はミニバッファのプロンプトとして表示されます。「入出力なし」は入力をまったく読まずに引数を計算します。プロンプト文字列は無視されます。
+</p>
+<h4>●アルファベットの変換</h4>
+<p> それでは簡単なコマンドを作ってみましょう。機能は、カーソル行の英小文字をすべて英大文字に変換するというものです。すでに upcase-region があるのでわざわざ作ることもないコマンドですが、例題としては手ごろでしょう。
+</p>
+<p> いちばん簡単な方法は、行の先頭と終わりの位置を求めて upcase-region を呼び出すことです。行単位でポイントを移動する主な関数を示します。
+</p>
+<table border=1>
+<caption>表 6 : 行単位の移動</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>goto-line line</td><td>line 行目の先頭に移動</td></tr>
+  <tr><td>beginning-of-line</td><td>行の先頭に移動 [xyzzy では goto-bol]</td></tr>
+  <tr><td>end-of-line</td><td>行の終わりに移動 [xyzzy では goto-eol]</td></tr>
+  <tr><td>forward-line &amp;optional count</td><td>count 行前方の行頭に移動、count が負の場合は後方に移動</td></tr>
+</tbody>
+</table>
+
+<p> goto-bol, goto-eol でポイントを移動させれば point で位置を求めることができます。関数 upcase-region は変換の開始位置と終了位置を与えます。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 4 : 関数 upcase-line
+
+(defun upcase-line ()
+  (interactive "*p")
+  (upcase-region
+    (progn (goto-bol) (point))
+    (progn (goto-eol) (point))))
+</pre>
+
+<p> interactive の引数はコマンド upcase-word と同じにしました。ファイル名を sample.l とすると、M-x load-file で sample.l を読み込み、M-x upcase-line で実行します。
+</p>
+<h4>●カーソル位置の保存</h4>
+<p> ところで、実際に試してみるとカーソルが行の終わりに移動してしまいます。カーソルの位置を動かしたくない場合は save-excursion を使います。
+</p>
+<pre class="item">
+save-excursion Ｓ式
+</pre>
+<p> エクスカージョン(excursion、周遊)は、プログラムの中で一時的にポイントを移動したり、バッファを切り替えたりすることをいいます。save-excursion は、カレントバッファのポイントやマーカーの値を保存し、S 式を実行したあとで元の値に戻します。プログラムは次のようになります。
+</p>
+<pre class="list">
+List 5 : 関数 upcase-line (改)
+
+(defun upcase-line ()
+  (interactive "*p")
+  (save-excursion
+    (upcase-region
+      (progn (goto-bol) (point))
+      (progn (goto-eol) (point)))))
+</pre>
+<p> これでコマンドを実行したあとでもカーソルの位置は元のままです。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap07">コマンド作成の基礎知識(2)</h3>
+<h4>●キーマップ</h4>
+<p> <b>キーマップ</b>は、キー入力やマウスのクリックなど、いわゆる<b>イベント</b>とコマンドの対応を表したデータ構造です。新しく作成したコマンドをキーに割り当てたい場合は、このキーマップに登録します。
+</p>
+<p> Emacs や xyzzy には多数のキーマップがありますが、コマンドを検索するときはその中から複数個のキーマップが使用されます。検索に使用される主なキーマップには次のものがあります。
+</p>
+<ul>
+  <li><b>グローバルキーマップ</b><br>
+      すべてのバッファが共有するキーマップです。グローバル変数 *global-keymap* に格納されています。
+  <li><b>ローカルキーマップ</b><br>
+カレントバッファのメジャーモードに対応するキーマップです。たとえば、Lisp やＣ言語などのモードでリターンキーを入力すると適切なインデントが行われるのも、リターンキーに対応するコマンドが実行されるからです。
+  <li><b>マイナーモードキーマップ</b><br>
+マイナーモードもキーマップを持つことができます。ON であるマイナーモードのキーマップが検索されます。
+</ul>
+<p> 検索の優先順位は、マイナーモードキーマップ、ローカルキーマップ、グローバルキーマップの順です。
+</p>
+
+<h4>●キー入力の表現</h4>
+<p> Common Lisp では文字を表すデータを<b>文字型データ</b>といい、文字の先頭に #\ をつけて表します。たとえば、#\a は a という文字を表します。xyzzy の場合、キー入力は文字で表します。CTRL, ALT(ESC), SHIFT のファンクションキーは \C-, \M-, \S- で表します。たとえば、CTRL と a を同時に押す (C-a) ことは #\C-a と表し、CTRL と SHIFT と a を同時に押すことは #\C-S-a と表します。ファイラーをオープンするときのように、複数のキーを入力するときはリストで表します。ファイラーのオープン C-c, C-f は (#\C-c #\C-f) となります。
+</p>
+<p> リターンやタブなど特別な文字は、次のように表すことができます。リファレンスからの抜粋です。
+</p>
+<pre class="item">
+SPC       スペースキー
+TAB       Tabキー        #\C-i と同じ
+LFD                      #\C-j と同じ
+RET       Enterキー      #\C-m と同じ
+ESC       Escキー        #\C-[ と同じ
+DEL                      #\C-? と同じ
+NUL                      #\C-@ と同じ
+</pre>
+<p> このほかにもありますが、詳細はリファレンスの「キー表現使用可能文字」を参照してください。
+</p>
+
+<h4>●コマンドの登録</h4>
+<p> キーマップにコマンドを登録する関数を示します。
+</p>
+<table border=1>
+<caption>表 7 : コマンドを登録する関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+<thead>
+<tbody>
+  <tr><td>define-key keymap key コマンド</td><td>keymap の key に対するコマンドを設定</td></tr>
+  <tr><td>global-set-key key コマンド</td><td>グローバルキーマップ の key に対するコマンドを設定</td></tr>
+  <tr><td>global-unset-key key コマンド</td><td>グローバルキーマップ の key に対するコマンドを削除</td></tr>
+  <tr><td>local-set-key key コマンド</td><td>現在のローカルキーマップ の key に対するコマンドを設定</td></tr>
+  <tr><td>local-unset-key key コマンド</td><td>現在のローカルキーマップ の key に対するコマンドを削除</td></tr>
+</tbody>
+</table>
+
+<p> それでは、upcase-line をグローバルキーマップに割り当ててみましょう。割り当てるキーは CTRL-C, l にします。upcase-line をロードして、*scratch* で次のプログラムを実行しました。
+</p>
+<pre>
+(global-set-key '(#\C-c #\l) 'upcase-line)
+t
+</pre>
+<p> これで登録は完了です。C-c, l でカーソル行の英小文字を英大文字に変換できます。実際には手動で登録するのではなく、プログラムファイルでキー登録を行えばいいでしょう。そうすれば、プログラムをロードした直後からキーを使うことができます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap08">バッファ</h3>
+<p> バッファは、編集するテキストを収めている Lisp のデータです。xyzzy は複数のバッファを保持することができますが、その中でカレントバッファはただひとつしかありません。多くの編集コマンドではカレントバッファが操作対象となります。
+</p>
+<h4>●バッファローカルな変数</h4>
+<p> バッファには多くの情報が含まれています。ポイントのように、関数を介してのみ操作できるデータもありますが、変数を介して直接参照できるデータもあります。そのような変数を<b>バッファローカルな変数</b>と呼び、特定のバッファでのみ有効となります。
+</p>
+<p> たとえば、フィルカラムの値を保持している fill-column はバッファローカルな変数です。バッファごとに異なった値を fill-column に設定することができます。たとえば、あるバッファでは fill-column を 70 とし、違うバッファでは 60 と設定すると、fill-column の値を使うコマンド、たとえば fill-paragraph を実行すれば、バッファごとに指定した値で文書を整形することができます。
+</p>
+<p> バッファローカルな変数を操作する主な関数を表に示します。
+</p>
+<table border=1>
+<caption>表 8 : バッファローカルな変数の操作関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>make-local-variable var</td><td>var をカレントバッファのローカル変数にする</td></tr>
+  <tr><td>kill-local-variable var</td><td>var をバッファローカルな変数から削除する</td></tr>
+  <tr><td>kill-all-local-variables</td><td>バッファローカルな変数をすべて削除する</td></tr>
+</tbody>
+</table>
+
+<p> 削除とは、バッファローカルな変数にしない、という意味です。したがって、通常の変数としての値を参照することができるようになります。主なバッファローカルな変数を表に示します（リファレンスより抜粋）。
+</p>
+<table border=1>
+<caption>表 9 : 主なバッファローカルな変数</caption>
+<thead>
+  <tr><th>変数名</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>make-backup-files</td><td>バックアップファイルを作るか否か</td></tr>
+  <tr><td>buffer-read-only</td><td>nil 以外の値だと読み出し専用バッファ</td></tr>
+  <tr><td>need-not-save</td><td>nil 以外の値だとセーブしない</td></tr>
+  <tr><td>mode-name</td><td>メジャーモードの名前を保持</td></tr>
+  <tr><td>lock-file</td><td>ロックファイルを作るか否か</td></tr>
+  <tr><td>kept-undo-information</td><td>アンドゥ情報を保存するか否か</td></tr>
+  <tr><td>auto-save</td><td>自動セーブするか否か</td></tr>
+</tbody>
+</table>
+
+<h4>●カレントバッファの操作</h4>
+<p> カレントバッファを操作する主な関数を表に示します。
+</p>
+<table border=1>
+<caption>表 10 : カレントバッファの操作関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>selected-buffer</td><td>カレントバッファを返す(Emacs では current-buffer)</td></tr>
+  <tr><td>set-buffer buffer</td><td>buffer をカレントバッファにするが、それを表示するとは限らない</td></tr>
+</tbody>
+</table>
+
+<p> set-buffer は、画面に表示されていないバッファでもカレントバッファにすることができます。しかし、そのバッファは画面には表示されません。ですが、編集コマンドを使ってバッファ内のデータを操作することはできます。
+</p>
+
+<h4>●バッファとファイルの関係</h4>
+<p> バッファの名前や対応するファイル名を求める関数を表に示します。
+</p>
+<table border=1>
+<caption>表 11 : バッファ名、ファイル名の操作関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>buffer-name buffer</td><td>バッファの名前を返す</td></tr>
+  <tr><td>find-buffer name</td><td>名前が name のバッファを返す（Emacs では get-buffer)</td></tr>
+  <tr><td>get-buffer-file-name &amp;optional buffer</td><td>ファイル名をフルパスで返す</td></tr>
+  <tr><td>get-file-buffer filename</td><td>ファイル filename を表示しているバッファを返す</td></tr>
+</tbody>
+</table>
+
+<h4>●バッファの生成</h4>
+<p> バッファを生成する主な関数を表に示します。
+</p>
+<table border=1>
+<caption>表 12 : バッファを生成する関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>get-buffer-create name</td><td>新しくバッファを作る（既にあればそれを使う）</td></tr>
+  <tr><td>switch-to-buffer buffer-or-name</td><td>指定したバッファをカレントバッファにして画面に表示する<br>バッファが存在しなければ新しく作成する</td></tr>
+  <tr><td>create-new-buffer name</td><td>新しくバッファを作るが、同名のバッファがある場合は数字をつけて区別する</td></tr>
+</tbody>
+</table>
+
+<p> switch-to-buffer はよく使用される関数なので、簡単な例を示しましょう。次のコマンドを定義してください。
+</p>
+<pre class="list">
+(defun test-cmd ()
+  (interactive)
+  (switch-to-buffer "*test*"))
+</pre>
+<p> M-x test-cmd を実行すると、表示されているカレントバッファが *test* に切り替わります。
+</p>
+<h4>●バッファの削除</h4>
+<p> バッファを削除する主な関数を表に示します。
+</p>
+<table border=1>
+<caption>表 13 : バッファを削除する関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>kill-buff buffer</td><td>バッファを削除する（問い合わせ有）</td></tr>
+  <tr><td>delete-buffer buffer</td><td>バッファを削除する（問い合わせ無）</td></tr>
+</tbody>
+</table>
+
+<h4>●標準入出力をバッファへ切り替えるマクロ</h4>
+<p> xyzzy Lisp には標準入出力をバッファへ切り替える便利なマクロが用意されています。
+</p>
+<table border=1>
+<caption>表 14 : 標準入出力を切り替えるマクロ</caption>
+<thead>
+  <tr><th>マクロ名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>with-input-from-selected-buffer</td><td>カレントバッファを標準入力とする</td></tr>
+  <tr><td>with-output-to-selected-buffer</td><td>カレントバッファを標準出力とする</td></tr>
+  <tr><td>with-output-to-buffer</td><td>引数で指定したバッファを標準出力とする</td></tr>
+  <tr><td>with-output-to-temp-buffer</td><td>引数で指定したバッファを作成し標準出力とする</td></tr>
+</tbody>
+</table>
+
+<p> それでは簡単な例を示しましょう。*scratch* で Lisp プログラムを実行する場合、標準出力は *scratch* へ書き込まれますが、ほかのバッファの場合では標準出力へ書き出しても、その結果は自分のバッファへ出力されません。この場合は with-out-to-selected-buffer を使いましょう。次のコマンドを入力してください。
+</p>
+<pre class="list">
+(defun test-cmd ()
+  (interactive)
+  (switch-to-buffer "*test*")
+  (with-output-to-selected-buffer
+    (print "change *test* buffer")))
+</pre>
+<p> このコマンドを実行すると、カレントバッファが *test* に切り替わり、バッファに "change *test* buffer" が表示されます。それから、このままだとバッファを削除するときにセーブするか問い合わせするので、バッファを *test* に切り替えたあとで、バッファローカルな変数 need-not-save に t をセットしておくといいでしょう。
+</p>
+<h4>●簡単なコマンドを作る</h4>
+<p> 複数のファイルを読み込んでいくと、それだけバッファが作られていきます。そのうちに、不用になったバッファをいっきに削除したくなります。そこで、*scratch* と変更されているバッファを除いて、すべてのバッファを削除するコマンド kill-all-buffer を作りましょう。
+</p>
+<p> xyzzy に存在するバッファは関数 <b>buffer-list</b> で求めることができます。この関数はバッファをリストに格納して返します。バッファ名ではなく、バッファそのものを返すので注意してください。バッファの変更は関数 <b>buffer-modified-p</b> でチェックすることができます。変更されていれば t を、そうでなければ nil を返します。この 2 つの関数を使うと、プログラムは簡単に作ることができます。
+</p>
+
+<pre class="list">
+List 6 : すべてのバッファを削除する
+
+(defun kill-all-buffer ()
+  (interactive)
+  (let ((scratch-buff (find-buffer "*scratch*")))
+    (dolist (buffer (buffer-list))
+      (if (and (not (eq scratch-buff buffer))
+               (not (buffer-modified-p buffer)))
+          (delete-buffer buffer)))))
+</pre>
+<p> *scratch* は名前で比較するのではなく、バッファ自身を find-buffer で求めて eq で比較しています。あとは dolist を使って、buffer-list が返したバッファをチェックするだけです。
+</p>
+<p> バッファを削除するちょっと危険なコマンドなので、例題にはふさわしくないかもしれません。また、kill-all-buffer は無保証であり、使用したことにより生じた損害について、M.Hiroi は一切の責任を負いません。テストは十分にしたつもりですが、実際に使用する場合には十分に注意してください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ PrevPage | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="xyzzy02.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

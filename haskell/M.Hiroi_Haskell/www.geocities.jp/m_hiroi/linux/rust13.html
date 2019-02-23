@@ -1,0 +1,1309 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881816</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>簡単なプログラム</h3>
+<h4 id="chap77">●トライ (trie)</h4>
+<p> トライは文字列など列型データ (sequence) の集合を表すのに都合のよいデータ構造です。トライの語源は、「検索 (retrieval)」という言葉の真ん中 (trie) に由来しています。詳しい説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo09.html">トライとパトリシア</a> をお読みくださいませ。
+</p>
+<h4 id="chap78">●文字列版</h4>
+<table border="1">
+<caption>表 : Trie&lt;V&gt; のメソッド</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>fn new() -&gt; Trie&lt;V&gt;</td><td>トライを生成する</td></tr>
+  <tr><td>fn contains_key(&amp;self, key: &amp;str) -&gt; bool</td><td>トライにキーがあれば true を返す</td></tr>
+  <tr><td>fn get(&amp;self, key: &amp;str) -&gt; Option&lt;&amp;V&gt;</td><td>キーに対応する値の参照を返す</td></tr>
+  <tr><td>fn insert(&amp;mut self, key: &amp;str, value: V)</td><td>トライにキーと値を登録する</td></tr>
+  <tr><td>fn remove(&amp;mut self, key: &amp;str) -&gt; Option&lt;V&gt;</td><td>トライからキーと値を削除する (返り値は削除した値)</td></tr>
+  <tr><td>fn foreach(&amp;self, func: &amp;Fn(&amp;str, &amp;V) -&gt;())</td><td>トライを巡回する</td></tr>
+  <tr><td>fn common_prefix(&amp;self, seq: &amp;str, func: &amp;Fn(&amp;str, &amp;V) -&gt;())</td><td>共通接頭辞の探索</td></tr>
+  <tr><td>fn len(&amp;self) -&gt; usize</td><td>トライの要素数を返す</td></tr>
+  <tr><td>fn is_empty(&amp;self) -&gt; bool</td><td>トライが空であれば true を返す</td></tr>
+  <tr><td>fn clear(&amp;mut self)</td><td>トライを空にする</td></tr>
+</tbody>
+</table>
+<h4>●プログラム</h4>
+<pre class="list">
+//
+// trie.rs : トライ
+//
+//           Copyright (C) 2018 Makoto Hiroi
+//
+use std::collections::HashMap;
+use std::cell::UnsafeCell;
+
+// トライの節
+struct Node&lt;V&gt; {
+    child: UnsafeCell&lt;HashMap&lt;char, Node&lt;V&gt;&gt;&gt;,
+    value: UnsafeCell&lt;Option&lt;V&gt;&gt;
+}
+
+impl &lt;V&gt; Node&lt;V&gt; {
+    fn new() -&gt; Node&lt;V&gt; {
+        Node { child: UnsafeCell::new(HashMap::new()), value: UnsafeCell::new(None) }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, seq: &amp;mut String, func: &amp;Fn(&amp;str, &amp;V) -&gt; ()) {
+        unsafe {
+            (*self.value.get()).as_ref().map(|value| func(&amp;seq, value) );
+            for (c, node) in (*self.child.get()).iter() {
+                seq.push(*c);
+                node.foreach(seq, func);
+                seq.pop();
+            }
+        }
+
+    }
+}
+
+// トライ
+struct Trie&lt;V&gt; {
+    root: Node&lt;V&gt;,
+    size: usize
+}
+
+impl &lt;V&gt; Trie&lt;V&gt; {
+    // 生成
+    fn new() -&gt; Trie&lt;V&gt; {
+        Trie { root: Node::new(), size: 0 }
+    }
+
+    // 挿入
+    fn insert(&amp;mut self, seq: &amp;str, value: V) {
+        let mut p = &amp;self.root;
+        for c in seq.chars() {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(&amp;c) } {
+                p = q;
+            } else {
+                unsafe { 
+                    (*ht).insert(c, Node::new());
+                    p = (*ht).get(&amp;c).unwrap();
+                }
+            }
+        }
+        self.size += 1;
+        unsafe { *p.value.get() = Some(value); }
+    }
+
+    // 探索
+    fn contains_key(&amp;self, seq: &amp;str) -&gt; bool {
+        let mut p = &amp;self.root;
+        for c in seq.chars() {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(&amp;c) } {
+                p = q;
+            } else {
+                return false;
+            }
+        }
+        unsafe { (*p.value.get()).is_some() }
+    }
+
+    // 値の参照を取得
+    fn get(&amp;self, seq: &amp;str) -&gt; Option&lt;&amp;V&gt; {
+        let mut p = &amp;self.root;
+        for c in seq.chars() {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(&amp;c) } {
+                p = q;
+            } else {
+                return None;
+            }
+        }
+        unsafe { (*p.value.get()).as_ref() }
+    }
+
+    // 削除
+    fn remove(&amp;mut self, seq: &amp;str) -&gt; Option&lt;V&gt; {
+        let mut p = &amp;self.root;
+        for c in seq.chars() {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(&amp;c) } {
+                p = q;
+            } else {
+                return None;
+            }
+        }
+        if unsafe { (*p.value.get()).is_some() } {
+            self.size -= 1;
+        }
+        unsafe { (*p.value.get()).take() }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, func: &amp;Fn(&amp;str, &amp;V) -&gt; ()) {
+        self.root.foreach(&amp;mut String::new(), func);
+    }
+
+    // 共通接頭辞の探索
+    fn common_prefix(&amp;self, seq: &amp;str, func: &amp;Fn(&amp;str, &amp;V) -&gt; ()) {
+        let mut p = &amp;self.root;
+        for c in seq.chars() {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(&amp;c) } {
+                p = q;
+            } else {
+                return;
+            }
+        }
+        p.foreach(&amp;mut seq.to_string(), func);
+    }
+
+    // 要素数
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // トライは空か？
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // トライを空にする
+    fn clear(&amp;mut self) {
+        self.root = Node::new();
+        self.size = 0;
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut trie = Trie::new();
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+    trie.insert("f", 1);
+    trie.insert("fo", 2);
+    trie.insert("foo", 3);
+    trie.insert("bar", 4);
+    trie.insert("baz", 5);
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+    trie.foreach(&amp;|k, v| println!("{}, {}", k, v));
+    trie.common_prefix("fo", &amp;|k, v| println!("{}, {}", k, v));
+    trie.common_prefix("ba", &amp;|k, v| println!("{}, {}", k, v));
+
+    println!("{}", trie.contains_key("f"));
+    println!("{}", trie.contains_key("fo"));
+    println!("{}", trie.contains_key("foo"));
+    println!("{}", trie.contains_key("b"));
+    println!("{}", trie.contains_key("ba"));
+    println!("{}", trie.contains_key("bar"));
+    println!("{}", trie.contains_key("baz"));
+    println!("{}", trie.contains_key("bazz"));
+
+    println!("{:?}", trie.get("f"));
+    println!("{:?}", trie.get("fo"));
+    println!("{:?}", trie.get("foo"));
+    println!("{:?}", trie.get("b"));
+    println!("{:?}", trie.get("ba"));
+    println!("{:?}", trie.get("bar"));
+    println!("{:?}", trie.get("baz"));
+    println!("{:?}", trie.get("bazz"));
+ 
+    println!("{:?}", trie.remove("f"));
+    println!("{:?}", trie.get("f"));
+    println!("{:?}", trie.get("fo"));
+    println!("{:?}", trie.get("foo"));
+
+    println!("{:?}", trie.remove("fo"));
+    println!("{:?}", trie.get("f"));
+    println!("{:?}", trie.get("fo"));
+    println!("{:?}", trie.get("foo"));
+
+    println!("{:?}", trie.remove("foo"));
+    println!("{:?}", trie.get("f"));
+    println!("{:?}", trie.get("fo"));
+    println!("{:?}", trie.get("foo"));
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    println!("{:?}", trie.remove("bar"));
+    println!("{:?}", trie.remove("baz"));
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    trie.insert("f", 1);
+    trie.insert("fo", 2);
+    trie.insert("foo", 3);
+    trie.insert("bar", 4);
+    trie.insert("baz", 5);
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    trie.clear();
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+}
+</pre>
+<h4>●実行結果</h4>
+<pre>
+0
+true
+5
+false
+f, 1
+fo, 2
+foo, 3
+bar, 4
+baz, 5
+fo, 2
+foo, 3
+bar, 4
+baz, 5
+true
+true
+true
+false
+false
+true
+true
+false
+Some(1)
+Some(2)
+Some(3)
+None
+None
+Some(4)
+Some(5)
+None
+Some(1)
+None
+Some(2)
+Some(3)
+Some(2)
+None
+None
+Some(3)
+Some(3)
+None
+None
+None
+2
+false
+Some(4)
+Some(5)
+0
+true
+5
+false
+5
+false
+0
+true
+</pre>
+<h4 id="chap79">●ジェネリック版</h4>
+<table border="1">
+<caption>表 : Trie&lt;K, V&gt; のメソッド</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>fn new() -&gt; Trie&lt;V&gt;</td><td>トライを生成する</td></tr>
+  <tr><td>fn contains_key(&amp;self, key: &amp;[K]) -&gt; bool</td><td>トライにキーがあれば true を返す</td></tr>
+  <tr><td>fn get(&amp;self, key: &amp;[K]) -&gt; Option&lt;&amp;V&gt;</td><td>キーに対応する値の参照を返す</td></tr>
+  <tr><td>fn insert(&amp;mut self, key: &amp;[K], value: V)</td><td>トライにキーと値を登録する</td></tr>
+  <tr><td>fn remove(&amp;mut self, key: &amp;[K]) -&gt; Option&lt;V&gt;</td><td>トライからキーと値を削除する (返り値は削除した値)</td></tr>
+  <tr><td>fn foreach(&amp;self, func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt;())</td><td>トライを巡回する</td></tr>
+  <tr><td>fn common_prefix(&amp;self, seq: &amp;[K], func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt;())</td><td>共通接頭辞の探索</td></tr>
+  <tr><td>fn len(&amp;self) -&gt; usize</td><td>トライの要素数を返す</td></tr>
+  <tr><td>fn is_empty(&amp;self) -&gt; bool</td><td>トライが空であれば true を返す</td></tr>
+  <tr><td>fn clear(&amp;mut self)</td><td>トライを空にする</td></tr>
+</tbody>
+</table>
+<h4>●プログラム</h4>
+<pre class="list">
+//
+// trie1.rs : トライ (ジェネリック版)
+//
+//            Copyright (C) 2018 Makoto Hiroi
+//
+use std::collections::HashMap;
+use std::hash::Hash;
+use std::cell::UnsafeCell;
+
+// トライの節
+struct Node&lt;K: Hash + Eq + Copy, V&gt; {
+    child: UnsafeCell&lt;HashMap&lt;K, Node&lt;K, V&gt;&gt;&gt;,
+    value: UnsafeCell&lt;Option&lt;V&gt;&gt;
+}
+
+impl &lt;K: Hash + Eq + Copy, V&gt; Node&lt;K, V&gt; {
+    fn new() -&gt; Node&lt;K, V&gt; {
+        Node { child: UnsafeCell::new(HashMap::new()), value: UnsafeCell::new(None) }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, seq: &amp;mut Vec&lt;K&gt;, func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt; ()) {
+        unsafe {
+            (*self.value.get()).as_ref().map(|value| func(&amp;seq, value) );
+            for (c, node) in (*self.child.get()).iter() {
+                seq.push(*c);
+                node.foreach(seq, func);
+                seq.pop();
+            }
+        }
+
+    }
+}
+
+// トライ
+struct Trie&lt;K: Hash + Eq + Copy, V&gt; {
+    root: Node&lt;K, V&gt;,
+    size: usize
+}
+
+impl &lt;K: Hash + Eq + Copy, V&gt; Trie&lt;K, V&gt; {
+    // 生成
+    fn new() -&gt; Trie&lt;K, V&gt; {
+        Trie { root: Node::new(), size: 0 }
+    }
+
+    // 挿入
+    fn insert(&amp;mut self, seq: &amp;[K], value: V) {
+        let mut p = &amp;self.root;
+        for c in seq {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(c) } {
+                p = q;
+            } else {
+                unsafe { 
+                    (*ht).insert(*c, Node::new());
+                    p = (*ht).get(c).unwrap();
+                }
+            }
+        }
+        self.size += 1;
+        unsafe { *p.value.get() = Some(value); }
+    }
+
+    // 探索
+    fn contains_key(&amp;self, seq: &amp;[K]) -&gt; bool {
+        let mut p = &amp;self.root;
+        for c in seq {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(c) } {
+                p = q;
+            } else {
+                return false;
+            }
+        }
+        unsafe { (*p.value.get()).is_some() }
+    }
+
+    // 値の参照を返す
+    fn get(&amp;self, seq: &amp;[K]) -&gt; Option&lt;&amp;V&gt; {
+        let mut p = &amp;self.root;
+        for c in seq {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(c) } {
+                p = q;
+            } else {
+                return None;
+            }
+        }
+        unsafe { (*p.value.get()).as_ref() }
+    }
+
+    // 削除
+    fn remove(&amp;mut self, seq: &amp;[K]) -&gt; Option&lt;V&gt; {
+        let mut p = &amp;self.root;
+        for c in seq {
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(c) } {
+                p = q;
+            } else {
+                return None;
+            }
+        }
+        if unsafe { (*p.value.get()).is_some() } {
+            self.size -= 1;
+        }
+        unsafe { (*p.value.get()).take() }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt; ()) {
+        self.root.foreach(&amp;mut vec![], func);
+    }
+
+    // 共通接頭辞の探索
+    fn common_prefix(&amp;self, seq: &amp;[K], func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt; ()) {
+        let mut p = &amp;self.root;
+        let mut buff = vec![];
+        for c in seq {
+            buff.push(*c);
+            let ht = p.child.get();
+            if let Some(q) = unsafe { (*ht).get(c) } {
+                p = q;
+            } else {
+                return;
+            }
+        }
+        p.foreach(&amp;mut buff, func);
+    }
+
+    // 要素数を返す
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // トライは空か
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // トライを空にする
+    fn clear(&amp;mut self) {
+        self.root = Node::new();
+        self.size = 0;
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut trie = Trie::new();
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+    let a = &amp;['f'];
+    let b = &amp;['f', 'o'];
+    let c = &amp;['f', 'o', 'o'];
+    let d = &amp;['b', 'a', 'r'];
+    let e = &amp;['b', 'a', 'z'];
+    let f = &amp;['b', 'a', 'z', 'z'];
+    trie.insert(a, 1);
+    trie.insert(b, 2);
+    trie.insert(c, 3);
+    trie.insert(d, 4);
+    trie.insert(e, 5);
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+    trie.foreach(&amp;|k, v| println!("{:?}, {}", k, v));
+    trie.common_prefix(&amp;['f', 'o'], &amp;|k, v| println!("{:?}, {}", k, v));
+    trie.common_prefix(&amp;['b', 'a'], &amp;|k, v| println!("{:?}, {}", k, v));
+
+    println!("{}", trie.contains_key(a));
+    println!("{}", trie.contains_key(b));
+    println!("{}", trie.contains_key(c));
+    println!("{}", trie.contains_key(d));
+    println!("{}", trie.contains_key(e));
+    println!("{}", trie.contains_key(f));
+
+    println!("{:?}", trie.get(a));
+    println!("{:?}", trie.get(b));
+    println!("{:?}", trie.get(c));
+    println!("{:?}", trie.get(d));
+    println!("{:?}", trie.get(e));
+    println!("{:?}", trie.get(f));
+ 
+    println!("{:?}", trie.remove(a));
+    println!("{:?}", trie.get(a));
+    println!("{:?}", trie.get(b));
+    println!("{:?}", trie.get(c));
+
+    println!("{:?}", trie.remove(b));
+    println!("{:?}", trie.get(a));
+    println!("{:?}", trie.get(b));
+    println!("{:?}", trie.get(c));
+
+    println!("{:?}", trie.remove(c));
+    println!("{:?}", trie.get(a));
+    println!("{:?}", trie.get(b));
+    println!("{:?}", trie.get(c));
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    println!("{:?}", trie.remove(d));
+    println!("{:?}", trie.remove(e));
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    trie.insert(a, 1);
+    trie.insert(b, 2);
+    trie.insert(c, 3);
+    trie.insert(d, 4);
+    trie.insert(e, 5);
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    trie.clear();
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+}
+</pre>
+<h4>●実行結果</h4>
+<pre>
+0
+true
+5
+false
+['f'], 1
+['f', 'o'], 2
+['f', 'o', 'o'], 3
+['b', 'a', 'z'], 5
+['b', 'a', 'r'], 4
+['f', 'o'], 2
+['f', 'o', 'o'], 3
+['b', 'a', 'z'], 5
+['b', 'a', 'r'], 4
+true
+true
+true
+true
+true
+false
+Some(1)
+Some(2)
+Some(3)
+Some(4)
+Some(5)
+None
+Some(1)
+None
+Some(2)
+Some(3)
+Some(2)
+None
+None
+Some(3)
+Some(3)
+None
+None
+None
+2
+false
+Some(4)
+Some(5)
+0
+true
+5
+false
+5
+false
+0
+true
+</pre>
+<h4 id="chap80">●UnsafeCell を使わない場合</h4>
+<pre class="list">
+//
+// trie2.rs : トライ (UnsafefCell を使わない)
+//
+//            Copyright (C) 2018 Makoto Hiroi
+//
+use std::collections::HashMap;
+use std::hash::Hash;
+
+struct Node&lt;K: Hash + Eq + Copy, V&gt; {
+    child: HashMap&lt;K, Node&lt;K, V&gt;&gt;,
+    value: Option&lt;V&gt;
+}
+
+impl &lt;K: Hash + Eq + Copy, V&gt; Node&lt;K, V&gt; {
+    fn new() -&gt; Node&lt;K, V&gt; {
+        Node { child: HashMap::new(), value: None }
+    }
+
+    // 挿入
+    fn insert(&amp;mut self, seq: &amp;[K], value: V) {
+        if seq.len() == 0 {
+            self.value = Some(value);
+        } else {
+            {
+                if let Some(p) = self.child.get_mut(&amp;seq[0]) {
+                    p.insert(&amp;seq[1..], value);
+                    return;
+                }
+            }
+            self.child.insert(seq[0], Node::new());
+            self.child.get_mut(&amp;seq[0]).unwrap().insert(&amp;seq[1..], value);
+        }
+    }
+
+    // 探索
+    fn contains_key(&amp;self, seq: &amp;[K]) -&gt; bool {
+        if seq.len() == 0 {
+            self.value.is_some()
+        } else if let Some(p) = self.child.get(&amp;seq[0]) {
+            p.contains_key(&amp;seq[1..])
+        } else {
+            false
+        }
+    }
+
+    // 値の参照を返す
+    fn get(&amp;self, seq: &amp;[K]) -&gt; Option&lt;&amp;V&gt; {
+        if seq.len() == 0 {
+            self.value.as_ref()
+        } else if let Some(p) = self.child.get(&amp;seq[0]) {
+            p.get(&amp;seq[1..])
+        } else {
+            None
+        }
+    }
+
+    // 値の削除
+    fn remove(&amp;mut self, seq: &amp;[K]) -&gt; Option&lt;V&gt; {
+        if seq.len() == 0 {
+            self.value.take()
+        } else if let Some(p) = self.child.get_mut(&amp;seq[0]) {
+            p.remove(&amp;seq[1..])
+        } else {
+            None
+        }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, seq: &amp;mut Vec&lt;K&gt;, func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt; ()) {
+        self.value.as_ref().map(|value| func(&amp;seq, value) );
+        for (c, node) in self.child.iter() {
+            seq.push(*c);
+            node.foreach(seq, func);
+            seq.pop();
+        }
+    }
+
+    // 共通接頭辞の探索
+    fn common_prefix(&amp;self, seq: &amp;[K], buff: &amp;mut Vec&lt;K&gt;, func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt; ()) {
+        if seq.len() == 0 {
+            self.foreach(buff, func);
+        } else if let Some(p) = self.child.get(&amp;seq[0]) {
+            buff.push(seq[0]);
+            p.common_prefix(&amp;seq[1..], buff, func);
+            buff.pop();
+        }
+    }
+}
+
+// トライ
+struct Trie&lt;K: Hash + Eq + Copy, V&gt; {
+    root: Node&lt;K, V&gt;,
+    size: usize
+}
+
+impl &lt;K: Hash + Eq + Copy, V&gt; Trie&lt;K, V&gt; {
+    // 生成
+    fn new() -&gt; Trie&lt;K, V&gt; {
+        Trie { root: Node::new(), size: 0 }
+    }
+
+    // 挿入
+    fn insert(&amp;mut self, seq: &amp;[K], value: V) {
+        self.size += 1;
+        self.root.insert(seq, value);
+    }
+
+    // 探索
+    fn contains_key(&amp;self, seq: &amp;[K]) -&gt; bool {
+        self.root.contains_key(seq)
+    }
+
+    // 値の参照を取得
+    fn get(&amp;self, seq: &amp;[K]) -&gt; Option&lt;&amp;V&gt; {
+        self.root.get(seq)
+    }
+
+    // 削除
+    fn remove(&amp;mut self, seq: &amp;[K]) -&gt; Option&lt;V&gt; {
+        let value = self.root.remove(seq);
+        if value.is_some() {
+            self.size -= 1;
+            value
+        } else {
+            None
+        }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt; ()) {
+        self.root.foreach(&amp;mut vec![], func);
+    }
+
+    // 共通接頭辞の探索
+    fn common_prefix(&amp;self, seq: &amp;[K], func: &amp;Fn(&amp;Vec&lt;K&gt;, &amp;V) -&gt; ()) {
+        self.root.common_prefix(seq, &amp;mut vec![], func);
+    }
+    
+    // 要素数を返す
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // トライは空か？
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // トライを空にする
+    fn clear(&amp;mut self) {
+        self.root = Node::new();
+        self.size = 0;
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut trie = Trie::new();
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+    let a = &amp;['f'];
+    let b = &amp;['f', 'o'];
+    let c = &amp;['f', 'o', 'o'];
+    let d = &amp;['b', 'a', 'r'];
+    let e = &amp;['b', 'a', 'z'];
+    let f = &amp;['b', 'a', 'z', 'z'];
+    trie.insert(a, 1);
+    trie.insert(b, 2);
+    trie.insert(c, 3);
+    trie.insert(d, 4);
+    trie.insert(e, 5);
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+    trie.foreach(&amp;|k, v| println!("{:?}, {}", k, v));
+    trie.common_prefix(&amp;['f', 'o'], &amp;|k, v| println!("{:?}, {}", k, v));
+    trie.common_prefix(&amp;['b', 'a'], &amp;|k, v| println!("{:?}, {}", k, v));
+
+    println!("{}", trie.contains_key(a));
+    println!("{}", trie.contains_key(b));
+    println!("{}", trie.contains_key(c));
+    println!("{}", trie.contains_key(d));
+    println!("{}", trie.contains_key(e));
+    println!("{}", trie.contains_key(f));
+
+    println!("{:?}", trie.get(a));
+    println!("{:?}", trie.get(b));
+    println!("{:?}", trie.get(c));
+    println!("{:?}", trie.get(d));
+    println!("{:?}", trie.get(e));
+    println!("{:?}", trie.get(f));
+ 
+    println!("{:?}", trie.remove(a));
+    println!("{:?}", trie.get(a));
+    println!("{:?}", trie.get(b));
+    println!("{:?}", trie.get(c));
+
+    println!("{:?}", trie.remove(b));
+    println!("{:?}", trie.get(a));
+    println!("{:?}", trie.get(b));
+    println!("{:?}", trie.get(c));
+
+    println!("{:?}", trie.remove(c));
+    println!("{:?}", trie.get(a));
+    println!("{:?}", trie.get(b));
+    println!("{:?}", trie.get(c));
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    println!("{:?}", trie.remove(d));
+    println!("{:?}", trie.remove(e));
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    trie.insert(a, 1);
+    trie.insert(b, 2);
+    trie.insert(c, 3);
+    trie.insert(d, 4);
+    trie.insert(e, 5);
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+
+    trie.clear();
+    println!("{}", trie.len());
+    println!("{}", trie.is_empty());
+}
+</pre>
+<p> 実行結果は同じなので省略します。
+</p>
+<h4 id="chap81">●式の計算 (再帰降下法)</h4>
+<p> 再帰降下法で式 (四則演算とカッコ) を計算するプログラムです。アルゴリズムの詳細は拙作のページ <a href="../func/scheme.html">Scheme Programming</a> <a href="../func/abcscm50.html">電卓プログラムの作成</a> をお読みください。
+</p>
+<pre class="list">
+//
+// calc1.rs : 簡単な電卓 (簡単な再帰降下法)
+//
+//            Copyright (C) 2018 Makoto Hiroi
+//
+use std::io::prelude::*;
+use std::io;
+
+// トークン
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+enum Token { Number, Add, Sub, Mul, Div, Lpar, Rpar, Semic, Others }
+
+use Token::*;
+
+// 大域変数
+static mut CH: char = ' ';
+static mut TOKEN: Token = Others;
+static mut VALUE: f64 = 0.0;
+
+// アクセス関数
+fn get_ch() -&gt; char { unsafe { CH } }
+fn next_ch() {
+    let mut buff = [0u8; 1];
+    io::stdin().read(&amp;mut buff).unwrap();
+    unsafe { CH = buff[0] as char; }
+}
+
+fn set_token(x: Token) {
+    unsafe { TOKEN = x; }
+}
+fn get_token() -&gt; Token { unsafe { TOKEN } }
+
+fn set_value(x: f64) {
+    unsafe { VALUE = x; }
+}
+fn get_value() -&gt; f64 { unsafe { VALUE } }
+
+// 数値の読み込み
+fn get_fixnum(buff: &amp;mut String) {
+    while get_ch().is_digit(10) {
+        buff.push(get_ch());
+        next_ch();
+    }
+}
+
+fn get_number() -&gt; f64 {
+    let mut buff = String::new();
+    get_fixnum(&amp;mut buff);
+    if get_ch() == '.' {
+        buff.push(get_ch());
+        next_ch();
+        get_fixnum(&amp;mut buff);
+    }
+    if get_ch() == 'E' || get_ch() == 'e' {
+        buff.push(get_ch());
+        next_ch();
+    }
+    get_fixnum(&amp;mut buff);
+    buff.parse::&lt;f64&gt;().unwrap()
+}
+
+// トークンの切り分け
+fn next_token() {
+    // 空白文字のスキップ
+    while get_ch().is_whitespace() {
+        next_ch();
+    }
+    if get_ch().is_digit(10) {
+        set_token(Number);
+        set_value(get_number());
+    } else {
+        let c = get_ch();
+        if c == '+' {
+            set_token(Add);
+            next_ch();
+        } else if c == '-' {
+            set_token(Sub);
+            next_ch();
+        } else if c == '*' {
+            set_token(Mul);
+            next_ch();
+        } else if c == '/' {
+            set_token(Div);
+            next_ch();
+        } else if c == '(' {
+            set_token(Lpar);
+            next_ch();
+        } else if c == ')' {
+            set_token(Rpar);
+            next_ch();
+        } else if c == ';' {
+            set_token(Semic);
+            next_ch();
+        } else {
+            set_token(Others);
+        }
+    }
+}
+
+// 構文解析
+fn expr() -&gt; Result&lt;f64, &amp;'static str&gt; {
+    let mut val = term()?;
+    loop {
+        if get_token() == Add {
+            next_token();
+            val += term()?;
+        } else if get_token() == Sub {
+            next_token();
+            val -= term()?;
+        } else {
+            break;
+        }
+    }
+    Ok(val)
+}
+
+// 項
+fn term() -&gt; Result&lt;f64, &amp;'static str&gt; {
+    let mut val = factor()?;
+    loop {
+        if get_token() == Mul {
+            next_token();
+            val *= factor()?;
+        } else if get_token() == Div {
+            next_token();
+            val /= factor()?;
+        } else {
+            break;
+        }
+    }
+    Ok(val)
+}
+
+// 因子
+fn factor() -&gt; Result&lt;f64, &amp;'static str&gt; {
+    if get_token() == Lpar {
+        next_token();
+        let val = expr()?;
+        if get_token() != Rpar {
+            Err("')' expected")
+        } else {
+            next_token();
+            Ok(val)
+        }
+    } else if get_token() == Number {
+        next_token();
+        Ok(get_value())
+    } else if get_token() == Add {
+        next_token();
+        factor()
+    } else if get_token() == Sub {
+        next_token();
+        let val = factor()?;
+        Ok(-val)
+    } else {
+        Err("unexpected token")
+    }
+}
+
+fn toplevel() -&gt; Result&lt;f64, &amp;'static str&gt; {
+    let val = expr()?;
+    if get_token() == Semic {
+        Ok(val)
+    } else {
+        Err("invalid token")
+    }
+}
+
+fn prompt() {
+    print!("Calc&gt; ");
+    io::stdout().flush().unwrap();
+}
+
+fn main() {
+    prompt();
+    next_ch();
+    loop {
+        next_token();
+        match toplevel() {
+            Ok(val) =&gt; {
+                println!("{}", val);
+                prompt();
+            },
+            Err(msg) =&gt; {
+                println!("{}", msg);
+                // 入力のクリア
+                while get_ch() != '\n' { next_ch(); }
+                prompt();
+            }
+        }
+    }
+}
+</pre>
+<pre>
+Calc> 1 + 2 + 3 + 4 + 5;
+15
+Calc> (1 + 2) * (3 - 4);
+-3
+Calc> 1.11111111 * 1.11111111;
+1.234567898765432
+Calc> 1 / 7;
+0.14285714285714285
+Calc> -10 * -10;
+100
+Calc> (1 + 2;
+')' expected
+Calc> 1 + * 2;
+unexpected token
+Calc> (終了は CTRL-C を入力してください)
+</pre>
+<h4 id="chap82">●式の計算 (構文木の構築)</h4>
+<p> 再帰降下法で構文木を構築して式 (四則演算とカッコ) を計算するプログラムです。アルゴリズムの詳細は拙作のページ <a href="../func/index.html#sml">お気楽 SML/NJ プログラミング入門</a> <a href="../func/smlnj23.html">電卓プログラムの作成</a> をお読みください。
+</p>
+<pre class="list">
+//
+// calc2.rs : 簡単な電卓 (構文木の構築)
+//
+//            Copyright (C) 2018 Makoto Hiroi
+//
+use std::io::prelude::*;
+use std::io;
+
+// 演算子
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+enum Op {Add, Sub, Mul, Div}
+
+// 構文木
+enum ExprTree {
+    Leaf(f64),
+    Node1(Op, Box&lt;ExprTree&gt;),
+    Node2(Op, Box&lt;ExprTree&gt;, Box&lt;ExprTree&gt;)
+}
+
+use ExprTree::*;
+
+fn make_node1(op: Op, expr1: ExprTree) -&gt; ExprTree {
+    Node1(op, Box::new(expr1))
+}
+
+fn make_node2(op: Op, expr1: ExprTree, expr2: ExprTree) -&gt; ExprTree {
+    Node2(op, Box::new(expr1), Box::new(expr2))
+}
+
+// トークン
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+enum Token { Number, Add, Sub, Mul, Div, Lpar, Rpar, Semic, Others }
+
+use Token::*;
+
+// 大域変数
+static mut CH: char = ' ';
+static mut TOKEN: Token = Others;
+static mut VALUE: f64 = 0.0;
+
+// アクセス関数
+fn get_ch() -&gt; char { unsafe { CH } }
+fn next_ch() {
+    let mut buff = [0u8; 1];
+    io::stdin().read(&amp;mut buff).unwrap();
+    unsafe { CH = buff[0] as char; }
+}
+
+fn set_token(x: Token) {
+    unsafe { TOKEN = x; }
+}
+fn get_token() -&gt; Token { unsafe { TOKEN } }
+
+fn set_value(x: f64) {
+    unsafe { VALUE = x; }
+}
+fn get_value() -&gt; f64 { unsafe { VALUE } }
+
+// 数値の読み込み
+fn get_fixnum(buff: &amp;mut String) {
+    while get_ch().is_digit(10) {
+        buff.push(get_ch());
+        next_ch();
+    }
+}
+
+fn get_number() -&gt; f64 {
+    let mut buff = String::new();
+    get_fixnum(&amp;mut buff);
+    if get_ch() == '.' {
+        buff.push(get_ch());
+        next_ch();
+        get_fixnum(&amp;mut buff);
+    }
+    if get_ch() == 'E' || get_ch() == 'e' {
+        buff.push(get_ch());
+        next_ch();
+    }
+    get_fixnum(&amp;mut buff);
+    buff.parse::&lt;f64&gt;().unwrap()
+}
+
+// トークンの切り分け
+fn next_token() {
+    // 空白文字のスキップ
+    while get_ch().is_whitespace() {
+        next_ch();
+    }
+    if get_ch().is_digit(10) {
+        set_token(Number);
+        set_value(get_number());
+    } else {
+        let c = get_ch();
+        if c == '+' {
+            set_token(Add);
+            next_ch();
+        } else if c == '-' {
+            set_token(Sub);
+            next_ch();
+        } else if c == '*' {
+            set_token(Mul);
+            next_ch();
+        } else if c == '/' {
+            set_token(Div);
+            next_ch();
+        } else if c == '(' {
+            set_token(Lpar);
+            next_ch();
+        } else if c == ')' {
+            set_token(Rpar);
+            next_ch();
+        } else if c == ';' {
+            set_token(Semic);
+            next_ch();
+        } else {
+            set_token(Others);
+        }
+    }
+}
+
+// 構文解析
+fn expr() -&gt; Result&lt;ExprTree, &amp;'static str&gt; {
+    let mut expr = term()?;
+    loop {
+        if get_token() == Add {
+            next_token();
+            expr = make_node2(Op::Add, expr, term()?);
+        } else if get_token() == Sub {
+            next_token();
+            expr = make_node2(Op::Sub, expr, term()?);
+        } else {
+            break;
+        }
+    }
+    Ok(expr)
+}
+
+// 項
+fn term() -&gt; Result&lt;ExprTree, &amp;'static str&gt; {
+    let mut expr = factor()?;
+    loop {
+        if get_token() == Mul {
+            next_token();
+            expr = make_node2(Op::Mul, expr, factor()?);
+        } else if get_token() == Div {
+            next_token();
+            expr = make_node2(Op::Div, expr, factor()?);
+        } else {
+            break;
+        }
+    }
+    Ok(expr)
+}
+
+// 因子
+fn factor() -&gt; Result&lt;ExprTree, &amp;'static str&gt; {
+    if get_token() == Lpar {
+        next_token();
+        let expr = expr()?;
+        if get_token() != Rpar {
+            Err("')' expected")
+        } else {
+            next_token();
+            Ok(expr)
+        }
+    } else if get_token() == Number {
+        next_token();
+        Ok(Leaf(get_value()))
+    } else if get_token() == Add {
+        next_token();
+        Ok(make_node1(Op::Add, factor()?))
+    } else if get_token() == Sub {
+        next_token();
+        Ok(make_node1(Op::Sub, factor()?))
+    } else {
+        Err("unexpected token")
+    }
+}
+
+fn toplevel() -&gt; Result&lt;ExprTree, &amp;'static str&gt; {
+    let expr = expr()?;
+    if get_token() == Semic {
+        Ok(expr)
+    } else {
+        Err("invalid token")
+    }
+}
+
+// 構文木の計算
+fn calc_expr(node: &amp;ExprTree) -&gt; f64 {
+    match node {
+        &amp;Leaf(val) =&gt; val,
+        &amp;Node1(op, ref expr) =&gt;{
+            let val = calc_expr(expr);
+            if op == Op::Add {
+                val
+            } else {
+                -val
+            }
+        },
+        &amp;Node2(op, ref expr1, ref expr2) =&gt; {
+            let val1 = calc_expr(expr1);
+            let val2 = calc_expr(expr2);
+            match op {
+                Op::Add =&gt; val1 + val2,
+                Op::Sub =&gt; val1 - val2,
+                Op::Mul =&gt; val1 * val2,
+                Op::Div =&gt; val1 / val2,
+            }
+        }
+    }
+}
+
+fn prompt() {
+    print!("Calc&gt; ");
+    io::stdout().flush().unwrap();
+}
+
+fn main() {
+    prompt();
+    next_ch();
+    loop {
+        next_token();
+        match toplevel() {
+            Ok(expr) =&gt; {
+                println!("{}", calc_expr(&amp;expr));
+                prompt();
+            },
+            Err(msg) =&gt; {
+                println!("{}", msg);
+                // 入力のクリア
+                while get_ch() != '\n' { next_ch(); }
+                prompt();
+            }
+        }
+    }
+}
+</pre>
+<p> 実行例は再帰降下法と同じです。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html><!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

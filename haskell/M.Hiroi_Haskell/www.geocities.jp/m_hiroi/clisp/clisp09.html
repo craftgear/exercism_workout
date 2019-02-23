@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 CLOS プログラミング入門</title>
+  <meta name="description" content="Common Lisp,Common Lisp Object System,CLOS,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881772</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>お気楽 CLOS プログラミング入門</h2>
+<div class="small">
+[ <a href="clisp08.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | NextPage ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3><a name="chap0901">●積木の移動</a></h3>
+<p> 今回は簡単な例題として、積木を指定の位置に移動するプログラムを作ってみましょう。このプログラムは <a href="index.html#cite">参考文献 [1]</a> <CITE>第 21 章「クラスとメソッドを用いた積木の世界」</CITE> を参考にしました。ただし、積木の種類を 1 つに減らして超簡略化しています。その分だけプログラムも簡単になります。次の図を見てください。
+</p>
+
+<pre class="fig">
+  ハンド     ┃
+             ┻
+積木の名前   b0 b1 b2 b3 b4 b5 b6 b7
+             ■ ■ ■ ■ ■ ■ ■ ■
+            -------------------------  
+   位置      ０ １ ２ ３ ４ ５ ６ ７
+                      table
+
+            図 1 : 積木の世界
+</pre>
+
+<p> 上図のように同じ種類の積木が 8 個テーブルの上に置いてあります。ハンドは積木をひとつだけ持ち上げて移動することができます。この積木を指定した積木の上、またはテーブルの上に移動するメソッド put-on を作りましょう。put-on は第 1 引数に移動する積木、第 2 引数に移動先の積木またはテーブルを指定します。簡単な動作例を示します。
+</p>
+<pre>
+&gt; (put-on b2 b0)
+Move HAND to 2 from 0
+Grasp B2
+Move B2 to top of B0 at location 0
+Ungrasp B2
+NIL
+</pre>
+<p> 上図の状態で積木 B2 を B0 の上に置きます。最初にハンドを位置 2 へ移動して、積木 B2 をつかみます。そして、B2 を位置 0 にある B0 の上へ移動してから B2 を離します。これで、B0 の上に B2 が置かれた状態になります。
+</p>
+<p> 次に、この状態で B0 を B7 へ移動します。この場合、最初に B0 の上にある B2 をテーブルへ置いてから B0 を B7 へ移動します。動作例は次のようになります。
+</p>
+<pre>
+&gt; (put-on b0 b7)
+Grasp B2
+Move B2 to top of TABLE at location 2
+Ungrasp B2
+Move HAND to 0 from 2
+Grasp B0
+Move B0 to top of B7 at location 7
+Ungrasp B0
+NIL
+</pre>
+<p> B2 をつかんでテーブルの空き場所へ置きます。それから、B0 をつかんで B7 へ移動します。このように、邪魔な積木がある場合は、そのブロックをテーブルへ移動させるわけです。テーブルには積木を置く十分な空き場所があるので、ブロックの移動は必ず成功します。この処理は put-on を再帰呼び出しすれば簡単に実現できます。
+</p>
+
+<h4>●クラスの定義</h4>
+<p> それではプログラムを作りましょう。最初にクラスを定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 1 : クラス定義
+
+; 基本クラス
+(defclass base-block ()
+  ((name :accessor block-name :initarg :name)
+   (position :accessor block-position :initarg :position)
+   (supported-for :accessor block-supported-for :initform nil)
+   (supported-by :accessor block-supported-by :initarg :supported-by :initform nil)))
+
+; テーブル
+(defclass table (base-block)
+  ((space-position :accessor table-space-position :initform nil)))
+
+; 積木
+(defclass block (base-block) ())
+
+; ハンド
+(defclass hand ()
+  ((name :accessor hand-name :initarg :name :initform 'hand)
+   (position :accessor hand-position :initarg :position)
+   (grasping :accessor hand-grasping :initform nil)))
+</pre>
+<p> 必要なオブジェクトはテーブル、積木、ハンドの 3 つです。テーブルと積木の上には他の積木を置くことができるので、この共通部分を base-block というクラスで表すことにします。そして、base-block を継承してテーブルを表すクラス table と積木を表すクラス block を作成します。ハンドを表すクラスは hand とします。
+</p>
+
+<p> クラス base-block のスロット name はオブジェクトの名前、position はオブジェクトの位置を表します。supported-by は自分の下にある（支持されている）オブジェクト、supported-for は自分の上にある（支持している）オブジェクトを格納します。
+</p>
+<p> たとえば、テーブルの上に積木 B0 があり、B0 の上に B2 がある場合、B0 の supported-by にはテーブルのインスタンスがセットされ、supported-for には B2 のインスタンスがセットされます。積木の上に何も置かれていない場合、supported-for の値は nil になります。また、ハンドで持ち上げられている状態では supported-by の値は nil になります。
+</p>
+
+<p> クラス table のスロット space-position は空き場所の位置を表します。積木をテーブルへ移動する場合、space-position から空き場所を求めて積木をそこへ置きます。テーブルには複数の積木が置かれているので、table の supported-for は積木のインスタンスをリストに格納してセットすることにします。テーブルと積木で supported-for にセットするデータ型が異なりますが、この違いは積木を移動するメソッドで対応することができます。
+</p>
+
+<p> 積木を表すクラス block には追加するスロットはありません。クラス block を定義することで、テーブルと積木が別のオブジェクトであることを表します。クラス hand のスロット name はハンドの名前、position はハンドの位置、grasping はハンドがつかんでいる積木のインスタンスを表します。何もつかんでいない場合は nil になります。
+</p>
+
+<h4>●インスタンスの生成</h4>
+<p> 次は必要なインスタンスを生成する関数 init-block-world を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 2 : 必要なインスタンスを生成する
+
+; スペシャル変数の宣言
+(defvar *hand*)
+(defvar *table*)
+
+; 初期化
+(defun init-block-world ()
+  (setq *hand* (make-instance 'hand :position 0)
+        *table* (make-instance 'table :name 'table))
+  (let ((block-name '(b0 b1 b2 b3 b4 b5 b6 b7))
+        block)
+    (dotimes (x (length block-name))
+      (setq block (make-instance 'block
+                                 :name (nth x block-name)
+                                 :position x
+                                 :supported-by *table*))
+      ; インスタンスをシンボルにセット
+      (setf (symbol-value (nth x block-name)) block)
+      ; テーブルに置く
+      (push block (block-supported-for *table*)))))
+</pre>
+
+<p> テーブルとハンドのインスタンスはスペシャル変数 *hand* と *table* にセットします。あとは積木のインスタンスを生成して、それをテーブルに配置します。積木の名前はシンボルで表します。そして、積木のインスタンスをシンボルのスペシャル変数にセットします。これで積木の名前からインスタンスを簡単に求めることができます。
+</p>
+
+<h4>●メソッドの作成</h4>
+<p> それでは、メソッド put-on を作りましょう。put-on はひとつの積木を他の積木の上、またはテーブルの上へ置くメソッドです。したがって、引数特定子は第 1 引数が block になり、第 2 引数が base-block になります。上にある積木を動かす処理は :before メソッドを使うと簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 3 : 積木を置く
+
+(defmethod put-on ((obj block) (support base-block))
+  (grasp obj)         ; obj をつかむ
+  (move obj support)  ; support の上まで移動
+  (ungrasp obj))      ; obj を離す
+
+; (1) 上にあるブロックをテーブルへ移動
+(defmethod put-on :before ((obj block) (support base-block))
+  (if (block-supported-for obj)
+      (put-on (block-supported-for obj) *table*)))
+
+; (2) 移動先がブロックの場合
+(defmethod put-on :before ((obj block) (support block))
+  (if (block-supported-for support)
+      (put-on (block-supported-for support) *table*)))
+</pre>
+
+<p> 基本メソッドはとても簡単です。関数 graps でハンドを動かして積木をつかみます。そして、メソッド move で積木を指定位置まで動かして、関数 ungraps で積木を離します。
+</p>
+<p> 上にある積木を動かす処理は :before メソッドで行います。ハンドで積木 obj を持ち上げる前に、ほかの積木をテーブルへ動かします。この処理をメソッド (1) で行います。次に、移動先が積木の場合、その上にある積木を動かさないといけません。この処理をメソッド (2) で行います。
+</p>
+<p> クラスの継承関係により、移動先がテーブルであればメソッド (2) は評価されず、メソッド (1) だけが評価されます。移動先が積木の場合はメソッド (2) が評価され、次にメソッド (1) が評価されます。どちらのメソッドも上に積木があれば、その積木を put-on でテーブルへ動かします。このように put-on を再帰呼び出しすることで、上にある積木をすべてテーブルへ動かすことができます。
+</p>
+
+<p> 次は積木を動かすメソッド move を作ります。supported-for と supported-by の更新を補助メソッドに任せると、基本メソッドはとても簡単になります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 4 : 積木の移動
+
+(defmethod move ((obj block) (support base-block))
+  (let ((new-position (block-position support)))
+    (format t "Move ~a to top of ~a at location ~a~%"
+            (block-name obj)
+            (block-name support)
+            new-position)
+    (setf (hand-position *hand*) new-position
+          (block-position obj) new-position)))
+
+; table 用 block-position メソッド
+(defmethod block-position ((obj table))
+  ; 空き場所を返す
+  (first (table-space-position obj)))
+</pre>
+<p> 最初に移動先の位置をメソッド block-position で求め、変数 new-position にセットします。移動先がテーブルの場合、スロット position の値ではなく、積木を置く位置を返さないといけません。このため、メソッド block-position をオーバーライドしています。このメソッドは space-position から空き場所の位置を取り出して返すだけです。あとは、積木の移動を format で表示して、ハンドと積木の position を更新するだけです。
+</p>
+
+<p> 次は move の :before メソッドを作ります。このメソッドでは、動かす積木の supported-by と、その下にあるオブジェクトの supported-for を更新します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 5 : move の :before メソッド
+
+(defmethod move :before ((obj block) dummy)
+  (let ((support (block-supported-by obj)))
+    (setf (block-supported-by obj) nil)
+    (delete-support support obj)))
+
+; 積木用
+(defmethod delete-support ((support block) dummy)
+  (setf (block-supported-for support) nil))
+
+; テーブル用
+(defmethod delete-support ((support table) (obj block))
+  (push (block-position obj) (table-space-position support))
+  (setf (block-supported-for support)
+        (remove obj (block-supported-for support))))
+</pre>
+
+<p> 動かす積木 obj の下にあるオブジェクトを取り出して変数 support にセットします。そして、obj の suppprted-by を nil に書き換えて、support の supported-for から obj を削除します。この処理をメソッド delete-support で行います。support には積木とテーブルがあるので、それぞれに対応するメソッドを定義します。
+</p>
+<p> 積木に対応する delete-support は簡単ですね。support の supported-for を nil に書き換えるだけです。テーブルの場合、積木 obj が置いてある場所を空き場所 space-position に追加して、supported-for から obj を削除します。
+</p>
+
+<p> 次は move の :after メソッドを作ります。このメソッドでは、動かした積木の supported-by と、その積木を置くオブジェクトの supported-for を更新します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 6 : move の :after メソッド
+
+(defmethod move :after ((obj block) (support base-block))
+  (setf (block-supported-by obj) support)
+  (add-support support obj))
+
+; 積木用
+(defmethod add-support ((support block) (obj block))
+  (setf (block-supported-for support) obj))
+
+; テーブル用
+(defmethod add-support ((support table) (obj block))
+  (push obj (block-supported-for support))
+  (setf (table-space-position support)
+        (remove (block-position obj) (table-space-position support))))
+</pre>
+
+<p> 動かした積木 obj の supported-by を移動先のオブジェクト support に更新します。そして、support の support-for をメソッド add-support で更新します。積木に対応する add-support は簡単ですね。support の supported-for を obj に書き換えるだけです。テーブルの場合、積木 obj を supported-for に追加して、空き場所 space-position から obj の場所を削除します。
+</p>
+
+<p> 最後にハンドを操作する関数を作ります。ハンドはひとつしかないので、操作は関数で十分です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 7 : ハンドの操作
+
+; ブロックをつかむ
+(defun grasp (obj)
+  (when (/= (block-position obj) (hand-position *hand*))
+    ; ハンドの移動
+    (format t "Move ~a to ~a from ~a~%"
+            (hand-name *hand*)
+            (block-position obj)
+            (hand-position *hand*))
+    (setf (hand-position *hand*) (block-position obj)))
+  (format t "Grasp ~a~%" (block-name obj))
+  (setf (hand-grasping *hand*) obj))
+
+; ブロックを離す
+(defun ungrasp (obj)
+  (format t "Ungrasp ~a~%" (block-name obj))
+  (setf (hand-grasping *hand*) nil))
+</pre>
+
+<p> 積木をつかむ動作は関数 grasp で行います。ハンドと積木 obj の位置をチェックして、位置が違う場合はハンドを移動します。次に、積木をつかむメッセージを format で表示して、grasping に積木 obj をセットします。積木を離す動作は関数 ungrasp で行います。これは grasping を nil に書き換えてメッセージを表示するだけです。
+</p>
+
+<h4>●実行例</h4>
+<p> これでプログラムは完成です。さっそく実行してみましょう。
+</p>
+<pre>
+&gt; (init-block-world)
+NIL
+&gt; (print-table)
+0 : B0
+1 : B1
+2 : B2
+3 : B3
+4 : B4
+5 : B5
+6 : B6
+7 : B7
+space position is NIL
+NIL
+
+&gt; (put-on b7 b0)
+Move HAND to 7 from 0
+Grasp B7
+Move B7 to top of B0 at location 0
+Ungrasp B7
+NIL
+&gt; (print-table)
+0 : B0 B7
+1 : B1
+2 : B2
+3 : B3
+4 : B4
+5 : B5
+6 : B6
+7 :
+space position is (7)
+NIL
+
+&gt; (put-on b0 b7)
+Grasp B7
+Move B7 to top of TABLE at location 7
+Ungrasp B7
+Move HAND to 0 from 7
+Grasp B0
+Move B0 to top of B7 at location 7
+Ungrasp B0
+NIL
+&gt; (print-table)
+0 :
+1 : B1
+2 : B2
+3 : B3
+4 : B4
+5 : B5
+6 : B6
+7 : B7 B0
+space position is (0)
+NIL
+</pre>
+<p> 正常に動作していますね。print-table はテーブルの状態を表示する関数です。詳細は <a href="clisp09.html#list">プログラムリスト</a> をお読みくださいませ。
+</p>
+
+<h4>●プログラムの改良</h4>
+<p> ところで、このプログラムには問題点があります。次の例を見てください。
+</p>
+<pre>
+&gt; (print-table)
+0 :
+1 : B1
+2 : B2
+3 : B3
+4 : B4
+5 : B5
+6 : B6
+7 : B7 B0
+space position is (0)
+NIL
+&gt; (put-on b0 b7)
+Grasp B0
+Move B0 to top of TABLE at location 0
+Ungrasp B0
+Grasp B0
+Move B0 to top of B7 at location 7
+Ungrasp B0
+NIL
+
+&gt; (put-on b1 *table*)
+Move HAND to 1 from 7
+Grasp B1
+Move B1 to top of TABLE at location 1
+Ungrasp B1
+NIL
+</pre>
+<p> 積木 B0 が B7 の上にある状態で (put-on b7 b0) を評価します。この場合、積木を動かす必要はありませんね。ところが、B7 をテーブルへ動かしてから、再び B7 を B0 へ移動しています。また、B1 がテーブルの上にある状態で、(put-on b1 *table*) を評価する場合も同様です。この場合も B1 を動かす必要はありませんが、B1 の移動処理が行われています。
+</p>
+
+<p> そこで、積木の移動が必要かチェックする処理を追加します。このチェック処理を put-on の基本メソッドに追加することはできません。なぜなら、基本メソッドの前に :before メソッドが評価されるからです。
+</p>
+<p> このような場合、:around メソッドを使うと簡単にチェック処理を実現できます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 8 : :around メソッドの定義
+
+(defmethod put-on :around ((obj block) (support base-block))
+  (if (eq (block-supported-by obj) support)
+      (format t "It is not necessary to move~%")
+      (call-next-method)))
+</pre>
+
+<p> 積木 obj がオブジェクト support の上にあれば、obj を動かす必要はありません。format でメッセージを表示します。そうでなければ、call-next-method を評価して積木の移動処理を実行します。とても簡単ですね。
+</p>
+
+<p> それでは実際に試してみましょう。
+</p>
+
+<pre>
+&gt; (init-block-world)
+NIL
+&gt; (put-on b1 b6)
+Move HAND to 1 from 0
+Grasp B1
+Move B1 to top of B6 at location 6
+Ungrasp B1
+NIL
+&gt; (print-table)
+0 : B0
+1 :
+2 : B2
+3 : B3
+4 : B4
+5 : B5
+6 : B6 B1
+7 : B7
+space position is (1)
+NIL
+
+&gt; (put-on b1 b6)
+It is not necessary to move
+NIL
+&gt; (put-on b6 *table*)
+It is not necessary to move
+NIL
+</pre>
+<p> 正常に動作していますね。ところで、このプログラムは積木が 1 種類しかないので、オブジェクト指向の例題としては簡単すぎて面白くなかったかもしれません。<a href="index.html#cite">参考文献 [1]</a> の「積木の世界」では、ボールや三角柱など形の違う積木や、同じ形でも大きさが異なる積木を取り扱っています。興味のある方はぜひ読んでみてください。
+</p>
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+;
+; block.l : 積木の移動（超簡易バージョン）
+;
+;           Copyright (C) 2003 Makoto Hiroi
+;
+
+;
+; ***** クラス定義 *****
+;
+; 基本クラス
+(defclass base-block ()
+  ((name :accessor block-name :initarg :name)
+   (position :accessor block-position :initarg :position)
+   (supported-for :accessor block-supported-for :initform nil)
+   (supported-by :accessor block-supported-by :initarg :supported-by :initform nil)))
+
+; テーブル
+(defclass table (base-block)
+  ((space-position :accessor table-space-position :initform nil)))
+
+; 積木
+(defclass block (base-block) ())
+
+; ハンド
+(defclass hand ()
+  ((name :accessor hand-name :initarg :name :initform 'hand)
+   (position :accessor hand-position :initarg :position)
+   (grasping :accessor hand-grasping :initform nil)))
+
+;
+; ***** インスタンスの生成 *****
+;
+; スペシャル変数の宣言
+(defvar *hand*)
+(defvar *table*)
+
+; 初期化
+(defun init-block-world ()
+  (setq *hand* (make-instance 'hand :position 0)
+        *table* (make-instance 'table :name 'table))
+  (let ((block-name '(b0 b1 b2 b3 b4 b5 b6 b7))
+        block)
+    (dotimes (x (length block-name))
+      (setq block (make-instance 'block
+                                 :name (nth x block-name)
+                                 :position x
+                                 :supported-by *table*))
+      ; インスタンスをシンボルにセット
+      (setf (symbol-value (nth x block-name)) block)
+      ; table に置く
+      (push block (block-supported-for *table*)))))
+
+;
+; ***** 積木を置く *****
+;
+(defmethod put-on ((obj block) (support base-block))
+  (grasp obj)         ; obj をつかむ
+  (move obj support)  ; support の上まで移動
+  (ungrasp obj))      ; obj を離す
+
+; (1) 上にあるブロックをテーブルへ移動
+(defmethod put-on :before ((obj block) (support base-block))
+  (if (block-supported-for obj)
+      (put-on (block-supported-for obj) *table*)))
+
+; (2) 移動先がブロックの場合
+(defmethod put-on :before ((obj block) (support block))
+  (if (block-supported-for support)
+      (put-on (block-supported-for support) *table*)))
+
+;
+; :around メソッドの定義
+;
+(defmethod put-on :around ((obj block) (support base-block))
+  (if (eq (block-supported-by obj) support)
+      (format t "It is not necessary to move~%")
+      (call-next-method)))
+
+;
+; ***** ハンド操作関数 *****
+;
+; ハンドでブロックをつかむ
+(defun grasp (obj)
+  (when (/= (block-position obj) (hand-position *hand*))
+    ; ハンドの移動
+    (format t "Move ~a to ~a from ~a~%"
+            (hand-name *hand*)
+            (block-position obj)
+            (hand-position *hand*))
+    (setf (hand-position *hand*) (block-position obj)))
+  (format t "Grasp ~a~%" (block-name obj))
+  (setf (hand-grasping *hand*) obj))
+
+; ブロックを離す
+(defun ungrasp (obj)
+  (format t "Ungrasp ~a~%" (block-name obj))
+  (setf (hand-grasping *hand*) nil))
+
+;
+; ***** 積木の移動 *****
+;
+(defmethod move ((obj block) (support base-block))
+  (let ((new-position (block-position support)))
+    (format t "Move ~a to top of ~a at location ~a~%"
+            (block-name obj)
+            (block-name support)
+            new-position)
+    (setf (hand-position *hand*) new-position
+          (block-position obj) new-position)))
+
+; table 用メソッド（オーバーライド）
+(defmethod block-position ((obj table))
+  ; 空き場所を返す
+  (first (table-space-position obj)))
+
+;
+; :before メソッド
+;
+(defmethod move :before ((obj block) dummy)
+  (let ((support (block-supported-by obj)))
+    (setf (block-supported-by obj) nil)
+    (delete-support support obj)))
+
+; 積木用
+(defmethod delete-support ((support block) dummy)
+  (setf (block-supported-for support) nil))
+
+; テーブル用
+(defmethod delete-support ((support table) (obj block))
+  (push (block-position obj) (table-space-position support))
+  (setf (block-supported-for support)
+        (remove obj (block-supported-for support))))
+
+;
+; :after メソッド
+;
+(defmethod move :after ((obj block) (support base-block))
+  (setf (block-supported-by obj) support)
+  (add-support support obj))
+
+; 積木用
+(defmethod add-support ((support block) (obj block))
+  (setf (block-supported-for support) obj))
+
+; テーブル用
+(defmethod add-support ((support table) (obj block))
+  (push obj (block-supported-for support))
+  (setf (table-space-position support)
+        (remove (block-position obj) (table-space-position support))))
+
+;
+; テーブル表示関数
+;
+(defun print-block (block)
+  (when block
+    (format t "~A " (block-name block))
+    (print-block (block-supported-for block))))
+
+(defun print-table ()
+  (dotimes (x 8)
+    (let ((block (find x (block-supported-for *table*) :key #'block-position)))
+      (format t "~D : " x)
+      (if block (print-block block))
+      (terpri)))
+  (format t "space position is ~a~%" (table-space-position *table*)))
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap0902">ちょっと寄り道</h3>
+<h4>■分数を使ったパズル</h4>
+<p> 今回はちょっと寄り道をして、分数を使ったパズルを紹介しましょう。Common Lisp には「分数」があるので、簡単に解法プログラムを作ることができます。なお、ここで紹介するパズルは、拙作のページ Memorandum で取り上げたものです。内容は重複しますが、ご了承くださいませ。
+</p>
+<h4>■パズル「小町分数 (1)」</h4>
+<p> それでは問題です。
+</p>
+<div class="question">
+<b>[問題] 小町分数 (1)</b>
+<p> 下図の A から I の場所に 1 から 9 までの数字をひとつずつ配置します。
+</p>
+3 つの分数を足すと 1 / N になる配置を求めてください。
+ただし、N は 2, 3, 4, 6, 10 とします。
+<pre class="fig">
+      Ａ      Ｄ      Ｇ      １
+     ---- ＋ ---- ＋ ---- ＝ ----      
+     ＢＣ    ＥＦ    ＨＩ     Ｎ
+
+例 :  3 / 27 + 6 / 54 + 9 / 81 = 1 / 3 
+      3 / 54 + 6 / 72 + 9 / 81 = 1 / 4
+
+        図 1 : 小町分数
+</pre>
+</div>
+<p> このパズルの元ネタは N = 1 の場合で、<a href="clisp09.html#cite_1">参考文献 [1]</a> に掲載されています。ちなみに、3 つの分数の和が整数になる場合、その値は 1 しかありません。また、値が 1 / N (N は整数) になる場合は 2, 3, 4, 6, 10 の 5 通りです。
+</p>
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 1 : パズル「小町分数 (1)」の解法
+
+(defun solve1 (&optional (n 0) (numbers '(9 8 7 6 5 4 3 2 1)) perm)
+  (if (= n 3)
+      (solve2 numbers perm nil)
+      (dolist (x numbers)
+        (if (apply #'&lt; x perm)
+            (solve1 (1+ n) (remove x numbers) (cons x perm))))))
+
+(defun solve2 (numbers perm1 perm2)
+  (if numbers
+      (dolist (x numbers)
+        (solve2 (remove x numbers) perm1 (cons x perm2)))
+      (apply #'check (append perm1 perm2))))
+
+(defun check (n1 n2 n3 m1 m2 m3 m4 m5 m6)
+  (let ((k (+ (/ n1 (+ (* m1 10) m2))
+              (/ n2 (+ (* m3 10) m4))
+              (/ n3 (+ (* m5 10) m6)))))
+    (when (integerp (/ k))
+      (format t "~D/~D~D + ~D/~D~D + ~D/~D~D = ~S~%" n1 m1 m2 n2 m3 m4 n3 m5 m6 k))))
+</pre>
+<p> 基本的には単純な生成検定法ですが、分子の数字を n1 &lt; n2 &lt; n3 と限定することで、
+</p>
+重複解を生成しないように工夫しています。それから、このプログラムでは 3 つの分数の和が 1 になる場合も解を出力します。プログラムを実行するときはご注意くださいませ。
+<p> <a name="back1" href="clisp09.html#ans1">小町分数 (1) の解答</a>
+</p>
+<h4>■パズル「小町分数 (2)」</h4>
+<p> もうひとつ「小町分数」を出題しましょう。
+</p>
+<div class="question">
+<b>[問題]</b> 小町分数 (2)
+<p> 下図の A から I の場所に 1 から 9 までの数字をひとつずつ配置します。
+</p>
+3 つの分数を足すと 1 / 2 になる配置を求めてください。
+<pre class="fig">
+  Ａ        Ｄ        Ｇ       １
+------ ＋ ------ ＋ ------ ＝ ----
+Ｂ×Ｃ    Ｅ×Ｆ    Ｈ×Ｉ     ２
+
+        図 2 : 小町分数
+</pre>
+</div>
+<p> このパズルの元ネタも値が 1 になる場合で、<a href="clisp09.html#cite_1">参考文献 [1]</a> に掲載されています。この問題で値が 1 / N (N は整数) になる場合は 1 と 2 の 2 通りしかないようです。
+</p>
+<p> プログラムは「小町分数 (1)」を参考にすれば、簡単に作成することができます。興味のある方は挑戦してみてください。
+</p>
+<p> <a name="back2" href="clisp09.html#ans2">小町分数 (2) の解答</a>
+</p>
+<div class="note">
+-- 参考文献 ------<br>
+<a name="cite_1">[1]</a> 芦ヶ原伸之,『超々難問数理パズル 解けるものなら解いてごらん』, 講談社, 2002
+</div>
+<hr>
+<h4>■単位分数の和</h4>
+<p> パズルではありませんが、分数のお話を紹介します。分子が 1 の分数を <b>単位分数</b> といいますが、単位分数の和は古代エジプト人がよく研究していたそうです。この話は <a href="http://homepage2.nifty.com/m_kamada/index.htm">M.Kamada さん</a> からお聞きしたのですが、<a href="clisp09.html#cite_2">参考文献 [2]</a> に「分数を単位分数の和で表す方法」がありましたので紹介します。
+</p>
+
+<p> 0 &lt; m / n &lt 1 の分数を単位分数の和で表します。まず、n / m の商 q を求めます。もし、割り切れれば単位分数になりますね。そうでなければ、m / n から 1 / (q + 1) を引き算して M / N を求めます。あとは、M / N に対して同じ処理を繰り返すだけです。次の式を見てください。
+</p>
+<pre class="item">
+M / N = m / n - 1 / (q + 1)
+M / N = (m(q + 1) - n) / n(q + 1)
+M = m(q + 1) - n = m - (n - mq) = m - (n mod m)
+</pre>
+<p> 0 &lt; (n mod m) &lt; m ですから、M は必ず m より小さな値になります。つまり、この処理を繰り返していくと m は必ず 1 になるので、分数を単位分数の和で表すことができる、というわけです。なるほど納得のアルゴリズムですね。たとえば、11 / 13 を単位分数の和で表してみましょう。
+</p>
+<pre class="item">
+11 / 13 =&gt; q = 1, 11 / 13 - 1 / 2 = 9 / 26
+ 9 / 26 =&gt; q = 2,  9 / 26 - 1 / 3 = 1 / 78
+11 / 13 = 1 / 2 + 1 / 3 + 1 / 78
+</pre>
+<p> このように、分子 m の値は減少していきます。このアルゴリズムを Common Lisp でプログラムすると、次のようになります。
+</p>
+
+<pre class="list">
+リスト 2 : 分数を単位分数の和で表す
+
+(defun bunsu (m n)
+  (if (zerop (mod n m))
+      (format t "1/~D" (/ n m))
+      (let ((q (1+ (truncate n m))))
+        (format t "1/~D + " q)
+        (bunsu (- (* m q) n) (* n q)))))
+</pre>
+
+<p> Lisp らしく再帰定義を使っています。関数名は適当なので、ふさわしい名前に変更してください。あとは、アルゴリズムをそのままプログラムしただけなので、特に難しいところはないでしょう。それでは実行してみましょう。
+</p>
+<pre class="item">
+(bunsu 11 13) =&gt; 1/2 + 1/3 + 1/78
+(bunsu 12 13) =&gt; 1/2 + 1/3 + 1/12 + 1/156
+(bunsu 19 23) =&gt; 1/2 + 1/4 + 1/14 + 1/215 + 1/138460
+</pre>
+<p> このほかにも、単位分数の和で表す方法は何通りもあるわけで、この方法はその中のひとつにすぎません。古代エジプトではどのような方法で求めたのでしょうか。興味深いところです。
+</p>
+<div class="note">
+-- 参考文献 ------<br>
+<a name="cite_2">[2]</a> 奥村晴彦, 『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991
+</div>
+<hr>
+<h4 id="ans1">■パズル「小町分数 (1)」の解答</h4>
+<pre class="fig">
+3/48 + 5/16 + 9/72 = 1/2
+
+1/96 + 5/48 + 7/32 = 1/3
+2/19 + 4/57 + 6/38 = 1/3
+2/18 + 5/63 + 7/49 = 1/3
+3/27 + 6/54 + 9/81 = 1/3
+
+1/26 + 5/39 + 7/84 = 1/4
+1/96 + 5/32 + 7/84 = 1/4
+1/48 + 5/32 + 7/96 = 1/4
+3/54 + 6/72 + 9/81 = 1/4
+
+1/24 + 3/56 + 7/98 = 1/6
+1/56 + 3/72 + 9/84 = 1/6
+1/32 + 5/96 + 7/84 = 1/6
+
+1/38 + 2/95 + 4/76 = 1/10
+</pre>
+<p><a href="clisp09.html#back1">戻る</a>
+</p>
+<h4 id="ans2">■パズル「小町分数 (2)」の解答</h4>
+<pre class="fig">
+  １        ５        ７       １
+------ ＋ ------ ＋ ------ ＝ ----
+２×４    ３×６    ８×９     ２
+
+    図 3 : 小町分数 (2) の解答
+</pre>
+<p><a href="clisp09.html#back2">戻る</a>
+</p>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003-2010 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clisp08.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | NextPage ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

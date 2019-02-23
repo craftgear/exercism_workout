@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Julia プログラミング超入門</title>
+  <meta name="description" content="Julia 入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881804</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="ce">
+<h1>Julia Language Programming</h1>
+<h2>お気楽 Julia プログラミング超入門</h2>
+<h2>Puzzle DE Julia!!</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>スライドパズル編</h3>
+<p> 今回は基本的な探索手法である幅優先探索 (breadth-first search) と反復深化 (iterative deeping) を使って 15 パズルで有名なスライドパズルを解いてみましょう。
+</p>
+<h4>●8 パズル</h4>
+<p> <a href="juliaa16.html#cite">参考文献 1</a> によると、15 パズルはアメリカのサム・ロイドが 1870 年代に考案したパズルで、彼はパズルの神様と呼ばれるほど有名なパズル作家だそうです。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┬─┐  
+  │１│２│３│４│
+  ├─┼─┼─┼─┤
+  │５│６│７│８│
+  ├─┼─┼─┼─┤
+  │９│10│11│12│
+  ├─┼─┼─┼─┤
+  │13│14│15│  │
+  └─┴─┴─┴─┘
+
+   図 : 15 パズル
+</pre>
+<p> 15 パズルは上図に示すように、1 から 15 までの駒を並べるパズルです。駒の動かし方は、1 回に 1 個の駒を空いている隣の場所に滑らせる、というものです。駒を跳び越したり持ち上げたりすることはできません。
+</p>
+
+<p> 15 パズルの場合、駒の配置は空き場所がどこでもいいことにすると、16! (約 2e13) 通りもあります。実際には、15 パズルの性質からその半分になるのですが、それでもパソコンで扱うにはあまりにも大きすぎる数です。そこで、盤面を一回り小さくした、1 から 8 までの数字を並べる「8 パズル」を考えることにします。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐      ┌─┬─┬─┐
+  │１│２│３│      │１│２│３│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │４│５│６│      │４│５│６│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │７│８│  │      │８│７│  │
+  └─┴─┴─┘      └─┴─┴─┘
+  （１）完成形      （２）不可能な局面  
+
+
+            図 : 8 パズル
+</pre>
+<p> 15 パズルは 4 行 4 列の盤ですが、8 パズルは 3 行 3 列と盤を小さくしたパズルです。8 パズルの場合、駒の配置は空き場所がどこでもいいことにすると、9! =  362880 通りあります。15 パズルや 8 パズルの場合、<a href="juliaa16.html#cite">参考文献 2</a> によると <cite>『適当な 2 つの駒をつまみ上げて交換する動作を偶数回行った局面にしか移行できない』</cite> とのことです。
+</p>
+<p> 上図 (2) は 7 と 8 を入れ替えただけの配置です。この場合、交換の回数が奇数回のため完成形に到達することができない、つまり解くことができないのです。このような性質を「偶奇性 (パリティ)」といいます。詳しい説明は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/parity.html">偶奇性（パリティ）のお話</a> をお読みください。8 パズルの場合、完成形に到達する局面の総数は 9! / 2 = 181440 個となります。
+</p>
+
+<h4>●幅優先探索による解法</h4>
+<p> それでは、プログラムを作りましょう。下図に示すスタートから完成形 (ゴール) に到達するまでの最短手数を幅優先探索で求めます。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐    ┌─┬─┬─┐
+  │８│６│７│    │１│２│３│
+  ├─┼─┼─┤    ├─┼─┼─┤
+  │２│５│４│    │４│５│６│
+  ├─┼─┼─┤    ├─┼─┼─┤
+  │３│  │１│    │７│８│  │
+  └─┴─┴─┘    └─┴─┴─┘
+     スタート           ゴール
+
+
+          図 : 8 パズル
+</pre>
+<p> 8 パズルの盤面は 1 次元配列を使って表します。盤面の位置と配列の添字の対応は下図を見てください。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐      ┌─┬─┬─┐
+  │１│２│３│      │１│２│３│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │４│５│６│      │４│５│６│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │７│８│  │      │７│８│９│
+  └─┴─┴─┘      └─┴─┴─┘
+
+ 盤面:[1, 2, 3,      盤面と配列の対応
+       4, 5, 6,
+       7, 8, 0]
+
+
+         図 : 8 パズルの盤面
+</pre>
+
+<p> 隣接リストの定義は次のようになります。
+</p>
+
+<pre class="list">
+リスト : 隣接リスト
+
+const adjacent = [
+  [2, 4],       # 1
+  [1, 3, 5],    # 2
+  [2, 6],       # 3
+  [1, 5, 7],    # 4
+  [2, 4, 6, 8], # 5
+  [3, 5, 9],    # 6
+  [4, 8],       # 7
+  [5, 7, 9],    # 8
+  [6, 8]        # 9
+]
+</pre>
+
+<p> 次は局面を表すクラスを定義します。
+</p>
+<pre class="list">
+リスト : 局面の定義
+
+# 盤面
+const Board = Vector{Int}
+
+# 局面
+struct State
+    board::Board
+    pos::Int
+    prev
+end
+
+# 手順の表示
+function printanswer(state, printer=println)
+    if state.prev !== nothing
+        printanswer(state.prev, printer)
+    end
+    printer(state.board)
+end
+</pre>
+<p> State と printanswer() は <a href="juliaa11.html">入れ替えパズルと幅優先探索編</a> で作成したものを流用します。
+</p>
+
+<p> それでは幅優先探索のプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 幅優先探索
+
+function solver(start, goal)
+    que = State[State(start, findfirst(isequal(0), start), nothing)]
+    chk = Dict{Board, Bool}(start => true)
+    while !isempty(que)
+        state = popfirst!(que)
+        for x = adjacent[state.pos]
+            newboard = copy(state.board)
+            newboard[state.pos] = newboard[x]
+            newboard[x] = 0
+            if haskey(chk, newboard) continue end
+            newstate = State(newboard, x, state)
+            if newboard == goal
+                printanswer(newstate)
+                return
+            else
+                push!(que, newstate)
+                chk[newboard] = true
+            end
+        end
+    end
+end
+</pre>
+<p> プログラムは <a href="juliaa11.html">入れ替えパズルと幅優先探索編</a> のものとほとんど同じです。State の pos に空き場所の位置を格納します。隣接リスト adjacent から動かす駒の位置を順番に取り出し、新しい盤面 newboard の state.pos と x の要素を入れ替えます。そして、同一局面がないか Julia の辞書を使ってチェックします。あとは特に難しいところないと思います。説明は割愛いたしますので、詳細はプログラムリストをお読みくださいませ。
+</p>
+
+<h4>●実行結果</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+<pre>
+julia> @time solver([8,6,7,2,5,4,3,0,1], [1,2,3,4,5,6,7,8,0])
+[8, 6, 7, 2, 5, 4, 3, 0, 1]
+[8, 6, 7, 2, 0, 4, 3, 5, 1]
+[8, 0, 7, 2, 6, 4, 3, 5, 1]
+[0, 8, 7, 2, 6, 4, 3, 5, 1]
+[2, 8, 7, 0, 6, 4, 3, 5, 1]
+[2, 8, 7, 3, 6, 4, 0, 5, 1]
+[2, 8, 7, 3, 6, 4, 5, 0, 1]
+[2, 8, 7, 3, 6, 4, 5, 1, 0]
+[2, 8, 7, 3, 6, 0, 5, 1, 4]
+[2, 8, 0, 3, 6, 7, 5, 1, 4]
+[2, 0, 8, 3, 6, 7, 5, 1, 4]
+[2, 6, 8, 3, 0, 7, 5, 1, 4]
+[2, 6, 8, 0, 3, 7, 5, 1, 4]
+[2, 6, 8, 5, 3, 7, 0, 1, 4]
+[2, 6, 8, 5, 3, 7, 1, 0, 4]
+[2, 6, 8, 5, 3, 7, 1, 4, 0]
+[2, 6, 8, 5, 3, 0, 1, 4, 7]
+[2, 6, 0, 5, 3, 8, 1, 4, 7]
+[2, 0, 6, 5, 3, 8, 1, 4, 7]
+[2, 3, 6, 5, 0, 8, 1, 4, 7]
+[2, 3, 6, 0, 5, 8, 1, 4, 7]
+[2, 3, 6, 1, 5, 8, 0, 4, 7]
+[2, 3, 6, 1, 5, 8, 4, 0, 7]
+[2, 3, 6, 1, 5, 8, 4, 7, 0]
+[2, 3, 6, 1, 5, 0, 4, 7, 8]
+[2, 3, 0, 1, 5, 6, 4, 7, 8]
+[2, 0, 3, 1, 5, 6, 4, 7, 8]
+[0, 2, 3, 1, 5, 6, 4, 7, 8]
+[1, 2, 3, 0, 5, 6, 4, 7, 8]
+[1, 2, 3, 4, 5, 6, 0, 7, 8]
+[1, 2, 3, 4, 5, 6, 7, 0, 8]
+[1, 2, 3, 4, 5, 6, 7, 8, 0]
+  0.910670 seconds (1.60 M allocations: 135.992 MiB, 11.31% gc time)
+
+実行環境 : Julia ver 1.0, Windows 10, Intel Core i5-6200U 2.30GHz
+</pre>
+<p> 31 手で解くことができました。生成した局面は全部で 181440 通りで、実行時間は 0.9 秒でした。8 パズルの場合、最長手数は 31 手で、下図に示す 2 通りの局面があります。スタートの局面はその一つです。
+</p>
+<pre class="fig">
+┌─┬─┬─┐    ┌─┬─┬─┐
+│８│６│７│    │６│４│７│
+├─┼─┼─┤    ├─┼─┼─┤
+│２│５│４│    │８│５│  │
+├─┼─┼─┤    ├─┼─┼─┤
+│３│  │１│    │３│２│１│
+└─┴─┴─┘    └─┴─┴─┘
+
+    図 : 31 手で解ける局面
+</pre>
+<p> 最長手数の局面は、幅優先探索を使って求めることができます。
+</p>
+<h4>●最長手数の求め方</h4>
+<p> 最長手数の求め方ですが、181440 通りの配置の最短手数がすべてわかれば、最長の手数となる配置を求めることができます。しかし、この方法では時間がとてもかかりそうです。そこで、完成形から始めていちばん長い手数の局面を生成することにします。
+</p>
+<p> まず、完成形から駒を動かして 1 手で到達する局面をすべて作ります。次に、これらの局面から駒を動かして新しい局面を作れば、完成形から 2 手で到達する局面となります。このように、手数を 1 手ずつ伸ばしていき、新しい局面が生成できなくなった時点での手数が求める最長手数となります。この処理は幅優先探索を使えばぴったりです。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 8 パズルの最長手数を求める
+
+function maxsolver()
+    start::Board = [1, 2, 3, 4, 5, 6, 7, 8, 0]
+    src = State[State(start, 9, nothing)]
+    dst = State[]
+    chk = Dict{Board, Bool}(start => true)
+    move = 0
+    while true
+        for state = src
+            for x = adjacent[state.pos]
+                newboard = copy(state.board)
+                newboard[state.pos] = newboard[x]
+                newboard[x] = 0
+                if haskey(chk, newboard) continue end
+                push!(dst, State(newboard, x, state))
+                chk[newboard] = true
+            end
+        end
+        if isempty(dst) break end
+        move += 1
+        src = dst
+        dst = []
+    end
+    println("max = $move")
+    for state = src
+        println(state.board)
+    end
+end
+</pre>
+<p> 関数 maxsolver() にはゴールをチェックする処理が無いことに注意してください。生成できる局面がなくなるまで処理を繰り返します。配列 src に start の局面を格納し、src から生成した新しい局面を配列 dst にセットします。dst が空の場合、新しい局面は生成されていません。つまり、src の局面が最長手数になります。break で while ループを脱出して解を表示します。そうでなければ回数 move を +1 して、src を dst に、dst を空の配列に書き換えて処理を継続します。
+</p>
+<h4>●実行結果</h4>
+<p>これでプログラムは完成です。さっそく実行してみましょう。
+</p>
+<pre>
+julia> @time maxsolver()
+max = 31
+[6, 4, 7, 8, 5, 0, 3, 2, 1]
+[8, 6, 7, 2, 5, 4, 3, 0, 1]
+  1.071583 seconds (2.22 M allocations: 159.715 MiB, 9.00% gc time)
+</pre>
+<p> 最長手数は 31 手で、その配置は全部で 2 通りになります。実行時間は 1.07 秒になりました。
+</p>
+
+<h4>●反復深化による解法</h4>
+<p> 次は反復深化で 8 パズルを解いてみましょう。幅優先探索では全ての局面を保存しましたが、反復深化ではその必要はありません。盤面は配列で表します。駒の移動は盤面を書き換えて、バックトラックする時は元に戻すことにします。動かした駒は配列に格納します。動かした駒がわかれば局面を再現できるので、それで移動手順を表すことにしましょう。
+</p>
+
+<p> それでは、探索を行う関数 ids() を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 単純な反復深化による解法
+
+function ids(n, limit, space, board, goal, moves)
+    if n == limit
+        if board == goal
+            println(moves[2:end])
+            throw("found!")
+        end
+    else
+        for x = adjacent[space]
+            p = board[x]
+            if moves[end] == p continue end
+            push!(moves, p)
+            board[space] = p
+            board[x] = 0
+            ids(n + 1, limit, x, board, goal, moves)
+            board[x] = p
+            board[space] = 0
+            pop!(moves)
+        end
+    end
+end
+</pre>
+<p>  関数 ids() の引数 n が手数、limit が上限値、space が空き場所の位置、board が盤面、goal がゴールを表します。引数 moves は動かした駒を格納する配列です。n が limit に達したら、パズルが解けたかチェックします。goal に到達したら、println() で手順 moves を表示します。moves の先頭要素はダミーデータ が入っているので、それを除いて表示します。limit に達していない場合は駒を移動して新しい盤面を作ります。
+</p>
+<p> 8 パズルのように、元の盤面に戻すことが可能 (可逆的) なパズルの場合、単純な深さ優先探索では同じ移動手順を何度も繰り返すことがあります。そうなると、とんでもない解を出力するだけではなく、再帰呼び出しが深くなるとスタックがオーバーフローしてプログラムの実行が停止してしまいます。
+</p>
+<p> このような場合、盤面の履歴を保存しておいて同じ盤面がないかチェックすることで、解を求めることができるようになります。ただし、同じ盤面がないかチェックする分だけ時間が余分にかかりますし、最初に見つかる解が最短手数とは限りません。
+</p>
+<p> 反復深化では深さが制限されているため、同じ盤面のチェックを行わなくてもスタックがオーバーフローすることはありません。そのかわり、無駄な探索はどうしても避けることができません。8 パズルの場合、1 手前に動かした駒を再度動かすと 2 手前の盤面に戻ってしまいます。完全ではありませんが、このチェックを入れるだけでもかなりの無駄を省くことができます。プログラムでは、配列 moves に移動した駒を格納しているので、1 手前と同じ駒は動かさないようにチェックしています。
+</p>
+
+<p> 次は、関数 ids() を呼び出すプログラムを作ります。
+</p>
+<pre class="list">
+リスト : 反復深化の実行
+
+function solver(start, goal)
+    s = findfirst(isequal(0), start)
+    try
+        for i in 1 : 31
+            println("----- $i -----")
+            ids(0, i, s, start, goal, [dummy])
+        end
+    catch e
+        println(e)
+    end
+end
+</pre>
+<p> for ループの変数 i が上限値を表します。i を 1 手ずつ増やして ids() を呼び出します。ids() は解を見つけたら throw() で大域脱出するので、try - catch でそれを捕捉します。
+</p>
+<h4>●実行結果 (1)</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+<pre>
+julia> @time solver([8,6,7,2,5,4,3,0,1], [1,2,3,4,5,6,7,8,0])
+----- 1 -----
+----- 2 -----
+----- 3 -----
+
+・・ 省略 ・・
+
+----- 29 -----
+----- 30 -----
+----- 31 -----
+[5, 6, 8, 2, 3, 5, 1, 4, 7, 8, 6, 3, 5, 1, 4, 7, 8, 6, 3, 5, 1, 4, 7, 8, 6, 3, 2, 1, 4, 7, 8]
+found!
+  4.245353 seconds (607.50 k allocations: 30.125 MiB, 0.12% gc time)
+</pre>
+<p> 当然ですが最短手数は 31 手で、実行時間は 4 秒ちょっとかかりました。単純な反復深化ですがけっこう速いですね。Julia は優秀な処理系だと改めて思いました。反復深化の常套手段である「下限値枝刈り法」を使うと、実行時間はもっと速くなります。
+</p>
+<h4>●下限値枝刈り法</h4>
+<p> 下限値を求める方法ですが、これにはいろいろな方法が考えられます。今回は、各駒が正しい位置へ移動するまでの手数 (移動距離) <sup><a href="juliaa16.html#note1">[*1]</a></sup> を下限値として利用することにしましょう。次の図を見てください。
+</p>
+<pre class="fig">
+┌─┬─┬─┐    ┌──┬──┬──┐
+│１│２│３│    │8(3)│6(2)│7(4)│
+├─┼─┼─┤    ├──┼──┼──┤
+│４│５│６│    │2(2)│5(0)│4(2)│
+├─┼─┼─┤    ├──┼──┼──┤
+│７│８│  │    │3(4)│    │1(4)│
+└─┴─┴─┘    └──┴──┴──┘
+                   (n) : n は移動距離
+
+  (1) 完成形     (2) 初期状態：合計 21
+
+          図 : 下限値の求め方
+</pre>
+<p> たとえば、右下にある 1 の駒を左上の正しい位置に移動するには、最低でも 4 手必要です。もちろん、ほかの駒との関連で、それ以上の手数が必要になる場合もあるでしょうが、4 手より少なくなることは絶対にありません。同じように、各駒について最低限必要な手数を求めることができます。そして、その合計値はパズルを解くのに最低限必要な手数となります。これを下限値として利用することができます。ちなみに、上図 (2) の初期状態の下限値は 21 手になります。
+</p>
+<p> 下限値枝刈り法を使う場合、下限値の計算を間違えると正しい解を求めることができなくなります。たとえば、10 手で解ける問題の下限値を 11 手と計算すれば、最短手数を求めることができなくなります。それどころか、10 手の解しかない場合は、答えを求めることすらできなくなります。下限値の計算には十分に注意してください。
+</p>
+<div class="note">
+-- note -----<br>
+<a name="note1">[*1]</a> これを「マンハッタン距離」と呼ぶことがあります。
+</div>
+<h4>●プログラムの作成</h4>
+<p> それでは、プログラムを作りましょう。下限値の求め方ですが、駒を動かすたびに各駒の移動距離を計算していたのでは時間がかかります。8 パズルの場合、1 回に一つの駒しか移動しないので、初期状態の下限値を求めておいて、動かした駒の差分だけ計算すればいいでしょう。また、駒の移動距離はいちいち計算するのではなく、あらかじめ計算した結果を配列に格納しておきます。この配列を distance とすると、盤面から移動距離を求めるプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 移動距離を求める
+
+# マンハッタン距離
+const distance = [
+    [0, 1, 2, 1, 2, 3, 2, 3, 4],
+    [1, 0, 1, 2, 1, 2, 3, 2, 3],
+    [2, 1, 0, 3, 2, 1, 4, 3, 2],
+    [1, 2, 3, 0, 1, 2, 1, 2, 3],
+    [2, 1, 2, 1, 0, 1, 2, 1, 2],
+    [3, 2, 1, 2, 1, 0, 3, 2, 1],
+    [2, 3, 4, 1, 2, 3, 0, 1, 2],
+    [3, 2, 3, 2, 1, 2, 1, 0, 1]
+]
+
+# 移動距離を求める
+function getdistance(board)
+    v = 0
+    for (x, p) = enumerate(board)
+        if p != 0
+            v += distance[p][x]
+        end
+    end
+    v
+end
+</pre>
+<p>  distance は配列の配列で「駒の種類×駒の位置」を表しています。関数 getdistance() は盤面 board にある駒と位置から移動距離を求めます。変数 v を 0 に初期化して、空き場所 (0) 以外の駒の移動距離を distance から求めて v に足し算するだけです。
+</p>
+
+<p> 次は、下限値枝刈り法による反復深化を行う関数 ids1() を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 下限値枝刈り法
+
+function ids1(n, limit, space, board, goal, moves, low)
+    if n == limit
+        if board == goal
+            println(moves[2:end])
+            throw("found!")
+        end
+    else
+        for x = adjacent[space]
+            p = board[x]
+            if moves[end] == p continue end
+            low1 = low - distance[p][x] + distance[p][space]
+            if low1 + n &lt;= limit
+                push!(moves, p)
+                board[space] = p
+                board[x] = 0
+                ids1(n + 1, limit, x, board, goal, moves, low1)
+                board[x] = p
+                board[space] = 0
+                pop!(moves)
+            end
+        end
+    end
+end
+</pre>
+<p> ids1() の引数 low は現在の盤面の下限値を表します。駒を動かしたら差分を計算して、新しい下限値 low1 を求めます。そして、low1 + n が上限値 limit を越えたら枝刈りを行います。limit 以下であれば ids1() を再帰呼び出しします。追加する処理はこれだけで、あとは反復深化のプログラムと同じです。とても簡単ですね。
+</p>
+
+<p>  最後に ids1() を呼び出す処理を修正します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ids1() の呼び出し
+
+function solver1(start, goal)
+    s = findfirst(isequal(0), start)
+    low = getdistance(start)
+    try
+        for i in low : 31
+            println("----- $i -----")
+            ids1(0, i, s, board, goal, [dummy], low)
+        end
+    catch e
+        println(e)
+    end
+end
+</pre>
+
+<p> 関数 getdistance() で初期状態の下限値 low を求めます。下限値がわかるのですから、上限値 limit は 1 手からではなく下限値 low からスタートします。あとは ids1() に下限値 low を渡して呼び出すだけです。
+</p>
+<h4>●実行結果 (2)</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+julia> @time solver1([8,6,7,2,5,4,3,0,1], [1,2,3,4,5,6,7,8,0])
+----- 21 -----
+----- 22 -----
+----- 23 -----
+----- 24 -----
+----- 25 -----
+----- 26 -----
+----- 27 -----
+----- 28 -----
+----- 29 -----
+----- 30 -----
+----- 31 -----
+[5, 6, 8, 2, 3, 5, 1, 4, 7, 8, 6, 3, 5, 1, 4, 7, 8, 6, 3, 5, 1, 4, 7, 8, 6, 3, 2, 1, 4, 7, 8]
+found!
+  0.088200 seconds (103.64 k allocations: 5.052 MiB)
+</pre>
+<p> 実行時間は 0.1 秒もかかりませんでした。下限値枝刈り法の効果は極めて高いですね。
+</p>
+<h4>●手数の偶奇性</h4>
+<p> 8 パズルや 15 パズルの場合、スタートの空き場所の位置とゴールの空き場所の位置から、解の手数が偶数になるのか奇数になるのか簡単に判定することができます。この場合、探索の上限値を 1 手ずつではなく 2 手ずつ増やすことができるので、実行時間を短縮することが可能です。
+</p>
+<p> 判定は簡単です。次の図を見てください。
+<pre class="fig">
+  ┌─┬─┬─┐
+  │１│０│１│
+  ├─┼─┼─┤
+  │０│１│０│
+  ├─┼─┼─┤
+  │１│０│１│
+  └─┴─┴─┘
+     パリティ
+
+  ┌─┬─┬─┐        ┌─┬─┬─┐
+  │８│６│７│        │１│２│３│
+  ├─┼─┼─┤        ├─┼─┼─┤
+  │２│５│４│        │４│５│６│
+  ├─┼─┼─┤        ├─┼─┼─┤
+  │３│  │１│        │７│８│  │
+  └─┴─┴─┘        └─┴─┴─┘
+     スタート               ゴール
+
+空場所のパリティ : 0   空場所のパリティ : 1
+
+  パリティが異なる場合 : 手数は奇数回
+  パリティが同じ場合   : 手数は偶数回
+
+          図 : 手数の偶奇性
+</pre>
+<p> 盤面を市松模様に塗り分けます。上図のパリティでは 0 と 1 で表しています。スタートからゴールに到達するまで、空き場所はいろいろな位置に移動しますが、同じパリティの位置に移動する場合は偶数回かかり、異なるパリティの位置に移動する場合は奇数回かかります。
+</p>
+<p> たとえば、スタートで駒 5 を 1 回動かすと、空き場所は上の位置に移動します。この場合、移動回数は奇数でパリティの値は 0 から 1 に変わります。スタートから駒 5 と 6 を動かすと、移動回数は偶数でパリティの値は 0 のままです。このように、同じパリティの位置に移動する場合は偶数回、異なるパリティの位置に移動する場合は奇数回となります。上図のスタートとゴールの場合、空き場所のパリティが異なるので、奇数回かかることがわかります。
+</p>
+<p> この処理を入れると単純な反復深化で実行時間は 4.25 秒から 1.98 秒になりました。
+</p>
+<h4>●11 パズルの解法</h4>
+<p> 次は 1 から 11 までの数字を並べる 11 パズル (3 行 4 列盤) を反復深化で解いてみましょう。<a href="http://www.ic-net.or.jp/home/takaken/">高橋謙一郎さん</a> の <a href="http://www.ic-net.or.jp/home/takaken/nt/slide/index.html">１１パズルの最適解が最長手数となる面の探索</a> によると、11 パズルの最長手数は 53 手で、局面は全部で 18 通りあるそうです。そのうちの一つを下図に示します。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┬─┐    ┌─┬─┬─┬─┐  
+  │  │３│２│１│    │１│２│３│４│
+  ├─┼─┼─┼─┤    ├─┼─┼─┼─┤
+  │８│７│６│５│    │５│６│７│８│
+  ├─┼─┼─┼─┤    ├─┼─┼─┼─┤
+  │４│11│10│９│    │９│10│11│  │
+  └─┴─┴─┴─┘    └─┴─┴─┴─┘
+                              完成形
+
+        図 : 11 パズル (最長手数局面)
+
+  (出典 : <A href="http://www.ic-net.or.jp/home/takaken/nt/slide/index.html">１１パズルの最適解が最長手数となる面の探索</A>)
+</pre>
+<p> 11 パズルも 8 パズルと同じ方法で解くことができます。詳細は <a href="juliaa16.html#list3">プログラムリスト３</a> をお読みください。
+</p>
+<p> 実行結果は次のようになりました。
+</p>
+<pre>
+julia> @time solver([0,3,2,1,8,7,6,5,4,11,10,9], [1,2,3,4,5,6,7,8,9,10,11,0])
+----- 23 -----
+----- 25 -----
+----- 27 -----
+----- 29 -----
+----- 31 -----
+----- 33 -----
+----- 35 -----
+----- 37 -----
+----- 39 -----
+----- 41 -----
+----- 43 -----
+----- 45 -----
+----- 47 -----
+----- 49 -----
+----- 51 -----
+----- 53 -----
+[3, 2, 6, 5, 1, 6, 2, 7, 5, 1, 9, 10, 11, 4, 8, 5, 1, 9, 10, 11, 4, 8, 5, 1, 9, 10, 11, 4, 8, 9, 10, 2, 7, 3, 1, 5, 
+9, 10, 2, 11, 4, 8, 11, 7, 6, 4, 7, 6, 3, 2, 6, 7, 8]
+found!
+ 27.763549 seconds (644.05 k allocations: 31.841 MiB, 0.04% gc time)
+</pre>
+<p> 当然ですが手数は 53 手、実行時間は約 28 秒でした。これ以上の高速化は下限値の精度を上げないと無理かもしれません。
+</p>
+<p> マンハッタン距離のほかには、<a href="http://www.ic-net.or.jp/home/takaken/">高橋謙一郎さん</a> が考案された ID (Invert Distance) や WD (Walking Distance) という方法があります。それらを使った 15 パズルの解法プログラムは抜群の性能を発揮しているようです。興味のある方は高橋さんのページ <a href="http://www.ic-net.or.jp/home/takaken/nt/slide/solve15.html">１５パズル自動解答プログラムの作り方</a> をご覧くださいませ。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>井上うさぎ, 『世界のパズル百科イラストパズルワンダーランド』, 東京堂出版, 1997
+  <li>三木太郎, 『特集コンピュータパズルへの招待 スライディングブロック編』, C MAGAZINE 1996 年 2 月号, ソフトバンク
+  <li>高橋謙一郎, 『特集 悩めるプログラマに効くアルゴリズム』, C MAGAZINE 2000 年 11 月号, ソフトバンク
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+#
+# eight.jl : ８パズルの解法 (幅優先探索)
+#
+#            Copyright (C) 2016-2018 Makoto Hiroi
+#
+
+# 盤面
+# 1 2 3
+# 4 5 6
+# 7 8 9
+
+# 隣接リスト
+const adjacent = [
+  [2, 4],       # 1
+  [1, 3, 5],    # 2
+  [2, 6],       # 3
+  [1, 5, 7],    # 4
+  [2, 4, 6, 8], # 5
+  [3, 5, 9],    # 6
+  [4, 8],       # 7
+  [5, 7, 9],    # 8
+  [6, 8]        # 9
+]
+
+# 盤面
+const Board = Vector{Int}
+
+# 局面
+struct State
+    board::Board
+    pos::Int
+    prev
+end
+
+# 手順の表示
+function printanswer(state, printer=println)
+    if state.prev !== nothing
+        printanswer(state.prev, printer)
+    end
+    printer(state.board)
+end
+
+# 幅優先探索
+function solver(start, goal)
+    que = State[State(start, findfirst(isequal(0), start), nothing)]
+    chk = Dict{Board, Bool}(start =&gt; true)
+    while !isempty(que)
+        state = popfirst!(que)
+        for x = adjacent[state.pos]
+            newboard = copy(state.board)
+            newboard[state.pos] = newboard[x]
+            newboard[x] = 0
+            if haskey(chk, newboard) continue end
+            newstate = State(newboard, x, state)
+            if newboard == goal
+                printanswer(newstate)
+                return
+            else
+                push!(que, newstate)
+                chk[newboard] = true
+            end
+        end
+    end
+end
+
+#
+# 最長手数の局面を求める
+#
+function maxsolver()
+    start::Board = [1, 2, 3, 4, 5, 6, 7, 8, 0]
+    src = State[State(start, 9, nothing)]
+    dst = State[]
+    chk = Dict{Board, Bool}(start =&gt; true)
+    move = 0
+    while true
+        for state = src
+            for x = adjacent[state.pos]
+                newboard = copy(state.board)
+                newboard[state.pos] = newboard[x]
+                newboard[x] = 0
+                if haskey(chk, newboard) continue end
+                push!(dst, State(newboard, x, state))
+                chk[newboard] = true
+            end
+        end
+        if isempty(dst) break end
+        move += 1
+        src = dst
+        dst = []
+    end
+    println("max = $move")
+    for state = src
+        println(state.board)
+    end
+end
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+#
+# eight1.jl : ８パズルの解法 (反復進化)
+#
+#             Copyright (C) 2016-2018 Makoto Hiroi
+#
+
+# ダミーデータ
+const dummy = 9
+
+# 盤面
+# 1 2 3
+# 4 5 6
+# 7 8 9
+
+# 隣接リスト
+const adjacent = [
+  [2, 4],       # 1
+  [1, 3, 5],    # 2
+  [2, 6],       # 3
+  [1, 5, 7],    # 4
+  [2, 4, 6, 8], # 5
+  [3, 5, 9],    # 6
+  [4, 8],       # 7
+  [5, 7, 9],    # 8
+  [6, 8]        # 9
+]
+
+# 単純な反復進化
+function ids(n, limit, space, board, goal, moves)
+    if n == limit
+        if board == goal
+            println(moves[2:end])
+            throw("found!")
+        end
+    else
+        for x = adjacent[space]
+            p = board[x]
+            if moves[end] == p continue end
+            push!(moves, p)
+            board[space] = p
+            board[x] = 0
+            ids(n + 1, limit, x, board, goal, moves)
+            board[x] = p
+            board[space] = 0
+            pop!(moves)
+        end
+    end
+end
+
+function solver(start, goal)
+    s = findfirst(isequal(0), start)
+    try
+        for i in 1 : 31
+            println("----- $i -----")
+            ids(0, i, s, start, goal, [dummy])
+        end
+    catch e
+        println(e)
+    end
+end
+
+# 手数の偶奇性
+const parity = [
+    1, 0, 1,
+    0, 1, 0,
+    1, 0, 1
+]
+
+function solver2(start, goal)
+    s = findfirst(isequal(0), start)
+    e = findfirst(isequal(0), goal)
+    x = parity[s] == parity[e] ? 2 : 1
+    try
+        for i in x : 2 : 31
+            println("----- $i -----")
+            ids(0, i, s, start, goal, [dummy])
+        end
+    catch e
+        println(e)
+    end
+end
+
+#
+# 下限値枝刈り法
+#
+
+# マンハッタン距離
+const distance = [
+    [0, 1, 2, 1, 2, 3, 2, 3, 4],
+    [1, 0, 1, 2, 1, 2, 3, 2, 3],
+    [2, 1, 0, 3, 2, 1, 4, 3, 2],
+    [1, 2, 3, 0, 1, 2, 1, 2, 3],
+    [2, 1, 2, 1, 0, 1, 2, 1, 2],
+    [3, 2, 1, 2, 1, 0, 3, 2, 1],
+    [2, 3, 4, 1, 2, 3, 0, 1, 2],
+    [3, 2, 3, 2, 1, 2, 1, 0, 1]
+]
+
+# 移動距離を求める
+function getdistance(board)
+    v = 0
+    for (x, p) = enumerate(board)
+        if p != 0
+            v += distance[p][x]
+        end
+    end
+    v
+end
+
+function ids1(n, limit, space, board, goal, moves, low)
+    if n == limit
+        if board == goal
+            println(moves[2:end])
+            throw("found!")
+        end
+    else
+        for x = adjacent[space]
+            p = board[x]
+            if moves[end] == p continue end
+            low1 = low - distance[p][x] + distance[p][space]
+            if low1 + n &lt;= limit
+                push!(moves, p)
+                board[space] = p
+                board[x] = 0
+                ids1(n + 1, limit, x, board, goal, moves, low1)
+                board[x] = p
+                board[space] = 0
+                pop!(moves)
+            end
+        end
+    end
+end
+
+function solver1(start, goal)
+    s = findfirst(isequal(0), start)
+    low = getdistance(start)
+    try
+        for i in low : 31
+            println("----- $i -----")
+            ids1(0, i, s, start, goal, [dummy], low)
+        end
+    catch e
+        println(e)
+    end
+end
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+#
+# eleven.jl : 11 パズル (下限値枝刈り法)
+#
+#             Copyright (C) 2016-2018 Makoto Hiroi
+#
+
+# 盤面
+# 1  2  3  4
+# 5  6  7  8
+# 9 10 11 12
+
+# 隣接リスト
+const adjacent = [
+    [2, 5],        # 1
+    [1, 3, 6],     # 2
+    [2, 4 , 7],    # 3
+    [3, 8],        # 4
+    [1, 6, 9],     # 5
+    [2, 5, 7, 10], # 6
+    [3, 6, 8, 11], # 7
+    [4, 7, 12],    # 8
+    [5, 10],       # 9
+    [6, 9, 11],    # 10
+    [7, 10, 12],   # 11
+    [8, 11]        # 12
+]
+
+# マンハッタン距離
+const distance = [
+    [0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5],  # 1
+    [1, 0, 1, 2, 2, 1, 2, 3, 3, 2, 3, 4],  # 2
+    [2, 1, 0, 1, 3, 2, 1, 2, 4, 3, 2, 3],  # 3
+    [3, 2, 1, 0, 4, 3, 2, 1, 5, 4, 3, 2],  # 4
+    [1, 2, 3, 4, 0, 1, 2, 3, 1, 2, 3, 4],  # 5
+    [2, 1, 2, 3, 1, 0, 1, 2, 2, 1, 2, 3],  # 6
+    [3, 2, 1, 2, 2, 1, 0, 1, 3, 2, 1, 2],  # 7
+    [4, 3, 2, 1, 3, 2, 1, 0, 4, 3, 2, 1],  # 8
+    [2, 3, 4, 5, 1, 2, 3, 4, 0, 1, 2, 3],  # 9
+    [3, 2, 3, 4, 2, 1, 2, 3, 1, 0, 1, 2],  # 10
+    [4, 3, 2, 3, 3, 2, 1, 2, 2, 1, 0, 1]   # 11
+]
+
+# パリティ
+const parity = [
+    1, 0, 1, 0,
+    0, 1, 0, 1,
+    1, 0, 1, 0,
+]
+
+# ダミーデータ
+const dummy = 12
+
+# 移動距離を求める
+function getdistance(board)
+    v = 0
+    for (x, p) = enumerate(board)
+        if p != 0
+            v += distance[p][x]
+        end
+    end
+    v
+end
+
+# 反復深化＋下限値枝刈り法
+function ids(n, limit, space, board, goal, moves, low)
+    if n == limit
+        if board == goal
+            println(moves[2:end])
+            throw("found!")
+        end
+    else
+        for x = adjacent[space]
+            p = board[x]
+            if moves[end] == p continue end
+            low1 = low - distance[p][x] + distance[p][space]
+            if low1 + n &lt;= limit
+                push!(moves, p)
+                board[space] = p
+                board[x] = 0
+                ids(n + 1, limit, x, board, goal, moves, low1)
+                board[x] = p
+                board[space] = 0
+                pop!(moves)
+            end
+        end
+    end
+end
+
+function solver(start, goal)
+    s = findfirst(isequal(0), start)
+    e = findfirst(isequal(0), goal)
+    low = getdistance(start)
+    if (parity[s] == parity[e] &amp;&amp; low % 2 != 0) ||
+       (parity[s] != parity[e] &amp;&amp; low % 2 == 0)
+        low += 1
+    end
+    try
+        for i in low : 2 : 53
+            println("----- $i -----")
+            ids(0, i, s, start, goal, [dummy], low)
+        end
+    catch e
+        println(e)
+    end
+end
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016-2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

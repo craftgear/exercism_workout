@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ言語プログラミング超入門</title>
+  <meta name="description" content="Ｃ言語,Ｃ言語入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881810</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ言語プログラミング超入門 : 番外編</h2>
+<div class="small">
+[ <a href="clangb03.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clangb05.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>続・電卓プログラムの作成 (4)</h4>
+<p> 今回は電卓プログラムに論理演算子、比較演算子、条件分岐の機能を追加してみましょう。
+</p>
+
+<h4>●論理演算子と比較演算子</h4>
+<p> 論理演算子と比較演算子を使う場合、真偽値を表すデータが必要になります。電卓プログラムのデータは数値しかないので 0 を偽、それ以外を真と定義することにしましょう。論理演算子と比較演算子は、結果が真であれば 1 を、偽であれば 0 を返すことにします。
+</p>
+<p> 電卓プログラムで使用する論理演算子と比較演算子を表に示します。
+<table border=1>
+<caption>表 : 論理演算子</caption>
+<thead>
+  <tr><th>操作</th><th>意味</th><th>トークン</th></tr>
+</thead>
+<tbody>
+  <tr><td>not x, ! x </td><td>x の否定（真偽の反転）</td><td>Not</td></tr>
+  <tr><td>x and y </td><td>x が真かつ y が真ならば真</td><td>And</td></tr>
+  <tr><td>x or y  </td><td>x が真まはた y が真ならば真</td><td>Or</td></tr>
+</tbody>
+</table>
+<br>
+<table border=1>
+<caption>表 : 比較演算子</caption>
+<thead>
+  <tr><th>演算子</th><th>意味</th><th>トークン</th></tr>
+</thead>
+<tbody>
+  <tr><td> ==   </td><td>等しい</td><td>Eq</td></tr>
+  <tr><td> !=   </td><td>等しくない</td><td>Ne</td></tr>
+  <tr><td> &lt;  </td><td>より小さい</td><td>Lt</td></tr>
+  <tr><td> &gt;  </td><td>より大きい</td><td>Gt</td></tr>
+  <tr><td> &lt;= </td><td>より小さいか等しい</td><td>Le</td></tr>
+  <tr><td> &gt;= </td><td>より大きいか等しい</td><td>Ge</td></tr>
+</tbody>
+</table>
+
+<p> 論理演算子は not (!), and, or で、not は単項演算子になります。比較演算子は ==, !=, &lt;, &gt;, &lt;=, &gt;= の 6 種類で、Ｃ言語の比較演算子と同じです。
+</p>
+<h4>●優先順位</h4>
+<p> 演算子の優先順位ですが、Ｃ言語のように細かく分けることはしないで、次のように設定することにしました。
+</p>
+<pre class="item">
+優先順位 (高)
+単項演算子 (+, -, not)
+乗法演算子 (*, /)
+加法演算子 (+, -)
+比較演算子 (==, !=, &lt;, &gt;, &lt;=, &gt;=)
+論理演算子 (and, or)
+代入演算子 (=)
+優先順位 (低)
+</pre>
+
+<h4>●条件分岐</h4>
+<p> 条件分岐は「文」として定義することもできますが、今回は簡単な電卓プログラムなので「if 式」として組み込むことにします。if 式の構文を示します。
+</p>
+<pre class="item">
+if 条件式 then 式a else 式b end
+if 条件式 then 式a end
+</pre>
+<p> if は条件式が真であれば式a を実行し、その結果が if 式の値になります。条件式が偽であれば 式b を実行して、その結果が if 式の値になります。else 節が省略されていて、かつ条件式が偽の場合、if 式は数値 0 を返すことにしましょう。
+</p>
+<h4>●文法の修正</h4>
+<p> 文法を EBNF で表すと次のようになります。
+</p>
+<pre class="item">
+[EBNF]
+   文    = 関数定義 | 式.
+関数定義 = "def", 関数, "(", [仮引数リスト], ")", 式, "end".
+   式    = 代入式 | 式１.
+ 代入式  = 変数, "=", 式.
+  式１   = 式２, { ("and" | "or"), 式２}.
+  式２   = 式３, ("==" | "!=" | "&lt;" | "&lt;=" | "&gt;" | "&gt;="), 式３.
+  式３   = 項, { ("+" | "-"), 項 }.
+   項    = 因子, { ("*" | "/"), 因子 }.
+  因子   = 数値 | ("+" | "-" | "not"), 因子 | "(", 式, ")" | 変数 | 関数, "(", [引数リスト], ")" | if式.
+  if式   = "if", 式, "then", 式, ["else", 式], "end".
+  変数   = 識別子
+  関数   = 識別子
+
+仮引数リスト = 変数, { ",", 変数 }.
+引数リスト   = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+<p> 論理演算子と比較演算子の処理は、文法をそのままプログラムするだけなので簡単です。if 式も構文木に変換すると簡単にプログラムすることができます。データ型の定義は次のようになります。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+// タグ
+enum {Num, Add2, Sub2, Mul2, Div2, Add1, Sub1,
+      Assign2, Sym, Func1, Func2, FuncU, Sel3,
+      Eq2, Ne2, Lt2, Gt2, Le2, Ge2, And2, Or2, Not1};
+
+// 構文木
+typedef struct expr {
+  int tag;
+  union {
+    double num;      // 数値
+    void *ref_value; // 参照型
+    struct {         // 構文木
+      struct expr *left;
+      struct expr *right;
+    };
+    // if 式
+    struct {
+      struct expr *test_c;   // 条件節
+      struct expr *then_c;   // then 節
+      struct expr *else_c;   // else 節
+    };
+  };
+} Expr;
+</pre>
+<p> タグに論理演算子 (Not1, And2, Or2)、比較演算子 (Eq2, Ne2, Lt2, Gt2, Le2, Ge2)、if 式を表す Sel3 を追加します。token には if 式を表す If, Then, Else を追加し、構文木 Expr には if 式を表す無名の構造体を追加します。メンバ変数 test_c が条件節、then_c が then 節、else_c が else 節を表します。
+</p>
+
+<h4>●字句解析の修正</h4>
+<p> それではプログラムを作りましょう。まず最初に、関数 get_token を修正します。
+</p>
+<pre class="list">
+リスト : トークンの切り出し
+
+void get_token(void)
+{
+  // 空白文字の読み飛ばし
+  while (isspace(getch())) nextch();
+  if (isdigit(getch())) {
+    token = Number;
+    value = get_number();
+  } else if (isalpha(getch())) {
+    symbol = get_ident();
+    if (strcmp(symbol-&gt;name, "def") == 0)
+      token = Def;
+    else if (strcmp(symbol-&gt;name, "end") == 0)
+      token = End;
+    else if (strcmp(symbol-&gt;name, "if") == 0)
+      token = If;
+    else if (strcmp(symbol-&gt;name, "then") == 0)
+      token = Then;
+    else if (strcmp(symbol-&gt;name, "else") == 0)
+      token = Else;
+    else if (strcmp(symbol-&gt;name, "and") == 0)
+      token = And;
+    else if (strcmp(symbol-&gt;name, "or") == 0)
+      token = Or;
+    else if (strcmp(symbol-&gt;name, "not") == 0)
+      token = Not;
+    else
+      token = Ident;
+  } else {
+    switch(getch()){
+    case '=':
+      nextch();
+      if (getch() == '=') {
+        nextch();
+        token = Eq;
+      } else 
+        token = Assign;
+      break;
+    case '!':
+      nextch();
+      if (getch() == '=') {
+        nextch();
+        token = Ne;
+      } else
+        token = Not;
+      break;
+    case '&lt;':
+      nextch();
+      if (getch() == '=') {
+        nextch();
+        token = Le;
+      } else
+        token = Lt;
+      break;
+    case '&gt;':
+      nextch();
+      if (getch() == '=') {
+        nextch();
+        token = Ge;
+      } else
+        token = Gt;
+      break;
+    case '+':
+      token = Add;
+      nextch();
+      break;
+    case '-':
+      token = Sub;
+      nextch();
+      break;
+    case '*':
+      token = Mul;
+      nextch();
+      break;
+    case '/':
+      token = Div;
+      nextch();
+      break;
+    case '(':
+      token = Lpar;
+      nextch();
+      break;
+    case ')':
+      token = Rpar;
+      nextch();
+      break;
+    case ';':
+      token = Semic;
+      nextch();
+      break;
+    case ',':
+      token = Comma;
+      nextch();
+      break;
+    case EOF:
+      token = Eof;
+      break;
+    default:
+      token = Others;
+    }
+  }
+}
+</pre>
+<p> 識別子の処理で、シンボル名が if, then, else, not, and, or であれば、おのおののトークンを token にセットします。記号が = で、次の記号も = の場合は token に Eq をセットします。記号が ! の場合、次の記号が = であれば token に Ne をセットし、そうでなければ Not をセットします。あとは同様に、&lt;, &lt;= と &gt;, &gt;= の処理を追加します。
+</p>
+<h4>●構文解析の修正</h4>
+<p> 次は構文解析の処理を修正します。論理演算子の処理は次のようになります。
+</p>
+<pre class="list">
+リスト : 論理演算子の処理
+
+Expr *expr1(void)
+{
+  Expr *e = expr2();
+  while (true) {
+    switch (token) {
+    case And:
+      get_token();
+      e = make_op2(And2, e, expr2());
+      break;
+    case Or:
+      get_token();
+      e = make_op2(Or2, e, expr2());
+      break;
+    default:
+      return e;
+    }
+  }
+}
+</pre>
+<p> 式を評価する expression から関数 expr1 を呼び出します。expr1 は and と or の処理を行います。最初に関数 expr2 を呼び出して、その返り値を変数 e にセットします。while ループの中で、token が And, Or の場合、make_op2 で論理積 (And2), 論理和 (Or2) を処理する構文木を作成します。
+</p>
+
+<p> 次は比較演算子の処理を作ります。
+<pre class="list">
+リスト : 比較演算子の処理
+
+Expr *expr2(void)
+{
+  Expr *e = expr3();
+  while (true) {
+    switch (token) {
+    case Eq:
+      get_token();
+      e = make_op2(Eq2, e, expr3());
+      break;
+    case Ne:
+      get_token();
+      e = make_op2(Ne2, e, expr3());
+      break;
+    case Lt:
+      get_token();
+      e = make_op2(Lt2, e, expr3());
+      break;
+    case Gt:
+      get_token();
+      e = make_op2(Gt2, e, expr3());
+      break;
+    case Le:
+      get_token();
+      e = make_op2(Le2, e, expr3());
+      break;
+    case Ge:
+      get_token();
+      e = make_op2(Ge2, e, expr3());
+      break;
+    default:
+      return e;
+    }
+  }
+}
+</PRE>
+
+<p> 関数 expr2 は比較演算子の処理を行います。最初に expr3 を呼び出して、その返り値を変数 e にセットします。while ループの中で、token が比較演算子であれば、make_op2 で token に対応する構文木を生成して返します。
+</p>
+<h4>●否定と条件分岐の処理</h4>
+<p> 次は factor に not と if 式の処理を追加します。
+</p>
+<pre class="list">
+リスト : 因子の処理
+
+Expr *factor(void)
+{
+  Symbol *sym;
+  switch (token) {
+
+  ・・・ 省略 ・・・
+
+  case Not:
+    get_token();
+    return make_op1(Not1, factor());
+  case If:
+    {
+      get_token();
+      Expr *test_c = expression();
+      if (token != Then) error("invalid if form");
+      get_token();
+      Expr *then_c = expression();
+      Expr *else_c = NULL;
+      if (token == Else) {
+        get_token();
+        else_c = expression();
+      }
+      if (token != End) error("end expected");
+      get_token();
+      return make_if(test_c, then_c, else_c);
+    }
+
+  ・・・ 省略 ・・・
+
+  }
+}
+</pre>
+<p> Not は make_op1 で単項演算子の構文木を生成して返すだけです。If の場合、最初に expression を呼び出して、条件式を読み込みます。次に、トークンが Then であることを確認し、expression で then 節を読み込みます。トークンが Else の場合、同様に else 節を読み込みます。トークンが End であることを確認したら if 式の構文木 (Sel3) を関数 make_if で生成して返します。End でない場合はエラーを送出します。
+</p>
+<h4>●式の評価</h4>
+<p> 次は式の評価を行う関数 eval を修正します。
+<pre class="list">
+リスト : 式の評価
+
+double eval(Expr *e, Env *env)
+{
+  Symbol *sym;
+  Env *env1;
+  switch (e-&gt;tag) {
+
+  ・・・ 省略 ・・・
+  case Not1: return eval(e-&gt;left, env) == 0 ? 1 : 0;
+  case Eq2:
+    return eval(e-&gt;left, env) == eval(e-&gt;right, env) ? 1 : 0;
+  case Ne2:
+    return eval(e-&gt;left, env) != eval(e-&gt;right, env) ? 1 : 0;
+  case Lt2:
+    return eval(e-&gt;left, env) &lt; eval(e-&gt;right, env) ? 1 : 0;
+  case Gt2:
+    return eval(e-&gt;left, env) &gt; eval(e-&gt;right, env) ? 1 : 0;
+  case Le2:
+    return eval(e-&gt;left, env) &lt;= eval(e-&gt;right, env) ? 1 : 0;
+  case Ge2:
+    return eval(e-&gt;left, env) &gt;= eval(e-&gt;right, env) ? 1 : 0;
+  case And2:
+    return eval(e-&gt;left, env) != 0 ? eval(e-&gt;right, env) : 0;
+  case Or2:
+    {
+      double val = eval(e-&gt;left, env);
+      return val == 0 ? eval(e-&gt;right, env) : val;
+    }
+  case Sel3:
+    if (eval(e-&gt;test_c, env) != 0)
+      return eval(e-&gt;then_c, env);
+    else if (e-&gt;else_c != NULL)
+      return eval(e-&gt;else_c, env);
+    else
+      return 0;
+
+  ・・・ 省略 ・・・
+
+  }
+}
+</pre>
+<p> Not の処理は e-&gt;left を eval で評価して、偽 (0) であれば 1 を、そうでなければ 0 を返します。比較演算子の場合、左辺式と右辺式を評価して、タグが表す条件を満たしていれば 1 を、そうでなければ 0 を返します。論理積 (And2) の場合、左辺式を評価して、それが真であれば右辺式を評価します。偽の場合は 0 を返します。論理和 (Or2) の場合、左辺式を評価して変数 val にセットします。val が真であれば val を返し、そうでなければ右辺式を評価します。
+</p>
+<p> if 文の処理 Sel3 も簡単です。最初に条件節 test_c を eval で評価し、その返り値が真であれば then 節 (then_c) を、偽であれば else 節 (else_c) を eval で評価するだけです。else 節が NULL の場合は 0 を返します。
+</p>
+
+<h4>●再帰呼び出しの対応</h4>
+<p> さて、電卓プログラムで if 式が使えるようになると、関数の再帰呼び出しが可能になります。ところが、前回作成したプログラムでは、関数の再帰呼び出しに対応していません。たとえば、階乗を求める関数は次のようになります。
+</p>
+<pre class="list">
+リスト : 階乗の計算
+
+def fact(n)
+    if n == 0 then 1 else n * fact(n - 1) end
+end
+</pre>
+
+<p> 電卓プログラムはシンボル表に登録されている識別子で sym_type が 0 以外のものを関数と判断します。def 文 は expression を実行したあとに sym->type を 3 にセットするので、expression を実行する段階では、fact を関数ではなく変数として認識してしまいます。これでは関数の再帰呼び出しができません。そこで、expression を実行する前に、sym->type を 3 にセットし、仮引数リストをシンボルの値にセットします。そして、expression を評価したあと、仮引数リストの後ろに関数本体を追加することにします。
+</p>
+<p> 関数 toplevel の修正は次のようになります。
+</p>
+<pre class="list">
+リスト : 関数定義の修正
+
+void toplevel(void)
+{
+  if (token == Def) {
+    // 関数定義
+    get_token();
+    if (token != Ident) error("Symbol expected");
+    Symbol *sym = symbol;
+    if (sym-&gt;type == 1 || sym-&gt;type == 2)
+      error("build-in function");
+    get_token();
+    if (token != Lpar) error("'(' expected");
+    Cell *para = get_parameter();
+    // 再帰定義対策
+    sym-&gt;type = 3;
+    Cell *fn = cons(para, NULL);
+    sym-&gt;ref_val = fn;
+    Expr *body = expression();
+    if (token != End) {
+      sym-&gt;type = 0;
+      error("end expected");
+    } else {
+      fn-&gt;next = cons(body, NULL);
+    }
+    printf("=&gt; %s\nCalc&gt; ", sym-&gt;name);
+    fflush(stdout);
+  } else { 
+
+    ・・・ 省略 ・・・
+
+  }
+}
+</pre>
+<p> 仮引数リスト para を取得したあと、sym->type に 3 をセットして、変数 fn に仮引数リストを格納したセルをセットし、それをシンボルの ref_val にセットします。あとは、expression で関数本体 body を求め、fn-&gt;next に cons(body, NULL) を追加します。
+</p>
+<p> 主な修正はこれで終わりです。あとのプログラムは簡単なので説明は割愛します。詳細は <a href="clangb04.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+Calc&gt; not 0;
+=&gt; 1
+Calc&gt; not 1;
+=&gt; 0
+Calc&gt; !0;
+=&gt; 1
+Calc&gt; !1;
+=&gt; 0
+Calc&gt; 0 and 0;
+=&gt; 0
+Calc&gt; 1 and 0;
+=&gt; 0
+Calc&gt; 1 and 2;
+=&gt; 2
+Calc&gt; 0 or 0;
+=&gt; 0
+Calc&gt; 2 or 0;
+=&gt; 2
+Calc&gt; 0 or 3;
+=&gt; 3
+Calc&gt; 2 == 2;
+=&gt; 1
+Calc&gt; 2 != 2;
+=&gt; 0
+Calc&gt; 1 &lt; 2;
+=&gt; 1
+Calc&gt; 1 &lt;= 2;
+=&gt; 1
+Calc&gt; 2 &lt;= 2;
+=&gt; 1
+Calc&gt; 1 &gt; 2;
+=&gt; 0
+Calc&gt; 1 &gt;= 2;
+=&gt; 0
+Calc&gt; 1 &gt;= 2;
+=&gt; 0
+</pre>
+<p> 論理演算子と比較演算子は正常に動作しているようです。次は論理演算子と比較演算子を組み合わせてみましょう。
+</p>
+<pre>
+Calc&gt; not 1 or not 0;
+=&gt; 1
+Calc&gt; not 1 or not 1;
+=&gt; 0
+Calc&gt; not 0 or not 1;
+=&gt; 1
+Calc&gt; not 0 and not 0;
+=&gt; 1
+Calc&gt; not 0 and not 1;
+=&gt; 0
+Calc&gt; 1 &lt; 2 and 2 &lt; 3;
+=&gt; 1
+Calc&gt; 1 &gt; 2 and 2 &lt; 3;
+=&gt; 0
+Calc&gt; 1 &lt; 2 and 2 &gt; 3;
+=&gt; 0
+Calc&gt; 1 &lt; 2 or 2 &lt; 3;
+=&gt; 1
+Calc&gt; 1 &gt; 2 or 2 &lt; 3;
+=&gt; 1
+Calc&gt; 1 &gt; 2 or 2 &gt; 3;
+=&gt; 0
+</pre>
+<p> これも正常に動作しているようです。次は if 式を試してみましょう。
+</p>
+<pre>
+Calc&gt; if 1 &lt; 2 then 10 else -10 end;
+=&gt; 10
+Calc&gt; if 1 &gt; 2 then 10 else -10 end;
+=&gt; -10
+Calc&gt; if 1 &gt; 2 then 10 end;
+=&gt; 0
+Calc&gt; def abs(n) if n &gt; 0 then n else - n end end
+=&gt; abs
+Calc&gt; abs(10);
+=&gt; 10
+Calc&gt; abs(-10);
+=&gt; 10
+Calc&gt; abs(11 - 10);
+=&gt; 1
+Calc&gt; abs(10 - 11);
+=&gt; 1
+</pre>
+<p> 正常に動作していますね。条件分岐があると、再帰呼び出しで繰り返しを実現することができます。階乗を求める関数 fact とフィボナッチ数列を求める関数 fibo は次のようになります。
+</p>
+<pre>
+Calc&gt; def fact(n) if n == 0 then 1 else n * fact(n - 1) end end
+=&gt; fact
+Calc&gt; fact(9);
+=&gt; 362880
+Calc&gt; fact(10);
+=&gt; 3628800
+Calc&gt; fact(15);
+=&gt; 1307674368000
+Calc&gt; fact(20);
+=&gt; 2.43290200817664e+18
+Calc&gt; def fibo(n) if n == 0 or n == 1 then 1 else fibo(n - 1) + fibo(n - 2) end end
+=&gt; fibo
+Calc&gt; fibo(5);
+=&gt; 8
+Calc&gt; fibo(6);
+=&gt; 13
+Calc&gt; fibo(7);
+=&gt; 21
+Calc&gt; fibo(10);
+=&gt; 89
+</pre>
+<p> 関数 fibo は二重再帰ですが、累積変数を使って末尾再帰に変換することができます。
+</p>
+<pre>
+Calc&gt; def fiboi(n, a, b) if n == 0 then a else fiboi(n - 1, a + b, a) end end
+=&gt; fiboi
+Calc&gt; fiboi(5, 1, 0);
+=&gt; 8
+Calc&gt; fiboi(10, 1, 0);
+=&gt; 89
+Calc&gt; fiboi(20, 1, 0);
+=&gt; 10946
+Calc&gt; fiboi(40, 1, 0);
+=&gt; 165580141
+</pre>
+<p> 電卓プログラムは末尾再帰最適化を行わないので繰り返しに変換することはできませんが、二重再帰よりも高速にフィボナッチ数列を求めることができます。
+</p>
+
+<h4>●参考文献</h4>
+<ol>
+  <li> 松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li> 水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li> 松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li> 高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li> 久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// calc6.c : 電卓プログラム (比較演算子, 論理演算子, if 式の追加)
+//
+//           Copyright (C) 2015 Makoto Hiroi
+//
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;ctype.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;math.h&gt;
+#include &lt;setjmp.h&gt;
+#include &lt;gc.h&gt;
+
+#define SYM_NAME_SIZE 32
+
+// 連結リスト
+typedef struct cell {
+  void *item;
+  struct cell *next;
+} Cell;
+
+// セルの生成
+Cell *cons(void *x, Cell *xs)
+{
+  Cell *cp = GC_MALLOC(sizeof(Cell));
+  cp-&gt;item = x;
+  cp-&gt;next = xs;
+  return cp;
+}
+
+// 先頭要素を取り出す
+void *car(Cell *cp)
+{
+  return cp-&gt;item;
+}
+
+// 先頭要素を取り除く
+Cell *cdr(Cell *cp)
+{
+  return cp-&gt;next;
+}
+
+// 2 番目の要素
+void *second(Cell *cp)
+{
+  return car(cdr(cp));
+}
+
+// 3 番目の要素
+void *third(Cell *cp)
+{
+  return car(cdr(cdr(cp)));
+}
+
+// 長さ
+int length(Cell *cp)
+{
+  int n = 0;
+  while (cp != NULL) {
+    cp = cdr(cp);
+    n++;
+  }
+  return n;
+}
+
+// シンボル
+typedef struct {
+  int type;
+  char name[SYM_NAME_SIZE + 1];    // 変数名
+  union {
+    double val;     // 即値
+    void *ref_val;  // 参照型
+  };
+} Symbol;
+
+// シンボル表
+#define SYM_TBL_SIZE 512
+
+Symbol sym_table[SYM_TBL_SIZE];
+int sym_count;
+
+// 局所変数の環境
+typedef struct _env {
+  Symbol *var;
+  double val;
+  struct _env *next;
+} Env;
+
+// コンストラクタ
+Env *acons(Symbol *sym, double n, Env *env)
+{
+  Env *e = GC_MALLOC(sizeof(Env));
+  e-&gt;var = sym;
+  e-&gt;val = n;
+  e-&gt;next = env;
+  return e;
+}
+
+// 参照
+Env *assoc(Symbol *sym, Env *env)
+{
+  while (env != NULL) {
+    if (sym == env-&gt;var) break;
+    env = env-&gt;next;
+  }
+  return env;
+}
+
+// 更新
+double update(Symbol *sym, double x, Env *env)
+{
+  Env *e = assoc(sym, env);
+  if (e != NULL)
+    e-&gt;val = x;    // 局所変数
+  else
+    sym-&gt;val = x;  // 大域変数
+  return x;
+}
+
+// タグ
+enum {Num, Add2, Sub2, Mul2, Div2, Add1, Sub1,
+      Assign2, Sym, Func1, Func2, FuncU, Sel3,
+      Eq2, Ne2, Lt2, Gt2, Le2, Ge2, And2, Or2, Not1};
+
+// 構文木
+typedef struct expr {
+  int tag;
+  union {
+    double num;      // 数値
+    void *ref_value; // 参照型
+    struct {         // 構文木
+      struct expr *left;
+      struct expr *right;
+    };
+    // if 
+    struct {
+      struct expr *test_c;   // 条件節
+      struct expr *then_c;   // then 節
+      struct expr *else_c;   // else 節
+    };
+  };
+} Expr;
+
+// 数値の生成
+Expr *make_number(double n)
+{
+  Expr *e = GC_MALLOC_ATOMIC(sizeof(Expr));
+  e-&gt;tag = Num;
+  e-&gt;num = n;
+  return e;
+}
+
+// 単項演算子の生生
+Expr *make_op1(int op, Expr *e1)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = op;
+  e-&gt;left = e1;
+  e-&gt;right = NULL;
+  return e;
+}
+
+// 二項演算子
+Expr *make_op2(int op, Expr *e1, Expr *e2)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = op;
+  e-&gt;left = e1;
+  e-&gt;right = e2;
+  return e;
+}
+
+// 関数呼び出し
+Expr *make_func(Symbol *sym, int tag, Cell *cp)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = tag;
+  e-&gt;ref_value = cons(sym-&gt;ref_val, cp);
+  return e;
+}
+
+// 変数の生成
+Expr *make_sym(Symbol *sym)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = Sym;
+  e-&gt;ref_value = sym;
+  return e;
+}
+
+// if 式の生成
+Expr *make_if(Expr *test_c, Expr *then_c, Expr *else_c)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = Sel3;
+  e-&gt;test_c = test_c;
+  e-&gt;then_c = then_c;
+  e-&gt;else_c = else_c;
+  return e;
+}
+
+// トークン
+enum {Eof, Number, Ident, Assign, Add, Sub, Mul, Div, Lpar, Rpar,
+      Eq, Ne, Lt, Gt, Le, Ge, And, Or, Not, 
+      Comma, Semic, Def, End, If, Then, Else, Others};
+
+// 外部変数
+int ch;         // 記号
+int token;      // トークン
+double value;   // 数値
+Symbol *symbol; // シンボル
+jmp_buf err;    // エラー脱出用
+
+// トークン名
+char *token_name[] = {
+  "EOF",
+  "Number",
+  "Ident",
+  "=",
+  "+",
+  "-",
+  "*",
+  "/",
+  "(",
+  ")",
+  "==",
+  "!=",
+  "&lt;",
+  "&gt;",
+  "&lt;=",
+  "&gt;=",
+  "And",
+  "Or",
+  "Not",
+  ",",
+  ";",
+  "Def",
+  "End",
+  "If",
+  "Then",
+  "Else",
+  "Others",
+};
+
+// 記号の先読み
+void nextch(void)
+{
+  ch = getchar();
+}
+
+// 先読み記号の取得
+int getch(void)
+{
+  return ch;
+}
+
+// エラー
+_Noreturn
+void error(char *mes)
+{
+  fprintf(stderr, "%s, %s\n", mes, token_name[token]);
+  longjmp(err, 1);
+}
+
+// シンボルの探索
+Symbol *lookup(const char *name)
+{
+  for (int i = 0; i &lt; sym_count; i++) {
+    Symbol *sym = &amp;sym_table[i];
+    if (strcmp(sym-&gt;name, name) == 0) return sym;
+  }
+  return NULL;
+}
+
+// シンボルの生成
+Symbol *gensym(const char *name)
+{
+  if (sym_count &gt;= SYM_TBL_SIZE) error("Symbol table is full");
+  Symbol *sym = &amp;sym_table[sym_count++];
+  strcpy(sym-&gt;name, name);
+  sym-&gt;val = 0;
+  sym-&gt;type = 0;
+  return sym;
+}
+
+// 組み込み関数
+
+// 表示
+double print(double x)
+{
+  printf("%.16g\n", x);
+  return x;
+}
+
+// 組み込み関数の初期化
+void init_func1(const char *name, double (*func)(double))
+{
+  Symbol *sym = gensym(name);
+  sym-&gt;type = 1;
+  sym-&gt;ref_val = func;
+}
+
+void init_func2(const char *name, double (*func)(double, double))
+{
+  Symbol *sym = gensym(name);
+  sym-&gt;type = 2;
+  sym-&gt;ref_val = func;
+}
+
+void init_func(void)
+{
+  init_func1("sqrt", sqrt);
+  init_func2("fmod", fmod);
+  init_func2("pow", pow);
+  init_func1("exp", exp);
+  init_func1("log", log);
+  init_func1("log10", log10);
+  init_func1("fabs", fabs);
+  init_func1("ceil", ceil);
+  init_func1("floor", floor);
+  init_func1("sin", sin);
+  init_func1("cos", cos);
+  init_func1("tan", tan);
+  init_func1("asin", asin);
+  init_func1("acos", acos);
+  init_func1("atan", atan);
+  init_func2("atan2", atan2);
+  init_func1("sinh", sinh);
+  init_func1("cosh", cosh);
+  init_func1("tanh", tanh);
+  init_func1("print", print);
+}
+
+// シンボル (識別子) を取得する
+Symbol *get_ident(void)
+{
+  char name[SYM_NAME_SIZE + 1];
+  int i = 0;
+  name[i++] = getch();
+  nextch();
+  while (true) {
+    int c = getch();
+    if (!isalnum(c) &amp;&amp; c != '_') break;
+    name[i++] = c;
+    if (i &gt; SYM_NAME_SIZE)
+      error("symbol name is too long");
+    nextch();
+  }
+  name[i] = '\0';
+  Symbol *sym = lookup(name);
+  if (sym == NULL)
+    sym = gensym(name);
+  return sym; 
+}
+
+#define SIZE 1024
+
+// 整数部をバッファに格納する
+int get_fixnum(char *buff, int i)
+{
+  while (isdigit(getch())) {
+    buff[i++] = getch();
+    nextch();
+  }
+  return i;
+}
+
+// 数値を求める
+double get_number(void)
+{
+  char buff[SIZE + 1];
+  char *err;
+  int i = get_fixnum(buff, 0);
+  if (getch() == '.') {
+    buff[i++] = getch();
+    nextch();
+    i = get_fixnum(buff,i);
+  }
+  if (getch() == 'e' || getch() == 'E') {
+    buff[i++] = getch();
+    nextch();
+    if (getch() == '+' || getch() == '-') {
+      buff[i++] = getch();
+      nextch();
+    }
+    i = get_fixnum(buff, i);
+  }
+  buff[i] = '\0';
+  double value = strtod(buff, &amp;err);
+  if (*err != '\0')
+    error("get_number: not Number\n");
+  return value;
+}
+
+// トークンの切り分け
+void get_token(void)
+{
+  // 空白文字の読み飛ばし
+  while (isspace(getch())) nextch();
+  if (isdigit(getch())) {
+    token = Number;
+    value = get_number();
+  } else if (isalpha(getch())) {
+    symbol = get_ident();
+    if (strcmp(symbol-&gt;name, "def") == 0)
+      token = Def;
+    else if (strcmp(symbol-&gt;name, "end") == 0)
+      token = End;
+    else if (strcmp(symbol-&gt;name, "if") == 0)
+      token = If;
+    else if (strcmp(symbol-&gt;name, "then") == 0)
+      token = Then;
+    else if (strcmp(symbol-&gt;name, "else") == 0)
+      token = Else;
+    else if (strcmp(symbol-&gt;name, "and") == 0)
+      token = And;
+    else if (strcmp(symbol-&gt;name, "or") == 0)
+      token = Or;
+    else if (strcmp(symbol-&gt;name, "not") == 0)
+      token = Not;
+    else
+      token = Ident;
+  } else {
+    switch(getch()){
+    case '=':
+      nextch();
+      if (getch() == '=') {
+        nextch();
+        token = Eq;
+      } else 
+        token = Assign;
+      break;
+    case '!':
+      nextch();
+      if (getch() == '=') {
+        nextch();
+        token = Ne;
+      } else
+        token = Not;
+      break;
+    case '&lt;':
+      nextch();
+      if (getch() == '=') {
+        nextch();
+        token = Le;
+      } else
+        token = Lt;
+      break;
+    case '&gt;':
+      nextch();
+      if (getch() == '=') {
+        nextch();
+        token = Ge;
+      } else
+        token = Gt;
+      break;
+    case '+':
+      token = Add;
+      nextch();
+      break;
+    case '-':
+      token = Sub;
+      nextch();
+      break;
+    case '*':
+      token = Mul;
+      nextch();
+      break;
+    case '/':
+      token = Div;
+      nextch();
+      break;
+    case '(':
+      token = Lpar;
+      nextch();
+      break;
+    case ')':
+      token = Rpar;
+      nextch();
+      break;
+    case ';':
+      token = Semic;
+      nextch();
+      break;
+    case ',':
+      token = Comma;
+      nextch();
+      break;
+    case EOF:
+      token = Eof;
+      break;
+    default:
+      token = Others;
+    }
+  }
+}
+
+// 構文解析
+Expr *expression(void);  // 代入演算子
+Expr *expr1(void);       // 論理演算子
+Expr *expr2(void);       // 比較演算子
+Expr *expr3(void);       // 加法演算子
+Expr *term(void);        // 乗法演算子
+Expr *factor(void);      // 因子
+
+Expr *expression(void)
+{
+  Expr *e = expr1();
+  if (token == Assign) {
+    if (e-&gt;tag != Sym) error("invalid assign form");
+    get_token();
+    return make_op2(Assign2, e, expression());
+  }
+  return e;
+}
+
+// 論理演算子
+Expr *expr1(void)
+{
+  Expr *e = expr2();
+  while (true) {
+    switch (token) {
+    case And:
+      get_token();
+      e = make_op2(And2, e, expr2());
+      break;
+    case Or:
+      get_token();
+      e = make_op2(Or2, e, expr2());
+      break;
+    default:
+      return e;
+    }
+  }
+}
+
+// 比較演算子
+Expr *expr2(void)
+{
+  Expr *e = expr3();
+  while (true) {
+    switch (token) {
+    case Eq:
+      get_token();
+      e = make_op2(Eq2, e, expr3());
+      break;
+    case Ne:
+      get_token();
+      e = make_op2(Ne2, e, expr3());
+      break;
+    case Lt:
+      get_token();
+      e = make_op2(Lt2, e, expr3());
+      break;
+    case Gt:
+      get_token();
+      e = make_op2(Gt2, e, expr3());
+      break;
+    case Le:
+      get_token();
+      e = make_op2(Le2, e, expr3());
+      break;
+    case Ge:
+      get_token();
+      e = make_op2(Ge2, e, expr3());
+      break;
+    default:
+      return e;
+    }
+  }
+}
+
+// 加法演算子
+Expr *expr3(void)
+{
+  Expr *e = term();
+  while (true) {
+    switch (token) {
+    case Add:
+      get_token();
+      e = make_op2(Add2, e, term());
+      break;
+    case Sub:
+      get_token();
+      e = make_op2(Sub2, e, term());
+      break;
+    default:
+      return e;
+    }
+  }
+}
+
+// 乗法演算子
+Expr *term(void)
+{
+  Expr *e = factor();
+  while (true) {
+    switch (token) {
+    case Mul:
+      get_token();
+      e = make_op2(Mul2, e, factor());
+      break;
+    case Div:
+      get_token();
+      e = make_op2(Div2, e, factor());
+      break;
+    default:
+      return e;
+    } 
+  }
+}
+
+// 引数の取得
+Cell *get_argument(void)
+{
+  Cell *cp = NULL;
+  get_token();
+  if (token == Rpar) {
+    get_token();
+    return cp;
+  }
+  while (true) {
+    cp = cons(expression(), cp);
+    if (token == Rpar) {
+      get_token();
+      return cp;
+    } else if (token == Comma) {
+      get_token();
+    } else 
+      error("unexpected token in argument list");
+  }
+}
+
+Expr *factor(void)
+{
+  Symbol *sym;
+  switch (token) {
+  case Lpar:
+    get_token();
+    Expr *e = expression();
+    if (token == Rpar)
+      get_token();
+    else 
+      error("')' expected");
+    return e;
+  case Number:
+    get_token();
+    return make_number(value);
+  case Add:
+    get_token();
+    return make_op1(Add1, factor());
+  case Sub:
+    get_token();
+    return make_op1(Sub1, factor());
+  case Not:
+    get_token();
+    return make_op1(Not1, factor());
+  case If:
+    {
+      get_token();
+      Expr *test_c = expression();
+      if (token != Then) error("invalid if form");
+      get_token();
+      Expr *then_c = expression();
+      Expr *else_c = NULL;
+      if (token == Else) {
+        get_token();
+        else_c = expression();
+      }
+      if (token != End) error("end expected");
+      get_token();
+      return make_if(test_c, then_c, else_c);
+    }
+  case Ident:
+    sym = symbol;
+    get_token();
+    if (sym-&gt;type == 0)
+      return make_sym(sym);
+    else {
+      if (token != Lpar) error("'(' expected");
+      Cell *cp = get_argument();
+      if (sym-&gt;type == 1) {
+        if (length(cp) != 1)
+          error("wrong number of arguments");
+        return make_func(sym, Func1, cp);
+      } else if(sym-&gt;type == 2) {
+        if (length(cp) != 2)
+          error("wrong number of arguments");
+        return make_func(sym, Func2, cp);
+      } else {
+        if (length(cp) != length(car(sym-&gt;ref_val)))
+          error("wrong number of arguments");
+        return make_func(sym, FuncU, cp);      
+      }
+    }
+  default:
+    error("unexpected token");
+  }
+}
+
+// プロトタイプ宣言
+double eval(Expr *, Env *);
+
+// 変数束縛
+Env *add_bindings(Cell *para, Cell *args, Env *env)
+{
+  Env *env1 = NULL; //  env で初期化するとダイナミックスコープになる
+  while (para != NULL) {
+    env1 = acons(car(para), eval(car(args), env), env1);
+    para = cdr(para);
+    args = cdr(args);
+  }
+  return env1;
+}
+
+// 数式の評価
+double eval(Expr *e, Env *env)
+{
+  Symbol *sym;
+  Env *env1;
+  switch (e-&gt;tag) {
+  case Num: return e-&gt;num;
+  case Sym:
+    sym = e-&gt;ref_value;
+    env1 = assoc(sym, env);
+    if (env1 != NULL) return env1-&gt;val;  // 局所変数
+    return sym-&gt;val;                     // 大域変数
+  case Add1: return eval(e-&gt;left, env);
+  case Sub1: return -eval(e-&gt;left, env);
+  case Not1: return eval(e-&gt;left, env) == 0 ? 1 : 0;
+  case Add2: return eval(e-&gt;left, env) + eval(e-&gt;right, env); 
+  case Sub2: return eval(e-&gt;left, env) - eval(e-&gt;right, env); 
+  case Mul2: return eval(e-&gt;left, env) * eval(e-&gt;right, env); 
+  case Div2: return eval(e-&gt;left, env) / eval(e-&gt;right, env);
+  case Eq2:
+    return eval(e-&gt;left, env) == eval(e-&gt;right, env) ? 1 : 0;
+  case Ne2:
+    return eval(e-&gt;left, env) != eval(e-&gt;right, env) ? 1 : 0;
+  case Lt2:
+    return eval(e-&gt;left, env) &lt; eval(e-&gt;right, env) ? 1 : 0;
+  case Gt2:
+    return eval(e-&gt;left, env) &gt; eval(e-&gt;right, env) ? 1 : 0;
+  case Le2:
+    return eval(e-&gt;left, env) &lt;= eval(e-&gt;right, env) ? 1 : 0;
+  case Ge2:
+    return eval(e-&gt;left, env) &gt;= eval(e-&gt;right, env) ? 1 : 0;
+  case And2:
+    return eval(e-&gt;left, env) != 0 ? eval(e-&gt;right, env) : 0;
+  case Or2:
+    {
+      double val = eval(e-&gt;left, env);
+      return val == 0 ? eval(e-&gt;right, env) : val;
+    }
+  case Assign2:
+    sym = e-&gt;left-&gt;ref_value;
+    return update(sym, eval(e-&gt;right, env), env);
+  case Sel3:
+    if (eval(e-&gt;test_c, env) != 0)
+      return eval(e-&gt;then_c, env);
+    else if (e-&gt;else_c != NULL)
+      return eval(e-&gt;else_c, env);
+    else
+      return 0;
+  case Func1:
+    {
+      Cell *cp = e-&gt;ref_value;
+      double (*func1)(double) = car(cp);
+      return func1(eval(second(cp), env));
+    }
+  case Func2:
+    {
+      Cell *cp = e-&gt;ref_value;
+      double (*func2)(double, double) = car(cp);
+      return func2(eval(third(cp), env), eval(second(cp), env));
+    }
+  case FuncU:
+    {
+      Cell *cp = e-&gt;ref_value;
+      Cell *fn = car(cp);
+      return eval(second(fn), add_bindings(car(fn), cdr(cp), env));
+    } 
+  default:
+    fprintf(stderr, "invalid Expr tag %d\n", e-&gt;tag);
+    exit(1);
+  }
+}
+
+// 仮引数の取得
+Cell *get_parameter(void)
+{
+  Cell *cp = NULL;
+  get_token();
+  if (token == Rpar) {
+    get_token();
+    return cp;
+  }
+  while (true) {
+    Expr *e = expression();
+    if (e-&gt;tag != Sym)
+      error("invalid parameter list");
+    cp = cons(e-&gt;ref_value, cp);
+    if (token == Rpar) {
+      get_token();
+      return cp;
+    } else if (token == Comma) {
+      get_token();
+    } else 
+      error("unexpected token in argument list");
+  }
+}
+
+void toplevel(void)
+{
+  if (token == Def) {
+    // 関数定義
+    get_token();
+    if (token != Ident) error("Symbol expected");
+    Symbol *sym = symbol;
+    if (sym-&gt;type == 1 || sym-&gt;type == 2)
+      error("build-in function");
+    get_token();
+    if (token != Lpar) error("'(' expected");
+    Cell *para = get_parameter();
+    // 再帰定義対策
+    sym-&gt;type = 3;
+    Cell *fn = cons(para, NULL);
+    sym-&gt;ref_val = fn;
+    Expr *body = expression();
+    if (token != End) {
+      sym-&gt;type = 0;
+      error("end expected");
+    } else {
+      fn-&gt;next = cons(body, NULL);
+    }
+    printf("=&gt; %s\nCalc&gt; ", sym-&gt;name);
+    fflush(stdout);
+  } else { 
+    Expr *e = expression();
+    if (token == Semic) {
+      printf("=&gt; %.16g\nCalc&gt; ", eval(e, NULL));
+      fflush(stdout);
+    } else {
+      error("invalid token");
+    }
+  }
+}
+
+int main(void)
+{
+  init_func();
+  printf("Calc&gt; ");
+  fflush(stdout);
+  nextch();
+  while (true) {
+    if (!setjmp(err)) {
+      get_token();
+      if (token == Eof) break;
+      toplevel();
+    } else {
+      // 入力のクリア
+      while (getch() != '\n') nextch();
+      printf("Calc&gt; ");
+      fflush(stdout);
+    }
+  }
+  printf("bye\n");
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="clangb03.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clangb05.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

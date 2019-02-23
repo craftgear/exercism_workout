@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881790</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell19.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell21.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">ByteString</h3>
+<p> 今回は「バイト列 (bytestring) 」を扱うモジュール Data.ByteString について説明します。bytestring はリストと似たデータ構造ですが、要素を 1 バイト (8 ビット) の整数値に固定したものです。Haskell の文字列は要素が文字型 (Char) のリストですが、Char はユニコード文字 (4 バイト) で表されているので、ファイルからデータを文字列として読み込むと無駄が多くなってしまいます。このような場合、bytestring を使うと効率的に処理することができます。
+</p>
+
+<h4>●bytestring の種類</h4>
+<p> bytestring を扱うモジュールは Data.ByteString だけではなく、次に示す 4 つのモジュールがあります。
+</p>
+<ul>
+  <li>Data.ByteString
+  <li>Data.ByteString.Char8
+  <li>Data.ByteString.Lazy
+  <li>Data.ByteString.Lazy.Char8
+</ul>
+<p> Data.ByteString は正格評価で、Lazy が付くモジュールは遅延評価を行います。Data.ByteString は要素を Word8 (0 から 255 までの整数値) として扱いますが、Char8 が付くモジュールは要素を 8 ビットの文字として扱います。
+</p>
+
+<p> 正格 bytestring の場合、すべての要素が評価されます。たとえば、ファイルを正格 bytestring で全部読み込む場合、そのデータを格納するだけのメモリが必要になります。これに対し、bytestring の遅延評価は 1 バイトずつ行われるのではなく、64K バイトずつ行われます。この塊を「チャンク (chunk) 」といいます。ファイルを先頭から順番に処理する場合、大きなファイルでも遅延 bytestring を使って処理していくことが可能です。もちろん、正格 bytestring でも読み込むバイト数を指定することで、大きなファイルを処理することができます。
+</p>
+
+<h4>●pack と unpack</h4>
+<p> 関数 pack は [Word8] を bytestring に変換します。逆に、unpack は bytestring を [Word8] に変換します。pack と unpack の型を示します。
+</p>
+<pre class="item">
+pack   :: [Word8] -&gt; ByteString
+unpack :: ByteString -&gt; [Word8]
+</pre>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+Prelude&gt; import qualified Data.ByteString as S
+Prelude S&gt; import qualified Data.ByteString.Lazy as B
+Prelude S B&gt; let a = S.pack [97..122]
+Prelude S B&gt; a
+"abcdefghijklmnopqrstuvwxyz"
+Prelude S B&gt; S.unpack a
+[97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122]
+
+Prelude S B&gt; let b = B.pack [97..122]
+Prelude S B&gt; b
+Chunk "abcdefghijklmnopqrstuvwxyz" Empty
+Prelude S B&gt; B.unpack b
+[97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122]
+</pre>
+<p> qualified 付きインポートで Data.ByteString に別名 S を、Data.ByteString.Lazy に別名 B を付けます。Empty は空の bytestring を表します。これは変数 empty として定義されています。
+</p>
+<pre>
+Prelude S B&gt; S.empty
+""
+Prelude S B&gt; B.empty
+Empty
+</pre>
+<p> 関数 singleton は 1 バイトの bytestring を生成します。
+</p>
+<pre class="item">
+singleton :: Word8 -&gt; ByteString
+</pre>
+<pre>
+Prelude S B&gt; S.singleton 97
+"a"
+Prelude S B&gt; B.singleton 97
+Chunk "a" Empty
+</pre>
+<h4>●遅延 bytestring と正格 bytestring の変換</h4>
+<p> モジュール Data.ByteString.Lazy に定義されている関数 toChunks は遅延 bytestring を正格 bytestring のリストに変換します。逆に、fromChunks は正格 bytestring のリストを遅延 bytestring に変換します。toChunks と fromChunks の型を示します。
+</p>
+<pre class="item">
+toChunks   :: ByteString -&gt; [ByteString]
+fromChunks :: [ByteString] -&gt; ByteString
+</pre>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+Prelude S B&gt; a
+"abcdefghijklmnopqrstuvwxyz"
+Prelude S B&gt; b
+Chunk "abcdefghijklmnopqrstuvwxyz" Empty
+Prelude S B&gt; B.fromChunks [a]
+Chunk "abcdefghijklmnopqrstuvwxyz" Empty
+Prelude S B&gt; B.toChunks b
+["abcdefghijklmnopqrstuvwxyz"]
+Prelude S B&gt; let c = B.fromChunks [S.pack [97..100], S.pack [101..105]]
+Prelude S B&gt; c
+Chunk "abcd" (Chunk "efghi" Empty)
+Prelude S B&gt; B.toChunks c
+["abcd","efghi"]
+</pre>
+
+<h4>●基本的な操作関数</h4>
+<p> bytestring はリストと違ってパターンマッチングを使用することができません。Data.ByteString にはリストの関数と同様の動作を行う関数が用意されているので、それらを使って bytestring を操作することになります。
+</p>
+<p> 基本的な関数を下表に示します。
+</p>
+
+<table border=1>
+<caption>表 : 基本的な bytestring の操作関数</caption>
+<thead>
+  <tr><th>関数名</th><th>型</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>cons  </td><td>Word8 -&gt; ByteString -&gt; ByteString</td><td>bytestring の先頭に 1 バイト追加する</td></tr>
+  <tr><td>head </td><td>ByteString -&gt; Word8</td><td>bytestring の先頭 1 バイトを取り出す</td></tr>
+  <tr><td>tail </td><td>ByteString -&gt; ByteString</td><td>bytestring の先頭 1 バイトを取り除く</td></tr>
+  <tr><td>append </td><td>ByteString -&gt; ByteString -&gt; ByteString</td><td>bytestring を連結する</td></tr>
+  <tr><td>null </td><td>ByteString -&gt; Bool</td><td>空の bytestring ならば True を返す</td></tr>
+  <tr><td>length </td><td>ByteString -&gt; Int64</td><td>bytestring の長さを求める</td></tr>
+  <tr><td>reverse </td><td>ByteString -&gt; ByteString</td><td>bytestring を反転する</td></tr>
+</tbody>
+</table>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+Prelude S B&gt; a
+"abcdefghijklmnopqrstuvwxyz"
+Prelude S B&gt; b
+Chunk "abcdefghijklmnopqrstuvwxyz" Empty
+Prelude S B&gt; S.cons 65 a
+"Aabcdefghijklmnopqrstuvwxyz"
+Prelude S B&gt; B.cons 65 b
+Chunk "A" (Chunk "abcdefghijklmnopqrstuvwxyz" Empty)
+Prelude S B&gt; S.head a
+97
+Prelude S B&gt; B.head b
+97
+Prelude S B&gt; S.tail a
+"bcdefghijklmnopqrstuvwxyz"
+Prelude S B&gt; B.tail b
+Chunk "bcdefghijklmnopqrstuvwxyz" Empty
+Prelude S B&gt; S.append (S.pack [97..100]) (S.pack [101..105])
+"abcdefghi"
+Prelude S B&gt; B.append (B.pack [97..100]) (B.pack [101..105])
+Chunk "abcd" (Chunk "efghi" Empty)
+Prelude S B&gt; S.length a
+26
+Prelude S B&gt; B.length b
+26
+Prelude S B&gt; S.reverse a
+"zyxwvutsrqponmlkjihgfedcba"
+Prelude S B&gt; B.reverse b
+Chunk "zyxwvutsrqponmlkjihgfedcba" Empty
+Prelude S B&gt; B.reverse $ B.append (B.pack [97..100]) (B.pack [101..105])
+Chunk "ihgfe" (Chunk "dcba" Empty)
+</pre>
+<p> 正格 bytestring の length は O(1) で長さを求めることができます。このほかにも、map, foldl, foldr などの高階関数や take, drop など bytestring を操作する関数が多数用意されています。詳細は Data.ByteString のマニュアルをお読みください。
+</p>
+
+<h4>●bytestring によるファイル入出力</h4>
+<p> Data.ByteString には bytestring を使って入出力処理を行う関数が用意されています。標準入出力に対して処理を行う関数を下表に示します。
+</p>
+
+<table border=1>
+<caption>表 : 標準入出力用の関数</caption>
+<thead>
+  <tr><th>関数名</th><th>型</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>getLine </td><td>IO ByteString</td><td>標準入力から 1 行読み込み bytestring にして返す</td></tr>
+  <tr><td>getContents </td><td>IO ByteString</td><td>標準入力からデータを読み込んで bytestring にして返す</td></tr>
+  <tr><td>putStr </td><td>ByteString -&gt; IO ()</td><td>bytestring を標準出力に書き込む</td></tr>
+  <tr><td>putStrLn </td><td>ByteString -&gt; IO ()</td><td>bytestring を標準出力に書き込む (改行付き)</td></tr>
+</tbody>
+</table>
+<p> 関数 getLine は遅延 bytestring ではサポートされていません。正格 bytestring の場合、関数 getContents は遅延評価しません。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+Prelude S B&gt; S.getLine
+hello, world
+"hello, world\r"
+Prelude S B&gt; S.putStrLn $ S.pack [97 .. 110]
+abcdefghijklmn
+Prelude S B&gt; B.putStrLn $ B.pack [97 .. 110]
+abcdefghijklmn
+</pre>
+
+<p> Data.ByteString には関数 readFile, writeFile もあります。
+</p>
+<table border=1>
+<caption>表 : ファイル用の関数</caption>
+<thead>
+  <tr><th>関数名</th><th>型</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>readFile </td><td>FilePath -&gt; IO ByteString</td><td>ファイルを読み込み bytestring にして返す</td></tr>
+  <tr><td>writeFile </td><td>FilePath -&gt; ByteString -&gt; IO ()</td><td>bytestring をファイルに書き込む</td></tr>
+</tbody>
+</table>
+<p> 簡単な実行例を示します。test00.txt の内容を表示します。
+</p>
+<pre class="fig">
+hello, world
+hello, Haskell
+foo bar baz
+oops! oops! oops!
+abcd efgh ijkl
+
+図 : test00.txt
+</pre>
+<pre>
+Prelude S B&gt; readFile "test00.txt"
+"hello, world\nhello, Haskell\nfoo bar baz\noops! oops! oops!\nabcd efgh ijkl\n"
+
+Prelude S B&gt; B.readFile "test00.txt"
+Chunk "hello, world\r\nhello, Haskell\r\nfoo bar baz\r\noops! oops! oops!\r\nabcd efgh ijkl\r\n" Empty
+
+Prelude S B&gt; S.readFile "test00.txt"
+"hello, world\r\nhello, Haskell\r\nfoo bar baz\r\noops! oops! oops!\r\nabcd efgh ijkl\r\n"
+</pre>
+<p> Windows の場合、改行は \r\n で表されます。テキストファイルを読み込む場合、Windows で動作する処理系では \r\n を \n に変換することが行われます。Haskell の場合、bytestring を使った入出力処理では改行の変換が行われません。Windows でバイナリファイルを扱う場合は bytestring を使用してください。
+</p>
+
+<p> Data.ByteString にはハンドルを使った入出力関数も用意されています。
+</p>
+<table border=1>
+<caption>表 : ハンドル用の関数</caption>
+<thead>
+  <tr><th>関数名</th><th>型</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>hGetLine </td><td>Handle -&gt; IO ByteString</td><td>ハンドルから 1 行読み込む</td></tr>
+  <tr><td>hGetContents </td><td>Handle -&gt; IO String</td><td>ハンドルから全データを読み込んで bytestring にして返す</td></tr>
+  <tr><td>hGet </td><td>Handle -&gt; Int -&gt; IO ByteString</td><td>ハンドルから n バイト読み込む</td></tr>
+  <tr><td>hPut </td><td>Handle -&gt; ByteString -&gt; IO ()</td><td>ハンドルに bytestring を書き込む</td></tr>
+  <tr><td>hPutStr </td><td>Handle -&gt; ByteString -&gt; IO ()</td><td>hPut と同じ</td></tr>
+  <tr><td>hPutStrLn </td><td>Handle -&gt; ByteString -&gt; IO ()</td><td>hPut と同じ (改行付き)</td></tr>
+</tbody>
+</table>
+<p> 関数 hGetLine, hPutStrLn は遅延 bytestring ではサポートされていません。hGet の場合、ファイルが途中で EOF になったならば、指定したバイト数よりも短い bytestring を返します。ファイルが EOF の場合は空の bytestring を返します。
+</p>
+
+<h4>●ファイルのコピー</h4>
+<p> それでは簡単な例題として、正格 bytestring の hGet と hPut を使ってファイルをコピーする関数 copyFile を作ってみましょう。readFile, writeFile を使ったほうが簡単ですが、hGet と hPut の簡単な使用例ということで、ご容赦くださいませ。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ファイルのコピー
+
+import qualified Data.ByteString as S
+import System.IO
+
+copyFile :: FilePath -&gt; FilePath -&gt; IO ()
+copyFile src dst = do
+  hs &lt;- openFile src ReadMode
+  hd &lt;- openFile dst WriteMode
+  copy hs hd
+  hClose hs
+  hClose hd
+    where size = 8
+          copy hs hd = do
+            contents &lt;- S.hGet hs size
+            if S.null contents
+              then return ()
+              else do S.hPut hd contents
+                      copy hs hd
+</pre>
+<p> 実際の処理は局所関数 copy で行います。S.hGet でファイルハンドル hs から size バイト読み込みます。今回は簡単な例題ということで、あえて小さな値 (8) にしています。ファイルが EOF の場合、S.hGet は空の byteString を返すので、関数 S.null でチェックします。空の bytestring であれば return で unit を IO に格納して返します。そうでなければ、S.hPut で出力先のファイルハンドル hd に contents を書き込み、copy を再帰呼び出しします。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; copyFile "test00.txt" "test000.txt"
+*Main&gt; S.readFile "test00.txt"
+"hello, world\r\nhello, Haskell\r\nfoo bar baz\r\noops! oops! oops!\r\nabcd efgh
+ ijkl\r\n"
+*Main&gt; S.readFile "test000.txt"
+"hello, world\r\nhello, Haskell\r\nfoo bar baz\r\noops! oops! oops!\r\nabcd efgh
+ ijkl\r\n"
+</pre>
+<p> 正常にコピーされていますね。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">配列</h3>
+<p> 今回は Haskell の「配列 (Array) 」について説明します。Haskell は純粋な関数型言語なので、変数の値を書き換えることはできません。また、同じ引数で関数を呼び出せば、計算結果はいつも同じ値になります。これを「参照透明性」と呼びます。Haskell の配列は大きく分けると二種類 <sup><a href="haskell20.html#note1">[*1]</a></sup> あって、ひとつは参照透明性を守る Array (immutable-array) 型、もう一つは参照透明性を守らない MArray (mutable-array) 型です。
+</p>
+<p> どちらのデータ型も、データの参照は O(1) で行うことができます。Array の場合、データの更新は要素数を N とすると O(N) に比例する時間がかかります。つまり、元の配列を書き換えるのではなく、データを更新した新しい配列を作るわけです。これに対し、MArray は配列を直接書き換えるので、データの更新も O(1) で行うことができます。ただし、副作用を伴うので純粋な関数の世界で使うことはできません。
+</p>
+
+<p> 具体的には、IO モナドの中で専用の配列 (IOArray) を使うことになります。また、IO モナドのほかに ST モナドの中でも MArray を使用することができますが、まだ ST モナドを説明していないので、本稿では取り上げません。関数型言語としては不純な機能なのですが、問題によっては配列を使った方が簡単にプログラムできる場合もあります。
+</p>
+
+<div class="note">
+-- <a name="note1">note</a> --------<br>
+[*1] Haskell の配列はデータの格納方法によって boxed と unboxed に分けることができます。本稿で説明する配列は boxed タイプで、unboxed タイプの説明は行いません。
+</div>
+<h4>●配列の生成</h4>
+<p> 最初に Array (immutable-array) 型の配列について説明します。Array 型を操作する関数はモジュール Data.Array に定義されています。配列の生成は関数 array を使います。array の型を示します。
+</p>
+<pre class="item">
+array :: Ix i =&gt; (i, i) -&gt; [(i, e)] -&gt; Array i e
+</pre>
+<p> 配列のデータ型は Array i e で、i が添字を表すデータ型、e が配列に格納されるデータ型です。Ix は添字を表す型クラスです。Ix のインスタンスであれば、整数値以外のデータでも添字として使用することができます。:info コマンドで Ix を調べると次のように表示されます。
+</p>
+<pre>
+Prelude> :m Data.Array
+Prelude Data.Array&gt; :i Ix
+class Ord a =&gt; Ix a where
+  range :: (a, a) -&gt; [a]
+  index :: (a, a) -&gt; a -&gt; Int
+  GHC.Arr.unsafeIndex :: (a, a) -&gt; a -&gt; Int
+  inRange :: (a, a) -&gt; a -&gt; Bool
+  rangeSize :: (a, a) -&gt; Int
+  GHC.Arr.unsafeRangeSize :: (a, a) -&gt; Int
+        -- Defined in `GHC.Arr'
+instance Ix Ordering -- Defined in `GHC.Arr'
+instance Ix Integer -- Defined in `GHC.Arr'
+instance Ix Int -- Defined in `GHC.Arr'
+instance Ix Char -- Defined in `GHC.Arr'
+instance Ix Bool -- Defined in `GHC.Arr'
+instance (Ix a1, Ix a2, Ix a3, Ix a4, Ix a5) =&gt;
+         Ix (a1, a2, a3, a4, a5)
+  -- Defined in `GHC.Arr'
+instance (Ix a1, Ix a2, Ix a3, Ix a4) =&gt; Ix (a1, a2, a3, a4)
+  -- Defined in `GHC.Arr'
+instance (Ix a1, Ix a2, Ix a3) =&gt; Ix (a1, a2, a3)
+  -- Defined in `GHC.Arr'
+instance (Ix a, Ix b) =&gt; Ix (a, b) -- Defined in `GHC.Arr'
+instance Ix () -- Defined in `GHC.Arr'
+</pre>
+<p> 整数値以外でも Char, Bool, タプルが Ix のインスタンスです。Array の場合、タプルを使って多次元配列を表すことができます。array の第 1 引数は添字の下限値と上限値を格納したタプルで、第 2 引数は添字とデータ (初期値) を格納した連想リストです。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+Prelude Data.Array&gt; let a = array (0, 3) [(0, 0), (1, 10), (2, 20), (3, 30)]
+Prelude Data.Array&gt; a
+array (0,3) [(0,0),(1,10),(2,20),(3,30)]
+</pre>
+<h4>●配列の参照と更新</h4>
+<p> 配列のデータは演算子 ! を使って参照することができます。型を示します。
+</p>
+<pre class="item">
+(!) :: Ix i =&gt; Array i e -&gt; i -&gt; e
+</pre>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+Prelude Data.Array&gt; a
+array (0,3) [(0,0),(1,10),(2,20),(3,30)]
+Prelude Data.Array&gt; a ! 0
+0
+Prelude Data.Array&gt; a ! 1
+10
+Prelude Data.Array&gt; a ! 2
+20
+Prelude Data.Array&gt; a ! 3
+30
+Prelude Data.Array&gt; a ! 4
+*** Exception: Ix{Integer}.index: Index (4) out of range ((0,3))
+</pre>
+<p> 範囲外の添字を与えるとエラーになります。また、要素の初期値を省略しても配列は生成されますが、その要素にアクセスするとエラーになります。
+</p>
+<pre>
+Prelude Data.Array&gt; let b = array (0, 3) [(0, 0), (1, 10), (3, 30)]
+Prelude Data.Array&gt; b ! 0
+0
+Prelude Data.Array&gt; b ! 1
+10
+Prelude Data.Array&gt; b ! 2
+*** Exception: (Array.!): undefined array element
+</pre>
+<p> 添字は関数 range で生成することができます。簡単な使用例を示します。
+</p>
+<pre>
+Prelude Data.Array&gt; range (1, 10)
+[1,2,3,4,5,6,7,8,9,10]
+Prelude Data.Array&gt; range ((1, 1), (5, 5))
+[(1,1),(1,2),(1,3),(1,4),(1,5),(2,1),(2,2),(2,3),(2,4),(2,5),(3,1),(3,2),(3,3),
+(3,4),(3,5),(4,1),(4,2),(4,3),(4,4),(4,5),(5,1),(5,2),(5,3),(5,4),(5,5)]
+</pre>
+<p> 配列の更新は演算子 // を使います。型を示します。
+</p>
+<pre class="item">
+(//) :: Ix i =&gt; Array i e -&gt; [(i, e)] -&gt; Array i e
+</pre>
+<p> 更新する添字とデータは連想リストで指定します。Array の更新には時間がかかるので、複数のデータを連想リストで指定できるようになっています。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+Prelude Data.Array&gt; a
+array (0,3) [(0,0),(1,10),(2,20),(3,30)]
+Prelude Data.Array&gt; let c = a // [(1,100), (3,300)]
+Prelude Data.Array&gt; c
+array (0,3) [(0,0),(1,100),(2,20),(3,300)]
+Prelude Data.Array&gt; a
+array (0,3) [(0,0),(1,10),(2,20),(3,30)]
+</pre>
+<p> 配列 a の 1 番目と 3 番目の要素を演算子 // で更新します。その結果、変数 c には更新された配列が格納されますが、変数 a の配列は更新されていません。このように、演算子 // は配列を破壊的に更新するのではなく、値を更新した新しい配列を生成します。
+</p>
+
+<h4>●配列の操作関数</h4>
+<p> ここで、Data.Array に用意されている関数をいくつか紹介しましょう。関数 listArray はリストの要素を順番に配列に格納します。
+</p>
+<pre class="item">
+listArray :: Ix i =&gt; (i, i) -&gt; [e] -&gt; Array i e
+</pre>
+<pre>
+Prelude Data.Array&gt; listArray (0, 3) [1,2,3,4]
+array (0,3) [(0,1),(1,2),(2,3),(3,4)]
+Prelude Data.Array&gt; listArray (0, 3) [1,2,3]
+array (0,3) [(0,1),(1,2),(2,3),(3,*** Exception: (Array.!): undefined array element
+Prelude Data.Array&gt; listArray (0, 3) [1,2,3,4,5]
+array (0,3) [(0,1),(1,2),(2,3),(3,4)]
+</pre>
+<p> リストの要素数が配列の大きさに満たない場合はエラーになります。余った要素は捨てられます。
+</p>
+
+<p> 配列の添字の範囲は関数 bounds で求めることができます。
+</p>
+<pre class="item">
+bounds :: Ix i =&gt; Array i e -&gt; (i, i)
+</pre>
+<pre>
+Prelude Data.Array&gt; let a = listArray (0,3) [1,2,3,4]
+Prelude Data.Array&gt; a
+array (0,3) [(0,1),(1,2),(2,3),(3,4)]
+Prelude Data.Array&gt; bounds a
+(0,3)
+</pre>
+<p> 関数 elems は配列の要素をリストに格納して返します。関数 assocs は配列を連想リストに変換します。
+</p>
+<pre class="item">
+elems :: Ix i =&gt; Array i e -&gt; [e]
+assocs :: Ix i =&gt; Array i e -&gt; [(i, e)]
+</pre>
+<pre>
+Prelude Data.Array&gt; a
+array (0,3) [(0,1),(1,2),(2,3),(3,4)]
+Prelude Data.Array&gt; elems a
+[1,2,3,4]
+Prelude Data.Array&gt; assocs a
+[(0,1),(1,2),(2,3),(3,4)]
+</pre>
+<p> 関数 accumArray は配列の初期値と連想リスト (添字と値) を指定し、配列の値と連想リストの値に関数を適用して、その結果を配列に格納します。連想リストには同じ添字が複数あってもかまいません。その添字に対して関数を繰り返し適用します。
+</p>
+<p> accumArray の型を示します。
+</p>
+<pre class="item">
+accumArray :: Ix i =&gt; (e -&gt; a -&gt; e) -&gt; e -&gt; (i, i) -&gt; [(i, a)] -&gt; Array i e
+</pre>
+<p> 第 1 引数が関数、第 2 引数が配列の初期値、第 3 引数が配列の大きさ、第 4 引数が連想リストです。型変数 e が配列の要素の型、型変数 a が連想リストの値の型になります。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+Prelude Data.Array&gt; accumArray (+) 0 (0,3) [(0,1),(1,2),(2,3),(3,4)]
+array (0,3) [(0,1),(1,2),(2,3),(3,4)]
+Prelude Data.Array&gt; accumArray (+) 0 (0,3) [(0,1),(1,2),(0,3),(1,4)]
+array (0,3) [(0,4),(1,6),(2,0),(3,0)]
+</pre>
+<p> 関数が + で初期値が 0 なので、配列の値は連想リストで同じ添字の値を合計した値になります。最初の例は同じ添字がないので、連想リストの値がそのまま配列の値になります。次の例では、添字 0 と 1 が 2 つずつあるので、その合計値 4 と 6 が 0 番目と 1 番目の値になります。2, 3 番目の値は初期値 0 のままです。
+</p>
+
+<h4>●二分探索</h4>
+<p> 次は、配列の応用例として「二分探索（バイナリサーチ：binary searching）」を例題として取り上げます。線形探索の実行時間は要素数 N に比例するので、数が多くなると時間がかかるようになります。これに対し二分探索は log<SUB>2</SUB> N に比例する時間でデータを探すことができます。ただし、探索するデータはあらかじめ昇順に並べておく必要があります。つまり、二分探索は最初にデータをソートしておかないといけないので、線形探索に比べて準備に時間がかかります。
+</p>
+
+<p> 二分探索の動作を下図に示します。
+</p>
+<pre class="fig">
+ [11 22 33 44 55 66 77 88 99]        key は 66
+              ↑                     66 &gt; 55 後半を探す
+
+ 11 22 33 44 55 [66 77 88 99]        88 &gt; 66 前半を探す
+                       ↑
+
+ 11 22 33 44 55 [66 77] 88 99        77 &gt; 66 前半を探す
+                    ↑
+
+ 11 22 33 44 55 [66] 77 88 99        66 = 66 発見
+                 ↑
+
+                   図 : 二分探索
+</pre>
+<p> 二分探索は探索する区間を半分に分割しながら調べていきます。キーが 66 の場合を考えてみましょう。まず区間の中央値 55 とキーを比較します。データが昇順にソートされている場合、66 は中央値 55 より大きいので区間の前半を調べる必要はありません。したがって、後半部分だけを探索すればいいのです。
+</p>
+
+<p> あとは、これと同じことを後半部分に対して行います。最後には区間の要素が一つしかなくなり、それとキーが一致すれば探索は成功、そうでなければ探索は失敗です。ようするに、探索するデータ数が 1 / 2 ずつ減少していくわけです。
+</p>
+
+<p> 上図の場合、線形探索ではデータの比較が 6 回必要になりますが、二分探索であれば 4 回で済みます。また、データ数が 1,000,000 個になったとしても、二分探索を使えば高々 20 回程度の比較で探索を完了することができます。
+</p>
+
+<p> 二分探索は要素をランダムアクセスすることになるので、リストには不向きのアルゴリズムです。そこで、配列からデータを二分探索するプログラムを作ってみましょう。二分探索は簡単にプログラムできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 二分探索
+
+bsearch :: Ord a =&gt; a -&gt; Array Int a -&gt; Bool
+bsearch x ary = iter low high
+  where
+    (low, high) = bounds ary
+    iter low high
+      | low &gt; high = False
+      | otherwise  = let mid = low + (high - low) `div` 2
+                         y = ary ! mid
+                     in if x == y then True
+                        else if x &lt; y then iter low (mid - 1)
+                        else iter (mid + 1) high
+</pre>
+<p> 関数 bsearch は配列 ary の中から x と等しい要素を二分探索します。配列の添字は Int に限定するので、型は Array Int a になります。実際の処理は局所関数 iter で行います。引数 low と high で探索する配列の範囲を指定します。bounds で ary の範囲を求め、それを iter に渡します。
+</p>
+
+<p> low が high よりも大きくなった場合、x と等しい要素は見つからなかったので False を返します。そうでなければ、区間の中央の位置を求めて変数 mid にセットし、mid の位置にある要素を演算子 ! で取り出して変数 y にセットします。
+</p>
+
+<p> x と y が等しい場合は True を返します。x &lt; y の場合、配列の前半部分を探索するため iter low (mid - 1) を呼び出します。x &gt; y の場合は後半部分を調べるため iter (mid + 1) high を呼び出します。
+</p>
+
+<p> これでプログラムは完成です。簡単な実行例を示しましょう。
+</p>
+<pre>
+*Main&gt; let a = array (0,9) [(x, x*11) | x &lt;- [0..9]] :: Array Int Int
+*Main&gt; a
+array (0,9) [(0,0),(1,11),(2,22),(3,33),(4,44),(5,55),(6,66),(7,77),(8,88),(9,99)]
+*Main&gt; bsearch 55 a
+True
+*Main&gt; bsearch 50 a
+False
+*Main&gt; bsearch 0 a
+True
+*Main&gt; bsearch 99 a
+True
+*Main&gt; bsearch 100 a
+False
+</pre>
+<p> 二分探索はデータを高速に探索することができますが、あらかじめデータをソートしておく必要があります。このため、二分探索はプログラムの実行中にデータを登録し、同時に探索も行うという使い方には向いていません。途中でデータを追加して探索も行う場合は、他の高速な探索アルゴリズムを検討してみてください。
+</p>
+
+<h4>●IOArray の基本的な操作</h4>
+<p> 次は MArray (mutable-array) 型の配列について説明します。MArray 型を操作する関数はモジュール Data.MArray に定義されていますが、実際に IO モナドで使用する場合はモジュール Data.Array.IO をインポートします。配列のデータ型は IOArray i e で、i が添字を表す型変数、e が配列に格納する値の型変数です。
+</p>
+<p> 配列の生成は関数 newArray を使います。newArray の型を示します。
+</p>
+<pre class="item">
+newArray  :: (Ix i, MArray a e m) =&gt; (i, i) -&gt; e -&gt; m (a i e)
+newArray_ :: (Ix i, MArray a e m) =&gt; (i, i) -&gt; m (a i e)
+</pre>
+<p> MArray の型変数 m はモナドを表します。生成される配列の型は (a i e) で、IOArray の場合は a が IOArray、i が添字の型、e が要素の型で、生成された配列は IO に格納されて返されます。第 1 引数が配列の大きさ、第 2 引数が要素の初期値です。関数 newArray_ は初期値の指定を省略したもので、このまま要素にアクセスするとエラーになります。
+</p>
+<p> データの参照と更新は関数 readArray と writeArray で行います。型を示します。
+</p>
+<pre class="item">
+readArray :: (Ix i, MArray a e m) =&gt; a i e -&gt; i -&gt; m e
+writeArray :: (Ix i, MArray a e m) =&gt; a i e -&gt; i -&gt; e -&gt; m ()
+</pre>
+<p> 第 1 引数は配列、第 2 引数は添字です。readArray の場合、値はモナド m に格納されて返されます。writeArray の第 3 引数が更新する値です。
+</p>
+<p> それでは、簡単な使用例を示します。
+</p>
+<pre>
+Prelude Data.Array.IO&gt; a &lt;- newArray (0,9) 0 :: IO (IOArray Int Int)
+Prelude Data.Array.IO&gt; readArray a 0
+0
+Prelude Data.Array.IO&gt; writeArray a 0 10
+Prelude Data.Array.IO&gt; readArray a 0
+10
+
+Prelude Data.Array.IO&gt; b &lt;- newArray_ (0,9) :: IO (IOArray Int Int)
+Prelude Data.Array.IO&gt; readArray b 0
+*** Exception: MArray: undefined array element
+Prelude Data.Array.IO&gt; writeArray b 0 10
+Prelude Data.Array.IO&gt; readArray b 0
+10
+</pre>
+<p> インタプリタ ghci の対話モードは do 構文の &lt;- をそのまま利用することができます。newArray で配列を生成するときは型の指定が必要になることがあります。初期値に 0 を指定しているので、readArray で配列 a の 0 番目の要素を求めると値は 0 になります。次に、writeArray で 0 番目の要素を 10 に書き換えます。readArray で再度 0 番目の要素を参照すると 10 になり、配列 a の値が書き換えられていることがわかります。
+</p>
+<p> newArray_ の場合、配列は初期化されないことに注意してください。たとえば、配列 b の 0 番目の要素を readArray で求めるとエラーになります。次に、writeArray で b の 0 番目の要素を 10 にセットします。そして、readArray で 0 番目の要素を参照すると、エラーにならずに 10 となります。
+</p>
+
+<h4>●IOArray の操作関数</h4>
+<p> ここで、Data.MArray に用意されている関数をいくつか紹介しましょう。関数 getBounds は配列の大きさを求めます。
+</p>
+<pre class="item">
+getBounds :: (Ix i, MArray a e m) =&gt; a i e -&gt; m (i, i)
+</pre>
+<pre>
+Prelude Data.Array.IO&gt; a &lt;- newArray (0,9) 0 :: IO (IOArray Int Int)
+Prelude Data.Array.IO&gt; getBounds a
+(0,9)
+</pre>
+<p> 関数 newListArray はリストから配列を生成します。
+</p>
+<pre>
+newListArray :: (Ix i, MArray a e m) =&gt; (i, i) -&gt; [e] -&gt; m (a i e)
+</pre>
+<pre>
+Prelude Data.Array.IO&gt; b &lt;- newListArray (0,9) [1..10] :: IO (IOArray Int Int)
+Prelude Data.Array.IO&gt; readArray b 0
+1
+Prelude Data.Array.IO&gt; readArray b 5
+6
+Prelude Data.Array.IO&gt; readArray b 9
+10
+Prelude Data.Array.IO&gt; c &lt;- newListArray (0,9) [1..5] :: IO (IOArray Int Int)
+Prelude Data.Array.IO&gt; readArray c 9
+*** Exception: MArray: undefined array element
+Prelude Data.Array.IO&gt; readArray c 5
+*** Exception: MArray: undefined array element
+Prelude Data.Array.IO&gt; readArray c 4
+5
+</pre>
+<p> リストの要素が足りない場合、配列はその分だけ初期化されません。リストの要素が多い場合、余分な値は捨てられます。
+</p>
+<p> 配列用のマップ関数もあります。
+</p>
+<pre class="item">
+mapArray :: (Ix i, MArray a e m, MArray a e' m) =&gt; (e' -&gt; e) -&gt; a i e' -&gt; m (a i e)
+</pre>
+<pre>
+Prelude Data.Array.IO&gt; d &lt;- newListArray (0,4) [1..5] :: IO (IOArray Int Int)
+Prelude Data.Array.IO&gt; e &lt;- mapArray (*2) d
+Prelude Data.Array.IO&gt; readArray e 0
+2
+Prelude Data.Array.IO&gt; readArray e 1
+4
+Prelude Data.Array.IO&gt; readArray e 2
+6
+Prelude Data.Array.IO&gt; readArray e 3
+8
+Prelude Data.Array.IO&gt; readArray e 4
+10
+</pre>
+<p> getElems は配列のデータをリストに格納して返します。getAssoc は配列を連想リストに変換します。どちらの場合も、返り値はモナド (IOArray であれば IO) に格納されます。
+</p>
+<pre class="item">
+getElems  :: (Ix i, MArray a e m) =&gt; a i e -&gt; m [e]
+getAssocs :: (Ix i, MArray a e m) =&gt; a i e -&gt; m [(i, e)]
+</pre>
+<pre>
+Prelude Data.Array.IO&gt; f &lt;- getElems e
+Prelude Data.Array.IO&gt; f
+[2,4,6,8,10]
+Prelude Data.Array.IO&gt; g &lt;- getAssocs e
+Prelude Data.Array.IO&gt; g
+[(0,2),(1,4),(2,6),(3,8),(4,10)]
+</pre>
+<p> 関数 freeze は mutable-array を immutable-array に変換します。逆に、関数 thaw は immutable-array を mutable-array に変換します。
+</p>
+<pre class="item">
+freeze :: (Ix i, MArray a e m, Data.Array.Base.IArray b e) =&gt; a i e -&gt; m (b i e)
+thaw :: (Ix i, MArray b e m, Data.Array.Base.IArray a e) =&gt; a i e -&gt; m (b i e)
+</pre>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+Prelude Data.Array.IO&gt; a &lt;- newListArray (0,9) [1..10] :: IO (IOArray Int Int)
+Prelude Data.Array.IO&gt; :m + Data.Array
+Prelude Data.Array.IO Data.Array&gt; b &lt;- freeze a :: IO (Array Int Int)
+Prelude Data.Array.IO Data.Array&gt; b
+array (0,9) [(0,1),(1,2),(2,3),(3,4),(4,5),(5,6),(6,7),(7,8),(8,9),(9,10)]
+Prelude Data.Array.IO Data.Array&gt; c &lt;- thaw b :: IO (IOArray Int Int)
+Prelude Data.Array.IO Data.Array&gt; readArray c 0
+1
+Prelude Data.Array.IO Data.Array&gt; writeArray c 0 10
+Prelude Data.Array.IO Data.Array&gt; readArray c 0
+10
+</pre>
+<h4>●エラトステネスの篩</h4>
+<p> それでは簡単な例題として、整数 n 以下の素数を求めるプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : エラトステネスの篩 (配列版)
+
+sieve :: Int -&gt;IO [Int]
+sieve n = do
+  ary &lt;- newArray (0, n `div` 2 + 1) True :: IO (IOArray Int Bool)
+  mapM_ (\x -&gt; do f &lt;- readArray ary (x `div` 2)
+                  when f $ do delete_multiple ary x (x `div` 2))
+        [3, 5 .. m]
+  xs &lt;- filterM (\x -&gt; readArray ary (x `div` 2)) [3, 5 .. n]
+  return (2:xs)
+    where m = (floor . sqrt . fromIntegral) n
+          delete_multiple ary i j =
+            mapM_ (\x -&gt; writeArray ary x False) [j+i, j+i*2 .. n `div` 2 + 1]
+</pre>
+<p> Bool 型の配列 ary で奇数列 (1, 3, 5, 7, ... ) を表します。True で素数を表し、素数でない場合は False に書き換えます。配列 ary は true で初期化されるので、最初はすべての数が素数ということになります。
+</p>
+
+<p> 奇数を変数 i とし、それに対応する配列 ary の添字を変数 j とすると、変数 i は 3, 5, 7, 9, ... に、それに対応する変数 j は 1, 2, 3, 4, ... になります。この場合、i の倍数に対応する j の値は j + i, j + i * 2, j + i * 3, ... になります。たとえば、3, 5, 7 の倍数は次のようになります。
+</p>
+<pre class="fig">
+i :  3  5  7  9 11 13 15 17 19 21 23 25
+j :  1  2  3  4  5  6  7  8  9 10 11 12
+--+-------------------------------------
+3 |  O        0        O        0
+5 |     0              0              0
+7 |        0                    0
+</pre>
+<p> プログラムは簡単です。mapM_ で奇数 x が素数であれば、局所関数 delete_multiple で x の倍数を False に書き換えます。mapM_ に渡す奇数列の上限値は √n で十分です。この値を関数合成 floor . sqrt . fromIntegral で求め、局所変数 m にセットします。関数 fromIntegral, sqrt, floor の型を示します。
+</p>
+<pre class="item">
+fromIntegral :: (Integral a, Num b) =&gt; a -&gt; b
+sqrt :: Floating a =&gt; a -&gt; a
+floor :: (Integral b, RealFrac a) =&gt; a -&gt; b
+</pre>
+<p> sqrt はルートを求めます。floor は「床関数」といって、実数 x に対して x 以下の最大の整数を求めます。fromIntegral は整数を他の数値型に変換します。簡単な例を示します。
+</p>
+<pre>
+*Main&gt; sqrt 2
+1.4142135623730951
+*Main&gt; floor 2.5
+2
+*Main&gt; fromIntegral 10 :: Double
+10.0
+</pre>
+<p> when はモジュール Control.Monad に定義されている関数です。
+</p>
+<pre class="item">
+when :: Monad m =&gt; Bool -&gt; m () -&gt; m ()
+</pre>
+<p> IO モナドの場合、when は真偽値と I/O アクションを受け取り、真の場合は I/O アクションを実行し、そうでなければ IO () を返します。when を使わない場合は、次のように記述することになります。
+</p>
+<pre class="list">
+リスト : when を使わない場合
+
+  mapM_ (\x -&gt; do f &lt;- readArray ary (x `div` 2)
+                  if f then delete_multiple ary x (x `div` 2) else return ())
+        [3, 5 .. m]
+</pre>
+
+<p> mapM_ で素数の倍数を削除したあと、filterM で素数を集めます。最後に、リストの先頭に 2 を追加します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; sieve 100
+[2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97]
+*Main&gt; sieve 1000
+[2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97,101,103,
+107,109,113,127,131,137,139,149,151,157,163,167,173,179,181,191,193,197,199,211,
+223,227,229,233,239,241,251,257,263,269,271,277,281,283,293,307,311,313,317,331,
+337,347,349,353,359,367,373,379,383,389,397,401,409,419,421,431,433,439,443,449,
+457,461,463,467,479,487,491,499,503,509,521,523,541,547,557,563,569,571,577,587,
+593,599,601,607,613,617,619,631,641,643,647,653,659,661,673,677,683,691,701,709,
+719,727,733,739,743,751,757,761,769,773,787,797,809,811,821,823,827,829,839,853,
+857,859,863,877,881,883,887,907,911,919,929,937,941,947,953,967,971,977,983,991,
+997]
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell19.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell21.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

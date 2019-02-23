@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>続・お気楽 JavaScript プログラミング超入門</title>
+  <meta name="description" content="JavaScript,JavaScript入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881802</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<BR>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>続・お気楽 JavaScript プログラミング超入門</h2>
+<div class="small">
+[ PrevPage | <a href="javascript.html#def">JavaScript</a> | <a href="js07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">Document Object Model (DOM)</h3>
+<p> Web ブラウザの JavaScript 処理系は window というオブジェクトを持っていて、これを使って Web ブラウザを操作できるようになっています。この中には表示中の Web ページを表すオブジェクト Document を格納したプロパティ document があり、これを操作することで Web ページの内容を動的に書き換えることが可能になります。Document を操作するための API は W3C により標準化されていて、これを「Document Object Model (DOM)」といいます。今回は DOM の基本を簡単に説明します。
+</p>
+
+<h4>●木構造</h4>
+<p> Web ブラウザは HTML 文書を読み込むと、それを「木構造 (tree structure)」に変換して保持しています。これを「DOM ツリー」といいます。木構造は「木 (tree)」と呼ばれることもあります。まず最初に、木の基本を簡単に説明しておきましょう。
+</p>
+<p> 木は「節 (ノード, node)」と呼ばれる要素に対して、階層的な関係を表したものです。身近な例では、ディレクトリの階層構造が木にあたります。ディレクトリに「ルートディレクトリ」があるように、木にも「根 (ルート) 」と呼ばれる節が存在します。下図を見てください。
+</p>
+<pre class="fig">
+          (root)
+            Ａ    ────────  レベル０
+          ／｜＼                ↑
+        ／  ｜  ＼
+      Ｂ    Ｃ    Ｄ            木  レベル１
+    ／｜＼        ｜＼          の
+  ／  ｜  ＼      ｜  ＼        高
+Ｅ    Ｆ    Ｇ    Ｈ    Ｉ      さ  レベル２
+          ／  ＼
+        ／      ＼              ↓
+      Ｊ          Ｋ    ─────  レベル３
+
+
+        図 : 一般的な木構造の一例
+</pre>
+<p> 木を図示する場合、階層関係がはっきりわかるように、根を上にして、同じ階層にある節を並べて書きます。根からレベル 0、レベル 1 と階層を数えていき、最下層の節までの階層数を「木の高さ」といいます。木は、ある節から下の部分を切り出したものも、木としての性質を持っています。これを「部分木」といいます。
+</p>
+<p> 木は、ある節からほかの節に至る「経路」を考えることができます。たとえば、A から J には、A - B - G - J という経路がありますね。これは、ディレクトリやファイルを指定するときのパスと同じです。
+</p>
+<p> ある節から根の方向にさかのぼるとき、途中で通っていく節を「先祖」といい、直接繋がっている節を「親」といます。これは、逆から見ると「子孫」と「子」という関係になります。子を持たない節をとくに「葉」と呼ぶことがあります。上図でいうと、G は J, K の親で、J は G の子になります。J は子を持っていないので葉となります。
+</p>
+<p> 子は、「左 &lt; 右」の順番で節に格納するのが一般的です。これを「順序木」といいます。また、順番がない木を「無順序木」と呼びます。節が持っている子の数を「次数」といいます。上図の場合、A は 3 つの子 B, C, D を持っているので、A の次数は 3 となります。すべての節の次数を n に揃えた順序木を「n 分木」と呼びます。DOM ツリーの場合、次数を揃えることはできないので、一般的な「多分木」になります。
+</p>
+<h4>●DOM ツリーのノード</h4>
+<p> DOM ツリーでは、節のことを「ノード」といいます。ノードを表すデータ型 (クラス) は階層構造を持っています。よく使用される基本的なノードの種類を下図に示します。
+</p>
+<pre class="fig">
+  Node
+  │
+  ├Document 
+  │
+  ├Element
+  │
+  ├Attr
+  │
+  ├Text
+  │
+ その他いろいろ
+</pre>
+<p> ノードは Node を継承していると考えてください。Node にはノードで使用する基本的な機能が定義されています。Document は DOM ツリーのルートを表すノードです。具体的には html タグの情報を保持していて、プロパティ window.document で取得することができます。
+</p>
+<p> Element は HTML タグの情報を保持するノードです。Element はタグの種類によりサブクラスに分かれています。基本的なところでは HTMLElement があります。たとえば、タグが div ならば HtmlDivElement になります。
+</p>
+<p> Attr は「属性」を表すノードです。たとえば、&lt;p id="..."&gt;hello, world&lt;/p&gt; という HTML タグがあるとすると、id="..." が属性になります。Text は文書を表すノードです。HTML タグ以外のデータが Text になります。なお、空白、タブ、改行は ひとつの Text ノードになります。また、Text ノードは子を持つことはできません。
+</p>
+<h4>●ノードの探索</h4>
+<p> それでは実際に Web ページのテキストを書き換えてみましょう。テキストを書き換える場合、対象となる Text を保持しているノードを指定しないといけません。一番簡単な方法は、HTML タグに属性 id=key を設定しておいて、メソッド getElementById(key) で探索することです。
+</p>
+<pre class="item">
+window.document.getElementById(key) =&gt; element
+</pre>
+<p> getElementById(key) は属性 id の値が key のノードを探します。なお、window のプロパティ document にアクセスするときは window. を省略することができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : ノードの探索
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg2"&gt;hello, world!&lt;/p&gt;
+&lt;script&gt;
+  let e1 = document.getElementById("msg1"),
+      e2 = document.getElementById("msg2");
+  console.log(e1);
+  console.log(e2);
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> JavaScript のプログラムは &lt;script&gt; と &lt;/script&gt; の間に記述します。DOM を操作するには DOM ツリーが必要なので、script タグは body タグの最後におくのが一般的なようです。HTML ファイルでは、h1 タグに id="msg1" を、p タグに id="msg2" を設定します。これを getElementById() で探索して、console.log() で表示します。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<a href="dom01.html">Sample01</a>
+<p> Google Chrome の場合、Ctrl-Shift-J でコンソールが表示されます。コンソールには &lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt; と &lt;p id="msg2"&gt;hello, world!&lt;/p&gt; が表示されているはずです。
+</p>
+<h4>●テキストの書き換え</h4>
+<p> テキストのアクセスはプロパティ Node.textContent を使います。このプロパティはノードおよびその子孫のテキスト内容を表していて、そこに文字列を代入すると Web ページの表示を書き換えることができます。
+</p>
+<p> プロパティ Element.style の値を書き換えると、CSS スタイルを変更することができます。たとえば、element.style.color = 'red' とすると、文字の色を赤に変更することができます。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre class="list">
+リスト : スタイルとテキストの変更
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg2"&gt;hello, world!&lt;/p&gt;
+&lt;script&gt;
+  let e1 = document.getElementById("msg1"),
+      e2 = document.getElementById("msg2");
+  console.log(e1.style);
+  e1.style.color = "red";
+  console.log(e1.style);
+  console.log(e2.textContent);
+  e2.textContent = "hello, DOM world!!";
+  console.log(e2.textContent);
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<a href="dom02.html">Sample02</a>
+<p> DOM 入門が赤色に、hello, world が hello, DOM world に変更されているのがわかります。
+</p>
+<h4>●新しいノードの追加</h4>
+<p> 各ノードには子ノードを格納するコレクションがあり、プロパティ Node.childNodes で求めることができます。これを子ノードリストといいます。あるノードに新しい子ノードを追加すれば、そのノードの内容を Web ページに表示させることができます。ただし、childNodes はリードオンリーなので、子ノードを追加するメソッドが用意されています。
+</p>
+<p> Element を生成するにはメソッド createElement(tagName) を、Text の生成には createTextNode(text) を使います。
+</p>
+<pre class="item">
+document.createElement(tagName) =&gt; element
+document.createTextNode(text) =&gt; textNode
+</pre>
+<p> メソッド Node.appendChild() はノードを子ノードリストの最後に追加します。
+</p>
+<pre class="item">
+appendChild(childNode) =&gt; childNode
+</pre>
+<p> appendChild() は追加した子ノードを返します。
+</p>
+<p> それでは簡単な例として、body の最後に oops! を追加してみましょう。次のリストを見てください。
+<pre class="list">
+リスト : 子ノードの追加
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg2"&gt;hello, world!&lt;/p&gt;
+&lt;script&gt;
+  let e1 = document.createElement('p');
+      e2 = document.createTextNode('oops!');
+  document.body.appendChild(e1).appendChild(e2);
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> createElement('p') で p タグを表すノードを生成し、createTextNode('oops!') で Text ノードを生成します。body を表すノードはプロパティ document.body で取得することができます。あとは、body.appendChild(e1) で body の子ノードに e1 を追加し、e1 の子ノードに e2 を追加するだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<a href="dom03.html">Sample03</a>
+<p> hello, world! の下に oops! が表示されます。
+</p>
+<h4>●コールバック関数</h4>
+<p> Web ブラウザなどの GUI アプリケーションは、ユーザからの入力やシステムの状態変化など、あるイベントをきっかけに処理を行うイベントドリブン型のプログラムです。このようなプログラムは、一般に次のようなメインルーチンを持っています。
+</p>
+<ol>
+  <li>初期化
+  <li>イベントを取得する
+  <li>イベントの種類に応じて処理を振り分ける
+  <li>2 に戻る
+</ol>
+<p> 2 から 4 をイベントループと呼び、アプリケーションはユーザからの入力などのイベントを待ちます。そして、3 の処理に対応する機能を「バインディング (binding)」といいます。バインディングは、ウィンドウでイベントが発生したときに、それに応じて実行するプログラムを設定します。このプログラムを「イベントハンドラ」とか「コールバック関数」と呼びます。
+</p>
+<p> 一般に、イベントは非同期に発生するので、それに対応するコールバック関数も非同期に実行されることになります。JavaScript はシングルスレッドのプログラミング言語なので、複数のプログラムを同時に実行することはできません。このため、Web ブラウザや Node.js などでは、イベントが発生したら対応するコールバック関数をすぐに実行するのではなく、いったんキュー (queue, 待ち行列) に登録しておいて、あとでキューからコールバック関数を取り出して順番に処理するようになっています。
+</p>
+<p> また、コールバック関数はイベントだけではなく、時間がかかる処理を実行するときにも使われます。たとえば、ファイル入出力や通信などの処理を終了まで待っていると、他の処理を実行することができなくなります。終了後に行うプログラムをコールバック関数として登録しておけば、終了を待たずに他の処理を実行することができます。
+</p>
+<h4>●コールバック関数の登録</h4>
+<p> DOM の場合、コールバック関数の登録はメソッド addEventListener() で行います。
+</p>
+<pre class="item">
+target.addEventLister(event, callback)
+</pre>
+<p> target は単一のノードだけではなく、document や window にも指定することができます。詳細は <a href="https://developer.mozilla.org/ja/docs/Web/API/EventTarget/addEventListener">EventTarget.addEventListener - Web API インターフェース | MDN</a> をお読みください。
+</p>
+<p> 簡単な例題として、ボタンを押すと oops! を追加していくプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ボタンを押す処理
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg2"&gt;hello, world!&lt;/p&gt;
+&lt;button id="add"&gt;Click!&lt;/button&gt;
+&lt;script&gt;
+  document.getElementById('add').addEventListener('click', () =&gt; {
+    let e1 = document.createElement('p');
+        e2 = document.createTextNode('oops!');
+    document.body.appendChild(e1).appendChild(e2);
+  });
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> HTML の button タグでボタンを作成します。このタグには id="add" を指定します。プログラムは、getElementById() で add のノードを求め、そこに addEventListener() でコールバック関数を追加します。マウスのクリックを表すイベントは 'click' です。アロー関数の中では、oops! を表示するためのノードを作って appendChild() で body の最後に追加するだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<a href="dom04.html">Sample04</a>
+<p> ボタンをクリックするたびに oops! が追加されていきます。
+</p>
+<p> ジオシティーズの場合、広告の後ろに oops! が追加されることになるので、ちょっと見づらいですね。メソッド insertBefore() を使うと、指定したノードの前に新しいノードを追加することができます。
+</p>
+<pre class="item">
+parent.insertBefore(childNode, refNode) =&gt; childNode
+</pre>
+<p> insertBefor() は refNode の前に childNode を挿入します。返り値は childNode です。
+</p>
+<p> それでは、プログラムを修正しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ボタンを押す処理 (2)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg2"&gt;hello, world!&lt;/p&gt;
+&lt;button id="add"&gt;Click!&lt;/button&gt;
+&lt;p id="msg3"&gt;----------&lt;/p&gt;
+&lt;script&gt;
+  let e3 = document.getElementById('msg3');
+  document.getElementById('add').addEventListener('click', () =&gt; {
+    let e1 = document.createElement('p');
+        e2 = document.createTextNode('oops!');
+    document.body.insertBefore(e1, e3).appendChild(e2);
+  });
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> ボタンの後ろに線 (----------) を表示して、その前に oops! を挿入します。線を表す p タグに属性 id="msg3" を設定し、変数 e3 にそのノードをセットします。あとは、insertBefore() で e3 の前に e1 を挿入するだけです。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<a href="dom041.html">Smaple041</a>
+<p> ボタンを押すと線の前に oops! が追加されます。
+</p>
+<h4>●ノードの削除</h4>
+<p> ノードを削除するにはメソッド removeChild() を使います。
+</p>
+<pre class="item">
+parent.removeChild(child) =&gt; child
+</pre>
+<p> 引数 child は削除するノード、parent は child の親ノードです。返り値は削除したノードです。child が見つからない場合はエラーになります。
+</p>
+<p> 簡単な例題として、追加した oops! を削除する処理をプログラムしてみましょう。
+</p>
+<pre class="list">
+リスト : ノードの削除
+
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg2"&gt;hello, world!&lt;/p&gt;
+&lt;button id="add"&gt;ADD&lt;/button&gt;
+&lt;button id="del"&gt;DEL&lt;/button&gt;
+&lt;script&gt;
+  let node = [];
+  document.getElementById('add').addEventListener('click', () =&gt; {
+    let e1 = document.createElement('p');
+        e2 = document.createTextNode('oops!');
+    node.push(e1);
+    document.body.appendChild(e1).appendChild(e2);
+  });
+  document.getElementById('del').addEventListener('click', () =&gt; {
+    if (node.length &gt; 0) {
+      document.body.removeChild(node.pop());
+    }
+  });
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> まず、oops! を追加するボタン ADD と削除するボタン DEL をつくります。oops! を追加するとき、作成したノードを配列 node に格納します。DEL ボタンを押したとき、node にノードがあれば、それを取り出して removeChild() で削除します。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<a href="dom05.html">Sample05</a>
+<p> ADD ボタンを押すと oops! が追加され、DEL ボタンを押すと oops! が削除されます。
+</p>
+<p> ご参考までに、insertBefore() を使ったプログラムを示します。
+</p>
+<pre class="list">
+リスト : ノードの削除 (2)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg2"&gt;hello, world!&lt;/p&gt;
+&lt;button id="add"&gt;ADD&lt;/button&gt;
+&lt;button id="del"&gt;DEL&lt;/button&gt;
+&lt;p id="msg3"&gt;----------&lt;/p&gt;
+&lt;script&gt;
+  let node = [],
+      e3 = document.getElementById('msg3');
+  document.getElementById('add').addEventListener('click', () =&gt; {
+    let e1 = document.createElement('p');
+        e2 = document.createTextNode('oops!');
+    node.push(e1);
+    document.body.insertBefore(e1, e3).appendChild(e2);
+  });
+  document.getElementById('del').addEventListener('click', () =&gt; {
+	if (node.length &gt; 0) {
+      document.body.removeChild(node.pop());
+    }
+  });
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<a href="dom051.html">Smaple051</a>
+<h4>●タイマー処理</h4>
+<p> もうひとつ簡単な例を示しましょう。関数 setTimeout() を使うと、指定した時間後に登録した関数を実行することができます。
+</p>
+<pre class="item">
+setTimeout(callback, after [, args, ...]) =&gt; timerID
+</pre>
+<p> 引数 callback は after msec 後に実行するコールバック関数です。callback に与える引数は after の後ろに指定することができます。
+</p>
+<p> たとえば、JavaScript コンソールで次のプログラムを実行すると、1 秒後に hello, world と表示されます。
+</p>
+<pre>
+setTimeout(() =&gt; console.log("hello, world"), 1000);
+40319
+hello, world  &lt;- 1 秒後に表示される
+</pre>
+<p> 数値は setTimeout() の返り値で、タイマー処理固有の timerID を表します。この timerID を clearTimeout() に渡すと、タイマー処理を途中で中断させることもできます。
+</p>
+<p> setTimeout() を使うと、現在時刻をテキストで表示する時計を簡単に作ることができます。なお、時計のようなアプリケーションはユーザからの入力がなくても動作させなくてはいけなので、単純なイベント駆動型アプリケーションでは時計を実現することはできません。このため、プログラム自身でなんらかのきっかけを作ってやる必要があります。
+</p>
+<p> たとえば、現在時刻を表示する関数を show() としましょう。show() を一定間隔で実行させる場合、show() の最後で setTimeout() を使って自分自身の起動を設定すればいいのです。具体的には次のようにプログラムします。
+</p>
+<pre class="list">
+let show = () =&gt; {
+  ... 表示処理 ...
+  setTimeout(show, 1000);
+};
+</pre>
+<p> これで 1 秒後に show() が実行されます。もっとも、厳密に 1 秒ごとに show() が実行されるわけではありません。Linux 系の OS や Windows はマルチタスクで動作しているので、ほかのタスクの影響も受けるからです。まあ、今回のような時計の場合、厳密なリアルタイム処理は必要としないので、これで十分でしょう。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 現在時刻の表示
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg2"&gt;現在時刻&lt;/p&gt;
+&lt;script&gt;
+  let e = document.getElementById('msg2'),
+      show = () =&gt; {
+        e.textContent = (new Date()).toLocaleString();
+        setTimeout(show, 1000);
+      };
+  show();
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> id が msg2 の Text を書き換えて現在時刻を表示します。現在時刻は new Date() で求めることができます。これを toLocaleString() で文字列に変換して textContent にセットします。アロー関数の最後で setTimeout() で show() の起動を 1 秒後に設定したら、スクリプトの最後で show() を実行してください。これを忘れると現在時刻を表示することはできません。ご注意くださいませ。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<a href="dom06.html">Sample06</a>
+<p> 現在時刻が表示されているはずです。
+</p>
+
+<p> タイマー処理は setTimeout() のほかにも setInterval() や setImmediate() があります。
+</p>
+<pre class="item">
+setInterval(callback, msec [, args, ...])
+setImmediate(callback [, args, ...])
+</pre>
+<p> setInterval() は callback を msec 間隔で実行します。setImmediate() は callback をすぐにキューに登録します。setInterval() は便利なのですが、コールバック関数が実行中でも、時間がきたらコールバック関数を起動する、つまりコールバック関数を多重起動してしまう問題があります。今回のように簡単な処理であれば問題ありませんが、時間がかかる処理を setInterval() で繰り返し実行する場合は注意してください。
+</p>
+<h4>●画像の操作</h4>
+<p> HTML の場合、画像は &lt;img&gt; タグで表示することができます。これに対応するノードが HTMLImageElement です。HTMLImageElement は次の方法で生成することができます。
+<pre class="item">
+document.createElement("img") =&gt; HTMLImageElement
+new Image([width, height]) =&gt; HTMLImageElement
+</pre>
+<p> Image() の引数 width, height は幅と高さを指定します。省略した場合は画像の大きさと同じになります。
+</p>
+<p> 画像ファイルの読み込みはプロパティ src で行います。
+</p>
+<pre class="item">
+imageElement.src = "画像ファイルのURL";
+</pre>
+<p> これで画像ファイルの読み込みが開始されます。このとき、プロパティ complete の値が false になり、ファイルの読み込みが正常終了する、またはエラー終了したとき、complete の値は true に戻ります。また、ファイルの読み込みが終了するとイベント load が発生し、ファイルの読み込みに失敗するとイベント error が発生します。
+</p>
+<p> 簡単な例を示しましょう。画像ファイルをクリックすると画像が切り替わるプログラムを作ります。
+</p>
+<pre class="list">
+リスト : 画像の切り替え
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;img id="img1"&gt;&lt;/img&gt;
+&lt;script&gt;
+let imgs = [new Image(), new Image(), new Image()],
+    done = 0, idx = 0,
+    e1 = document.getElementById("img1");
+
+imgs[0].addEventListener('load', () =&gt; {
+  e1.src = imgs[0].src;
+  done++;
+});
+imgs[1].addEventListener('load', () =&gt; done++);
+imgs[2].addEventListener('load', () =&gt; done++);
+imgs[0].src = "ruby_img/line1.png";
+imgs[1].src = "ruby_img/line2.png";
+imgs[2].src = "ruby_img/line3.png";
+
+e1.addEventListener('click', () =&gt; {
+  if (done == imgs.length) {
+    if (++idx &gt;= imgs.length) idx = 0;
+    e1.src = imgs[idx].src;
+  }
+});
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> new Image() で生成したオブジェクトを配列 imgs に格納します。変数 done はロード完了した画像ファイル数をカウントします。変数 idx は imgs の添字で、現在表示している画像を表します。&lt;img&gt; タグで生成したノードは変数 e1 にセットします。ここではまだ画像ファイルをロードしていません。
+</p>
+<p> 次に、各画像ごとにイベント load のコールバック関数を設定します。この関数で done の値を +1 します。0 番目の画像がロードされたら、e1.src に imgs[0].src を代入して画像を表示するようにします。それから、画像ファイルをロードします。画像ファイルは拙作のページ <a href="ruby.html#ruby_tk">お気楽 Ruby/Tk 超入門</a> で作成した画像です。あとは、画像がクリックされたら idx の値を +1 して、次の画像を表示するだけです。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<a href="dom07.html">Sample07</a>
+<p> 画像をクリックすると、次の画像に切り替わります。
+</p>
+<h4>●フォントの操作</h4>
+<p> フォントはプロパティ style.fontFamily で指定することができます。たとえば、Windows であれば 'MS ゴシック' や 'MS 明朝' など具体的なフォント名を指定するか、次に示すフォントスタイルを指定します。
+</p>
+<ul>
+  <li>serif (明朝系のフォント)</li>
+  <li>sans-serif (ゴシック系のフォント)</li>
+  <li>monospace (等幅フォント)</li>
+  <li>cursive (筆記体・草書体のフォント)</li>
+  <li>fantasy (装飾的なフォント)</li>
+</ul>
+<p> これらのフォントスタイルは CSS で定義されていて、Web ブラウザにより適切なフォントが選択されます。なお、空白を含むフォント名を指定する場合は引用符 ( ' ) で囲んでください。
+</p>
+<p> 複数のフォントを指定する場合はカンマで区切ってください。
+</p>
+<pre class="item">
+"font1, font2, font3, ..."
+</pre>
+<p> font1 がない場合は font2 が適用され、font2 がない場合は font3 が適用されます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : フォントの変更
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg"&gt;hello, world&lt;/p&gt;
+&lt;button id="b1"&gt;serif&lt;/button&gt;
+&lt;button id="b2"&gt;sans-serif&lt;/button&gt;
+&lt;button id="b3"&gt;monospace&lt;/button&gt;
+&lt;script&gt;
+let e0 = document.getElementById("msg"),
+    e1 = document.getElementById("b1"),
+    e2 = document.getElementById("b2"),
+    e3 = document.getElementById("b3");
+e1.addEventListener('click', () =&gt; {
+  e0.style.fontFamily = "serif";
+});
+e2.addEventListener('click', () =&gt; {
+  e0.style.fontFamily = "sans-serif";
+});
+e3.addEventListener('click', () =&gt; {
+  e0.style.fontFamily = "monospace";
+});
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<a href="dom08.html">Smaple08</a>
+<p> ボタンをクリックするとフォントが切り替わります。
+</p>
+<p> このほかにもフォントの大きさを設定するプロパティ fontSize, 文字を斜体にする fontStyle, フォントの重みや太さを制御する fontWeight などがあります。興味のある方は調べてみてください。
+</p>
+<h4>●スタイルクラスの切り替え</h4>
+<p> CSS にはスタイルクラスがありますが、プロパティ className の値を書き換えると、スタイルクラスを切り替えることができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : スタイルクラスの切り替え
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="utf-8"&gt;
+  &lt;title&gt;続・お気楽 JavaScript 超入門&lt;/title&gt;
+  &lt;style&gt;
+      .myclass1 {
+          font-size: medium;
+      }
+      .myclass2 {
+          font-size: large; font-weight: bold; color: blue;
+      }
+      .myclass3 {
+          font-size: xx-large; font-weight: bold; font-style: italic; color: green;
+      }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1 id="msg1"&gt;DOM 入門&lt;/h1&gt;
+&lt;p id="msg"&gt;hello, world&lt;/p&gt;
+&lt;button id="b1"&gt;style1&lt;/button&gt;
+&lt;button id="b2"&gt;style2&lt;/button&gt;
+&lt;button id="b3"&gt;style3&lt;/button&gt;
+&lt;script&gt;
+let e0 = document.getElementById("msg"),
+    e1 = document.getElementById("b1"),
+    e2 = document.getElementById("b2"),
+    e3 = document.getElementById("b3");
+e1.addEventListener('click', () =&gt; {
+  e0.className = "myclass1";
+});
+e2.addEventListener('click', () =&gt; {
+  e0.className = "myclass2";
+});
+e3.addEventListener('click', () =&gt; {
+  e0.className = "myclass3";
+});
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> スタイルクラスを 3 つ用意して、ボタンで切り替えるだけです。実際に試してみてください。
+</p>
+<a href="dom09.html">Smaple09</a>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="https://developer.mozilla.org/ja/docs/DOM/DOM_Reference">DOM リファレンス - DOM | MDN</a>
+  <li><a href="http://hakuhin.jp/js.html">JavaScript プログラミング講座</a>, (<a href="http://hakuhin.jp/">Hakuhin さん</a>)
+</ol>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">ダイアログ</h3>
+<p> Web ブラウザや GUI アプリケーションの場合、ボタンを押すとかメニューを選ぶといった操作は、基本的にはユーザーが自由に行うことができます。ところが、ある操作をしないと次の処理に進めない場合があります。たとえば、画像を表示する場合、表示するファイル名をユーザーから入力してもらわないと、画像ファイルを表示することはできません。このときによく使われるのが ダイアログ (dialog) です。
+</p>
+<h4>●alert()</h4>
+<p> メソッド alert() は警告用のダイアログを表示します。
+</p>
+<pre class="item">
+alert(message)
+</pre>
+<p> alert() は引数の文字列 message を表示して、OK ボタンが押されるのを待ちます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : alert() のサンプル
+
+&lt;button id="alert"&gt;alert() のサンプル&lt;/button&gt;
+
+&lt;script&gt;
+document.getElementById('alert').addEventListener('click', () =&gt; {
+  alert("alert のサンプルです");
+});
+&lt;/script&gt;
+</pre>
+<p> 実際にボタンを押して確かめてみてください。
+</p>
+<button id="alert">alert() のサンプル</button>
+
+<h4>●confirm()</h4>
+<p> メソッド confirm() は確認用のダイアログを表示します。
+</p>
+<pre class="item">
+confirm(message) =&gt; boolean
+</pre>
+<p> confirm() は引数の文字列 message を表示して、OK またはキャンセルボタンが押されるのを待ちます。OK ボタンが押されたときは true を返し、キャンセルボタンが押された場合は false を返します。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : confirm() のサンプル
+
+&lt;button id="confirm"&gt;confirm() のサンプル&lt;/button&gt;
+
+&lt;script&gt;
+document.getElementById('confirm').addEventListener('click', () =&gt; {
+  confirm("confirm のサンプルです");
+});
+&lt;/script&gt;
+</pre>
+<p> 実際にボタンを押して確かめてみてください。
+</p>
+<button id="confirm">confirm() のサンプル</button>
+
+<h4>●prompt()</h4>
+<p> メソッド prompt() は入力欄付きのダイアログを表示します。
+</p>
+<pre class="item">
+prompt(message [, input]) =&gt; string
+</pre>
+<p> prompt() は引数の文字列 message を表示して、OK またはキャンセルボタンが押されるのを待ちます。OK ボタンが押されたときは入力された文字列を返し、キャンセルボタンが押された場合は null を返します。引数 input に文字列を指定すると、入力欄に input が表示されます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : prompt() のサンプル
+
+&lt;button id="prompt"&gt;prompt() のサンプル&lt;/button&gt;
+&lt;pre id="prompt_output" class="item"&gt;
+please input your name
+&lt;/pre&gt;
+
+&lt;script&gt;
+document.getElementById('prompt').addEventListener('click', () =&gt; {
+  let input_text = prompt("confirm のサンプルです", "please input your name");
+  document.getElementById("prompt_output").textContent = input_text;
+});
+&lt;/script&gt;
+</pre>
+<p> 実際にボタンを押して確かめてみてください。
+</p>
+<button id="prompt">prompt() のサンプル</button>
+<pre id="prompt_output" class="item">
+please input your name
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ PrevPage | <a href="javascript.html#def">JavaScript</a> | <a href="js07.html">NextPage</a> ]
+</div>
+</div>
+<script>
+document.getElementById('alert').addEventListener('click', () => {
+  alert("alert のサンプルです");
+});
+
+document.getElementById('confirm').addEventListener('click', () => {
+  confirm("confirm のサンプルです");
+});
+
+document.getElementById('prompt').addEventListener('click', () => {
+  let input_text = prompt("confirm のサンプルです", "please input your name");
+  document.getElementById("prompt_output").textContent = input_text;
+});
+</script>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

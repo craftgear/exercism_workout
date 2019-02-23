@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Yet Another Scala Problems</title>
+  <meta name="description" content="Scala,Scala入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881779</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scala Programming</h1>
+<h2>Yet Another Scala Problems</h2>
+<div class="small">
+[ <a href="yasp04.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="yasp06.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h4>●問題41</h4>
+<p> 挿入ソートはソート済みの配列に新しいデータを挿入していくことでソートします。最初は先頭のデータひとつがソート済みと考え、2 番目のデータをそこに挿入することからスタートします。データを挿入するので、そこにあるデータをどかさないといけません。そこで、挿入位置を決めるため後ろから順番に比較するとき、いっしょにデータの移動も行うことにします。
+</p>
+<pre class="fig">
+ [9] 5 3 7 6 4 8    5 を取り出す
+
+ [9] * 3 7 6 4 8    5 を[9]の中に挿入する
+
+ [5 9] 3 7 6 4 8    9 をひとつずらして先頭に 5 を挿入
+
+ [5 9] * 7 6 4 8    3 を取り出して[5 9]の中に挿入する
+
+ [3 5 9] 7 6 4 8    先頭に 3 を挿入
+
+ [3 5 9] * 6 4 8    7 を取り出して[3 5 9] に挿入
+
+ [3 5 7 9] 6 4 8    9 を動かして 7 を挿入
+                    残りの要素も同様に行う
+
+        図 : 挿入ソート
+</pre>
+<p> 配列を挿入ソートする関数 insertSort を定義してください。
+</p>
+<pre class="item">
+def insertSort[A &lt;% Ordered[A]](buff: Array[A]): Unit
+</pre>
+<pre>
+scala&gt; val a = Array(5, 6, 4, 7, 3, 8, 2, 9, 1, 0)
+a: Array[Int] = Array(5, 6, 4, 7, 3, 8, 2, 9, 1, 0)
+
+scala&gt; insertSort(a)
+
+scala&gt; a
+res0: Array[Int] = Array(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+</pre>
+<p><a href="yasp05.html#ans41">解答</a>
+</p>
+
+<h4>●問題42</h4>
+<p> シェルソート (shell sort) は挿入ソートの改良版ともいえる方法です。最初は遠く離れた要素間でソートを開始し、徐々に間隔を狭めていきます。最後は隣り合った要素間でソートします。つまり、単純挿入ソートと同じになります。
+</p>
+<p> 間隔が大きいときは要素の個数が少ないので、単純なアルゴリズムでもソートにかかる時間は少なくてすみます。間隔が小さくなると要素の個数は多くなりますが、大まかにソートされているので挿入ソートでも高速にソートすることが可能です。
+</p>
+<pre class="fig">
+ 9 5 3 7 6 4 2 8  最初の状態
+
+ 9       6        間隔を 4 で分割する
+   5       4
+     3       8
+       7       2
+
+ 6       9        各群をソートする
+   4       5
+     3       8
+       2       7
+
+ 6   3   9   8    間隔を 2 で分割する
+   4   2   5   7
+
+ 3   6   8   9    各群をソートする
+   2   4   5   7
+
+ 3 2 6 4 8 5 9 7  間隔を 1 で分割する（単純挿入ソートと同じ）
+
+ 2 3 4 5 6 7 8 9  ソート完了
+
+  図 : シェルソート
+</pre>
+<p> 配列をシェルソートする関数 shellSort を定義してください。
+</p>
+<pre class="item">
+def shellSort[A &lt;% Ordered[A]](buff: Array[A]): Unit
+</pre>
+<pre>
+scala&gt; val a = Array(5, 6, 4, 7, 3, 8, 2, 9, 1, 0)
+a: Array[Int] = Array(5, 6, 4, 7, 3, 8, 2, 9, 1, 0)
+
+scala&gt; shellSort(a)
+
+scala&gt; a
+res7: Array[Int] = Array(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+</pre>
+
+<p><a href="yasp05.html#ans42">解答</a>
+</p>
+
+<h4>●問題43</h4>
+<p> クイックソートはある値を基準にして、要素をそれより大きいものと小さいものの 2 つに分割していくことでソートを行います。2 つに分けた各々の区間を同様に分割して 2 つの区間に分けます。最後は区間の要素がひとつになってソートが完了します。
+</p>
+<pre class="fig">
+  9 5 3 7 6 4 2 8     最初の状態
+
+  9 5 3 7 6 4 2 8     7 を枢軸にして左側から 7 以上の値を探し、
+  L           R       右側から 7 以下の値を探す。
+
+  2 5 3 7 6 4 9 8     交換する
+  L           R
+
+  2 5 3 7 6 4 9 8     検索する
+        L   R
+
+  2 5 3 4 6 7 9 8     交換する
+        L   R
+
+  2 5 3 4 6 7 9 8     検索する。R と L が交差したら分割終了。
+          R L
+
+  [2 5 3 4 6] [7 9 8] この 2 つの区間について再び同様な分割を行う
+
+                図 : クイックソート
+</pre>
+<p> 基準になる値のことを「枢軸 (pivot) 」といいます。枢軸は要素の中から適当な値を選びます。今回は中央にある要素を選ぶことにしましょう。上図を見てください。左側から枢軸 7 以上の要素を探し、左側から 7 以下の要素を探します。探索のときは枢軸が番兵の役割を果たすので、ソート範囲外の要素を探索することはありません。見つけたらお互いの要素を交換します。探索位置が交差したら分割は終了です。
+</p>
+<p>  あとは同じ手順を分割した 2 つの区間に適用します。これは再帰定義を使えば簡単に実現できます。分割した区間の要素数が 1 になったときが再帰の停止条件になります。
+</p>
+
+<p> 配列をクイックソートする関数 quickSort を定義してください。
+</p>
+<pre class="item">
+def quickSort[A &lt;% Ordered[A]](buff: Array[A], low: Int, high: Int): Unit
+</pre>
+<pre>
+scala&gt; val a = Array(5, 6, 4, 7, 3, 8, 2, 9, 1, 0)
+a: Array[Int] = Array(5, 6, 4, 7, 3, 8, 2, 9, 1, 0)
+
+scala&gt; quickSort(a, 0, 9)
+
+scala&gt; a
+res20: Array[Int] = Array(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+</pre>
+<p><a href="yasp05.html#ans43">解答</a>
+</p>
+
+<h4>●問題44</h4>
+<p> マージ (併合) とは、複数のソート済みのリストを一つのソート済みのリストにまとめる操作です。次の図を見てください。
+</p>
+<pre class="fig">
+      ┌─ [1, 3, 5]  : リスト a 
+ [] ←┤
+      └─ [2, 4, 6]  : リスト b 
+
+    小さい方をセットする
+
+       ┌─ [3, 5]    : リスト a 
+ [1] ←┘
+            [2, 4, 6] : リスト b 
+
+    1 をセットする
+
+               [3, 5] : リスト a 
+ [1, 2] ←┐
+          └─ [4, 6] : リスト b 
+
+    2 をセットする
+
+ データがなくなるまで繰り返す 
+
+    図 : リストのマージ
+</pre>
+<p> 2 つのリスト a と b があります。これらのリストはソート済みとしましょう。これらのリストをソート済みのリストにまとめることを考えます。a と b はソート済みなので先頭のデータがいちばん小さな値です。したがって、上図のように先頭のデータを比較し、小さい方のデータを取り出して順番に並べていけば、ソート済みのリストにまとめることができます。途中でどちらかのリストが空になったら、残ったリストのデータをそのまま追加します。
+</p>
+<p> 2 つのリストをマージする関数 mergeList を定義してください。
+</p>
+<pre class="item">
+def mergeList[A &lt;% Ordered[A]](xs: List[A], ys: List[A]): List[A]
+</pre>
+<pre>
+scala&gt; mergeList(List(1, 3, 5, 7, 9), List(2, 4, 6, 8))
+res0: List[Int] = List(1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; mergeList(List(1, 3, 5, 7, 9), List(0, 2, 4, 6, 8))
+res1: List[Int] = List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+</pre>
+
+<p><a href="yasp05.html#ans44">解答</a>
+</p>
+
+<h4>●問題45</h4>
+<p> マージソートはマージを使ってデータをソートします。次の図を見てください。
+</p>
+<pre class="fig">
+  9 5 3 7 6 4 2 8  最初の状態
+
+ |5 9|3 7|4 6|2 8| 長さ２の列に併合
+
+ |3 5 7 9|2 4 6 8| 長さ４の列に併合 
+
+  2 3 4 5 6 7 8 9  ソート終了
+
+    図 : マージソート
+</pre>
+<p> マージをソートに応用する場合、最初は各要素をソート済みのリストとして考えます。この状態で隣のリストとマージを行い、長さ 2 のリストを作ります。次に、このリストに対して再度マージを行い、長さ 4 のリストを作ります。このように順番にマージしていくと、最後にはひとつのリストにマージされソートが完了します。
+</p>
+
+<p> 実際にプログラムを作る場合、リストの長さを 1, 2, 4, 8, ... と増やしていくよりも、再帰的に考えた方が簡単です。まず、ソートするリストを 2 つに分割して、前半部分をソートします。次に、後半部分をソートして、その結果をマージすればいいわけです。
+</p>
+
+<p> 再帰呼び出しするたびにリストは 2 つに分割されるので、最後にリストの要素はひとつとなります。これはソート済みのリストなので、ここで再帰呼び出しを終了してマージ処理を行えばいいわけです。
+</p>
+<p> リストをマージソートする関数 mergeSort を定義してください。
+</p>
+<pre class="item">
+def mergeSort[A &lt;% Ordered[A]](n: Int, xs: List[A]): List[A]
+</pre>
+<pre>
+scala&gt; mergeSort(9, List(5, 6, 4, 7, 3, 8, 2, 9, 1))
+res0: List[Int] = List(1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; mergeSort(9, List(9, 8, 7, 6, 5, 4, 3, 2, 1))
+res1: List[Int] = List(1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; mergeSort(9, List(1, 2, 3, 4, 5, 6, 7, 8, 9))
+res2: List[Int] = List(1, 2, 3, 4, 5, 6, 7, 8, 9)
+</pre
+<p><a href="yasp05.html#ans45">解答</a>
+</p>
+
+<h4>●問題46</h4>
+<p> リスト xs のべき集合を求める関数 powerSet を定義してください。たとえばリスト (1, 2, 3) のべき集合は Nil, (1), (2), (3), (1, 2), (1, 3), (2, 3), (1, 2, 3) になります。
+</p>
+<pre class="item">
+def powerSet[A](xs: List[A]): List[List[A]]
+</pre>
+<pre>
+scala&gt; powerSet(List(1, 2, 3)).foreach(println)
+List()
+List(3)
+List(2)
+List(2, 3)
+List(1)
+List(1, 3)
+List(1, 2)
+List(1, 2, 3)
+
+scala&gt; powerSet(List(1, 2, 3, 4)).foreach(println)
+List()
+List(4)
+List(3)
+List(3, 4)
+List(2)
+List(2, 4)
+List(2, 3)
+List(2, 3, 4)
+List(1)
+List(1, 4)
+List(1, 3)
+List(1, 3, 4)
+List(1, 2)
+List(1, 2, 4)
+List(1, 2, 3)
+List(1, 2, 3, 4)
+</pre>
+<p><a href="yasp05.html#ans46">解答</a>
+</p>
+
+<h4>●問題47</h4>
+<p> リスト xs の中で連続した等しい記号を部分リストにまとめる関数 pack を定義してください。
+</p>
+<pre class="item">
+def pack[A](xs: List[A]): List[List[A]]
+</pre>
+<pre>
+scala&gt; pack(List(1, 1, 1, 2, 3, 3, 4, 4, 4, 5))
+res0: List[List[Int]] = List(List(1, 1, 1), List(2), List(3, 3), List(4, 4, 4),List(5))
+scala&gt; pack(List(1, 2, 3, 1, 2, 3))
+res1: List[List[Int]] = List(List(1), List(2), List(3), List(1), List(2), List(3))
+</pre>
+<p><a href="yasp05.html#ans47">解答</a>
+</p>
+
+<h4>●問題48</h4>
+<p> 連続している同じ記号を (code . num) に変換する関数 encode と、その逆変換を行う関数 decode を定義してください。code は記号、num は個数を表します。このような変換を「ランレングス符号化」といいます。
+</p>
+<pre class="list">
+def encode[A](xs: List[A]): List[(A, Int)]
+def decode[A](xs: List[(A, Int)]): List[A]
+</pre>
+<pre>
+scala&gt; encode(List(1, 1, 1, 2, 3, 3, 3, 3, 4, 4, 1, 1, 1, 5, 5, 5, 5, 5))
+res0: List[(Int, Int)] = List((1,3), (2,1), (3,4), (4,2), (1,3), (5,5))
+
+scala&gt; decode(encode(List(1, 1, 1, 2, 3, 3, 3, 3, 4, 4, 1, 1, 1, 5, 5, 5, 5, 5)))
+res1: List[Int] = List(1, 1, 1, 2, 3, 3, 3, 3, 4, 4, 1, 1, 1, 5, 5, 5, 5, 5)
+</pre>
+
+<p><a href="yasp05.html#ans48">解答</a>
+</p>
+
+<h4>●問題49</h4>
+<p> k 個の要素をもつ集合 ls を要素数が等しい m 個の部分集合に分割することを考えます。部分集合の要素数 n は k / m になります。分割の仕方をすべて求める高階関数 groupPartition を定義してください。
+</p>
+<pre class="item">
+type List2[A] = List[List[A]]
+def groupPartition[A](f: List2[A] =&gt; Unit, n: Int, m: Int, xs: List[A]): Unit
+</pre>
+<pre>
+scala&gt; groupPartition(println, 2, 2, List(1, 2, 3, 4))
+List(List(1, 4), List(2, 3))
+List(List(1, 3), List(2, 4))
+List(List(1, 2), List(3, 4))
+
+scala&gt; groupPartition(println, 2, 3, List(1, 2, 3, 4, 5, 6))
+List(List(1, 6), List(2, 5), List(3, 4))
+List(List(1, 5), List(2, 6), List(3, 4))
+List(List(1, 6), List(2, 4), List(3, 5))
+List(List(1, 4), List(2, 6), List(3, 5))
+List(List(1, 5), List(2, 4), List(3, 6))
+List(List(1, 4), List(2, 5), List(3, 6))
+List(List(1, 6), List(2, 3), List(4, 5))
+List(List(1, 3), List(2, 6), List(4, 5))
+List(List(1, 2), List(3, 6), List(4, 5))
+List(List(1, 5), List(2, 3), List(4, 6))
+List(List(1, 3), List(2, 5), List(4, 6))
+List(List(1, 2), List(3, 5), List(4, 6))
+List(List(1, 4), List(2, 3), List(5, 6))
+List(List(1, 3), List(2, 4), List(5, 6))
+List(List(1, 2), List(3, 4), List(5, 6))
+</pre>
+<p><a href="yasp05.html#ans49">解答</a>
+</p>
+
+<h4>●問題50</h4>
+<p> 集合を groupPartition で分割するとき、その仕方の総数を多倍長整数 (BigInt) で求める関数 groupPartitionNumber を定義してください。
+</p>
+<pre class="item">
+def groupPartitionNumber(n: Int, m: Int): BigInt
+</pre>
+<p> 引数 n は部分集合の要素数、m は部分集合の個数です。
+</p>
+<pre>
+scala&gt; groupPartitionNumber(2, 2)
+res0: BigInt = 3
+
+scala&gt; groupPartitionNumber(2, 3)
+res1: BigInt = 15
+
+scala&gt; groupPartitionNumber(3, 5)
+res2: BigInt = 1401400
+</pre>
+<p><a href="yasp05.html#ans50">解答</a>
+</p>
+
+<hr>
+<h4 id="ans41">●解答41</h4>
+<pre class="list">
+リスト : 挿入ソート
+
+  def insertSort[A &lt;% Ordered[A]](buff: Array[A]) {
+    val k = buff.size
+    for (i &lt;- 1 until k) {
+      val tmp = buff(i)
+      var j = i - 1
+      while (j &gt;= 0 &amp;&amp; tmp &lt; buff(j)) {
+        buff(j + 1) = buff(j)
+        j -= 1
+      }
+      buff(j + 1) = tmp
+    }
+  }
+</pre>
+<p> 最初のループで挿入するデータを選びます。ソート開始時は先頭のデータひとつがソート済みと考えるるので、2 番目のデータ（添字では 1）を取り出して挿入していきます。2 番目のループで挿入する位置を探しています。探索は後ろから前に向かって行います。このとき、挿入位置の検索と同時にデータの移動も行っています。ループが最後まで回れば、そのデータは先頭に挿入されることになります。
+</p>
+
+<p> ところで、挿入ソートは興味深い特性をもっています。ソート済みのデータは高速にソートすることができます。データがソートされていれば、2 番目のループは繰り返しを行わずに終了するため、最初のループの繰り返し回数でソートが完了することになります。したがって、与えられたデータが大まかにでもソートされていれば、2 番目のループで繰り返す回数が少なくなり、挿入ソートでも高速にソートすることができます。
+</p>
+
+<h4 id="ans42">●解答42</h4>
+<pre class="list">
+リスト : シェルソート
+
+  def shellSort[A &lt;% Ordered[A]](buff: Array[A]) {
+    val k = buff.size
+    var gap = k / 2
+    while (gap &gt; 0) {
+      for (i &lt;- gap until k) {
+        val tmp = buff(i)
+        var j = i - gap
+        while (j &gt;= 0 &amp;&amp; tmp &lt; buff(j)) {
+          buff(j + gap) = buff(j)
+          j -= gap
+        }
+        buff(j + gap) = tmp
+      }
+      gap /= 2
+    }
+  }
+</pre>
+<p> 最初のループで間隔を徐々に狭めていきます。ここでは単純に 2 で割っていくことにしました。次のループで比較する要素を取り出します。最後のループでこの要素を挿入する位置を探索します。このときの探索は隣り合った要素ではなく gap 離れた要素を比較します。
+</p>
+<p> 2 番目のループでは、各群を並列にソートしていることに注意してください。群のひとつの要素を取り出して位置を決めたら、次の群の要素を取り出して位置を決めています。最後に gap は 1 になるので、挿入ソートと同じになりソートが完了します。
+</p>
+
+<p> ところで、gap を常に奇数になるようにすると、シェルソートの実行速度はデータの個数 n の 1.5 乗に比例します。また、Knuth によると、gap の値に次の数列を用いると、シェルソートは n の 1.25 乗に比例するそうです。
+</p>
+<pre class="fig">
+gap = ..., 121, 40, 13, 4, 1
+</pre>
+<p> この数列は 3 倍して 1 を加えることで得られる数列を逆にしたものです。これをプログラムすると、次のようになります。
+</p>
+
+<pre class="list">
+リスト : シェルソートの改良版
+
+  def shellSort1[A &lt;% Ordered[A]](buff: Array[A]) {
+    val k = buff.size
+    var gap = 1
+    while (gap &lt; k / 9) gap = gap * 3 + 1
+    while (gap &gt; 0) {
+      for (i &lt;- gap until k) {
+        val tmp = buff(i)
+        var j = i - gap
+        while (j &gt;= 0 &amp;&amp; tmp &lt; buff(j)) {
+          buff(j + gap) = buff(j)
+          j -= gap
+        }
+        buff(j + gap) = tmp
+      }
+      gap /= 3
+    }
+  }
+</pre>
+<h4 id="ans43">●解答43</h4>
+<pre class="list">
+リスト : クイックソート
+
+  def quickSort[A &lt;% Ordered[A]](buff: Array[A], low: Int, high: Int) {
+    val p = buff(low + (high - low) / 2)
+    var i = low
+    var j = high
+    while (true) {
+      while (p &gt; buff(i)) i += 1
+      while (p &lt; buff(j)) j -= 1
+      if (i &gt;= j) {
+        if (low &lt; i - 1) quickSort(buff, low, i - 1)
+        if (high &gt; j + 1) quickSort(buff, j + 1, high)
+        return
+      } else {
+        val tmp = buff(i)
+        buff(i) = buff(j)
+        buff(j) = tmp
+        i += 1
+        j -= 1
+      }
+    }
+  }
+</pre>
+<p> 関数 quickSort の引数 buff がソートするリスト、low が区間の下限値、high が区間の上限値です。quickSort は buff の low から high までの区間をソートします。最初に、区間の中央にあるデータを枢軸として選びます。そして、最初の while ループで pivot を基準にして区間を 2 つに分けます。
+</p>
+
+<p> 次の while ループで、左側から枢軸以上の要素を探しています。ここでは枢軸以上という条件を、枢軸より小さい間は探索位置を進める、というように置き換えています。同様に次の while ループで右側から枢軸以下の要素を探します。お互いの探索位置 i, j が交差したら分割は終了です。そうでなければお互いの要素を交換します。交換したあとは i と j の値を更新しておくことを忘れないでください。
+</p>
+
+<p> そして、分割した区間に対して quickSort を再帰呼び出しします。このとき要素数をチェックして、2 個以上ある場合に再帰呼び出しを行います。この停止条件を忘れると正常に動作しません。ご注意ください。
+</p>
+
+<p> ところで、クイックソートは枢軸の選び方で効率が大きく左右されます。区間の中間値を枢軸に選ぶと、区間をほぼ半分に分割することができます。この場合がいちばん効率が良く、データ数を N とすると N * log N に比例する時間でソートすることができます。
+</p>
+
+<p> 逆に、区間での最大値または最小値を枢軸に選ぶと、その要素と残りの要素の 2 つに分割にされることになります。これが最悪の場合で、分割のたびに最大値もしくは最小値を選ぶと、実行時間は要素数の 2 乗に比例することになります。つまり、挿入ソートと同じくらい遅いソートになります。
+</p>
+
+<h4 id="ans44">●解答44</h4>
+<pre class="list">
+リスト : リストのマージ
+
+  def mergeList[A &lt;% Ordered[A]](xs: List[A], ys: List[A]): List[A] =
+    (xs, ys) match {
+      case (Nil, _) =&gt; ys
+      case (_, Nil) =&gt; xs
+      case (x::xs1, y::ys1) =&gt; if (x &lt;= y) x::mergeList(xs1, ys)
+                               else y::mergeList(xs, ys1)
+    }
+</pre>
+
+<p> 関数 mergeList の引数 xs, ys がマージするリストです。最初の節はリスト xs が空リストになった場合で、リスト ys をそのまま返します。2 番目の節はリスト ys が空リストになった場合で、リスト xs をそのまま返します。この 2 つが再帰呼び出しの停止条件になります。
+</p>
+
+<p> リスト xs と ys にデータがあれば、先頭要素 x と y を演算子 &lt;= で比較します。返り値が真であれば x を、そうでなければ y を mergeList が返すリストに追加します。mergeList を再帰呼び出しするとき、追加する要素をリストから取り除くことに注意してください。これでリストをマージすることができます。
+</p>
+
+<h4 id="ans45">●解答45</h4>
+<pre class="list">
+リスト : マージソート
+
+  def mergeSort[A &lt;% Ordered[A]](n: Int, xs: List[A]): List[A] =
+    (n, xs) match {
+      case (_, Nil) =&gt; Nil
+      case (1, x::_) =&gt; List(x)
+      case (2, x::y::_) =&gt; if (x &gt; y) List(y, x) else List(x, y)
+      case _ =&gt; {
+        val m = n / 2
+        mergeList(mergeSort(m, xs), mergeSort(n - m, xs.drop(m)))
+      }
+    }
+</pre>
+<p> 関数 merge_sort の第 1 引数がリストの長さ、第 2 引数がソートするリストです。merge_sort はリストを分割する処理で、新しいリストを作らないことに注意してください。次の図を見てください。
+</p>
+<pre class="fig">
+  引数 x
+   ｜
+   ｜←── 長さn ──→｜
+ （１ ２ ３ ４ ５ ６ ７ ８）   
+   ｜←n/2→｜ ｜←n/2→｜
+   ｜          ｜
+  引数 x      引数 y     再帰呼び出し 
+
+        図 : リストの分割
+</pre>
+<p> mergeSort はソートするリストの範囲を開始位置と長さで表しています。上図のリストを二分割する場合、前半部分は x と n / 2 で表し、後半部分を y と n / 2 で表します。y はリスト x の先頭から n / 2 個の要素を取り除けば求めることができます。
+</p>
+<p> あとは再帰呼び出しでリストを分割していき、リストの長さが 1 になったならば新しいリストを返します。リストの長さが 2 の場合は簡単なので、2 つの要素を比較してソート済みのリストを作成して返します。そして、mergeSort の返り値を mergeList でマージすればいいわけです。
+</p>
+<section class="contents">
+<h4>●別解</h4>
+<p> リストを二分割していくのではなく、要素が 1 つのリストを作って、それを順番にマージしていくこともできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : マージソート (別解)
+
+  def mergeSort1[A &lt;% Ordered[A]](xs: List[A]): List[A] = {
+    def iter1(xs: List[List[A]]): List[A] =
+      xs match {
+        case x::Nil =&gt; x
+        case _ =&gt; iter1(iter2(xs))
+      }
+    def iter2(xs: List[List[A]]): List[List[A]] =
+      xs match {
+        case Nil =&gt; Nil
+        case x::Nil =&gt; xs
+        case x::y::zs =&gt; mergeList(x, y) :: iter2(zs)
+      }
+    iter1(xs.map(List(_)))
+  }
+</pre>
+<p> 実際の処理は局所関数 iter1 と iter2 で行います。最初に、map で要素をリストに格納して、それを iter1 に渡します。iter1 はリストの要素がひとつになるまで、iter2 を繰り返し呼び出します。iter2 は先頭から順番にリストを 2 つ取り出して、それを mergeList でマージします。そして、その結果をリストに格納して返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; mergeSort1(List(5,6,4,7,3,8,2,9,1))
+res0: List[Int] = List(1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; mergeSort1(List(9,8,7,6,5,4,3,2,1))
+res1: List[Int] = List(1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; mergeSort1(List(1,2,3,4,5,6,7,8,9))
+res2: List[Int] = List(1, 2, 3, 4, 5, 6, 7, 8, 9)
+</pre>
+</section>
+<h4 id="ans46">●解答46</h4>
+<pre class="list">
+リスト : べき集合
+
+  def powerSet[A](xs: List[A]): List[List[A]] =
+    xs match {
+      case Nil =&gt; List(Nil)
+      case x::xs1 =&gt; {
+        val ys = powerSet(xs1)
+        ys ::: ys.map(x::_)
+      }
+    }
+
+  // 別解
+  def powerSet1[A](f: List[A] =&gt; Unit, xs: List[A]) {
+    def iter(xs: List[A], a: List[A]) {
+      xs match {
+        case Nil =&gt; f(a.reverse)
+        case x::xs1 =&gt; { iter(xs1, a); iter(xs1, x::a) }
+      }
+    }
+    iter(xs, Nil)
+  }
+</pre>
+<p> べき集合を求める関数 power-set は簡単です。xs が空リストの場合は Nil を格納したリストを返します。そうでなければ powerSet を再帰呼び出しして xs1 のべき集合を求め、その集合に先頭要素 x を追加します。そして、その集合と xs1 のべき集合を演算子 ::: で連結します。
+</p>
+
+<p> 別解の powerSet1 は高階関数バージョンです。リストの長さを N とすると、べき集合の要素数は 2 ^ N になります。N が大きくなると、べき集合をリストに格納して返すことは困難になります。その場合は高階関数を使うとよいでしょう。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; powerSet1(println, List(1,2,3))
+List()
+List(3)
+List(2)
+List(2, 3)
+List(1)
+List(1, 3)
+List(1, 2)
+List(1, 2, 3)
+
+scala&gt; powerSet1(println, List(1,2,3,4))
+List()
+List(4)
+List(3)
+List(3, 4)
+List(2)
+List(2, 4)
+List(2, 3)
+List(2, 3, 4)
+List(1)
+List(1, 4)
+List(1, 3)
+List(1, 3, 4)
+List(1, 2)
+List(1, 2, 4)
+List(1, 2, 3)
+List(1, 2, 3, 4)
+</pre>
+<h4 id="ans47">●解答47</h4>
+<pre class="list">
+リスト : 連続した同じ記号を部分リストにまとめる
+
+  def pack[A](xs: List[A]): List[List[A]] =
+    xs match {
+      case Nil =&gt; Nil
+      case _ =&gt; {
+        val (ys, zs) = xs.span(_ == xs.head)
+        ys :: pack(zs)
+      }
+    }
+</pre>
+<p> pack はリストを分割するメソッド span を使うと簡単です。引数 xs が空リストならば Nil を返します。そうでなければ span で先頭要素 xs.head と等しい要素のリスト ys と、残りのリスト xs に分割します。あとは、pack(zs) の返り値に ys を追加するだけです。
+</p>
+
+<h4 id="ans48">●解答48</h4>
+<pre class="list">
+リスト : ランレングス符号化
+
+  def encode[A](xs: List[A]): List[(A, Int)] =
+    pack(xs).map(ys =&gt; (ys.head, ys.length))
+
+  def decode[A](xs: List[(A, Int)]): List[A] =
+    xs.flatMap(x =&gt; List.fill(x._2)(x._1))
+
+  // 別解
+  def encode1[A](xs: List[A]): List[(A, Int)] =
+    for ((y::ys) &lt;- pack(xs)) yield (y, ys.length + 1)
+
+  def decode1[A](xs: List[(A, Int)]): List[A] =
+    for ((x, k) &lt;- xs; y &lt;- List.fill(k)(x)) yield y
+
+</pre>
+<p> encode は pack を使うと簡単です。pack の返り値を map で (code, n) に変換するだけです。ランレングスの復号は関数 flatmap と List.fill を使うと簡単です。List.fill で (code, n) をリストに変換し、flatmap でそれを平坦化するだけです。別解は for 内包表記で書き直したものです。
+</p>
+
+<h4 id="ans49">●解答49</h4>
+<pre class="list">
+リスト : 集合のグループ分け
+
+  type List2[A] = List[List[A]]
+
+  def remove[A](x: A, xs: List[A]): List[A] = 
+    xs match {
+      case Nil =&gt; Nil
+      case y::ys =&gt; if (x == y) ys else y :: remove(x, ys)
+    }
+
+  def groupPartition[A](f: List2[A] =&gt; Unit, n: Int, m: Int, xs: List[A]) {
+    def groupPart(xs: List[A], ys: List2[A]): Unit =
+      xs match {
+        case Nil =&gt; f(ys)
+        case x::xs1 =&gt; {
+          if (ys.length &lt; m) groupPart(xs1, List(x)::ys)
+          for (y &lt;- ys if (y.length &lt; n)) groupPart(xs1, (x::y)::remove(y, ys))
+        }
+      }
+    //
+    groupPart(xs.reverse, Nil)
+  }
+</pre>
+<p> groupPartition は partitionOfSet (問題 25) を改造するだけで簡単に作成することができます。生成する部分集合の大きさを n に、部分集合の個数を m に制限するだけです。新しい部分集合 List(x) を追加する場合、ys.length &lt; m であることをチェックします。部分集合 y に x を追加する場合、y.length &lt; n であることをチェックします。これで集合をグループに分けることができます。
+</p>
+
+<h4 id="ans50">●解答50</h4>
+<p> グループ分けの総数は次の式で求めることができます。
+</p>
+<pre class="item">
+k = n * m
+<sub>k</sub>Ｃ<sub>n</sub> * <sub>k-n</sub>Ｃ<sub>n</sub> * <sub>k-2*n</sub>Ｃ<sub>n</sub> * ... * <sub>2*n</sub>Ｃ<sub>n</sub> * <sub>n</sub>Ｃ<sub>n</sub> / m!
+</pre>
+<p> たとえば、n = 3, m = 5 の場合は次のようになります。
+</p>
+<pre class="fig">
+<sub>15</sub>Ｃ<sub>3</sub> * <sub>12</sub>Ｃ<sub>3</sub> * <sub>9</sub>Ｃ<sub>3</sub> * <sub>6</sub>Ｃ<sub>3</sub> * <sub>3</sub>Ｃ<sub>3</sub> / 5! = 1401400
+</pre>
+<p> これをそのままプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : グループ分けの総数
+
+  def fact(n: Int): BigInt =
+    if (n == 0) 1
+    else n * fact(n - 1)
+
+  def combNum(n: Int, r: Int): BigInt =
+    if (n == r || r == 0) 1
+    else combNum(n, r - 1) * (n - r + 1) / r
+
+  def groupPartitionNumber(n: Int, m: Int): BigInt = {
+    def groupPartNum(k: Int, a: BigInt): BigInt =
+      if (k == 0) a / fact(m)
+      else groupPartNum(k - n, a * combNum(k, n))
+    groupPartNum(n * m, 1)
+  }
+</pre>
+<p> 階乗は関数 fact で、組み合わせの個数は関数 combNum で計算します。要素の個数を変数 k にセットし、累積変数 a に combNum(k, n) を乗算します。あとは k から n を減算し、k が 0 でなければ処理を繰り返すだけです。最後に a / fact(m) を計算して返します。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+//
+// yasp05.scala : Yet Another Scala Problems
+//
+//                Copyright (C) 2014 Makoto Hiroi
+//
+object yasp05 {
+  // Q41
+  def insertSort[A &lt;% Ordered[A]](buff: Array[A]) {
+    val k = buff.size
+    for (i &lt;- 1 until k) {
+      val tmp = buff(i)
+      var j = i - 1
+      while (j &gt;= 0 &amp;&amp; tmp &lt; buff(j)) {
+        buff(j + 1) = buff(j)
+        j -= 1
+      }
+      buff(j + 1) = tmp
+    }
+  }
+
+  // Q42
+  def shellSort[A &lt;% Ordered[A]](buff: Array[A]) {
+    val k = buff.size
+    var gap = k / 2
+    while (gap &gt; 0) {
+      for (i &lt;- gap until k) {
+        val tmp = buff(i)
+        var j = i - gap
+        while (j &gt;= 0 &amp;&amp; tmp &lt; buff(j)) {
+          buff(j + gap) = buff(j)
+          j -= gap
+        }
+        buff(j + gap) = tmp
+      }
+      gap /= 2
+    }
+  }
+
+  def shellSort1[A &lt;% Ordered[A]](buff: Array[A]) {
+    val k = buff.size
+    var gap = 1
+    while (gap &lt; k / 9) gap = gap * 3 + 1
+    while (gap &gt; 0) {
+      for (i &lt;- gap until k) {
+        val tmp = buff(i)
+        var j = i - gap
+        while (j &gt;= 0 &amp;&amp; tmp &lt; buff(j)) {
+          buff(j + gap) = buff(j)
+          j -= gap
+        }
+        buff(j + gap) = tmp
+      }
+      gap /= 3
+    }
+  }
+
+  // Q43
+  def quickSort[A &lt;% Ordered[A]](buff: Array[A], low: Int, high: Int) {
+    val p = buff(low + (high - low) / 2)
+    var i = low
+    var j = high
+    while (true) {
+      while (p &gt; buff(i)) i += 1
+      while (p &lt; buff(j)) j -= 1
+      if (i &gt;= j) {
+        if (low &lt; i - 1) quickSort(buff, low, i - 1)
+        if (high &gt; j + 1) quickSort(buff, j + 1, high)
+        return
+      } else {
+        val tmp = buff(i)
+        buff(i) = buff(j)
+        buff(j) = tmp
+        i += 1
+        j -= 1
+      }
+    }
+  }
+
+  // Q44
+  def mergeList[A &lt;% Ordered[A]](xs: List[A], ys: List[A]): List[A] =
+    (xs, ys) match {
+      case (Nil, _) =&gt; ys
+      case (_, Nil) =&gt; xs
+      case (x::xs1, y::ys1) =&gt; if (x &lt;= y) x::mergeList(xs1, ys)
+                               else y::mergeList(xs, ys1)
+    }
+
+  // Q45
+  def mergeSort[A &lt;% Ordered[A]](n: Int, xs: List[A]): List[A] =
+    (n, xs) match {
+      case (_, Nil) =&gt; Nil
+      case (1, x::_) =&gt; List(x)
+      case (2, x::y::_) =&gt; if (x &gt; y) List(y, x) else List(x, y)
+      case _ =&gt; {
+        val m = n / 2
+        mergeList(mergeSort(m, xs), mergeSort(n - m, xs.drop(m)))
+      }
+    }
+
+  // 別解
+  def mergeSort1[A &lt;% Ordered[A]](xs: List[A]): List[A] = {
+    def iter1(xs: List[List[A]]): List[A] =
+      xs match {
+        case x::Nil =&gt; x
+        case _ =&gt; iter1(iter2(xs))
+      }
+    def iter2(xs: List[List[A]]): List[List[A]] =
+      xs match {
+        case Nil =&gt; Nil
+        case x::Nil =&gt; xs
+        case x::y::zs =&gt; mergeList(x, y) :: iter2(zs)
+      }
+    iter1(xs.map(List(_)))
+  }
+
+  // Q46
+  def powerSet[A](xs: List[A]): List[List[A]] =
+    xs match {
+      case Nil =&gt; List(Nil)
+      case x::xs1 =&gt; {
+        val ys = powerSet(xs1)
+        ys ::: ys.map(x::_)
+      }
+    }
+
+  // 別解 (高階関数)
+  def powerSet1[A](f: List[A] =&gt; Unit, xs: List[A]) {
+    def iter(xs: List[A], a: List[A]) {
+      xs match {
+        case Nil =&gt; f(a.reverse)
+        case x::xs1 =&gt; { iter(xs1, a); iter(xs1, x::a) }
+      }
+    }
+    iter(xs, Nil)
+  }
+
+  // Q47
+  def pack[A](xs: List[A]): List[List[A]] =
+    xs match {
+      case Nil =&gt; Nil
+      case _ =&gt; {
+        val (ys, zs) = xs.span(_ == xs.head)
+        ys :: pack(zs)
+      }
+    }
+
+  // Q48
+  def encode[A](xs: List[A]): List[(A, Int)] =
+    pack(xs).map(ys =&gt; (ys.head, ys.length))
+
+  def decode[A](xs: List[(A, Int)]): List[A] =
+    xs.flatMap(x =&gt; List.fill(x._2)(x._1))
+
+  def encode1[A](xs: List[A]): List[(A, Int)] =
+    for ((y::ys) &lt;- pack(xs)) yield (y, ys.length + 1)
+
+  def decode1[A](xs: List[(A, Int)]): List[A] =
+    for ((x, k) &lt;- xs; y &lt;- List.fill(k)(x)) yield y
+
+  // Q49
+  type List2[A] = List[List[A]]
+
+  def remove[A](x: A, xs: List[A]): List[A] = 
+    xs match {
+      case Nil =&gt; Nil
+      case y::ys =&gt; if (x == y) ys else y :: remove(x, ys)
+    }
+
+  def groupPartition[A](f: List2[A] =&gt; Unit, n: Int, m: Int, xs: List[A]) {
+    def groupPart(xs: List[A], ys: List2[A]): Unit =
+      xs match {
+        case Nil =&gt; f(ys)
+        case x::xs1 =&gt; {
+          if (ys.length &lt; m) groupPart(xs1, List(x)::ys)
+          for (y &lt;- ys if (y.length &lt; n)) groupPart(xs1, (x::y)::remove(y, ys))
+        }
+      }
+    //
+    groupPart(xs.reverse, Nil)
+  }
+
+  // Q50
+  def fact(n: Int): BigInt =
+    if (n == 0) 1
+    else n * fact(n - 1)
+
+  def combNum(n: Int, r: Int): BigInt =
+    if (n == r || r == 0) 1
+    else combNum(n, r - 1) * (n - r + 1) / r
+
+  def groupPartitionNumber(n: Int, m: Int): BigInt = {
+    def groupPartNum(k: Int, a: BigInt): BigInt =
+      if (k == 0) a / fact(m)
+      else groupPartNum(k - n, a * combNum(k, n))
+    groupPartNum(n * m, 1)
+  }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b> Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="yasp04.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="yasp06.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

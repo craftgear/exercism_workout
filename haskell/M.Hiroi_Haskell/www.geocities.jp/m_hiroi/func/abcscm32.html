@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881783</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm31.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm33.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>Scheme で作る micro Scheme (3)</h3>
+<p> 今回は micro Scheme に「継続 (continuation) 」を導入します。micro Scheme は Scheme 上で動作しているので、cons や eq? のように call/cc を呼び出せば、簡単に継続を実装することができます。ですが、それでは面白くないですね。そこで、インタプリタを「継続渡しスタイル (Continuation Passing Style : CPS) 」で書き直して、継続を取り扱うことにします。
+</p>
+<p> 継続渡しスタイルについては拙作のページ <a href="abcscm20.html">継続と継続渡しスタイル</a> で詳しく説明しています。よろしければ参考にしてください。
+</p>
+
+<h4>●S 式の評価の修正</h4>
+<p> まずは S 式を評価する関数 m-eval から修正します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : S 式の評価
+
+(define (m-eval expr env cont)
+  (cond ((self-evaluation? expr) (cont expr))
+        ((symbol? expr)
+         (cont (cdr (lookup expr env))))
+        ((pair? expr)
+         (m-eval (car expr) env
+           (lambda (procedure)
+             (case (car procedure)
+               ((syntax) ((cadr procedure) expr env cont))
+               ((macro)
+                (m-apply (cdr procedure) (cdr expr)
+                  (lambda (new-expr)
+                    (m-eval new-expr env cont))))
+               (else
+                (map-eval (cdr expr) env
+                  (lambda (actuals)
+                    (m-apply procedure actuals cont))))))))
+        (else
+         (error "unknown expression type -- m-eval" exp))))
+</pre>
+<p> m-eval の引数 cont が継続を表すクロージャです。たとえば、値 value を返す場合は cont に value を渡して評価します。expr が自己評価フォームの場合は expr を、変数の場合は lookup で値を求めて返します。
+</p>
+<p> expr がリストの場合はちょっと複雑です。まず、先頭要素を m-eval で評価して、その値を継続の引数 procedure に渡して処理します。このように、m-eval を呼び出すときは、必ず継続渡しスタイルでプログラムを記述してください。
+</p>
+<p> procedure が syntax ならば、引数と環境と継続を渡して関数を呼び出します。macro の場合は、m-apply でクロージャを評価して新しい S 式 new-expr を生成します。m-apply も継続渡しスタイルで記述し、最後の引数が継続を表すクロージャになります。このラムダ式の中で new-expr を m-eval で評価します。
+</p>
+<p> 関数呼び出しの場合は、関数 map-eval で引数を評価します。map-eval も継続渡しスタイルです。map-eval は引数の評価結果をリストに格納してラムダ式の引数 actuals に渡します。この中で m-apply を呼び出して関数 procedure を評価します。関数の評価結果は cont で返します。
+</p>
+
+<p> map-eval は次のようになります。
+</p>
+<pre class="list">
+リスト : 引数を評価する
+
+(define (map-eval args env cont)
+  (if (null? args)
+      (cont '())
+    (m-eval (car args) env
+      (lambda (x)
+        (map-eval (cdr args) env
+          (lambda (y) (cont (cons x y))))))))
+</pre>
+<p> 引数 args が空リストの場合は cont で空リストを返します。そうでなければ、m-eval で先頭要素を評価し、その結果を継続 (ラムダ式) の引数 x に渡します。この中で map-eval を再帰呼び出しし、残りのリストを処理します。その結果は継続の引数 y に渡されます。ここで、x と y の値を cons でつないで cont で返します。これで引数を評価した結果をリストに格納して返すことができます。
+</p>
+<p> 継続渡しスタイルのプログラムはちょっと難しいと思います。よく理解できない方は拙作のページ <a href="abcscm20.html">継続と継続渡しスタイル</a> をお読みください。
+</p>
+
+<h4>●シンタックス形式の修正</h4>
+<p> 次はシンタックス形式を処理する関数を修正します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : シンタックス形式
+
+; (quote x)
+(define (m-quote expr env cont) (cont (cadr expr)))
+
+; (if test then else)
+(define (m-if expr env cont)
+  (m-eval (cadr expr) env
+    (lambda (pred)
+      (if pred
+          (m-eval (caddr expr) env cont)
+        (if (null? (cdddr expr))
+            (cont '*undef*)
+          (m-eval (cadddr expr) env cont))))))
+
+; (lambda (args ...) body ...)
+(define (m-lambda expr env cont)
+  (cont (list 'closure expr env)))
+
+; (define name s-expr)
+(define (m-define expr env cont)
+  ; 内部 define は考慮しない
+  (m-eval (caddr expr) env
+    (lambda (value)
+      (set! *global-environment*
+            (cons (cons (cadr expr) value)
+                  *global-environment*))
+      ; シンボルを返す
+      (cont (cadr expr)))))
+
+; (set! name value)
+(define (m-set! expr env cont)
+  (m-eval (caddr expr) env
+    (lambda (value)
+      (set-cdr! (lookup (cadr expr) env) value)
+      (cont value))))
+</pre>
+<p> m-quote は簡単です。expr の第 2 要素を cont に渡して評価するだけです。m-if は条件部を m-eval で評価して、その結果を継続の引数 pred に渡します。pred が真の場合、m-eval で then 節を評価します。偽の場合、else 節があればそれを m-eval で評価します。なければ、cont で *undef* を返します。m-lambda は簡単です。クロージャを生成して cont で返すだけです。
+</p>
+<p> m-define は m-eval で expr の第 3 要素を評価して、その値を継続の引数 value に渡します。この中で、変数 (cadr expr) と値 value を組にして *global-environment* にセットします。そして、cont で変数を返します。m-set! は m-eval で expr の第 3 要素を評価して、継続の引数 value に渡します。この中で変数と値を格納したセルを lookup で求め、その CDR 部を value に書き換えます。最後に cont で値 value を返します。
+</p>
+
+<h4>●マクロの修正</h4>
+<p> 次はマクロの処理を修正します。
+</p>
+<pre class="list">
+リスト : マクロの定義
+
+(define (m-define-macro expr env cont)
+  ; とりあえず大域変数のみ
+  (m-eval (caddr expr) env
+    (lambda (value)
+      (set! *global-environment*
+            (cons (cons (cadr expr)
+                        (cons 'macro value))
+                  *global-environment*))
+      ; symbol を返す
+      (cont (cadr expr)))))
+</pre>
+<p> m-define-macro は m-eval で expr の第 3 要素を評価して、その値を継続の引数 value に渡します。この中で、変数 (cadr expr) と (cons 'macro value) を組にして *global-environment* にセットします。そして、cont でマクロ名を表すシンボルを返します。
+</p>
+
+<p> 次はバッククオートの処理を修正します。
+</p>
+<pre class="list">
+リスト : quasiquote
+
+(define (m-quasiquote exp env cont)
+  (define (transfer ls cont)
+    (cond ((pair? ls)
+           (cond ((pair? (car ls))
+                  (cond ((eq? (caar ls) 'unquote)
+                         (transfer (cdr ls)
+                           (lambda (xs)
+                             (m-eval (cadar ls) env
+                               (lambda (ys) (cont (cons ys xs)))))))
+                        ((eq? (caar ls) 'unquote-splicing)
+                         (transfer (cdr ls)
+                           (lambda (xs)
+                             (m-eval (cadar ls) env
+                               (lambda (ys) (cont (append ys xs)))))))
+                        (else (transfer (car ls)
+                                (lambda (xs)
+                                  (transfer (cdr ls)
+                                    (lambda (ys) (cont (cons xs ys)))))))))
+                 (else (transfer (cdr ls)
+                         (lambda (xs) (cont (cons (car ls) xs)))))))
+          (else (cont ls))))
+  (transfer (cadr exp) cont))
+</pre>
+<p> 内部関数 transfer を継続渡しスタイルで書き直します。引数 cont が継続です。ls の先頭要素で (unquote ...) を見つけた場合、残りのリスト (cdr ls) を transfer で処理し、その結果を継続の引数 xs に渡します。この中で m-eval を呼び出して、unquote の引数を評価します。その結果を継続の引数 ys に渡し、cons で ys と xs を結合して cont で返します。unquote-splicing を見つけた場合は append で結合します。
+</p>
+<p> そうでなければ transfer で (car ls) を処理し、その結果を継続の引数 xs に渡します。この中で残りのリスト (cdr ls) を処理して、その結果を継続の引数 ys に渡します。あとは cons で xs と ys を結合して cont で返します。
+</p>
+<p> ls の先頭要素がリストでなければ、transfer で (cdr ls) を処理して、その結果と先頭要素を cons で結合して返します。ls がリストでなければ、それをそのまま cont で返すだけです。
+</p>
+
+<h4>●関数適用の修正</h4>
+<p> 次は関数適用の処理を修正します。ここで継続を取り出す関数 call/cc と高階関数 apply を追加します。apply は継続のテストで使うため実装します。継続は引数を一つ受け取る関数として定義します。これらの関数を表すため、primitive の構造を修正します。第 2 要素がシンボルの場合、それに対応する処理を行うようにします。
+</p>
+<pre class="item">
+primitive apply             : apply の処理
+primitive call/cc           : call/cc の処理
+primitive continuation cont : 継続 cont の評価
+primitive #&lt;func&gt;           : 関数 func の評価
+</pre>
+<p> 継続は (primitive continuation cont) で表します。cont は継続渡しスタイルで引数として渡している継続です。この継続を micro Scheme の関数値として取り出すことで、micro Scheme で継続を実装することができます。この処理を関数 p-call/cc で行います。
+</p>
+
+<pre class="list">
+リスト : micro Scheme 用 call/cc
+
+(define (p-call/cc procedure cont)
+  (m-apply procedure
+           (list (list 'primitive 'continuation cont)) cont))
+</pre>
+<p> p-call/cc は m-apply を呼び出して procedure を評価します。このとき、継続を表す関数 (primitive continuation cont) を生成します。ここで継続 cont が取り出されて、関数値を表すリストに保存されます。それをリストに格納して m-apply に渡します。これで procedure に継続を渡して評価することができます。
+</p>
+
+<p> m-apply のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 関数適用
+
+(define (m-apply procedure actuals cont)
+  (case (car procedure)
+    ((primitive)
+     (case (cadr procedure)
+       ((apply)
+        (p-apply (car actuals) (cdr actuals) cont))
+       ((call/cc)
+        (p-call/cc (car actuals) cont))
+       ((continuation)
+        ((caddr procedure) (car actuals)))
+       (else
+        (cont (apply (cadr procedure) actuals)))))
+    ((closure)
+     (let ((expr (cadr procedure)))
+       ; body の評価
+       (eval-body (cddr expr)
+                  (add-binding (cadr expr) actuals (caddr procedure))
+                  cont)))
+    (else
+     (error "unknown procedure type -- m-apply" procedure))))
+</pre>
+<p> m-apply も継続渡しスタイルで記述します。procedure が primitive の場合、第 2 要素によって処理を振り分けます。apply であれば、p-apply を呼び出して関数 apply の処理を行います。call/cc の場合は p-call/cc を呼び出します。
+</p>
+<p> continuation の場合、第 3 要素の継続に引数を一つ渡して評価します。このとき、m-apply の引数 cont を評価して値を返すのではなく、procedure に格納されている継続を評価することで値を返すことに注意してください。他の関数は apply で評価して、その結果を cont に渡して返します。
+</p>
+<p> procedure が closure の場合は、add-binding で変数束縛を行い、eval-body で本体を評価します。eval-body も継続渡しスタイルでプログラムします。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : body の評価
+
+(define (eval-body body env cont)
+  (if (null? (cdr body))
+      (m-eval (car body) env cont)
+    (m-eval (car body) env
+      (lambda (value)
+        (eval-body (cdr body) env cont)))))
+</pre>
+<p> body の要素が残り一つの場合、それを m-eval で評価します。要素が複数有る場合、m-eval で先頭要素を評価し、その結果を継続の引数 value に渡します。そして、eval-body を再帰呼び出しします。この場合、value は使用されずに捨てられることになります。結局、最後の S 式の評価結果を cont で返すことになります。
+</p>
+
+<p> 次は apply を処理する関数 p-apply を作ります。
+</p>
+<pre class="list">
+リスト : micro Scheme 用 apply
+
+(define (p-apply procedure actuals cont)
+  ; 複数の引数を最後のリストに集める
+  (define (collect-actuals ls)
+    (if (null? (cdr ls))
+        (car ls)
+      (cons (car ls) (collect-actuals (cdr ls)))))
+  (m-apply procedure (collect-actuals actuals) cont))
+</pre>
+<p> apply に与えられる最後の引数はリストです。内部関数 collect-actuals は最後の引数の先頭に、今までの引数を追加して返します。つまり、次のような動作を行います。
+</p>
+<pre>
+(collect-actuals '(a b (c d e))) =&gt; '(a b c d e)
+</pre>
+<p> そして、m-apply で procedure を評価します。これでリストの引数を展開して procedure に渡すことができます。
+</p>
+
+<h4>●REPL の修正</h4>
+<p> 最後に REPL (read-eval-print-loop) を修正します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : REPL
+
+; 初期化
+(define *global-environment*
+        (list
+          (list 'car   'primitive car)
+          (list 'cdr   'primitive cdr)
+          (list 'cons  'primitive cons)
+          (list 'eq?   'primitive eq?)
+          (list 'eqv?  'primitive eqv?)
+          (list 'pair? 'primitive pair?)
+          (list 'call/cc 'primitive 'call/cc)
+          (list 'apply   'primitive 'apply)
+          (list 'display 'primitive (lambda (x) (display x) '*undef*))
+          (list 'newline 'primitive (lambda () (newline) '*undef*))
+          (list 'if     'syntax m-if)
+          (list 'quote  'syntax m-quote)
+          (list 'lambda 'syntax m-lambda)
+          (list 'define 'syntax m-define)
+          (list 'set!   'syntax m-set!)
+          (list 'define-macro 'syntax m-define-macro)
+          (list 'quasiquote   'syntax m-quasiquote)
+        ))
+
+;;; read-eval-print-loop
+(define (repl)
+  (let loop ()
+    (display "\n&gt;&gt;&gt; ")
+    (display (m-eval (read) '() (lambda (x) x)))
+    (newline)
+    (loop)))
+</pre>
+<p> *global-environment* には apply と call/cc のほかに、テストで使うため display と newline を追加します。関数 repl は m-eval に (lambda (x) x) を渡すだけです。これで、m-eval の評価結果を求めて、display で表示することができます。
+</p>
+<h4>●簡単な実行例</h4>
+<p> それでは実際に継続を使ってみましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (define list (lambda x x))
+list
+
+&gt;&gt;&gt; (define a #f)
+a
+
+&gt;&gt;&gt; a
+(primitive continuation #&lt;closure (map-eval #f)&gt;)
+
+&gt;&gt;&gt; (list 'a 'b (call/cc (lambda (k) (set! a k) 'c)) 'd)
+(a b c d)
+
+&gt;&gt;&gt; (a 'e)
+(a b e d)
+
+&gt;&gt;&gt; (a 'f)
+(a b f d)
+</pre>
+<p> 変数 a に取り出した継続をセットします。この場合、継続は (list a b [ ] 'd) になります。list の処理だけではなく、'd を評価する処理も残っています。継続 a に引数を渡して評価すると、[ ] の部分に継続の引数がセットされ、'd を評価して list に渡されます。したがって、(a 'e) を評価すると (a b e d) になり、(a 'f) を評価すると (a b f d) になります。正常に動作していますね。
+</p>
+<h4>●大域脱出</h4>
+<p> 次は大域脱出を試してみましょう。
+</p>
+<pre class="list">
+リスト : 大域脱出
+
+(define bar1 (lambda (cont) (display "call bar1\n")))
+(define bar2 (lambda (cont) (display "call bar2\n") (cont #f)))
+(define bar3 (lambda (cont) (display "call bar3\n")))
+(define test (lambda (cont) (bar1 cont) (bar2 cont) (bar3 cont)))
+</pre>
+<pre>
+&gt;&gt;&gt; (call/cc (lambda (cont) (test cont)))
+call bar1
+call bar2
+#f
+</pre>
+<p> bar2 からトップレベルへ脱出するので、bar3 は呼び出されていません。これも正常に動作していますね。
+</p>
+<h4>●繰り返しからの脱出</h4>
+<p> もちろん、繰り返しから脱出することもできます。次の例を見てください。
+</p>
+<pre class="list">
+リスト : do から脱出する場合
+
+(define find-do
+  (lambda (fn ls)
+    (call/cc
+      (lambda (k)
+        (do ((xs ls (cdr xs)))
+            ((null? xs) #f)
+          (if (fn (car xs)) (k (car xs))))))))
+</pre>
+<p> リスト ls から関数 fn が真を返す要素を探します。継続のテストということで、あえて do を使って実装しています。fn が真を返す場合、継続 k でその要素を返します。それでは実行してみましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (find-do (lambda (x) (eq? 'c x)) '(a b c d e))
+c
+
+&gt;&gt;&gt; (find-do (lambda (x) (eq? 'c x)) '(a b d e f))
+#f
+</pre>
+<p> もちろん高階関数からも脱出することができます。
+</p>
+<pre class="list">
+リスト : map から脱出する場合
+
+(define map-check (lambda (fn chk ls)
+  (call/cc
+    (lambda (k)
+      (map (lambda (x) (if (chk x) (k '()) (fn x))) ls)))))
+</pre>
+<pre>
+&gt;&gt;&gt; (map-check (lambda (x) (cons x x)) (lambda (x) (eq? x 'e)) '(a b c d e f))
+()
+
+&gt;&gt;&gt; (map-check (lambda (x) (cons x x)) (lambda (x) (eq? x 'e)) '(a b c d f))
+((a . a) (b . b) (c . c) (d . d) (f . f))
+</pre>
+<p> 関数 chk が真となる要素がある場合、処理を中断して空リストを返します。これも正常に動いていますね。
+</p>
+<h4>●再帰呼び出しからの脱出</h4>
+<p> 再帰呼び出しから脱出することも簡単です。
+</p>
+<pre class="list">
+リスト : flatten の再帰呼び出しから脱出する場合
+
+(define flatten (lambda (ls)
+  (call/cc
+    (lambda (cont)
+      (letrec ((flatten-sub
+                (lambda (ls)
+                  (cond ((null? ls) '())
+                        ((not (pair? ls)) (list ls))
+                        ((null? (car ls)) (cont '()))
+                        (else (append (flatten-sub (car ls))
+                                      (flatten-sub (cdr ls))))))))
+        (flatten-sub ls))))))
+</pre>
+<p> 拙作のページ <a href="abcscm20.html">継続と継続渡しスタイル</a> で作成したプログラムと同じです。リストを平坦化する関数 flatten で、要素に空リストが含まれている場合は空リストを返します。
+</p>
+<pre>
+&gt;&gt;&gt; (flatten '(a (b (c (d . e) f) g) h))
+(a b c d e f g h)
+
+&gt;&gt;&gt; (flatten '(a (b (c (d () . e) f) g) h))
+()
+</pre>
+<p> これも正常に動作しています。
+</p>
+<h4>●イテレータの生成</h4>
+<p> 最後に、イテレータを生成する関数 make-iter を試してみます。
+</p>
+<pre class="list">
+リスト : イテレータを生成する関数
+
+(define (make-iter proc . args)
+  (letrec ((iter
+            (lambda (return)
+              (apply 
+                proc
+                (lambda (x)             ; 高階関数に渡す関数の本体
+                  (set! return          ; 脱出先継続の書き換え
+                   (call/cc
+                    (lambda (cont)
+                      (set! iter cont)  ; 継続の書き換え
+                      (return x)))))
+                args)
+                ; 終了後は継続 return で脱出
+                (return #f))))
+    (lambda ()
+      (call/cc
+        (lambda (cont) (iter cont))))))
+</pre>
+<pre class="list">
+リスト : 木の高階関数
+
+(define (for-each-tree fn ls)
+  (let loop ((ls ls))
+    (cond ((null? ls) '())
+          ((pair? ls)
+           (loop (car ls))
+           (loop (cdr ls)))
+          (else (fn ls)))))
+</pre>
+<p> 拙作のページ <a href="abcscm20.html">継続と継続渡しスタイル</a> で作成したプログラムと同じです。それでは実行してみましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (define a (make-iter for-each-tree '(a (b (c (d . e) f) g) h)))
+a
+
+&gt;&gt;&gt; (a)
+a
+
+&gt;&gt;&gt; (a)
+b
+
+&gt;&gt;&gt; (a)
+c
+
+&gt;&gt;&gt; (a)
+d
+
+&gt;&gt;&gt; (a)
+e
+
+&gt;&gt;&gt; (a)
+f
+
+&gt;&gt;&gt; (a)
+g
+
+&gt;&gt;&gt; (a)
+h
+
+&gt;&gt;&gt; (a)
+#f
+</pre>
+<p> 正常に動作していますね。なお、(a) を評価する前に変数 a の値を表示すると無限ループになります。ご注意ください。
+</p>
+
+<h4>●末尾再帰最適化</h4>
+<p> 最後に末尾再帰最適化について考えてみましょう。Scheme は末尾再帰最適化を行うので、ある条件で m-eval が末尾再帰していれば、micro Scheme も末尾再帰最適化が行われます。実をいうと micro Scheme は最初から末尾再帰最適化が行われているのです。なお、ここでいう末尾再帰最適化は処理速度のことではなく、次に示すような関数呼び出しにおいて、スタックを消費せずに実行できることです。
+</p>
+<pre>
+&gt;&gt;&gt; (define foo (lambda () (foo)))
+foo
+
+&gt;&gt;&gt; (foo)
+=&gt; 無限ループになる
+</pre>
+<p> 末尾再帰最適化が行われる場合、foo を評価すると無限ループになります。実際、micro Scheme で foo を評価すると無限ループになります。
+</p>
+
+<p> 末尾再帰の末尾とは最後に行われる処理のことで、一般に末尾で関数を呼び出すことを「末尾呼び出し」といいます。関数を呼び出す場合、返ってきた後に行う処理のために、必要な情報を保存しておかなければいけません。ところが、末尾呼び出しはそのあと実行する処理がないので、情報を保存しておく必要がありません。このため、末尾再帰は繰り返しに変換することができるのです。
+</p>
+
+<p> 簡単な例として、Common Lisp で階乗を計算する関数 fact を作りましょう。
+</p>
+
+<pre class="list">
+リスト : 末尾再帰を繰り返しに変換する
+
+(defun fact (x a)
+  (if (= x 0)
+      a
+    (fact (- x 1) (* a x))))
+
+(defun facti (x a)
+  (tagbody
+    loop
+    (if (= x 0)
+        (return-from facti a))
+    (setf a (* a x)
+          x (- x 1))
+    (go loop)))
+</pre>
+
+<p> fact は末尾再帰になっています。これを繰り返しに変換すると facti のようになります。引数 x と a の値を保存する必要が無いので、値を書き換えてから先頭の処理へジャンプします。tagbody はジャンプ命令 go を使うための特殊形式 (シンタックス形式) です。Scheme に tagbody と go はありませんが、末尾再帰は最適化が行われるため効率的に処理することができます。
+</p>
+
+<p> micro Scheme で S 式を評価するとき、末尾呼び出しが行われる場所は m-if と eval-body の 2 か所しかありません。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 末尾呼び出しの処理
+
+; (if test then else)
+(define (m-if expr env)
+  (if (m-eval (cadr expr) env)
+      (m-eval (caddr expr) env)
+    (if (null? (cdddr expr))
+        '*undef*
+      (m-eval (cadddr expr) env))))
+
+; body の評価
+(define (eval-body body env)
+  (cond ((null? (cdr body))
+         (m-eval (car body) env))   ; 最後の S 式の評価結果を返す
+        (else
+         (m-eval (car body) env)
+         (eval-body (cdr body) env))))
+</pre>
+<p> m-if は条件部を評価したあと、then 節か else 節を評価しますが、そのあと評価する S 式はありません。どちらの節を評価するにしても末尾で m-eval を呼び出しているので、m-eval は m-if を経由していますが末尾再帰になっています。このような場合でも Scheme は最適化してくれます。
+</p>
+<p> eval-body の場合も同様です。最後の S 式を評価するときの m-eval は末尾呼び出しになっているので、m-apply と eval-body を経由して m-eval は末尾再帰になります。このように m-eval を末尾再帰でプログラムすると、micro Scheme で S 式を評価するときに末尾再帰最適化が行われます。
+</p>
+
+<p> 継続渡しスタイルの場合も同じです。m-if と eval-body の末尾呼び出しで、m-eval を末尾再帰でプログラムすれば、micro Scheme でも末尾再帰最適化が行われます。ちなみに、eval-body を次のようにプログラムすると、末尾再帰最適化は行われません。
+</p>
+
+<pre class="list">
+リスト : body の評価 (間違い)
+
+(define (eval-body body env cont)
+  (m-eval (car body) env
+    (lambda (value)
+      (if (null? (cdr body))
+          (cont value)
+        (eval-body (cdr body) env cont)))))
+</pre>
+<p> これでも継続は正常に動作しますが、if の then 節で m-eval を呼び出していないので、m-eval の呼び出しは末尾再帰になりません。ご注意くださいませ。
+</p>
+
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>黒川利明, 『LISP 入門』, 培風館, 1982
+  <li>Patrick Henry Winston, Berthold Klaus Paul Horn, 『LISP 原書第 3 版 (1)』, 培風館, 1992<br>
+18. Lisp で書く Lisp
+  <li>R. Kent Dybvig (著), 村上雅章 (訳), 『プログラミング言語 SCHEME』, 株式会社ピアソン・エデュケーション, 2000<br>
+9.2 Scheme のメタ循環インタプリタ
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』, アジソンウェスレイ, 1995<br>
+第 11 章 定義インタプリタ
+  <li>Harold Abelson, Gerald Jay Sussman, Julie Sussman, <a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs"</a>, <br><a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-26.html#%_sec_4.1">4.1  The Metacircular Evaluator</a>
+  <li><a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/index-j.html">稲葉雅幸</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/index-j.html">ソフトウェア特論</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/soft4-scheme-interp/index.html">Scheme インタプリタ</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; micro.scm : Micro Scheme
+;
+;             (1) 基本機能の実装
+;             (2) 伝統的なマクロを追加
+;             (3) 継続を CPS で実装
+;
+;             Copyright (C) 2009 Makoto Hiroi
+;
+
+; 変数束縛
+(define (add-binding vars vals env)
+  (cond ((null? vars) env)    ; 実引数が多い場合は無視する
+        ((symbol? vars)
+         ; 実引数をリストにまとめて変数に束縛
+         (cons (cons vars vals) env))
+        (else
+         (cons (cons (car vars) (car vals))
+               (add-binding (cdr vars) (cdr vals) env)))))
+
+; 変数を環境から探す
+(define (lookup var env)
+  ; 局所変数から探す
+  (let ((value (assoc var env)))
+    (if value
+        value
+      ; 大域変数から探す
+      (assoc var *global-environment*))))
+
+;;; syntax
+
+; (quote x)
+(define (m-quote expr env cont) (cont (cadr expr)))
+
+; (if test then else)
+(define (m-if expr env cont)
+  (m-eval (cadr expr) env
+    (lambda (pred)
+      (if pred
+          (m-eval (caddr expr) env cont)
+        (if (null? (cdddr expr))
+            (cont '*undef*)
+          (m-eval (cadddr expr) env cont))))))
+
+; (lambda (args ...) body ...)
+(define (m-lambda expr env cont)
+  (cont (list 'closure expr env)))
+
+; (define name s-expr)
+(define (m-define expr env cont)
+  ; 内部 define は考慮しない
+  (m-eval (caddr expr) env
+    (lambda (value)
+      (set! *global-environment*
+            (cons (cons (cadr expr) value)
+                  *global-environment*))
+      ; シンボルを返す
+      (cont (cadr expr)))))
+
+; (set! name value)
+(define (m-set! expr env cont)
+  (m-eval (caddr expr) env
+    (lambda (value)
+      (set-cdr! (lookup (cadr expr) env) value)
+      (cont value))))
+
+;;; マクロ
+
+; (define-macro name s-expr)
+(define (m-define-macro expr env cont)
+  ; とりあえず大域変数のみ
+  (m-eval (caddr expr) env
+    (lambda (value)
+      (set! *global-environment*
+            (cons (cons (cadr expr)
+                        (cons 'macro value))
+                  *global-environment*))
+      ; symbol を返す
+      (cont (cadr expr)))))
+
+; quasiquote
+(define (m-quasiquote exp env cont)
+  (define (transfer ls cont)
+    (cond ((pair? ls)
+           (cond ((pair? (car ls))
+                  (cond ((eq? (caar ls) 'unquote)
+                         (transfer (cdr ls)
+                           (lambda (xs)
+                             (m-eval (cadar ls) env
+                               (lambda (ys) (cont (cons ys xs)))))))
+                        ((eq? (caar ls) 'unquote-splicing)
+                         (transfer (cdr ls)
+                           (lambda (xs)
+                             (m-eval (cadar ls) env
+                               (lambda (ys) (cont (append ys xs)))))))
+                        (else (transfer (car ls)
+                                (lambda (xs)
+                                  (transfer (cdr ls)
+                                    (lambda (ys) (cont (cons xs ys)))))))))
+                 (else (transfer (cdr ls)
+                         (lambda (xs) (cont (cons (car ls) xs)))))))
+          (else (cont ls))))
+  (transfer (cadr exp) cont))
+
+
+;;; 関数適用
+
+; 関数値 : (tag ...)
+; tag
+; syntax    : シンタックス形式 (syntax m-xxx)
+; primitive : プリミティブ     (primitive #&lt;subr ...&gt;)
+; closure   : クロージャ       (closure (lambda (args ...) body ...) env)
+; macro     : マクロ           (macro (lambda (args ...) body ...))
+
+; 継続
+(define (p-call/cc procedure cont)
+  (m-apply procedure
+           (list (list 'primitive 'continuation cont)) cont))
+
+; apply
+(define (p-apply procedure actuals cont)
+  ; 複数の引数を最後のリストに集める
+  (define (collect-actuals ls)
+    (if (null? (cdr ls))
+        (car ls)
+      (cons (car ls) (collect-actuals (cdr ls)))))
+  (m-apply procedure (collect-actuals actuals) cont))
+
+; apply
+; procedure := 関数値
+(define (m-apply procedure actuals cont)
+  (case (car procedure)
+    ((primitive)
+     (case (cadr procedure)
+       ((apply)
+        (p-apply (car actuals) (cdr actuals) cont))
+       ((call/cc)
+        (p-call/cc (car actuals) cont))
+       ((continuation)
+        ((caddr procedure) (car actuals)))
+       (else
+        (cont (apply (cadr procedure) actuals)))))
+    ((closure)
+     (let ((expr (cadr procedure)))
+       ; body の評価
+       (eval-body (cddr expr)
+                  (add-binding (cadr expr) actuals (caddr procedure))
+                  cont)))
+    (else
+     (error "unknown procedure type -- m-apply" procedure))))
+
+;;; S 式の評価
+
+; body の評価
+(define (eval-body body env cont)
+  (if (null? (cdr body))
+      (m-eval (car body) env cont)
+    (m-eval (car body) env
+      (lambda (value)
+        (eval-body (cdr body) env cont)))))
+
+; 自己評価フォームか
+(define (self-evaluation? expr)
+  (and (not (pair? expr)) (not (symbol? expr))))
+
+; 引数を評価する
+(define (map-eval args env cont)
+  (if (null? args)
+      (cont '())
+    (m-eval (car args) env
+      (lambda (x)
+        (map-eval (cdr args) env
+          (lambda (y) (cont (cons x y))))))))
+
+; eval
+(define (m-eval expr env cont)
+  (cond ((self-evaluation? expr) (cont expr))
+        ((symbol? expr)
+         (cont (cdr (lookup expr env))))
+        ((pair? expr)
+         (m-eval (car expr) env
+           (lambda (procedure)
+             (case (car procedure)
+               ((syntax) ((cadr procedure) expr env cont))
+               ((macro)
+                (m-apply (cdr procedure) (cdr expr)
+                  (lambda (new-expr)
+                    (m-eval new-expr env cont))))
+               (else
+                (map-eval (cdr expr) env
+                  (lambda (actuals)
+                    (m-apply procedure actuals cont))))))))
+        (else
+         (error "unknown expression type -- m-eval" exp))))
+
+; 初期化
+(define *global-environment*
+        (list
+          (list 'car   'primitive car)
+          (list 'cdr   'primitive cdr)
+          (list 'cons  'primitive cons)
+          (list 'eq?   'primitive eq?)
+          (list 'eqv?  'primitive eqv?)
+          (list 'pair? 'primitive pair?)
+          (list 'call/cc 'primitive 'call/cc)
+          (list 'apply   'primitive 'apply)
+          (list 'display 'primitive (lambda (x) (display x) '*undef*))
+          (list 'newline 'primitive (lambda () (newline) '*undef*))
+          (list 'if     'syntax m-if)
+          (list 'quote  'syntax m-quote)
+          (list 'lambda 'syntax m-lambda)
+          (list 'define 'syntax m-define)
+          (list 'set!   'syntax m-set!)
+          (list 'define-macro 'syntax m-define-macro)
+          (list 'quasiquote   'syntax m-quasiquote)
+        ))
+
+;;; read-eval-print-loop
+(define (repl)
+  (let loop ()
+    (display "\n&gt;&gt;&gt; ")
+    (display (m-eval (read) '() (lambda (x) x)))
+    (newline)
+    (loop)))
+
+; 実行
+(define (main args)
+  ; ファイルの読み込み
+  (for-each
+    (lambda (name)
+      (with-input-from-file name
+        (lambda ()
+          (let loop ()
+            (let ((output (m-eval (read) '() (lambda (x) x))))
+              (display output)
+              (newline)
+              (if (not (eof-object? output))
+                  (loop)))))))
+    (cdr args))
+  ; 実行
+  (repl))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm31.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm33.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

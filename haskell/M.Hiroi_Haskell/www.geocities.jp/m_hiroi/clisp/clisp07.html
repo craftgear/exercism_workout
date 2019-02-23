@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 CLOS プログラミング入門</title>
+  <meta name="description" content="Common Lisp,Common Lisp Object System,CLOS,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881760</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>お気楽 CLOS プログラミング入門</h2>
+<div class="small">
+[ <a href="clisp06.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | <a href="clisp08.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap0701">●メソッド結合</h3>
+<p> 今回は「メソッド結合 (method combination) 」について説明します。メソッド結合とは、複数のメソッドを組み合わせて使うための機能です。<a href="clisp03.html">継承</a> で説明しましたが、スーパークラスのメソッドは call-next-method で呼び出すことができます。一般的なオブジェクト指向言語の場合、「メソッド結合」はスーパークラスのメソッドを呼び出す機能のことを指すようです。
+</p>
+<p> CLOS の場合、メソッド結合は call-next-method だけではありません。実は、CLOS には「基本メソッド」と「補助メソッド」という 2 種類のメソッドがあります。補助メソッドは基本メソッドを補助するためのメソッドで、基本メソッドが評価される前後で自動的に補助メソッドが評価されるのです。この機能には M.Hiroi も驚きました。
+</p>
+<p> 補助メソッドは defmethod で「メソッド修飾子」 :before, :after, :around のどれかひとつを指定すると、そのメソッドは補助メソッドになります。メソッド修飾子の指定がない場合は基本メソッドになります。まず最初に、:before メソッドと :after メソッドについて説明します。
+</p>
+
+<h4>●:before メソッドと :after メソッド</h4>
+<p> :before メソッドは基本メソッドの前に評価される補助メソッドで、:after メソッドは逆に基本メソッドのあとに評価される補助メソッドです。簡単な例を示しましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 1 : :before メソッドと :after メソッド
+
+; クラス定義
+(defclass foo1 () ())
+(defclass foo2 (foo1) ())
+(defclass foo3 (foo2) ())
+
+; 基本メソッド
+(defmethod bar ((x foo1)) (format t "foo1 bar~%"))
+(defmethod bar ((x foo2)) (format t "foo2 bar~%"))
+(defmethod bar ((x foo3)) (format t "foo3 bar~%"))
+
+; :after メソッド
+(defmethod bar :after ((x foo1)) (format t "foo1 bar after~%"))
+(defmethod bar :after ((x foo2)) (format t "foo2 bar after~%"))
+(defmethod bar :after ((x foo3)) (format t "foo3 bar after~%"))
+
+; :before メソッド
+(defmethod bar :before ((x foo1)) (format t "foo1 bar before~%"))
+(defmethod bar :before ((x foo2)) (format t "foo2 bar before~%"))
+(defmethod bar :before ((x foo3)) (format t "foo3 bar before~%"))
+</pre>
+<p> クラス foo1, foo2, foo3 と基本メソッド bar を定義します。補助メソッドの定義は、defmethod でメソッド名の後ろにメソッド修飾子を指定するだけです。このとき、複数のメソッド修飾子を指定することはできません。ご注意ください。これで各クラスの基本メソッド bar に :before メソッドと :after メソッドが定義されます。
+</p>
+
+<p> それでは実際に実行してみましょう。次の例を見てください。
+</p>
+<pre>
+&gt; (setq x1 (make-instance 'foo1))
+#&lt;FOO1 #x1A707C2D&gt;
+&gt; (bar x1)
+foo1 bar before
+foo1 bar
+foo1 bar after
+NIL
+</pre>
+
+<p> クラス foo1 のインスタンスを生成して、メソッド bar を評価します。最初に :before メソッドが評価され、次に基本メソッド、最後に :after メソッドが評価されます。この場合、基本メソッドの返り値が (bar x1) の返り値になります。このとき、:before メソッドと :after メソッドの返り値は無視されます。
+</p>
+<p> 次はクラス foo2, foo3 のインスタンスを生成して、メソッド bar を評価してみましょう。結果は次のようになります。
+</p>
+<pre>
+&gt; (setq x2 (make-instance 'foo2))
+#&lt;FOO2 #x1A70C0BD&gt;
+&gt; (bar x2)
+foo2 bar before
+foo1 bar before
+foo2 bar
+foo1 bar after
+foo2 bar after
+NIL
+
+&gt; (setq x3 (make-instance 'foo3))
+#&lt;FOO3 #x1A70EC31&gt;
+&gt; (bar x3)
+foo3 bar before
+foo2 bar before
+foo1 bar before
+foo3 bar
+foo1 bar after
+foo2 bar after
+foo3 bar after
+NIL
+</pre>
+<p> :before メソッドと :after メソッドは、自動的にスーパークラスの :before メソッドと :after メソッドを呼び出すことに注意してください。したがって、:before メソッドや :after メソッド内で call-next-method を使う必要はありません。実際に call-next-method を呼び出すとエラーが発生します。
+</p>
+<p> クラス foo2 のインスタンスを生成してメソッド bar 呼び出すと、最初に foo2 の :before メソッドが評価され、次に foo1 の :before メソッドが評価されます。つまり、「クラス優先順位リスト」に従って特定的なメソッドから順番に評価されます。
+</p>
+<p> :after メソッドは、評価順序が :before メソッドの逆になることに注意してください。つまり、クラス優先順位リストの逆順に評価されます。したがって、foo1 の :after メソッドが評価されてから、次に foo2 の :after メソッドが評価されます。
+</p>
+<p> クラス foo3 のインスタンスを生成してメソッド bar を評価すると、:before メソッドは foo3 -&gt; foo2 -&gt; foo1 の順番で評価され、:after メソッドは foo1 -&gt; foo2 -&gt; foo3 の順番で評価されます。
+</p>
+
+<h4>●:around メソッド</h4>
+<p> 基本メソッドを評価するとき、:before メソッドと :after メソッドが自動的に評価されるという機能はとてもユニークだと思います。AWK や Perl をご存知の方であれば、BEGIN と END という機能を思い浮かべたかもしれませんね。最後の :around メソッドも、非常に面白い機能です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 2 : :around メソッド
+
+; クラス定義
+(defclass foo1 () ())
+(defclass foo2 (foo1) ())
+(defclass foo3 (foo2) ())
+
+; 基本メソッド
+(defmethod bar ((x foo1)) (format t "foo1 bar~%") 'foo1)
+(defmethod bar ((x foo2)) (format t "foo2 bar~%") 'foo2)
+(defmethod bar ((x foo3)) (format t "foo3 bar~%") 'foo3)
+
+; :after メソッド
+(defmethod bar :after ((x foo1)) (format t "foo1 bar after~%"))
+(defmethod bar :after ((x foo2)) (format t "foo2 bar after~%"))
+(defmethod bar :after ((x foo3)) (format t "foo3 bar after~%"))
+
+; :before メソッド
+(defmethod bar :before ((x foo1)) (format t "foo1 bar before~%"))
+(defmethod bar :before ((x foo2)) (format t "foo2 bar before~%"))
+(defmethod bar :before ((x foo3)) (format t "foo3 bar before~%"))
+
+; :around メソッド
+(defmethod bar :around ((x foo1)) (format t "foo1 bar around~%") (call-next-method))
+(defmethod bar :around ((x foo2)) (format t "foo2 bar around~%") (call-next-method))
+(defmethod bar :around ((x foo3)) (format t "foo3 bar around~%") (call-next-method))
+</pre>
+<p> クラス定義、:before メソッド、:after メソッドは最初の例題と同じですが、基本メソッド bar はクラス名のシンボルを返すように変更しています。:around メソッドは :before メソッドよりも先に評価される補助メソッドです。:around メソッドは :before メソッドと :after メソッドとは違い、自動的にスーパークラスの :around メソッドや基本メソッドを呼び出すことはしません。次の例を見てください。
+</p>
+<pre>
+&gt; (setq x1 (make-instance 'foo1))
+#&lt;FOO1 #x1A70A63D&gt;
+&gt; (bar x1)
+foo1 bar around
+foo1 bar before
+foo1 bar
+foo1 bar after
+FOO1
+</pre>
+<p> クラス foo1 のインスタンスを生成してメソッド bar を評価します。:around メソッドが定義されている場合、まず最初に :around メソッドが評価されます。:around メソッド内で call-next-method が評価されると、クラス優先順位リストに従って次の :around メソッドが評価されます。
+</p>
+<p> もしも、call-next-method で次に評価する :around メソッドがない場合は、基本メソッドが評価されます。このとき、:before メソッドや :after メソッドが定義されていれば、いままでと同様に :before メソッドが先に評価され、次に基本メソッド、最後に :after メソッドが評価されます。
+</p>
+<p> foo1 の :around メソッドで call-next-method が評価されると、次に評価する :around メソッドはもうありません。そこで、bar の :before メソッドが評価され、その次に基本メソッド、そして最後に :after メソッドが評価されます。
+</p>
+<p> それから、(bar x1) の返り値は基本メソッドの返り値ではなく、:around メソッドの返り値になります。この場合は call-next-method の値が返されるので、call-next-method によって評価された基本メソッドの返り値 FOO1 になります。
+</p>
+<p> もしも、:around メソッドで call-next-method の評価が行われないと、そのメソッドを評価するだけで他のメソッドは評価されないことに注意してください。たとえば、foo1 の :around メソッドで call-next-method を削除すると、基本メソッドの呼び出しは行われません。:around メソッドには call-next-method が必要であることを覚えておいてください。
+</p>
+<p> それでは、クラス foo2 と foo3 のインスタンスを生成して、メソッド bar を評価してみましょう。結果は次のようになります。
+</p>
+<pre>
+&gt; (setq x2 (make-instance 'foo2))
+#&lt;FOO2 #x1A7132F5&gt;
+&gt; (bar x2)
+foo2 bar around
+foo1 bar around
+foo2 bar before
+foo1 bar before
+foo2 bar
+foo1 bar after
+foo2 bar after
+FOO2
+
+&gt; (setq x3 (make-instance 'foo3))
+#&lt;FOO3 #x1A71AB11&gt;
+&gt; (bar x3)
+foo3 bar around
+foo2 bar around
+foo1 bar around
+foo3 bar before
+foo2 bar before
+foo1 bar before
+foo3 bar
+foo1 bar after
+foo2 bar after
+foo3 bar after
+FOO3
+</pre>
+<p> クラス foo2 のインスタンスを生成してメソッド bar を呼び出します。最初に、foo2 の :around メソッドが評価され、call-next-method により foo1 の :around メソッドが評価されます。そして、foo1 の :around メソッドで call-next-method が評価され、基本メソッドが評価されます。このとき、:before メソッドと :after メソッドが定義されているので、:before メソッド -&gt; 基本メソッド -&gt; :after メソッドの順番で評価されます。
+</p>
+<p> (bar x2) の返り値は foo2 の :around メソッドの返り値になります。この場合、最後に評価された call-next-method の値になります。この値は foo1 の :around メソッドの返り値なので、けっきょく基本メソッドの返り値 FOO2 が (bar x2) の返り値になります。
+</p>
+<p> クラス foo3 の場合は foo3 -&gt; foo2 -&gt; foo1 の順番で :around メソッドが評価され、そのあとで基本メソッドが評価されます。:before メソッドと :after メソッドが定義されているので、:before メソッド -&gt; 基本メソッド -&gt; :after メソッドの順番で評価されます。
+</p>
+
+<h4>●補助メソッドはアクセスメソッドにも定義できる</h4>
+<p> ところで、スロットにアクセスするため defclass の :accessor でメソッドを指定しますが、このメソッドにも補助メソッドを定義することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 3 : アクセスメソッドの定義
+
+; クラス定義
+(defclass foo () ((a :accessor foo-a :initform 1 :initarg :a)))
+
+; 読み込み用補助メソッド
+(defmethod foo-a :after ((x foo)) (format t "foo-a after~%"))
+(defmethod foo-a :before ((x foo)) (format t "foo-a before~%"))
+
+; 書き込み用補助メソッド
+(defmethod (setf foo-a) :after (data (x foo)) (format t "setf foo-a after~%"))
+(defmethod (setf foo-a) :before (data (x foo)) (format t "setf foo-a before~%"))
+</pre>
+<p> foo-a はスロット a にアクセスするメソッドです。メソッド foo-a の補助メソッドを定義するのは簡単ですね。これで (foo-a x) のようにメソッドが評価されると、:before メソッドと :after メソッドが評価されます。
+</p>
+<p> ところが、(setf (foo-a x) 10) のようにスロットに値をセットする場合、メソッド foo-a ではなく書き込み用のメソッドが評価されます。このメソッドの名前は (setf foo-a) という特別な形式で、第 1 引数が書き込むデータ、第 2 引数がインスタンスになります。このメソッドに補助メソッドを定義すると、(setf (foo-a x) 10) を評価したときに、:before メソッドと :after メソッドが評価されます。
+</p>
+
+<p> それでは、実際に試してみましょう。
+</p>
+<pre>
+&gt; (setq x (make-instance 'foo))
+#&lt;FOO #x1A70A605&gt;
+&gt; (foo-a x)
+foo-a before
+foo-a after
+1
+&gt; (setf (foo-a x) 10)
+setf foo-a before
+setf foo-a after
+10
+</pre>
+<p> クラス foo のインスタンスを生成して変数 x にセットします。(foo-a x) を評価すると、:before メソッドと :after メソッドが評価され、スロットの値 1 が返されます。次に、(setf (foo-a x) 10) を評価すると、:before メソッドと :after メソッドが評価され、スロットに書き込んだ値 10 が返されます。このように、アクセスメソッドにも補助メソッドを定義することができます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap0702">●インスタンスの初期化</h3>
+<p> CLOS は make-instance でクラスのインスタンスを生成します。スロットの初期値は make-instance でセットすることができますが、このほかに総称関数 initialize-instance を使ってインスタンスの初期化を行うことができます。今回はインスタンスの初期化について説明します。
+</p>
+
+<h4>●initialize-instance</h4>
+<p> initialize-instance は make-instance から呼び出される総称関数です。インスタンスを生成するとき、独自の初期化処理を行いたい場合は initialize-instance を使うと便利です。
+</p>
+<pre class="item">
+initialize-instance instance &amp;rest initargs
+</pre>
+<p> initialize-instance はインスタンスが生成されてから呼び出されます。このとき、スロットは未束縛であることに注意してください。スロットの初期値は :initform や :initarg を使って設定することができますが、この処理は CLOS が提供する initialize-instance の基本メソッドで行われます。したがって、単純に initialize-instance をオーバーライドすると、スロットは未束縛のままになってしまいます。次の例を見てください。
+</p>
+
+<pre class="list">
+リスト 1 : initialize-instance の例 (1)
+
+; クラス定義
+(defclass foo () ((a :accessor foo-a :initform 1 :initarg :a)))
+
+; initialize-instance をオーバーライドする
+(defmethod initialize-instance ((x foo) &amp;rest initargs)
+  (format t "init-args ~S~%" initargs)
+  (if (slot-boundp x 'a)
+      (format t "slot a is ~S~%" (foo-a x))
+      (format t "slot a is unbound~%")))
+</pre>
+
+<p> この例はクラス foo の initialize-instance をオーバーライドしています。slot-boundp はスロットが束縛されているかチェックする関数です。
+</p>
+<pre class="item">
+slot-boundp instance slot-name
+</pre>
+<p> slot-name はスロット名を表すシンボルです。instance のスロット slot-name が束縛されていれば t を、未束縛であれば nil を返します。
+</p>
+<p> ここで、スロットを操作するときに便利な関数を紹介しましょう。スロットを未束縛にする関数が slot-makunbound です。
+</p>
+<pre class="item">
+slot-makunbound instance slot-name
+</pre>
+<p> slot-makunbound は instance のスロット slot-name を未束縛の状態にします。slot-makunbound は instance を返します。
+</p>
+<p> 任意のオブジェクトにスロットがあるかチェックする関数が slot-exists-p です。
+</p>
+<pre class="item">
+slot-exists-p object slot-name
+</pre>
+<p> slot-exists-p はオブジェクト object にスロット slot-name が存在すれば t を、なければ nil を返します。
+</p>
+<p> それでは、クラス foo のインスタンスを生成してみましょう。
+</p>
+<pre>
+&gt; (setq z (make-instance 'foo :a 10))
+init-args (:A 10)
+slot a is unbound
+#&lt;FOO #x1A7062C1&gt;
+&gt; (slot-boundp z 'a)
+NIL
+</pre>
+<p> make-instance からオーバライドした initialize-instance が呼び出されますが、このときスロット a は未束縛の状態です。このあと、生成されたインスタンスのスロット a を slot-boundp でチェックすると nil が返ってきます。このように、initialize-instance をオーバーライドすると、:initform や :initarg で指定したスロットの初期化処理が行われないのです。
+</p>
+<p> この場合、基本メソッドをオーバーライドするのではなく、次のように :after メソッドとして定義するとよいでしょう。
+</p>
+
+<pre class="list">
+リスト 2 : initialize-instance の例 (2)
+
+; :after メソッド
+(defmethod initialize-instance :after ((x foo) &amp;rest initargs)
+  (format t "init-args ~S~%" initargs)
+  (if (slot-boundp x 'a)
+      (format t "slot a is ~S~%" (foo-a x))
+      (format t "slot a is unbound~%")))
+</pre>
+
+<p> initialize-instance は通常のメソッドと同様に補助メソッド (:before, :after, :around) を定義することができます。実行例は次のようになります。
+</p>
+<pre>
+&gt; (setq z (make-instance 'foo :a 10))
+init-args (:A 10)
+slot a is 10
+#&lt;FOO #x1A7060F1&gt;
+&gt; (foo-a z)
+10
+</pre>
+<p> :after メソッドは基本メソッドのあとで呼び出される補助メソッドです。したがって、:after メソッドが評価されるときには、スロット a の値は既に :a で指定した 10 に初期化されているのです。
+</p>
+<h4>●ベクタによるキューの実装</h4>
+<p> それでは簡単な例題として、ベクタを使って「キュー (queue) 」を実装してみましょう。Common Lisp 入門 : <a href="../xyzzy_lisp/abclisp11.html#yori16">ベクタによるキューの実装</a> では「構造体」を使いましたが、今回は CLOS でプログラムを作ってみます。
+</p>
+
+<p> 最初に、キューを操作するためのメソッドを示します。
+</p>
+<ul>
+  <li><b>enqueue queue data</b><br>
+キュー queue にデータ data を追加する。成功は t を失敗は nil を返す。
+  <li><b>dequeu queue</b><br>
+キュー queue からデータを取り出す。失敗は nil を返す。
+  <li><b>front queue</b><br>
+キュー queue の先頭データを返す。このとき、データはキューから削除されない。
+  <li><b>emptyp queue</b><br>
+キュー queue が空の場合は t を、そうでなければ nil を返す。
+  <li><b>fullp queue</b><br>
+キュー queue が満杯の場合は t を、そうでなければ nil を返す。
+  <li><b>clear queue</b><br>
+キュー queue を空にする。
+</ul>
+<p> 次に、キューを表すクラスを定義します。
+</p>
+<pre class="list">
+リスト 3 : クラス queue の定義
+
+(defclass queue ()
+  ((front :accessor queue-front :initform 0)
+   (rear  :accessor queue-rear  :initform 0)
+   (count :accessor queue-count :initform 0)
+   (size  :accessor queue-size  :initform 16 :initarg :size)
+   (buffer :accessor queue-buffer)))
+
+; 初期化
+(defmethod initialize-instance :after ((x queue) &amp;rest initargs)
+  (setf (queue-buffer x) (make-array (queue-size x))))
+</pre>
+<p> スロット count はキューに格納されたデータ数をカウントします。この変数を用意することで、キューの状態を簡単にチェックすることができます。スロット size はキューの大きさを表し、スロット buffer にはベクタをセットします。ベクタは initialize-instance で生成してスロット buffer にセットします。これで make-instance で :size を指定するだけで、その大きさのキューを簡単に作ることができます。
+</p>
+
+<p> あとのメソッドは簡単なので説明は省略いたします。詳細は <a href="clisp07.html#list">プログラムリスト</a> をお読みくださいませ。
+</p>
+
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+&gt; (setq z (make-instance 'queue))
+#&lt;QUEUE #x1A71D4E9&gt;
+&gt; (queue-size z)
+16
+&gt; (dotimes (x 10) (enqueue z x))
+NIL
+&gt; (dotimes (x 10) (print (dequeue z)))
+
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+NIL
+&gt; (emptyp z)
+T
+&gt; (fullp z)
+NIL
+</pre>
+<p> 正常に動作していますね。この実行例では make-instance で :size を指定していないので、キューの大きさはスロット size の :initform の値 (16) になります。
+</p>
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+;
+; queue.l : 簡単なリングバッファの実装 (CLOS バージョン)
+;
+;           Copyright (C) 2003 Makoto Hiroi
+;
+
+; クラス定義
+(defclass queue ()
+  ((front :accessor queue-front :initform 0)
+   (rear  :accessor queue-rear  :initform 0)
+   (count :accessor queue-count :initform 0)
+   (size  :accessor queue-size  :initform 16 :initarg :size)
+   (buffer :accessor queue-buffer)))
+
+
+; 初期化
+(defmethod initialize-instance :after ((x queue) &amp;rest initargs)
+  (setf (queue-buffer x) (make-array (queue-size x))))
+
+
+; キューに追加
+(defmethod enqueue ((q queue) data)
+  (when (&lt; (queue-count q) (queue-size q))
+    (setf (aref (queue-buffer q) (queue-rear q)) data)
+    (incf (queue-count q))
+    (incf (queue-rear q))
+    (if (= (queue-size q) (queue-rear q))
+        (setf (queue-rear q) 0))
+    t))
+
+
+; キューから取り出す
+(defmethod dequeue ((q queue))
+  (when (plusp (queue-count q))
+    (prog1
+      (aref (queue-buffer q) (queue-front q))
+      (decf (queue-count q))
+      (incf (queue-front q))
+      (if (= (queue-size q) (queue-front q))
+          (setf (queue-front q) 0)))))
+
+
+; データをリード(削除しない)
+(defmethod front ((q queue))
+  (when (plusp (queue-count q))
+    (aref (queue-buffer q) (queue-front q))))
+
+
+; キューが空か
+(defmethod emptyp ((q queue)) (zerop (queue-count q)))
+
+
+; キューが満杯か
+(defmethod fullp ((q queue)) (= (queue-count q) (queue-size q)))
+
+
+; キューを空にする
+(defmethod clear ((q queue))
+  (setf (queue-rear q)  0
+        (queue-front q) 0
+        (queue-count q) 0))
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap0703">●共有スロット</h3>
+<p> CLOS の場合、インスタンス中のスロットは同じクラスのインスタンスでも別々のメモリ領域に割り当てられます。たとえば、クラス foo にスロット a, b がある場合、make-instance でインスタンス x1, x2 を生成すると、x1 と x2 のスロット a, b は異なるメモリ領域に割り当てられます。CLOS では、これを「局所スロット」といいます。オブジェクト指向プログラミングの場合、インスタンスは個々のオブジェクトを表しているので、スロットがインスタンスごとに別々のメモリ領域に割り当てられるのは当然といえるでしょう。
+</p>
+<p> ところが、プログラムによっては、同じクラスのインスタンスで共通の変数や定数を使いたい場合があります。つまり、インスタンスごとにスロットを用意するのではなく、クラス単位でスロットを用意するのです。CLOS では、これを「共有スロット」といいます。今回は共有スロットについて説明します。
+</p>
+
+<h4>●共有スロットの設定</h4>
+<p> 共有スロットの設定は、スロットオプション :allocation にキーワード :class を指定します。:allocation の指定がない場合、もしくはキーワード :instance を指定すると、スロットは共有されず「局所スロット」になります。
+</p>
+
+<p> 簡単な例を示しましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 1 : 共有スロットの定義
+
+(defclass foo ()
+  ((a :accessor foo-a :initarg :a :allocation :class)
+   (b :accessor foo-b :initform 1 :initarg :b)))
+</pre>
+
+<p> クラス foo にはスロット a, b がありますが、スロット a が共有スロットで、スロット b が局所スロットになります。局所スロット b はインスタンスごとにメモリ領域が割り当てられますが、共有スロット a のメモリ領域はクラスでひとつしかありません。次の例を見てください。
+</p>
+
+<pre>
+&gt; (setq x1 (make-instance 'foo :a 0 :b 10))
+#&lt;FOO #x1A707A45&gt;
+&gt; (setq x2 (make-instance 'foo :b 20))
+#&lt;FOO #x1A70B5A5&gt;
+&gt; (foo-a x1)
+0
+&gt; (foo-a x2)
+0
+&gt; (foo-b x1)
+10
+&gt; (foo-b x2)
+20
+&gt; (setf (foo-a x1) 100)
+100
+&gt; (foo-a x2)
+100
+</pre>
+
+<p> 最初に、インスタンス x1 を生成します。ここでスロット a を 0 に、b を 10 に初期化します。次にインスタンス x2 を生成し、スロット b を 20 に初期化します。スロット a は共有スロットなので、a の値は x1 を生成したときの値 0 になります。当然ですが、(foo-a x1) と (foo-a x2) は同じ値になり、(foo-b x1) と (foo-b x2) は異なる値になります。また、(setf (foo-a x1) 100) のように共有スロットの値を書き換えると、(foo-a x2) の値は書き換えた値 100 になります。このように、スロットが共有されていることがわかります。
+</p>
+
+<h4>●共有スロットの継承</h4>
+<p> ところで、CLOS の継承はスロットやメソッドだけではなく、:accessor, :initform, :initarg などのスロットオプションも継承されますが、:allocation オプションも継承されることに注意してください。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 2 : 共有スロットの継承
+
+(defclass foo ()
+  ((a :accessor foo-a :initarg :a :allocation :class)
+   (b :accessor foo-b :initform 1 :initarg :b)))
+
+(defclass foo1 (foo)
+  ((c :accessor foo-c :initform 2 :initarg :c)))
+</pre>
+<p> クラス foo を継承してクラス foo1 を定義します。foo1 のスロットは a, b, c の 3 つになりますが、スロット a は共有スロットになります。このとき、スロット a は foo1 だけはなく、foo と foo1 の共有スロットになります。簡単な例を示しましょう。
+</p>
+
+<pre>
+&gt; (setq x3 (make-instance 'foo1))
+#&lt;FOO1 #x1A72620D&gt;
+&gt; (foo-a x3)
+100
+&gt; (foo-b x3)
+1
+&gt; (foo-c x3)
+2
+&gt; (setf (foo-a x3) 200)
+200
+&gt; (foo-a x1)
+200
+&gt; (foo-a x2)
+200
+&gt; (foo-a x3)
+200
+</pre>
+<p> クラス foo のインスタンスが変数 x1, x2 にセットされている状態で、クラス foo1 のインスタンスを生成して変数 x3 にセットします。x3 のスロット a は共有スロットなので、x1, x2 と同じ値 (100) になります。スロット b, c は局所スロットなので、:initform の値で初期化されます。ここで、(setf (foo-a x3) 200) とスロット a の値を書き換えると、(foo-a x1) と (foo-a x2) の値は 200 になります。スロット a はクラス foo と foo1 で共有されていることがわかります。
+</p>
+
+<h4>●共有スロットの衝突</h4>
+<p> それでは、サブクラスにスーパークラスと同じ名前の共有スロットを定義したらどうなるのでしょうか。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 3 : 同名の共有スロットがある場合
+
+(defclass foo ()
+  ((a :accessor foo-a :initarg :a :allocation :class)
+   (b :accessor foo-b :initform 1 :initarg :b)))
+
+(defclass foo2 (foo)
+  ((a :accessor foo2-a :initarg :a :allocation :class)
+   (c :accessor foo2-c :initform 3 :initarg :c)))
+</pre>
+
+<p> クラス foo を継承してクラス foo2 を定義します。foo2 でも共有スロット a を定義していることに注意してください。この場合、foo のスロット a と foo1 のスロット a は共有されません。つまり、foo のスロット a は foo の共有スロットであり、foo1 のスロット a は foo1 の共有スロットになるのです。次の例を見てください。
+</p>
+
+<pre>
+&gt; (setq x1 (make-instance 'foo :a 100))
+#&lt;FOO #x1A709685&gt;
+&gt; (setq x2 (make-instance 'foo2 :a 200))
+#&lt;FOO2 #x1A70DB39&gt;
+&gt; (foo-a x1)
+100
+&gt; (foo2-a x2)
+200
+&gt; (foo-a x2)
+200
+</pre>
+<p> foo のインスタンスを生成して変数 x1 にセットします。このとき、共有スロット a を 100 に初期化しています。次に、foo2 のインスタンスを生成して変数 x2 にセットします。共有スロット a は 200 に初期化していることに注意してください。そして、インスタンス x1 と x2 のスロット a の値を求めるてみると 100 と 200 になります。
+</p>
+<p> このように、foo と foo2 のスロット a は共有されません。foo2 のインスタンス中のスロット a は foo2 の共有スロットであり、(foo-a x2) としても foo の共有スロット a にアクセスすることはできません。つまり、foo の共有スロット a はサブクラス foo2 の共有スロット a に「隠蔽（シャドウ）」されるわけです。
+</p>
+
+<h4>●局所スロットと共有スロットの衝突</h4>
+<p> 今度は、スーパークラスの共有スロットと同じ名前の局所スロットがある場合を考えてみます。この場合、:allocation オプションはサブクラスの指定が優先されます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 4 : 局所スロットと共有スロットの衝突 (1)
+
+(defclass foo ()
+  ((a :accessor foo-a :initarg :a :allocation :class)
+   (b :accessor foo-b :initform 1 :initarg :b)))
+
+(defclass foo3 (foo)
+  ((a :accessor foo3-a :initarg :a :allocation :instance)
+   (c :accessor foo3-c :initform 3 :initarg :c)))
+</pre>
+<p> クラス foo を継承してクラス foo3 を定義します。foo のスロット a は共有スロットですが、foo3 のスロット a は局所スロットであることに注意してください。この場合、クラス foo のインスタンスのスロット a は共有スロットになりますが、クラス foo3 のインスタンスのスロット a は局所スロットになります。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; (setq x1 (make-instance 'foo :a 10 :b 20))
+#&lt;FOO #x1A70B2DD&gt;
+&gt; (setq x2 (make-instance 'foo :b 30))
+#&lt;FOO #x1A70EE3D&gt;
+&gt; (setq y1 (make-instance 'foo3 :a 100 :c 200))
+#&lt;FOO3 #x1A70FEC5&gt;
+&gt; (setq y2 (make-instance 'foo3 :a 300 :c 400))
+#&lt;FOO3 #x1A712135&gt;
+&gt; (foo-a x1)
+10
+&gt; (foo-a x2)
+10
+&gt; (foo-a y1)
+100
+&gt; (foo-a y2)
+300
+</pre>
+<p> クラス foo のインスタンスを生成して変数 x1, x2 にセットし、クラス foo3 のインスタンスを生成して変数 y1, y2 にセットします。foo のスロット a は共有スロットなので、(foo-a x1) と (foo-a x2) は同じ値 (10) になります。ところが、foo3 のスロット a は局所スロットになるので、make-instance で指定した値に初期化されます。したがって、(foo-a y1) は 100 になり、(foo-a y2) は 300 になります。
+</p>
+
+<p> 逆に、スーパークラスのスロット a が局所スロットで、サブクラスのスロット a が共有スロットの場合、サブクラスのスロット a は共有スロットになります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 5 : 局所スロットと共有スロットの衝突 (2)
+
+(defclass bar ()
+  ((a :accessor bar-a :initform 0 :initarg :a)
+   (b :accessor bar-b :initform 1 :initarg :b)))
+
+(defclass bar1 (bar)
+  ((a :accessor bar1-a :initarg :a :allocation :class)
+   (c :accessor bar1-c :initform 2 :initarg :c)))
+</pre>
+<p> クラス bar のスロット a, b は局所スロットです。bar を継承して暮らす bar1 を定義します。このとき、スロット a を共有スロットとして定義します。bar のインスタンス中のスロット a は局所スロットになりますが、bar1 のスロット a は共有スロットになります。簡単な実行例を示しましょう。
+</p>
+
+<pre>
+&gt; (setq x1 (make-instance 'bar :a 10 :b 20))
+#&lt;BAR #x1A70E9CD&gt;
+&gt; (setq x2 (make-instance 'bar :a 30 :b 40))
+#&lt;BAR #x1A712549&gt;
+&gt; (setq y1 (make-instance 'bar1 :a 100 :b 200 :c 300))
+#&lt;BAR1 #x1A7135F1&gt;
+&gt; (setq y2 (make-instance 'bar1 :b 400 :c 500))
+#&lt;BAR1 #x1A71585D&gt;
+&gt; (bar-a x1)
+10
+&gt; (bar-a x2)
+30
+&gt; (bar-a y1)
+100
+&gt; (bar-a y2)
+100
+&gt; (bar1-a y2)
+100
+</pre>
+<p> クラス bar のインスタンス x1, x2 のスロット a は局所スロットで、bar1 のインスタンス y1, y2 のスロット a は共有スロットになっていることがわかります。ようするに、スロットオプション :allocation の設定は「クラス優先順位リスト」に従って決定されるのです。これは多重継承でも同じです。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 6 : 局所スロットと共有スロットの衝突 (3)
+
+(defclass baz1 ()
+	  ((a :accessor baz1-a :initarg :a)))
+
+(defclass baz2 ()
+	  ((a :accessor baz2-a :initarg :a :allocation :class)))
+
+(defclass baz3 (baz1 baz2) ())
+
+(defclass baz4 (baz2 baz1) ())
+</pre>
+
+<p> クラス baz1 のスロット a は局所スロットで、baz2 のスロット a は共有スロットです。この 2 つのクラスを多重継承して、クラス baz3 と baz4 を作成します。この場合、クラス優先順位リスト（この場合は左優先則）に従って、baz3 のスロット a は局所スロット、baz4 のスロット a は共有スロットになります。実行例は次のようになります。
+</p>
+
+<pre>
+&gt; (setq x1 (make-instance 'baz3 :a 10))
+#&lt;BAZ3 #x1A7111BD&gt;
+&gt; (setq x2 (make-instance 'baz3 :a 20))
+#&lt;BAZ3 #x1A714D21&gt;
+&gt; (setq y1 (make-instance 'baz4 :a 30))
+#&lt;BAZ4 #x1A715D89&gt;
+&gt; (setq y2 (make-instance 'baz4))
+#&lt;BAZ4 #x1A717FB5&gt;
+&gt; (baz1-a x1)
+10
+&gt; (baz1-a x2)
+20
+&gt; (baz1-a y1)
+30
+&gt; (baz1-a y2)
+30
+</pre>
+<p> baz3 のインスタンス x1, x2 のスロット a の値は 10, 20 になるので、局所スロットであることがわかります。次に、baz4 のインスタンス y1, y2 を生成します。y1 のスロット a の値は 30 で、y2 のスロット a も 30 なので、共有スロットであることがわかります。このように、スロット名が衝突した場合、:allocation の設定は「クラス優先順位リスト」に従って決定されます。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003-2010 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clisp06.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | <a href="clisp08.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

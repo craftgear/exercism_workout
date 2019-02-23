@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Yet Another Common Lisp Problems</title>
+  <meta name="description" content="Common Lisp,Common Lisp Problems,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881771</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Yet Another Common Lisp Problems</h2>
+<div class="small">
+[ <a href="yaclp05.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | NextPage ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h4>●問題101</h4>
+<p> 2 つのリスト xs, ys を受け取り、同じ位置にある要素をリストにまとめ、それをリストに格納して返す関数 zip xs ys を定義してください。引数のリストの長さが異なる場合は、短いリストの長さに合わせてください。関数 mapcar を使うと簡単に定義できますが、ここでは mapcar を使わないものとします。
+</p>
+<pre>
+* (zip '(a b c d) '(1 2 3 4))
+
+((A 1) (B 2) (C 3) (D 4))
+* (zip '(a b c d) '(1 2 3))
+
+((A 1) (B 2) (C 3))
+* (zip '(a b c) '(1 2 3 4))
+
+((A 1) (B 2) (C 3))
+* (zip '(a b c) '())
+
+NIL
+</pre>
+<p><a href="yaclp06.html#ans101">解答</a>
+</p>
+<h4>●問題102</h4>
+<p> 2 つ以上のリストを受け取り、同じ位置にある要素をリストにまとめ、それをリストに格納して返す関数 zipN xs1 xs2 ... を定義してください。引数のリストの長さが異なる場合は、短いリストの長さに合わせてください。ただし、関数 mapcar は使わないで、次に示すマップ関数 map1 を使ってください。
+</p>
+<pre class="list">
+リスト : マップ関数
+
+(defun map1 (f xs)
+  (if (null xs)
+      nil
+    (cons (funcall f (car xs)) (map1 f (cdr xs)))))
+</pre>
+<pre>
+* (zipN '(a b c) '(1 2 3) '(4 5 6))
+
+((A 1 4) (B 2 5) (C 3 6))
+* (zipN '(a b c) '(1 2 3) '(4 5))
+
+((A 1 4) (B 2 5))
+</pre>
+<p><a href="yaclp06.html#ans102">解答</a>
+</p>
+<h4>●問題103</h4>
+<p> zip したリストを元に戻す関数 unzip xs を定義してください。返り値のリストは多値で返すものとします。
+</p>
+<pre>
+* (unzip '((a 1) (b 2) (c 3) (d 4)))
+
+(A B C D)
+(1 2 3 4)
+</pre>
+<p><a href="yaclp06.html#ans103">解答</a>
+</p>
+<h4>●問題104</h4>
+<p> zipN したリストを元に戻す関数 unzipN xs を定義してください。返り値のリストは多値で返すものとします。
+</p>
+<pre>
+* (unzipN '((a 1 11) (b 2 12) (c 3 13) (d 4 14)))
+
+(A B C D)
+(1 2 3 4)
+(11 12 13 14)
+</pre>
+<p><a href="yaclp06.html#ans104">解答</a>
+</p>
+<h4>●問題105</h4>
+<p> 関数 take-while pred xs は述語 pred を満たす要素が続いている間、リスト xs の先頭から順番に要素を取り出します。関数 take-while を定義してください。
+</p>
+<pre>
+* (take-while #'evenp '(2 4 6 8 1 2 3 4 5))
+
+(2 4 6 8)
+* (take-while #'oddp '(2 4 6 8 1 2 3 4 5))
+
+NIL
+</pre>
+<p><a href="yaclp06.html#ans105">解答</a>
+</p>
+<h4>●問題106</h4>
+<p> 関数 drop-while pred xs は述語 pred を満たす要素が続いている間、リスト xs の先頭から順番に要素を取り除きます。関数 drop-while を定義してください。
+</p>
+<pre>
+* (drop-while #'evenp '(2 4 6 8 1 2 3 4 5))
+
+(1 2 3 4 5)
+* (drop-while #'oddp '(2 4 6 8 1 2 3 4 5))
+
+(2 4 6 8 1 2 3 4 5)
+</pre>
+<p><a href="yaclp06.html#ans106">解答</a>
+</p>
+<h4>●問題107</h4>
+<p> 関数 span pred xs は (values (take-while pred xs) (drop-while pred xs)) を返します。take-while と drop-while を使わないで関数 span を定義してください。
+</p>
+<pre>
+* (span #'evenp '(2 4 6 8 1 2 3 4 5))
+
+(2 4 6 8)
+(1 2 3 4 5)
+* (span #'oddp '(2 4 6 8 1 2 3 4 5))
+
+NIL
+(2 4 6 8 1 2 3 4 5)
+</pre>
+<p><a href="yaclp06.html#ans107">解答</a>
+</p>
+<h4>●問題108</h4>
+<p> 関数 break1 pred xs は span とは逆の動作、つまり (span #'(lambda (x) (not (pred x))) xs) と同じ動作をします。take-while, drop-while, span を使わないで関数 break1 を定義してください。Common Lisp には break という別機能の関数が定義されているので、ここでは関数名を break1 としました。
+</p>
+<pre>
+* (break1 #'evenp '(2 4 6 8 1 2 3 4 5))
+
+NIL
+(2 4 6 8 1 2 3 4 5)
+* (break1 #'oddp '(2 4 6 8 1 2 3 4 5))
+
+(2 4 6 8)
+(1 2 3 4 5)
+</pre>
+<p><a href="yaclp06.html#ans108">解答</a>
+</p>
+<h4>●問題109</h4>
+<p> 関数 scanl f a xs は畳み込みを行う関数 fold-left f a xs と同じ動作をしますが、計算途中の累積値をリストに格納して返すところが異なります。関数 scanl を定義してください。なお、関数 f の引数は、第 1 引数が要素、第 2 引数が累積値になります。
+</p>
+<pre>
+* (scanl #'+ 0 '(1 2 3 4 5 6 7 8 9 10))
+
+(0 1 3 6 10 15 21 28 36 45 55)
+* (scanl #'cons nil '(1 2 3 4))
+
+(NIL (1) (2 1) (3 2 1) (4 3 2 1))
+</pre>
+<p> ご参考までに畳み込みを行う関数 fold-left のプログラムと動作例を示します。関数 f の引数の順番が scanl と逆になることに注意してください。
+</p>
+<pre class="list">
+リスト : 畳み込み
+
+(defun fold-left (f a xs)
+  (if (null xs)
+      a
+    (fold-left f (funcall f a (car xs)) (cdr xs))))
+
+; reduce を使う場合
+; (defun fold-left (f a xs) (reduce f xs :initial-value a))
+</pre>
+<pre>
+* (fold-left #'list 0 '(1 2 3 4 5))
+
+(((((0 1) 2) 3) 4) 5)
+</pre>
+<p><a href="yaclp06.html#ans109">解答</a>
+</p>
+<h4>●問題110</h4>
+<p> 関数 scanr f a xs は畳み込みを行う関数 fold-right f a xs と同じ動作をしますが、計算途中の累積値をリストに格納して返すところが異なります。関数 scanr を定義してください。
+</p>
+<pre>
+* (scanr #'+ 0 '(1 2 3 4 5 6 7 8 9 10))
+
+(55 54 52 49 45 40 34 27 19 10 0)
+* (scanr #'cons nil '(1 2 3 4))
+
+((1 2 3 4) (2 3 4) (3 4) (4) NIL)
+</pre>
+
+<p> ご参考までに畳み込みを行う関数 fold-right のプログラムと動作例を示します。
+</p>
+<pre class="list">
+リスト : 畳み込み
+
+(defun fold-right (f a xs)
+  (if (null xs)
+      a
+    (funcall f (car xs) (fold-right f a (cdr xs)))))
+
+; reduce を使う場合
+; (defun fold-right (f a xs) (reduce f xs :from-end t :initial-value a))
+</pre>
+<pre>
+* (fold-right #'list 0 '(1 2 3 4 5))
+
+(1 (2 (3 (4 (5 0)))))
+</pre>
+<p><a href="yaclp06.html#ans110">解答</a>
+</p>
+<h4>●問題111</h4>
+<p> 関数 map-accum-left f a xs は map と fold-left を合わせた関数で、畳み込みを行った結果と各要素に関数 f を適用した結果を格納したリストを多値で返します。関数 f は累積値とリストの要素を受け取り、新しい累積値とリストに格納する値を多値で返します。関数 map-accum-left を定義してください。
+</p>
+<pre>
+* (map-accum-left #'(lambda (a x) (values (+ a (* x x)) (* x x))) 0 '(1 2 3 4 5))
+
+55
+(1 4 9 16 25)
+* (map-accum-left #'(lambda (a x) (values (+ a x) (+ a x))) 0 '(1 2 3 4 5))
+
+15
+(1 3 6 10 15)
+</pre>
+<p><a href="yaclp06.html#ans111">解答</a>
+</p>
+<h4>●問題112</h4>
+<p> 関数 map-accum-right f a xs は map と fold-right を合わせた関数で、畳み込みを行った結果と各要素に関数 f を適用した結果を格納したリストを多値で返します。関数 f は累積値とリストの要素を受け取り、新しい累積値とリストに格納する値を多値で返します。関数 map-accum-right を定義してください。
+</p>
+<pre>
+* (map-accum-right #'(lambda (a x) (values (+ a (* x x)) (* x x))) 0 '(1 2 3 4 5))
+
+55
+(1 4 9 16 25)
+* (map-accum-right #'(lambda (a x) (values (+ a x) (+ a x))) 0 '(1 2 3 4 5))
+
+15
+(15 14 12 9 5)
+</pre>
+<p><a href="yaclp06.html#ans112">解答</a>
+</p>
+<h4>●問題113</h4>
+<p> リスト xs の要素の間に x を挿入する関数 intersperse x xs を定義してください。
+</p>
+<pre>
+* (intersperse 0 '(1 2 3 4 5))
+
+(1 0 2 0 3 0 4 0 5)
+* (intersperse '(0 0) '(1 2 3 4 5))
+
+(1 (0 0) 2 (0 0) 3 (0 0) 4 (0 0) 5)
+</pre>
+<p><a href="yaclp06.html#ans113">解答</a>
+</p>
+<h4>●問題114</h4>
+<p> リスト ys の要素の間にリスト xs を挿入して平坦化する関数 intercalate xs ys を定義してください。この場合、ys の要素はリストでなければなりません。
+</p>
+<pre>
+* (intercalate '(0 0) '((1 2) (3 4) (5 6)))
+
+(1 2 0 0 3 4 0 0 5 6)
+</pre>
+<p><a href="yaclp06.html#ans114">解答</a>
+</p>
+<h4>●問題115</h4>
+<p> 畳み込みを行う関数 fold-left, fold-right はリストの要素に関数が適用されますが、リストそのものを関数に渡して畳み込みを行う方法も考えられます。リストの先頭から畳み込みを行う関数 pair-fold-left と、末尾から畳み込みを行う関数 pair-fold-right を定義してください。
+</p>
+<pre>
+* (pair-fold-left #'(lambda (a x) (cons x a)) nil '(1 2 3 4 5))
+
+((5) (4 5) (3 4 5) (2 3 4 5) (1 2 3 4 5))
+* (pair-fold-left #'(lambda (a x) (cons (apply #'+ x) a)) nil '(1 2 3 4 5))
+
+(5 9 12 14 15)
+* (pair-fold-right #'(lambda (x a) (cons x a)) nil '(1 2 3 4 5))
+
+((1 2 3 4 5) (2 3 4 5) (3 4 5) (4 5) (5))
+* (pair-fold-right #'(lambda (x a) (cons (apply #'+ x) a)) nil '(1 2 3 4 5))
+
+(15 14 12 9 5)
+</pre>
+<p><a href="yaclp06.html#ans115">解答</a>
+</p>
+<h4>●問題116</h4>
+<p> リスト xs の接頭辞をすべて求める関数 inits xs を定義してください。
+</p>
+<pre>
+* (inits '(a b c d e))
+
+(NIL (A) (A B) (A B C) (A B C D) (A B C D E))
+</pre>
+<p><a href="yaclp06.html#ans116">解答</a>
+</p>
+<h4>●問題117</h4>
+<p> リスト xs の接尾辞をすべて求める関数 tails xs を定義してください。
+</p>
+<pre>
+* (tails '(a b c d e))
+
+((A B C D E) (B C D E) (C D E) (D E) (E) NIL)
+</pre>
+<p><a href="yaclp06.html#ans117">解答</a>
+</p>
+<h4>●問題118</h4>
+<p> リスト xs の中で等しい要素を集めてグループに分ける関数 group-collection xs を定義してください。なお、等値関係は述語 eql でチェックするものとします。
+</p>
+
+<pre>
+* (group-collection '(1 2 1 2 3 1 2 3 4 5 4 3 2 1))
+
+((1 1 1 1) (2 2 2 2) (3 3 3) (4 4) (5))
+* (group-collection '(a b c d e))
+
+((A) (B) (C) (D) (E))
+</pre>
+<p><a href="yaclp06.html#ans118">解答</a>
+</p>
+<h4>●問題119</h4>
+<p> リスト xs に x を挿入するパターンをすべて求めてリストに格納して返す関数 interleave x xs を定義してください。
+</p>
+<pre>
+* (interleave 0 '(1))
+
+((0 1) (1 0))
+* (interleave 0 '(1 2))
+
+((0 1 2) (1 0 2) (1 2 0))
+* (interleave 0 '(1 2 3 4 5))
+
+((0 1 2 3 4 5) (1 0 2 3 4 5) (1 2 0 3 4 5) (1 2 3 0 4 5) (1 2 3 4 0 5) (1 2 3 4 5 0))
+</pre>
+<p><a href="yaclp06.html#ans119">解答</a>
+</p>
+<h4>●問題120</h4>
+<p> 関数 interleave を使ってリスト xs の順列を求める関数 permutations を定義してください。なお、順列はリストに格納して返すものとします。
+</p>
+<pre>
+* (permutations '(a b c))
+
+((A B C) (B A C) (B C A) (A C B) (C A B) (C B A))
+* (permutations '(a b c d))
+
+((A B C D) (B A C D) (B C A D) (B C D A) (A C B D) (C A B D) (C B A D)
+ (C B D A) (A C D B) (C A D B) (C D A B) (C D B A) (A B D C) (B A D C)
+ (B D A C) (B D C A) (A D B C) (D A B C) (D B A C) (D B C A) (A D C B)
+ (D A C B) (D C A B) (D C B A))
+</pre>
+<p><a href="yaclp06.html#ans120">解答</a>
+</p>
+<hr>
+<h4 id="ans101">●解答101</h4>
+<p> 2 つのリストをひとつにまとめる場合、mapcar を使えば (mapcar #'list xs ys) で実現できます。mapcar を使わずに再帰定義でプログラムすると、次のようになるでしょう。
+</p>
+<pre class="list">
+リスト : 2 つのリストをひとつにまとめる
+
+(defun zip (xs ys)
+  (if (or (null xs) (null ys))
+      nil
+    (cons (list (car xs) (car ys)) (zip (cdr xs) (cdr ys)))))
+
+; 別解
+(defun zip1 (xs ys)
+  (do ((xs xs (cdr xs))
+       (ys ys (cdr ys))
+       (a nil (cons (list (car xs) (car ys)) a)))
+      ((or (null xs) (null ys)) (nreverse a))))
+</pre>
+<p> xs または ys が空リストならば空リストを返します。そうでなければ、zip を再帰呼び出しして、その返り値に (list (car xs) (car ys)) を追加します。とても簡単ですね。別解は do を使ってプログラムしたものです。最後に nreverse でリストを反転することに注意してください。
+</p>
+<h4 id="ans102">●解答102</h4>
+<p> 複数のリストをひとつにまとめる場合、再帰呼び出しでプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 複数のリストをひとつにまとめる
+
+; マップ関数
+(defun map1 (f xs)
+  (if (null xs)
+      nil
+    (cons (funcall f (car xs)) (map1 f (cdr xs)))))
+
+(defun zipN (&amp;rest xs)
+  (if (some #'null xs)
+      nil
+    (cons (map1 #'car xs) (apply #'zipN (map1 #'cdr xs)))))
+
+; 別解
+(defun zipN1 (&amp;rest xs)
+  (do ((xs xs (map1 #'cdr xs))
+       (a nil (cons (map1 #'car xs) a)))
+      ((some #'null xs) (nreverse a))))
+</pre>
+<p> 述語 some でリスト xs の中に空リストがあるかチェックします。空リストがある場合は空リストを返します。そうでなければ zipN を再帰呼び出しします。このとき、map1 を使ってリストの要素 (リスト) に cdr を適用し、apply を使って zipN を評価します。その返り値に map1 で集めた先頭要素を追加します。別解は do を使ってプログラムしたものです。
+</p>
+</pre>
+<h4 id="ans103">●解答103</h4>
+<pre class="list">
+リスト : ひとつのリストを 2 つのリストに分ける
+
+(defun unzip (xs)
+  (if (null xs)
+      (values nil nil)
+    (multiple-value-bind
+        (a b)
+        (unzip (cdr xs))
+      (values (cons (caar xs) a)
+              (cons (cadar xs) b)))))
+
+; 別解 1
+(defun unzip1 (xs)
+  (do ((xs xs (cdr xs))
+       (a nil (cons (caar xs) a))
+       (b nil (cons (cadar xs) b)))
+      ((null xs) (values (nreverse a) (nreverse b)))))
+
+; 別解 2
+(defun unzip2 (xs)
+  (apply #'values
+         (fold-right #'(lambda (x a) (mapcar #'cons x a)) '(() ()) xs)))
+</pre>
+<p> unzip は再帰呼び出しでプログラムすると簡単です。xs が空リストの場合、2 つの空リストを values で返します。そうでなければ、unzip を再帰呼び出しして、返り値 (多値) を multiple-value-bind で受け取ります。そして、受け取ったリストに要素を追加して、それを values で返すだけです。
+</p>
+<p> 別解 1 は do でプログラムしたものです。最後に nreverse でリストを反転しています。別解 2 は畳み込み fold-right でプログラムしたものです。
+</p>
+
+<h4 id="ans104">●解答104</h4>
+<pre class="list">
+リスト : ひとつのリストを複数のリストに分ける
+
+(defun unzipN (xs)
+  (if (null (cdr xs))
+      (apply #'values (mapcar #'list (car xs)))
+    (let ((ys (multiple-value-list (unzipN (cdr xs)))))
+      (apply #'values (mapcar #'cons (car xs) ys)))))
+
+; 別解
+(defun unzipN1 (xs)
+  (do ((xs (cdr xs) (cdr xs))
+       (a (mapcar #'list (car xs)) (mapcar #'cons (car xs) a)))
+      ((null xs) (apply #'values (mapcar #'nreverse a)))))
+
+; 別解 2
+(defun unzipN2 (xs)
+  (apply #'values
+         (mapcar #'nreverse
+                 (fold-left #'(lambda (a x) (mapcar #'cons x a))
+                            (mapcar #'list (car xs))
+                            (cdr xs)))))
+</pre>
+<p> unzipN も簡単です。xs の要素が 1 つの場合、リストの要素を分けて values で返します。これは mapcar で各要素に list を適用すれば簡単に求めることができます。実行例を示しましょう。
+</p>
+<pre>
+* (mapcar #'list '(a b c d e))
+
+((A) (B) (C) (D) (E))
+* (apply #'values (mapcar #'list '(a b c d e)))
+
+(A)
+(B)
+(C)
+(D)
+(E)
+</pre>
+<p> そうでなければ unzipN を再帰呼び出しして、返り値を multiple-value-list で受け取ります。この場合、変数 ys の値はリストになることに注意してください。あとは mapcar でリストに要素を追加して、それを apply #'values で返すだけです。
+</p>
+<p> 別解 1 は do でプログラムしたものです。最後に、各リストに nreverse を適用して反転していることに注意してください。別解 2 は畳み込み fold-left を使ってプログラムしたものです。
+</p>
+
+<h4 id="ans105">●解答105</h4>
+
+<pre class="list">
+リスト : pred が真の要素を取り出す
+
+(defun take-while (pred xs)
+  (if (or (null xs) (not (funcall pred (car xs))))
+      nil
+    (cons (car xs) (take-while pred (cdr xs)))))
+
+; 別解
+(defun take-while1 (pred xs)
+  (do ((xs xs (cdr xs))
+       (a nil (cons (car xs) a)))
+      ((or (null xs) (not (funcall pred (car xs))))
+       (nreverse a))))
+</pre>
+<p> take-while は xs が空リストまたは述語 pred が偽を返すとき空リストを返します。そうでなければ、take-while を再帰呼び出しして、その返り値にリストの要素を追加します。別解は do でプログラムしたものです。
+</p>
+
+<h4 id="ans106">●解答106</h4>
+
+<pre class="list">
+リスト : pred が真の要素を取り除く
+
+(defun drop-while (pred xs)
+  (if (or (null xs) (not (funcall pred (car xs))))
+      xs
+    (drop-while pred (cdr xs))))
+
+; 別解
+(defun drop-while1 (pred xs)
+  (do ((xs xs (cdr xs)))
+      ((or (null xs) (not (funcall pred (car xs)))) xs)))
+</pre>
+<p> drop-while は簡単です。リスト xs が空リストまたは述語 pred が偽を返すとき、リスト xs を返します。そうでなければ、drop-while を再帰呼び出しするだけです。別解は do を使ってプログラムしたものです。
+</p>
+
+<h4 id="ans107">●解答107</h4>
+
+<pre class="list">
+リスト : pred が偽を返すところでリストを分ける
+
+(defun span (pred xs)
+  (if (or (null xs) (not (funcall pred (car xs))))
+      (values '() xs)
+    (multiple-value-bind
+        (ys zs)
+        (span pred (cdr xs))
+      (values (cons (car xs) ys) zs))))
+
+; 別解
+(defun span1 (pred xs)
+  (do ((xs xs (cdr xs))
+       (a nil (cons (car xs) a)))
+      ((or (null xs) (not (funcall pred (car xs))))
+       (values (nreverse a) xs))))
+</pre>
+<p> span は再帰呼び出しでプログラムすると簡単です。リスト xs が空リストまたは述語 pred が偽を返すときが再帰呼び出しの停止条件です。values で空リストと xs を返します。そうでなければ、span を再帰呼び出しして返り値を multiple-value-bind で受け取ります。そして、xs の先頭要素を ys に追加して、zs といっしょに values で返します。別解は do でプログラムしたものです。
+</p>
+<h4 id="ans108">●解答108</h4>
+
+<pre class="list">
+リスト : pred が真を返すところでリストを分ける
+
+(defun break1 (pred xs)
+  (if (or (null xs) (funcall pred (car xs)))
+      (values nil xs)
+    (multiple-value-bind
+        (ys zs)
+        (break1 pred (cdr xs))
+      (values (cons (car xs) ys) zs))))
+
+; 別解
+(defun break2 (pred xs)
+  (do ((xs xs (cdr xs))
+       (a nil (cons (car xs) a)))
+      ((or (null xs) (funcall pred (car xs)))
+       (values (nreverse a) xs))))
+</pre>
+<p> break1 も再帰呼び出しでプログラムすると簡単です。リスト xs が空リストまたは述語 pred が真を返すときが再帰呼び出しの停止条件です。values で空リストと xs を返します。そうでなければ、break1 を再帰呼び出しして返り値を multiple-value-bind で受け取ります。そして、xs の先頭要素を ys に追加して、zs といっしょに values で返します。別解は do でプログラムしたものです。
+</p>
+<h4 id="ans109">●解答109</h4>
+
+<pre class="list">
+リスト : 累積値リストの生成 (1)
+
+(defun scanl (f a xs)
+  (if (null xs)
+      (list a)
+    (cons a (scanl f (funcall f (car xs) a) (cdr xs)))))
+
+; 別解
+(defun scanl1 (f a xs)
+  (nreverse (fold-left #'(lambda (a x) (cons (funcall f x (car a)) a)) (list a) xs)))
+</pre>
+<p> scanl はリストの最後の要素が最終の累積値になります。xs が空リストのとき、累積変数 a の値をリストに格納して返します。そうでなければ、scanl を再帰呼び出しして、その返り値に累積変数 a の値を追加して返します。scanl を再帰呼び出しするときは、関数 f を呼び出して累積変数の値を更新することに注意してください。別解は fold-left を使ったバージョンです。返り値のリストは逆順になるので、nreverse で反転しています。
+</p>
+<h4 id="ans110">●解答110</h4>
+
+<pre class="list">
+リスト : 累積値リストの生成 (2)
+
+(defun scanr (f a xs)
+  (if (null xs)
+      (list a)
+    (let ((ys (scanr f a (cdr xs))))
+      (cons (funcall f (car xs) (car ys)) ys))))
+
+; 別解
+(defun scanr1 (f a xs)
+  (fold-right #'(lambda (x a) (cons (funcall f x (car a)) a)) (list a) xs))
+</pre>
+<p> scanr はリストの先頭の要素が最終の累積値、最後の要素が初期値になります。リスト xs が空リストの場合は (list a) を返します。そうでなければ、scanr を再帰呼び出しします。このとき、累積変数 a の値は更新しません。返り値のリストは変数 ys にセットします。この ys の先頭要素が一つ前の累積値になるので、この値と xs の要素を関数 f に渡して評価します。あとは、f の返り値を ys の先頭に追加して返せばいいわけです。別解は畳み込み fold-right を使ったバージョンです。
+</p>
+<h4 id="ans111">●解答111</h4>
+
+<pre class="list">
+リスト : マッピングと畳み込み
+
+(defun map-accum-left (f acc xs)
+  (if (null xs)
+      (values acc nil)
+    (multiple-value-bind
+        (a y)
+        (funcall f acc (car xs))
+      (multiple-value-bind
+          (b ys)
+          (map-accum-left f a (cdr xs))
+        (values b (cons y ys))))))
+
+; 別解
+(defun map-accum-left1 (f acc xs)
+  (do ((xs xs (cdr xs))
+       (a acc)
+       (ys nil))
+      ((null xs) (values a (nreverse ys)))
+    (multiple-value-bind
+        (b y)
+        (funcall f a (car xs))
+      (setq a b)
+      (push y ys))))
+</pre>
+<p> map-accum-left は fold-left と map を組み合わせたものです。累積値はリストの先頭から計算し、マッピングの結果は末尾から組み立てていきます。引数 acc は初期値とともに計算途中の累積値を表します。xs が空リストの場合、acc と空リストを valuse で返します。そうでなければ、関数 f に累積値 acc と要素 (car xs) を渡して評価し、新しい累積値とマッピングの値を変数 a と y にセットします。
+</p>
+<p> それから、map-accum-left を再帰呼び出しします。このとき、累積値は a になることに注意してください。返り値は畳み込みの値 b とマッピングの結果を格納したリスト ys です。あとは、ys に y を追加して b と一緒に values で返すだけです。別解は do でプログラムしたものです。マッピングの値を格納したリスト ys は逆順になっているので、nreverse で反転していることに注意してください。
+</p>
+
+<h4 id="ans112">●解答112</h4>
+
+<pre class="list">
+リスト : マッピングと畳み込み
+
+(defun map-accum-right (f acc xs)
+  (if (null xs)
+      (values acc nil)
+    (multiple-value-bind
+        (a ys)
+        (map-accum-right f acc (cdr xs))
+      (multiple-value-bind
+          (b y)
+          (funcall f a (car xs))
+        (values b (cons y ys))))))
+
+; 別解
+(defun map-accum-right1 (f acc xs)
+  (do ((xs (reverse xs) (cdr xs))
+       (a acc)
+       (ys nil))
+      ((null xs) (values a ys))
+    (multiple-value-bind
+        (b y)
+        (funcall f a (car xs))
+      (setq a b)
+      (push y ys))))
+</pre>
+<p> map-accum-right の場合、累積値はリストの末尾から計算し、マッピングの結果も末尾から組み立てていきます。xs が空リストの場合、初期値 acc と空リストを valuse で返します。そうでなければ map-accum-right を再帰呼び出しします。初期値 acc をそのまま渡すことに注意してください。返り値は multiple-value-bind で受け取り、累積値が変数 a に、マッピングの値を格納したリストが変数 ys にセットされます。
+</p>
+<p> 次に関数 f を呼び出します。このとき、累積値 a とリストの要素 (car xs) を渡します。結果は multiple-value-bind で受け取り、新しい累積値が b に、マッピングの値が y にセットされます。あとは、y を ys に追加して累積値 b と一緒に values で返すだけです。別解は do を使ったバージョンです。引数 xs を reverse で反転することで、リストの末尾から処理を行っています。
+</p>
+
+<h4 id="ans113">●解答113</h4>
+
+<pre class="list">
+リスト : 要素の間にデータを挿入する
+
+(defun intersperse (x xs)
+  (if (or (null xs) (null (cdr xs)))
+      xs
+    (list* (car xs) x (intersperse x (cdr xs)))))
+
+; 別解
+(defun intersperse1 (x xs)
+  (if (or (null xs) (null (cdr xs)))
+      xs
+    (do ((xs (cdr xs) (cdr xs))
+         (a (list (car xs)) (list* (car xs) x a)))
+        ((null xs) (nreverse a)))))
+</pre>
+<p> intersperse は再帰呼び出しで簡単にプログラムできます。リスト xs が空リストまたは要素がひとつしかない場合、データ x を挿入できないので xs をそのまま返します。そうでなければ、先頭の要素と次の要素の間に x を挿入します。これは関数 list* を使うと簡単です。(car xs) の次に x を挿入し、残りのリストに対して intersperse を再帰呼び出しすればいいわけです。別解は do を使ったバージョンです。この場合、返り値のリストは逆順になるので nreverse で反転しています。
+</p>
+
+<h4 id="ans114">●解答114</h4>
+
+<pre class="list">
+リスト : リストの要素の間にデータを挿入して平坦化する
+
+(defun intercalate (xs xss)
+  (apply #'append (intersperse xs xss)))
+
+; 別解
+(defun intercalate1 (xs xss)
+  (cond ((null xss) xss)
+        ((null (cdr xss)) (car xss))
+        (t
+         (append (car xss) xs (intercalate1 xs (cdr xss))))))
+</pre>
+<p> intercalate は intersperse を呼び出して xs を xss の要素の間に挿入し、その結果を apply #'append で平坦化するだけです。別解は intersperse を使わないで再帰呼び出しでプログラムしたものです。intersperse と違って、append でリストを連結していることに注意してください。これでリストを平坦化することができます。
+</p>
+
+<h4 id="ans115">●解答115</h4>
+
+<pre class="list">
+リスト : 畳み込み
+
+(defun pair-fold-left (f a xs)
+  (if (null xs)
+      a
+    (pair-fold-left f (funcall f a xs) (cdr xs))))
+
+(defun pair-fold-right (f a xs)
+  (if (null xs)
+      a
+    (funcall f xs (pair-fold-right f a (cdr xs)))))
+</pre>
+<p> pair-fold-left と pair-fold-right は簡単です。関数 f を呼び出すときリストの要素 (car xs) の代わりに xs をそのまま渡すだけです。あとは普通の畳み込み fold-left, fold-right と同じです。
+</p>
+
+<h4 id="ans116">●解答116</h4>
+
+<pre class="list">
+リスト : 接頭辞を求める
+
+(defun inits (xs)
+  (scanl #'(lambda (x a) (append a (list x))) nil xs))
+
+; 別解
+(defun inits1 (xs)
+  (nreverse (fold-left #'(lambda (a x) (cons (append (car a) (list x)) a)) '(()) xs)))
+</pre>
+<p> inits は scanl を使うと簡単です。累積値 a の末尾に x を追加していくだけです。別解は fold-left を使ったバージョンです。
+</p>
+
+<h4 id="ans117">●解答117</h4>
+
+<pre class="list">
+リスト : 接尾辞を求める
+
+(defun tails (xs) (scanr #'cons nil xs))
+
+; 別解
+(defun tails1 (xs)
+  (pair-fold-right #'cons '(()) xs))
+</pre>
+<p> inits は scanr を使うと簡単です。累積値の先頭に xs の要素を追加するだけです。別解のように pair-fold-right を使っても簡単にプログラムできます。
+</p>
+<h4 id="ans118">●解答118</h4>
+
+<pre class="list">
+リスト : 等値 (eql) でグループに分ける
+
+(defun group-insert (x xs)
+  (cond ((null xs)
+         (list (list x)))
+        ((eql x (caar xs))
+         (cons (cons x (car xs)) (cdr xs)))
+        (t
+         (cons (car xs) (group-insert x (cdr xs))))))
+
+(defun group-collection (xs)
+  (do ((xs xs (cdr xs))
+       (ys nil (group-insert (car xs) ys)))
+      ((null xs) ys)))
+
+; 別解
+(defun group-collection1 (xs)
+  (fold-left #'(lambda (a x) (group-insert x a)) nil xs))
+</pre>
+<p> group-collection は x をグループに挿入する関数 group-insert x xs を定義すると簡単です。group-insert の引数 xs はグループ (リスト) を格納したリストです。xs が空リストの場合、x と等しい値を持つグループはなかったので新しいグループを生成して返します。グループの先頭要素 (caar xs) と x が等しい場合、そのグループに x を追加して返します。そうでなければ、group-insert を再帰呼び出しして次のグループをチェックします。
+</p>
+<p> group-collection は引数 xs の要素を順番に取り出し、group-insert で該当するグループに挿入していくだけです。別解は畳み込み fold-left を使ったバージョンです。
+</p>
+
+<h4 id="ans119">●解答119</h4>
+
+<pre class="list">
+リスト : データをひとつ挿入するパターンをすべて求める
+
+(defun interleave (x xs)
+  (if (null xs)
+      (list (list x))
+    (append (list (cons x xs))
+            (mapcar #'(lambda (ys) (cons (car xs) ys))
+                    (interleave x (cdr xs))))))
+
+; 別解
+(defun reverse-append (xs ys)
+  (if (null xs)
+      ys
+    (reverse-append (cdr xs) (cons (car xs) ys))))
+
+(defun interleave1 (x xs)
+  (do ((xs xs (cdr xs))
+       (ys nil (cons (car xs) ys))
+       (a nil (cons (reverse-append ys (cons x xs)) a)))
+      ((null xs) (cons (reverse-append ys (list x)) a))))
+</pre>
+<p> interleave はリスト xs の先頭に x を挿入する場合と、それ以外の場合に分けて考えます。先頭に追加するのは簡単ですね。それ以外の場合は、先頭要素を取り除いたリスト (cdr xs) に x を挿入すればいいので、interleave を再帰呼び出しすることで求めることができます。そして、その返り値のリストに先頭要素 (car xs) を追加すればいいわけです。
+</p>
+<p> プログラムは簡単です。xs が空リストの場合は (list (list x)) を返します。そうでなければ、xs の先頭に x を追加したものと、(interleave x (cdr xs)) の返り値に (car xs) を追加したものを append で連結して返します。
+</p>
+
+<p> 別解はリストの先頭から順番に x の挿入位置を変えていきます。x よりも前にある要素を ys に格納しておくと、x を挿入したリストは、ys + (x) + xs で求めることができます。interleave1 の場合、ys は逆順になるので、リストの連結処理を関数 reverse-append で行っています。
+</p>
+
+<h4 id="ans120">●解答120</h4>
+
+<pre class="list">
+リスト : 順列の生成
+
+; flatmap
+(defun flatmap (f xs)
+  (apply #'append (mapcar f xs)))
+
+(defun permutations (xs)
+  (if (null xs)
+      '(())
+    (flatmap #'(lambda (ys) (interleave (car xs) ys))
+             (permutations (cdr xs)))))
+</pre>
+<p> permutations は簡単です。permutations を再帰呼び出しして (cdr xs) の順列を求め、順列を表す要素 ys に interleave で (car xs) を挿入すればいいわけです。リストを平坦化するため flatmap を使っていることに注意してください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="yaclp05.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | NextPage ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

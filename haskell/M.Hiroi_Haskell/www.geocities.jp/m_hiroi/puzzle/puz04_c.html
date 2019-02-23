@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 「おしどりの遊び」と「6 パズル」のプログラムリスト</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881841</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>「おしどりの遊び」と「6 パズル」のプログラムリスト</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h4 id="oshidori">●oshidori.c</h4>
+<pre class="list">
+/*
+ * oshidori.c : パズル「おしどり」の解法
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define S     0
+#define B     1
+#define W     2
+#define SIZE  8
+
+/* 状態の最大値 */
+#define MAX_STATE 140
+
+/* 状態 */
+char  state[MAX_STATE + 1][SIZE];    /* +1 はワーク領域 */
+char  space_position[MAX_STATE];
+short prev_state[MAX_STATE];
+
+/* 初期状態 */
+char initial_state[SIZE] = {
+  B, W, B, W, B, W, S, S
+};
+
+/* 最終状態 */
+char final_state[SIZE] = {
+  B, B, B, W, W, W, S, S
+};
+
+/* 手順の表示 */
+void print_answer( int n )
+{
+  int i;
+  if( n != 0 ) print_answer( prev_state[n] );
+  for( i = 0; i &lt; SIZE; i++ ){
+    switch( state[n][i] ){
+    case S:
+      printf("空 "); break;
+    case B:
+      printf("黒 "); break;
+    case W:
+      printf("白 "); break;
+    }
+  }
+  printf("\n");
+}
+
+/* 同じ状態をチェックする */
+int check_same_state( int n )
+{
+  /* とりあえず単純な線形探索 */
+  int i;
+  for( i = 0; i &lt; n; i++ ){
+    if( !memcmp( state[i], state[n], SIZE ) ) return TRUE;
+  }
+  return FALSE;
+}
+
+/* 番人を使う方法 */
+int check_same_state1( int n )
+{
+  int i = 0;
+  while( memcmp( state[i], state[n], SIZE ) ) i++;
+  return (i != n) ? TRUE : FALSE;
+}
+
+/* 石の移動 */
+void move_stone( int front, int rear, int dest )
+{
+  int j = space_position[front];
+  memcpy( state[rear], state[front], SIZE );
+  state[rear][j] = state[front][dest];
+  state[rear][j + 1] = state[front][dest + 1];
+  state[rear][dest] = S;
+  state[rear][dest + 1] = S;
+  space_position[rear] = dest;
+  prev_state[rear] = front;
+}
+
+/* 探索関数 */
+void search( void )
+{
+  int front = 0, rear = 1;
+  /* 初期化 */
+  memcpy( state[0], initial_state, SIZE );
+  prev_state[0] = -1;
+  space_position[0] = 6;
+  while( front &lt; rear ){
+    int i;
+    /* 移動 (0 から 6 までチェック) */
+    for( i = 0; i &lt; SIZE - 1; i++ ){
+      if( state[front][i] &amp;&amp; state[front][i + 1] ){
+        /* 移動可能 */
+        move_stone( front, rear, i );
+        /* チェックする */
+        if( !memcmp( state[rear], final_state, SIZE ) ){
+          /* 解けた */
+          print_answer( rear );
+          printf("状態数 %d 個\n", rear );
+          return;
+        } else if( !check_same_state1( rear ) ){
+          /* 同じ状態はない */
+          rear++;
+        }
+      }
+    }
+    front++;
+  }
+}
+
+int main()
+{
+  search();
+  return 0;
+}
+</pre>
+<p><a href="puzdoc04.html#oshidori">戻る</a>
+</p>
+<hr>
+<h4 id="hex1">●hex1.c</h4>
+<pre class="list">
+/*
+ * hex1.c : パズル「6 パズル」の解法
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  7
+
+/* 最大の状態数 7! = 5040 */
+#define MAX_STATE 5040
+
+/* 隣接リスト */
+const char adjacent[SIZE][7] = {
+  1, 2, 3, -1, -1, -1, -1,  /* 0 */
+  0, 3, 4, -1, -1, -1, -1,  /* 1 */
+  0, 3, 5, -1, -1, -1, -1,  /* 2 */
+  0, 1, 2,  4,  5,  6, -1,  /* 3 */
+  1, 3, 6, -1, -1, -1, -1,  /* 4 */
+  2, 3, 6, -1, -1, -1, -1,  /* 5 */
+  3, 4, 5, -1, -1, -1, -1   /* 6 */
+};
+
+/* キュー */
+char  state[MAX_STATE + 1][SIZE];      /* +1 はワーク領域 */
+char  space_position[MAX_STATE];
+short prev_state[MAX_STATE];
+int count = 0;
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 5, 2, 6, 3, 4, 0
+};
+
+/* 最終状態 */
+char final_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 0
+};
+
+/* 同じ状態があるか */
+int check_same_state( int n )
+{
+  int i;
+  for( i = 0; i &lt; n; i++ ){
+    count++;
+    if( !memcmp( state[i], state[n], SIZE ) ) return TRUE;
+  }
+  return FALSE;
+}
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int i;
+  if( n != 0 ) print_answer( prev_state[n] );
+  for( i = 0; i &lt; SIZE; i++ ){
+    printf("%d ", state[n][i] );
+  }
+  printf("\n");
+}
+
+/* 探索 */
+void search( void )
+{
+  int front = 0, rear = 1, i;
+  /* 初期化 */
+  memcpy( state[0], init_state, SIZE );
+  space_position[0] = 6;
+  prev_state[0] = -1;
+  while( front &lt; rear ){
+    int s = space_position[front];
+    int n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 状態をコピー */
+      memcpy( state[rear], state[front], SIZE );
+      /* 移動 */
+      state[rear][s] = state[rear][n];
+      state[rear][n] = 0;
+      space_position[rear] = n;
+      prev_state[rear] = front;
+      if( !memcmp( state[rear], final_state, SIZE ) ){
+        print_answer( rear );
+        printf("状態数 %d 個\n", rear );
+        return;
+      } else if( !check_same_state( rear ) ){
+        /* 登録 */
+        rear++;
+      }
+    }
+    front++;
+  }
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("比較回数 %d, 時間 %d \n", count, end - start );
+  return 0;
+}
+</pre>
+<p> <a href="puzdoc04.html#hex1">戻る</a>
+</p>
+<hr>
+<h4 id="hex2">●hex2.c</h4>
+<pre class="list">
+/*
+ * hex2.c : パズル「6 パズル」の解法（改良版）
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  7
+#define FORWARD  0
+#define BACKWARD 1 
+
+/* 最大の状態数 7! = 5040 */
+#define MAX_STATE 5040
+
+/* 隣接リスト */
+const char adjacent[SIZE][7] = {
+  1, 2, 3, -1, -1, -1, -1,  /* 0 */
+  0, 3, 4, -1, -1, -1, -1,  /* 1 */
+  0, 3, 5, -1, -1, -1, -1,  /* 2 */
+  0, 1, 2,  4,  5,  6, -1,  /* 3 */
+  1, 3, 6, -1, -1, -1, -1,  /* 4 */
+  2, 3, 6, -1, -1, -1, -1,  /* 5 */
+  3, 4, 5, -1, -1, -1, -1   /* 6 */
+};
+
+/* キュー */
+char  state[MAX_STATE + 1][SIZE];      /* +1 はワーク領域 */
+char  space_position[MAX_STATE];
+short prev_state[MAX_STATE];
+char  direction[MAX_STATE];
+
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 5, 2, 6, 3, 4, 0
+};
+
+/* 最終状態 */
+char final_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 0
+};
+
+/* 同じ状態があるか */
+int check_same_state( int n )
+{
+  int i;
+  for( i = 0; i &lt; n; i++ ){
+    if( !memcmp( state[i], state[n], SIZE ) ) return i;
+  }
+  return -1;
+}
+
+/* 結果を出力 */
+void print_answer_forward( int n )
+{
+  int i;
+  if( n &gt; 1 ) print_answer_forward( prev_state[n] );
+  for( i = 0; i &lt; SIZE; i++ ){
+    printf("%d ", state[n][i] );
+  }
+  printf("\n");
+}
+
+void print_answer_backward( int n )
+{
+  do {
+    int i;
+    n = prev_state[n];
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[n][i] );
+    }
+    printf("\n");
+  } while( prev_state[n] != -1 );
+}
+
+void print_answer( int i, int j )
+{
+  if( direction[i] == FORWARD ){
+    print_answer_forward( i );
+    print_answer_backward( j );
+  } else {
+    print_answer_forward( j );
+    print_answer_backward( i );
+  }
+}
+
+/* 探索 */
+void search( void )
+{
+  int front = 0, rear = 2;
+  /* 初期化 */
+  memcpy( state[0], init_state, SIZE );
+  space_position[0] = 6;
+  prev_state[0] = -1;
+  direction[0] = FORWARD;
+  memcpy( state[1], final_state, SIZE );
+  space_position[1] = 6;
+  prev_state[1] = -1;
+  direction[1] = BACKWARD;
+  while( front &lt; rear ){
+    int s = space_position[front];
+    int i, j, n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 状態をコピー */
+      memcpy( state[rear], state[front], SIZE );
+      /* 移動 */
+      state[rear][s] = state[rear][n];
+      state[rear][n] = 0;
+      space_position[rear] = n;
+      prev_state[rear] = front;
+      direction[rear] = direction[front];
+      /* 検索する */
+      if( (j = check_same_state( rear )) &gt;= 0 ){
+        if( direction[j] != direction[rear] ){
+          /* 前後からの検索が一致 */
+          print_answer( j, rear );
+          printf("状態数 %d 個\n", rear );
+          return;
+        }
+      } else {
+        /* 登録 */
+        rear++;
+      }
+    }
+    front++;
+  }
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("時間 %d \n",end - start );
+  return 0;
+}
+</pre>
+<p><a href="puzdoc04.html#hex2">戻る</a>
+</p>
+<hr>
+<h4 id="hex3">●hex3.c</h4>
+<pre class="list">
+/*
+ * hex3.c : パズル「6 パズル」の解法（最長手数の局面を求める）
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  7
+
+/* 最大の状態数 7! = 5040 */
+#define MAX_STATE 5040
+
+/* 隣接リスト */
+const char adjacent[SIZE][7] = {
+  1, 2, 3, -1, -1, -1, -1,  /* 0 */
+  0, 3, 4, -1, -1, -1, -1,  /* 1 */
+  0, 3, 5, -1, -1, -1, -1,  /* 2 */
+  0, 1, 2,  4,  5,  6, -1,  /* 3 */
+  1, 3, 6, -1, -1, -1, -1,  /* 4 */
+  2, 3, 6, -1, -1, -1, -1,  /* 5 */
+  3, 4, 5, -1, -1, -1, -1   /* 6 */
+};
+
+/* キュー */
+char state[MAX_STATE + 1][SIZE];     /* +1 はワーク領域 */
+char space_position[MAX_STATE];
+char move[MAX_STATE];
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 0
+};
+
+int count = 0;
+
+/* 同じ状態があるか */
+int check_same_state( int n )
+{
+  int i;
+  for( i = 0; i &lt; n; i++ ){
+    count++;
+    if( !memcmp( state[i], state[n], SIZE ) ) return TRUE;
+  }
+  return FALSE;
+}
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int m = move[n - 1], c = 0, i;
+  while( move[--n] == m ){
+    c++;
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[n][i] );
+    }
+    printf("\n");
+  }
+  printf("最長手数 %d 手、総数 %d 個\n", m, c );
+}
+
+void print_answer_all( int n )
+{
+  int i, j;
+  for( j = 0; j &lt; n; j++ ){
+    printf("手数 %d : ", move[j] );
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[j][i] );
+    }
+    printf("\n");
+  }
+}
+
+/* 探索 */
+void search( void )
+{
+  int front = 0, rear = 1, i;
+  /* 初期化 */
+  memcpy( state[0], init_state, SIZE );
+  space_position[0] = 6;
+  move[0] = 0;
+  while( front &lt; rear ){
+    int s = space_position[front];
+    int n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 状態をコピー */
+      memcpy( state[rear], state[front], SIZE );
+      /* 移動 */
+      state[rear][s] = state[rear][n];
+      state[rear][n] = 0;
+      if( !check_same_state( rear ) ){
+        /* 登録 */
+        space_position[rear] = n;
+        move[rear] = move[front] + 1;
+        rear++;
+      }
+    }
+    front++;
+  }
+  print_answer( rear );
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("比較回数 %d 回、時間 %d \n", count, end - start );
+  return 0;
+}
+</pre>
+<p> <a href="puzdoc04.html#hex3">戻る</a>
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2002,2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

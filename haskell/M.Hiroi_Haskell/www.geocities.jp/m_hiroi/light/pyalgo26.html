@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 置換表と MTD(f) 法</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881794</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>置換表と MTD(f) 法</h2>
+<div class="small">
+[ <a href="pyalgo25.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo27.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> ミニマックス法の続きです。今回は「置換表 (transposition table) 」と「MTD(f) 法」を取り上げます。題材とするゲームは前回と同じく「カラー (Kalah) 」です。
+</p>
+
+<p> 置換表は局面の情報を格納しておく表 (table) のことです。ゲーム木の探索では、同じ局面が何度も現れることがよくあります。同じ局面を何度も探索するのは時間の無駄なので、すでに探索した局面はその情報 (評価値、手番、探索の深さなど) を表に格納しておき、同一局面が現れたら表の情報を再利用します。表の情報が十分なものであれば、そこで探索を打ち切って、評価値をそのまま返すことができます。もし、情報が不十分な場合でも、それを基にして探索を続行し、その結果で表の情報を更新します。
+</p>
+<p> 一般に、何度も同じ値を計算することがないように、計算した値は表に格納しておいて、2 回目以降は表から計算結果を求めることでアルゴリズムを高速化する手法を「表計算法」といいます。表を使うアルゴリズムというと、有名なところでは <a href="pyalgo23.html">欲張り法 [2], 動的計画法</a> で説明した「動的計画法」があります。置換表は表計算法の一種と考えることができます。置換表はチェス、将棋、リバーシなどのプログラムでよく用いられる手法です。
+</p>
+<p> 一般に、置換表は <a href="pyalgo04.html">ハッシュ法</a> を使って実装します。今回は Python の辞書 (dictionary) を使って置換表をプログラムしてみましょう。
+</p>
+
+<h4>●ネガマックス法と置換表</h4>
+<p> まずは最初にネガマックス法で置換表を使ってみて、どの程度の効果があるか確かめてみましょう。ネガマックス法の場合、置換表に登録するデータは評価値、指し手、手番、探索の深さなどがあります。とくに、探索の深さは重要な情報です。次の図を見てください。
+</p>
+<pre class="fig">
+                       Ｒ                        レベル０
+                     ／  ＼
+                   ／      ＼
+                 ／          ＼
+               ／              ＼
+             ／                  ＼
+           Ａ                      Ｂ            レベル１
+         ／  ＼                  ／  ＼
+       ／      ＼              ／      ＼
+     Ｃ          Ｄ          Ｅ          Ｆ      レベル２
+   ／  ＼      ／  ＼      ／  ＼      ／  ＼
+ Ｇ      Ｈ  Ｉ      Ｊ  Ｋ      Ｌ  Ｍ      Ｎ  レベル３
+
+
+              図 : ゲームの木
+</pre>
+<p> たとえば、探索レベルが 5 で、局面 J と B が同じだったとしましょう。この場合、置換表には J の評価値が登録されますが、局面 B にこの評価値を適用することはできません。J はレベル 3 の局面なので、このあと 2 手先読みした局面の中から J の評価値が求まります。局面 B はレベル 1 なので、あと 4 手先読みしないと探索レベルが 5 に到達しません。つまり、F で J の評価値を適用すると、探索レベルが 3 に下がってしまうのです。
+</p>
+<p> 逆に、レベル 1 の局面 A とレベル 3 の局面 N が同じだった場合、A の評価値を N に適用すると、その探索レベルは 7 に上がります。つまり、2 レベル分だけ深くゲーム木を探索できたことになります。この場合、置換表の評価値を採用して、N の評価値として A の評価値を返しても問題ありません。また、同じレベルの局面の場合も置換表の評価値をそのまま利用することができます。
+</p>
+<p> このように、探索の深さにより置換表の情報を採用するか否かを決定することができます。今回のカラーもそのようにプログラムすることができますが、勝敗の結果が今までと異なる場合がでてきます。そうすると、今までの評価結果と単純に比較するのは難しくなるので、置換表を使うのは探索レベルが同じ局面だけに制限することにします。この場合、置換表の効果を十分に引き出すことはできません。ご注意ください。
+</p>
+<p> そこで、今回は探索の深さと手番も置換表 (Python の辞書) のキーに含めることにします。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : ネガマックス法 + 置換表
+
+def negamax(turn, depth, board):
+    if depth == 0:
+        v = board.value_func()
+        if turn == SECOND_KALAH: v = -v
+        return v, []
+    # 置換表の探索
+    key = (depth, turn) + tuple(board.board)
+    if key in table: return table[key]
+    #
+    value = MIN_VALUE
+    move = []
+    for pos in xrange(turn - 6, turn):
+        if board[pos] == 0: continue
+        b = board.copy()
+        # 石を動かす
+        result = b.move_stone(turn, pos)
+        m = []
+        if result == GAMEOVER:
+            v = b.value_func()
+            if turn == SECOND_KALAH: v = -v
+        elif result == KALAH:
+            # 手番は同じまま
+            v, m = negamax(turn, depth, b)
+        else:
+            # 後手番
+            v, _ = negamax((turn + 7) % 14, depth - 1, b)
+            v = -v
+        # ネガマックス : 大きな値を選ぶ
+        if value &lt; v:
+            value = v
+            move = [pos] + m
+    # 置換表の更新
+    table[key] = (value, move)
+    return value, move
+</pre>
+<p> ネガマックス法のプログラム (関数 negamax) に置換表の探索処理と更新処理を追加します。置換表 (Python の辞書) はグローバル変数 table にセットします。Python の場合、辞書のキーに配列 (Python のリスト) を使うことはできないので、関数 tuple で盤面 board をタプルに変換します。これに、探索の深さと手番 (depth, turn) を追加して変数 key にセットします。key が table にある場合は、その値をそのまま返します。
+</p>
+<p> 置換表には評価値 value と指し手 move をタプルに格納してセットします。この処理は return の前で行います。それから、関数 negamax を呼び出す前に置換表 table をクリアすることをお忘れなく。なお、今回は盤面 board をそのままタプルに変換してキーとしましたが、盤面が大きなゲームでは局面のハッシュ値を高速に求めるための工夫が必要になります。ご注意ください。
+</p>
+<ul>
+  <li><a href="pyalgo26.html#list1">プログラムリスト１</a>
+</ul>
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。勝敗はネガマックス法とまったく同じです。置換表の効果を確かめるため、局面を評価した回数をカウントして比較してみましょう。置換表が有効に機能すれば、局面の評価回数は少なくなるはずです。結果は次のようになりました。
+</p>
+<pre>
+   表 : 局面の評価回数 (ネガマックス法 + 置換表)
+
+ 先手＼後手 :    2    :    3    :    4    :    5
+----------------------------------------------------
+     2      :   11775 :   90968 :  318340 : 1221294
+            :   11775 :   88587 :  280641 : 1133706
+            :       0 :     177 :    2163 :    8433
+     3      :    4383 :   41159 :  654559 :  588627
+            :    4169 :   39527 :  499265 :  465047
+            :      15 :     217 :    8348 :   10836
+     4      :  160765 :  131496 :  510241 : 1734092
+            :  153855 :  122566 :  471636 : 1594021
+            :     876 :     872 :    4000 :   12365
+     5      : 3648321 : 1580529 : 2488362 : 4806261
+            : 2750886 : 1319953 : 2086842 : 4093994
+            :   47583 :   17254 :   26862 :   40012
+
+  上段 : ネガマックス法
+  中段 : ネガマックス法 + 置換表
+  下段 : 置換表にヒットした回数
+</pre>
+<p> 探索レベルが 2, 3 の場合、置換表の効果はほとんどありません。探索レベルが 4, 5 になると、置換表にヒットする回数が多くなり、その分だけ局面の評価回数が少なくなります。ただし、これだけで実行速度が高速になるとはかぎりません。置換表の探索に時間がかかるようでは、かえって実行速度が遅くなってしまいます。ご参考までにレベル 3, 4, 5 の実行時間を示します。
+</p>
+<pre>
+  表 : ミニマックス法の実行時間 (単位 : 秒)
+
+    探索レベル: (3, 3) : (4, 4) : (5, 5)
+    -------------------------------------
+    置換表無し:  1.35  :  16.70 : 156.80
+    置換表有り:  1.35  :  16.50 : 149.25
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> ミニマックス法の場合、置換表の効果はそれほど大きくないようです。
+</p>
+<h4>●アルファベータ法と置換表</h4>
+<p> 次はアルファベータ法 (ネガアルファ法) で置換表を使ってみましょう。アルファベータ法の場合、枝刈り (αカット、βカット) が行われると、局面の評価値はミニマックス法で求められる正確な値にはなりません。この値を minimax 値と呼ぶことにします。window の幅を (α, β) とすると、null window search と同様にα値以下であれば fail-low になり、β値以上であれば fail-high になります。このため、置換表に評価値だけを格納しても、それが minimax 値なのか、それとも fail-low, fail-high なのか判断することができません。
+</p>
+<p> そこで、置換表には minimax 値が存在する範囲 (lower, upper) を格納することにします。lower と upper は下限値と上限値を表し、MIN_VALUE と MAX_VALUE で初期化しておきます。そして、求めた評価値 value が fail-low であれば、minimax 値は value 以下であることがわかるので、置換表のデータを (lower, value) に書き換えます。
+</p>
+<p> 逆に、value が fail-high であれば、minimax 値は value 以上であることがわかるので、置換表のデータを (value, upper) に書き換えます。もしも、value が (α, β) の範囲内にあれば、それは minimax 値なので、置換表のデータを (value, value) に書き換えます。これで、minimax 値と fail-low, fail-high を区別することができます。
+</p>
+
+<p> そして、置換表の範囲 (lower, upper) と window の幅 (α, β) を比較して、置換表の情報を採用するか否かを決定します。これは次に示す 3 通りの場合があります。
+</p>
+<pre class="fig">
+(1) β &lt;= lower
+
+(2) upper &lt;= α
+
+(3) upper == lower
+</pre>
+<p> (1) の場合、minimax 値はβ値以上にあることが確定するので、ここで枝刈りすることができます。この場合は評価値として lower を返します。(2) の場合、minimax 値はα値以下であることが確定します。つまり、fail-low になるので、この局面は選択されません。この場合、評価値として upper を返します。最後に (3) の場合は minimax 値なので、その値 (lower or upper) を返します。
+</p>
+<p> これ以外の場合は、置換表の情報は採用しないで実際に探索を行います。このとき、(lower, upper) と (α, β) を比較して、window の幅が狭くなるように設定してから、ゲーム木を探索します。そして、その結果を使って置換表の情報を更新します。このように、アルファベータ法の場合はミニマックス法よりも処理が複雑になります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ネガアルファ法 + 置換表
+
+def negamax(turn, depth, board, alpha, beta):
+    if depth == 0:
+        v = board.value_func()
+        if turn == SECOND_KALAH: v = -v
+        return v, []
+    # 置換表の探索
+    key = (depth, turn) + tuple(board.board)
+    if key in table:
+        lower, upper, m = table[key]
+        if lower &gt;= beta: return lower, m
+        if upper &lt;= alpha or upper == lower: return upper, m
+        alpha = max(alpha, lower)
+        beta = min(beta, upper)
+    else:
+        lower = MIN_VALUE
+        upper = MAX_VALUE
+    #
+    value = MIN_VALUE
+    move = []
+    for pos in xrange(turn - 6, turn):
+        if board[pos] == 0: continue
+        b = board.copy()
+        # 石を動かす
+        result = b.move_stone(turn, pos)
+        m = []
+        if result == GAMEOVER:
+            v = b.value_func()
+            if turn == SECOND_KALAH: v = -v
+        elif result == KALAH:
+            # 手番は同じまま
+            v, m = negamax(turn, depth, b, max(alpha, value), beta)
+        else:
+            # 後手番
+            v, _ = negamax((turn + 7) % 14, depth - 1, b, -beta, -max(alpha, value))
+            v = -v
+        # ネガマックス法 : 大きな値を選ぶ
+        if value &lt; v:
+            value = v
+            move = [pos] + m
+        # ネガアルファ法
+        if value &gt;= beta: break
+    # 置換表の更新
+    if value &lt;= alpha:
+        table[key] = (lower, value, move)
+    elif value &gt;= beta:
+        table[key] = (value, upper, move)
+    else:
+        table[key] = (value, value, move)
+    return value, move
+</pre>
+<p> まず、置換表からデータ lower, value, m を取り出します。m は指し手になります。lower &gt;= beta の場合、枝刈りできるので lower, m を返します。upper &gt;= alpha の場合、fail-low になるので upper, m を返します。また、lower == upper の場合は minimax 値なので upper, m を返します。
+</p>
+<p> それ以外の場合、alpha と lower を比較して、大きいほうを alpha にセットします。beta と upper の場合は、小さいほうを beta にセットします。たとえば、lower &lt; alpha &lt; upper &lt; beta であれば、window の幅は (alpha, upper) になります。これで、window の幅 (alpha, beta) を狭くしてゲーム木を探索することができます。置換表にデータがない場合は、lower を MIN_VALUE に、upper を MAX_VALUE に初期化します。
+</p>
+<p> ゲーム木の探索が終わったら、置換表のデータを更新します。評価値 value が alpha 以下の場合は fail-low なので、minimax 値は value 以下であることがわかります。置換表の上限値を value に書き換えます。初出の局面の場合、lower は MIN_VALUE に初期化されているので、(MIN_VALUE, value) が minimax 値の範囲になります。
+</p>
+<p> value が beta 以上であれば fail-high なので、置換表の下限値を value に書き換えます。初出の局面の場合、upper は MAX_VALUE に初期化されているので、(value, MAX_VALUE) が minimax 値の範囲になります。それ以外の場合、value は minimax 値になるので、上限値と下限値を value に書き換えます。
+</p>
+
+<ul>
+  <li><a href="pyalgo26.html#list2">プログラムリスト２</a>
+</ul>
+
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。勝敗はネガアルファ法とまったく同じです。置換表の効果を確かめるため、局面を評価した回数をカウントして比較してみましょう。置換表が有効に機能すれば、局面の評価回数は少なくなるはずです。結果は次のようになりました。
+</p>
+<pre>
+ 表 : 局面の評価回数 (ネガアルファ法改良版 + 置換表)
+
+ 先手＼後手 :    2    :    3    :    4    :    5
+----------------------------------------------------
+     2      :    2672 :   13450 :   39302 :  100648
+            :    2672 :   12303 :   32903 :   94461
+            :       0 :     122 :     175 :     940
+     3      :    1654 :   10122 :   37689 :   37778
+            :    1589 :    9732 :   35909 :   33351
+            :       9 :      77 :     337 :     828
+     4      :   18117 :   19860 :   58028 :  116496
+            :   17342 :   19218 :   53016 :  104106
+            :     139 :     103 :     595 :    1432
+     5      :  100583 :   86327 :  183703 :  314184
+            :   81791 :   77532 :  161446 :  255539
+            :    1580 :     934 :    2576 :    5682
+
+
+  上段 : ネガアルファ法改良版
+  中段 : ネガアルファ法改良版 + 置換表
+  下段 : 置換表にヒットした回数
+</pre>
+<p> 探索レベルが 2, 3, 4 の場合、置換表の効果はほとんどありません。探索レベルが 5 になると、置換表にヒットする回数が多くなり、その分だけ局面の評価回数が少なくなりますが、ミニマックス法よりも少ないです。もっと深く探索しないと、置換表の効果は現れないようです。ご参考までにレベル 3, 4, 5 の実行時間を示します。
+</p>
+<pre>
+  表 : ネガアルファ法の実行時間 (単位 : 秒)
+
+    探索レベル: (3, 3) : (4, 4) : (5, 5)
+    ------------------------------------
+    置換表無し:  0.37  :  2.11  : 11.91
+    置換表有り:  0.39  :  2.15  : 11.60
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> 探索レベルが 3, 4 の場合、実行時間は少し遅くなりました。探索レベルが 5 の場合でも、置換表の効果はほとんどないようです。興味のある方は探索レベルを増やして試してみてください。
+</p>
+<h4>●ネガスカウト法と置換表</h4>
+<p> 置換表はネガスカウト法でも利用することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ネガスカウト法
+
+def negascout(turn, depth, board, alpha, beta):
+    if depth == 0:
+        v = board.value_func()
+        if turn == SECOND_KALAH: v = -v
+        return v, []
+    # 置換表の探索
+    key = (depth, turn) + tuple(board.board)
+    if key in table:
+        lower, upper, m = table[key]
+        if lower &gt;= beta: return lower, m
+        if upper &lt;= alpha or upper == lower: return upper, m
+        alpha = max(alpha, lower)
+        beta = min(beta, upper)
+    else:
+        lower = MIN_VALUE
+        upper = MAX_VALUE
+    #
+    value = MIN_VALUE
+    move = []
+    for pos in xrange(turn - 6, turn):
+        if board[pos] == 0: continue
+        b = board.copy()
+        # 石を動かす
+        result = b.move_stone(turn, pos)
+        m = []
+        if result == GAMEOVER:
+            v = b.value_func()
+            if turn == SECOND_KALAH: v = -v
+        elif result == KALAH:
+            # 手番は同じまま
+            # null window search は適用しない
+            v, m = negascout(turn, depth, b, max(alpha, value), beta)
+        else:
+            # 後手番
+            # null window search
+            a = max(alpha, value)
+            v, _ = negascout((turn + 7) % 14, depth - 1, b, -(a+1), -a)
+            v = -v
+            if beta &gt; v &gt; a:
+                # 再探索
+                v, _ = negascout((turn + 7) % 14, depth - 1, b, -beta, -v)
+                v = -v
+        # ネガマックス法 : 大きな値を選ぶ
+        if v &gt; value:
+            value = v
+            move = [pos] + m
+        # ネガアルファ法
+        if value &gt;= beta: break
+    # 置換表の更新
+    if value &lt;= alpha:
+        table[key] = (lower, value, move)
+    elif value &gt;= beta:
+        table[key] = (value, upper, move)
+    else:
+        table[key] = (value, value, move)
+    return value, move
+</pre>
+<p> ネガスカウト法のプログラムに置換表の処理を追加するだけです。置換表の探索と更新処理はネガアルファ法のプログラムとまったく同じです。
+</p>
+
+<ul>
+  <li><a href="pyalgo26.html#list3">プログラムリスト３</a>
+</ul>
+
+<h4>●実行結果</h4>
+<p> それでは、実行結果を示しましょう。勝敗はネガスカウト法とまったく同じです。置換表の効果を確かめるため、局面を評価した回数をカウントして比較してみましょう。置換表が有効に機能すれば、局面の評価回数は少なくなるはずです。結果は次のようになりました。
+</p>
+<pre>
+        表 : 局面の評価回数
+
+ 先手＼後手 :    2    :    3    :    4    :    5
+----------------------------------------------------
+     2      :    3266 :    8330 :   29077 :   61462
+            :    3145 :    6741 :   25288 :   49840
+            :     167 :     491 :    2368 :    7581
+     3      :    2100 :   10266 :   35313 :   36692
+            :    1334 :    9206 :   25862 :   28411
+            :     294 :    1449 :    3155 :    4341
+     4      :   18432 :   19704 :   45380 :   86733
+            :   15615 :   12153 :   37836 :   55457
+            :    2553 :    1953 :    4233 :    6021
+     5      :   90776 :   81086 :  139925 :  273440
+            :   65232 :   61328 :   78266 :  187421
+            :    8392 :    6762 :   10206 :   20909
+
+  上段 : ネガスカウト法
+  中段 : ネガスカウト法 + 置換法
+  下段 : 置換表にヒットした回数
+</pre>
+<p> 探索レベルが 2, 3 の場合、置換表の効果はほとんどありません。探索レベルが 4, 5 になると、置換表にヒットする回数が多くなり、その分だけ局面の評価回数は少なくなります。ネガスカウト法の場合、null window search を行っている分だけ、置換表の効果は他の方法よりも大きくなるようです。ご参考までにレベル 3, 4, 5 の実行時間を示します。
+</p>
+<pre>
+  表 : ネガスカウト法の実行時間 (単位 : 秒)
+
+    探索レベル: (3, 3) : (4, 4) : (5, 5)
+    -------------------------------------
+    置換表無し:  0.41  :  1.80  : 11.68
+    置換表有り:  0.41  :  1.67  :  9.51
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> 探索レベルを上げると、実行時間は置換表を用いたほうが速くなります。置換表の効果は十分に出ていると思います。
+</p>
+<h4>●MTD(f) 法</h4>
+<p> 次は MTD(f) 法を説明します。MTD は "Memory Test Drive" の略で、探索した局面の情報をメモリに保存しておいて、null window search を繰り返し適用することで minimax 値が存在する範囲を絞っていく手法です。局面の情報は置換表を使って保存します。MTD(f) 法は null window search で window の値を変えながらゲーム木を何度も探索するので、置換表がないと高速に動作しません。置換表が必須のアルゴリズムなのです。
+</p>
+
+<p> ところで、今まで説明した方法は全て「深さ優先探索」でプログラムしています。ゲーム木を探索する場合、プログラムは深さ優先探索で実装するのが一般的ですが、このほかに「最良優先探索 (best-first search) 」という方法を用いる場合があります。これは、局面の情報を保存しておいて、評価値の高い局面から優先的に調べていく方法です。参考 URL <a href="pyalgo26.html#cite"> 6</a> によると、 <cite>『MTD(f)とは、最良優先探索アルゴリズムSSS* を、Alpha-Beta とTransposition Table (TT)を用いて再定式化したものです。』</cite> とのことです。一般に、最良優先探索のプログラムは複雑になりますが、MTD(f) 法のプログラムはとても簡単です。
+</p>
+
+<p> それでは、プログラムを作りましょう。MTD(f) 法はアルファベータ法と置換表で作成したプログラム (関数 negamax) を使うと、とても簡単にプログラムすることができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : MTD(f) 法
+
+def mtdf(turn, depth, board, f):
+    global table
+    lower = MIN_VALUE
+    upper = MAX_VALUE
+    bound = f
+    table = {}
+    while lower &lt; upper:
+        value, move = negamax(turn, depth, board, bound - 1, bound)
+        if value &lt; bound:
+            upper = value   # (lower, value)
+        else:
+            lower = value   # (value, upper)
+        if lower == value:
+            bound = value + 1
+        else:
+            bound = value
+    return value, move
+</pre>
+<p> 関数 mtdf の引数 turn が手番、depth が探索レベル、board が盤面です。引数 f は "first guess" の意味で、null window search を行うときの window の初期値です。f が minimax 値に近いほど MTD(f) 法の探索効率は良くなります。f の設定が MTD(f) 法を使いこなすポイントの一つになります。
+</p>
+<p> 変数 lower と upper は minimax 値が存在する範囲を表します。lower が下限値で MIN_VALUE に初期化し、upper が上限値で MAX_VALUE に初期化します。bound は null window search での window の値で f に初期化します。table は置換表を格納します。MTD(f) 法の場合、同じゲーム木を何度も探索するので、置換表 table は while ループの前で空に初期化します。
+</p>
+<p> あとは while ループで null window search を繰り返します。関数 negamax は置換表を用いたネガアルファ法のプログラムと同じです。window の幅を (bound - 1, bound) に設定して呼び出すと、null window search になります。置換表がないと MTD(f) 法は高速に動作しません。ご注意ください。
+</p>
+<p> 返り値 value が bound よりも小さい場合は fail-low なので、minimax 値は value 以下であることがわかります。upper を書き換えて範囲を (lower, value) に設定します。そうでなければ fail-high なので、minimax 値は value 以上であることがわかります。lower を value に書き換えて、範囲を (value, upper) に設定します。
+</p>
+<p> それから、bound の値を更新します。value が下限値 (lower) の場合、次の null window search は (value, value + 1) で行うので、bound を value + 1 に設定します。value が上限値 (upper) の場合は、(value - 1, value) で null window search を行うので、bound を value に設定します。null window serach を繰り返すたびに (lower, upper) の範囲が絞られていき、最後は lower &gt;= upper になります。ここで、while ループを終了して value, move を返します。
+</p>
+
+<p> あとは f の設定ですが、今回は一つ前の評価値を使うことにします。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 関数 mtdf の呼び出し
+
+def play(first_depth, second_depth):
+    board = Board([6,6,6,6,6,6,0,6,6,6,6,6,6,0])    # 初期状態
+    turn = FIRST_KALAH
+    value_first = 0
+    value_second = 0
+    while True:
+        if turn == FIRST_KALAH:
+            value_first, move = mtdf(turn, first_depth, board, value_first)
+        else:
+            value_second, move = mtdf(turn, second_depth, board, value_second)
+
+    ・・・ 省略 ・・・
+</pre>
+<p> 先手番の評価値を value_first に、後手番の評価値を value_second に格納します。この値を mtdf の引数 f に渡します。簡単な方法ですが、カラーの場合はこれでも十分に機能するようです。このほかに、数レベルの浅い探索を行って評価値を求め、その値を使って MTD(f) で深く探索する方法があります。興味のある方はいろいろ試してみてください。
+</p>
+
+<ul>
+  <li><a href="pyalgo26.html#list4">プログラムリスト４</a>
+</ul>
+
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。勝敗は今までの方法とまったく同じです。局面の評価回数と置換表にヒットした回数は次のようになりました。
+</p>
+<pre>
+ 表 : 局面の評価回数 (MTD(f) 法)
+
+ 先手＼後手 :    2    :    3    :    4    :    5
+----------------------------------------------------
+     2      :    2918 :   12567 :   19852 :   35114
+            :     586 :    3549 :    2596 :    3735
+     3      :    1363 :    5941 :   18378 :   18045
+            :     476 :    1228 :    2653 :    2004
+     4      :    9281 :    9818 :   26684 :   45592
+            :    1253 :    1455 :    3238 :    4850
+     5      :   19073 :   45141 :   58735 :  157227
+            :    2247 :    4080 :    4034 :   14716
+
+
+  上段 : MTD(f) 法
+  下段 : 置換表にヒットした回数
+</pre>
+<p> MTD(f) 法の場合、同じゲーム木を何度も探索するので、置換表にヒットする回数は他の方法よりも多くなると予想していました。確かにネガアルファ法よりも多くなりましたが、ネガスカウト法よりは少なくなりました。それだけではなく、局面の評価回数もネガスカウト法より少なくなりました。これは置換表の効果だけではなく、null window search を繰り返し適用する MTD(f) 法の効果が出ていると思われます。また、初期値 f の選択も適切だったのでしょう。ご参考までにレベル 3, 4, 5 の実行時間を示します。
+</p>
+<pre>
+  表 : MTD(f) 法の実行時間 (単位 : 秒)
+
+    探索レベル: (3, 3) : (4, 4) : (5, 5)
+    ------------------------------------
+    NegaScout :  0.41  :  1.67  :  9.51  (置換表有り)
+     MTD(f)   :  0.28  :  1.19  :  7.83
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> ネガスカウト法よりもMTD(f) 法のほうが高速になりました。MTD(f) 法は優秀なアルゴリズムだと思います。MTD(f) 法の場合、初期値 f の設定で実行時間は左右されます。興味のある方はいろいろ試してみてください。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>松原仁・竹内郁雄 編著, 『bit別冊 ゲームプログラミング』, 共立出版, 1997
+  <li>松原仁 編著, 『コンピュータ将棋の進歩』, 共立出版, 1996
+  <li>松原仁, 『将棋とコンピュータ』, 共立出版, 1994
+  <li><a href="http://ray.sakura.ne.jp/search_problem/index.html">ゲーム木の探索問題</a>
+  <li><a href="http://fujitake.dip.jp/sealsoft/thell/algorithm.html">アルゴリズム解説</a>
+  <li><a href="http://uguisu.skr.jp/othello/index.html">-鶯教-コンピュータ・リバーシ講座</a>
+  <li><a href="http://www.cs.vu.nl/~aske/mtdf.html">MTD(f), A Minimax Algorithm faster than NegaScout</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# kalah.py : カラー (ネガマックス法 + 置換表)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+from board import *
+
+
+# ネガマックス法 + 置換表
+def negamax(turn, depth, board):
+    if depth == 0:
+        v = board.value_func()
+        if turn == SECOND_KALAH: v = -v
+        return v, []
+    # 置換表の探索
+    key = (depth, turn) + tuple(board.board)
+    if key in table: return table[key]
+    #
+    value = MIN_VALUE
+    move = []
+    for pos in xrange(turn - 6, turn):
+        if board[pos] == 0: continue
+        b = board.copy()
+        # 石を動かす
+        result = b.move_stone(turn, pos)
+        m = []
+        if result == GAMEOVER:
+            v = b.value_func()
+            if turn == SECOND_KALAH: v = -v
+        elif result == KALAH:
+            # 手番は同じまま
+            v, m = negamax(turn, depth, b)
+        else:
+            # 後手番
+            v, _ = negamax((turn + 7) % 14, depth - 1, b)
+            v = -v
+        # ネガマックス法 : 大きな値を選ぶ
+        if value &lt; v:
+            value = v
+            move = [pos] + m
+    # 置換表の更新
+    table[key] = (value, move)
+    return value, move
+
+# 実行
+def play(first_depth, second_depth):
+    global table
+    board = Board([6,6,6,6,6,6,0,6,6,6,6,6,6,0])    # 初期状態
+    turn = FIRST_KALAH
+    while True:
+        table = {}
+        if turn == FIRST_KALAH:
+            value, move = negamax(turn, first_depth, board)
+        else:
+            value, move = negamax(turn, second_depth, board)
+        # 表示
+        for x in move:
+            print 'move', x
+            a = board.move_stone(turn, x)
+            board.print_board()
+            print
+        if a == GAMEOVER:
+            print 'Game Over'
+            return
+        if turn == FIRST_KALAH:
+            turn = SECOND_KALAH
+        else:
+            turn = FIRST_KALAH
+
+#
+play(2, 2)
+print_count()
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# kalah.py : カラー (ネガアルファ法 + 置換表)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+from board import *
+
+
+# ネガアルファ法
+def negamax(turn, depth, board, alpha, beta):
+    if depth == 0:
+        v = board.value_func()
+        if turn == SECOND_KALAH: v = -v
+        return v, []
+    # 置換表
+    key = (depth, turn) + tuple(board.board)
+    if key in table:
+        lower, upper, m = table[key]
+        if lower &gt;= beta: return lower, m
+        if upper &lt;= alpha or upper == lower: return upper, m
+        alpha = max(alpha, lower)
+        beta = min(beta, upper)
+    else:
+        lower = MIN_VALUE
+        upper = MAX_VALUE
+    #
+    value = MIN_VALUE
+    move = []
+    for pos in xrange(turn - 6, turn):
+        if board[pos] == 0: continue
+        b = board.copy()
+        # 石を動かす
+        result = b.move_stone(turn, pos)
+        m = []
+        if result == GAMEOVER:
+            v = b.value_func()
+            if turn == SECOND_KALAH: v = -v
+        elif result == KALAH:
+            # 手番は同じまま
+            v, m = negamax(turn, depth, b, max(alpha, value), beta)
+        else:
+            # 後手番
+            v, _ = negamax((turn + 7) % 14, depth - 1, b, -beta, -max(alpha, value))
+            v = -v
+        # ネガマックス法 : 大きな値を選ぶ
+        if value &lt; v:
+            value = v
+            move = [pos] + m
+        # ネガアルファ法
+        if value &gt;= beta: break
+    # 置換表の更新
+    if value &lt;= alpha:
+        table[key] = (lower, value, move)
+    elif value &gt;= beta:
+        table[key] = (value, upper, move)
+    else:
+        table[key] = (value, value, move)
+    return value, move
+
+# 実行
+def play(first_depth, second_depth):
+    global table
+    board = Board([6,6,6,6,6,6,0,6,6,6,6,6,6,0])    # 初期状態
+    turn = FIRST_KALAH
+    while True:
+        table = {}
+        if turn == FIRST_KALAH:
+            value, move = negamax(turn, first_depth, board, MIN_VALUE, MAX_VALUE)
+        else:
+            value, move = negamax(turn, second_depth, board, MIN_VALUE, MAX_VALUE)
+        # 表示
+        for x in move:
+            print 'move', x
+            a = board.move_stone(turn, x)
+            board.print_board()
+            print
+        if a == GAMEOVER:
+            print 'Game Over'
+            return
+        if turn == FIRST_KALAH:
+            turn = SECOND_KALAH
+        else:
+            turn = FIRST_KALAH
+
+#
+play(2, 2)
+print_count()
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+# coding: utf-8
+#
+# kalah.py : カラー (ネガスカウト法 + 置換表)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+from board import *
+
+
+# ネガスカウト法
+def negascout(turn, depth, board, alpha, beta):
+    if depth == 0:
+        v = board.value_func()
+        if turn == SECOND_KALAH: v = -v
+        return v, []
+    # 置換表
+    key = (depth, turn) + tuple(board.board)
+    if key in table:
+        lower, upper, m = table[key]
+        if lower &gt;= beta: return lower, m
+        if upper &lt;= alpha or upper == lower: return upper, m
+        alpha = max(alpha, lower)
+        beta = min(beta, upper)
+    else:
+        lower = MIN_VALUE
+        upper = MAX_VALUE
+    #
+    value = MIN_VALUE
+    move = []
+    for pos in xrange(turn - 6, turn):
+        if board[pos] == 0: continue
+        b = board.copy()
+        # 石を動かす
+        result = b.move_stone(turn, pos)
+        m = []
+        if result == GAMEOVER:
+            v = b.value_func()
+            if turn == SECOND_KALAH: v = -v
+        elif result == KALAH:
+            # 手番は同じまま
+            # null window search は適用しない
+            v, m = negascout(turn, depth, b, max(alpha, value), beta)
+        else:
+            # 後手番
+            # null window search
+            a = max(alpha, value)
+            v, _ = negascout((turn + 7) % 14, depth - 1, b, -(a+1), -a)
+            v = -v
+            if beta &gt; v &gt; a:
+                # 再探索
+                v, _ = negascout((turn + 7) % 14, depth - 1, b, -beta, -v)
+                v = -v
+        # ネガマックス法 : 大きな値を選ぶ
+        if v &gt; value:
+            value = v
+            move = [pos] + m
+        # ネガアルファ法
+        if value &gt;= beta: break
+    # 置換表の更新
+    if value &lt;= alpha:
+        table[key] = (lower, value, move)
+    elif value &gt;= beta:
+        table[key] = (value, upper, move)
+    else:
+        table[key] = (value, value, move)
+    return value, move
+
+# 実行
+def play(first_depth, second_depth):
+    global table
+    board = Board([6,6,6,6,6,6,0,6,6,6,6,6,6,0])    # 初期状態
+    turn = FIRST_KALAH
+    table = {}
+    while True:
+        if turn == FIRST_KALAH:
+            value, move = negascout(turn, first_depth, board, MIN_VALUE, MAX_VALUE)
+        else:
+            value, move = negascout(turn, second_depth, board, MIN_VALUE, MAX_VALUE)
+        # 表示
+        for x in move:
+            print 'move', x
+            a = board.move_stone(turn, x)
+            board.print_board()
+            print
+        if a == KALAH: raise 'error'
+        if a == GAMEOVER:
+            print 'Game Over'
+            return
+        if turn == FIRST_KALAH:
+            turn = SECOND_KALAH
+        else:
+            turn = FIRST_KALAH
+
+#
+play(2, 2)
+print_count()
+</pre>
+<hr>
+<h4 id="list4">●プログラムリスト４</h4>
+<pre class="list">
+# coding: utf-8
+#
+# kalah.py : カラー (MTD(f)法)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+from board import *
+
+
+# ネガアルファ法 + 置換表
+def negamax(turn, depth, board, alpha, beta):
+    if depth == 0:
+        v = board.value_func()
+        if turn == SECOND_KALAH: v = -v
+        return v, []
+    # 置換表
+    key = (depth, turn) + tuple(board.board)
+    if key in table:
+        lower, upper, m = table[key]
+        if lower &gt;= beta: return lower, m
+        if upper &lt;= alpha or upper == lower: return upper, m
+        alpha = max(alpha, lower)
+        beta = min(beta, upper)
+    else:
+        lower = MIN_VALUE
+        upper = MAX_VALUE
+    #
+    value = MIN_VALUE
+    move = []
+    for pos in xrange(turn - 6, turn):
+        if board[pos] == 0: continue
+        b = board.copy()
+        # 石を動かす
+        result = b.move_stone(turn, pos)
+        m = []
+        if result == GAMEOVER:
+            v = b.value_func()
+            if turn == SECOND_KALAH: v = -v
+        elif result == KALAH:
+            # 手番は同じまま
+            v, m = negamax(turn, depth, b, max(alpha, value), beta)
+        else:
+            # 後手番
+            v, _ = negamax((turn + 7) % 14, depth - 1, b, -beta, -max(alpha, value))
+            v = -v
+        # ネガマックス法 : 大きな値を選ぶ
+        if value &lt; v:
+            value = v
+            move = [pos] + m
+        # ネガアルファ法
+        if value &gt;= beta: break
+    # 置換表の更新
+    if value &lt;= alpha:
+        table[key] = (lower, value, move)
+    elif value &gt;= beta:
+        table[key] = (value, upper, move)
+    else:
+        table[key] = (value, value, move)
+    return value, move
+
+# MTD(f) 法
+def mtdf(turn, depth, board, f):
+    global table
+    lower = MIN_VALUE
+    upper = MAX_VALUE
+    bound = f
+    table = {}
+    while True:
+        v, m = negamax(turn, depth, board, bound - 1, bound)
+        if v &lt; bound:
+            upper = v   # (lower, v)
+        else:
+            lower = v   # (v, upper)
+        if lower == v:
+            bound = v + 1
+        else:
+            bound = v
+        if lower &gt;= upper: return v, m
+
+
+# 実行
+def play(first_depth, second_depth):
+    board = Board([6,6,6,6,6,6,0,6,6,6,6,6,6,0])    # 初期状態
+    turn = FIRST_KALAH
+    value_first = 0
+    value_second = 0
+    while True:
+        if turn == FIRST_KALAH:
+            value_first, move = mtdf(turn, first_depth, board, value_first)
+        else:
+            value_second, move = mtdf(turn, second_depth, board, value_second)
+        # 表示
+        for x in move:
+            print 'move', x
+            a = board.move_stone(turn, x)
+            board.print_board()
+            print
+        if a == GAMEOVER:
+            print 'Game Over'
+            return
+        if turn == FIRST_KALAH:
+            turn = SECOND_KALAH
+        else:
+            turn = FIRST_KALAH
+
+#
+play(2, 2)
+print_count()
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo25.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo27.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

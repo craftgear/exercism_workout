@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 裏表パズル</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881773</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>裏表パズル</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p> 今回は「裏表パズル」を解いてみましょう。裏表パズルはルービック・キューブを平面にしたようなパズルです。たとえば、表を白、裏を黒に塗り、任意の行（または列）を裏返しにして模様を完成させる、または、同じ色に揃えるのがパズルの目的です。次の図を見てください。
+</p>
+
+<pre class="fig">
+    表      裏                 表      裏                 表      裏
+  １２３  １２３             １２３  １２３             １２３  １２３
+Ａ□□□  ■■■           Ａ□□□  ■■■           Ａ□□□  ■■■
+Ｂ□□□  ■■■ = C 行 =&gt; Ｂ□□□  ■■■ = 2 列 =&gt; Ｂ□■□  ■□■  
+Ｃ□□□  ■■■           Ｃ■■■  □□□           Ｃ■■■  □□□
+
+                         図：裏表パズルの動作
+</pre>
+
+<p> 上図の C 行を 2 列を中心に回転して裏返しにします。すると、C 行は黒になりますが、このとき (C, 3) の裏が (C, 1) の表に、(C, 1) の裏が (C, 3) の表になることに注意してください。次に、2 列を B 行を中心に回転させると、(A, 2) の裏が (C, 2) の表になるので黒のまま、(C, 2) の裏が (A, 2) の表になるので白のままで、(B, 2) が裏返しになるので (B, 2) が黒になります。このように、行（または列）を回転させて裏返しにするところが裏表パズルの面白いところです。
+</p>
+
+<p> 裏表パズルの詳しい説明は、高木茂男氏の著書「パズル遊びへの招待」<a href="http://www.torito.co.jp/puzzles/puzzle_asobi.html">オンライン版</a> の <a href="http://www.torito.co.jp/puzzles/304.html">裏表パズル</a> をお読みくださいませ。
+</p>
+<p> それでは問題です。
+</p>
+<div class="question">
+<pre class="fig">
+
+  ■□■     □□□  
+  □■■ ==&gt; □□□
+  ■■■     □□□
+  START       GOAL
+
+  問題：裏表パズル
+</pre>
+<p> 3 行 3 列盤の裏表パズルで、表をすべて白にする最短手順を求めてください。
+</p>
+</div>
+<hr>
+<h4>●プログラムの作成</h4>
+<p> 今回は単純な反復深化でプログラムを作ります。使用するプログラミング言語はＣ言語です。最初にグローバル変数を定義します。
+</p>
+<pre class="fig">
+ ┌─┬─┬─┐ 
+ │０│１│２│ 
+ ├─┼─┼─┤ 
+ │３│４│５│ 
+ ├─┼─┼─┤ 
+ │６│７│８│ 
+ └─┴─┴─┘ 
+
+ 図：盤面の番号
+</pre>
+<pre class="list">
+リスト：グローバル変数の定義
+
+/* 直線 */
+const char line_table[LINE][3] = {
+  0, 1, 2,  3, 4, 5,  6, 7, 8,
+  0, 3, 6,  1, 4, 7,  2, 5, 8,
+};
+
+char board[SIZE];     /* 盤面 */
+char move[MAX_MOVE];  /* 手順 */
+</pre>
+<p> 盤面は 1 次元配列 board で表します。盤面の位置と配列の添字の対応を左図のように定義すると、列（行）は配列 line_table で表すことができます。line_table の先頭から列に番号を割り当てると、手順は裏返しにした列の番号で表すことができます。手順は配列 move に格納します。
+</p>
+
+<p> 列の裏返しは簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：列を裏返す
+
+void reverse_line( int n )
+{
+  int p1 = line_table[n][0];
+  int p2 = line_table[n][1];
+  int p3 = line_table[n][2];
+  if( board[p1] == board[p3] ){
+    board[p1] ^= 1;
+    board[p3] ^= 1;
+  }
+  board[p2] ^= 1;
+}
+</pre>
+
+<p> 白と黒を W (0) と B (1) で表すことにします。白と黒を反転させるには、盤面の値と 1 の排他的論理和 (XOR) を計算すれば簡単にできます。3 行 3 列盤の場合、中央の値は無条件に反転していいのですが、両端の値は条件をチェックしないといけません。白と白または黒と黒の場合は反転しますが、それ以外の場合は裏返しにしても状態は変わらないので反転しません。
+</p>
+<p> プログラムはとても簡単です。関数 reverse_line の引数 n が列の盤号を表します。盤面の位置を line_table から取り出して、変数 p1, p2, p3 にセットします。両端の値 board[p1] と board[p3] の値が等しい場合は、値を反転させます。中央の board[p2] は無条件に反転させます。
+</p>
+
+<p> 次は反復深化で解を求める関数 solve_id を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：反復深化による解法
+
+void solve_id( int n, int limit, int prev )
+{
+  int i;
+  if( n == limit ){
+    if( !memcmp( board, final_state, SIZE ) ){
+      print_answer( n );
+      exit( 0 );
+    }
+  } else {
+    for( i = 0; i &lt; LINE; i++ ){
+      if( i == prev ) continue;
+      reverse_line( i );
+      move[n] = i;
+      solve_id( n + 1, limit, i );
+      /* 元に戻す */
+      reverse_line( i );
+    }
+  }
+}
+</pre>
+<p> 関数 solve_id の引数 n が手数、limit が反復深化の上限値、prev が直前に裏返しにした列の番号を表します。裏表パズルの場合、1 手前に裏返しにした列を再度裏返しにすると、2 手前の局面に戻ってしまいます。直前に裏返しにした列を再度裏返しにしないようにチェックすると、かなりの無駄を省くことができます。
+</p>
+<p> 引数 n が limit に達したならば、パズルが解けたかチェックしますfinal_state は GOAL を表す配列です。パズルが解けたら print_answer で手順を表示します。n が limit に達していない場合は、列を裏返しにして新しい局面を作ります。このとき、prev と等しい列は裏返しにしません。reverse_line で列を裏返しにして手順を move に格納したら、solve_id を再帰呼び出しします。そのあと、reverse_line を呼び出して board を元に戻すことをお忘れなく。
+</p>
+
+<p> あとはとくに難しいところはありません。詳細は <a name="back1" href="uraomote.html#list1">プログラムリスト１</a> をお読みくださいませ。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。最短手数は 7 手で、これが表を白に揃える最長手数になります。手順の一例を図に示します。
+</p>
+
+<pre class="fig">
+                      ↓               ↓                    ↓
+  →■□■   □■□   □■□ →□■□  ■□■   □□■   □□■   □□□   
+    □■■ →□■■   □□■   ■□■  ■□■   □□■   □□■   □□□
+    ■■■   ■■■   ■■■   ■■■  ■■■ →□■■   □□■   □□□
+      ０       １       ２       ３      ４       ５       ６       ７
+
+                        図：裏表パズルの解答
+</pre>
+<hr>
+<h4>●裏表パズルの偶奇性</h4>
+<p> 裏表パズルには偶奇性があります。2 行 2 列盤の裏表パズルを例に考えてみましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+                                          |
+ □□   ■■   □□   ■□   □■   ■■  |  ■□   □■   
+ □□   □□   ■■   ■□   □■   ■■  |  □■   ■□   
+  Ａ     Ｂ     Ｃ     Ｄ     Ｅ     Ｆ   |   Ｇ     Ｈ
+
+                図：裏表パズルの偶奇性
+</pre>
+<p> ここでは、表にある黒の個数を数えることにします。A の場合、黒の個数は 0 ですね。ここで白と白の列を裏返しにすると黒と黒になります。この場合、B - E の 4 通りありますが、どれも黒の個数は 2 になります。B - E の状態で、白と白の列を裏返しにすると、表がすべて黒の状態 F になるので、黒の個数は 4 になります。また、B - E で黒と黒の列を裏返しにすると、A の状態に戻るのは自明ですね。
+</p>
+
+<p> それでは、白と黒の列を裏返しにしてみましょう。B の状態で、白と黒を裏返しにすると、黒の裏（白）が下側の表になり、白の裏（黒）が上側の表になるので、B の状態に変化はありません。これはどの状態の場合でも同じです。白と黒の列を裏返しにしても、状態に変化はありません。したがって、黒の個数は 2 のままです。このように、裏表パズルはどの列を裏返しにしても黒の偶奇性に変化はありません。したがって、黒の個数が奇数の場合、表を白一色にすることはできないのです。
+</p>
+
+<p> ここで、もうひとつ注意点があります。偶奇性を満たしていても解けない場合があるのです。上図の G と H を見てください。白と黒が交互に配置されていますね。この状態では、どの列を裏返しにしても元のままです。つまり、裏表パズルには変化しないパターンがあるのです。もちろん、この場合も表を白一色にすることはできません。けっきょく、白一色にできるパターンは、それ自身も含めて 6 通りしかありません。盤面を大きくしても、白一色にできるパターンはかなり少ないと思われます。
+</p>
+
+<p> それでは、3 行 3 列盤を考えてみましょう。下図に示すように、盤面をグループに分けると簡単です。
+</p>
+
+<pre class="fig">
+┌─┬─┬─┐  
+│０│１│０│  Group 0 には偶奇性が成立する
+├─┼─┼─┤
+│１│１│１│  Group 1 には偶奇性が成立しない
+├─┼─┼─┤
+│０│１│０│  局面の総数 : (2 ^ 5) * 6 = 192 通り  
+└─┴─┴─┘
+
+        図：3 行 3 列盤のグループ分け
+</pre>
+
+<p> Group 0 の 4 か所は、2 行 2 列盤と同じ偶奇性が成立することはすぐにわかると思います。したがって、白一色になるパターンは Group 0 では 6 通りしかありません。つまり、Group 0 で黒の個数が奇数、または、白と黒が交互に配置されている状態では、3 行 3 列盤でも白一色にすることはできません。
+</p>
+<p> Group 1 は単独で裏返しにできる場所です。たとえば、両端が黒と白の場合、裏返しにしても両端の状態は変わらないので、真ん中の部分だけを裏返しにすることができます。したがって、Group 1 に偶奇性は成立しません。つまり、Group 0 の状態だけで、解の有無をチェックすることができるわけです。局面の総数は 2 ^ 5 (2 の 5 乗) * 6 = 192 通りになります。
+</p>
+
+<p> 次は 4 行 4 列盤を考えてみましょう。下図を見てください。
+</p>
+<pre class="fig">
+┌─┬─┬─┬─┐  
+│０│１│１│０│
+├─┼─┼─┼─┤
+│２│３│３│２│  どの Group にも偶奇性が成立
+├─┼─┼─┼─┤
+│２│３│３│２│  局面の総数 : 6 ^ 4 = 1296 通り  
+├─┼─┼─┼─┤
+│０│１│１│０│
+└─┴─┴─┴─┘
+
+    図：4 行 4 列盤のグループ分け
+</pre>
+<p> 3 行 3 列盤と違って、どの Group にも 2 行 2 列盤と同じ偶奇性が成立します。したがって、白一色にできる局面の総数は 6 ^ 4 = 1296 通りになります。5 行 5 列盤になると、偶奇性が成立する Group が 4 つ、その他の場所が 9 つあるので、局面の総数は (6 ^ 4) * (2 ^ 9) = 663552 通りになります。5 行 5 列盤の局面は全部で 2 ^ 25 = 33,554,432 通りあるので、白一色にできるパターンは約 2 % しかありません。このように、裏表パズルで白一色にできるパターンはかなり少ないことがわかります。
+</p>
+
+<p> また、2 行 2 列盤には変化しないパターンがありますが、4 行 4 列盤でもすべての Group が変化しないパターンであれば、どの列を裏返しにしても状態は変化しません。たとえば下図に示すように、盤面を白と黒の市松模様にすると、どの列を裏返しにしても市松模様のままです。これは裏表パズルの面白い特徴だと思います。
+</p>
+
+<pre class="fig">
+ ■■□□   ■□■□   ■■□□   ■■□□   ■□■□   ■□■□   
+ ■■□□   ■■□□   ■□■□   □□■■   □■□■   □□■■   
+ □□■■   □□■■   □■□■   ■■□□   ■□■□   ■■□□   
+ □□■■   □■□■   □□■■   □□■■   □■□■   □■□■   
+
+              図：変化しないパターンの例 (4 * 4 盤)
+</pre>
+<p> ところで、3 行 3 列盤や 5 行 5 列盤の市松模様は簡単に解けます。息抜きや気分転換にちょっと考えてみてください。
+</p>
+<hr>
+<h3 id="max">最長手数の局面</h3>
+<p> 次は裏表パズルの最長手数の局面を「幅優先探索」で求めてみましょう。幅優先探索でパズルを解く場合、同一局面の検索処理が重要になりますが、3 行 3 列盤は局面の総数が少ないので、単純な線形探索で十分でしょう。
+</p>
+
+<p> プログラムは基本的な幅優先探索なので、難しいところはないと思います。説明は省略いたしますので、詳細は <a name="back2" href="uraomote.html#list2">プログラムリスト２</a> をお読みくださいませ。
+</p>
+
+<p> それでは実行結果を示します。3 行 3 列盤の最長手数は 7 手、全部で 8 通りのパターンがあります。対称解を除くと次の 2 通りになります。
+</p>
+
+<pre class="fig">
+   □■□    ■□■   
+   ■■□    □■■   
+   □□□    ■■■   
+
+  図：最長手数の局面
+</pre>
+<p> 生成された局面は全部で 192 通りで、偶奇性で計算した結果と一致します。
+</p>
+<p> ところで、4 行 4 列盤の最長手数も幅優先探索で簡単に求めることができます。プログラムの改造も簡単です。実際に試してみたところ、最長手数は 6 手、全部で 224 通りのパターンがあります。最長手数の局面の例を図に示します。
+</p>
+
+<pre class="fig">
+ □□□□    □□□□    □■■□    ■□□■
+ □■□■    □□■■    ■■□□    □□□■
+ □■□■    □□■■    ■■□□    □■■■
+ □■■□    ■□□■    ■■■■    ■■■■
+
+      図：最長手数の局面の例 (4 * 4 盤)
+</pre>
+<p> 生成された局面は全部で 1296 通り、これも偶奇性で計算した結果と一致します。本当に 6 手で解けるのか、興味のある方は挑戦してみてください。
+</p>
+<p> 次は 5 行 5 列盤の裏表パズルに挑戦してみましょう。お楽しみに。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+/*
+ * uo.c : 裏表パズル (3 * 3 盤) を反復深化で解く
+ *
+ *         Copyright (C) 2003 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+#define TRUE      1
+#define FALSE     0
+#define SIZE      9
+#define LINE      6
+#define MAX_MOVE 10
+#define B         1
+#define W         0
+
+/*
+  盤面
+  0 1 2
+  3 4 5
+  6 7 8
+ */
+const char line_table[LINE][3] = {
+  0, 1, 2,
+  3, 4, 5,
+  6, 7, 8,
+  0, 3, 6,
+  1, 4, 7,
+  2, 5, 8,
+};
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  B, W, B,
+  W, B, B,
+  B, B, B,
+};
+
+/* 終了状態 */
+char final_state[SIZE] = {
+  W, W, W,
+  W, W, W,
+  W, W, W,
+};
+
+/* 盤面 */
+char board[SIZE];
+
+/* 手順 */
+char move[MAX_MOVE];
+
+/* 裏返す */
+void reverse_line( int n )
+{
+  int p1 = line_table[n][0];
+  int p2 = line_table[n][1];
+  int p3 = line_table[n][2];
+  if( board[p1] == board[p3] ){
+    /* 裏返しにする */
+    board[p1] ^= 1;
+    board[p3] ^= 1;
+  }
+  board[p2] ^= 1;
+}
+
+/* 盤面の表示 */
+void print_board( void )
+{
+  int i;
+  for( i = 0; i &lt; SIZE; i++ ){
+    printf("%d ", board[i] );
+    if( i == 2 || i == 5 ) printf("\n");
+  }
+  printf("\n\n");
+}
+
+/* 解の表示 */
+void print_answer( int n )
+{
+  int i;
+  memcpy( board, init_state, SIZE );
+  print_board();
+  for( i = 0; i &lt; n; i++ ){
+    reverse_line( move[i] );
+    print_board();
+  }
+}
+
+/* 反復深化による解法 */
+void solve_id( int n, int limit, int prev )
+{
+  int i;
+  if( n == limit ){
+    if( !memcmp( board, final_state, SIZE ) ){
+      print_answer( n );
+      exit( 0 );
+    }
+  } else {
+    for( i = 0; i &lt; LINE; i++ ){
+      if( i == prev ) continue;
+      reverse_line( i );
+      move[n] = i;
+      solve_id( n + 1, limit, i );
+      /* 元に戻す */
+      reverse_line( i );
+    }
+  }
+}
+
+int main()
+{
+  int i;
+  /* 初期化 */
+  memcpy( board, init_state, SIZE );
+  for( i = 1; i &lt; MAX_MOVE; i++ ){
+    printf("----- %d 手を探索 -----\n", i );
+    solve_id( 0, i, -1 );
+  }
+  return 0;
+}
+</pre>
+<p><a href="uraomote.html#back1">戻る</a>
+</p>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+/*
+ * uo_max.c : 裏表パズルの最長手数を求める
+ *
+ *            Copyright (C) 2003 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+#define TRUE      1
+#define FALSE     0
+#define SIZE      9
+#define LINE      6
+#define B         1
+#define W         0
+#define MAX_STATE 192
+
+/*
+  盤面
+  0 1 2
+  3 4 5
+  6 7 8
+ */
+const char line_table[LINE][3] = {
+  0, 1, 2,
+  3, 4, 5,
+  6, 7, 8,
+  0, 3, 6,
+  1, 4, 7,
+  2, 5, 8,
+};
+
+/* 局面 */
+char state[MAX_STATE + 1][SIZE];
+
+/* 手数 */
+char move[MAX_STATE];
+
+/* 裏返す */
+void reverse_line( char *board, int n )
+{
+  int p1 = line_table[n][0];
+  int p2 = line_table[n][1];
+  int p3 = line_table[n][2];
+  if( board[p1] == board[p3] ){
+    /* 裏返しにする */
+    board[p1] ^= 1;
+    board[p3] ^= 1;
+  }
+  board[p2] ^= 1;
+}
+
+/* 盤面の表示 */
+void print_board( char *board )
+{
+  int i;
+  for( i = 0; i &lt; SIZE; i++ ){
+    printf("%d ", board[i] );
+    if( i == 2 || i == 5 ) printf("\n");
+  }
+  printf("\n\n");
+}
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int m = move[n - 1], c = 0;
+  while( move[--n] == m ){
+    c++;
+    print_board( state[n] );
+  }
+  printf("最長手数 %d 手、総数 %d 個\n", m, c );
+}
+
+/* 同一局面のチェック */
+int check_same_state( int n )
+{
+  int i;
+  for( i = 0; i &lt; n; i++ ){
+    if( !memcmp( state[i], state[n], SIZE ) ) return TRUE;
+  }
+  return FALSE;
+}
+
+/* 幅優先探索による解法 */
+void solve_b( void )
+{
+  int i, front = 0, rear = 1;
+  /* 初期化 */
+  memset( state[0], 0, SIZE );
+  move[0] = 0;
+  /* 探索 */
+  while( front &lt; rear ){
+    for( i = 0; i &lt; LINE; i++ ){
+      memcpy( state[rear], state[front], SIZE );
+      reverse_line( state[rear], i );
+      if( !check_same_state( rear ) ){
+        move[rear] = move[front] + 1;
+        rear++;
+      }
+    }
+    front++;
+  }
+  printf("局面の総数 %d\n", rear );
+  print_answer( rear );
+}
+
+int main()
+{
+  solve_b();
+  return 0;
+}
+</pre>
+<p><a href="uraomote.html#back2">戻る</a>
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

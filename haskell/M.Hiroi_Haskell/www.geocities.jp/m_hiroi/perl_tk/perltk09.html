@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Perl/Tk プログラミング入門</title>
+  <meta name="description" content="Perl/Tk,Perl/Tk入門,GUI,プログラミング">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881765</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Perl/Tk memo</h1>
+<h2>お気楽 Perl/Tk プログラミング入門</h2>
+<div class="small">
+[ <a href="perltk08.html">PrevPage</a> | <a href="index.html">Perl/Tk</a> | NextPage ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chapter22">神経衰弱ゲーム</h3>
+<p> 今回は簡単な例題として、ボタンウィジェットを使った神経衰弱ゲームを作ってみましょう。なお、このプログラムは拙作のページ <a href="../tcl_tk_doc/tcltk_doc.html#DEF">Tcl/Tk お気楽 GUI プログラミング応用編</a> の <a href="../tcl_tk_doc/tcltk205.html#chapter14">神経衰弱ゲーム</a> を Perl/Tk で書き直したものです。内容は重複していますが、ご了承くださいませ。
+</p>
+
+<p> ゲームは 10 色のボタンを 4 つずつ、合計 40 個のボタンを用意します。ひとりでプレイしても面白くないでしょうから、コンピュータを相手にボタンを取り合うことにします。
+</p>
+
+<p> ここで問題になるのが、コンピュータ側のボタン選択処理です。色が判明したボタンを全て記憶しておくことは、コンピュータにとって朝飯前のことですが、私達に勝ち目が無くなってしまいます。かといって、ランダムでボタンを選ぶようでは、コンピュータが弱すぎるので面白くありません。そこで、コンピュータの記憶力を制限することにします。Level 1 では 4 個、Level 2 では 6 個、Level 3 では 8 個までとします。もし、Level 1 でも歯が立たないのであれば、個数をもっと少なくすればいいでしょう。逆に、Level 3 でも楽勝ならば、Level 4 や 5 を作ってみてください。
+</p>
+
+<h4>●ボタンの配置</h4>
+<p> ボタンは 5 行 8 列に並べ、その色を配列 @board に格納します。コンピュータ側は、色が判明したボタンの位置だけを記憶し、色は @board から求めることにします。
+</p>
+
+<p> ボタンの配置は Grid マネージャを使った方が簡単です。スコア表示用のラベルは Pack マネージャで十分です。このような場合、配置するウィジェットをフレームに分けることで、異なるジオメトリマネージャを使うことができます。Grid マネージャだけで十分ではないかと思われるでしょうが、フレームを使う利点がもうひとつあるのです。
+</p>
+
+<p> このゲームでは、取ったボタンを画面から取り除かないといけません。Perl/Tk では、destroy メソッドを使ってウィジェットを消去することができますが、それでは再ゲームのときにボタンを作り直さなければいけません。そこで、ボタンを画面から隠すことにします。このとき、フレームが役に立つのです。
+</p>
+
+<p> 上にあるウィンドウが下のウィンドウを覆い隠すように、ウィジェットにも重なり順があります。Tk の場合、あとから作成したウィジェットが上になります。フレームウィジェットを作っておいて、ボタンとの重なり順を調整することで、ボタンをフレームの下に隠したり、出したりすることができます。Perl/Tk ではメソッド raise と lower を使って、重なり順を簡単に変更することができます。
+</p>
+
+<p> それではラベルとボタンから作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ラベルとボタンの配置
+
+# メインウィンドウ
+$top = MainWindow-&gt;new();
+
+# フォントの設定
+$top-&gt;optionAdd( '*font' =&gt; 'FixedSys 14' );
+
+# ラベルの作成
+$f0 = $top-&gt;Frame();
+$f0-&gt;Label( -textvariable =&gt; \$buffer0 )-&gt;pack();
+$f0-&gt;Label( -textvariable =&gt; \$buffer1 )-&gt;pack();
+
+# ボタンの作成
+$f1 = $top-&gt;Frame();
+$i = 0;
+for( $y = 0; $y &lt; 5; $y++ ){
+  for( $x = 0; $x &lt; 8; $x++ ){
+    $button[$i] = $top-&gt;Button( -text =&gt; '   ',
+                                -command =&gt; [\&amp;select_button_human, $i],
+                                -activebackground =&gt; 'darkgray',
+                                -bg =&gt; 'darkgray' );
+    $button[$i]-&gt;grid( -in =&gt; $f1, -column =&gt; $x, -row =&gt; $y );
+    $i++;
+  }
+}
+
+$f0-&gt;pack();
+$f1-&gt;pack();
+
+# イベントループ
+MainLoop();
+</pre>
+<p> ラベルはフレーム $f0 に配置し、ボタンはフレーム $f1 に配置します。ボタンはメインウィンドウ $top から生成し、インスタンスを配列 @button に格納します。これらのボタンは、grid の -in オプションによりフレーム $f1 に配置されます。ボタンをフレームから生成すると、フレームとボタンの重なり順を変更できなくなります。ご注意くださいませ。
+</p>
+
+<p> ボタンは格子状に配置されますが、0 から 39 までの番号で区別することができます。この番号が配列 @board の添字に対応します。ボタンを押したときに実行される関数が select_button_human です。バインドされるときは $i が変数展開されるので、押したボタンの番号が引数として渡されます。この番号を使って、ボタンの背景色を @board に格納されている色に変更します。あとは pack でフレーム $f0 と $f1 をウィンドウに詰め込みます。これでボタンとラベルが表示されます。
+</p>
+
+<img src="img/shinkei1.png" alt="神経衰弱の画面"> ボタンとラベルの配置
+
+<h4>●ボタンの選択処理</h4>
+<p> 次は、コンピュータのボタン選択処理を作りましょう。色が判明したボタンの位置は配列 @memory にセットします。ボタンを選ぶときは、@memory の中から同じ色のボタンを一組選びます。見つからない場合は、しょうがないのでランダムでボタンを選びます。
+</p>
+
+<p> 記憶力の制限ですが、@memory を検索して空き場所があれば記憶し、無ければ記憶しないことにします。空いている場所を -1 で表すことにすると、制限値が 4 の場合は 0 から 3 までの間で -1 を探せばいいわけです。それから、ボタンを取ったら @memory から削除することをお忘れなく。
+</p>
+
+<p> ボタンの選択処理は次のようになります。
+</p>
+
+<pre class="list">
+リスト : ボタンの選択処理
+
+sub select_button_com {
+  while( 1 ){
+    # 記憶の中でボタンを取れるか
+    my $result = &amp;select_same_button();
+    if( @$result &gt; 0 ){
+      &amp;push_button( $result-&gt;[0] );
+      &amp;push_button( $result-&gt;[1] );
+    } elsif( &amp;select_button_random() == 0 ){
+      $turn = 0;
+      &amp;print_message( 'あなたの手番です' );
+      return;
+    }
+    $count{'com'} += 2;
+    if( $count{'com'} + $count{'human'} == 40 ){
+      &game_over();
+      return;
+    }
+    &amp;print_message('もう一回ですね');
+  }
+}
+</pre>
+
+<p> グローバル変数 $turn は手番を管理するために使います。人間の手番が 0 で、コンピュータの手番が 1 です。%count は取ったボタンの個数をカウントするためのハッシュです。まず、select_same_button で @memory から同じ色のボタンを一組探します。見つかれば、push_button でボタンの色を表示して取り除きます。
+</p>
+
+<p> 同じ色のボタンが見つからない場合は、select_button_random を呼び出して、ランダムでボタンを決定します。実際には単純なランダムではなく、ボタンをひとつ選んだら、それと同じ色のボタンが @memory にないか検索します。ボタンが取れなかったら 0 を返すので、手番を相手に移します。ボタンを取ることができたら、$count{'com'} の値を増やします。ボタンが無くなったらゲーム終了です。
+</p>
+
+<h4>●ボタンの表示処理</h4>
+<p> ボタンを押したときの処理は push_button で行います。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ボタンの選択
+
+sub push_button {
+  my $i = shift;
+  my $result = 0;
+  $button[$i]-&gt;configure( -bg =&gt; $board[$i], -activebackground =&gt; $board[$i] );
+  $top-&gt;update();
+  $top-&gt;after( 500 );
+  if( $number &gt;= 0 ){
+    if( $board[$number] eq $board[$i] ){
+      # ボタンを取る
+      &get_button( $i, $number );
+      $result = 2;
+    } else {
+      # 記憶する
+      &amp;write_memory( $i );
+      &amp;write_memory( $number );
+    }
+    # 表示をクリアする
+    $button[$i]-&gt;configure( -bg =&gt; 'darkgray', -activebackground =&gt; 'darkgray' );
+    $button[$number]-&gt;configure( -bg =&gt; 'darkgray', -activebackground =&gt; 'darkgray' );
+    $number = -1;
+  } else {
+    $number = $i;
+    $result = 1;
+  }
+  $result;
+}
+</pre>
+
+<p> ボタンを押したあと、しばらく色を表示させるため 500 msec 待ちます。時間待ちには after メソッドを使います。ところが実際に試してみると、ボタンがへこんだまま 500 msec が経過し、色の表示が一瞬で終わってしまうのです。これは、マウスの左ボタンを押したときに push_button が実行されるため、マウスの左ボタンを離したときの処理が実行されないまま 500 msec 経過してしまうからです。
+</p>
+<p> これを回避するために update メソッドを使います。このメソッドは、全ての待ちイベントを受け付け、実行すべきプログラムを処理します。これによって、マウスの左ボタンを離したときの処理が実行され、ボタンが元に戻るので色がきちんと表示されます。
+</p>
+
+<p> 押したボタンの番号はグローバル変数 $number に格納します。まだボタンを押していない場合、$number の値は -1 です。$number が 0 以上であれば、すでにボタンを 1 回押していることがわかります。引数 $i と $number のボタンの色を比較し、同じ色であればボタンを取り除きます。これは get_button で行います。この中で @memory からボタンを削除しています。違う色であれば、その位置を @memory に記憶してボタンの表示を元に戻します。
+</p>
+
+<p> あとのプログラムは簡単なので、説明は割愛いたします。詳細は <A href="perltk09.html#list">プログラムリスト</A> をお読みくださいませ。
+</p>
+<img src="img/shinkei2.png" alt="神経衰弱の画面"> 失敗！
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+#
+# shinkei.pl : 対戦版神経衰弱ゲーム
+#
+#               Perl/Tk サンプルプログラム
+#
+#               Copyright (C) 2004 Makoto Hiroi
+#
+# グローバル変数
+#   @board       : 色を格納するテーブル（１次元配列）
+#   $number      : 押したボタンの番号（無ければ -1）
+#   @memory      : 色と番号を覚える配列
+#   $level       : レベル（記憶容量）
+#   $action      : 先手・後手
+#   %count       : com   コンピュータ側が取った枚数
+#                : hyman 人間側が取った枚数
+#   $turn        : 0: 人間側の手番, 1: コンピュータ側の手番
+
+use Tk;
+
+# グローバル変数の初期化
+$action = 0;
+$turn = 2;
+$level = 4;
+$buffer1 = 'メニュー Games の Start でゲーム開始！';
+
+
+# 色のリスト
+@color_list = ('white', 'green', 'orange', 'red', 'cyan',
+               'yellow', 'blue', 'purple', 'black', 'pink');
+
+# メッセージの表示
+sub print_message {
+  my $mes = shift;
+  $buffer0 = sprintf( "COM : %2d  HUMAN : %2d", $count{'com'}, $count{'human'} );
+  $buffer1 = $mes;
+  $top-&gt;update();
+  $top-&gt;after( 500 );
+}
+
+
+# 初期化
+sub start_game {
+  my ($i, $j, $c);
+  $i = 0;
+  foreach $c (@color_list) {
+    for( $j = 0; $j &lt; 4; $j++ ){
+      $board[$i++] = $c;
+    }
+  }
+  # シャッフル
+  for( $i = 0; $i &lt; 40; $i++ ){
+    $j = int( rand( 40 ) );
+    $c = $board[$j];
+    $board[$j] = $board[$i];
+    $board[$i] = $c;
+  }
+  # グローバル変数の初期化
+  @memory = (-1,-1,-1,-1,-1,-1,-1,-1);
+  $number = -1;
+  $count{'com'} = 0;
+  $count{'human'} = 0;
+  # ボタンを見せる
+  $f1-&gt;lower();
+  if( $action == 0 ){
+    $turn = 0;
+    &amp;print_message('あなたの手番です');
+  } else {
+    $turn = 1;
+    &amp;print_message('私の手番です');
+    &amp;select_button_com();
+  }
+}
+
+
+# ボタンを取る
+sub get_button {
+  my ($n1, $n2) = @_;
+  $button[$n1]-&gt;lower();
+  $button[$n2]-&gt;lower();
+  $board[$n1] = 'none';
+  $board[$n2] = 'none';
+  &amp;delete_memory( $n1 );
+  &amp;delete_memory( $n2 );
+}
+
+# ボタンを押した
+# 0 : 失敗, 1 : 最初の選択, 2 : 成功
+sub push_button {
+  my $i = shift;
+  my $result = 0;
+  $button[$i]-&gt;configure( -bg =&gt; $board[$i], -activebackground =&gt; $board[$i] );
+  $top-&gt;update();
+  $top-&gt;after( 500 );
+  if( $number &gt;= 0 ){
+    if( $board[$number] eq $board[$i] ){
+      # ボタンを取る
+      &amp;get_button( $i, $number );
+      $result = 2;
+    } else {
+      # 記憶する
+      &amp;write_memory( $i );
+      &amp;write_memory( $number );
+    }
+    # 表示をクリアする
+    $button[$i]-&gt;configure( -bg =&gt; 'darkgray', -activebackground =&gt; 'darkgray' );
+    $button[$number]-&gt;configure( -bg =&gt; 'darkgray', -activebackground =&gt; 'darkgray' );
+    $number = -1;
+  } else {
+    $number = $i;
+    $result = 1;
+  }
+  $result;
+}
+
+# 場所を探す
+sub search_memory {
+  my $n = shift;
+  my $i;
+  for( $i = 0; $i &lt; $level; $i++ ){
+    return $i if $memory[$i] == $n;
+  }
+  return -1;
+}
+
+# 場所を記憶する
+sub write_memory {
+  my $n = shift;
+  # チェック
+  if( &amp;search_memory( $n ) == -1 ){
+    # 記憶する
+    my $i = &amp;search_memory( -1 );
+    $memory[$i] = $n if $i &gt;= 0;
+  }
+}
+
+
+# 削除する
+sub delete_memory {
+  my $n = shift;
+  my $i = &amp;search_memory( $n );
+  $memory[$i] = -1 if $i &gt;= 0;
+}
+
+
+# 同じ色のボタンを探す
+sub find_same_button {
+  my $c = shift;
+  my $i;
+  for( $i = 0; $i &lt; $level; $i++ ){
+    my $j = $memory[$i];
+    return $j if $board[$j] eq $c;
+  }
+  return -1;
+}
+
+
+# 同種のボタンを一組選ぶ
+sub select_same_button {
+  my $i;
+  my %postion;
+  foreach $c (@color_list) {
+    $postion{$c} = -1;
+  }
+  for( $i = 0; $i &lt; $level; $i++ ){
+    my $j = $memory[$i];
+    if( $j != -1 ){
+      my $c = $board[$j];
+      if( $postion{$c} == -1 ){
+        $postion{$c} = $j;
+      } else {
+        return [$postion{$c}, $j];
+      }
+    }
+  }
+  return [];
+}
+
+
+# 乱数でボタンを決めるよ
+sub select_random {
+  my $n = shift;
+  my @buff = ();
+  # 取られていないボタンを集める
+  my $i;
+  for( $i = 0; $i &lt; 40; $i++ ){
+    if( ($i != $n) and
+        ($board[$i] ne 'none') and
+        (&amp;search_memory( $i ) == -1) ){
+      push( @buff, $i );
+    }
+  }
+  # 乱数で選択
+  return $buff[ int( rand( @buff ) ) ];
+}
+
+
+# 終了メッセージ
+sub game_over {
+  my $mes;
+  if( $count{'com'} &gt; $count{'human'} ){
+    $mes = 'わたしの勝ちです';
+  } elsif( $count{'com'} &lt; $count{'human'} ){
+    $mes = 'あなたの勝ちです';
+  } else {
+    $mes = '引き分けです';
+  }
+  &amp;print_message( $mes );
+}
+
+
+# ランダムでボタンを選択する
+sub select_button_random {
+  my ($n1, $n2);
+  # ランダムでボタンをひとつ選ぶ
+  $n1 = &amp;select_random( -1 );
+  # 記憶の中に同じ色のボタンがあるか
+  $n2 = &amp;find_same_button( $board[$n1] );
+  if( $n2 == -1 ){
+    # ランダムで選ぶ
+    $n2 = &amp;select_random( $n1 );
+  }
+  &amp;push_button( $n1 );
+  &amp;push_button( $n2 );
+}
+
+# COM の手番
+# level によって記憶するカードの枚数を制限する
+sub select_button_com {
+  while( 1 ){
+    # 記憶の中でボタンを取れるか
+    my $result = &amp;select_same_button();
+    if( @$result &gt; 0 ){
+      &amp;push_button( $result-&gt;[0] );
+      &amp;push_button( $result-&gt;[1] );
+    } elsif( &amp;select_button_random() == 0 ){
+      $turn = 0;
+      &amp;print_message( 'あなたの手番です' );
+      return;
+    }
+    $count{'com'} += 2;
+    if( $count{'com'} + $count{'human'} == 40 ){
+      &amp;game_over();
+      return;
+    }
+    &amp;print_message('もう一回ですね');
+  }
+}
+
+
+# 人間側
+sub select_button_human {
+  my $i = shift;
+  my $result;
+  return if $turn != 0 or $number == $i;
+  $result = &amp;push_button( $i );
+  if( $result == 0 ){
+    $turn = 1;
+    &amp;print_message('わたしの手番です');
+    $top-&gt;after( 500 );
+    &amp;select_button_com();
+  } elsif( $result == 2 ){
+    $count{'human'} += 2;
+    if( $count{'com'} + $count{'human'} == 40 ){
+      &amp;game_over();
+      return;
+    }
+    $turn = 0;
+    &amp;print_message('あなたの手番です');
+  }
+}
+
+
+# メインウィンドウ
+$top = MainWindow-&gt;new();
+
+# ********** メニューの設定 **********
+$top-&gt;optionAdd( '*font' =&gt; 'FixedSys 14' );
+$m = $top-&gt;Menu( -type =&gt; 'menubar' );
+$top-&gt;configure( -menu =&gt; $m );
+
+$m1 = $m-&gt;cascade(-label =&gt; 'Games', -under =&gt; 0, -tearoff =&gt; 0);
+$m2 = $m-&gt;cascade(-label =&gt; 'Level', -under =&gt; 0, -tearoff =&gt; 0);
+
+$m1-&gt;command(-label =&gt; 'Start', -under =&gt; 0, -command =&gt; \&amp;start_game );
+$m1-&gt;separator;
+$m1-&gt;radiobutton(-label =&gt; '先手', -variable =&gt; \$action, -value =&gt; 0);
+$m1-&gt;radiobutton(-label =&gt; '後手', -variable =&gt; \$action, -value =&gt; 1);
+$m1-&gt;separator;
+$m1-&gt;command(-label =&gt; 'exit', -under =&gt; 0, -command =&gt; \&amp;exit );
+
+$m2-&gt;radiobutton(-label =&gt; 'Level 1', -variable =&gt; \$level, -value =&gt; 4);
+$m2-&gt;radiobutton(-label =&gt; 'Level 2', -variable =&gt; \$level, -value =&gt; 6);
+$m2-&gt;radiobutton(-label =&gt; 'Level 3', -variable =&gt; \$level, -value =&gt; 8);
+
+# ラベルの作成
+$f0 = $top-&gt;Frame();
+$f0-&gt;Label( -textvariable =&gt; \$buffer0 )-&gt;pack();
+$f0-&gt;Label( -textvariable =&gt; \$buffer1 )-&gt;pack();
+
+
+# ボタンの作成
+$f1 = $top-&gt;Frame();
+$i = 0;
+for( $y = 0; $y &lt; 5; $y++ ){
+  for( $x = 0; $x &lt; 8; $x++ ){
+    $button[$i] = $top-&gt;Button( -text =&gt; '   ',
+                                -command =&gt; [\&amp;select_button_human, $i],
+                                -activebackground =&gt; 'darkgray',
+                                -bg =&gt; 'darkgray' );
+    $button[$i]-&gt;grid( -in =&gt; $f1, -column =&gt; $x, -row =&gt; $y );
+    $i++;
+  }
+}
+
+$f0-&gt;pack();
+$f1-&gt;pack();
+
+# イベントループ
+MainLoop();
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chapter23">アナログ時計</h3>
+<p> 今回はキャンバスウィジェットの簡単な例題として、リサイズ可能なアナログ時計を作ってみましょう。なお、このプログラムは拙作のページ <a href="../tcl_tk_doc/tcltk_doc.html#DEF">Tcl/Tk お気楽 GUI プログラミング応用編</a> の <a href="../tcl_tk_doc/tcltk202.html#chapter6">アナログ時計</a> を Perl/Tk で書き直したものです。内容は重複していますが、ご了承くださいませ。
+</p>
+
+<p> 時計をウィンドウいっぱいに広げるのは面倒なので、幅と高さのどちらか短い方に合わせて時計を描画することにします。キャンバスウィジェットに長針、短針、秒針を描き、after コマンドを使って１秒ごとに針の位置を動かします。短針は動きを滑らかにするために、１分ごとに位置を動かします。したがって、短針を動かす角度は 360 / (12 * 60) = 0.5 度になります。
+</p>
+
+<h4>●画面の設定</h4>
+<p> 最初に画面を設定します。ウィンドウが小さくなると時計がよく見えないので、ウィンドウの大きさを制限します。これはメソッド minsize と maxsize で設定することができます。幅と高さはピクセル単位で指定します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 画面の設定
+
+# メインウィンドウ
+$top = MainWindow-&gt;new();
+$top-&gt;minsize( 100, 100 );
+$top-&gt;maxsize( 400, 400 );
+
+# キャンバス
+$c0 = $top-&gt;Canvas( -width =&gt; 140, -height =&gt; 140, -bg =&gt; 'darkgreen' );
+$c0-&gt;pack( -expand =&gt; 1, -fill =&gt; 'both' );
+
+# 図形の生成
+$circle = $c0-&gt;create('oval', 5, 5, 135, 135, -fill =&gt; 'darkgray', -outline =&gt; 'darkgray' );
+for( $i = 0; $i &lt; 12; $i++ ){
+  $backboard[$i] = $c0-&gt;create('line', $i, $i, 135, 135, -width =&gt; 2.0 );
+}
+$hour = $c0-&gt;create('line', 70, 70, 70, 30, -fill =&gt; 'blue', -width =&gt; 3.0 );
+$min  = $c0-&gt;create('line', 70, 70, 70, 20, -fill =&gt; 'green', -width =&gt; 2.0 );
+$sec  = $c0-&gt;create('line', 70, 70, 70, 15, -fill =&gt; 'red' );
+</pre>
+
+<p> ウィンドウの大きさは、幅と高さを 100 から 400 ピクセルの範囲に制限します。背景の円と目盛を表す図形は、変数 $circle と配列 @backboard に格納します。針を表す図形は変数 $hour, $min, $sec に格納します。ここは図形を生成するだけなので、位置はでたらめでもかまいません。
+</p>
+
+<h4>●ウィンドウの再描画</h4>
+<p> さて、問題はウィンドウがリサイズされた場合です。ここで発生するイベントが Configure です。このイベントをバインドして、ウィンドウの大きさが変わったら時計を再描画すればいいわけです。バインドはメインウィンドウに対して設定すれば大丈夫です。
+</p>
+
+<pre class="item">
+$top-&gt;bind( "&lt;Configure&gt;", \&amp;change_size );
+</pre>
+
+<p> キャンバスウィジェットは -fill と -expand を設定して pack されているので、ウィンドウの大きさが変わると、キャンバスの大きさも変わります。詳しい説明は <A href="perltk06.html#chapter16">ウィンドウのリサイズ</A> をお読みくださいませ。このときに Configure イベントを受け取るので、時計の大きさを変える関数 change_size を実行します。
+</p>
+
+<p> キャンバスウィジェットの大きさですが、これは cget メソッドでは求めることができません。実際、ウィンドウがリサイズされキャンバスウィジェットが引き伸ばされても、最初に設定されたオプションの値そのままになっています。キャンバスウィジェットの大きさを求めるには、ウィジェットの情報を取得するメソッド width と height を使います。change_size は次のようになります。
+</p>
+
+<pre class="list">
+リスト : 大きさの変更
+
+sub change_size {
+  my $w = $c0-&gt;width;
+  my $h = $c0-&gt;height;
+  $width = ($w &lt; $h ? $w : $h);
+  &amp;draw_backboard();
+  &amp;draw_hand();
+}
+</pre>
+<p> $width は時計の大きさを表すグローバル変数で、キャンバスと同じ大きさに初期化しておきます。キャンバスの幅と高さを求め、小さい方を $width にセットします。図形の配置は背景を draw_backboard で、針を draw_hour で行います。これらの関数は $width にセットされた大きさに合わせて時計を描画します。描画は coords メソッドで図形を移動させるだけです。針を動かす関数 draw_hand は次のようになります。
+</p>
+
+<pre class="list">
+リスト : 針の描画
+
+sub draw_hand {
+  my ($s, $m, $h) = localtime( time );
+  my $r = $width / 2;
+  my $rs = $r * 7 / 8;
+  my $rm = $r * 6 / 8;
+  my $rh = $r * 5 / 8;
+  my ($x, $y, $n);
+  # 秒
+  $n = $s * 12;
+  $x = $r + $rs * $sin_table[$n];
+  $y = $r - $rs * $cos_table[$n];
+  $c0-&gt;coords( $sec, $r, $r, $x, $y );
+  # 分
+  $n = $m * 12;
+  $x = $r + $rm * $sin_table[$n];
+  $y = $r - $rm * $cos_table[$n];
+  $c0-&gt;coords( $min, $r, $r, $x, $y );
+  # 時
+  $n = ($h &lt; 12 ? $h : $h - 12) * 60 + $m;
+  $x = $r + $rh * $sin_table[$n];
+  $y = $r - $rh * $cos_table[$n];
+  $c0-&gt;coords( $hour, $r, $r, $x, $y );
+}
+</pre>
+
+<p> まず time で現在時刻を求め、localtime で時、分、秒に分解します。時計の半径を $r に、秒針、長針、短針の長さを $rs, $rm, $rh にセットします。あとは、あらかじめ計算しておいた三角関数表 sin_table と cos_table を使って座標を計算し、メソッド coords で針を移動させます。背景を描画する draw_backboard も簡単です。説明は割愛いたしますので、詳細は <A href="perltk09.html#list1">プログラムリスト</A> をお読みくださいませ。
+</p>
+
+<h4>●時計を動かす</h4>
+<p> あとは after メソッドを使って、１秒ずつ針を動かします。
+</p>
+<pre class="list">
+# 表示
+sub show_time {
+  &amp;draw_hand();
+  $top-&gt;after( 1000, \&amp;show_time );
+}
+
+# 最初の起動
+&amp;show_time();
+</pre>
+<p> show_time は draw_hand を呼び出して針を描画し、1 秒後に show_time を呼び出すよう after メソッドで設定します。最後に show_time を実行すれば、1 秒ごとに短針が動き、時計が動作します。
+</p>
+
+<img src="img/clock1.png" alt="アナログ時計（標準）"> デフォルトサイズのアナログ時計
+<br><br>
+<img src="img/clock3.png" alt="アナログ時計（縮小）"> ウィンドウを縮小
+<br><br>
+<img src="img/clock2.png" alt="アナログ時計（拡大）"> ウィンドウを拡大
+
+<p> これで、リサイズ可能なアナログ時計を作ることができました。ただ、縦長や横長にしても、ウィンドウ全体に時計が拡大されるわけではないので、やや物足りないかもしれません。興味のある方は時計を楕円にするなど、プログラムの改造に挑戦してください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+#
+# clock.pl : アナログ時計
+#
+#            Perl/Tk サンプルプログラム
+#
+#            Copyright (C) 2004 Makoto Hiroi
+#
+
+use Tk;
+
+# グローバル変数
+$width = 140;
+
+# データの初期化
+sub init_data {
+  foreach $i (0 .. 719) {
+    my $rad = 3.14 / 360 * $i;
+    $sin_table[$i] = sin( $rad );
+    $cos_table[$i] = cos( $rad );
+  }
+}
+
+# 背景の描画
+sub draw_backboard {
+  my $i;
+  my $r = $width / 2;
+  # 円
+  $c0-&gt;coords( $circle, 5, 5, $width - 5, $width - 5 );
+  # 目盛
+  for( $i = 0; $i &lt; 12; $i++ ){
+    my $n = $i * 60;
+    my $x1 = $r + ($r - 5) * $sin_table[$n];
+    my $y1 = $r + ($r - 5) * $cos_table[$n];
+    my $x2 = $r + ($r - 5) * 4 / 5 * $sin_table[$n];
+    my $y2 = $r + ($r - 5) * 4 / 5 * $cos_table[$n];
+    $c0-&gt;coords( $backboard[$i], $x1, $y1, $x2, $y2 );
+  }
+}
+
+# 針を描く
+sub draw_hand {
+  my ($s, $m, $h) = localtime( time );
+  my $r = $width / 2;
+  my $rs = $r * 7 / 8;
+  my $rm = $r * 6 / 8;
+  my $rh = $r * 5 / 8;
+  my ($x, $y, $n);
+  # 秒
+  $n = $s * 12;
+  $x = $r + $rs * $sin_table[$n];
+  $y = $r - $rs * $cos_table[$n];
+  $c0-&gt;coords( $sec, $r, $r, $x, $y );
+  # 分
+  $n = $m * 12;
+  $x = $r + $rm * $sin_table[$n];
+  $y = $r - $rm * $cos_table[$n];
+  $c0-&gt;coords( $min, $r, $r, $x, $y );
+  # 時
+  $n = ($h &lt; 12 ? $h : $h - 12) * 60 + $m;
+  $x = $r + $rh * $sin_table[$n];
+  $y = $r - $rh * $cos_table[$n];
+  $c0-&gt;coords( $hour, $r, $r, $x, $y );
+}
+
+# 大きさの変更
+sub change_size {
+  my $w = $c0-&gt;width;
+  my $h = $c0-&gt;height;
+  $width = ($w &lt; $h ? $w : $h);
+  &amp;draw_backboard();
+  &amp;draw_hand();
+}
+
+# 表示
+sub show_time {
+  &amp;draw_hand();
+  $top-&gt;after( 1000, \&amp;show_time );
+}
+
+# メインウィンドウ
+$top = MainWindow-&gt;new();
+$top-&gt;minsize( 100, 100 );
+$top-&gt;maxsize( 400, 400 );
+
+# キャンバス
+$c0 = $top-&gt;Canvas( -width =&gt; 140, -height =&gt; 140, -bg =&gt; 'darkgreen' );
+$c0-&gt;pack( -expand =&gt; 1, -fill =&gt; 'both' );
+$top-&gt;bind( "&lt;Configure&gt;", \&amp;change_size );
+
+# 図形の生成
+$circle = $c0-&gt;create('oval', 5, 5, 135, 135, -fill =&gt; 'darkgray', -outline =&gt; 'darkgray' );
+for( $i = 0; $i &lt; 12; $i++ ){
+  $backboard[$i] = $c0-&gt;create('line', $i, $i, 135, 135, -width =&gt; 2.0 );
+}
+$hour = $c0-&gt;create('line', 70, 70, 70, 30, -fill =&gt; 'blue', -width =&gt; 3.0 );
+$min  = $c0-&gt;create('line', 70, 70, 70, 20, -fill =&gt; 'green', -width =&gt; 2.0 );
+$sec  = $c0-&gt;create('line', 70, 70, 70, 15, -fill =&gt; 'red' );
+
+# データの初期化
+&amp;init_data();
+
+# 最初の起動
+&amp;draw_backboard();
+&amp;show_time();
+
+# メインループ
+MainLoop();
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2004 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="perltk08.html">PrevPage</a> | <a href="index.html">Perl/Tk</a> | NextPage ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

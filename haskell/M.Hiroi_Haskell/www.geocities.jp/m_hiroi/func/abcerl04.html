@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Erlang プログラミング入門</title>
+  <meta name="description" content="Erlang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881787</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Erlang プログラミング入門</h2>
+<div class="small">
+[ <a href="abcerl03.html">PrevPage</a> | <a href="erlang.html">Erlang</a> | <a href="abcerl05.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">高階関数とクロージャ</h3>
+<p> Lisp や ML などの関数型言語は、関数を他のデータ型と同等に取り扱うことができます。つまり、関数を変数に代入したり、引数として渡すことができるのです。また、値として関数を返すこともできるので、関数を作る関数を定義することも簡単にできます。
+</p>
+<p> 関数を引数にとる関数のことを「汎関数 (functional)」とか「高階関数 (higher order function)」と呼びます。Erlang は高階関数を簡単に定義することができます。もちろん、値として関数を返すこともできるので、関数を作る関数を定義することも簡単です。
+</p>
+
+<h4>●関数を引数にとる関数</h4>
+<p> 簡単な例として、整数 n から m までの和を求める関数 sum_of_integer/2 を作ってみましょう。末尾再帰でプログラムすると、次のようになります。
+</p>
+<pre class="list">
+リスト : 整数の和
+
+-module(higher).
+-export([sum_of_integer/2]).
+
+sum_of_integer(N, M, A) when N &gt; M -&gt; A;
+sum_of_integer(N, M, A) -&gt; sum_of_integer(N + 1, M, A + N).
+
+sum_of_integer(N, M) -&gt; sum_of_integer(N, M, 0).
+</pre>
+<p> 実行例を示します。
+</p>
+<pre>
+&gt; higher:sum_of_integer(1, 1000).
+500500
+</pre>
+<p> プログラムは簡単なので説明は不要でしょう。それでは、整数の 2 乗の和と 3 乗の和を求めるプログラムはどうなるでしょうか。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 整数の 2 乗の和と 3 乗の和
+
+square(X) -&gt; X * X.
+cube(X) -&gt; X * X * X.
+
+% 2 乗の和を求める
+sum_of_square(N, M, A) when N &gt; M -&gt; A;
+sum_of_square(N, M, A) -&gt; sum_of_square(N + 1, M, A + square(N)).
+
+sum_of_square(N, M) -&gt; sum_of_square(N, M, 0).
+
+% 3 乗の和を求める
+sum_of_cube(N, M, A) when N &gt; M -&gt; A;
+sum_of_cube(N, M, A) -&gt; sum_of_cube(N + 1, M, A + cube(N)).
+
+sum_of_cube(N, M) -&gt; sum_of_cube(N, M, 0).
+</pre>
+
+<p> 実行例を示します。
+</p>
+<pre>
+&gt; higher:sum_of_square(1, 1000).
+333833500
+&gt; higher:sum_of_cube(1, 1000).
+250500250000
+</pre>
+<p> 累積変数 A に値を加算する処理で、関数 square を呼び出すと 2 乗の和を、関数 cube を呼び出すと 3 乗の和を求めることができます。関数 sum_of_square/3 と sum_of_cube/3 の違いはこれだけです。ここで、square や cube を引数として渡すことができれば、sum_of_square や sum_of_cube を一つの関数で済ますことができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 高階関数 sum_of/3
+
+sum_of(_, N, M, A) when N &gt; M -&gt; A;
+sum_of(F, N, M, A) -&gt; sum_of(F, N + 1, M, A + F(N)).
+
+sum_of(F, N, M) -> sum_of(F, N, M, 0).
+</pre>
+<p> 関数 sum_of/3 の第 1 引数 F に関数を渡します。渡された関数は、今までと同じ方法で呼び出すことができます。square や cube のかわりに A + F(N) とすることで、関数 F に整数 N を適用した結果を A に加算することができます。
+</p>
+<p> Erlang の場合、定義された関数の本体 (関数型データまたは関数値) を取り出すには fun を使います。
+</p>
+<pre class="item">
+fun 関数名/arity
+</pre>
+<p> Erlang は Scheme などとは違って、名前が同じでも引数の個数によって異なる関数を定義することができます。このため、関数の arity (引数の個数) を指定しないと、関数を特定することができないのです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+&gt; fun higher:square/1.
+#Fun&lt;higher.square.1&gt;
+&gt; fun higher:cube/1.
+#Fun&lt;higher.cube.1&gt;
+&gt; higher:sum_of(fun higher:square/1, 1, 1000).
+333833500
+&gt; higher:sum_of(fun higher:cube/1, 1, 1000).
+250500250000
+</pre>
+<p> このように、fun により関数値を求めて、それを関数の引数に渡して実行することができます。
+</p>
+<p> また、次のように引数をそのまま返す関数を定義すると、sum_of_integer も sum_of で定義することができます。
+</p>
+<pre class="list">
+リスト : 恒等関数
+
+identity(X) -&gt; X.
+</pre>
+<pre>
+&gt; higher:sum_of(fun higher:identity/1, 1, 1000).
+500500
+</pre>
+<p> 引数をそのまま返す関数を「恒等関数 (identity function)」といいます。
+</p>
+
+<h4>●無名関数</h4>
+<p> 高階関数を使うようになると、数を 2 乗する square のような小さな関数をいちいち定義するのが面倒になります。とくに、その高階関数でしか使わないのであれば、なおさらそう思うでしょう。Erlang には Lisp のラムダ式 (lambda) のような「無名関数 (anonymous function)」という名前のない関数が用意されています。
+</p>
+<p> Erlang の場合、無名関数は次のように定義します。
+</p>
+<pre class="item">
+fun
+    (引数, ...) [ガード] -&gt; 式, ..., 式;
+         ・・・・・
+    (引数, ...) [ガード] -&gt; 式, ..., 式
+end
+
+        図 : 無名関数の定義
+</pre>
+<p> 無名関数は fun と end の間に複数の節を定義することができます。無名関数は関数値を生成して返します。この値を変数に束縛しておけば、その変数を使って関数を呼び出すことができます。また、無名関数をそのまま実行したり、関数の引数に無名関数を渡すこともできます。
+</p>
+<p> 簡単な例を示します。
+</p>
+<pre>
+&gt; F = fun(X) -&gt; X * X end.
+#Fun&lt;erl_eval.6.128620087&gt;
+&gt; F(100).
+10000
+&gt; fun(X) -&gt; X * X end(10).
+100
+&gt; higher:sum_of(fun(X) -&gt; X end, 1, 1000).
+500500
+&gt; higher:sum_of(fun(X) -&gt; X * X end, 1, 1000).
+333833500
+&gt; higher:sum_of(fun(X) -&gt; X * X * X end, 1, 1000).
+250500250000
+</pre>
+<p> 最初の例は変数 F に関数値を束縛します。そして、F(100) とすると、F に束縛された関数を呼び出し、100 * 100 を計算して 10000 を返します。次の例は、無名関数のあとに引数を与えて呼び出しています。また、sum_of に fun(X) -&gt; X end を与えれば整数の和を、fun(X) -&gt; X * X end を与えれば 2 乗の和を、fun(X) -&gt; X * X * X end を与えれば 3 乗の和を求めることができます。
+</p>
+
+<h4>●高階関数によるリストの操作</h4>
+<p> 関数型言語の場合、リスト操作関数の多くは高階関数として定義されています。ここではよく使われる高階関数として、マッピング、フィルター、畳み込み (縮約) について説明します。
+</p>
+
+<h4>●マッピング</h4>
+<p> まず最初に、リストの要素に関数 F を適用して、その結果をリストに格納して返す関数を作ってみましょう。このような操作を「マッピング (写像)」といいます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : マッピング
+
+mapcar(_, []) -&gt; [];
+mapcar(F, [X | Xs]) -&gt; [F(X) | mapcar(F, Xs)].
+</pre>
+
+<p> 関数名は mapcar としました。名前は Common Lisp から拝借しました。なお、Erlang には同じ機能を持つ関数 map/2 がモジュール lists に用意されています。
+</p>
+<p> プログラムは簡単です。パターンマッチングで引数のリストを先頭の要素 X と残りのリスト Xs に分解します。そして、X に関数 F を適用した結果を mapcar(F, Xs) の返り値に追加すればいいのです。引数のリストが空リストの場合が再帰呼び出しの停止条件になります。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; higher:mapcar(fun(X) -&gt; X * X end, [1, 2, 3, 4, 5]).
+[1,4,9,16,25]
+</pre>
+<p> mapcar はリスト内包表記で定義することもできます。
+</p>
+<pre class="list">
+リスト : マッピング (リスト内包表記)
+
+mapcar(F, Xs) -&gt; [F(X) || X &lt;- Xs].
+</pre>
+<p> Erlang の場合、こちらのほうが簡単ですね。
+</p>
+<p> 二つのリストの要素に関数 F を適用したい場合は、Erlang のモジュール lists の zipwith/3 を使うと簡単です。リストを 3 つ受け取る関数 zipwith3/4 も用意されています。
+</p>
+<pre>
+&gt; lists:zipwith(fun(X, Y) -&gt; X + Y end, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10]).
+[7,9,11,13,15]
+
+&gt; lists:zipwith3(fun(X, Y, Z) -&gt; X + Y + Z end, [1, 2, 3], [4, 5, 6], [7, 8, 9]).
+[12,15,18]
+</pre>
+<p> これらの関数はリストの長さが異なるとエラーになるので注意してください。
+</p>
+<p> zipwith と zipwith3 は zip, zip3 とリスト内包表記を使うと簡単に定義することができます。
+</p>
+<pre class="list">
+リスト : zipwith/3 と zipwith3/4
+
+zipwith(F, Xs, Ys) -&gt; [F(X, Y) || {X, Y} &lt;- lists:zip(Xs, Ys)].
+
+zipwith3(F, Xs, Ys, Zs) -&gt; [F(X, Y, Z) || {X, Y, Z} &lt;- lists:zip3(Xs, Ys, Zs)].
+</pre>
+<pre>
+&gt; higher:zipwith(fun(X, Y) -&gt; X + Y end, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10]).
+[7,9,11,13,15]
+
+&gt; higher:zipwith3(fun(X, Y, Z) -&gt; X + Y + Z end, [1, 2, 3], [4, 5, 6], [7, 8, 9]).
+[12,15,18]
+</pre>
+<h4>●フィルター</h4>
+<p> 「フィルター (filter)」はリストの要素に関数を適用し、関数が真を返す要素をリストに格納して返す関数です。関数型言語では、真または偽を返す関数のことを「述語 (predicate)」といいます。ここでは簡単な例題として、述語が真を返す要素を削除する関数 remove_if/2 を作ってみましょう。関数名は Common Lisp から拝借しました。
+</p>
+
+<pre class="list">
+リスト : 要素の削除
+
+remove_if(_, []) -&gt; [];
+remove_if(P, [X | Xs]) -&gt;
+  case P(X) of
+    true  -&gt; remove_if(P, Xs);
+    false -&gt; [X | remove_if(P, Xs)]
+  end.
+</pre>
+
+<p> mapcar と同様に remove_if も簡単です。P(X) が真ならば X をリストに加えません。偽ならば X をリストに加えるだけです。なお、Erlang のガードでは P(X) を呼び出すことができないので、case 式で P(X) を呼び出しています。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; higher:remove_if(fun(X) -&gt; X rem 2 =:= 0 end, [1, 2, 3, 4, 5]).
+[1,3,5]
+&gt; higher:remove_if(fun(X) -&gt; X rem 2 =/= 0 end, [1, 2, 3, 4, 5]).
+[2,4]
+</pre>
+<p> 最初の例では偶数の要素が削除されます。次の例は奇数の要素が削除されます。
+</p>
+
+<p> もちろん、フィルターも簡単に定義することができます。remove_if とは逆に、述語が真を返すとき要素をリストに追加し、偽を返すときはリストに加えません。なお、Erlang には同様の動作を行う関数 filter/2 がモジュール lists に用意されています。
+</p>
+
+<pre class="list">
+リスト : フィルター
+
+filter(_, []) -&gt; [];
+filter(P, [X | Xs]) -&gt;
+  case P(X) of
+    true  -&gt; [X | filter(P, Xs)];
+    false -&gt; filter(P, Xs)
+  end.
+</pre>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; higher:filter(fun(X) -&gt; X rem 2 =:= 0 end, [1, 2, 3, 4, 5]).
+[2,4]
+&gt; higher:filter(fun(X) -&gt; X rem 2 =/= 0 end, [1, 2, 3, 4, 5]).
+[1,3,5]
+</pre>
+<p> remove_if, filter ともにリスト内包表記でもプログラムすることができます。
+</p>
+<pre class="list">
+リスト : フィルター (リスト内包表記)
+
+remove_if(P, Xs) -&gt; [X || X &lt;- Xs, not P(X)].
+
+filter(P, Xs) -&gt; [X || X &lt;- Xs, P(X)].
+</pre>
+<p> リスト内包表記の条件式では P(X) を呼び出すことができるので、プログラムはとても簡単になります。
+</p>
+
+<h4>●畳み込み</h4>
+<p> 2 つの引数を取る関数 f とリストを引数に受け取る関数 reduce を考えます。reduce はリストの各要素に対して関数 f を下図のように適用します。
+</p>
+
+<pre class="fig">
+(1) [a1, a2, a3, a4, a5]
+    =&gt; f( f( f( f( a1, a2 ), a3 ), a4 ), a5 )
+
+(2) [a1, a2, a3, a4, a5]
+    =&gt; f( a1, f( a2, f( a3, f( a4, a5 ) ) ) )
+
+        図 : 関数 reduce の動作
+</pre>
+
+<p> 関数 f を適用する順番で 2 通りの方法があります。図 (1) はリストの先頭から f を適用し、図 (2) はリストの後ろから f を適用します。たとえば、関数 f が単純な加算関数とすると、reduce の結果はどちらの場合もリストの要素の和になります。
+</p>
+
+<pre class="item">
+f(x, y) = x + y の場合
+reduce =&gt; a1 + a2 + a3 + a4 + a5
+</pre>
+
+<p> このように、reduce はリストのすべての要素を関数 f を用いて結合します。このような操作を「縮約」とか「畳み込み」といいます。また、reduce の引数に初期値 g を指定することがあります。この場合、reduce は下図に示す動作になります。
+</p>
+
+<pre class="fig">
+(1) [a1, a2, a3, a4, a5]
+    =&gt; f( f( f( f( f( g, a1 ), a2 ), a3 ), a4 ), a5 )
+
+(2) [a1, a2, a3, a4, a5]
+    =&gt; f( a1, f( a2, f( a3, f( a4, f( a5, g ) ) ) ) )
+
+        図 : reduce() の動作 (2)
+</pre>
+
+<p> ここでは簡単な例題として、図 (1) の動作を行う関数 fold_left/3 と、図 (2) の動作を行う関数 fold_right/3 を作ってみましょう。なお、Erlang には同様の動作を行う関数 foldl/3 と foldr/3 がモジュール lists に用意されています。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 畳み込み
+
+fold_left(_, A, []) -&gt; A;
+fold_left(F, A, [X | Xs]) -&gt; fold_left(F, F(A, X), Xs).
+
+fold_right(_, A, []) -&gt; A;
+fold_right(F, A, [X | Xs]) -&gt; F(X, fold_right(F, A, Xs)).
+</pre>
+
+<p> 第 1 引数 F が適用する関数、第 2 引数 A が初期値、第 3 引数がリストです。最初の節は再帰呼び出しの停止条件ですが、fold_left (fold_right) に空リストが与えられた場合にも対応します。この場合は初期値 A を返します。次の節でリストの要素を取り出して関数 F を呼び出します。
+</p>
+
+<p> たとえば、リストが [1, 2, 3] で A が 0 とします。最初は F(0, 1) が実行され、その返り値が fold_left の第 2 引数に渡されます。次は F(A, 2) が実行されますが、これは F(F(0, 1), 2) と同じことです。そして、その結果が fold_left の第 2 引数になります。最後に F(a, 3) が実行されますが、これは F(F(F(0, 1), 2), 3) となり、図 (1) と同じ動作になります。
+</p>
+
+<p> fold_left の場合、リストの要素が関数 F の第 2 引数になり、第 1 引数にはこれまでの処理結果が渡されます。これに対し、fold_right の場合は逆になり、関数 f の第 1 引数にリストの要素が渡されて、これまでの処理結果は第 2 引数に渡されます。これで図 (2) の動作を実現することができます。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; higher:fold_left(fun(A, X) -&gt; A + X end, 0, [1, 2, 3, 4, 5]).
+15
+&gt; higher:fold_right(fun(X, A) -&gt; A + X end, 0, [1, 2, 3, 4, 5]).
+15
+</pre>
+<p> どちらの関数を使ってもリストの和を求めることができます。
+</p>
+<p> なお、lists モジュールの foldl と foldr を使用すると次のようになります。
+</p>
+<pre>
+&gt; lists:foldl(fun(X, A) -&gt; X + A end, 0, [1, 2, 3, 4, 5]).
+15
+&gt; lists:foldr(fun(X, A) -&gt; X + A end, 0, [1, 2, 3, 4, 5]).
+15
+</pre>
+<p> foldl, foldr に渡す関数において、どちらの場合も第 2 引数が累積変数になります。fold_left と違うことに注意してください。
+</p>
+<h4>●畳み込みの使用例</h4>
+<p> ところで、fold_left, fold_right と 2 引数の関数を組み合わせると、いろいろな関数を実現することができます。最初に length の例を示します。
+</p>
+<pre>
+&gt; higher:fold_left(fun(A, _) -&gt; A + 1 end, 0, [1, 2, 3, 4, 5]).
+5
+&gt; higher:fold_right(fun(_, A) -&gt; A + 1 end, 0, [1, 2, 3, 4, 5]).
+5
+</pre>
+<p> fold_left で length を実現する場合、初期値を 0 にして第 1 引数の値を +1 することで実現できます。fold_right の場合は第 2 引数の値を +1 します。
+</p>
+<p> 次に map の例を示します。
+</p>
+<pre>
+&gt; higher:fold_right(fun(X, A) -&gt; [X * X | A] end, [], [1, 2, 3, 4, 5]).
+[1,4,9,16,25]
+</pre>
+<p> map の場合は fold_rigth を使うと簡単です。初期値を [ ] にして第 1 引数の計算結果を第 2 引数のリストに追加するだけです。
+</p>
+<p> 次に filter の例を示します。
+</p>
+<pre>
+&gt; higher:fold_right(fun(X, A) -&gt; if X rem 2 =:= 0 -&gt; [X | A]; true -&gt; A end end,[], [1, 2, 3, 4, 5]).
+[2,4]
+&gt; higher:fold_right(fun(X, A) -&gt; if X rem 2 =/= 0 -&gt; [X | A]; true -&gt; A end end,[], [1, 2, 3, 4, 5]).
+[1,3,5]
+</pre>
+<p> filter の場合も初期値を [ ] にして、第 1 引数が条件を満たしていれば第 2 引数のリストに追加します。
+</p>
+<p> 最後に述語が真となる要素の個数を求めてみましょう。これは Common Lisp の関数 count-if と同じです。
+</p>
+<pre>
+&gt; higher:fold_left(fun(A, X) -&gt; if X rem 2 =:= 0 -&gt; A + 1; true -&gt; A end end, 0, [1, 2, 3, 4, 5]).
+2
+&gt; higher:fold_left(fun(A, X) -&gt; if X rem 2 =/= 0 -&gt; A + 1; true -&gt; A end end, 0, [1, 2, 3, 4, 5]).
+3
+</pre>
+<p> また、リストのコピーや reverse も簡単に実現することができます。
+</p>
+<pre>
+&gt; higher:fold_right(fun(X, A) -&gt; [X | A] end, [], [1, 2, 3, 4, 5]).
+[1,2,3,4,5]
+&gt; higher:fold_left(fun(A, X) -&gt; [X | A] end, [], [1, 2, 3, 4, 5]).
+[5,4,3,2,1]
+</pre>
+<p> このように、畳み込みを使っていろいろな処理を実現することができます。
+</p>
+
+<h4>●foreach</h4>
+<p> 副作用を目的とした高階関数を作ることもできます。foreach/2 はリストの要素に関数を適用しますが、その返り値をリストに格納することはしません。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : foreach
+
+foreach(_, []) -&gt; ok;
+foreach(F, [X | Xs]) -&gt; F(X), foreach(F, Xs).
+</pre>
+<p> プログラムは F(X) で関数 F を呼び出しますが、その返り値は利用せずに捨てています。なお、Erlang の lists モジュールには同じ機能を持つ関数 foreach が用意されてます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+&gt; higher:foreach(fun io:write/1, [1, 2, 3, 4, 5]).
+12345ok
+</pre>
+<p> このように、foreach に io:write を渡すとリストの要素を表示することができます。
+</p>
+
+<h4>●tabulate</h4>
+<p> もうひとつ、ちょっと便利な高階関数を紹介しましょう。関数 tabulate は iota で生成した数列に関数 fn を適用した結果をリストに格納して返します。tabulate(F, N) は mapcar(F, itoa(1, N)) と同じですが、この方法では iota で新しいリストを生成し、なおかつ mapcar で新しいリストを生成することになります。tabulate は数列を生成しながら関数 F を適用するので、無駄なリストを生成することがありません。
+</p>
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : tabulate
+
+tabulate(0, _, A) -&gt; A;
+tabulate(N, F, A) when N &gt; 0 -&gt; tabulate(N - 1, F, [F(N) | A]).
+tabulate(N, F) -&gt; tabulate(N, F, []).
+</pre>
+<p> tabulate は生成した数値 N に関数 F を適用し、その結果をリスト A に格納するだけです。簡単な実行例を示します。
+</p>
+
+<pre>
+&gt; higher:tabulate(8, fun(X) -&gt; X end).
+[1,2,3,4,5,6,7,8]
+&gt; higher:tabulate(8, fun(X) -&gt; X * X end).
+[1,4,9,16,25,36,49,64]
+</pre>
+
+<h4>●逆畳み込み</h4>
+<p> ところで、iota や tabulate のようなリストを生成する関数は、次のように一般化することができます。
+</p>
+<pre class="list">
+リスト : 逆畳み込み
+
+unfold(P, F, G, S) -&gt;
+    case P(S) of
+        true  -&gt; [];
+        false -&gt; [F(S) | unfold(P, F, G, G(S))]
+    end.
+</pre>
+<p> 関数 unfold/4 は畳み込みを行う fold_left の逆変換に相当する処理で、「解きほぐし」とか「逆畳み込み」と呼ばれています。
+</p>
+<p> unfold は値 S (seed, 種) に関数 F を適用し、その要素をリストに格納して返します。引数 P は終了条件を表す関数で、P が真を返すとき空リストを返します。関数 G は S の値を更新するために使用します。したがって、生成されるリストの要素は次のようになります。
+</p>
+<pre class="fig">
+[ F(S),                        % G を 0 回適用
+  F(G(S)),                     % G を 1 回適用
+  F(G(G(S))),                  % G を 2 回適用
+  F(G(G(G(S)))),               % G を 3 回適用
+  ...
+  F(G(G( ... G(S) ...))) ]     % G を n 回適用
+</pre>
+<p> リストの長さが n + 1 の場合、最後の要素は G を n 回適用し、その結果に F を適用することになります。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt; higher:unfold(fun(X) -&gt; X > 10 end, fun(X) -&gt; X end, fun(X) -&gt; X + 1 end, 1).
+[1,2,3,4,5,6,7,8,9,10]
+
+&gt; higher:unfold(fun(X) -&gt; X > 10 end, fun(X) -&gt; X * X end, fun(X) -&gt; X + 1 end, 1).
+[1,4,9,16,25,36,49,64,81,100]
+</pre>
+<p> このように、unfold を使って iota を実現することができます。また、関数 fun(X) -&gt; X end のかわりに他の関数を渡すことで、関数 tabulate と同じ動作を実現できます。
+</p>
+<h4>●局所変数の有効範囲</h4>
+<p> 無名関数を使うと、関数の中で関数を定義することができます。このとき、局所変数の有効範囲 (スコープ) はどのようになるのでしょうか。次の例を見てください。
+</p>
+
+<pre class="list">
+リスト : リストの要素を n 倍する
+
+times_element(N, Ls) -&gt; mapcar(fun(X) -&gt; X * N end, Ls).
+</pre>
+<p> 実行例を示します。
+</p>
+<pre>
+&gt; higher:times_element(10, [1, 2, 3, 4, 5]).
+[10,20,30,40,50]
+</pre>
+<p> 無名関数は関数呼び出しと同じ働きをします。無名関数の仮引数は X だけですから、無名関数内の変数 N は未束縛変数になると思われるかもしれません。ここで、無名関数が定義されている位置に注目してください。無名関数は、関数を定義している式の中で定義されていますね。この場合、変数 N は関数 times_element の仮引数 N をアクセスするのです。これを図に表すと次のようになります。
+</p>
+<pre class="fig">
+┌────── Erlang system  ─────┐
+│                                      │
+│    ┌─ times_element : N Ls ─┐    │
+│    │                  ↑      │    │
+│    │                  └─┐  │    │
+│    │  ┌── fun : X  ─┐│  │    │
+│    │  │          ↑    ││  │    │
+│    │  │    ┌──┘    ││  │    │
+│    │  │     X * N      ││  │    │
+│    │  │        └───┼┘  │    │
+│    │  └────────┘    │    │
+│    └─────────────┘    │
+│                                      │
+└───────────────────┘
+
+        図 : 無名関数内の変数
+</pre>
+<p> 関数 times_element の中に無名関数が包み込まれていると考えてください。このように関数内で定義されている無名関数の中では、その時点で定義されている局所変数にアクセスすることができるのです。
+</p>
+
+<p> もうひとつ簡単な例題をあげましょう。指定した文字 code が先頭にある文字列を、リストから削除する関数を作ってみましょう。これは、次に示すような処理を行います。
+</p>
+
+<pre>
+&gt; higher:remove_string($a, ["abc", "def", "agh", "ijk"]).
+["def","ijk"]
+</pre>
+
+<p> リストに格納された文字列の中で、a から始まる文字列を削除します。まず、この処理を再帰定義で作ってみましょう。処理手順は次のようになります。
+</p>
+<pre class="fig">
+      │ $a ["abc","def","agh","ijk"]
+      │      =                      ["def","ijk"]
+  再  ↓                              ↑
+  帰  │ $a ["def","agh","ijk"]       │
+  呼  │      X        ─────→  ["def","ijk"]
+  び  ↓                              ↑
+  出  │ $a ["agh","ijk"]             │
+  し  │      =                      ["ijk"]
+      ↓                              ↑
+      │ $a ["ijk")                   │
+      │      X        ─────→  ["ijk"]
+      ↓                              ↑
+         $a []     []  ───→ []  ─┘
+
+           図 : remove-string の処理手順
+</pre>
+<p> 引数の文字と文字列の先頭文字が異なっていれば、それをリストに格納して返せばいいわけです。これをプログラムすると、次のようになります。
+</p>
+
+<pre class="list">
+リスト : 指定した先頭文字の文字列を削除
+
+remove_string(_, []) -&gt; [];
+remove_string(C, [[C | _] | Xs]) -&gt; remove_string(C, Xs);
+remove_string(C, [X | Xs]) -&gt; [X | remove_string(C, Xs)].
+</pre>
+
+<p> この処理は高階関数 remove_if と無名関数を使うと簡単に定義できます。
+</p>
+
+<pre class="list">
+リスト : 指定した先頭文字の文字列を削除
+
+remove_string1(C, Xs) -&gt; remove_if(fun([X | _]) -&gt; X =:= C end, Xs).
+</pre>
+
+<p> 無名関数の中で remove_string の仮引数 C を参照できるので、このようなプログラムが可能になるのです。このように、無名関数と高階関数をうまく組み合わせると、複雑な処理でも簡単にプログラムすることができます。
+</p>
+
+<h4>●局所関数の再帰呼び出し</h4>
+<p> Erlang の場合、無名関数を使って局所関数を定義できますが、名前がないので再帰呼び出しができません。再帰呼び出しをしたい場合は、引数に自分の関数値を渡すことで実現することができます。
+</p>
+<p> 簡単な例を示しましょう。階乗を求める関数 fact を局所関数で定義することを考えます。次のプログラムはコンパイルでエラーになります。
+</p>
+<pre class="list">
+リスト : 階乗 (間違い)
+
+fact(M) -&gt;
+  F = fun
+        (0) -&gt; 1;
+        (N) when N &gt; 0 -&gt; N * F(N - 1)
+      end,
+  F(M).
+</pre>
+<p> 無名関数の中で変数 F を関数呼び出ししています。F は fact() 内の局所変数 F を参照しますが、無名関数をコンパイルする段階ではまだ未束縛変数のままです。したがって、コンパイルでエラーになるのです。この場合、fun の引数に自分自身 (関数値) を渡して、それを呼び出すようにします。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 階乗 (局所関数版)
+
+fact(M) -&gt;
+  F = fun
+        (_, 0) -&gt; 1;
+        (Recur, N) when N &gt; 0 -&gt; N * Recur(Recur, N - 1)
+      end,
+  F(F, M).
+</pre>
+<p> 局所関数の引数 Recur に呼び出す関数値を渡します。この変数に自分自身の関数値 F を渡せば再帰呼び出しを実現することができます。Recur を呼び出すときは、引数に自分自身 Recur を渡すことに注意してください。無名関数の中で変数 F を参照していないので、プログラムは正常にコンパイルされます。
+</p>
+<p> 実際に実行してみましょう。
+</p>
+<pre>
+&gt; higher:fact(9).
+362880
+&gt; higher:fact(10).
+3628800
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●無名関数とクロージャ</h4>
+<p> Lisp などの関数型言語では、関数を生成する関数を簡単に作ることができます。このとき使われる機能が「クロージャ (closure)」です。クロージャは評価する関数と参照可能な局所変数をまとめたものです。クロージャは関数のように実行することができますが、クロージャを生成するときに参照可能な局所変数を保存するところが異なります。参照可能な局所変数の集合を「環境」と呼ぶことがあります。
+</p>
+
+<p> Erlang でクロージャを生成するには無名関数を使います。たとえば、「引数を n 倍する関数」を生成する関数は、無名関数を使うと次のようになります。
+</p>
+<pre class="list">
+リスト : 引数を N 倍する関数
+
+foo(N) -&gt; fun(X) -&gt; N * X end.
+</pre>
+
+<pre>
+&gt; Foo10 = higher:foo(10).
+#Fun&lt;higher.2.1374450&gt;
+&gt; Foo10(11).
+110
+&gt; Foo5 = higher:foo(5).
+#Fun&lt;higher.2.1374450&gt;
+&gt; Foo5(1).
+5
+&gt; Foo5(10).
+50
+</pre>
+<p> 関数 foo(N) は引数を N 倍する関数を生成します。変数 Foo10 に foo(10) の返り値をセットします。すると、Foo10 は引数を 10 倍する関数として使うことができます。同様に、 変数 Foo5 に foo(5) の返り値をセットすると、Foo5 は引数を 5 倍する関数になります。
+</p>
+
+<p> 無名関数で関数を生成するとき、評価する関数のほかに、そのとき参照可能な局所変数、つまり「環境」もいっしょに保存されます。この場合、参照可能な局所変数は foo() の引数 N です。そして、クロージャを実行するときは、保存されている局所変数を参照することができるのです。
+</p>
+
+<p> foo(10) を実行して無名関数を生成するとき、定義されているローカル変数は N で、その値は 10 です。この値がクロージャに保存されているので、Foo10 の関数は引数を 10 倍した結果を返します。foo(5) を評価すると N の値は 5 で、それがクロージャに保存されているので、Foo5 の関数は引数を 5 倍した結果を返すのです。
+</p>
+
+<h4>●連想リスト</h4>
+<p> クロージャを理解する場合、環境を「連想リスト (association list : a-list)」で考えるとわかりやすいと思います。ここで簡単に連想リストについて説明します。
+</p>
+
+<p> 連想リストは Lisp でよく用いられるデータ構造で、Erlang ではキーとデータのタプルを要素とするリストで実現することができます。
+</p>
+
+<pre class="fig">
+                  ┌───┬───┬───┬──→ データ 
+                  │      │      │      │
+連想リスト =&gt; [{a, 1}, {b, 2}, {c, 3}, {d, 4}]
+                │      │      │      │
+                └───┴───┴───┴──→ キー
+
+                図 : 連想リストの構造
+</pre>
+
+<p> 上図の場合、アトム a, b, c, d がキーで、整数 1, 2, 3, 4 がデータとなります。
+</p>
+
+<p> 最初に関数を呼び出す場合、関数を評価するための環境は空リストです。最初に、引数がこの環境に追加されます。他の局所変数もこの環境に追加されます。たとえば、foo(5) と呼び出すと環境は次のようになります。
+</p>
+<pre class="item">
+foo(5) ==&gt; 環境 : [{N, 5}]
+</pre>
+<p> 連想リストのキー N が変数名で、その値が 5 です。クロージャを生成するとき、この連想リストを保持すると考えてください。そして、クロージャを評価するときは、保存していた環境を使います。したがって、Foo5(11) を評価すると、環境 [{N, 5}] に引数 X の値が追加され、[{X, 11}, {N, 5}] になります。この環境で式 N * X を評価するので、5 * 11 = 55 を返すわけです。
+</p>
+<p> 関数の評価が終了すると、環境に追加された変数は削除されます。foo5(11) の評価で追加された変数は X なので、{X, 11} が削除され [{N, 5}] になります。このように、クロージャに保存された環境は変化しません。
+</p>
+<p> ただし、Common Lisp や Scheme のように、変数の値を書き換えることができる処理系では、クロージャに保存された変数の値を変更することが可能です。興味のある方は Common Lisp 入門：<a href="../xyzzy_lisp/abclisp11.html#chap23">クロージャ</a> を読んでみてください。
+</p>
+<h4>●カリー化</h4>
+<p> もう一つ、クロージャを使った応用例を紹介しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : mapcar のカリー化
+
+mapcar_c(F) -&gt; fun(Xs) -&gt; [F(X) || X &lt;- Xs] end.
+</pre>
+<p> 関数 mapcar_c/1 は関数 mapcar/2 を 1 引数の関数に直したものです。mapcar_c は関数 F を受け取り、その F を呼び出してリスト Xs を操作する関数を返します。これでもマッピングの動作ができるのです。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; F = higher:mapcar_c(fun(X) -&gt; X * X end).
+#Fun&lt;higher.5.5834104&gt;
+
+&gt; F([1,2,3,4,5]).
+[1,4,9,16,25]
+
+&gt; (higher:mapcar_c(fun(X) -&gt; X * X end))([1,2,3,4,5]).
+[1,4,9,16,25]
+</pre>
+<p> 最初の例は mapcar_c で生成した関数を変数 F にセットし、それから F を関数呼び出しします。次の例は、mapcar_c の返り値を直接関数呼び出ししています。カッコが多くなりますが、2 引数の mapcar と同じように呼び出すことができます。つまり、最初の引数を受け取って関数を生成し、その関数を 2 番目の引数に適用する、という動作になります。
+</p>
+<p> このように、関数の引数が一つでも「関数を返す関数」を使うことで、複数の引数を処理することができます。これを関数の「カリー化 (curry)」といい、カリー化されている関数を「カリー化関数 (curried function)」といいます。
+</p>
+<p> Eralng の場合、カリー化関数の定義はちょっと面倒になりますし、高階関数もカリー化されていないので、カリー化関数を使うメリットはほとんどないと思います。ところが、他の関数型言語 (たとえば Haskell や ML (SML/NJ, OCaml) など) では、カリー化関数を簡単に定義できるようになっています。また、高階関数もカリー化されているので、カリー化関数はとても役に立ちます。興味のある方は拙作のページ Haskell 入門 <a href="haskell03.html#chap02">高階関数</a>, SML/NJ 入門 <a href="smlnj04.html#chap11">カリー化関数</a>, OCaml 入門: <a href="ocaml03.html">高階関数</a> をお読みくださいませ。
+</p>
+
+<h4>●関数の合成</h4>
+<p> 最後に、関数 f(x) と g(x) を合成して新しい関数 h(x) を作ることを考えてみましょう。関数 h(x) を次のように定義します。
+</p>
+<pre class="item">
+h(x) = g( f(x) )
+</pre>
+<p> たとえば、f(x) = 2 * x + 1, g(y) = y * y + 3 * y とすると、h(x) は次のようになります。
+</p>
+<pre class="item">
+h(x) = g( f(x) )
+     = (2 * x + 1) * (2 * x + 1) + 3 * (2 * x + 1)
+     = 4 * x * x + 4 * x + 1 + 6 * x + 3
+     = 4 * x * x + 10 * x + 4
+</pre>
+<p> 実際のプログラムは数式を展開するのではなく、f(x) の評価結果を g(x) に渡すだけなので簡単です。第 1 引数と第 2 引数に関数 F と G を受け取り、それらを合成した関数を返す関数 compose は次のようになります。
+</p>
+<pre class="list">
+リスト : 関数の合成
+
+compose(F, G) -&gt; fun(X) -&gt; G(F(X)) end.
+</pre>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt; Foo = fun(X) -&gt; 2 * X + 1 end.
+#Fun&lt;erl_eval.6.80247286&gt;
+&gt; Bar = fun(Y) -&gt; Y * Y + 3 * Y end.
+#Fun&lt;erl_eval.6.80247286&gt;
+&gt; Bar(Foo(4)).
+108
+&gt; Baz = higher:compose(Foo, Bar).
+#Fun&lt;higher.3.37363937&gt;
+&gt; Baz(4).
+108
+</pre>
+<p> 関数 Foo と Bar を定義します。Foo と Bar の合成は Bar( Foo( x ) ) と表すことができます。実際に 4 を計算すると 108 になります。この関数は compose で合成することができます。compose(Foo, Bar) の返り値を変数 Baz に束縛すると、Baz を合成関数として使うことができます。
+</p>
+<hr>
+<div align="right">
+初出 2011 年 10 月 10 日<br>
+改訂 2018 年 12 月 16 日
+</div>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011-2018 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcerl03.html">PrevPage</a> | <a href="erlang.html">Erlang</a> | <a href="abcerl05.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

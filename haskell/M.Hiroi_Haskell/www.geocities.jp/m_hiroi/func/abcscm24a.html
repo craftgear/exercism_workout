@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881783</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm24.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm25.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>遅延ストリーム (3)</h3>
+<p> 前回まで作成した遅延ストリームは、stream-cons で遅延ストリームを生成するとき、ストリームの要素となる引数を評価していました。たとえば、(stream-cons (func x) ...) とすると、(func x) を評価した値がストリームの要素となります。ここで、ストリームにまだアクセスしていないのに、(func x) が評価されていることに注意してください。もし、(func x) がデータの入力処理だとすると、遅延ストリームを生成するときにデータをひとつ先読みしてしまうことになります。
+</p>
+<p> そこで、コンスセルの CAR 部と CDR 部をまとめて遅延評価することにします。この場合、プロミスが遅延ストリームを表すことになります。今回はこの方法で遅延ストリームを作ってみましょう。
+</p>
+
+<h4>●遅延ストリームをプロミスで表す</h4>
+<p> 遅延ストリームをプロミスで表す場合、その構造はつぎのようになります。
+</p>
+<pre class="list">
+リスト : 遅延ストリーム
+
+;; プロミスが遅延ストリームを表す
+(define-syntax stream-cons
+  (syntax-rules ()
+    ((_ a b) (delay (cons a b)))))
+
+;; 先頭要素を取り出す
+(define (stream-car s) (car (force s)))
+
+;; 先頭要素を取り除く
+(define (stream-cdr s) (cdr (force s)))
+
+;; ストリームの終端
+(define nil (delay '()))
+(define (empty? s) (null? (force s)))
+</pre>
+<p> stream-cons は (cons a (delay b)) ではなく (delay (cons a b)) とします。これで stream-cons の引数 a, b が遅延評価されます。stream-car と stream-cdr は遅延ストリーム s を force で評価してから car と cdr を適用します。遅延ストリームはプロミスで表すので、終端 nil の定義は (delay '()) とします。empty? も遅延ストリーム s を force で評価してから null? でチェックします。
+</p>
+<h4>●stream-delay</h4>
+<p> ここで empty? を評価すると、遅延ストリームが force されることに注意してください。たとえば、遅延ストリームを連結する stream-append を次のように定義すると問題が発生します。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの連結 (間違い版)
+
+;; 整数列の生成
+(define (range low high)
+  (if (> low high)
+      nil
+    (stream-cons low
+                 (range (+ 1 low) high))))
+
+;; 遅延ストリームの連結 (間違い版)
+(define (stream-append-bad s1 s2)
+  (if (empty? s1)
+      s2
+    (stream-cons (stream-car s1)
+                 (stream-append-bad (stream-cdr s1) s2))))
+</pre>
+<p> stream-append-bad でストリームを生成するとき、empty? で s1 が force されることになります。つまり、新しいストリームを生成する前に引数のストリームが評価されてしまうのです。次の例を見てください。
+</p>
+<pre>
+gosh&gt; (define s1 (range 1 4))
+s1
+gosh&gt; (define s2 (range 5 8))
+s2
+gosh&gt; (define s3 (stream-append-bad s1 s2))
+s3
+gosh&gt; s1
+#&lt;promise ... (forced)&gt;
+gosh&gt; s2
+#&lt;promise ...&gt;
+gosh&gt; s3
+#&lt;promise ...&gt;
+</pre>
+<p> s1 と s2 を連結した新しいストリーム s3 を評価していないにもかかわらず、引数のストリーム s1 が force されていることがわかります。この場合、stream-append の本体を delay と force で囲みます。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの連結 (修正版)
+
+(define (stream-append s1 s2)
+  (delay
+   (force
+    (if (empty? s1)
+        s2
+      (stream-cons (stream-car s1)
+                   (stream-append (stream-cdr s1) s2))))))
+</pre>
+<p> delay と force で囲むのは無駄なように思いますが、これにより stream-append を評価して遅延ストリームを生成するとき、引数 s1 の遅延ストリームが force されずにすむわけです。
+</p>
+<p> 実際には、次に示すようなマクロを定義すると簡単です。
+</p>
+<pre class="list">
+リスト : 式 expr の遅延ストリームを返す
+
+(define-syntax stream-delay
+  (syntax-rules ()
+    ((_ expr) (delay (force expr)))))
+</pre>
+<pre class="list">
+リスト : 遅延ストリームの連結 (完成版)
+
+(define (stream-append s1 s2)
+  (stream-delay
+    (if (empty? s1)
+        s2
+      (stream-cons (stream-car s1)
+                   (stream-append (stream-cdr s1) s2)))))
+</pre>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (define s4 (range 1 4))
+s4
+gosh&gt; (define s5 (range 5 8))
+s5
+gosh&gt; (define s6 (stream-append s4 s5))
+s6
+gosh&gt; s4
+#&lt;promise ...&gt;
+gosh&gt; s5
+#&lt;promise ...&gt;
+gosh&gt; s6
+#&lt;promise ...&gt;
+gosh&gt; (stream-car s6)
+1
+gosh&gt; (stream-car (stream-cdr s6))
+2
+gosh&gt; (stream-car (stream-cdr (stream-cdr s6)))
+3
+gosh&gt; (stream-car (stream-cdr (stream-cdr (stream-cdr s6))))
+4
+gosh&gt; (stream-car (stream-cdr (stream-cdr (stream-cdr (stream-cdr s6)))))
+5
+</pre>
+<p> このように、stream-delay を使うことで、新しい遅延ストリームを生成するとき、引数のストリームが force されるのを防止することができます。
+</p>
+<p> 同様に stream-map や stream-filter など、遅延ストリームを受け取って新しい遅延ストリームを返す関数は stream-delay で囲む必要があります。詳細は <a href="abcscm24a.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行速度の比較</h4>
+<p> それでは簡単な実行例として、素数を求めるプログラムで実行速度を比較してみましょう。
+</p>
+<pre class="list">
+リスト : 素数を求める
+
+(define primes (stream-cons 2 (stream-cons 3 (stream-cons 5 (primes-from 7)))))
+
+(define (primes-from n)
+  (if (prime? n)
+      (stream-cons n (primes-from (+ n 2)))
+    (primes-from (+ n 2))))
+
+(define (prime? n)
+  (every (lambda (p) (not (zero? (modulo n p))))
+         (stream-take-while (lambda (p) (&lt;= (* p p) n)) primes)))
+</pre>
+<p> 素数列 primes の定義は <a href="abcscm23.html">遅延ストリーム (1)</a> で作成したものと同じです。(stream-ref primes 5000) の実行時間を求めたところ、結果は次のようになりました。
+</p>
+<pre class="item">
+lazystream.scm  : 0.34 秒
+lazystream1.scm : 0.45 秒
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz
+</pre>
+<p> 今回の遅延ストリームのほうが少し遅くなりました。興味のある方はいろいろ試してみてください。
+</p>
+
+<h4>●問題点</h4>
+<p> 今回は単純に delay と force を使いましたが、この方法では末尾再帰的なアルゴリズムとの相性がよくないことがわかっているそうです。詳しい説明は Gauche のリファレンス <a href="http://practical-scheme.net/gauche/man/gauche-refj/Chi-Yan-Ping-Jia-.html">遅延評価</a> や Yutaka Hara さんの <a href="https://nacl-ltd.github.io/2016/05/31/delay-force.html">R7RSのdelay-forceとは何か</a> をお読みください。
+</p>
+<h4>●SRFI-40</h4>
+<p> ところで、Scheme には遅延ストリームを扱うライブラリ SRFI-40 があり、Gauche でも (use util.stream) で使用することができます。下記に基本的な操作関数を示します。
+</p>
+<ul>
+  <li>stream-cons x s<br>
+遅延ストリームの生成
+  <li>stream-car s<br>
+遅延ストリーム s の先頭要素を求める
+  <li>stream-cdr s<br>
+遅延ストリーム s の先頭要素を取り除く
+  <li>stream-null<br>
+空の遅延ストリーム
+  <li>stream-null? s<br>
+遅延ストリーム s が空ならば真を返す
+  <li>stream-delay expr<br>
+引数 expr を遅延したストリームを返す
+  <li>stream x ... <br>
+引数 x ... が要素となる遅延ストリームを返す
+  <li>stream-take s n<br>
+遅延ストリーム s から n 個の要素を取り出し、それを格納した新しい遅延ストリームを返す。
+  <li>stream-drop s n<br>
+遅延ストリーム s の先頭から n 個の要素を取り除く
+  <li>stream-&gt;list s <br>
+遅延ストリーム s をリストに変換する
+  <li>list-&gt;stream xs<br>
+リスト xs を遅延ストリームに変換する
+  <li>stream-map func . s<br>
+マッピング
+  <li>stream-filter pred s<br>
+フィルター
+  <li>stream-for-each func . s<br>
+func をストリームの各要素に適用する
+</ul>
+<p> stream-take が遅延ストリームを返すことに注意してください。リストに変換するには関数 stream-&gt;list を使ってください。このほかにも便利な関数が多数用意されています。詳細は Gauche のリファレンス <a href="https://practical-scheme.net/gauche/man/gauche-refj/sutorimuraiburari.html">12.67 util.stream - ストリームライブラリ</a> をお読みくださいませ。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (use util.stream)
+gosh&gt; (define a (stream-cons 1 stream-null))
+a
+gosh&gt; (define b (stream-cons 2 a))
+b
+gosh&gt; (define c (stream-cons 3 b))
+c
+gosh&gt; a
+#&lt;promise(stream) ...&gt;
+gosh&gt; b
+#&lt;promise(stream) ...&gt;
+gosh&gt; c
+#&lt;promise(stream) ...&gt;
+gosh&gt; (stream-car c)
+3
+gosh&gt; (stream-car (stream-cdr c))
+2
+gosh&gt; (stream-car (stream-cdr (stream-cdr c)))
+1
+gosh&gt; (stream-cdr (stream-cdr (stream-cdr c)))
+#&lt;promise(stream) ...&gt;
+gosh&gt; (stream-null? (stream-cdr (stream-cdr (stream-cdr c))))
+#t
+gosh&gt; (define (range n m) (if (&gt; n m) stream-null (stream-cons n (range (+ n 1) m))))
+range
+gosh&gt; (define s (range 1 10))
+s
+gosh&gt; (stream-take s 10)
+#&lt;promise(stream) ...&gt;
+gosh&gt; (stream-&gt;list s)
+(1 2 3 4 5 6 7 8 9 10)
+gosh&gt; (define (add-stream s1 s2) (stream-map + s1 s2))
+add-stream
+gosh&gt; (define s1 (add-stream (range 1 10) (range 11 20)))
+s1
+gosh&gt; (stream-&gt;list s1)
+(12 14 16 18 20 22 24 26 28 30)
+gosh&gt; (define fibo (stream-cons 0 (stream-cons 1 (add-stream (stream-cdr fibo) fibo))))
+fibo
+gosh&gt; (stream-&gt;list (stream-take fibo 40))
+(0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 
+28657 46368 75025 121393 196418 317811 514229 832040 1346269 2178309 3524578 5702887 
+9227465 14930352 24157817 39088169 63245986)
+</pre>
+
+<pre class="list">
+リスト : 素数の生成 (lazysieve.scm)
+
+(define (sieve s)
+  (stream-cons (stream-car s)
+               (sieve (stream-filter
+                        (lambda (x) (not (zero? (modulo x (stream-car s)))))
+                        (stream-cdr s)))))
+
+;; 別解
+(define primes (stream-cons 2 (stream-cons 3 (stream-cons 5 (primes-from 7)))))
+
+(define (primes-from n)
+  (if (prime? n)
+      (stream-cons n (primes-from (+ n 2)))
+    (primes-from (+ n 2))))
+
+(define (prime? n)
+  (stream-every (lambda (p) (not (zero? (modulo n p))))
+                (stream-take-while (lambda (p) (&lt;= (* p p) n)) primes)))
+</pre>
+<pre>
+gosh&gt; (stream-&gt;list (stream-take (stream-iota -1 1) 10))
+(1 2 3 4 5 6 7 8 9 10)
+gosh&gt; (stream-&gt;list (stream-take (sieve (stream-iota -1 2)) 25))
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+gosh&gt; (stream->list (stream-take primes 100))
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211
+223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331
+337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449
+457 461 463 467 479 487 491 499 503 509 521 523 541)
+gosh&gt; (time (stream-car (stream-drop primes 5000)))
+;(time (stream-car (stream-drop primes 5000)))
+; real   2.260
+; user   1.903
+; sys    1.061
+48619
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz
+</pre>
+<pre class="list">
+リスト : 順列の生成と８クイーン (lazyperm.scm)
+
+;; ストリームの連結 (遅延評価版)
+(define (stream-append-delay s1 s2)
+  (stream-delay
+    (if (stream-null? s1)
+        (force s2)
+      (stream-cons (stream-car s1)
+                   (stream-append-delay (stream-cdr s1) s2)))))
+
+;; stream-map の結果を平坦化する
+(define (stream-flatmap proc s)
+  (stream-delay
+    (if (stream-null? s)
+        stream-null
+      (stream-append-delay (proc (stream-car s))
+                           (delay (stream-flatmap proc (stream-cdr s)))))))
+
+;; 順列の生成
+(define (make-perm n s)
+  (if (zero? n)
+      (stream-cons '() stream-null)
+    (stream-flatmap
+     (lambda (x)
+       (stream-map (lambda (y) (cons x y))
+                   (make-perm
+                    (- n 1)
+                    (stream-filter (lambda (z) (not (eqv? x z))) s))))
+     s)))
+
+;;
+;; ８クイーンの解法 (遅延ストリーム版)
+;;
+
+;; 衝突のチェック
+(define (attack x xs)
+  (define (attack-sub x n ys)
+    (cond ((null? ys) #t)
+           ((or (= (+ (car ys) n) x)
+                (= (- (car ys) n) x))
+             #f)
+          (else
+           (attack-sub x (+ n 1) (cdr ys)))))
+  (attack-sub x 1 xs))
+
+; N Queen の解法
+(define (queen s)
+  (stream-delay
+    (if (stream-null? s)
+        (stream-cons '() stream-null)
+      (stream-filter
+       (lambda (ls)
+         (if (null? ls)
+             #t
+           (attack (car ls) (cdr ls))))
+       (stream-flatmap
+        (lambda (x)
+          (stream-map (lambda (y) (cons x y))
+                      (queen (stream-filter (lambda (z) (not (eqv? x z))) s))))
+        s)))))
+</pre>
+<pre>
+gosh&gt; (define s (make-perm 4 (stream 1 2 3 4)))
+s
+gosh&gt; (stream->list s)
+((1 2 3 4) (1 2 4 3) (1 3 2 4) (1 3 4 2) (1 4 2 3) (1 4 3 2) (2 1 3 4) (2 1 4 3)
+ (2 3 1 4) (2 3 4 1) (2 4 1 3) (2 4 3 1) (3 1 2 4) (3 1 4 2) (3 2 1 4) (3 2 4 1)
+ (3 4 1 2) (3 4 2 1) (4 1 2 3) (4 1 3 2) (4 2 1 3) (4 2 3 1) (4 3 1 2) (4 3 2 1)
+)
+gosh&gt; (define qs (queen (stream-iota 8 1)))
+qs
+gosh&gt; (stream-&gt;list (stream-take qs 10))
+((1 5 8 6 3 7 2 4) (1 6 8 3 7 4 2 5) (1 7 4 6 8 2 5 3) (1 7 5 8 2 4 6 3) 
+ (2 4 6 8 3 1 7 5) (2 5 7 1 3 8 6 4) (2 5 7 4 1 8 6 3) (2 6 1 7 4 8 3 5) 
+ (2 6 8 3 1 4 7 5) (2 7 3 6 8 5 1 4))
+</pre>
+<h4>●Gauche の遅延シーケンス</h4>
+<p> 遅延ストリームを扱う場合、Gauche にはもう一つ「遅延シーケンス」という便利な機能があります。Gauche のリファレンス <a href="http://practical-scheme.net/gauche/man/gauche-refj/Chi-Yan-Ping-Jia-.html#g_t_9045_5ef6_30b7_30fc_30b1_30f3_30b9">遅延シーケンス</a> より引用します。
+</p>
+<p> <cite>『遅延シーケンスはリストのようなデータ構造ですが、要素は必要になるまで計算されません。内部的には、これはcdrの評価が遅延される特別な種類のペアを使って実現されています。しかし、Schemeのレベルで「遅延ペア」のような特別なデータ型が見えることは決してありません。遅延ペアにアクセスしようとした途端、Gaucheは自動的に遅延されていた計算をforceして、遅延ペアは通常のペアに変化してしまうからです。』</cite>
+</p>
+<p> Gauche の遅延シーケンスは通常のリスト操作関数に渡すことができるので便利です。たとえば、先頭要素を取り出すには car で、先頭要素を取り除くのも cdr で行うことができます。また、空のシーケンスは '() で表されるので、そのチェックは null? で行うことができます。
+</p>
+<p> ただし、REPL で無限シーケンスを評価すると、その結果を表示する、つまり無限リストを生成しようとするため、Guache がフリーズしてしまいます。それから、Gauche の遅延シーケンスは、常にひとつ余分に評価します。自分自身を参照する遅延データ構造を作成するときには注意してください。詳細は Gauche のリファレンスをお読みくださいませ。
+</p>
+<p> モジュール gauche.lazy には遅延シーケンス用の便利な関数が定義されているので、遅延シーケンスを使うときは (use gauche.lazy) してください。基本的な関数を以下に示します。
+<ul>
+  <li>lcons x s<br>
+遅延シーケンスの生成
+  <li>lcons* x ... s<br>
+引数 x ... を遅延シーケンス s に追加した遅延シーケンスを返す
+  <li>lrange start [end step] <br>
+start から end 未満の数列を生成する (end を省略すると無限大、step を省略すると 1)
+  <li>liota [count start step]<br>
+start から step 刻みで count 個の数列を生成する (count を省略すると無限大)
+  <li>x-&gt;lseq x<br>
+x を遅延シーケンスに変換する
+  <li>lappend s ...<br>
+遅延シーケンスを連結する
+  <li>lconcatenate s ...<br>
+遅延シーケンスを一段平坦化する
+  <li>lmap func . s<br>
+マッピング
+  <li>lfilter pred s<br>
+フィルター
+  <li>ltake s n <br>
+遅延シーケンス s から n 個の要素を取り出した遅延シーケンスを返す
+  <li>ltake-while pred s<br>
+遅延シーケンス s から述語 pred が真を返す要素を取り出した遅延シーケンスを返す
+</ul>
+<p> このほかにも便利な関数が多数用意されています。詳細は Gauche のリファレンス <a href="http://practical-scheme.net/gauche/man/gauche-refj/Chi-Yan-sikensuyuteiritei.html">9.13 gauche.lazy - 遅延シーケンスユーティリティ</a> をお読みくださいませ。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (define a (lcons 1 '()))
+a
+gosh&gt; (define b (lcons 2 a))
+b
+gosh&gt; (define c (lcons 3 b))
+c
+gosh&gt; a
+(1)
+gosh&gt; b
+(2 1)
+gosh&gt; c
+(3 2 1)
+gosh&gt; (car c)
+3
+gosh&gt; (cadr c)
+2
+gosh&gt; (caddr c)
+1
+gosh&gt; (null? (cdddr c))
+#t
+gosh&gt; (define s (lrange 1 11))
+s
+gosh&gt; (take s 10)
+(1 2 3 4 5 6 7 8 9 10)
+gosh&gt; s
+(1 2 3 4 5 6 7 8 9 10)
+gosh&gt; (define (add-stream s1 s2) (lmap + s1 s2))
+add-stream
+gosh&gt; (define s1 (add-stream (lrange 1 10) (lrange 11 20)))
+s1
+gosh&gt; s1
+(12 14 16 18 20 22 24 26 28)
+gosh&gt; (define s1 (add-stream (lrange 1 11) (lrange 11 21)))
+s1
+gosh&gt; s1
+(12 14 16 18 20 22 24 26 28 30)
+
+gosh&gt; (define fibo (lcons 0 (lcons 1 (add-stream (cdr fibo) fibo))))
+fibo
+gosh&gt; (take fibo 40)
+*** ERROR: Attempt to recursively force a lazy pair.
+
+gosh&gt; (define fibo (lcons 0 (lcons 1 (lcons 1 (lmap (lambda (x y) (+ y (* x 2)))
+ (cdr fibo) fibo)))))
+fibo
+gosh&gt; (take fibo 40)
+(0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711
+ 28657 46368 75025 121393 196418 317811 514229 832040 1346269 2178309 3524578 
+ 5702887 9227465 14930352 24157817 39088169 63245986)
+</pre>
+<pre class="list">
+リスト : 素数の生成 (lseq1.scm)
+
+(use gauche.lazy)
+
+;; 素数の生成
+(define (sieve s)
+  (lcons (car s)
+         (sieve (lfilter
+                 (lambda (x) (not (zero? (modulo x (car s)))))
+                 (cdr s)))))
+
+(define primes (lcons 2 (lcons 3 (lcons 5 (primes-from 7)))))
+
+(define (primes-from n)
+  (if (prime? n)
+      (lcons n (primes-from (+ n 2)))
+    (primes-from (+ n 2))))
+
+(define (prime? n)
+  (every (lambda (p) (not (zero? (modulo n p))))
+         (ltake-while (lambda (p) (<= (* p p) n)) primes)))
+</pre>
+<pre>
+gosh&gt; (define s (lrange 2))
+s
+gosh&gt; (take s 10)
+(2 3 4 5 6 7 8 9 10 11)
+gosh&gt; (define s (sieve (lrange 2)))
+s
+gosh&gt; (take s 25)
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+gosh&gt; (take primes 100)
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211
+223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331
+337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449
+457 461 463 467 479 487 491 499 503 509 521 523 541)
+gosh&gt; (time (car (drop primes 5000)))
+;(time (car (drop primes 5000)))
+; real   0.218
+; user   0.249
+; sys    0.016
+48619
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz
+</pre>
+<pre class="list">
+リスト : 順列の生成と８クイーンの解法 (lseq2.scm)
+
+(use gauche.lazy)
+
+;; lmap の結果を平坦化する
+(define (lflatmap proc s)
+  (lconcatenate (lmap proc s)))
+
+;; 順列の生成
+(define (make-perm n s)
+  (if (zero? n)
+      (lcons '() '())
+    (lflatmap
+     (lambda (x)
+       (lmap (lambda (y) (cons x y))
+             (make-perm
+              (- n 1)
+              (lfilter (lambda (z) (not (eqv? x z))) s))))
+     s)))
+
+;;
+;; ８クイーンの解法 (遅延ストリーム版)
+;;
+
+;; 衝突のチェック
+(define (attack x xs)
+  (define (attack-sub x n ys)
+    (cond ((null? ys) #t)
+           ((or (= (+ (car ys) n) x)
+                (= (- (car ys) n) x))
+             #f)
+          (else
+           (attack-sub x (+ n 1) (cdr ys)))))
+  (attack-sub x 1 xs))
+
+; N Queen の解法
+(define (queen s)
+  (if (null? s)
+      (lcons '() '())
+    (lfilter
+     (lambda (ls)
+       (if (null? ls)
+           #t
+         (attack (car ls) (cdr ls))))
+     (lflatmap
+      (lambda (x)
+        (lmap (lambda (y) (cons x y))
+              (queen (lfilter (lambda (z) (not (eqv? x z))) s))))
+      s))))
+</pre>
+<pre>
+gosh&gt; (define s (make-perm 4 (lcons* 1 2 3 4 '())))
+s
+gosh&gt; s
+((1 2 3 4) (1 2 4 3) (1 3 2 4) (1 3 4 2) (1 4 2 3) (1 4 3 2) (2 1 3 4) (2 1 4 3)
+ (2 3 1 4) (2 3 4 1) (2 4 1 3) (2 4 3 1) (3 1 2 4) (3 1 4 2) (3 2 1 4) (3 2 4 1)
+ (3 4 1 2) (3 4 2 1) (4 1 2 3) (4 1 3 2) (4 2 1 3) (4 2 3 1) (4 3 1 2) (4 3 2 1)
+)
+gosh&gt; (liota 8 1)
+(1 2 3 4 5 6 7 8)
+gosh&gt; (define qs (queen (liota 8 1)))
+qs
+gosh&gt; (take qs 10)
+((1 5 8 6 3 7 2 4) (1 6 8 3 7 4 2 5) (1 7 4 6 8 2 5 3) (1 7 5 8 2 4 6 3) 
+ (2 4 6 8 3 1 7 5) (2 5 7 1 3 8 6 4) (2 5 7 4 1 8 6 3) (2 6 1 7 4 8 3 5)
+ (2 6 8 3 1 4 7 5) (2 7 3 6 8 5 1 4))
+</pre>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;;
+;; lazystream1.scm : 遅延ストリーム (CAR 部も遅延評価する)
+;;
+;;                   Copyright (C) 2017 Makoto Hiroi
+;;
+(use srfi-1)
+
+;; プロミスが遅延ストリームを表す
+
+;; 遅延ストリームの基本関数
+(define-syntax stream-cons
+  (syntax-rules ()
+    ((_ a b) (delay (cons a b)))))
+
+;; 先頭要素を取り出す
+(define (stream-car s) (car (force s)))
+
+;; 先頭要素を取り除く
+(define (stream-cdr s) (cdr (force s)))
+
+;; ストリームの終端
+(define nil (delay '()))
+(define (empty? s) (null? (force s)))
+
+;; 式 expr の遅延ストリームを返す
+(define-syntax stream-delay
+  (syntax-rules ()
+    ((_ expr) (delay (force expr)))))
+
+;;
+;; ストリームの生成
+;;
+
+;; 数列を生成するストリーム
+(define (range low high)
+  (if (&gt; low high)
+      nil
+    (stream-cons low
+                 (range (+ 1 low) high))))
+
+;; フィボナッチ数列を生成する遅延ストリーム
+(define (fibonacci a b)
+  (stream-cons a (fibonacci b (+ a b))))
+
+;; 初項が a で次項を proc で生成する
+(define (iterate proc a)
+  (stream-cons a (iterate proc (proc a))))
+
+;; リストを遅延ストリームに変換する
+(define (list-&gt;stream xs)
+  (if (null? xs)
+      nil
+    (stream-cons (car xs) (list-&gt;stream (cdr xs)))))
+
+;;
+;; 操作関数
+;;
+
+;; n 番目の要素を求める
+(define (stream-ref s n)
+  (if (zero? n)
+      (stream-car s)
+    (stream-ref (stream-cdr s) (- n 1))))
+
+;; 先頭から n 個の要素を取り出す
+(define (stream-take s n)
+  (let loop ((s s) (n n) (a '()))
+    (if (or (zero? n) (empty? s))
+        (reverse! a)
+      (loop (stream-cdr s) (- n 1) (cons (stream-car s) a)))))
+
+;; 先頭から n 個の要素を取り除く
+(define (stream-drop s n)
+  (stream-delay
+    (if (or (zero? n) (empty? s))
+        s
+      (stream-drop (stream-cdr s) (- n 1)))))
+
+;; 遅延ストリームの連結
+(define (stream-append s1 s2)
+  (stream-delay
+    (if (empty? s1)
+        s2
+      (stream-cons (stream-car s1)
+                   (stream-append (stream-cdr s1) s2)))))
+
+;; 間違い版
+(define (stream-append-bad s1 s2)
+  (if (empty? s1)
+      s2
+    (stream-cons (stream-car s1)
+                 (stream-append-bad (stream-cdr s1) s2))))
+
+;; 遅延評価版
+(define (stream-append-delay s1 s2)
+  (stream-delay
+    (if (empty? s1)
+        (force s2)
+      (stream-cons (stream-car s1)
+                   (stream-append-delay (stream-cdr s1) s2)))))
+
+;; ストリームの要素を交互に出力
+(define (interleave s1 s2)
+  (stream-delay
+    (if (empty? s1)
+        s2
+      (stream-cons (stream-car s1)
+                   (interleave s2 (stream-cdr s1))))))
+
+;;
+;; 高階関数
+;;
+
+;; マッピング
+(define (stream-map proc . s)
+  (stream-delay
+    (if (any empty? s)
+        nil
+      (stream-cons (apply proc (map stream-car s))
+                   (apply stream-map proc (map stream-cdr s))))))
+
+;; stream-map の結果を平坦化する
+(define (stream-flatmap proc s)
+  (stream-delay
+    (if (empty? s)
+        nil
+      (stream-append-delay (proc (stream-car s))
+                           (delay (stream-flatmap proc (stream-cdr s)))))))
+
+;; フィルター
+(define (stream-filter pred s)
+  (stream-delay
+    (cond ((empty? s) nil)
+          ((pred (stream-car s))
+           (stream-cons (stream-car s)
+                        (stream-filter pred (stream-cdr s))))
+          (else
+           (stream-filter pred (stream-cdr s))))))
+
+;; 畳み込み
+(define (stream-fold-left proc a s)
+  (if (empty? s)
+      a
+    (stream-fold-left proc (proc a (stream-car s)) (stream-cdr s))))
+
+(define (stream-fold-right proc a s)
+  (if (empty? s)
+      a
+    (proc (stream-car s) (stream-fold-right proc a (stream-cdr s)))))
+
+;; 巡回
+(define (stream-for-each proc s)
+  (cond ((not (empty? s))
+         (proc (stream-car s))
+         (stream-for-each proc (stream-cdr s)))))
+
+;; 述語 pred が真を返す要素を取り出す
+(define (stream-take-while pred s)
+  (let loop ((s s) (a '()))
+    (if (or (empty? s) (not (pred (stream-car s))))
+        (reverse! a)
+      (loop (stream-cdr s) (cons (stream-car s) a)))))
+
+;; 述語 pred が真を返す要素を取り除く
+(define (stream-drop-while pred s)
+  (stream-delay
+    (if (or (not (pred (stream-car s))) (empty? s))
+        s
+      (stream-drop-while pred (stream-cdr s)))))
+
+;; 遅延ストリームの併合
+(define (stream-merge s1 s2)
+  (stream-delay
+    (cond ((empty? s1) s2)
+          ((empty? s2) s1)
+          (else
+           (if (&lt;= (stream-car s1) (stream-car s2))
+               (stream-cons (stream-car s1) (stream-merge (stream-cdr s1) s2))
+             (stream-cons (stream-car s2) (stream-merge s1 (stream-cdr s2))))))))
+
+;; 集合演算
+;; 和集合
+(define (stream-union s1 s2)
+  (stream-delay
+    (cond ((empty? s1) s2)
+          ((empty? s2) s1)
+          (else
+           (cond ((&lt; (stream-car s1) (stream-car s2))
+                  (stream-cons (stream-car s1)
+                               (stream-union (stream-cdr s1) s2)))
+                 ((&gt; (stream-car s1) (stream-car s2))
+                  (stream-cons (stream-car s2)
+                               (stream-union s1 (stream-cdr s2))))
+                 (else
+                  (stream-cons (stream-car s1)
+                               (stream-union (stream-cdr s1) (stream-cdr s2)))))))))
+
+;; 積集合
+(define (stream-intersect s1 s2)
+  (stream-delay
+    (cond ((or (empty? s1) (empty? s2)) nil)
+          ((= (stream-car s1) (stream-car s2))
+           (stream-cons (stream-car s1)
+                        (stream-intersect (stream-cdr s1) (stream-cdr s2))))
+          ((&lt; (stream-car s1) (stream-car s2))
+           (stream-intersect (stream-cdr s1) s2))
+          (else
+           (stream-intersect s1 (stream-cdr s2))))))
+
+;; 素数の生成
+(define (sieve s)
+  (stream-cons (stream-car s)
+               (sieve (stream-filter
+                       (lambda (x) (not (zero? (modulo x (stream-car s)))))
+                       (stream-cdr s)))))
+
+;; 別解
+(define primes (stream-cons 2 (stream-cons 3 (stream-cons 5 (primes-from 7)))))
+
+(define (primes-from n)
+  (if (prime? n)
+      (stream-cons n (primes-from (+ n 2)))
+    (primes-from (+ n 2))))
+
+(define (prime? n)
+  (every (lambda (p) (not (zero? (modulo n p))))
+         (stream-take-while (lambda (p) (&lt;= (* p p) n)) primes)))
+
+;; 順列の生成
+(define (make-perm n s)
+  (if (zero? n)
+      (stream-cons '() nil)
+    (stream-flatmap
+     (lambda (x)
+       (stream-map (lambda (y) (cons x y))
+                   (make-perm
+                    (- n 1)
+                    (stream-filter (lambda (z) (not (eqv? x z))) s))))
+     s)))
+
+;;
+;; ８クイーンの解法 (遅延ストリーム版)
+;;
+
+;; 衝突のチェック
+(define (attack x xs)
+  (define (attack-sub x n ys)
+    (cond ((null? ys) #t)
+           ((or (= (+ (car ys) n) x)
+                (= (- (car ys) n) x))
+             #f)
+          (else
+           (attack-sub x (+ n 1) (cdr ys)))))
+  (attack-sub x 1 xs))
+
+; N Queen の解法
+(define (queen s)
+  (stream-delay
+    (if (empty? s)
+        (stream-cons '() nil)
+      (stream-filter
+       (lambda (ls)
+         (if (null? ls)
+             #t
+           (attack (car ls) (cdr ls))))
+       (stream-flatmap
+        (lambda (x)
+          (stream-map (lambda (y) (cons x y))
+                      (queen (stream-filter (lambda (z) (not (eqv? x z))) s))))
+        s)))))
+
+;; 木の巡回 (遅延ストリーム版)
+(define (stream-of-tree ls cont)
+  (stream-delay
+    (cond ((null? ls) (cont))
+          ((not (pair? ls))
+           (stream-cons ls (cont)))
+          (else
+           (stream-of-tree
+            (car ls)
+            (lambda () (stream-of-tree (cdr ls) (lambda () (cont)))))))))
+
+;; ツリーマッチング
+(define (same-fringe-p tree1 tree2)
+  (define (iter s1 s2)
+    (cond ((and (empty? s1) (empty? s2)) #t)
+          ((or (empty? s1) (empty? s2)) #f)
+          ((eqv? (stream-car s1) (stream-car s2))
+           (iter (stream-cdr s1) (stream-cdr s2)))
+          (else #f)))
+  (iter (stream-of-tree tree1 (lambda () nil))
+        (stream-of-tree tree2 (lambda () nil))))
+</pre>
+<h4>●簡単な実行例</h4>
+<pre>
+gosh&gt; (define (add-stream s1 s2) (stream-map (lambda (x y) (+ x y)) s1 s2))
+add-stream
+gosh&gt; (define s1 (range 1 10))
+s1
+gosh&gt; (define s2 (range 11 20))
+s2
+gosh&gt; (define s3 (add-stream s1 s2))
+s3
+gosh&gt; s1
+#&lt;promise ...&gt;
+gosh&gt; s2
+#&lt;promise ...&gt;
+gosh&gt; s3
+#&lt;promise ...&gt;
+gosh&gt; (stream-take s3 10)
+(12 14 16 18 20 22 24 26 28 30)
+gosh&gt; (define fibo (stream-cons 0 (stream-cons 1 (add-stream (stream-cdr fibo) fibo))))
+fibo
+gosh&gt; (stream-take fibo 40)
+(0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 
+28657 46368 75025 121393 196418 317811 514229 832040 1346269 2178309 3524578 5702887 
+9227465 14930352 24157817 39088169 63245986)
+gosh&gt; (define hs (stream-cons 1
+ (stream-union (stream-map (lambda (x) (* x 2)) hs)
+ (stream-union (stream-map (lambda (x) (* x 3)) hs)
+ (stream-map (lambda (x) (* x 5)) hs)))))
+hs
+gosh&gt; (stream-take hs 100)
+(1 2 3 4 5 6 8 9 10 12 15 16 18 20 24 25 27 30 32 36 40 45 48 50 54 60 64 72 75
+80 81 90 96 100 108 120 125 128 135 144 150 160 162 180 192 200 216 225 240 243
+250 256 270 288 300 320 324 360 375 384 400 405 432 450 480 486 500 512 540 576
+600 625 640 648 675 720 729 750 768 800 810 864 900 960 972 1000 1024 1080 1125
+1152 1200 1215 1250 1280 1296 1350 1440 1458 1500 1536)
+gosh&gt; (define s (make-perm 4 (range 1 4)))
+s
+gosh&gt; (stream-take s 24)
+((1 2 3 4) (1 2 4 3) (1 3 2 4) (1 3 4 2) (1 4 2 3) (1 4 3 2) (2 1 3 4) (2 1 4 3)
+ (2 3 1 4) (2 3 4 1) (2 4 1 3) (2 4 3 1) (3 1 2 4) (3 1 4 2) (3 2 1 4) (3 2 4 1)
+ (3 4 1 2) (3 4 2 1) (4 1 2 3) (4 1 3 2) (4 2 1 3) (4 2 3 1) (4 3 1 2) (4 3 2 1)
+)
+gosh&gt; (define qs (queen (range 1 8)))
+qs
+gosh&gt; (stream-take qs 10)
+((1 5 8 6 3 7 2 4) (1 6 8 3 7 4 2 5) (1 7 4 6 8 2 5 3) (1 7 5 8 2 4 6 3)
+ (2 4 6 8 3 1 7 5) (2 5 7 1 3 8 6 4) (2 5 7 4 1 8 6 3) (2 6 1 7 4 8 3 5)
+ (2 6 8 3 1 4 7 5) (2 7 3 6 8 5 1 4))
+gosh&gt; (same-fringe-p '(1 2 (3 4 (5 . 6) 7) 8) '(1 2 (3 4 (5 6) 7) 8))
+#t
+gosh&gt; (same-fringe-p '(1 2 (3 4 (5 . 6) 7) 8) '(1 2 (3 4 (6 5) 7) 8))
+#f
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm24.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm25.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

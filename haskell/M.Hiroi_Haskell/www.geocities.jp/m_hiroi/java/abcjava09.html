@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Java プログラミング入門</title>
+  <meta name="description" content="Java,Java入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881776</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>お気楽 Java プログラミング入門</h1>
+<h2>第 9 回 入れ子クラスとイテレータ</h2>
+<div class="small">
+[ <a href="abcjava08.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava10.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 前回は簡単な例題として基本的なデータ構造である「連結リスト」を作成しました。今回は「入れ子クラス (nested class)」と「イテレータ (iterator)」という機能を使って、連結リストのプログラムを改良してみましょう。
+</p>
+
+<h4>●入れ子クラス</h4>
+<p> 入れ子クラスは、クラスもしくはメソッドの中で定義されたクラスのことです。「ネストしたクラス」と呼ばれることもあります。Java はインターフェースも入れ子にすることができるので、それらを総称して「ネストした型」といいます。このページではネストしたクラスを中心に説明していくことにします。
+</p>
+<p> ネストした型は次に示す 3 通りのパターンがあります。
+</p>
+<ul>
+  <li>メンバ型
+  <ul>
+    <li>static なもの
+    <li>static でないもの (内部クラス : inner class)
+  </ul>
+  <li>ローカルクラス
+  <li>無名クラス (匿名クラス)
+</ul>
+<p> メンバ型はクラスもしくはインターフェースの中で定義されるもので、フィールド変数やメソッドと同様に、public, protected, private によるアクセス制御や、static 宣言することもできます。メンバ型の入れ子クラスは static 宣言の有無により動作が異なり、static でないものを「内部クラス (inner class) 」と呼びます。なお、内部クラスという用語は入れ子クラスのことを指す場合もあるので注意してください。
+</p>
+<p> ローカルクラスはブロックの中で定義されたクラスのことで、一般的にはメソッドの中で局所的に定義されたクラスのことをいいます。無名クラスは名前の無いクラスのことで、抽象クラスもしくはインターフェースから通常のクラス定義をせずに直接インスタンスを生成するための機能です。無名クラスはとても強力な機能で、Java のイテレータは無名クラスを使うと簡単に実装することができます。
+</p>
+
+<h4>●メンバ型の入れ子クラス</h4>
+<p> メンバ型の入れ子クラスで static なものは、通常のクラスと同じように取り扱うことができます。クラス変数やクラスメソッドと同様に、外側のクラスのインスタンスが無くてもアクセスすることができます。入れ子のクラスの特徴は、private なフィールド変数やメソッドであっても、外側のクラスからアクセスできるところです。簡単な例を示しましょう。
+</p>
+
+<pre class="list">
+リスト 1 : ネストしたクラス
+
+class Foo {
+  // ネストしたクラス
+  static class Bar {
+    private int x;
+    static private int xx = 1;
+    Bar() { }
+    Bar(int x) { this.x = x; }
+    int getX() { return x; }
+    // int getY(){ return y; }  Foo のインスタンス変数にはアクセスできない
+    static int getYy(){ return yy; }   // Foo のクラス変数にはアクセスできる
+  }
+  
+  private int y;
+  private static int yy = 2;
+  Foo(){ }
+  Foo(int y) { this.y = y; }
+  static int getX(Bar z) { return z.x; }
+  static int getXx() { return Bar.xx; }
+}
+
+public class sample90 {
+  public static void main(String[] args) {
+    Foo.Bar a = new Foo.Bar(20);
+    Foo.Bar b = new Foo.Bar(200);
+    System.out.println(a.getX());
+    System.out.println(b.getX());
+    System.out.println(Foo.getX(a));
+    System.out.println(Foo.getX(b));
+    System.out.println(Foo.Bar.getYy());
+  }
+}
+</pre>
+<pre>
+C&gt;java sample90
+20
+200
+20
+200
+2
+</pre>
+<p> クラス Foo の中で入れ子クラス Bar を定義します。Foo にはインスタンス変数 y とクラス変数 yy が、Bar にはインスタンス変数 x とクラス変数 xx が private で定義されています。Foo のクラスメソッド getX() は、Bar のインスタンスを引数にとり、インスタンス変数 x の値を返します。x は private 宣言されていますが、外側のクラス Foo からアクセスすることができます。同様に、クラスメソッド getXx() で Bar の private なクラス変数 xx にアクセスすることができます。
+</p>
+
+<p> なお、Bar から Foo のインスタンス変数 y にアクセスすることはできませんが、クラス変数 yy には private でもアクセスすることができます。
+</p>
+
+<p> Foo の中で Bar のインスタンスを生成する場合、今までのように new Bar() でいいのですが、それ以外のクラスではデータ型を Foo.Bar と宣言し、new Foo.Bar() でインスタンスを生成します。Bar のクラス変数やクラスメソッドもアクセスが許可されていれば Foo.Bar を付けてアクセスすることができます。
+</p>
+
+<h4>●内部クラス</h4>
+<p> メンバ型の入れ子クラスで static を付けないものを「内部クラス」といいます。内部クラスは static ではないので、外側のクラスのインスタンスがないとアクセスすることができません。なおかつ、static なフィールド変数やメソッドも持つことができません。そのかわり、外側のクラスのインスタンス変数にアクセスすることができます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト 2 : 内部クラス
+
+class Foo {
+  // 内部クラス
+  class Bar {
+    private int x;
+    Bar() { }
+    Bar(int x) { this.x = x; }
+    int getX() { return x; }
+    int getY() { return y; }    // Foo のインスタンス変数にアクセスできる
+    int getYy() { return yy; }  // Foo のクラス変数にもアクセスできる
+  }
+  
+  private int y;
+  static private int yy = 1;
+  Foo() { }
+  Foo(int y) { this.y = y; }
+  static int getX(Bar z) { return z.x; }
+}
+
+public class sample91 {
+  public static void main(String[] args) {
+    Foo a = new Foo(10);
+    Foo b = new Foo(100);
+    Foo.Bar c = a.new Bar(20);
+    Foo.Bar d = b.new Bar(200);
+    System.out.println(c.getY());
+    System.out.println(d.getY());
+    System.out.println(c.getYy());
+    System.out.println(d.getYy());
+    System.out.println(Foo.getX(c));
+    System.out.println(Foo.getX(d));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample91
+10
+100
+1
+1
+20
+200
+</pre>
+
+<p> クラス Foo の中で内部クラス Bar を定義します。Bar は private なインスタンス変数 x があり、Foo には private なインスタンス変数 y とクラス変数 yy があります。Foo のクラスメソッド getX() は、Bar のインスタンスを引数にとり、インスタンス変数 x の値を返します。x は private 宣言されていますが、外側のクラス Foo からアクセスすることができます。
+</p>
+<p> また、Bar のメソッド getY() は Foo のインスタンス変数 y の値を返し、メソッド getYy() は Foo のクラス変数 yy の値を返します。Bar でクラスメソッドは定義できないので、getYy() はインスタンスメソッドであることに注意してください。このように、Bar から Foo のインスタンス変数やクラス変数にアクセスすることができます。
+</p>
+<p> main() で Foo のインスタンスを生成して、変数 a, b にセットします。そして、そのインスタンスを使って Bar のインスタンスを生成します。データ型は Foo.Bar と宣言し、インスタンスは a.new Bar() で生成します。または、new Foo().new Bar() としてもかまいません。
+</p>
+<p> 生成したインスタンスは変数 c, d にセットします。c から getY() を呼び出すと 10 になり、d から getY() を呼び出すと 100 になります。このように、内部クラスは外側のクラスのインスタンス変数にアクセスすることができます。また、getYy() を呼び出すとクラス変数 yy の値を求めることができます。
+</p>
+
+<h4>●ローカルクラス</h4>
+<p> ブロック { } の中で定義されたクラスを「ローカルクラス」といいます。通常はインスタンスメソッドの中でクラスを定義し、その場でインスタンスを生成して使用する、もしくは生成したインスタンスを返すことになります。他のクラスや他のメソッドからローカルクラスにアクセスすることはできません。また、ローカルクラスは内部クラスの一種なので、static なフィールド変数やメソッドを定義することはできません。そのかわり、外側のクラスのインスタンス変数にアクセスすることは可能です。
+</p>
+
+<p> 簡単な例として、関数型言語でよく用いられる「マッピング」という機能を実現してみましょう。Lisp などの関数型言語の場合、関数はほかのデータと同等に取り扱うことができます。つまり、関数を変数に代入したり、引数として渡すことができるのです。関数を引数として受け取る関数を「汎関数 (functional)」とか「高階関数 (higher order function)」と呼びます。
+</p>
+
+<p> マッピングは配列と関数を引数に受け取り、配列の要素を関数に渡して実行します。そして、その結果を新しい配列に格納して返します。たとえば、配列 {1, 2, 3, 4, 5} と数を 2 乗する関数を渡すと、要素を 2 乗した配列 {1, 4, 9, 16, 25} を返します。このような操作を「マッピング (写像)」といい、マッピングを行う関数を「マップ関数」といいます。
+</p>
+
+<p> Java は手続き型言語なので、関数型言語のように関数やメソッドをそのまま変数に代入したり、引数として渡すことはできません。そのかわり、インターフェースとローカルクラスを使うと、マッピングと同様の処理を行うことができます。なお、Java 8 で導入された「ラムダ式」を使うと、同様な処理をもっと簡単に実現することができます。ラムダ式は回を改めて説明する予定です。
+</p>
+
+<p> プログラムをリスト 3 に示します。 
+</p>
+<pre class="list">
+リスト 3 : ローカルクラス (1)
+
+// 関数の型を定義
+interface Function {
+  int func(int x);
+}
+
+public class sample92 {
+  // マップ関数
+  static int[] map(Function f, int[] ary) {
+    int [] newAry = new int [ary.length];
+    for (int i = 0; i &lt; ary.length; i++) {
+      newAry[i] = f.func(ary[i]);
+    }
+    return newAry;
+  }
+
+  public static void main(String[] args){
+    int[] a = {1, 2, 3, 4, 5};
+    class Foo implements Function {
+      public int func(int x) { return x * x; }
+    };
+    for (int n: map(new Foo(), a)) System.out.println(n);
+  }
+}
+</pre>
+<pre>
+C&gt;java sample92
+1
+4
+9
+16
+25
+</pre>
+<p> プログラムを簡単にするため、今回は int 型の配列に限定します。最初に、インターフェースで関数の型 Function を定義します。Function には呼び出す関数 func() の仕様を定義します。func() の仕様は引数が int で返り値も int になります。マップ関数 map() は引数に Function と int 型の配列を受け取り、配列の要素に Function の関数 func() を適用した結果を新しい配列 newAry に格納します。最後に newAry を返します。
+</p>
+
+<p> map() を呼び出すときはローカルクラスを使うと簡単です。インターフェース Function を継承したクラス Foo を定義します。ここで、数を 2 乗する関数 func() を実装します。あとは、Foo のインスタンスを new で生成して map() に渡すだけです。Foo は Function を継承しているので、Function 型としてアップキャストすることができます。これで、配列 a の要素を 2 乗した配列を求めることができます。
+</p>
+
+<p> もう一つ簡単な例を示しましょう。今度は map() を使って、配列の要素を n 倍する関数 ntimes() を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 4 : ローカルクラス (2)
+
+// 関数の型を定義
+interface Function {
+  int func(int x);
+}
+
+public class sample93 {
+  // マップ関数
+  static int[] map(Function f, int[] ary) {
+    int [] newAry = new int [ary.length];
+    for (int i = 0; i &lt; ary.length; i++) {
+      newAry[i] = f.func(ary[i]);
+    }
+    return newAry;
+  }
+
+  // 要素を n 倍する
+  static int[] ntimes(int n, int[] ary) {
+    final int nn = n;
+    class Foo implements Function {
+      // final 修飾子を使わない場合
+      // int nn;
+      // Foo(int n){ nn = n; }
+      public int func(int x) { return nn * x; }
+    };
+    // final 修飾子を使わない場合
+  　// return map(new Foo(n), ary); 
+    return map(new Foo(), ary);
+  }
+  
+  public static void main(String[] args) {
+    int[] a = {1, 2, 3, 4, 5};
+    for (int n: ntimes(10, a)) System.out.println(n);
+    for (int n: ntimes(100, a)) System.out.println(n);
+  }
+}
+</pre>
+<pre>
+C&gt;java sample93
+10
+20
+30
+40
+50
+100
+200
+300
+400
+500
+</pre>
+<p> ローカルクラスの中では、外側のメソッドの final 修飾子がついた局所変数に限り値を参照することができます。局所変数は final 修飾子をつけて宣言すると、初期化したあと値を書き換えることができません。したがって、ローカルクラスでは局所変数の値を参照することしかできないわけです。
+</p>
+
+<p> 関数 ntimes() の引数 n が要素を乗算する値で、ary が int 型の配列です。ローカルクラスで引数 n を参照できないので、fainl 修飾子をつけた変数 nn を用意して n の値で初期化します。そして、ローカルクラス Foo で関数 func() を定義します。func() は nn * x の値を返すだけです。このように、メソッドの局所変数 nn の値を参照することで、要素を n 倍する関数を定義することができます。あとは、Foo のインスタンスを生成して map() に渡すだけです。
+</p>
+
+<p> なお、final 修飾子を使わなくても ntimes() をプログラムすることができます。コンストラクタを使って引数 n の値をインスタンス変数 nn に格納するだけです。これで func() からインスタンス変数 nn の値を参照できるので、配列の要素 x を n 倍することができます。
+</p>
+
+<h4>●無名クラス</h4>
+<p> このように、ローカルクラスは抽象クラスやインターフェースを一時的に具体化して使用する場合がほとんどです。もしも、コンストラクタが必要でなければ、無名クラスを使うともっと簡単にプログラムできます。無名クラスは抽象クラスまたはインターフェースからインスタンスを直接生成する方法です。生成されたインスタンスが属するクラスを無名クラスといいます。無名クラスの構文を次に示します。
+</p>
+<pre class="item">
+new 抽象クラス名() { ... }
+new インターフェース名() { ... } 
+</pre>
+<p> 無名クラスはブロック { } の中でクラスを定義し、その場でインスタンスが生成されます。ただし、クラス名が無いのでコンストラクタを定義することはできません。ご注意ください。
+</p>
+<p> 無名クラスを使って ntimes() のプログラムを書き直すと次のようになります。
+</p>
+<pre class="list">
+リスト 5 : 無名クラス
+
+// 関数の型を定義
+interface Function {
+  int func(int x);
+}
+
+public class sample94 {
+  // マップ関数
+  static int[] map(Function f, int[] ary) {
+    int[] newAry = new int [ary.length];
+    for (int i = 0; i &lt; ary.length; i++) {
+      newAry[i] = f.func(ary[i]);
+    }
+    return newAry;
+  }
+
+  // 要素を n 倍する
+  static int[] ntimes(int n, int[] ary) {
+    final int nn = n;
+    Function f = new Function() {
+      public int func(int x){ return nn * x; }
+    };
+    return map(f, ary);
+  }
+  
+  public static void main(String[] args) {
+    int[] a = {1, 2, 3, 4, 5};
+    for (int n: ntimes(10, a)) System.out.println(n);
+    for (int n: ntimes(100, a)) System.out.println(n);
+  }
+}
+</pre>
+<p> ntimes() の中で無名クラス new Function() { ... } を定義します。生成されたインスタンスは変数 f にセットします。データ型はインターフェースの型 Function を使うことができます。あとは、map() に f と ary を渡すだけです。
+</p>
+
+<h4>●イテレータ</h4>
+<p> 「イテレータ (iterator)」はコレクションの要素を順番にアクセスするための機能です。日本語では「反復子」と呼ばれることもあります。Java にはいろいろなコレクションがクラスとして用意されていますが、各クラスには Iterator というインターフェースが実装されていて、コレクションを操作するための共通なメソッドとして利用することができます。また、Iterable というインターフェースを実装しておくと拡張 for 文が使えるようになります。
+</p>
+
+<p> Iterator は次に示すインターフェースから構成されています。
+</p>
+<pre class="list">
+リスト 6 : Iterator インターフェース
+
+interface Iterator {
+  boolean hasNext();
+  Object next();
+  void remove();
+}
+
+interface Iterable {
+  Iterator iterator();
+}
+</pre>
+<p> Iterator のメソッド hasNext() はコレクションに次の要素があるとき真を返し、無ければ false を返します。メソッド next() はコレクションから次の要素を取り出して返します。メソッド remove() は直前の next() で取り出した要素をコレクションから削除します。このメソッドは未実装でもかまいません。その場合は例外 UnsupportedOperationException を送出するように定義してください。
+</p>
+
+<p> 拡張 for 文を利用するには Iterable インターフェースを実装する必要があります。メソッド iterator() は Iterator のインスタンスを返します。そして、このインスタンスを使って Iterator のメソッドを呼び出すことで拡張 for 文が機能します。ただし、配列の拡張 for 文は特別扱いされていて、コンパイルするときに単純な for 文に変換されているようです。
+</p>
+
+<p> それでは簡単な例として、無名クラスを使って配列用の Iterator を作ってみましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト 7 : イテレータ
+
+import java.util.*;
+
+public class sample95 {
+  static void printCollection(Iterator iter) {
+    while (iter.hasNext()) {
+      System.out.println(iter.next());
+    }
+  }
+  
+  public static void main(String[] args) {
+    final int[] a = {1, 2, 3, 4, 5};
+    Iterator iter = new Iterator() {
+      int i = 0;
+      public boolean hasNext(){
+        return i &lt; a.length;
+      }
+      public Object next(){
+        return a[i++];
+      }
+      public void remove(){
+        throw new UnsupportedOperationException();
+      }
+    };
+    printCollection(iter);
+  }
+}
+</pre>
+<pre>
+C&gt;java sample95
+1
+2
+3
+4
+5
+</pre>
+<p> Iterator を利用するためパッケージ java.util をインポートします。関数 printCollection() はコレクションに格納されている要素をすべて表示します。引数 iter は Iterator のインスタンスです。処理内容は簡単で、メソッド hasNext() が真のあいだはメソッド next() で要素を取り出して表示します。これで Iterator を実装したコレクションであれば、printCollection() で全ての要素を表示することができます。
+</p>
+<p> main() では無名クラスで Iterator のインスタンスを生成します。インスタンス変数 i が取り出す要素の位置を表します。最初は 0 に初期化します。hasNext() は i &lt; a.length の値を返し、next() も a[i++] の要素を返すだけです。remove() は未実装としました。このインスタンスを printCollection() に渡すと配列 a の要素が全て表示されます。
+</p>
+<h4>●連結リストの改良</h4>
+<p> それでは入れ子クラスを用いて連結リストのプログラムを改良してみましょう。最初にクラス Cell を修正します。Cell は連結リストを構成する部品なので、他のクラスから利用されることはありません。このような場合、Cell をクラス SinglyLinkedList の中で定義することができます。Cell のメソッドは SinglyLinkedList のインスタンス変数を参照する必要は無いので、static な入れ子クラスとして定義します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 8 : 連結リスト
+
+import java.util.*;
+
+// 例外クラス
+class ListIndexOutOfBoundsException extends IndexOutOfBoundsException {
+  public ListIndexOutOfBoundsException() { }
+  public ListIndexOutOfBoundsException(String msg) { super(msg); }
+}
+
+// 連結リスト
+class SinglyLinkedList implements Iterable {
+  // セル
+  static private class Cell {
+    // フィールド変数
+    private Object value;
+    private Cell link;
+    // コンストラクタ
+    Cell(Object obj, Cell xs) {
+      value = obj;
+      link = xs;
+    }
+    // アクセスメソッド
+    Object getValue() { return value; }
+    Cell getLink() { return link; }
+    void setValue(Object obj) { value = obj; }
+    void setLink(Cell xs) { link = xs; }
+  }
+
+  // フィールド変数
+  private Cell head;
+  private int  size;
+  // コンストラクタ
+  SinglyLinkedList() {
+    head = new Cell(null, null);   // ヘッダーセル
+    size = 0;
+  }
+
+  // メソッドの定義
+  ...
+}
+</pre>
+<p> 拡張 for 文を利用できるようにするため、SinglyLinkedList はインターフェース Iterable を実装します。Cell は static で private なクラスとして宣言します。これで SinglyLinkedList 以外のクラスで Cell を使うことはできません。
+</p>
+
+<p> 次はイテレータを返すメソッド iterator() を作ります。
+</p>
+
+<pre class="list">
+リスト 9 : 連結リストのイテレータ
+
+  public Iterator iterator() {
+    // 無名クラス
+    return new Iterator(){
+      Cell xs = head.getLink();
+      public boolean hasNext() { return xs != null; }
+      public Object next() {
+        Object obj = xs.getValue();
+        xs = xs.getLink();
+        return obj;
+      }
+      public void remove() {
+        throw new UnsupportedOperationException();
+      }
+    };
+  }
+</pre>
+
+<p> new Iterator() で Iterator のインスタンスを生成して返します。インスタンス変数 xs は先頭のセル head.getLink() で初期化します。メソッド hasNext() は xs が null でなければ真を返します。メソッド next() はセル xs の要素 value を返します。そして、xs を次のセルへ移動します。
+</p>
+
+<p> それでは実行例を示しましょう。
+</p>
+<pre class="list">
+リスト 10 : 簡単なテスト
+
+public class SList1 {
+  static void printCollection(Iterator iter){
+    while(iter.hasNext()){
+      System.out.print(iter.next() + " ");
+    }
+    System.out.println();
+  }
+  
+  public static void main(String[] args) {
+    SinglyLinkedList xs = new SinglyLinkedList();
+    System.out.println(xs);
+    System.out.println(xs.size());
+    System.out.println(xs.isEmpty());
+    for (int i = 0; i &lt; 10; i++) {
+      System.out.println("insert: " + i + ", "+ i);
+      xs.insert(i, i);
+      System.out.println(xs);
+      System.out.println(xs.size());
+      System.out.println(xs.isEmpty());
+    }
+    for (Object n: xs.toArray()) System.out.print(n + " ");
+    System.out.println();
+    for (int i = 0; i &lt; 10; i++) {
+      xs.set(i, (int)xs.get(i) + 10);
+      System.out.print(xs.get(i) + " ");
+    }
+    System.out.println();
+    for(int i = 0; i &lt; 5; i++) {
+      System.out.println("remove: " + i);
+      System.out.println(xs.remove(i));
+      System.out.println(xs);
+      System.out.println(xs.size());
+      System.out.println(xs.isEmpty());
+    }
+    System.out.println("clear:");
+    xs.clear();
+    System.out.println(xs);
+    System.out.println(xs.size());
+    System.out.println(xs.isEmpty());
+
+    SinglyLinkedList ys = new SinglyLinkedList();
+    for(int i = 0; i &lt; 10; i++){
+      ys.insert(0, i);
+    }
+    printCollection(ys.iterator());
+    for (Object n: ys) System.out.print(n + " ");
+    System.out.println();
+  }
+}
+</pre>
+<pre>
+C&gt;java SList1
+()
+0
+true
+insert: 0, 0
+(0)
+1
+false
+insert: 1, 1
+(0 1)
+2
+false
+insert: 2, 2
+(0 1 2)
+3
+false
+insert: 3, 3
+(0 1 2 3)
+4
+false
+insert: 4, 4
+(0 1 2 3 4)
+5
+false
+insert: 5, 5
+(0 1 2 3 4 5)
+6
+false
+insert: 6, 6
+(0 1 2 3 4 5 6)
+7
+false
+insert: 7, 7
+(0 1 2 3 4 5 6 7)
+8
+false
+insert: 8, 8
+(0 1 2 3 4 5 6 7 8)
+9
+false
+insert: 9, 9
+(0 1 2 3 4 5 6 7 8 9)
+10
+false
+0 1 2 3 4 5 6 7 8 9
+10 11 12 13 14 15 16 17 18 19
+remove: 0
+10
+(11 12 13 14 15 16 17 18 19)
+9
+false
+remove: 1
+12
+(11 13 14 15 16 17 18 19)
+8
+false
+remove: 2
+14
+(11 13 15 16 17 18 19)
+7
+false
+remove: 3
+16
+(11 13 15 17 18 19)
+6
+false
+remove: 4
+18
+(11 13 15 17 19)
+5
+false
+clear:
+()
+0
+true
+9 8 7 6 5 4 3 2 1 0
+9 8 7 6 5 4 3 2 1 0
+</pre>
+
+<p> 連結リストのイテレータを printCollection() に渡すと、すべての要素を表示することができます。また、拡張 for 文に連結リストを渡すと、要素を順番に取り出していくことができます。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// SList1.java : 片方向連結リスト
+//
+//               Copyright (C) 2016 Makoto Hiroi
+//
+import java.util.*;
+
+// 例外クラス
+class ListIndexOutOfBoundsException extends IndexOutOfBoundsException {
+  public ListIndexOutOfBoundsException() { }
+  public ListIndexOutOfBoundsException(String msg) { super(msg); }
+}
+
+// 連結リスト
+class SinglyLinkedList implements Iterable {
+  // セル
+  static private class Cell {
+    // フィールド変数
+    private Object value;
+    private Cell link;
+    // コンストラクタ
+    Cell(Object obj, Cell xs) {
+      value = obj;
+      link = xs;
+    }
+    // アクセスメソッド
+    Object getValue() { return value; }
+    Cell getLink() { return link; }
+    void setValue(Object obj) { value = obj; }
+    void setLink(Cell xs) { link = xs; }
+  }
+
+  // フィールド変数
+  private Cell head;
+  private int  size;
+  // コンストラクタ
+  SinglyLinkedList() {
+    head = new Cell(null, null);   // ヘッダーセル
+    size = 0;
+  }
+  
+  // n 番目のセルを求める
+  private Cell nth(int n) {
+    int i = -1;
+    Cell xs = head;
+    while (xs != null) {
+      if (n == i) return xs;
+      i++;
+      xs = xs.getLink();
+    }
+    throw new ListIndexOutOfBoundsException("SinglyLinkedList");
+  }
+
+  // 参照
+  public Object get(int n) {
+    return nth(n).getValue();
+  }
+
+  // 挿入
+  public void insert(int n, Object obj) {
+    Cell xs = nth(n - 1);
+    Cell ys = new Cell(obj, xs.getLink());
+    xs.setLink(ys);
+    size++;
+  }
+
+  // 削除
+  public Object remove(int n) {
+    Cell xs = nth(n - 1);
+    Cell ys = xs.getLink();
+    if (ys == null) {
+      throw new ListIndexOutOfBoundsException("SinglyLinkedList");
+    }
+    xs.setLink(ys.getLink());
+    size--;
+    return ys.getValue();
+  }
+
+  // 書き換え
+  public Object set(int n, Object obj) {
+    Cell xs = nth(n);
+    Object old = xs.getValue();
+    xs.setValue(obj);
+    return old;
+  }
+
+  // 空にする
+  public void clear() {
+    head.setLink(null);
+    size = 0;
+  }
+
+  // 個数を求める
+  public int size() { return size; }
+
+  // 空リストか
+  public boolean isEmpty() { return size == 0; }
+
+  // 配列に変換する
+  public Object[] toArray(){
+    Object[] a = new Object [size];
+    Cell xs = head.getLink();
+    for (int i = 0; i &lt; size; i++) {
+      a[i] = xs.getValue();
+      xs = xs.getLink();
+    }
+    return a;
+  }
+  
+  // 文字列に変換
+  public String toString(){
+    String buff = "(";
+    Cell xs = head.getLink();
+    while (xs != null) {
+      buff += xs.getValue().toString();
+      xs = xs.getLink();
+      if (xs != null) buff += " ";
+    }
+    buff += ")";
+    return buff;
+  }
+
+  // イテレータ
+  public Iterator iterator() {
+    // 無名クラス
+    return new Iterator(){
+      Cell xs = head.getLink();
+      public boolean hasNext() { return xs != null; }
+      public Object next() {
+        Object obj = xs.getValue();
+        xs = xs.getLink();
+        return obj;
+      }
+      public void remove() {
+        throw new UnsupportedOperationException();
+      }
+    };
+  }
+}
+
+// 簡単なテスト
+public class SList1 {
+  static void printCollection(Iterator iter){
+    while(iter.hasNext()){
+      System.out.print(iter.next() + " ");
+    }
+    System.out.println();
+  }
+  
+  public static void main(String[] args) {
+    SinglyLinkedList xs = new SinglyLinkedList();
+    System.out.println(xs);
+    System.out.println(xs.size());
+    System.out.println(xs.isEmpty());
+    for (int i = 0; i &lt; 10; i++) {
+      System.out.println("insert: " + i + ", "+ i);
+      xs.insert(i, i);
+      System.out.println(xs);
+      System.out.println(xs.size());
+      System.out.println(xs.isEmpty());
+    }
+    for (Object n: xs.toArray()) System.out.print(n + " ");
+    System.out.println();
+    for (int i = 0; i &lt; 10; i++) {
+      xs.set(i, (int)xs.get(i) + 10);
+      System.out.print(xs.get(i) + " ");
+    }
+    System.out.println();
+    for(int i = 0; i &lt; 5; i++) {
+      System.out.println("remove: " + i);
+      System.out.println(xs.remove(i));
+      System.out.println(xs);
+      System.out.println(xs.size());
+      System.out.println(xs.isEmpty());
+    }
+    System.out.println("clear:");
+    xs.clear();
+    System.out.println(xs);
+    System.out.println(xs.size());
+    System.out.println(xs.isEmpty());
+
+    SinglyLinkedList ys = new SinglyLinkedList();
+    for(int i = 0; i &lt; 10; i++){
+      ys.insert(0, i);
+    }
+    printCollection(ys.iterator());
+    for (Object n: ys) System.out.print(n + " ");
+    System.out.println();
+  }
+}
+</pre>
+</section>
+<div align="right">
+初版 2009 年 5 月 16 日<br>
+改訂 2016 年 11 月 12 日
+</div>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcjava08.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava10.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ++プログラミング超入門</title>
+  <meta name="description" content="Ｃ++,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881813</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ++プログラミング超入門</h2>
+<div class="small">
+[ <a href="cpp34.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp36.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>タプル (tuple)</h3>
+<p> 今回は C++11 で導入された「タプル (tuple)」というコンテナクラスを簡単に説明します。タプルは SML/NJ, OCaml, Haskell など多くの関数型言語でサポートされている immutable なデータ構造です。スクリプト言語では Python がタプルをサポートしています。
+</p>
+<h4>●タプルとは？</h4>
+<p> Ｃ++の場合、tuple は構造体 pair を拡張したデータ構造です。pair は 2 つの要素しか格納できませんが、tuple は複数の要素を格納できるクラスです。pair と同様に、要素のデータ型は異なっていてもかまいません。pair はメンバ変数 first, second の値を書き換えることができますが、tuple は要素の値を書き換えることはできません。ご注意くださいませ。
+</p>
+
+<p> tuple を使用するときは、ヘッダファイル tuple をインクルードしてください。変数の宣言は次のように行います。
+</p>
+<ol>
+  <li>tuple&lt;データ型, ...&gt; 変数名;
+  <li>tuple&lt;データ型, ...&gt; 変数名(値, ...);
+</ol>
+<p> tuple はテンプレートなので、&lt; &gt; の中に格納する要素のデータ型を指定してください。1 の場合、指定したデータ型のデフォルト値を格納したタプルが生成されます。普通は 2 のように、値を指定してタプルを生成するか、関数 make_tuple() を使います。make_tuple() はあとで説明します。
+</p>
+<p> このほかにも、コピーコンストラクタやムーブコンストラクタ、pair からタプルを構築するコンストラクタなどが用意されています。詳細はＣ++のリファレンスマニュアルをお読みください。
+</p>
+<p> 要素は関数 get() でアクセスすることができます。
+</p>
+<pre class="item">
+get&lt;位置&gt;(タプル);
+</pre>
+<p> 位置は配列と同じく先頭要素が 0 番目になります。範囲外の位置を指定するとコンパイルエラーになります。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : tuple の簡単な使用例
+
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+using namespace std;
+
+int main()
+{
+  tuple&lt;int, double, string&gt; a;
+  cout &lt;&lt; get&lt;0&gt;(a) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;1&gt;(a) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;2&gt;(a) &lt;&lt; endl;
+  tuple&lt;int, double, string&gt; b(1, 1.234, "foo");
+  cout &lt;&lt; get&lt;0&gt;(b) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;1&gt;(b) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;2&gt;(b) &lt;&lt; endl;
+  pair&lt;string, int&gt; p = {"bar", 20};
+  tuple&lt;string, int&gt; c(p);
+  cout &lt;&lt; get&lt;0&gt;(c) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;1&gt;(c) &lt;&lt; endl;
+}
+</pre>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0
+0
+
+1
+1.234
+foo
+bar
+20
+</pre>
+<p> 変数 a は int, double, string を格納するタプルがセットされます。値はデフォルト値 (0, 0.0, "") になります。変数 b には 1, 1.234, foo を格納したタプルがセットされます。変数 c のタプルは pair&lt;string, int&gt; から生成されます。
+</p>
+<h4>●make_tuple() によるタプルの生成</h4>
+<p> タプルは関数 make_tuple() で生成することもできます。この場合、make_tuple() の引数がタプルの要素にコピーされます。引数が右辺値であれば、ムーブセマンティクスが働きます。make_tuple() を使うと、変数の宣言に auto を使うことができるので便利です。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : make_tuple() の使用例
+
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+using namespace std;
+
+class Foo {
+  int x;
+public:
+  Foo() : x(0) {}
+  Foo(int n) : x(n) {}
+  Foo(const Foo&amp; a) : x(a.x) { cout &lt;&lt; "copy " &lt;&lt; x &lt;&lt; endl; }
+  Foo(Foo&amp;&amp; a) : x(a.x) { cout &lt;&lt; "move " &lt;&lt; x &lt;&lt; endl; }
+  int get_x() const { return x; }
+};
+
+int main()
+{
+  auto a = make_tuple(1, 1.234, "foo");
+  cout &lt;&lt; get&lt;0&gt;(a) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;1&gt;(a) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;2&gt;(a) &lt;&lt; endl;
+  Foo b(10);
+  auto c = make_tuple(b, Foo(20));
+  cout &lt;&lt; get&lt;0&gt;(c).get_x() &lt;&lt; endl;
+  cout &lt;&lt; get&lt;1&gt;(c).get_x() &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+1.234
+foo
+move 20
+copy 10
+10
+20
+</pre>
+<p> 変数 a, c の値は make_tuple() の返り値なので、データ型は auto で宣言することができます。make_tuple() に変数 b の値を渡すとコピーコンストラクタが呼び出され、右辺値 Foo(20) を渡すとムーブコンストラクタが呼び出されることがわかります。
+</p>
+<h4>●タプルにポインタや参照を格納する</h4>
+<p> tuple はポインタや参照も格納することもできます。次の例を見てください。
+</p>
+<pre class="list">
+リスト : tuple にポインタや参照を格納する
+
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+using namespace std;
+
+int main()
+{
+  int a = 1;
+  double b = 1.2345;
+  string c = "hello, world";
+  tuple&lt;int, double*, string&amp;&gt; d(1, &amp;b, c);
+  cout &lt;&lt; get&lt;0&gt;(d) &lt;&lt; endl;
+  cout &lt;&lt; *(get&lt;1&gt;(d)) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;2&gt;(d) &lt;&lt; endl;
+  *(get&lt;1&gt;(d)) = 12.345;
+  get&lt;2&gt;(d) = "foo bar";
+  cout &lt;&lt; *(get&lt;1&gt;(d)) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;2&gt;(d) &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+1.2345
+hello, world
+12.345
+foo bar
+</pre>
+<p> ポインタや参照の場合、ポインタ先や参照先の変数の値を書き換えることができます。この場合、tuple に格納されている値は書き換わっていないことに注意してください。
+</p>
+<p> tuple に参照を格納する場合は関数 tie() を使うと便利です。tie() は引数の参照を格納したタプルを生成して返します。簡単な例を示します。
+</p>
+<pre class="list">
+リスト : 関数 tie() の使用例
+
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+using namespace std;
+
+int main()
+{
+  int a = 1;
+  double b = 1.2345;
+  string c = "hello, world";
+  auto d = tie(a, b, c);
+  cout &lt;&lt; get&lt;0&gt;(d) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;1&gt;(d) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;2&gt;(d) &lt;&lt; endl;
+  get&lt;0&gt;(d) *= 10;
+  get&lt;1&gt;(d) *= 100;
+  cout &lt;&lt; get&lt;0&gt;(d) &lt;&lt; endl;
+  cout &lt;&lt; get&lt;1&gt;(d) &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+1.2345
+hello, world
+10
+123.45
+</pre>
+<p> 変数 d のデータ型は tuple&lt;int&amp;, double&amp;, string&amp;&gt; になります。tie() は変数 a, b, c の参照を格納したタプルを生成して返します。参照先の変数の値を書き換えることもできます。
+</p>
+<h4>●タプルの要素を取り出す</h4>
+<p> もう一つ tie() には便利な使い方があって、tuple に格納されている値を変数に取り出すことができます。
+</p>
+<pre class="item">
+auto t = tuple&lt;データ型, ...&gt;(値, ...);
+tie(変数, ...) = t;
+</pre>
+<p> tie() にタプル t を代入すると、t の要素を tie() で指定した変数にセットすることができます。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : tie() の使用例 (2)
+
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+using namespace std;
+
+int main()
+{
+  int a;
+  double b;
+  string c;
+  auto d = make_tuple(1, 1.2345, "foo");
+  tie(a, b, c) = d;
+  cout &lt;&lt; a &lt;&lt; endl;
+  cout &lt;&lt; b &lt;&lt; endl;
+  cout &lt;&lt; c &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+1.2345
+foo
+</pre>
+
+<h4>●タプルで多値を返す</h4>
+<p> 一般に、関数の返り値はひとつしかありませんが、なかには複数の値を返すことができるプログラミング言語もあります。たとえば Lisp / Scheme では、この機能を「多値 (Multiple Values)」といい、複数の値を効率的に返すことができるようになっています。Ｃ++の場合、クラスや構造体を使って複数の値を返すことができますが、tuple と tie() を使うともっと簡単に「多値」を実現することができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : tuple による多値の実装
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;tuple&gt;
+using namespace std;
+
+template&lt;class T&gt;
+tuple&lt;T, T&gt; max_min(vector&lt;T&gt;&amp; vec)
+{
+  T x = vec[0];
+  T y = vec[0];
+  for (int i = 0; i &lt; vec.size(); i++) {
+    if (x &lt; vec[i]) x = vec[i];
+    else if (y &gt; vec[i]) y = vec[i];
+  }
+  return make_tuple(x, y);
+}
+
+int main()
+{
+  vector&lt;int&gt; a = {5, 6, 4, 7, 3, 8, 2, 9, 1};
+  int x, y;
+  tie(x, y) = max_min(a);
+  cout &lt;&lt; x &lt;&lt; endl;
+  cout &lt;&lt; y &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+9
+1
+</pre>
+<p> 関数 max_min() は vector の中から最大値と最小値を求めて、それらをタプルに格納して返します。呼び出す側では、最大値と最小値を受け取る変数 x, y を用意して、tie(x, y) で指定すれば、max_min() の返り値を変数 x, y にセットすることができます。
+</p>
+<p> 受け取りたくない値がある場合は、tie() の中で ignore を指定してください。たとえば、最大値だけ受け取るときは次のように指定します。
+</p>
+<pre class="list">
+リスト : ignore の使用例
+
+  int x;
+  tie(x, ignore) = max_min(a);
+</pre>
+<p> このほかにも tuple には便利な関数が用意されています。詳細はＣ++のリファレンスマニュアルをお読みください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">Yet Another C++ Problems (7)</h3>
+<h4>●問題51</h4>
+<p> 自然数 n (long long int) を素因数分解する関数 factorization() を定義してください。返り値は vector&lt;Pair&gt; で、Pair(p, q) は p<sup>q</sup> を表します。
+</p>
+<pre class="list">
+リスト : Pair の定義
+
+typedef tuple&lt;long long, long long&gt; Pair;
+</pre>
+<pre>
+factorization(24)         =&gt; (2, 3) (3, 1)
+factorization(12345678)   =&gt; (2, 1) (3, 2) (47, 1) (14593, 1)
+factorization(123456789)  =&gt; (3, 2) (3607, 1) (3803, 1)
+factorization(1234567890) =&gt; (2, 1) (3, 2) (5, 1) (3607, 1) (3803, 1)
+factorization(1111111111) =&gt; (11, 1) (41, 1) (271, 1) (9091, 1)
+</pre>
+<p> <a href="cpp35.html#ans51">解答</a>
+</p>
+<h4>●問題52</h4>
+<p> 自然数 n の約数の個数を求める関数 divisor_num() を定義してください。
+</p>
+<pre>
+divisor_num(24)         =&gt; 8
+divisor_num(12345678)   =&gt; 24
+divisor_num(123456789)  =&gt; 12
+divisor_num(1234567890) =&gt; 48
+divisor_num(1111111111) =&gt; 16
+</pre>
+
+<p> <a href="cpp35.html#ans52">解答</a>
+</p>
+<h4>●問題53</h4>
+<p> 自然数 n の約数の合計値を求める関数 divisor_sum() を定義してください。
+</p>
+<pre>
+divisor_sum(24)         =&gt; 60
+divisor_sum(12345678)   =&gt; 27319968
+divisor_sum(123456789)  =&gt; 178422816
+divisor_sum(1234567890) =&gt; 3211610688
+divisor_sum(1111111111) =&gt; 1246404096
+</pre>
+
+<p> <a href="cpp35.html#ans53">解答</a>
+</p>
+<h4>●問題54</h4>
+<p> 自然数 n の約数を vector に格納して返す関数 divisor() を定義してください。
+</p>
+<pre>
+divisor(24) =&gt; 1 2 3 4 6 8 12 24
+divisor(12345678) =&gt;
+1 2 3 6 9 18 47 94 141 282 423 846 14593 29186 43779 87558 131337 262674 685871
+ 1371742 2057613 4115226 6172839 12345678
+divisor(123456789) =&gt; 1 3 9 3607 3803 10821 11409 32463 34227 13717421 41152263 123456789
+divisor(1234567890) =&gt;
+1 2 3 5 6 9 10 15 18 30 45 90 3607 3803 7214 7606 10821 11409 18035 19015 21642
+ 22818 32463 34227 36070 38030 54105 57045 64926 68454 108210 114090 162315 171135
+ 324630 342270 13717421 27434842 41152263 68587105 82304526 123456789 137174210
+ 205761315 246913578 411522630 617283945 1234567890
+divisor(1111111111) =&gt;
+1 11 41 271 451 2981 9091 11111 100001 122221 372731 2463661 4100041 27100271
+ 101010101 1111111111
+</pre>
+
+<p> <a href="cpp35.html#ans54">解答</a>
+</p>
+<h4>●問題55</h4>
+<p> <a href="http://ja.wikipedia.org/wiki/%E5%AE%8C%E5%85%A8%E6%95%B0">完全数 - Wikipedia</a> によると、<cite>『完全数（かんぜんすう，perfect number）とは、その数自身を除く約数の和が、その数自身と等しい自然数のことである。』</cite> とのことです。自然数 n 以下の完全数を求める関数 perfect_number() を定義してください。
+</p>
+<pre>
+perfect_number(10000) =&gt; (画面に出力)
+6
+28
+496
+8128
+</pre>
+<p> <a href="cpp35.html#ans55">解答</a>
+</p>
+<h4>●問題56</h4>
+<p><a href="http://ja.wikipedia.org/wiki/%E5%8F%8B%E6%84%9B%E6%95%B0">友愛数 - Wikipedia</a> によると、<cite>『友愛数（ゆうあいすう）とは、異なる2つの自然数の組で、自分自身を除いた約数の和が、互いに他方と等しくなるような数をいう。』</cite> とのことです。自然数 n 以下の友愛数を求める関数 yuuai_number() を定義してください。
+</p>
+<pre>
+yuuaiNumber(100000) =&gt; (画面に出力)
+220 284
+1184 1210
+2620 2924
+5020 5564
+6232 6368
+10744 10856
+12285 14595
+17296 18416
+63020 76084
+66928 66992
+67095 71145
+69615 87633
+79750 88730
+</pre>
+
+<p> <a href="cpp35.html#ans56">解答</a>
+</p>
+
+<h4>●問題57</h4>
+<p> m 個の整数 1, 2, ..., m の順列を考えます。このとき、i 番目 (先頭要素が 1 番目) の要素が整数 i ではない順列を「完全順列」といいます。簡単な例を示しましょう。
+</p>
+<pre class="item">
+1 - 3 の完全順列
+2 3 1
+3 1 2
+</pre>
+<pre class="item">
+1 - 4 の完全順列
+2 1 4 3
+2 3 4 1
+2 4 1 3
+3 1 4 2
+3 4 1 2
+3 4 2 1
+4 1 2 3
+4 3 1 2
+4 3 2 1
+</pre>
+
+<p> 1 から m までの整数値で完全順列を生成するプログラムを作ってください。
+</p>
+<p><a href="cpp35.html#ans57">解答</a></p>
+
+<h4>●問題58</h4>
+<p> 完全順列の総数を「モンモール数 (Montmort number) 」といいます。モンモール数は次の漸化式で求めることができます。
+</p>
+<pre class="item">
+A<sub>1</sub> = 0
+A<sub>2</sub> = 1
+A<sub>n</sub> = (n - 1) * (A<sub>n-1</sub> + A<sub>n-2</sub>)  ; n &gt;= 3
+</pre>
+<p> モンモール数を求める関数 montmort_number() を定義してください。
+</p>
+<pre>
+montmort_number(1) =&gt; 0
+montmort_number(2) =&gt; 1
+montmort_number(3) =&gt; 2
+montmort_number(4) =&gt; 9
+montmort_number(5) =&gt; 44
+montmort_number(6) =&gt; 265
+montmort_number(7) =&gt; 1854
+montmort_number(10) =&gt; 1334961
+montmort_number(20) =&gt; 895014631192902121
+</pre>
+<p><a href="cpp35.html#ans58">解答</a></p>
+
+<h4>●問題59</h4>
+<p> バランスの取れた n 対のカッコ列を画面に表示する関数 kakko() を定義してください。カッコ列は ( と ) からなる列のことで、バランスが取れているカッコ列は、右カッコで閉じることができる、つまり右カッコに対応する左カッコがある状態のことをいいます。たとえば n = 1 の場合、( ) はバランスの取れたカッコ列ですが、) ( はバランスが取れていません。
+<pre>
+kakko(3) =&gt; (画面に表示)
+((()))
+(()())
+(())()
+()(())
+()()()
+
+kakko(4) =&gt; (画面に表示)
+(((())))
+((()()))
+((())())
+((()))()
+(()(()))
+(()()())
+(()())()
+(())(())
+(())()()
+()((()))
+()(()())
+()(())()
+()()(())
+()()()()
+</pre>
+
+<p><a href="cpp35.html#ans59">解答</a>
+</p>
+
+<h4>●問題60</h4>
+<p> バランスの取れた n 対のカッコ列の総数を求める関数 kakko_num() を定義してください。
+</p>
+<pre>
+kakko_num(1)   =&gt; 1
+kakko_num(2)   =&gt; 2
+kakko_num(3)   =&gt; 5
+kakko_num(4)   =&gt; 14
+kakko_num(5)   =&gt; 42
+kakko_num(6)   =&gt; 132
+kakko_num(7)   =&gt; 429
+kakko_num(8)   =&gt; 1430
+kakko_num(9)   =&gt; 4862
+kakko_num(10)  =&gt; 16796
+kakko_num(30)  =&gt; 3814986502092304
+</pre>
+
+<p><a href="cpp35.html#ans60">解答</a></p>
+
+<hr>
+<h4 id="ans51">●解答51</h4>
+<pre class="list">
+リスト : 素因数分解
+
+typedef tuple&lt;long long, long long&gt; Pair;
+
+Pair factor_sub(long long n, long long m)
+{
+  long long i = 0;
+  while (n % m == 0) {
+    i++;
+    n /= m;
+  }
+  return make_tuple(i, n);
+}
+
+vector&lt;Pair&gt; factorization(long long n)
+{
+  vector&lt;Pair&gt; a;
+  long long c, m;
+  tie(c, m) = factor_sub(n, 2);
+  if (c &gt; 0) a.push_back(make_tuple(2, c));
+  for (long long i = 3; m &gt;= i * i; i += 2) {
+    tie(c, m) = factor_sub(m, i);
+    if (c &gt; 0) a.push_back(make_tuple(i, c));
+  }
+  if (m &gt; 1) a.push_back(make_tuple(m, 1));
+  return a;
+}
+</pre>
+<p> 素因数分解は素数 2, 3, 5, ... で順番に割り算していけばいいのですが、いちいち素数を求めるのは大変なので、2 と 3 以上の奇数列で割り算していきます。関数 factor_sub() は n を m で割り算します。このとき、m で割り切れる回数を求めます。factor_sub() は m で割った回数と商を Pair に格納して返します。
+</p>
+<p> 次に、factor_sub() を呼び出して n を 2 で割り算します。それから、for ループで奇数列を生成します。変数 i は 3 で初期化します。変数 a は結果を格納する vector です。√m &lt; i になったら for ループを終了します。そうでなければ、factor_sub() を呼び出して m を i で割り算します。奇数列には素数ではないものがありますが、その前に小さな素数で素因数分解されているので、n がその値で割り切れることはありません。
+</p>
+
+<h4 id="ans52">●解答52</h4>
+<p> n の素因数分解ができると、約数の個数を求めるのは簡単です。n = p<sup>a</sup> * q<sup>b</sup> * r<sup>c</sup> とすると、約数の個数は (a + 1) * (b + 1) * (c + 1) になります。たとえば、12 は 2<sup>2</sup> * 3<sup>1</sup> になるので、約数の個数は 3 * 2 = 6 になります。実際、12 の約数は 1, 2, 3, 4, 6, 12 の 6 個です。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 約数の個数
+
+long long divisor_num(long long n)
+{
+  long long a = 1;
+  for (auto&amp; x : factorization(n)) {
+    a *= get&lt;1&gt;(x) + 1;
+  }
+  return a;
+}
+</pre>
+<p> divisor_num() は範囲 for 文で vector の要素を順番に取り出し、get&lt;1&gt;(x) + 1 を a に掛け算していくだけです。 
+</p>
+
+<h4 id="ans53">●解答53</h4>
+<p> n の素因数分解ができると、約数の合計値を求めるのは簡単です。n の素因数分解が p<sup>a</sup> だった場合、その約数の合計値は次の式で求めることができます。
+</p>
+<pre class="item">
+σ(p, a) = p<sup>a</sup> + p<sup>a-1</sup> + ... + p<sup>2</sup> + p + 1
+</pre>
+<p> たとえば、8 の素因数分解は 2<sup>3</sup> になり、素数の合計値は 8 + 4 + 2 + 1 = 15 になります。
+</p>
+<p> p<sup>a</sup> の約数の合計値を σ(p, a) で表すことにします。n = p<sup>a</sup> * q<sup>b</sup> * r<sup>c</sup> の場合、n の約数の合計値は σ(p, a) * σ(q, b) * σ(r, c) になります。たとえば、12 は 2<sup>2</sup> * 3 に素因数分解できますが、その合計値は (4 + 2 + 1) * (3 + 1) = 28 となります。12 の約数は 1, 2, 3, 4, 6, 12 なので、その合計値は確かに 28 になります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 約数の合計値
+
+// 累乗の計算
+long long pow(long long x, long long y)
+{
+  if (y == 0)
+    return 1;
+  else if (y == 0)
+    return x;
+  else {
+    long long z = pow(x, y / 2);
+    return y % 2 == 0 ? z * z : z * z * x;
+  }
+}
+
+// σ(p, n) の計算
+long long div_sum_sub(long long p, long long n)
+{
+  long long a = 0;
+  for (; n &gt; 0; n--) a += pow(p, n);
+  return a + 1;
+}
+
+// 約数の和
+long long divisor_sum(long long n)
+{
+  long long a = 1;
+  for (auto&amp; x : factorization(n))
+    a *= div_sum_sub(get&lt;0&gt;(x), get&lt;1&gt;(x));
+  return a;
+}
+</pre>
+<p> 関数 div_sum_sub() は σ(p, n) を計算します。あとは for ループで div_sum_sub() の返り値を累積変数 a に掛け算していくだけです。
+</p>
+
+<h4 id="ans54">●解答54</h4>
+<p> p が素数の場合、p<sup>a</sup> の約数は次のように簡単に求めることができます。
+</p>
+<pre class="item">
+p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1
+</pre>
+<p> n の素因数分解が p<sup>a</sup> * q<sup>b</sup> だったとすると、その約数は次のようになります。
+</p>
+<pre class="item">
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * q<sup>b</sup>,
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * q<sup>b-1</sup>,
+        .....
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * q<sup>2</sup>,
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * q,
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * 1
+</pre>
+<p> たとえば、12 の約数は 2<sup>4</sup> = (1, 2, 4) と 3 = (1, 3) から、(1, 2, 4) * 1 と (1, 2, 4) * 3 のすべての要素 (1, 2, 4, 3, 6, 12) になります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 約数をすべて求める
+
+// p ^ q の約数を求める
+vector&lt;long long&gt; divisor_sub(long long p, long long q)
+{
+  vector&lt;long long&gt; a;
+  for (long long i = 0; i &lt;= q; i++)
+    a.push_back(pow(p, i));
+  return a;
+}	
+
+// 互いの要素を掛け算する
+vector&lt;long long&gt; product(const vector&lt;long long&gt;&amp; xs,
+			  const vector&lt;long long&gt;&amp; ys)
+{
+  vector&lt;long long&gt; a;
+  for (auto x : xs) {
+    for (auto y : ys) {
+      a.push_back(x * y);
+    }
+  }
+  return a;
+}
+
+// n の約数を求める
+vector&lt;long long&gt; divisor(long long n)
+{
+  auto xs = factorization(n);
+  auto ys = divisor_sub(get&lt;0&gt;(xs[0]), get&lt;1&gt;(xs[0]));
+  for (int i = 1; i &lt; xs.size(); i++)
+    ys = product(divisor_sub(get&lt;0&gt;(xs[i]), get&lt;1&gt;(xs[i])), ys);
+  sort(ys.begin(), ys.end());
+  return ys;
+}
+</pre>
+<p> 関数 divisor_sub() は p<sup>n</sup> の約数を vector に格納して返します。関数 product() は 2 つの vector (xs、ys) の要素を掛け合わせたものを vector に格納して返します。あとは for ループで素因数分解した結果を順番に取り出し、p<sup>q</sup> を divisor_sub() で vector に変換して、それを product() で累積変数 ys のスライスと掛け合わせていくだけです。
+</p>
+
+<h4 id="ans55">●解答55</h4>
+<pre class="list">
+リスト : 完全数
+
+void perfect_number(int n)
+{
+  for (int x = 2; x &lt;= n; x++) {
+    if (divisor_sum(x) - x == x) 
+      cout &lt;&lt; x &lt;&lt; endl;
+  }
+}
+</pre>
+<p> 完全数を求める perfect_number() は簡単です。x の約数の合計値を divisor_sum() で求め、その値から x を引いた値が x と等しければ完全数です。出力演算子 &lt;&lt; で x を表示します。
+</p>
+
+<h4 id="ans56">●解答56</h4>
+<pre class="list">
+リスト : 友愛数
+
+void yuuai_number(int n)
+{
+  for (int x = 2; x &lt;= n; x++) {
+    long long m = divisor_sum(x) - x;
+    if (x &lt; m &amp;&amp; x == divisor_sum(m) - m)
+      cout &lt;&lt; x &lt;&lt; " " &lt;&lt; m &lt;&lt; endl;
+  }
+}
+</pre>
+<p> 友愛数を求める yuuai_number() も簡単です。divisor_sum() で x の約数の合計値を求め、その値から x を引いた値を変数 m にセットします。m の約数の合計値から m を引いた値が x と等しければ、x と m は友愛数です。出力演算子 &lt;&lt;で x と m を表示します。同じ組を表示しないようにするため、x &lt; m を条件に入れています。
+</p>
+<h4 id="ans57">●解答57</h4>
+<pre class="list">
+リスト : 完全順列
+
+void perfect_perm_sub(vector&lt;int&gt;&amp; buff, int n = 0)
+{
+  if (n == buff.size()) {
+    for (int x : buff) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  } else {
+    int temp = buff[n];
+    for (int i = n; i &lt; buff.size(); i++) {
+      if (buff[i] == n + 1) continue;
+      buff[n] = buff[i];
+      buff[i] = temp;
+      perfect_perm_sub(buff, n + 1);
+      buff[i] = buff[n];
+      buff[n] = temp;
+    }
+  }
+}
+
+void perfect_perm(int m)
+{
+  vector&lt;int&gt; buff(m);
+  iota(buff.begin(), buff.end(), 1);
+  perfect_perm_sub(buff);
+}
+</pre>
+<p> 実際の処理は関数 perfect_perm_sub() で行います。基本的には 1 から m までの数字を m 個選ぶ順列を生成する処理と同じです。n 番目の数字を選ぶとき、数字 i が n + 1 と等しい場合は i を選択しません。n が m と等しい場合は m 個の数字を選んだので buff の内容を表示します。これで完全順列を生成することができます。
+</p>
+<h4 id="ans58">●解答58</h4>
+<pre class="list">
+リスト : 完全順列の総数
+
+long long montmort_number(int n)
+{
+  if (n == 1)
+    return 0;
+  else if (n == 2)
+    return 1;
+  else
+    return (n - 1) * (montmort_number(n - 1) + montmort_number(n - 2));
+}
+
+// 別解
+long long montmort_number1(int n)
+{
+  long long a = 0, b = 1;
+  for (int i = 1; i &lt; n; i++) {
+    long long c = (i + 1) * (a + b);
+    a = b;
+    b = c;
+  }
+  return a;
+}
+</pre>
+<p> 関数 montmort_number() は公式をそのままプログラムしただけです。二重再帰になっているので、実行速度はとても遅くなります。これを繰り返しに変換すると別解のようになります。考え方はフィボナッチ数列と同じです。変数 a に i 番目の値を、b に i + 1 番目の値を保存しておきます。すると、i + 2 番目の値は (i + 1) * (a + b) で計算することができます。あとは、b の値を a に、新しい値を b にセットして処理を繰り返すだけです。
+</p>
+<h4 id="ans59">●解答59</h4>
+<pre class="list">
+リスト : カッコ列の生成
+
+void kakko_sub(int x, int y, int m, string s)
+{
+  if (x == y &amp;&amp; x == m) {
+    cout &lt;&lt; s &lt;&lt; endl;
+  } else {
+    if (x &lt; m) {
+      kakko_sub(x + 1, y, m, s + "(");
+    }
+    if (y &lt; x) {
+      kakko_sub(x, y + 1, m, s + ")");
+    }
+  }
+}
+
+void kakko(int m)
+{
+  kakko_sub(0, 0, m, "");
+}
+</pre>
+<p> カッコ列の生成は簡単です。関数 kakko_sub() の引数 x が左カッコの個数、引数 y が右カッコの個数を表します。引数 s はカッコ列を表す文字列です。
+</p>
+<p> バランスの取れたカッコ列の場合、x, y, m には y &lt;= x &lt;= m の関係が成り立ちます。x == y &amp;&amp; y == m の場合、カッコ列がひとつ完成しました。文字列 s を出力演算子 &lt;&lt; で表示します。そうでなければ、kakko_sub() を再帰呼び出しします。x &lt; m であれば左カッコを追加し、y &lt; x であれば右カッコを追加します。これでカッコ列を生成することができます。
+</p>
+<h4 id="ans60">●解答60</h4>
+<p> <a href="http://ja.wikipedia.org/wiki/%E3%82%AB%E3%82%BF%E3%83%A9%E3%83%B3%E6%95%B0">カタラン数 - Wikipedia</a> によると、
+カッコ列の総数は「カタラン数 (Catalan number) 」になるとのことです。カタラン数は次に示す公式で求めることができます。
+</p>
+<pre class="item">
+         (2n)!
+Ｃ<SUB>n</SUB> = ----------
+       (n+1)!n!
+</pre>
+<p> これをそのままプログラムしてもいいのですが、それではちょっと面白くないので別な方法でプログラムを作ってみましょう。カタラン数は次に示す経路図において、A から B までの最短距離の道順を求めるとき、対角線を超えないものの総数に一致します。
+</p>
+<pre class="fig">
+                    Ｂ                      Ｂ  
+  ┌─┬─┬─┬─┐      ┌─┬─┬─０─14    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ├─┼─０─５─14    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ├─０─２─５─９    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ０─１─２─３─４    
+  │  │  │  │  │      │  │  │  │  │    
+  └─┴─┴─┴─┘      １─１─１─１─１    
+Ａ                      Ａ                      
+
+            図 : 道順の総数の求め方
+</pre>
+<p> A からある地点にいたる最短距離の道順の総数は、左隣と真下の地点の値を足したものになります。一番下の地点は 1 で、対角線を越えた地点は 0 になります。あとは下から順番に足し算していけば、A から B までの道順の総数を求めることができます。上図の場合はカラタン数 Ｃ<sub>4</sub> に相当し、その値は 14 となります。
+
+<p> プログラムは配列を使うと簡単です。次の図を見てください。
+</p>
+<pre class="fig">
+0 : [1, 1, 1, 1, 1]
+
+1 : [1, 1, 1, 1, 1,]
+
+2 : [1, 1, 1+1=2, 2+1=3, 3+1=4]
+ =&gt; [1, 1, 2, 3, 4]
+
+3 : [1, 1, 2, 3+2=5, 5+4=9]
+ =&gt; [1, 1, 2, 5, 9]
+
+4 : [1, 1, 2, 5, 5+9=14]
+ =&gt; [1, 1, 2, 5, 14]
+</pre>
+<p> 上図は Ｃ<SUB>n</SUB> (n = 4) を求める場合です。大きさが n + 1, 要素の値が 1 の一次元配列を用意します。n = 0, 1 の場合は n 番目の要素をそのまま返します。n が 2 よりも大きい場合、変数 i を 2 に初期化して、i - 1 番目以降の要素の累積和を求めます。
+</p>
+<p> たとえば i = 2 の場合、2 番目の要素は 1 番目の要素と自分自身を加算した値 2 になります。3 番目の要素は 2 番目の要素と自分自身を足した値 3 になり、4 番目の要素は 3 + 1 = 4 になります。次に i を +1 して同じことを繰り返します。3 番目の要素は 2 + 3 = 5 になり、4 番目の要素は 5 + 4 = 9 になります。i = 4 のとき、4 番目の要素は 5 + 9 = 14 となり、Ｃ<sub>4</sub> の値を求めることができました。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : カッコ列の総数
+
+long long kakko_num(int n)
+{
+  vector&lt;long long&gt; table(n + 1, 1);
+  for (int i = 2; i &lt;= n; i++) {
+    for (int j = i; j &lt;= n; j++) {
+      table[j] += table[j - 1];
+    }
+  }
+  return table[n];
+}
+</pre>
+<p> 説明したことをそのままプログラムしただけなので、とくに難しいところはないと思います。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+//
+// yacp07.cpp : Yet Another C++ Problems (7)
+//
+//              Copyright (C) 2015 Makoto Hiroi
+//
+#include &lt;iostream&gt;
+#include &lt;tuple&gt;
+#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+#include &lt;numeric&gt;
+using namespace std;
+
+// Q51
+typedef tuple&lt;long long, long long&gt; Pair;
+
+Pair factor_sub(long long n, long long m)
+{
+  long long i = 0;
+  while (n % m == 0) {
+    i++;
+    n /= m;
+  }
+  return make_tuple(i, n);
+}
+
+vector&lt;Pair&gt; factorization(long long n)
+{
+  vector&lt;Pair&gt; a;
+  long long c, m;
+  tie(c, m) = factor_sub(n, 2);
+  if (c &gt; 0) a.push_back(make_tuple(2, c));
+  for (long long i = 3; m &gt;= i * i; i += 2) {
+    tie(c, m) = factor_sub(m, i);
+    if (c &gt; 0) a.push_back(make_tuple(i, c));
+  }
+  if (m &gt; 1) a.push_back(make_tuple(m, 1));
+  return a;
+}
+
+void print_factor(const vector&lt;Pair&gt;&amp; v)
+{
+  for (auto&amp; x : v) {
+    cout &lt;&lt; "(" &lt;&lt; get&lt;0&gt;(x) &lt;&lt; "," &lt;&lt; get&lt;1&gt;(x) &lt;&lt; ")";
+  }
+  cout &lt;&lt; endl;
+}
+
+// Q52
+long long divisor_num(long long n)
+{
+  long long a = 1;
+  for (auto&amp; x : factorization(n)) {
+    a *= get&lt;1&gt;(x) + 1;
+  }
+  return a;
+}
+
+// Q53
+long long pow(long long x, long long y)
+{
+  if (y == 0)
+    return 1;
+  else if (y == 0)
+    return x;
+  else {
+    long long z = pow(x, y / 2);
+    return y % 2 == 0 ? z * z : z * z * x;
+  }
+}
+
+// σ(p, n) の計算
+long long div_sum_sub(long long p, long long n)
+{
+  long long a = 0;
+  for (; n &gt; 0; n--) a += pow(p, n);
+  return a + 1;
+}
+
+// 約数の和
+long long divisor_sum(long long n)
+{
+  long long a = 1;
+  for (auto&amp; x : factorization(n))
+    a *= div_sum_sub(get&lt;0&gt;(x), get&lt;1&gt;(x));
+  return a;
+}
+
+// Q54
+
+// p ^ q の約数を求める
+vector&lt;long long&gt; divisor_sub(long long p, long long q)
+{
+  vector&lt;long long&gt; a;
+  for (long long i = 0; i &lt;= q; i++)
+    a.push_back(pow(p, i));
+  return a;
+}	
+
+// 互いの要素を掛け算する
+vector&lt;long long&gt; product(const vector&lt;long long&gt;&amp; xs,
+			  const vector&lt;long long&gt;&amp; ys)
+{
+  vector&lt;long long&gt; a;
+  for (auto x : xs) {
+    for (auto y : ys) {
+      a.push_back(x * y);
+    }
+  }
+  return a;
+}
+
+//
+vector&lt;long long&gt; divisor(long long n)
+{
+  auto xs = factorization(n);
+  auto ys = divisor_sub(get&lt;0&gt;(xs[0]), get&lt;1&gt;(xs[0]));
+  for (int i = 1; i &lt; xs.size(); i++)
+    ys = product(divisor_sub(get&lt;0&gt;(xs[i]), get&lt;1&gt;(xs[i])), ys);
+  sort(ys.begin(), ys.end());
+  return ys;
+}
+
+template&lt;class T&gt;
+void print_vector(const vector&lt;T&gt;&amp; v)
+{
+  for (auto&amp; x : v) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+
+// Q55
+void perfect_number(int n)
+{
+  for (int x = 2; x &lt;= n; x++) {
+    if (divisor_sum(x) - x == x) 
+      cout &lt;&lt; x &lt;&lt; endl;
+  }
+}
+
+// Q56
+void yuuai_number(int n)
+{
+  for (int x = 2; x &lt;= n; x++) {
+    long long m = divisor_sum(x) - x;
+    if (x &lt; m &amp;&amp; x == divisor_sum(m) - m)
+      cout &lt;&lt; x &lt;&lt; " " &lt;&lt; m &lt;&lt; endl;
+  }
+}
+
+// Q57
+void perfect_perm_sub(vector&lt;int&gt;&amp; buff, int n = 0)
+{
+  if (n == buff.size()) {
+    for (int x : buff) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  } else {
+    int temp = buff[n];
+    for (int i = n; i &lt; buff.size(); i++) {
+      if (buff[i] == n + 1) continue;
+      buff[n] = buff[i];
+      buff[i] = temp;
+      perfect_perm_sub(buff, n + 1);
+      buff[i] = buff[n];
+      buff[n] = temp;
+    }
+  }
+}
+
+void perfect_perm(int m)
+{
+  vector&lt;int&gt; buff(m);
+  iota(buff.begin(), buff.end(), 1);
+  perfect_perm_sub(buff);
+}
+
+// Q58
+long long montmort_number(int n)
+{
+  if (n == 1)
+    return 0;
+  else if (n == 2)
+    return 1;
+  else
+    return (n - 1) * (montmort_number(n - 1) + montmort_number(n - 2));
+}
+
+// 別解
+long long montmort_number1(int n)
+{
+  long long a = 0, b = 1;
+  for (int i = 1; i &lt; n; i++) {
+    long long c = (i + 1) * (a + b);
+    a = b;
+    b = c;
+  }
+  return a;
+}
+
+// Q59
+void kakko_sub(int x, int y, int m, string s)
+{
+  if (x == y &amp;&amp; x == m) {
+    cout &lt;&lt; s &lt;&lt; endl;
+  } else {
+    if (x &lt; m) {
+      kakko_sub(x + 1, y, m, s + "(");
+    }
+    if (y &lt; x) {
+      kakko_sub(x, y + 1, m, s + ")");
+    }
+  }
+}
+
+void kakko(int m)
+{
+  kakko_sub(0, 0, m, "");
+}
+
+// Q60
+long long kakko_num(int n)
+{
+  vector&lt;long long&gt; table(n + 1, 1);
+  for (int i = 2; i &lt;= n; i++) {
+    for (int j = i; j &lt;= n; j++) {
+      table[j] += table[j - 1];
+    }
+  }
+  return table[n];
+}
+
+// 簡単なテスト
+int main()
+{
+  // Q51
+  print_factor(factorization(24));
+  print_factor(factorization(12345678));
+  print_factor(factorization(123456789));
+  print_factor(factorization(1234567890));
+  print_factor(factorization(1111111111));
+  // Q52
+  cout &lt;&lt; divisor_num(24) &lt;&lt; endl;
+  cout &lt;&lt; divisor_num(12345678) &lt;&lt; endl;
+  cout &lt;&lt; divisor_num(123456789) &lt;&lt; endl;
+  cout &lt;&lt; divisor_num(1234567890) &lt;&lt; endl;
+  cout &lt;&lt; divisor_num(1111111111) &lt;&lt; endl;
+  // Q53
+  cout &lt;&lt; divisor_sum(24) &lt;&lt; endl;
+  cout &lt;&lt; divisor_sum(12345678) &lt;&lt; endl;
+  cout &lt;&lt; divisor_sum(123456789) &lt;&lt; endl;
+  cout &lt;&lt; divisor_sum(1234567890) &lt;&lt; endl;
+  cout &lt;&lt; divisor_sum(1111111111) &lt;&lt; endl;
+  // Q54
+  print_vector(divisor(24));
+  print_vector(divisor(12345678));
+  print_vector(divisor(123456789));
+  print_vector(divisor(1234567890));
+  print_vector(divisor(1111111111));
+  // Q55
+  perfect_number(10000);
+  // Q56
+  yuuai_number(100000);
+  // Q57
+  perfect_perm(3);
+  perfect_perm(4);
+  perfect_perm(5);
+  // Q58
+  for (int i = 1; i &lt;= 10; i++) {
+    cout &lt;&lt; montmort_number(i) &lt;&lt; endl;
+    cout &lt;&lt; montmort_number1(i) &lt;&lt; endl;
+  }
+  cout &lt;&lt; montmort_number(20) &lt;&lt; endl;
+  cout &lt;&lt; montmort_number(20) &lt;&lt; endl;
+  // Q59
+  kakko(3);
+  kakko(4);
+  // Q60
+  for (int i = 1; i &lt;= 10; i++)
+    cout &lt;&lt; kakko_num(i) &lt;&lt; endl;
+  cout &lt;&lt; kakko_num(30) &lt;&lt; endl;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="cpp34.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp36.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

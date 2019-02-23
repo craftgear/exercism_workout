@@ -1,0 +1,1047 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 bash 超入門 (後編)</title>
+  <meta name="description" content="bash 入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881807</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 bash 超入門 (後編)</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="linuxbash1.html">前編</A> ]
+<hr>
+</div>
+<section class="contents">
+<h3>CONTENTS</h3>
+<ul>
+  <li><a href="linuxbash2.html#chap00">シェルスクリプトの構造</a>
+  <li><a href="linuxbash2.html#chap01">整数の計算</a>
+  <li><a href="linuxbash2.html#chap02">引用符の使い方</a>
+  <li><a href="linuxbash2.html#chap03">ヒアドキュメント</a>
+  <li><a href="linuxbash2.html#chap04">配列</a>
+  <li><a href="linuxbash2.html#chap05">条件分岐</a>
+  <li><a href="linuxbash2.html#chap06">test コマンド</a>
+  <li><a href="linuxbash2.html#chap07">while 文</a>
+  <li><a href="linuxbash2.html#chap08">for 文</a>
+  <li><a href="linuxbash2.html#chap09">break と continue</a>
+  <li><a href="linuxbash2.html#chap10">case 文</a>
+  <li><a href="linuxbash2.html#chap11">コマンドライン引数の取得</a>
+  <li><a href="linuxbash2.html#chap12">関数とエイリアス</a>
+  <li><a href="linuxbash2.html#chap13">read コマンド</a>
+  <li><a href="linuxbash2.html#chap14">その他</a>
+</ul>
+<hr>
+<h4 id="chap00">●シェルスクリプトの構造</h4>
+<p> シェルスクリプトの基本はコマンドを順番に書いていくだけです。シェルスクリプトのファイル名は拡張子を .sh とするのが一般的です。簡単な例を示しましょう。</p>
+<pre class="list">
+リスト : hello.sh
+
+echo Hello, $USER
+exit 0
+</pre>
+<p> hello.sh は Hello, ユーザー名 を画面に出力し、コマンド exit でスクリプトを実行しているシェルを終了します。スクリプトの終わりまで実行してもシェルは終了しますが、exit を使うとスクリプトの途中でシェルを終了したり、終了コードを返すことができます。一般に、終了コード 0 は正常終了したことを表し、それ以外の値は異常終了したことを表します。
+</p>
+<p> それでは実行してみましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ bash hello.sh
+Hello, mhiroi
+mhiroi@mhiroi-VirtualBox:~/work$ 
+</pre>
+<p> コマンドラインで bash を指定せずにスクリプトを実行することもできます。次のリストを見てください。</p>
+
+<pre class="list">
+リスト : hello2.sh
+
+#! /bin/bash
+
+echo Hello, $USER
+exit 0
+</pre>
+<p> シェルスクリプトの場合、# から行末までがコメントになります。1 行目の #! は「シェバン (shebang) 」といい、スクリプトファイルを読み込むシェルを絶対パスで指定します。次に、コマンド chmod で hello2.sh のパーミッションに実行権をセットします。これで、hello2.sh をコマンドのように使うことができます。</p>
+<p> それでは実際に試してみましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ em hello2.sh
+mhiroi@mhiroi-VirtualBox:~/work$ ls -l hello2.sh
+-rw-rw-r-- 1 mhiroi mhiroi 41  1月 11 11:11 hello2.sh
+mhiroi@mhiroi-VirtualBox:~/work$ chmod +x hello2.sh
+mhiroi@mhiroi-VirtualBox:~/work$ ls -l hello2.sh
+-rwxrwxr-x 1 mhiroi mhiroi 41  1月 11 11:11 hello2.sh
+mhiroi@mhiroi-VirtualBox:~/work$ ./hello2.sh
+Hello, mhiroi
+</pre>
+<p> カレントディレクトリは PATH に含まれていないので、相対パス ./hello2.sh で実行するスクリプトファイルを指定してください。</p>
+
+<h4 id="chap01">●整数の計算</h4>
+<p> シェルはコマンド expr で数式を計算することができます。expr は与えられた引数全体を式として評価し、その結果を文字列にして返します。扱うことができる数値は整数のみで、M.Hiroi が使用している GNU bash, バージョン 4.3.30 では -9223372036854775808 から 9223372036854775807 まで、つまり 64 ビット整数になります。使用できる演算子には四則演算 (+, -, *, /) や剰余 (%) があります。</p>
+
+<p> 数式にはカッコ (, ) を使うことができます。ただし、乗算 * とカッコ (, ) を使う場合は、前に \ (バックスラッシュ) を付けてください。また、演算子と数値は必ず空白で区切ってください。</p>
+<p> 簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ expr 1 + 2 \* 3
+7
+mhiroi@mhiroi-VirtualBox:~$ expr \( 1 + 2 \) \* 3
+9
+mhiroi@mhiroi-VirtualBox:~$ a=10
+mhiroi@mhiroi-VirtualBox:~$ b=20
+mhiroi@mhiroi-VirtualBox:~$ expr $a + $b
+30
+mhiroi@mhiroi-VirtualBox:~$ expr a + b
+expr: 整数でない引数
+</pre>
+<p> シェルが扱うことができるデータは文字列だけです。引数の文字列を整数に変換できない場合はエラーになります。なお、expr には整数の計算だけではなく、正規表現による文字列の切り出しを行う演算子 <b>:</b> など、便利な演算子が用意されています。詳細は man expr でマニュアルをお読みください。
+</p>
+<p> bash の場合、expr を使わなくても $[ 式 ] や $(( 式 )) で式を計算することができます。この場合、演算子と数値の値を空白で区切る必要はありません。また、カッコや * の前に \ をつける必要もありません。簡単な例を示します。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ a=10
+mhiroi@mhiroi-VirtualBox:~$ b=20
+mhiroi@mhiroi-VirtualBox:~$ c=$[$a + $b]
+mhiroi@mhiroi-VirtualBox:~$ echo $c
+30
+mhiroi@mhiroi-VirtualBox:~$ echo $[$a * $b]
+200
+mhiroi@mhiroi-VirtualBox:~$ echo $((10+20*30))
+610
+mhiroi@mhiroi-VirtualBox:~$ echo $(((10+20)*30))
+900
+</pre>
+<p> コマンド let は引数の文字列を式とみなして、それを計算します。let の場合、式の中では変数名の前に $ をつける必要はありません。簡単な例を示しましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ let c="a + b"
+mhiroi@mhiroi-VirtualBox:~$ echo $c
+30
+mhiroi@mhiroi-VirtualBox:~$ let d=a*b
+mhiroi@mhiroi-VirtualBox:~$ echo $d
+200
+mhiroi@mhiroi-VirtualBox:~$ let ++d
+mhiroi@mhiroi-VirtualBox:~$ echo $d
+201
+</pre>
+
+<p> ++ は値を +1 する演算子です。$[ 式 ], $(( 式 )), let では expr よりも多くの演算子を使用することができます。詳細は man bash や help let などでマニュアルを参照してください。
+</p>
+
+<h4 id="chap02">●引用符の使い方</h4>
+<p> 文字列に空白を含めたい場合は、エスケープ記号 ( <b>\</b>, バックスラッシュ) を使うか、シングルクォート ( <b>'</b> ) またはダブルクォート ( <b>"</b> ) で囲みます。エスケープ記号はメタ文字を通常の文字として扱うときにも使います。ただし、Ｃ言語などで用いられるエスケープシーケンス、たとえば \n が改行で \t がタブを表しているのではなく、\ 直後の文字を通常の文字として扱うだけです。Ｃ言語のようなエスケープシーケンスを使いたい場合は $'...' の中に記述します。</p>
+<pre class="item">
+$'\n'    : 改行
+$`\t'    : タブ
+$' \n\t' : 空白、改行、タブ
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ echo $'\t'hello, $'\n'world
+	hello, 
+world
+</pre>
+<p> '...' の中では、エスケープ記号や変数展開は無効になります。逆に、"..." の中ではエスケープ記号や変数展開が有効になります。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ name=pen
+mhiroi@mhiroi-VirtualBox:~$ echo 'This is a $name.'
+This is a $name.
+mhiroi@mhiroi-VirtualBox:~$ echo "This is a $name."
+This is a pen.
+mhiroi@mhiroi-VirtualBox:~$ echo "This is a \$name."
+This is a $name.
+mhiroi@mhiroi-VirtualBox:~$ echo "$'\t'hello, $'\n'world"
+$'\t'hello, $'\n'world
+</pre>
+<p> 'This is a $name.' は変数展開が行われないので、変数名 $name はそのまま文字列となり、This is a $name. と表示されます。"This is a $name." は変数展開されるので、This is a pen. と表示されます。"This is a \$name." は $ の前にエスケープ記号が着いているので、 \$ は文字 $ として扱われます。その結果、This is a $name. と表示されます。なお、"..." の中では $'...' の展開は行われないので注意してください。</p>
+
+<p> バッククォート ( ` ) で囲んだ場合、たとえば `command ...` とすると、その中で最初の文字列 command をコマンドとして実行し、その実行結果 (コマンドが標準出力へ出力したデータ) が文字列の内容となります。これを「コマンド置換」といいます。また、最近の bash では、$(command ...) でもコマンド置換を行うことができます。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ var=`expr 10 + 200`
+mhiroi@mhiroi-VirtualBox:~$ echo $var
+210
+mhiroi@mhiroi-VirtualBox:~$ var=$(expr 100 + 200)
+mhiroi@mhiroi-VirtualBox:~$ echo $var
+300
+</pre>
+<p> 最初の例では、expr 10 + 200 が評価されて、その結果である 210 に置き換えられます。それから = が評価され、変数に 210 が代入されます。次の例は 100 + 200 の計算結果 300 が var に代入されます。</p>
+
+<p> 変数置換は `...` の中でも有効です。また、コマンド置換は "..." の中でも有効です。次の例を見てください。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ a=10
+mhiroi@mhiroi-VirtualBox:~$ b=20
+mhiroi@mhiroi-VirtualBox:~$ c=`expr $a + $b`
+mhiroi@mhiroi-VirtualBox:~$ echo $c
+30
+mhiroi@mhiroi-VirtualBox:~$ echo "$a + $b = `expr $a + $b`"
+10 + 20 = 30
+</pre>
+<p> 最初に変数 $a と $b の置換が行われ、それから expr 10 + 20 が評価されます。そのあとで = が評価され、変数 c に 30 が代入されます。次の例は `expr $a + $b` が評価されて 10 + 20 = 30 と表示されます。</p>
+
+
+<h4 id="chap03">●ヒアドキュメント</h4>
+<p> シェルには、&lt;&lt; と次に書かれた記号 (終端記号) を指定すると、次の行から終端記号までの複数行をひとつの文字列として扱う機能があります。これを「ヒアドキュメント (here-document) 」といいます。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ cat &lt;&lt; EOF
+&gt; hello, world
+&gt; hello, Lubuntu
+&gt; EOF
+hello, world
+hello, Lubuntu
+mhiroi@mhiroi-VirtualBox:~$
+</pre>
+<p> 画面には hello, world と hello, Lubuntu が表示されます。なお、終端記号だけが現れる行までを文字列として扱うので、終端記号の前後に空白を入れてはいけません。</p>
+<p> ヒアドキュメントの中では変数展開やコマンド置換が有効です。たとえば、ディレクトリの内容を取り込みたい場合は、次のようにすればいいでしょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ cat &lt;&lt; EOF
+&gt; `ls -F`
+&gt; EOF
+bigrev/
+hexrev/
+kalah/
+minigame/
+octagon/
+octrev/
+reversi/
+updepon/
+</pre>
+<p> 変数展開やコマンド置換を無効化したい場合は終端記号を引用符 ( <b>'</b> or <b>"</b> ) で囲みます。簡単な例を示します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ a=10
+mhiroi@mhiroi-VirtualBox:~/work$ b=20
+mhiroi@mhiroi-VirtualBox:~/work$ cat &lt;&lt; EOF
+&gt; $a + $b = `expr $a + $b`
+&gt; EOF
+10 + 20 = 30
+mhiroi@mhiroi-VirtualBox:~/work$ cat &lt;&lt; "EOF"
+&gt; $a + $b = `expr $a + $b`
+&gt; EOF
+$a + $b = `expr $a + $b`
+</pre>
+
+<h4 id="chap04">●配列</h4>
+<p> 配列は複数のデータを格納するデータ構造です。配列はホテルやマンションの部屋にたとえるとわかりやすいでしょう。ホテル全体を配列とすると、各部屋がデータを格納する変数と考えることができます。ホテルでは、ルームナンバーによって部屋を指定しますね。配列の場合も、整数値によってデータを格納する変数を指定することができます。この整数値を「添字 (subscripts) 」といいます。</p>
+<pre class="fig">
+添字    ０  １  ２  ３  ４  ５  ６  ７  ８  ９
+      ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐
+配列  │  │  │  │  │  │  │  │  │  │  │
+      └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘
+
+                    図 : 配列の構造
+</pre>
+<p> たとえば、10 個のデータを格納する配列を考えてみます。これは、平屋建てのホテルで、部屋が 10 室あると考えてください。この場合は上図に示すように、データを格納する変数が並んでいて、それぞれ 0 から 9 までの添字で指定することができます。シェルの場合、Ｃ言語と同じく添字は 0 から順番に数えます。ただし、シェルでは 1 次元配列しか使えないので注意してください。</p>
+
+<p> シェルの配列はカッコで表します。</p>
+<pre class="item">
+変数名=(item1 item2 item3 ...)
+</pre>
+<p> 配列の要素は空白で区切ります。要素のアクセスですが、$変数名 とすると先頭要素を参照します。また、${変数名[n]} とすると、n 番目の要素を参照します。${変数名[@]} とすると、配列全体の値になります。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ a=(1 2 3 4 5)
+mhiroi@mhiroi-VirtualBox:~$ echo $a
+1
+mhiroi@mhiroi-VirtualBox:~$ echo ${a[0]}
+1
+mhiroi@mhiroi-VirtualBox:~$ echo ${a[1]}
+2
+mhiroi@mhiroi-VirtualBox:~$ echo ${a[4]}
+5
+mhiroi@mhiroi-VirtualBox:~$ echo ${a[5]}
+
+mhiroi@mhiroi-VirtualBox:~$ echo ${a[@]}
+1 2 3 4 5
+mhiroi@mhiroi-VirtualBox:~$ echo ${#a[@]}
+5
+mhiroi@mhiroi-VirtualBox:~$ echo $a[4]
+1[4]
+</pre>
+<p> 変数 a に配列 (1 2 3 4 5) をセットします。$a または ${a[0]} で 0 番目の要素を、${a[1]} で 1 番目の要素を参照します。添字が範囲外の場合は空文字列になります。${a[@]} で配列全体の値になり、# を付けて ${#a[@]} とすると配列の要素数になります。{ } で囲まないで $a[4] とすると、$a で先頭要素に置換されるので、1[4] と表示されます。ご注意くださいませ。
+</p>
+<p> 要素を書き換えるには = を使います。また、配列の末尾に要素を追加するには += を使います。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ echo ${a[@]}
+1 2 3 4 5
+mhiroi@mhiroi-VirtualBox:~$ a[4]=100
+mhiroi@mhiroi-VirtualBox:~$ echo ${a[@]}
+1 2 3 4 100
+mhiroi@mhiroi-VirtualBox:~$ a+=(200 300)
+mhiroi@mhiroi-VirtualBox:~$ echo ${a[@]}
+1 2 3 4 100 200 300
+mhiroi@mhiroi-VirtualBox:~$ echo ${#a[@]}
+7
+</pre>
+<p> シェルの配列はコマンド置換と組み合わせて使うと便利です。次の例を見てください。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ ls -l hello.sh
+-rw-rw-r-- 1 mhiroi mhiroi 27  1月  11 11:11 hello.sh
+mhiroi@mhiroi-VirtualBox:~/work$ b=(`ls -l hello.sh`)
+mhiroi@mhiroi-VirtualBox:~/work$ echo ${b[4]}
+27
+</pre>
+<p> たとえば、ファイルサイズを求めることを考えてみましょう。`ls -l hello.sh` をカッコの中で実行すると、ls が表示した情報を空白で区切って配列に格納されます。4 番目の要素を参照すれば、hello.sh のファイルサイズを求めることができます。
+</p>
+
+<h4 id="chap05">●条件分岐</h4>
+<p> 「条件分岐」と書くとなにやら難しい言葉のようにみえますが、プログラムにとっては最も基本的な動作のひとつです。簡単にいうと「もしも～～ならば○○をせよ」という動作です。</p>
+<pre class="fig">
+      ↓                        ↓
+┌─────┐No          ┌─────┐No
+│  条  件  │─┐        │  条  件  │─────┐
+└─────┘  │        └─────┘          │
+      ↓Yes     │              ↓Yes             ↓
+┌─────┐  │        ┌─────┐    ┌─────┐
+│  処理Ａ  │  │        │  処理Ａ  │    │  処理Ｂ  │
+└─────┘  │        └─────┘    └─────┘
+      │        │              │                │
+      ├←───┘              ├←───────┘
+      ↓                        ↓
+
+     (1)                        (2)
+
+                     図 : 条件分岐
+</pre>
+<p> (1) では、「もしも条件を満たすならば、処理Ａを実行する」となります。この場合、条件が成立しない場合は何も処理を実行しませんが、(2) のように、条件が成立しない場合でも処理を実行することができます。(2) の場合では、「もしも条件を満たすならば、処理Ａを実行し、そうでなければ処理Ｂを実行する」となります。すなわち、条件によって処理Ａか処理Ｂのどちらかが実行されることになります。</p>
+
+<p> プログラミングの世界では、条件が成立することを「真 (true) 」といい、条件が不成立のことを「偽 (false) 」といいます。実際のプログラミングでは、true と false を表すデータが必要になります。シェルの場合、コマンドの終了コード 0 が真を表し、それ以外の値が偽になります。</p>
+
+<p> 条件分岐には if 文を使います。</p>
+<pre class="list">
+リスト : if 文の構文
+
+if コマンド
+then
+  処理A1
+   .....
+  処理AZ
+else
+  処理B1
+   .....
+  処理BZ
+fi
+</pre>
+<p> if 文の最後は fi で閉じることに注意してください。if 文は後ろのコマンド (条件式) を実行し、その結果が真であれば、処理A1 から処理AZ を実行します。コマンドの結果が偽であれば、else から始まる処理B1 から処理BZ を実行します。なお、else は省略することができます。</p>
+
+<p> もう少し複雑な使い方を紹介しましょう。</p>
+<pre class="list">
+リスト : if ～ elif ～ else ～ fi の構文
+
+if コマンド1
+then
+  処理A
+elif コマンド2
+  処理B
+else
+  処理C
+fi
+</pre>
+<p> これを図に示すと次のようになります。</p>
+<pre class="fig">
+      ↓
+┌─────┐No
+│コマンド１│─────┐
+└─────┘          │
+      ↓Yes             ↓
+      │          ┌─────┐No
+      │          │コマンド２│─────┐
+      │          └─────┘          │
+      │                ↓Yes             ↓
+┌─────┐    ┌─────┐    ┌─────┐
+│  処理Ａ  │    │  処理Ｂ  │    │  処理Ｃ  │
+└─────┘    └─────┘    └─────┘
+      │                │                │
+      ↓                ↓                ↓
+      ├────────┴────────┘
+      ↓
+
+                  図 : 複雑な条件分岐
+</pre>
+<p> elif を使うことで、if を連結することができます。コマンド１が偽の場合は、次の elif の条件 コマンド２ を実行します。この結果が真であれば処理B を実行します。そうでなければ、else の処理C を実行します。elif はいくつでも繋げることができます。</p>
+<h4 id="chap06">●test コマンド</h4>
+<p> 数値や文字列の比較やファイル種別の確認などを行うため、シェルにはコマンド test が用意されています。主な条件を下表に示します。
+</p>
+<table border=1>
+<caption>表 : test の主な条件</caption>
+<thead>
+  <tr><th>記述法</th><th>意味</th></tr>
+</thead>
+<tbody>
+  <tr><td>x -eq y</td><td>数値 x と y が等しいとき真</td>
+  <tr><td>x -ne y</td><td>数値 x と y が等しくないとき真</td>
+  <tr><td>x -gt y</td><td>数値 x が y より大きいとき真</td>
+  <tr><td>x -lt y</td><td>数値 x が y より小さいとき真</td>
+  <tr><td>x -ge y</td><td>数値 x が y 以上のとき真</td>
+  <tr><td>x -le y</td><td>数値 x が y 以下のとき真</td>
+  <tr><td>x = y</td><td>文字列 x が y と等しいとき真</td>
+  <tr><td>x != y</td><td>文字列 x が y と等しくないとき真</td>
+  <tr><td>-e file</td><td>file が存在しているとき真</td>
+  <tr><td>-f file</td><td>file が存在し、通常ファイルであるとき真</td>
+  <tr><td>-d file</td><td>file がディレクトリのとき真</td>
+  <tr><td>!条件式</td><td>条件式が偽とき真 (否定)</td>
+  <tr><td>条件1 -a 条件2</td><td>条件1 と条件2 が真のとき真 (論理積)</td>
+  <tr><td>条件1 -o 条件2</td><td>条件1 が真または条件2 が真のとき真 (論理和)</td>
+</tbody>
+</table>
+<p> 詳しい説明は man test でマニュアルをお読みください。</p>
+<p> 簡単な例を示しましょう。直前に実行したコマンドの終了コードは特別な変数 ? に格納されます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ a=10
+mhiroi@mhiroi-VirtualBox:~$ test $a -eq 10
+mhiroi@mhiroi-VirtualBox:~$ echo $?
+0
+mhiroi@mhiroi-VirtualBox:~$ test $a -eq 20
+mhiroi@mhiroi-VirtualBox:~$ echo $?
+1
+mhiroi@mhiroi-VirtualBox:~$ test hello = hello
+mhiroi@mhiroi-VirtualBox:~$ echo $?
+0
+mhiroi@mhiroi-VirtualBox:~$ test hello = world
+mhiroi@mhiroi-VirtualBox:~$ echo $?
+1
+mhiroi@mhiroi-VirtualBox:~$ cd work
+mhiroi@mhiroi-VirtualBox:~/work$ ls
+bigrev    hello2.sh  kalah     octagon  reversi
+hello.sh  hexrev     minigame  octrev   updepon
+mhiroi@mhiroi-VirtualBox:~/work$ test -e hello.sh
+mhiroi@mhiroi-VirtualBox:~/work$ echo $?
+0
+mhiroi@mhiroi-VirtualBox:~/work$ test -e hello1.sh
+mhiroi@mhiroi-VirtualBox:~/work$ echo $?
+1
+mhiroi@mhiroi-VirtualBox:~/work$ test -d kalah
+mhiroi@mhiroi-VirtualBox:~/work$ echo $?
+0
+mhiroi@mhiroi-VirtualBox:~/work$ test -d hello2.sh
+mhiroi@mhiroi-VirtualBox:~/work$ echo $?
+1
+</pre>
+<p> なお、test はコマンド [ で置き換えることができます。</p>
+<pre class="item">
+test -f file ==&gt; [ -f file ]
+</pre>
+<p> [ はコマンドなので、[ や ] の前後には空白を入れてください。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ if [ -d kalah ] ; then echo "directory" ; fi
+directory
+mhiroi@mhiroi-VirtualBox:~/work$ b=20
+mhiroi@mhiroi-VirtualBox:~/work$ if [ $a -gt $b ] ; then echo "Good" ; fi
+mhiroi@mhiroi-VirtualBox:~/work$ if [ $a -lt $b ] ; then echo "Good" ; fi
+Good
+</pre>
+<p> if 文はセミコロンを使って 1 行で書くこともできます。次のように、then の後ろで改行する書き方もあります。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ if [ $a -eq $a ] ; then
+&gt; echo "equal"
+&gt; fi
+equal
+</pre>
+<p> if 文のほかに終了コードを判断してコマンドを実行する方法があります。</p>
+<pre class="item">
+command1 &amp;&amp; command2 : command1 が真のとき command2 を実行する
+command1 || command2 : command1 が偽のとき command2 を実行する
+</pre>
+<p> &amp;&amp; と || は論理演算子の AND, OR と同じ働きをします。</p>
+
+
+<h4 id="chap07">●while 文</h3>
+<p> 次は「繰り返し」を説明します。繰り返しは同じ処理を何度も行うことです。まずは簡単な繰り返しから紹介しましょう。while 文は条件が真のあいだ、処理を繰り返し実行します。</p>
+<pre class="list">
+リスト : while の構文
+
+while [ 条件式 ]
+do
+  処理A
+   ... 
+  処理Z
+done
+</pre>
+<pre class="fig">
+              ↓
+              ├←─────┐
+  false ┌─────┐      │
+┌───│  条件式  │      │
+│      └─────┘      │
+│            ↓true        │
+│      ┌─────┐      │
+│      │  処理Ａ  │      │
+│      └─────┘      │
+│            ・            │
+│            ・            │
+│            ・            │
+│      ┌─────┐      │
+│      │  処理Ｚ  │      │
+│      └─────┘      │
+│            └──────┘
+└──────┐
+              ↓
+
+        図 : while の処理
+</PRE>
+
+<p> 図を見ればおわかりのように、while 文はいたって単純です。繰り返す処理は do と done の間に記述します。</p>
+<p> 簡単な例を示しましょう。hello, world を 10 回表示します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ i=0
+mhiroi@mhiroi-VirtualBox:~/work$ while [ $i -lt 10 ]
+&gt; do
+&gt; echo "hello, world"
+&gt; i=`expr $i + 1`
+&gt; done
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+</pre>
+<p> bash の場合、変数の値をインクリメントするときは let ++i とするほうが簡単でしょう。</p>
+
+<h4 id="chap08">●for 文</h4>
+<p> 次は for 文を説明します。シェルの for 文はＣ言語や Java などの for 文とは違い、Java の拡張 for 文や Perl の foreach とほぼ同じ働きをします。</p>
+<pre class="list">
+リスト : for 文の構造
+
+for 変数 in リスト
+do
+  処理A
+  ...
+  処理Z
+done
+</pre>
+<pre class="fig">
+              ↓
+              ├←─────┐
+     No ┌─────┐      │
+┌───│要素がある│      │
+│      └─────┘      │
+│            ↓Yes         │
+│   ┌────────┐   │
+│   │変数 ← 次の要素│   │
+│   └────────┘   │
+│            ↓            │
+│      ┌─────┐      │
+│      │  処理Ａ  │      │
+│      └─────┘      │
+│            ・            │
+│            ・            │
+│            ・            │
+│      ┌─────┐      │
+│      │  処理Ｚ  │      │
+│      └─────┘      │
+│            └──────┘
+└──────┐
+              ↓
+
+        図 : for の処理
+</pre>
+
+<p> リストは空白で区切られた文字列 (要素) の集まりです。for 文はリストから要素を順番に取り出して変数にセットし、do と done の間に書かれた処理を実行します。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ for x in 1 2 3 4 5
+&gt; do
+&gt; echo $x
+&gt; done
+1
+2
+3
+4
+5
+</pre>
+<p> for 文に配列を渡して処理することも簡単にできます。たとえば、配列の要素の合計を求める場合は、次のようにプログラミングできます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ ary=(2 4 6 8 10)
+mhiroi@mhiroi-VirtualBox:~$ sum=0
+mhiroi@mhiroi-VirtualBox:~$ for x in ${ary[@]}
+&gt; do
+&gt; sum=$((sum+x))
+&gt; done
+mhiroi@mhiroi-VirtualBox:~$ echo $sum
+30
+</pre>
+<p> コマンド seq を使うと、数列を簡単に生成することができます。</p>
+<pre class="item">
+seq 初期値 [増分値] 終了値
+</pre>
+<p> 増分値を省略すると 1 になります。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ seq 1 5
+1
+2
+3
+4
+5
+mhiroi@mhiroi-VirtualBox:~$ seq 1 2 6
+1
+3
+5
+mhiroi@mhiroi-VirtualBox:~$ seq 1 2 7
+1
+3
+5
+7
+mhiroi@mhiroi-VirtualBox:~$ for x in `seq 1 10`; do echo "hello, world"; done
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+</pre>
+<p> for 文で seq を使うときにはコマンド置換を忘れないでください。seq 1 10 をコマンド置換しないと、変数 x には seq, 1, 10 が順番にセットされます。</p>
+<p> for 文のリストにグロブを指定するとファイル名を展開することができます。また、{ ... } による文字列の展開もできます。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/test$ ls
+a.out  hello.c  work
+mhiroi@mhiroi-VirtualBox:~/test$ for x in *.c; do echo $x; done
+hello.c
+mhiroi@mhiroi-VirtualBox:~/test$ for x in *; do echo $x; done
+a.out
+hello.c
+work
+mhiroi@mhiroi-VirtualBox:~/test$ for x in a*; do echo $x; done
+a.out
+mhiroi@mhiroi-VirtualBox:~/test$ for x in foo.{txt,tcl,c} ; do echo $x; done
+foo.txt
+foo.tcl
+foo.c
+</pre>
+
+<h4 id="chap09">●break と continue</h4>
+<p> 繰り返しの中では、break と continue という制御コマンドが使えます。これはＣ言語のそれと同じ働きをします。break は繰り返しを中断し、continue はそれ以降の処理を飛ばして次の繰り返しへ進みます。</p>
+<p> 簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ i=0
+mhiroi@mhiroi-VirtualBox:~$ while :
+&gt; do
+&gt; if [ $i -gt 10 ]; then break; fi
+&gt; echo $i
+&gt; i=$((i+1))
+&gt; done
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre>
+<p> <b>:</b> は終了コード 0 を返すコマンド (組み込み関数) です。while : で無限ループになります。while ループの中で変数 i をチェックして、10 より大きくなったら break でループを脱出します。</p>
+
+<p> シェルの break と continue はＣ言語と違って多重ループを一度に脱出することができます。break や continue の後ろに脱出するループの個数を指定します。シェルスクリプトで複雑なループ処理を行うことは少ないと思うので、詳しい説明は割愛します。興味のある方は実際に試してみてください。</p>
+
+<h4 id="chap10">●case 文</h4>
+<p> 一つの値を比較して条件分岐を行う場合は、if 文よりも case 文を使ったほうが簡単です。case 文の構文を示します。</p>
+<pre class="list">
+リスト ; case 文の構文
+
+case key in
+  pattern_A)
+    処理A1
+    ...
+    処理A9
+    ;;
+  pattern_B)
+    処理B1
+    ...
+    処理B9
+    ;;
+  pattern_C)
+    処理C1
+    ...
+    処理C9
+    ;;
+  *)
+    処理Z1
+    ...
+    処理Z9
+    ;;
+esac
+</pre>
+<p> case 文の最後は case を逆にした esac で閉じます。case は key とパターンを順番に比較していき、マッチした最初のパターンの処理を実行します。コマンドの最後には ;; を付けます。これはＣ言語や Java の switch 文で break を付けるのと似ています。パターンにはグロブのメタ文字が利用できます。最後にパターン * を指定すと、switch 文で default を指定したことと同じ動作になります。つまり、どんな値にもマッチして、その処理が実行されます。</p>
+<p> case 文の動作を図に示すと次のようになります。</p>
+<pre class="fig">
+      ｋｅｙ
+        ↓
+  ┌─────┐Yes ┌────┐          ┌────┐
+  │pattern_A │─→│処理Ａ１│→・・・→│処理Ａ９│─ ；； →┐
+  └─────┘    └────┘          └────┘          │
+        ↓ No                                                   │
+  ┌─────┐Yes ┌────┐          ┌────┐          │
+  │pattern_B │─→│処理Ｂ１│→・・・→│処理Ｂ９│─ ；； →┤
+  └─────┘    └────┘          └────┘          │
+        ↓ No                                                   │
+  ┌─────┐Yes ┌────┐          ┌────┐          │
+  │pattern_C │─→│処理Ｃ１│→・・・→│処理Ｃ９│─ ；； →┤
+  └─────┘    └────┘          └────┘          │
+        ↓ No                                                   │
+  ┌─────┐    ┌────┐          ┌────┐          │
+  │    ＊    │─→│処理Ｚ１│→・・・→│処理Ｚ９│────→┤
+  └─────┘    └────┘          └────┘          │
+                                                                │
+                                                                ↓
+
+        図 : case 文の流れ図
+</pre>
+<p> 簡単な例題として FizzBuzz 問題をシェルスクリプトで解いてみましょう。FizzBuzz 問題は 1 から 100 までの値を表示するとき、3 の倍数のときは Fizz を、5 の倍数ときは Buzz を表示するというものです。FizzBuzz 問題の詳細については <A href="http://ja.wikipedia.org/wiki/Fizz_Buzz">Fizz Buzz - Wikipedia</A> をお読みください。</p>
+<p> プログラムは次のようになります。</p>
+<pre class="list">
+リスト : FizzBuzz 問題 (fizzbuzz.sh)
+
+for x in `seq 1 100`
+do
+  a=`expr $x % 3`
+  b=`expr $x % 5`
+  case $a$b in
+    00) echo -n "FizzBuzz " ;;
+    0?) echo -n "Fizz " ;;
+    ?0) echo -n "Buzz " ;;
+    ??) echo -n "$x " ;;
+  esac
+done    
+</pre>
+<p> 変数 a には $x % 3 をセットし、変数 b には $x % 5 をセットします。そして、case 文のキーには $a$b を指定します。x が 3 と 5 で割り切れるとき、$a$b の値は 00 になります。この場合は FizzBuzz を表示します。x が 3 で割り切れて 5 で割り切れないとき、$a$b の値は 01, 02, 03, 04 になります。これはパターン 0? で表すことができます。この場合は Fizz を表示します。同様に、x が 5 で割り切れるときはパターン ?0 で表すことができます。この場合は Buzz を表示します。それ以外の場合は x の値を表示します。
+</p>
+<p> それでは実行してみましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/test$ bash fizzbuzz.sh 
+1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz
+16 17 Fizz 19 Buzz Fizz 22 23 Fizz Buzz 26 Fizz 28 29 FizzBuzz
+31 32 Fizz 34 Buzz Fizz 37 38 Fizz Buzz 41 Fizz 43 44 FizzBuzz
+46 47 Fizz 49 Buzz Fizz 52 53 Fizz Buzz 56 Fizz 58 59 FizzBuzz
+61 62 Fizz 64 Buzz Fizz 67 68 Fizz Buzz 71 Fizz 73 74 FizzBuzz
+76 77 Fizz 79 Buzz Fizz 82 83 Fizz Buzz 86 Fizz 88 89 FizzBuzz
+91 92 Fizz 94 Buzz Fizz 97 98 Fizz Buzz 
+</pre>
+<p> 正常に動作していますね。</p>
+<h4 id="chap11">●コマンドライン引数の取得</h4>
+<p> シェルスクリプトを実行したときの引数は先頭から順番に特別な変数 $1, $2, $3, ... に格納されます。$0 はスクリプトファイル名がセットされます。数字だけのシェル変数を 「positional 変数」といいます。引数の個数は変数 $# で求めることができます。すべての引数は変数 $* や $@ で参照することができます。簡単な例を示しましょう。</p>
+<pre class="list">
+リスト : コマンドライン引数の取得 (args.sh)
+
+#! /bin/bash
+
+echo "ファイル名 $0"
+echo "引数の個数 $#"
+echo "1: $1"
+echo "2: $2"
+echo "3: $3"
+echo "引数 $@"
+echo "引数 $*"
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ ./args.sh foo bar baz
+ファイル名 ./args.sh
+引数の個数 3
+1: foo
+2: bar
+3: baz
+引数 foo bar baz
+引数 foo bar baz
+mhiroi@mhiroi-VirtualBox:~/work$ ./args.sh foo bar baz oops
+ファイル名 ./args.sh
+引数の個数 4
+1: foo
+2: bar
+3: baz
+引数 foo bar baz oops
+引数 foo bar baz oops
+</pre>
+<p> positional 変数はコマンド set を使って値を代入することもできます。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ echo $#
+0
+mhiroi@mhiroi-VirtualBox:~/work$ set foo bar baz
+mhiroi@mhiroi-VirtualBox:~/work$ echo $#
+3
+mhiroi@mhiroi-VirtualBox:~/work$ echo $1
+foo
+mhiroi@mhiroi-VirtualBox:~/work$ echo $2
+bar
+mhiroi@mhiroi-VirtualBox:~/work$ echo $3
+baz
+mhiroi@mhiroi-VirtualBox:~/work$ set oops
+mhiroi@mhiroi-VirtualBox:~/work$ echo $#
+1
+mhiroi@mhiroi-VirtualBox:~/work$ echo $@
+oops
+</pre>
+<p> set は引数を順番に positional 変数に代入します。このとき、$# や $@ の値も書き換えられます。</p>
+<p> 引数の先頭が - だと、set のオプションと判断されるため、代入できない場合があります。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ set -a -b -c
+bash: set: -c: 無効なオプションです
+set: 使用法: set [-abefhkmnptuvxBCHP] [-o option-name] [--] [arg ...]
+mhiroi@mhiroi-VirtualBox:~/work$ set - -a -b -c
+mhiroi@mhiroi-VirtualBox:~/work$ echo $#
+3
+mhiroi@mhiroi-VirtualBox:~/work$ echo $@
+-a -b -c
+</pre>
+<p> この場合、オプション - を付けると、- で始まる引数も代入することができます。</p>
+<h4 id="chap12">●関数とエイリアス</h4>
+<p> シェルには私達ユーザーが独自のコマンドを定義する機能があります。これを「関数」と呼びます。関数は function を用いて定義します。</p>
+<pre class="list">
+リスト : 関数定義
+
+function 関数名() {
+  処理A
+  ...
+  処理Z
+  return 終了コード
+}
+</pre>
+<p> function の後ろに関数名を、その後ろに () を書きます。そして、波カッコ {...} の中に実行するコマンドを書き並べます。なお、function は省略することができます。また、コマンド return を使うと終了コードを返すことができます。他のプログラミング言語のように return で値を返すことはできません。値を返したい場合は標準出力に書き込んで、コマンド置換で取得することになります。プログラミング言語の関数とはちょっと違うことに注意してください。</p>
+
+<p> 定義した関数は、コマンドと同じように呼び出すことができます。() をつける必要はありません。引数は positional 変数にセットされます。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ echo $@
+-a -b -c
+mhiroi@mhiroi-VirtualBox:~/work$ function foo() {
+> echo $#
+> echo $1
+> echo $2
+> echo $3
+> echo $@
+> }
+mhiroi@mhiroi-VirtualBox:~/work$ foo a b c
+3
+a
+b
+c
+a b c
+mhiroi@mhiroi-VirtualBox:~/work$ echo $@
+-a -b -c
+</pre>
+<p> positional 変数の値は関数呼び出しが終了すると元の値に戻ります。</p>
+
+<p> 関数内で使用される変数は、関数の外からでもアクセスすることができます。プログラミング言語の用語でいえば「大域変数 (global variable) 」になります。これに対し、関数を実行している間だけ有効になる変数を「局所変数 (local variable) 」といいます。シェルスクリプトで局所変数を定義するにはコマンド local を使います。</p>
+<pre class="item">
+local 変数名
+local 変数名=値
+</pre>
+<p> 簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ function foo() {
+&gt; a=10
+&gt; local b=20
+&gt; echo "$a $b"
+&gt; }
+mhiroi@mhiroi-VirtualBox:~$ a=0
+mhiroi@mhiroi-VirtualBox:~$ b=0
+mhiroi@mhiroi-VirtualBox:~$ foo
+10 20
+mhiroi@mhiroi-VirtualBox:~$ echo $a
+10
+mhiroi@mhiroi-VirtualBox:~$ echo $b
+0
+</pre>
+<p> 関数 foo の中で変数 a, b を使っています。a は大域変数になるので、foo の実行が終了しても値は書き換えられた 10 のままです。b は局所変数になるので、foo を実行している間だけ有効です。関数呼び出しから戻ってくると b は元の値 0 になります。</p>
+
+<p> ところで、長いコマンド名を入力したり、複雑なオプションを指定するのはけっこう面倒です。そのようなコマンドを何度も入力する場合は、コマンドに別名を付けて実行できると便利です。この機能を「エイリアス」といい、コマンド alias で定義することができます。</p>
+<pre class="item">
+alias 名前=コマンド
+</pre>
+<p> オプションや引数を指定するなど空白文字を含む場合は引用符で囲ってください。たとえば、エディタ Emacs を端末で起動する場合は -nw というオプションを付けて emacs -nw としますが、いちいちオプションを打ち込むのは面倒ですね。alias で別名 em を付けると次のようになります。</p>
+<pre class="item">
+alias em='emacs -nw'
+</pre>
+<p> 実際、M.Hiroi はこの 1 行をファイル .bashrc に定義しています。これで端末から em を入力すると Emacs を起動することができます。</p>
+<p> alias 名前 と入力すると、エイリアスが定義されていれば、その内容が表示されます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ alias em
+alias em='emacs -nw'
+</pre>
+<p> alias を引数なしで実行すると、定義されているエイリアスがすべて表示されます。また、エイリアスを削除するにはコマンド unalias を使います。</p>
+<pre class="item">
+unalias 名前
+</pre>
+<h4 id="chap13">●read コマンド</h4>
+<p> データの入力はコマンド read で行うことができます。</p>
+<pre class="item">
+read 変数名
+</pre>
+<p> read は標準入力から 1 行読み込み、指定された変数にセットします。データが入力された場合、read は終了コード 0 を返します。ファイルの終了を検出した場合は異常終了 (終了コードが 0 以外の値) になります。簡単な例を示しましょう。</p>
+
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ while read buff; do echo $buff; done
+hello, world
+hello, world
+hello, lubuntu
+hello, lubuntu
+foo bar baz
+foo bar baz
+oops!
+oops!
+</pre>
+<p> 終了する場合は Ctrl-D を入力してください。</p>
+<p> ファイルから入力したい場合は while ... done のあとに &lt; を書き、その後ろに入力ファイルを指定してください。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ while read buff; do echo $buff; done &lt; hello2.sh
+#! /bin/bash
+
+echo "Hello, $USER"
+exit 0
+</pre>
+<p> read はシェル変数 IFS に設定されている区切り文字で入力された文字列を切り分けることができます。通常、IFS には空白、タブ、改行がセットされています。次のコマンドで確かめることができます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ set | grep ^IFS
+IFS=$' \t\n'
+mhiroi@mhiroi-VirtualBox:~/work$ echo -n "$IFS" | od -c
+0000000      \t  \n
+0000003
+mhiroi@mhiroi-VirtualBox:~$ printenv IFS
+mhiroi@mhiroi-VirtualBox:~$ 
+</pre>
+<p> 最初のコマンドは set でシェル変数をすべて表示し、その中から grep で IFS を検索します。^ は行頭を表す正規表現 (メタ文字) です。次のコマンドは echo で IFS の値を改行を付加せずに表示し、それをコマンド od で変換します。od はファイルを 8 進数やその他の形式でダンプします。IFS の値は空白、改行、タブなので IFS をそのまま echo に渡すと、引数なしで echo を実行することと同じになります。"$IFS" として文字列の中に IFS の値を格納するようにしてください。最後のコマンド printenv は環境変数を表示するコマンドです。IFS は環境変数ではないので、printenv で値は表示されません。</p>
+<p> read の後ろに複数の変数を指定すると、入力文字列を切り分けて別々の変数に格納することができます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ read a b c
+foo bar baz
+mhiroi@mhiroi-VirtualBox:~/work$ echo $a
+foo
+mhiroi@mhiroi-VirtualBox:~/work$ echo $b
+bar
+mhiroi@mhiroi-VirtualBox:~/work$ echo $c
+baz
+mhiroi@mhiroi-VirtualBox:~/work$ read a b c
+1 2 3 4 5
+mhiroi@mhiroi-VirtualBox:~/work$ echo $a
+1
+mhiroi@mhiroi-VirtualBox:~/work$ echo $b
+2
+mhiroi@mhiroi-VirtualBox:~/work$ echo $c
+3 4 5
+mhiroi@mhiroi-VirtualBox:~/work$ read a b c
+foo bar
+mhiroi@mhiroi-VirtualBox:~/work$ echo $a
+foo
+mhiroi@mhiroi-VirtualBox:~/work$ echo $b
+bar
+mhiroi@mhiroi-VirtualBox:~/work$ echo $c
+
+mhiroi@mhiroi-VirtualBox:~/work$ 
+</pre>
+<p> 切り分けた文字列の個数が変数の数よりも多いと、最後の変数に残りの文字列がまとめて格納されます。変数の個数が多い場合、余った変数は空文字列がセットされます。なお、行頭に区切り文字があると、それは削除されるので注意してください。</p>
+<p> もうひとつ簡単な例として、ファイルを連結する mycat.sh を作りましょう。プログラムは次のようになります。</p>
+<pre class="list">
+リスト : ファイルの連結
+
+IFS=$'\n'
+
+for x in $@
+do
+  while read -r buff
+  do
+    echo $buff
+  done &lt; $x
+done
+</pre>
+<p> IFS に改行 $'\n' をセットします。スクリプトをサブシェルで実行する場合、シェル変数の値を書き換えても、元のシェルの環境に影響は与えません。for ループで引数のファイルを順番に取り出して変数 x にセットします。そして、while ループでファイル x から 1 行ずつ buff に読み込み、echo $buff で表示します。read の -r は \ (バックスラッシュ) をエスケープ記号とみなさないオプションです。</p>
+<p> それでは実際に試してみましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ ./mycat.sh hello.sh hello2.sh mycat.sh
+echo Hello, $USER
+exit 0
+#! /bin/bash
+
+echo Hello, $USER
+exit 0
+IFS=$'\n'
+
+for x in $@
+do
+  while read -r buff
+  do
+    echo $buff
+  done &lt; $x
+done
+</pre>
+<p> 正常に動作しているように見えますが、サブシェルを起動しないでスクリプトを実行するコマンド <b>.</b> または source を使うと、シェル変数 IFS の値が書き換えられたままになります。実際に試してみましょう</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ . mycat.sh mycat.sh
+IFS=$'\n'
+
+for x in $@
+do
+  while read -r buff
+  do
+    echo $buff
+  done &lt; $x
+done
+mhiroi@mhiroi-VirtualBox:~/work$ echo -n "$IFS" | od -c
+0000000  \n
+0000001
+</pre>
+<p> 今のシェルで mycat.sh を実行するので、シェル変数 IFS の値は元に戻りません。この場合は他のシェル変数に $IFS の値を退避しておいて、for ループが終わったら元の値に戻せばいいでしょう。興味のある方はプログラムを修正してみてください。</p>
+
+<h4 id="chap14">●その他</h4>
+<p> 最後に、シェルスクリプトの簡単な例題として、小町算というパズルを解いてみましょう。それでは問題です。1 から 9 までの数字を順番に並べ、間に + と - を補って 100 になる式を作ってください。今回は 1 の前に - 符号はつけないものとします。</p>
+<pre class="item">
+例：1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 = 100
+</pre>
+<p> パズルの世界では、1 から 9 までの数字を 1 個ずつすべて使った数字を「小町数」といいます。たとえば、123456789 とか 321654987 のような数字です。「小町算」というものもあり、たとえば 123 + 456 + 789 とか 321 * 654 + 987 のようなものです。この問題は小町算の中でも特に有名なパズルです。</p>
+
+<p> このようなパズルは、関数の「再帰定義」を使うと簡単に解くことができます。関数定義の中で、その関数自身を呼び出すことを「再帰呼び出し (recursive call) 」とか「再帰定義 (recursive definition) 」といいます。シェルスクリプトでも関数の再帰呼び出しは可能ですが、使う機会はあまりないと思います。詳しい説明は割愛しますが、簡単なサンプルプログラムとして参考にしていただければ幸いです。</p>
+<pre class="list">
+リスト : 小町算の解法
+
+function komachi(){
+  if [ $1 -eq 10 ]
+  then
+    if [ $[$2] -eq 100 ]
+    then
+      echo "$2=100"
+    fi
+  else
+    local op
+    for op in + - ""
+    do
+      komachi $[$1 + 1] "$2$op$1"
+    done
+  fi
+}
+
+komachi 2 "1"
+</pre>
+<p> for 文の前に local op と宣言すると、変数 op は局所変数になります。このプログラムでは op が大域変数でも動作しますが、局所変数が使えないと再帰定義でプログラムを作るのは大変難しくなります。
+</p>
+<p> 実行結果は次のようになります。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/test$ bash komachi.sh 
+1+2+3-4+5+6+78+9=100
+1+2+34-5+67-8+9=100
+1+23-4+5+6+78-9=100
+1+23-4+56+7+8+9=100
+12+3+4+5-6-7+89=100
+12+3-4+5+67+8+9=100
+12-3-4+5-6+7+89=100
+123+4-5+67-89=100
+123+45-67+8-9=100
+123-4-5-6-7+8-9=100
+123-45-67+89=100
+</pre>
+<p> 解は全部で 11 通りあります。再帰定義に興味のある方は M.Hiroi's Home Page で公開している拙作の入門講座をお読みください。どのプログラミング言語でも、再帰定義について詳しく説明しています。</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="linuxbash1.html">前編</A> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

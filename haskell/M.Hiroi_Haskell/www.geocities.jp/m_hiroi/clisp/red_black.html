@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881840</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="index.html">Common Lisp</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>２色木（赤黒木）：テストプログラム</h3>
+<pre class="list">
+;
+; rb_tree.l : 2 色木のテストプログラム
+;
+;             Copyright (C) 2003 Makoto Hiroi
+;
+; END : 終端を表すオブジェクト
+; R   : Red
+; B   : Black
+;
+
+;
+; 節の定義
+;
+(defstruct Node
+  color data right left)
+
+;
+; 終端を定義
+;
+(setf END (make-Node :color 'B))
+
+;
+; 表示
+;
+(defun print-rb-tree (n node)
+  (when (not (eq node END))
+    (print-rb-tree (1+ n) (Node-left node))
+    (dotimes (x n) (princ "    "))
+    (format t "[~S,~D]~%" (Node-color node) (Node-data node))
+    (print-rb-tree (1+ n) (Node-right node))))
+
+;
+; 右回転
+;
+(defun right-rotate (node)
+  (let ((left-node (Node-left node)))
+    (setf (Node-left node) (Node-right left-node)
+          (Node-right left-node) node)
+    left-node))
+
+;
+; 左回転
+;
+(defun left-rotate (node)
+  (let ((right-node (Node-right node)))
+    (setf (Node-right node) (Node-left right-node)
+          (Node-left right-node) node)
+    right-node))
+
+;
+; ********** データの挿入 **********
+;
+
+;
+; データを挿入する節までの経路を求める
+;
+(defun search-path (node num)
+  (let (path)
+    (while (not (eq node END))
+      ; 節を記憶
+      (push node path)
+      (cond ((&lt; num (Node-data node))        ; 左の子をたどる
+             (setf node (Node-left node)))
+            ((&lt; (Node-data node) num)        ; 右の子をたどる
+             (setf node (Node-right node)))
+            (t (setf path nil)               ; 同じデータは挿入しない
+               (return))))
+    ; 経路 path を返す
+    path))
+
+;
+; データの挿入
+;
+(defun insert-rb-tree (root num)
+  (let ((path (search-path root num)) new-node node)
+    (cond
+     ; 空の木
+     ((eq root END)
+      (make-Node :color 'B :data num :left END :right END))
+     ; 同じデータだった場合
+     ((null path) root)
+     ; データの挿入
+     (t (setf node (pop path)
+              new-node (make-Node :color 'R :data num :left END :right END))
+        (if (&lt; num (Node-data node))
+            (setf (Node-left node) new-node)
+            (setf (Node-right node) new-node))
+        (check-balance root new-node node path)))))
+
+;
+; バランスのチェック
+;
+(defun check-balance (root node pnode path)
+  (let (gnode pnode-bro)
+    (loop
+      ; node の親 pnode が黒節ならば終了
+      (if (eq (Node-color pnode) 'B) (return root))
+      ; pnode の兄弟を求める
+      (setf gnode (pop path))
+      (if (eq (Node-left gnode) pnode)
+          (setf pnode-bro (Node-right gnode))
+          (setf pnode-bro (Node-left gnode)))
+      ; 兄弟が黒節ならば回転処理で終了
+      (if (eq (Node-color pnode-bro) 'B)
+          (return (rotate-tree root node pnode gnode path)))
+      ; 兄弟が赤節ならば色を塗り替えて上の木で修正
+      (setf (Node-color pnode) 'B
+            (Node-color pnode-bro) 'B)
+      ; gnode が root ならば終了
+      (if (eq gnode root) (return root))
+      ; gnode を赤に書き換えて修正を続行する
+      (setf (Node-color gnode) 'R
+            node gnode
+            pnode (pop path)))))
+
+;
+; 木の回転による修正
+;
+(defun rotate-tree (root node pnode gnode path)
+  (let (rnode ggnode)
+    (cond ((eq (Node-left gnode) pnode)
+           ; node が pnode の右の子であれば pnode を左回転
+           (if (eq (Node-right pnode) node)
+               (setf (Node-left gnode) (left-rotate pnode)))
+           ; 色の塗り替え
+           (setf (Node-color gnode) 'R
+                 (Node-color (Node-left gnode)) 'B)
+           ; gnode を右回転
+           (setf rnode (right-rotate gnode)))
+          (t
+           ; node が pnode の左の子であれば pnode を右回転
+           (if (eq (Node-left pnode) node)
+               (setf (Node-right gnode) (right-rotate pnode)))
+           ; 色の塗り替え
+           (setf (Node-color gnode) 'R
+                 (Node-color (Node-right gnode)) 'B)
+           ; gnode を左回転
+           (setf rnode (left-rotate gnode))))
+    ; gnode の親節を変更
+    (cond ((eq gnode root) rnode)    ; gnode は root なので rnode を返す
+          (t
+           (setf ggnode (pop path))  ; gnode の親節を書き換えて root を返す
+           (if (eq (Node-left ggnode) gnode)
+               (setf (Node-left ggnode) rnode)
+               (setf (Node-right ggnode) rnode))
+           root))))
+
+;
+; ********** データの削除 **********
+;
+
+;
+; 節の色は黒か
+;
+(defun black-p (node)
+  (eq (Node-color node) 'B))
+
+;
+; 節の色は赤か
+;
+(defun red-p (node)
+  (eq (Node-color node) 'R))
+
+;
+; 節の色を黒に書き換える
+;
+(defun write-black (node)
+  (setf (Node-color node) 'B))
+
+;
+; 節の色を赤に書き換える
+;
+(defun write-red (node)
+  (setf (Node-color node) 'R))
+
+;
+; node は pnode の左の子か
+;
+(defun left-child-p (pnode node)
+  (eq (Node-left pnode) node))
+
+;
+; 削除する節までの経路を求める
+; データが見つからない場合は nil を返す
+;
+(defun search-delete-path (node num)
+  (let (path find-node)
+    (while (not (eq node END))
+      ; 節を記憶
+      (push node path)
+      (cond ((&lt; num (Node-data node))        ; 左の子をたどる
+             (setf node (Node-left node)))
+            ((&lt; (Node-data node) num)        ; 右の子をたどる
+             (setf node (Node-right node)))
+            (t (setf find-node node)         ; 発見
+               (return))))
+    (when find-node
+        ; 左右の子がある場合は右部分木から最小値を探す
+      (when (and (not (eq (Node-left node) END))
+                 (not (eq (Node-right node) END)))
+        (setf node (Node-right node))
+        ; 左の子をたどっていく
+        (loop
+          (push node path)
+          (if (eq (Node-left node) END) (return))
+          (setf node (Node-left node)))
+        ; 最小値をセットする
+        (setf (Node-data find-node) (Node-data node)))
+
+      ; 経路 path を返す
+      path)))
+
+;
+; データの削除
+;
+(defun delete-rb-tree (root num)
+  (let* ((path (search-delete-path root num))
+         (node (pop path))
+         (pnode (pop path)))
+    (cond ((null node) root)  ; データ無し
+          ; 左の子がある
+          ((not (eq (Node-left node) END))
+           (setf (Node-data node) (Node-data (Node-left node))
+                 (Node-left node) END)
+           root)
+          ; 右の子がある
+          ((not (eq (Node-right node) END))
+           (setf (Node-data node) (Node-data (Node-right node))
+                 (Node-right node) END)
+           root)
+          ; 削除する node は葉で root だよ
+          ((eq root node) END)
+          ; 葉は削除する
+          (t
+           (if (left-child-p pnode node)
+               (setf (Node-left pnode) END)
+               (setf (Node-right pnode) END))
+           ; 赤節は削除するだけでよい
+           (if (red-p node)
+               root
+               ; バランスの修正
+               (delete-check-balance root END pnode path))))))
+
+
+;
+; 木の修正を続けるか
+;
+(defun continue-p (node-bro pnode)
+  (and (black-p pnode)
+       (black-p node-bro)
+       (black-p (Node-left node-bro))
+       (black-p (Node-right node-bro))))
+
+;
+; 回転は不要か
+;
+(defun not-rotate-p (node-bro pnode)
+  (and (red-p pnode)
+       (black-p node-bro)
+       (black-p (Node-left node-bro))
+       (black-p (Node-right node-bro))))
+
+;
+; 削除したときのバランスのチェック
+;
+(defun delete-check-balance (root node pnode path)
+  (let (node-bro result gnode)
+    (loop
+      ; 兄弟を求める
+      (if (left-child-p pnode node)
+          (setf node-bro (Node-right pnode))
+          (setf node-bro (Node-left pnode)))
+      (cond
+       ((continue-p node-bro pnode)
+        ; node-bro を赤に塗り替えて上の木でチェックする
+        (write-red node-bro)
+        (setf node pnode
+              pnode (pop path))
+        ; root のチェック
+        (if (eq root node) (return root)))
+       (t
+        ; 回転によるバランスの修正
+        (setf result (delete-rotate-tree node node-bro pnode))
+        ; 節の付け替え
+        (setf gnode (pop path))
+        (cond ((null gnode) (setf root result))     ; root の付け替え
+              ((left-child-p gnode pnode)
+               (setf (Node-left gnode) result))
+              (t
+               (setf (Node-right gnode) result)))
+        (return root))))))
+
+;
+; 回転によるバランスの修正
+; (部分木 node の黒高さが -1 だよ)
+;
+(defun delete-rotate-tree (node node-bro pnode)
+  (cond
+   ((not-rotate-p node-bro pnode)
+    ; 節の色を塗り替えて終了
+    (write-black pnode)
+    (write-red node-bro)
+    pnode)
+   ((red-p node-bro)
+    ; ２重回転
+    (if (left-child-p pnode node)
+        (delete-double-rotate-left node node-bro pnode)
+        (delete-double-rotate-right node node-bro pnode)))
+   (t
+    ; 回転または２重回転
+    (if (left-child-p pnode node)
+        (delete-rotate-left node node-bro pnode)
+        (delete-rotate-right node node-bro pnode)))))
+
+;
+; 左回転による修正 : 左部分木 (node) の黒高さが -1
+;
+(defun delete-rotate-left (node node-bro pnode)
+  (when (black-p (Node-right node-bro))
+    ; node-bro を右回転
+    (write-red node-bro)
+    (write-black (Node-left node-bro))
+    (setf (Node-right pnode) (right-rotate node-bro)))
+  ; 色の塗り替え
+  (when (red-p pnode)
+    (write-black pnode)
+    (write-red (Node-right pnode)))
+  (write-black (Node-right (Node-right pnode)))
+  ; pnode を左回転
+  (left-rotate pnode))
+
+;
+; 右回転による修正 : 右部分木 (node) の黒高さが -1
+;
+(defun delete-rotate-right (node node-bro pnode)
+  (when (black-p (Node-left node-bro))
+    ; node-bro を左回転
+    (write-red node-bro)
+    (write-black (Node-right node-bro))
+    (setf (Node-left pnode) (left-rotate node-bro)))
+  ; 色の塗り替え
+  (when (red-p pnode)
+    (write-black pnode)
+    (write-red (Node-left pnode)))
+  (write-black (Node-left (Node-left pnode)))
+  ; pnode を右回転
+  (right-rotate pnode))
+
+;
+; 2 重回転 : 左部分木 (node) が -1
+;
+(defun delete-double-rotate-left (node node-bro pnode)
+  ; 色の塗り替え
+  (write-red pnode)
+  (write-black node-bro)
+  ; 左回転
+  (setf pnode (left-rotate pnode))
+  ; 再度回転処理
+  (setf (Node-left pnode)
+        (delete-rotate-tree node
+                            (Node-right (Node-left pnode))
+                            (Node-left pnode)))
+  ; pnode を返す
+  pnode)
+
+;
+; 2 重回転 : 右部分木 (node) が -1
+;
+(defun delete-double-rotate-right (node node-bro pnode)
+  ; 色の塗り替え
+  (write-red pnode)
+  (write-black node-bro)
+  ; 右回転
+  (setf pnode (right-rotate pnode))
+  ; 再度回転処理
+  (setf (Node-right pnode)
+        (delete-rotate-tree node
+                            (Node-left (Node-right pnode))
+                            (Node-right pnode)))
+  ; pnode を返す
+  pnode)
+
+; end of file
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="index.html">Common Lisp</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881816</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>簡単なプログラム</h3>
+<h4>●連結リスト</h4>
+<p> 今回は「片方向連結リスト (singly linked list)」を実装してみましょう。連結リストは基本的なデータ構造です。他のプログラミング言語、特にガベージコレクションがある言語では、とても簡単にプログラムを作ることができます。ところが、Rust には所有権や借用チェックがあるので、他の言語のように簡単ではありません。他の言語と同じように作ろうとすると、必ずといっていいほど借用チェッカーにひっかかるのではないでしょうか。
+</p>
+<p> 案の定、M.Hiroi も借用チェッカーの壁を越えられず途方に暮れていたのですが、<a href="http://cglab.ca/~abeinges/blah/too-many-lists/book/">Learning Rust With Entirely Too Many Linked Lists</a> という参考文献を見つけたので、Rust における連結リストの基本的な作り方を勉強しているところです。作者様に感謝いたします。
+</p>
+<p> Rust は再帰的なデータ構造の扱いが難しいようで、Rust の制約を回避するため、unsafe な処理が必要になることもあるようです。まあ、必要なものはたいていライブラリに揃っているので、それを使えばよいのですが、連結リストのような基本的なデータ構造を素直にプログラムできないのは、M.Hiroi の好みとはちょっと違うなあ、と思っています。リストの操作は Lisp / Scheme や関数型言語のほうがやっぱり簡単ですね。
+</p>
+<h4 id="chap52">●スタックの作成</h4>
+<p> 今回は上記文献を参考にして、連結リストを使ってスタックを実装してみましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 連結リストによるスタックの実装
+
+// ノードの定義
+enum Node&lt;T&gt; {
+    Nil,
+    Cons(T, Box&lt;Node&lt;T&gt;&gt;)
+}
+
+use Node::*;
+
+// スタックの定義
+struct Stack&lt;T&gt; {
+    head: Node&lt;T&gt;
+}
+
+// メソッド
+impl&lt;T&gt; Stack&lt;T&gt; {
+    // スタックの生成
+    fn new() -&gt; Stack&lt;T&gt; {
+        Stack { head: Nil }
+    }
+
+    // データの追加
+    fn push(&amp;mut self, x: T) {
+        let new_node = Cons(x, Box::new(std::mem::replace(&amp;mut self.head, Nil)));
+        self.head = new_node;
+        //self.head = Cons(x, Box::new(self.head));
+    }
+
+    // データの取り出し
+    fn pop(&amp;mut self) -&gt; Option&lt;T&gt; {
+        match std::mem::replace(&amp;mut self.head, Nil) {
+            Nil =&gt; None,
+            Cons(x, node) =&gt; {
+                let node = *node;  // Box から移動
+                self.head = node;
+                Some(x)
+            }
+        }
+    }
+
+    // 先頭データの参照
+    fn peek(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        match self.head {
+            Nil =&gt; None,
+            Cons(ref x, _) =&gt; Some(x)
+        }
+    }
+
+    // スタックは空か？
+    fn is_empty(&amp;self) -&gt; bool {
+        match self.head {
+            Nil =&gt; true,
+            _ =&gt; false
+        }
+    }
+}
+
+fn main() {
+    let mut a: Stack&lt;i32&gt; = Stack::new();
+    for i in 0 .. 8 {
+        a.push(i);
+    }
+    println!("{}", a.peek().unwrap());
+    while !a.is_empty() {
+        println!("{}", a.pop().unwrap());
+    }
+}
+</pre>
+<pre>
+7
+7
+6
+5
+4
+3
+2
+1
+0
+</pre>
+<p> プログラムのポイントはメソッド push() と pop() で Stack の head を書き換えるところです。たとえば、push() を次のようにプログラムするとコンパイルエラーになります。
+</p>
+<pre class="list">
+リスト : 間違った push()
+
+fn push(&amp;mut self, x: T) {
+    self.head = Cons(x, Box::new(self.head));
+}
+</pre>
+<pre>
+self.head = Cons(x, Box::new(self.head));
+                             ^^^^ cannot move out of borrowed content
+</pre>
+<p> self.head の値を書き換えるためには、push() の第 1 引数を &amp;mut self にしなければいけないのですが、そうすると所有権を移動することができなくなってしまうのです。これを回避するためには、std::mem モジュールにある関数 replace() を使います。
+</p>
+<pre class="item">
+fn replace&lt;T&gt;(dest: &amp;mut T, src: T) -&gt; T
+</pre>
+<p> replace() は dest の値を src に書き換えて、dest の元の値を返します。std::mem にはメモリを操作する特別な関数が定義されています。その中では unsafe な処理を行うことにより、Rust の制約を緩和しているようです。単純な連結リスト (スタック) を作るのに、このような処理が必要になるとは驚きました。
+</p>
+<p> push() は Cons(x, Box::new(std::mem::replace(&amp;mut self.head, Nil))) で新しいコンスセルを作ります。replace() により self.head の値がコンスセルの Box に移され、self.head の値は Nil に書き換えられます。あとは新しいセルを self.head にセットするだけです。
+</p>
+<p> pop() は replace() で self.head を Nil に書き換えて、その返り値を match でパターンマッチします。Nil であれば None を返します。そうでなければ、Cons(x, node) とマッチングします。コンスセルは Box に格納されているので、let node = *node; で Box から取り出します。あとは self.head の値を Box から取り出した node に書き換え、値 x を Some に包んで返すだけです。
+</p>
+<h4>●Option 版</h4>
+<p> ところで、Option には replace() と同様のメソッド take() があるので、Option を使って連結リスト (スタック) を作ることも可能です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 連結リストによるスタックの実装 (Option 版)
+
+// ノードの定義
+struct Node&lt;T&gt; {
+    car: T,
+    cdr: Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;
+}
+
+// スタックの定義
+struct Stack&lt;T&gt; {
+    head: Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;
+}
+</pre>
+<p> 構造体 Node がコンスセルを表します。フィールド car にデータを、cdr に次のコンスセルを格納します。car と cdr は Lisp から拝借しました。cdr のデータ型は Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt; で、終端を None で表します。末尾のコンスセルは cdr が None になります。Stack の head は連結リストを保持するので、cdr と同じデータ型になります。そして、head が None であれば空のスタックになります。
+</p>
+<p> 次はスタックのメソッドを定義します。
+</p>
+<pre class="list">
+リスト : スタックのメソッド
+
+impl&lt;T&gt; Stack&lt;T&gt; {
+    // スタックの生成
+    fn new() -&gt; Stack&lt;T&gt; {
+        Stack { head: None }
+    }
+
+    // データの追加
+    fn push(&amp;mut self, x: T) {
+        let new_node = Node { car: x, cdr: self.head.take() };
+        self.head = Some(Box::new(new_node));
+    }
+
+    // データの取り出し
+    fn pop(&amp;mut self) -&gt; Option&lt;T&gt; {
+        self.head.take().map(|xs| {
+            let xs = *xs;
+            self.head = xs.cdr;
+            xs.car
+        })
+    }
+
+    // 先頭データの参照
+    fn peek(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.head.as_ref().map(|xs| {
+            &amp;xs.car
+        })
+    }
+
+    // スタックは空か？
+    fn is_empty(&amp;self) -&gt; bool {
+        self.head.is_none()
+    }
+}
+
+fn main() {
+    let mut a: Stack&lt;i32&gt; = Stack::new();
+    for i in 0 .. 8 {
+        a.push(i);
+    }
+    println!("{}", a.peek().unwrap());
+    while !a.is_empty() {
+        println!("{}", a.pop().unwrap());
+    }
+}
+</pre>
+<p> push() は新しいリスト new_node を生成するとき、self.head.take() で cdr に self.head の値をセットします。このとき、self.head の値は None に書き換えられます。あとは、new_node を Box に包み、さらに Some に包んで self.head にセットするだけです。
+</p>
+<p> pop() は self.head.take() で self.head の値 (Option 型) を取り出し、それを map() に渡して処理します。ラムダの引数 xs は Box 型なので、let xs = *xs; でリストを Box から取り出します。あとは、self.head に xs.cdr をセットして xs.car を返すだけです。
+</p>
+<p> peek() は as_ref() と map() を使うと簡単です。as_ref() で Option&lt;T&gt; を Option&lt;&amp;T&gt; に変換してから map() に渡します。ラムダの引数 xs は Box の参照になりますが、自動的にデリファレンスが行われるので、&amp;xs.car で値の参照を返すことができます。
+</p>
+<p> 実行結果は同じなので省略します。
+</p>
+<h4 id="chap53">●要素の参照を返す</h4>
+<p> 次は n 番目の要素の参照 (immutable と mutable) を返すメソッド get() と get_mut() を作りましょう。プログラムは最初に作った基本的な連結リストの定義を使います。それから、構造体 Stack の名前を List に変更します。
+</p>
+<p> get() は簡単に定義することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : immutable な参照を返す
+
+fn get(&amp;self, n: usize) -&gt; Option&lt;&amp;T&gt; {
+    let mut i = 0;
+    let mut node = &amp;self.head;
+    while i &lt; n {
+        match *node {
+            Nil =&gt; break,
+            Cons(_, ref node1) =&gt; {
+                node = &amp;node1;  // &amp;**node1 のこと (自動デリファレンスされる)
+                i += 1;
+            }
+        }
+    }
+    match *node {
+        Nil =&gt; None,
+        Cons(ref x, _) =&gt; Some(x)
+    }
+}
+</pre>
+<p> コンスセルを順番にたどるだけなので、とくに難しいところはないと思います。ところが、get_mut() の場合、次のように get() と同じようにプログラムすると借用チェックでコンパイルエラーになります。
+</p>
+<pre class="list">
+リスト : mutable な参照を返す (コンパイルエラー版)
+
+fn get_mut(&amp;mut self, n: usize) -&gt; Option&lt;&amp;mut T&gt; {
+    let mut i = 0;
+    let mut node = &amp;mut self.head;
+    while i &lt; n {
+        match *node {
+            Nil =&gt; break,
+            Cons(_, ref mut node1) =&gt; {
+                node = &amp;mut node1;
+                i += 1;
+            }
+        }
+    }
+    match *node {
+        Nil =&gt; None,
+        Cons(ref mut x, _) =&gt; Some(x)
+    }
+}
+</pre>
+<p> Rust の場合、mutable な借用は一つしか作成することができません。node に node1 を代入するところで、同じデータを指す mutable な参照が 2 つできるので、コンパイルエラーになるようです。ここで、またしても M.Hiroi は途方に暮れたのですが、tkyk0317 さんの <a href="http://qiita.com/tkyk0317/items/8edf3374ead689875d4b">rustで単方向リスト＋単体テスト</a> を参考にして解決することができました。tkyk0317 さんに感謝いたします。
+</p>
+<p> 具体的には、次のように局所関数 iter() を再帰呼び出しで定義することで、mutable な参照でもコンスセルをたどることができました。
+</p>
+<pre class="list">
+リスト : mutable な参照を返す
+
+fn get_mut(&amp;mut self, n: usize) -&gt; Option&lt;&amp;mut T&gt; {
+    fn iter&lt;T&gt;(i: usize, n: usize, node: &amp;mut Node&lt;T&gt;) -&gt; Option&lt;&amp;mut T&gt; {
+        if i == n {
+            match *node {
+                Nil =&gt; None,
+                Cons(ref mut x, _) =&gt; Some(x)
+            }
+        } else {
+            match *node {
+                Nil =&gt; None,
+                Cons(_, ref mut node1) =&gt; iter(i + 1, n, node1)
+            }
+        }
+    }
+    iter(0, n, &amp;mut self.head)
+}
+</pre>
+<p> この方法だと、引数 node と変数 node1 が指し示すデータの参照 (mutable) が別々になるので、借用チェッカーに引っかかることなくコンパイルすることができます。
+</p>
+<p> プログラムと簡単な実行例を示します。
+</p>
+<pre class="list">
+リスト : 連結リストの実装
+
+// ノード (コンスセル) の定義
+enum Node&lt;T&gt; {
+    Nil,
+    Cons(T, Box&lt;Node&lt;T&gt;&gt;)
+}
+
+use Node::*;
+
+// 連結リストの定義
+struct List&lt;T&gt; {
+    head: Node&lt;T&gt;
+}
+
+// メソッドの定義
+impl&lt;T&gt; List&lt;T&gt; {
+    // 連結リストの生成
+    fn new() -&gt; List&lt;T&gt; {
+        List { head: Nil }
+    }
+
+    // データの追加
+    fn push(&amp;mut self, x: T) {
+        let new_node = Cons(x, Box::new(std::mem::replace(&amp;mut self.head, Nil)));
+        self.head = new_node;
+        //self.head = Cons(x, Box::new(self.head));
+    }
+
+    // データの取り出し
+    fn pop(&amp;mut self) -&gt; Option&lt;T&gt; {
+        match std::mem::replace(&amp;mut self.head, Nil) {
+            Nil =&gt; None,
+            Cons(x, node) =&gt; {
+                let node = *node;  // Box から移動
+                self.head = node;
+                Some(x)
+            }
+        }
+    }
+
+    // 先頭データの参照
+    fn peek(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        match self.head {
+            Nil =&gt; None,
+            Cons(ref x, _) =&gt; Some(x)
+        }
+    }
+
+    // 連結リストは空か？
+    fn is_empty(&amp;self) -&gt; bool {
+        match self.head {
+            Nil =&gt; true,
+            _ =&gt; false
+        }
+    }
+
+    // n 番目の要素の参照 (immutable) を返す
+    fn get(&amp;self, n: usize) -&gt; Option&lt;&amp;T&gt; {
+        let mut i = 0;
+        let mut node = &amp;self.head;
+        while i &lt; n {
+            match *node {
+                Nil =&gt; break,
+                Cons(_, ref node1) =&gt; {
+                    node = &amp;node1;  // &amp;**node1 のこと (自動デリファレンスされるlist1)
+                    i += 1;
+                }
+            }
+        }
+        match *node {
+            Nil =&gt; None,
+            Cons(ref x, _) =&gt; Some(x)
+        }
+    }
+
+    // n 番目の要素の参照 (mutable) を返す
+    fn get_mut(&amp;mut self, n: usize) -&gt; Option&lt;&amp;mut T&gt; {
+        fn iter&lt;T&gt;(i: usize, n: usize, node: &amp;mut Node&lt;T&gt;) -&gt; Option&lt;&amp;mut T&gt; {
+            if i == n {
+                match *node {
+                    Nil =&gt; None,
+                    Cons(ref mut x, _) =&gt; Some(x)
+                }
+            } else {
+                match *node {
+                    Nil =&gt; None,
+                    Cons(_, ref mut node1) =&gt; iter(i + 1, n, node1)
+                }
+            }
+        }
+        iter(0, n, &amp;mut self.head)
+    }
+}
+
+fn main() {
+    let mut a: List&lt;i32&gt; = List::new();
+    for i in 0 .. 8 {
+        a.push(i);
+    }
+    println!("{}", a.peek().unwrap());
+    for i in 0 .. 9 {
+        println!("{:?}", a.get(i));
+    }
+    *a.get_mut(7).unwrap() += 10;
+    while !a.is_empty() {
+        println!("{}", a.pop().unwrap());
+    }
+}
+</pre>
+<pre>
+7
+Some(7)
+Some(6)
+Some(5)
+Some(4)
+Some(3)
+Some(2)
+Some(1)
+Some(0)
+None
+7
+6
+5
+4
+3
+2
+1
+10
+</pre>
+<h4 id="chap54">●イテレータの作成</h4>
+<p> 次は連結リストにイテレータを実装してみましょう。イテレータにはメソッド nth() があるので、get() や get_mut() を作らなくても要素の参照を取得することができます。ところが、mutable なイテレータの実装でつまづいてしまいました。ライフタイム関連でコンパイルエラーが発生し、それを解決することができませんでした。まだまだ修行が足りないようです。
+</p>
+<p> そこで、Option を使った連結リストにイテレータを実装することにしました。このプログラムは参考文献 <a href="http://cglab.ca/~abeinges/blah/too-many-lists/book/">Learning Rust With Entirely Too Many Linked Lists</a> とほとんど同じです。詳しい説明は参考文献をお読みいただくとして、ここでは概要を簡単に説明することにします。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : イテレータの実装
+
+// ノードの定義
+struct Node&lt;T&gt; {
+    car: T,
+    cdr: Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;
+}
+
+// 連結リストの定義
+struct List&lt;T&gt; {
+    head: Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;
+}
+
+// イテレータの定義
+struct IterList&lt;'a, T: 'a&gt; {
+    next: Option&lt;&amp;'a Node&lt;T&gt;&gt;
+}
+
+struct IterMutList&lt;'a, T: 'a&gt; {
+    next: Option&lt;&amp;'a mut Node&lt;T&gt;&gt;
+}
+
+struct IterIntoList&lt;T&gt; {
+    head: List&lt;T&gt;
+}
+
+impl&lt;'a, T&gt; Iterator for IterList&lt;'a, T&gt; {
+    type Item = &amp;'a T;
+    fn next(&amp;mut self) -&gt; Option&lt;&amp;'a T&gt; {
+        self.next.map(|node| {
+            self.next = node.cdr.as_ref().map(|node| { &amp;**node });
+            &amp;node.car
+        })
+    }
+}
+
+impl&lt;'a, T&gt; Iterator for IterMutList&lt;'a, T&gt; {
+    type Item = &amp;'a mut T;
+    fn next(&amp;mut self) -&gt; Option&lt;&amp;'a mut T&gt; {
+        self.next.take().map(|node| {
+            self.next = node.cdr.as_mut().map(|node| { &amp;mut **node });
+            &amp;mut node.car
+        })
+    }
+}
+
+impl&lt;T&gt; Iterator for IterIntoList&lt;T&gt; {
+    type Item = T;
+    fn next(&amp;mut self) -&gt; Option&lt;T&gt; {
+        self.head.pop()
+    }
+}
+
+// メソッドの定義
+impl&lt;T&gt; List&lt;T&gt; {
+    // リストの生成
+    fn new() -&gt; List&lt;T&gt; {
+        List { head: None }
+    }
+
+    // データの追加
+    fn push(&amp;mut self, x: T) {
+        let new_node = Node { car: x, cdr: self.head.take() };
+        self.head = Some(Box::new(new_node));
+    }
+
+    // データの取り出し
+    fn pop(&amp;mut self) -&gt; Option&lt;T&gt; {
+        self.head.take().map(|xs| {
+            let xs = *xs;
+            self.head = xs.cdr;
+            xs.car
+        })
+    }
+
+    // 先頭データへの参照
+    fn peek(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.head.as_ref().map(|xs| {
+            &amp;xs.car
+        })
+    }
+
+    // リストは空か？
+    fn is_empty(&amp;self) -&gt; bool {
+        self.head.is_none()
+    }
+
+    // イテレータの生成
+    fn iter(&amp;self) -&gt; IterList&lt;T&gt; {
+        IterList { next: self.head.as_ref().map(|node| &amp;**node )}
+    }
+    fn iter_mut(&amp;mut self) -&gt; IterMutList&lt;T&gt; {
+        IterMutList { next: self.head.as_mut().map(|node| &amp;mut **node )}
+    }
+    fn into_iter(self) -&gt; IterIntoList&lt;T&gt; {
+        IterIntoList { head: self }
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut a: List&lt;i32&gt; = List::new();
+    for i in 0 .. 8 {
+        a.push(i);
+    }
+    println!("{}", a.peek().unwrap());
+    for x in a.iter() {
+        print!("{} ", x)
+    }
+    println!("");
+    for x in a.iter_mut() {
+        *x += 10;
+    }
+    println!("{}", a.iter().nth(7).unwrap());
+    *a.iter_mut().nth(7).unwrap() += 100;
+    println!("{}", a.iter().nth(7).unwrap());
+    while !a.is_empty() {
+        println!("{}", a.pop().unwrap());
+    }
+    for i in 0 .. 8 {
+        a.push(i)
+    }
+    let b: Vec&lt;i32&gt; = a.into_iter().collect();
+    println!("{:?}", b);
+}
+</pre>
+<p> イテレータは次の 3 つのメソッドで生成します。
+</p>
+<ol>
+  <li>iter(), immutable な参照を返すイテレータを生成する</li>
+  <li>iter_mut(), mutable な参照を返すイテレータを生成する</li>
+  <li>into_iter(), 所有権を移動するイテレータを生成する</li>
+</ol>
+<p> 3 番目の into_iter() が一番簡単で、連結リスト self をイテレータの head に move し、あとは pop() を使って要素を順番に返していくだけです。immutable なイテレータは map() でノード node を取り出し、その cdr を as_ref() で Option の型を参照に変換し、map() で次のノードを取り出していきます。
+</p>
+<p> mutable なイテレータも map() でノード (node) を取り出しますが、take() でイテレータのフィールド self.next を None に書き換えないと、借用チェッカーに引っかかるので注意してください。あとは、node.cdr を as_mut() で Option の型を mutable な参照に変換し、map() で次のセルを取りだします。
+</p>
+<p> 単純な連結リストのはずなのですが、Rust ではけっこう複雑な処理になりますね。もしかしたら、もっと簡単な方法があるのかもしれません。今後の課題にしたいと思います。それでは実行結果を示します。
+</p>
+<pre>
+7
+7 6 5 4 3 2 1 0
+10
+110
+17
+16
+15
+14
+13
+12
+11
+110
+[7, 6, 5, 4, 3, 2, 1, 0]
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4 id="chap55">●二分木</h4>
+<p> 今回は Rust で「二分木 (binary tree)」を作ってみましょう。Rust のライブラリには B-tree という平衡木を使った BTreeMap, BTreeSet が用意されているので、わざわざ二分木を作る必要はないのですが、Rust のお勉強ということで単純な二分木を作ってみましょう。なお、二分木のアルゴリズムは拙作のページで詳しく説明しています。よろしければ参考にしてください。
+</p>
+
+<ul id="algo_cite">
+  <li><a href="../light/pyalgo03.html">二分木とヒープ</a> (Python)</li>
+  <li><a href="clang13.html">二分探索木</a> (Ｃ言語)</li>
+  <li><a href="cpp16.html">二分探索木</a> (C++)</li>
+  <li><a href="../func/abcscm15.html">二分木 (binary tree)</a> (Scheme)</li>
+  <li><a href="../func/haskell10.html">二分探索木</a> (Haskell)</li>
+</ul>
+<p> まずは最初にデータ構造を定義しましょう。連結リストと同様に、列挙型で二分木の節を定義する方法と、Option 型を使う方法があります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 二分木の定義１ (列挙型を使う方法)
+
+// 節の定義
+enum Node&lt;T: Ord&gt; {
+    Nil,
+    Cons(T, Box&lt;Node&lt;T&gt;&gt;, Box&lt;Node&lt;T&gt;&gt;)
+}
+
+// 二分木
+struct Tree&lt;T: Ord&gt; {
+    root: Node&lt;T&gt;
+}
+</pre>
+<pre class="list">
+リスト : 二分木の定義２ (Option 型を使う方法)
+
+// 節の定義
+struct Node&lt;T : Ord&gt; {
+    item:  T,
+    left:  Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;,
+    right: Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;
+}
+
+// 二分木
+struct Tree&lt;T: Ord&gt; {
+    root: Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;
+}
+</pre>
+<p> 二分木の基本的な操作であるデータの挿入と探索はどちらの方法でも簡単にプログラムできます。ところが、データの削除がとても難しくて、M.Hiroi は定義１の方法でデータの削除処理を作ることをあきらめました。Rust 初心者 (M.Hiroi) にとって再帰的なデータ構造は鬼門ですね。Rust は本当に難しいプログラミング言語だと痛感しています。
+</p>
+<h4 id="chap56">●データの挿入</h4>
+<p> データの挿入は再帰定義を使えば簡単です。他の言語の場合、部分木を保持するフィールド変数に関数の返り値を代入する方法をよく使いますが、Rust ではデータを挿入する場所を探して、そこに新しい節を挿入する方法になります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの挿入 (定義１)
+
+impl&lt;T: Ord&gt; Node&lt;T&gt; {
+    // データの挿入
+    fn insert(&amp;mut self, x: T) {
+        match *self {
+            Nil =&gt; *self = Cons(x, Box::new(Nil), Box::new(Nil)),
+            Cons(ref y, ref mut left, ref mut right) =&gt; {
+                if x &lt; *y {
+                    left.insert(x);
+                } else if x &gt; *y {
+                    right.insert(x)
+                }
+            }
+        }
+    }
+}    
+
+// メソッドの定義
+impl&lt;T: Ord&gt; Tree&lt;T&gt; {
+    // 二分木の生成
+    fn new() -&gt; Tree&lt;T&gt; {
+        Tree { root: Nil }
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, x: T) {
+        self.root.insert(x);
+    }
+}
+</pre>
+<pre class="list">
+リスト : データの挿入 (定義２)
+
+// 節のメソッド
+impl&lt;T: Ord&gt; Node&lt;T&gt; {
+    // 節の生成
+    fn new(x: T) -&gt; Node&lt;T&gt; {
+        Node { item: x, left: None, right: None }
+    }
+    
+    // データの挿入
+    fn insert(&amp;mut self, x: T) {
+        if x == self.item { return; }
+        let node = if x &lt; self.item { &amp;mut self.left } else { &amp;mut self.right };
+        match node {
+            &amp;mut Some(ref mut node1) =&gt; node1.insert(x),
+            &amp;mut None =&gt; {
+                *node = Some(Box::new(Node::new(x)))
+            }
+        }
+    }
+}
+
+// 二分木のメソッド
+impl&lt;T: Ord&gt; Tree&lt;T&gt; {
+    // 二分木の生成
+    fn new() -&gt; Tree&lt;T&gt;{
+        Tree { root: None }
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, x: T) {
+        if self.root.is_none() {
+            self.root = Some(Box::new(Node::new(x)));
+        } else {
+            self.root.as_mut().map(|node| node.insert(x));
+        }
+    }
+}    
+</pre>
+<p> どちらの方法でも Node のメソッド insert() でデータを挿入します。第 1 引数 &amp;mut self の値が空の木 (Nil, None) の場合、そこに新しい節を挿入します。それ以外の場合は、値を比較して二分木の節をたどります。
+</p>
+<h4 id="chap57">●データの探索と二分木の巡回</h4>
+<p> 次はデータを探索するメソッド contains(), min(), max() と二分木を巡回するメソッド foreach() を作ります。contains() はデータを比較して左右の部分木をたどります。min() は一番左側にある節のデータの参照を、max() が一番右側にある節のデータの参照を返します。それから、foreach() にはクロージャではなくトレイトオブジェクトを渡すことに注意してください。詳細はプログラムリストをお読みくださいませ。
+</p>
+<pre class="list">
+リスト : データの探索と巡回 (定義１)
+
+impl&lt;T: Ord&gt; Node&lt;T&gt; {
+    // データの探索
+    fn contains(&amp;self, x: T) -&gt; bool {
+        match *self {
+            Nil =&gt; false,
+            Cons(ref y, ref left, ref right) =&gt; {
+                if x == *y {
+                    true
+                } else if x &lt; *y {
+                    left.contains(x)
+                } else {
+                    right.contains(x)
+                }
+            }
+        }
+    }
+
+    // 最小値
+    fn min(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        match *self {
+            Nil =&gt; None,
+            Cons(ref x, ref left, _) =&gt; {
+                match **left {
+                    Nil =&gt; Some(x),
+                    _ =&gt; left.min()
+                }
+            }
+        }
+    }
+    
+    // 最大値
+    fn max(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        match *self {
+            Nil =&gt; None,
+            Cons(ref x, _, ref right) =&gt; {
+                match **right {
+                    Nil =&gt; Some(x),
+                    _ =&gt; right.max()
+                }
+            }
+        }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, func: &amp;Fn(&amp;T) -&gt; ()) {
+        match *self {
+            Nil =&gt; (),
+            Cons(ref x, ref left, ref right) =&gt; {
+                left.foreach(func);
+                func(x);
+                right.foreach(func);
+            }
+        }
+    }
+}
+
+// 二分木のメソッド
+impl&lt;T: Ord&gt; Tree&lt;T&gt; {
+    fn new() -&gt; Tree&lt;T&gt; {
+        Tree { root: Nil }
+    }
+
+    fn contains(&amp;self, x: T) -&gt; bool {
+        self.root.contains(x)
+    }
+
+    fn min(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.root.min()
+    }
+
+    fn max(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.root.max()
+    }
+
+    fn foreach(&amp;self, func: &amp;Fn(&amp;T) -&gt; ()) {
+        self.root.foreach(func);
+    }
+
+    fn is_empty(&amp;self) -&gt; bool {
+        match self.root {
+            Nil =&gt; true,
+            _ =&gt; false
+        }
+    }
+}
+</pre>
+<pre class="list">
+リスト : 簡単なテスト
+
+fn main() {
+    let mut a: Tree&lt;i32&gt; = Tree::new();
+    println!("{}", a.is_empty());
+    for x in vec![5, 3, 1, 4, 2, 7, 6, 8, 9] {
+        a.insert(x);
+    }
+    println!("{}", a.is_empty());
+    for x in 0 .. 11 {
+        println!("{}, {}", x, a.contains(x));
+    }
+    a.foreach(&amp;|x| print!("{} ", x));
+    println!("");
+    println!("{:?}", a.min());
+    println!("{:?}", a.max());
+}
+</pre>
+<pre>
+true
+false
+0, false
+1, true
+2, true
+3, true
+4, true
+5, true
+6, true
+7, true
+8, true
+9, true
+10, false
+1 2 3 4 5 6 7 8 9
+Some(1)
+Some(9)
+</pre>
+<pre class="list">
+リスト : データの探索と巡回 (定義２)
+
+// 節のメソッド
+impl&lt;T: Ord&gt; Node&lt;T&gt; {
+    // データの探索
+    fn contains(&amp;self, x: T) -&gt; bool {
+        if x == self.item { return true; }
+        let node = if x &lt; self.item { &amp;self.left } else { &amp;self.right };
+        match node {
+            &amp;Some(ref node1) =&gt; node1.contains(x),
+            &amp;None =&gt; false
+        }
+    }
+
+    // 最小値
+    fn min(&amp;self) -&gt; &amp;T {
+        match self.left {
+            None =&gt; &amp;self.item,
+            Some(ref node) =&gt; node.min()
+        }
+    }
+
+    // 最大値
+    fn max(&amp;self) -&gt; &amp;T {
+        match self.right {
+            None =&gt; &amp;self.item,
+            Some(ref node) =&gt; node.max()
+        }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, func: &amp;Fn(&amp;T) -&gt; ()) {
+        self.left.as_ref().map(|node| node.foreach(func));
+        func(&amp;self.item);
+        self.right.as_ref().map(|node| node.foreach(func));
+    }
+}
+
+impl&lt;T: Ord&gt; Tree&lt;T&gt; {
+    fn contains(&amp;self, x: T) -&gt; bool {
+        self.root.as_ref().map_or_else(|| false, |node| node.contains(x))
+    }
+    
+    fn min(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.root.as_ref().map(|node| node.min())
+    }
+    
+    fn max(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.root.as_ref().map(|node| node.max())
+    }
+        
+    fn foreach(&amp;self, func: &amp;Fn(&amp;T) -&gt;()) {
+        self.root.as_ref().map(|node| node.foreach(func));
+    }
+
+    fn is_empty(&amp;self) -&gt; bool {
+        self.root.is_none()
+    }
+}
+</pre>
+<p> テストプログラムと結果は同じなので省略します。
+</p>
+<h4 id="chap58">●データの削除</h4>
+<p> 次はデータを削除するプログラムを作ります。実は、定義２の方法でも削除処理を作るのは大変難しくて、M.Hiroi は途方に暮れていたのですが、参考文献 <a href="https://codereview.stackexchange.com/questions/133209/binary-tree-implementation-in-rust">Binary Tree Implementation in Rust</a> を読んで、ようやくプログラムを作ることができました。作者様に感謝いたします。
+</p>
+<p> データを削除するため、次に示す補助的な定義と関数を使います。
+</p>
+<ul>
+  <li>type Link&lt;T&gt; = Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;;
+  <li>fn search_node&lt;T: Ord&gt;(xs: &amp;mut Link&lt;T&gt;, x: T) -&gt; &amp;mut Link&lt;T&gt;;</li>
+  <li>fn search_min_node&lt;T: Ord&gt;(xs: &amp;mut Link&lt;T&gt;) -&gt; &amp;mut Lnik&lt;T&gt;;</li>
+  <li>fn search_max_node&lt;T: Ord&gt;(xs: &amp;mut Link&lt;T&gt;) -&gt; &amp;mut Lnik&lt;T&gt;;</li>
+  <li>fn remove_node&lt;T: Ord&gt;(xs: &amp;mut Link&lt;T&gt;) -&gt; Option&lt;T&gt;;</li>
+</ul>    
+<p> ポイントは Link&lt;T&gt; を使って二分木を操作するところです。データを削除する場合、Option の値を書き換えるため、連結リストと同様に Option のメソッド take() を使う必要があります。Node のメソッドとして定義すると、それを格納している Option がわからなくなるため、Link&lt;T&gt; を受け取る関数や、Link&lt;T&gt; を返す関数が必要になるわけです。
+</p>
+<p> search_node() は削除するデータを格納している Link&lt;T&gt; を求めます。search_min_node() は最小値を、search_max_node() は最大値を格納している Link&lt;T&gt; を求めます。remove_node() は引数 xs を削除して、格納しているデータを返します。データを削除するアルゴリズムは <a href="rust04.html#algo_cite">拙作のページ</a> をお読みくださいませ。
+</p>
+<p> それではプログラムを作りましょう。search_node(), search_min_node(), search_max_node() は再帰定義を使うと簡単ですが、借用チェックには注意してください。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データの探索
+
+// x と等しい節を探す
+fn search_node&lt;T: Ord&gt;(xs: &amp;mut Link&lt;T&gt;, x: T) -&gt; &amp;mut Link&lt;T&gt; {
+    match xs {
+        &amp;mut Some(ref mut ys) if x != ys.item => {
+            if x &lt; ys.item {
+                search_node(&amp;mut ys.left, x)
+            } else {
+                search_node(&amp;mut ys.right, x)
+            }
+        },
+        _ => xs
+    }
+}
+
+// 最小値の節を求める
+fn search_min_node&lt;T: Ord&gt;(xs: &amp;mut Link&lt;T&gt;) -&gt; &amp;mut Link&lt;T&gt; {
+    match xs {
+        &amp;mut Some(ref mut node) if node.left.is_some() =&gt; search_min_node(&amp;mut node.left), 
+        _ =&gt; xs
+    }
+}
+
+// 最大値の節を求める
+fn search_max_node&lt;T: Ord&gt;(xs: &amp;mut Link&lt;T&gt;) -&gt; &amp;mut Link&lt;T&gt; {
+    match xs {
+        &amp;mut Some(ref mut node) if node.right.is_some() =&gt; search_max_node(&amp;mut node.right), 
+        _ =&gt; xs,
+    }
+}
+</pre>
+<p> search_node() は x と ys.item が等しくなければ左右の部分木をたどります。xs が None または x と ys.item が等しい場合は xs をそのまま返します。x と ys.item が等しい処理を Some(ref mut ys) =&gt; { ... } の中に書くと、ys が mutable な借用をしているため xs を返すことができなくなります。ご注意くださいませ。
+</p>
+<p> search_min_node() は左部分木をたどって最小値を格納している Link&lt;T&gt; を求めます。search_max_node() は右部分木をたどるだけで、あとは search_min_node() と同じです。ここでは search_min_node() だけを説明します。
+</p>
+<p> xs と Some をマッチングし、node.left が Some であれば search_min_node() を再帰呼び出しして左部分木をたどります。node.left が None の場合、xs が最小値を格納している Link&lt;T&gt; になります。この場合、次のパターンとマッチングして xs を返します。最初のパターンの中でこの処理を行うと、node が mutable な借用しているため xs を返すことができなくなります。Rust の借用チェックはとても厳しく、初心者にとってコンパイルエラーの修正は大変な作業に感じるのではないでしょうか。
+</p>
+<p> 次は remove_node() を作ります。
+</p> 
+<pre class="list">
+リスト : 節の削除
+
+fn remove_node&lt;T: Ord&gt;(xs: &amp;mut Link&lt;T&gt;) -&gt; Option&lt;T&gt; {
+    if let Some(mut boxed_node) = xs.take() {
+        match (boxed_node.left.take(), boxed_node.right.take()) {
+            (None, None) =&gt; Some(boxed_node.item), 
+            (leaf @ Some(_), None) | (None, leaf @ Some(_)) =&gt; {
+                *xs = leaf;
+                Some(boxed_node.item)
+            },
+            (left, right) =&gt; {
+                boxed_node.left = left;   // 元に戻す
+                boxed_node.right = right;
+                let result;
+                {
+                    let node = &amp;mut *boxed_node;
+                    let min_node = search_min_node(&amp;mut node.right);
+                    std::mem::swap(&amp;mut node.item, &amp;mut min_node.as_mut().unwrap().item);
+                    result = remove_node(min_node);
+                }
+                *xs = Some(boxed_node);
+                result
+            }
+        }
+    } else {
+        None
+    }
+}
+</pre>
+<p> take() で xs Option の値を取り出してパターン Some(mut boxed_node) とマッチングします。None の場合は削除するデータがないので処理を終了します。ここで、xs の Option は None に書き換えられていることに注意してください。次に、boxed_node の左右の部分木に take() を適用して、Option の値を取り出して match でパターンマッチングします。
+</p>
+<p> 両方とも None の場合、xs を格納している Option の値は None に書き換えられているので、このままで OK です。どちらかが None の場合は、部分木 leaf を *xs にセットします。どちらの場合も boxed_node.item を Some に包んで返します。残った boxed_node はスコープの範囲外になった時に Rust がメモリ領域を解放してくれます。
+</p>
+<p> 左右の部分木 left, right が None ではない場合、右部分木から最小値を求め、それを xs の値と交換します。まず、left, right を boxed_node に元します。次に、Box をデリファレンスして、Node の mutable な参照を変数 node にセットします。ブロックで node の有効範囲を限定していることに注意してください。それから、search_min_node() で最小値を格納している Link&lt;T&gt; を求め、変数 min_node にセットします。
+</p>
+<p> 値の交換は std::mem::swap() を使います。
+</p>
+<pre class="item">
+fn swap&lt;T&gt;(x: &amp;mut T, y: &amp;mut T)
+</pre>
+<p> swap() で node.item と min_node の値を交換します。min_node の型は Link&lt;T&gt; なので、as_mut() と unwrap() を使って Node を取り出していることに注意してください。そして、remove_node() で min_node を削除し、返り値を変数 result にセットします。
+</p>
+<p> そして、boxed_node を Some に包んで *xs にセットします。ここで、所有権が boxed_node から xs に移動するので、メモリ領域が解放されることはありません。最後に result を返します。
+</p>
+<p> 最後に Tree のメソッド remove() を作ります。
+</p>
+<pre class="list">
+リスト : データの削除
+
+impl&lt;T: Ord&gt; Tree&lt;T&gt; {
+    fn remove_min(&amp;mut self) -&gt; Option&lt;T&gt; {
+        remove_node(search_min_node(&amp;mut self.root))
+    }
+    
+    fn remove_max(&amp;mut self) -&gt; Option&lt;T&gt; {
+        remove_node(search_max_node(&amp;mut self.root))
+    }
+    
+    fn remove(&amp;mut self, x: T) -&gt; Option&lt;T&gt; {
+        remove_node(search_node(&amp;mut self.root, x));
+    }
+}    
+</pre>
+<p> search_node(), search_min_node(), search_max_node() で削除するデータを探し、remove_node() でそれを削除するだけです。
+</p>
+<p> 簡単なテストと実行結果を示します。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+fn main() {
+    let mut a: Tree&lt;i32&gt; = Tree::new();
+    println!("{}", a.is_empty());
+    for x in vec![5, 3, 2, 4, 1, 7, 6, 8, 9] {
+        a.insert(x);
+    }
+    println!("{}", a.is_empty());
+    for x in 0 .. 11 {
+        println!("{}, {}", x, a.contains(x));
+    }
+    a.foreach(&amp;|x| print!("{} ", x));
+    println!("");
+    println!("{:?}", a.min());
+    println!("{:?}", a.max());
+    for x in 1 .. 10 {
+        a.remove(x);
+        a.foreach(&amp;|x| print!("{} ", x));
+        println!("");
+    }
+    println!("{}", a.is_empty());
+}
+</pre>
+<pre>
+true
+false
+0, false
+1, true
+2, true
+3, true
+4, true
+5, true
+6, true
+7, true
+8, true
+9, true
+10, false
+1 2 3 4 5 6 7 8 9
+Some(1)
+Some(9)
+2 3 4 5 6 7 8 9
+3 4 5 6 7 8 9
+4 5 6 7 8 9
+5 6 7 8 9
+6 7 8 9
+7 8 9
+8 9
+9
+
+true
+</pre>
+<p> 正常に動作しているようです。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+//
+// tree.rs : 単純な二分木
+//
+//           Copyright (C) 2017 Makoto Hiroi
+//
+
+// ノードの定義
+enum Node&lt;T: Ord&gt; {
+    Nil,
+    Cons(T, Box&lt;Node&lt;T&gt;&gt;, Box&lt;Node&lt;T&gt;&gt;)
+}
+
+impl&lt;T: Ord&gt; Node&lt;T&gt; {
+    // データの探索
+    fn contains(&amp;self, x: T) -&gt; bool {
+        match *self {
+            Nil =&gt; false,
+            Cons(ref y, ref left, ref right) =&gt; {
+                if x == *y {
+                    true
+                } else if x &lt; *y {
+                    left.contains(x)
+                } else {
+                    right.contains(x)
+                }
+            }
+        }
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, x: T) {
+        match *self {
+            Nil =&gt; *self = Cons(x, Box::new(Nil), Box::new(Nil)),
+            Cons(ref y, ref mut left, ref mut right) =&gt; {
+                if x &lt; *y {
+                    left.insert(x);
+                } else if x &gt; *y {
+                    right.insert(x)
+                }
+            }
+        }
+    }
+
+    // 最小値の探索
+    fn min(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        match *self {
+            Nil =&gt; None,
+            Cons(ref x, ref left, _) =&gt; {
+                match **left {
+                    Nil =&gt; Some(x),
+                    _ =&gt; left.min()
+                }
+            }
+        }
+    }
+
+    // 最大値の探索
+    fn max(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        match *self {
+            Nil =&gt; None,
+            Cons(ref x, _, ref right) =&gt; {
+                match **right {
+                    Nil =&gt; Some(x),
+                    _ =&gt; right.max()
+                }
+            }
+        }
+    }
+
+    // 巡回
+    fn foreach(&amp;self, func: &amp;Fn(&amp;T) -&gt; ()) {
+        match *self {
+            Nil =&gt; (),
+            Cons(ref x, ref left, ref right) =&gt; {
+                left.foreach(func);
+                func(x);
+                right.foreach(func);
+            }
+        }
+    }
+}
+
+use Node::*;
+
+// 二分木
+struct Tree&lt;T: Ord&gt; {
+    root: Node&lt;T&gt;
+}
+
+// メソッドの定義
+impl&lt;T: Ord&gt; Tree&lt;T&gt; {
+    fn new() -&gt; Tree&lt;T&gt; {
+        Tree { root: Nil }
+    }
+
+    fn contains(&amp;self, x: T) -&gt; bool {
+        self.root.contains(x)
+    }
+
+    fn insert(&amp;mut self, x: T) {
+        self.root.insert(x);
+    }
+
+    fn min(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.root.min()
+    }
+
+    fn max(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.root.max()
+    }
+
+    fn foreach(&amp;self, func: &amp;Fn(&amp;T) -&gt; ()) {
+        self.root.foreach(func);
+    }
+
+    fn is_empty(&amp;self) -&gt; bool {
+        match self.root {
+            Nil =&gt; true,
+            _ =&gt; false
+        }
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut a: Tree&lt;i32&gt; = Tree::new();
+    println!("{}", a.is_empty());
+    for x in vec![5, 3, 1, 4, 2, 7, 6, 8, 9] {
+        a.insert(x);
+    }
+    println!("{}", a.is_empty());
+    for x in 0 .. 11 {
+        println!("{}, {}", x, a.contains(x));
+    }
+    a.foreach(&amp;|x| print!("{} ", x));
+    println!("");
+    println!("{:?}", a.min());
+    println!("{:?}", a.max());
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html><!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

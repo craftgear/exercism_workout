@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 接尾辞配列 (suffix array)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881796</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>接尾辞配列 (suffix array) [2]</h2>
+<div class="small">
+[ <a href="pyalgo43.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo45.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 接尾辞配列 (suffix array) の続きです。今回は「二段階ソート法 (two-stage sort) 」について説明します。前回説明したように、マルチキークイックソートは suffix array の作成に適したソートです。そして、Larsson Sadakane 法を用いると、マルチキークイックソートよりも高速に suffix array を作ることができました。
+</p>
+
+<p> ところが、Larsson Sadakane 法よりも速い方法があるのです。一般的なテキストファイルの場合、伊東秀夫氏が考案された「二段階ソート法」を用いると、Larsson Sadakane 法よりも高速に suffix array を作成することができます。ただし、二段階ソート法にはマルチキークイックソートと同様の欠点があり、同じ記号が長く続くデータや繰り返しの多いデータでは極端に遅くなることがあります。
+</p>
+
+<p> 今回は二段階ソート法を簡単に説明して、実際にプログラムを作って試してみましょう。なお、二段階ソート法の詳しい説明は、<a href="http://www.ricoh.co.jp/rdc/techreport/No27/index.html">RICOH TECHNICAL REPORT [No.27 2001]</a> で公開されている伊東秀夫氏の論文 <cite>『Suffix Array の効率的な構築法』</cite> をお読みくださいませ。
+</p>
+
+<h4>●二段階ソート法</h4>
+<p> 二段階ソート法は、サフィックス間の関係を利用した画期的なアルゴリズムです。たとえば、"cacbcccbca" という文字列のサフィックスをソートしてみましょう。次の図を見てください。
+</p>
+<pre class="fig">
+c a c b c c c b c a $
+        │
+1 文字で分布数えソート
+        ↓
+a c b c c c b c a $      a $                   Type A
+a $                      a c b c c c b c a $   Type B (a &lt; c) はソートする
+---------------------    ---------------------
+b c c c b c a $          b c a $               Type B (b &lt; c) はソートする
+b c a $                  b c c c b c a $
+---------------------    ---------------------
+c a c b c c c b c a $    c a c b c c c b c a $
+c b c c c b c a $        c b c c c b c a $     Type A (c &gt; a, c &gt; b) は
+c c c b c a $            c b c a $             ソート不要
+c c b c a $              c a $
+c b c a $                -------------------
+c a $                    c c b c a $           Type B はソートする
+                         c c c b c a $
+
+
+                図 : 二段階ソート法 (1)
+</pre>
+
+<p> 最初に 1 文字で分布数えソートを行います。次に、先頭文字 S1 と次の文字 S2 を比較して、S1 &gt; S2 のサフィックスを Type A とし、 S1 &lt;= S2 のサフィックスを Type B と定義します。そして、同じ区間にあるサフィックスを Type A と B の 2 つに分離します。
+</p>
+<p> たとえば、上図の文字 c の区間を見てください。Type A のサフィックスは Type B より小さいので、Type A を区間の前へ、Type B を後ろへ移動します。このようにサフィックスを分離すると、Type A のサフィックスは文字 a と b の区間のソートが完了すれば、ソートしなくても昇順に並べることができます。つまり、Type B のサフィックスだけをソートすればいいのです。これが「二段階ソート法」のポイントです。
+</p>
+
+<p> 二段階ソート法は第一段階で Type B のサフィックスをソートし、第二段階で Type A のサフィックスを昇順に並べます。次の図を見てください。
+</p>
+
+<pre class="fig">
+       c a $
+index  8 9  ─────────┐
+                              │
+       c a c b c c c b c a $  │
+index  0 1 2 3 4 5 6 7 8 9  ─┼─┐
+                              │  │
+       c b c a $              │  │
+index  6 7 8 9  ───────┼─┼─┐
+                              │  │  │
+       c b c c c b c a $      │  │  │
+index  2 3 4 5 6 7 8 9  ───┼─┼─┼─┐
+                              ↓  ↓  ↓  ↓
+            ┌─┬─┬─┬─┬─┬─┬─┬─┬─┬─┐
+index table │９│１│７│３│８│０│６│２│５│４│
+            └─┴─┴─┴─┴─┴─┴─┴─┴─┴─┘
+            │A │─Tyep B─│─  Type A  ─│Type B│
+              ↑
+       a $    │
+index  9  ──┘
+
+            図 : 二段階ソート法 (2)
+</pre>
+
+<p> 配列 index table はサフィックスの開始位置 (インデックス) を格納します。index table の先頭から順番に Type A のサフィックスを探して、そのインデックスを index table にセットしていきます。具体的には、先頭文字 S1 とひとつ前の文字 S0 を比較します。S0 &gt; S1 であれば、S0 から始まるサフィックスは Type A であることがわかります。そのインデックスを文字 S0 の Type A の区間にセットします。index table はソートされているので、見つけた Type A のサフィックスのインデックスを順番にセットするだけで、Type A のサフィックスを昇順に並べることができるのです。
+</p>
+
+<p> ここで、最後尾のデータは Type A になることに注意してください。終端記号を含めて index table を作成した場合、index table の先頭は終端記号になります。したがって、最初にセットするインデックスは、最後尾の文字のインデックスでなければいけません。上図の場合、a$ のインデックス 9 を文字 a の Type A の区間 (0) にセットします。
+</p>
+
+<p> 次に、index table を順番に調べていきます。index table の先頭は S0 (c) &gt; S1 (a) なので Type A のサフィックスですね。文字 c の Type A の区間に S0 (c) のインデックス (8) をセットします。次の要素も Type A なので、インデックス (0) を Type A の区間にセットします。このように、index table の先頭から順番に Type A のサフィックスを探して、その文字の Type A の区間にインデックスをセットしていけばいいわけです。
+</p>
+
+<p> これでソートできるなんて、不思議に思われる方もいるでしょう。一般的なデータでは、次のように考えるとわかりやすいと思います。記号の種類が 0 から 255 までの場合、記号 0 はいちばん小さい値なので、最後尾のデータが 0 でなければ Type A は存在しません。したがって、記号 0 の区間はすべてソートします。
+</p>
+
+<p> 次に記号 1 の場合、Type A は [1, 0] の場合しかありません。あとは Type B の区間なのでソートされます。そのあと、Type A の区間にインデックスをセットしますが、記号 0 はすでにソートされていますね。index table を先頭から順番に調べていけば、記号 0 の区間のチェックが終了した段階で、記号 1 の Type A の区間にインデックスをセットすることができます。これで、記号 1 のソートが完了します。
+</p>
+
+<p> 同様に、記号 2 の Type A は [2, 0] と [2, 1] の場合があります。記号 0 の区間をチェックすることで記号 1 までのソートが完了し、記号 2 の Type A の区間には [2, 0] のインデックスがセットされます。次に、記号 1 の区間をチェックすることで、Type A の区間に [2, 1] のインデックスがセットされ記号 2 のソートが完了します。あとはこれを記号 255 まで繰り返すだけです。このように、小さい記号から順番にチェックしていくことで、Type A の区間に矛盾なくインデックスをセットすることができるのです。
+</p>
+
+<p> 二段階ソート法で実際にソートするのは Type B のサフィックスだけなので、Type A のサフィックスが多いほど (Type B のサフィックスが少ないほど) ソートするデータ数が少なくなり、とても高速にソートすることができます。まさに画期的なアルゴリズムですね。M.Hiroi も目からウロコが落ちました。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 二段階ソート法
+
+def suffix_sort():
+    # Type A をセット
+    def set_type_a(i):
+        if i &gt; 0 and buff[i - 1] &gt; buff[i]:
+            c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+            idx[count_sum[c]] = i - 1
+            count_sum[c] += 1
+    # 分布数えソート
+    count = [0] * SIZE
+    count_sum = [0] * (SIZE + 1)
+    for x in xrange(data_size):
+        count[(buff[x] &lt;&lt; 8) + buff[x + 1]] += 1
+    for x in xrange(1, SIZE + 1):
+        count_sum[x] = count[x - 1] + count_sum[x - 1]
+    for x in xrange(1, SIZE):
+        count[x] += count[x - 1]
+    for x in xrange(data_size - 1, -1, -1):
+        c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+        count[c] -= 1
+        idx[count[c]] = x
+    # two-stage sort
+    # Type B をソート 
+    for x in xrange(256):
+        for y in xrange(x, 256):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1] - 1
+            if high - low &gt;= 1:
+                mqsort(low, high, 2)
+    # Type A をセット
+    # 最初に最後尾のデータをチェック
+    set_type_a(data_size)
+    for x in xrange(data_size): set_type_a(idx[x])
+</pre>
+
+<p> 最初に、先頭 2 文字で分布数えソートを行います。こうすると、Type A と Type B を簡単に分離することができます。先頭の文字を x とし、2 番目の文字を y とすると、x &lt;= y の区間が Type B になります。この区間をマルチキークイックソートでソートします。なお、配列 buff には終端記号として 0 を付加していることに注意してください。
+</p>
+
+<p> 次に Type A の区間にインデックスをセットします。最後尾のデータ buff[data_size - 1] が終端記号 0 よりも大きいと、最後尾のデータが Type A になります。このデータは、その区間の最小値になるので、このインデックスを先にセットします。インデックスのセットは内部関数 set_type_a で行います。あとは、idx を先頭から順番に調べていくだけです。
+</p>
+
+<p> 関数 set_type_a は Type A のインデックスを idx にセットします。buff[i - 1] &gt; buff[i] であれば Type A なので、その区間にインデックス i - 1 をセットします。区間の先頭は累積度数表 count_sum で求めることができます。インデックスをセットしたら count_sum の値を +1 することをお忘れなく。これで Type A の区間にインデックスをセットすることができます。
+</p>
+
+<p> あとはとくに難しいところはないと思います。説明は割愛いたしますので、詳細は <a href="pyalgo44.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> で suffix array を作成してみましょう。結果は suffix_sort の時間で、ファイルの入出力処理は含んでいません。結果は次にようになりました。
+</p>
+<pre>
+    表 : suffix array の作成
+         (suffix_sort の時間)
+
+  ファイル名      サイズ    MQ     LS     TS
+  --------------------------------------------
+  alice29.txt    152,089   4.91   4.10   2.95
+  asyoulik.txt   125,179   3.71   3.25   2.29
+  cp.html         24,603   0.95   0.56   0.61
+  fields.c        11,150   0.46   0.28   0.34
+  grammar.lsp      3,721   0.18   0.12   0.16
+  kennedy.xls  1,029,744  37.21  31.14  26.82
+  lcet10.txt     426,754  16.44  12.62  10.59
+  plrabn12.txt   481,861  16.01  14.52   9.28
+  ptt5           513,216   ----  24.33   ----
+  sum             38,240   4.36   0.89   2.84
+  xargs.1          4,227   0.17   0.13   0.14
+  --------------------------------------------
+  合計         2,810,784   ----  91.94   ----
+
+  ファイル名   サイズ    MQ    LS     TS
+  ----------------------------------------
+  repeat1.txt   2,600   8.27  0.14   7.86
+  repeat2.txt   5,200  31.20  0.25  29.56
+
+
+# 時間の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> MQ は単純なマルチキークイックソート、LS が Larsson Sadakane 法、TS が二段階ソート法の結果です。テキストファイルの場合、二段階ソート法の効果はとても大きく、Larsson Sadakane 法よりも高速になりました。バイナリファイルでも kennedy.xls では大きな効果がありました。
+</p>
+
+<p> 小さなファイルは Larsson Sadakane 法より遅くなることもありますが、単純なマルチキークイックソートよりは高速です。ただし、ptt5 や repeat1,txt, repeat2.txt の場合、マルチキークイックソートと同様に、実行時間は極端に遅くなります。これが二段階ソート法の欠点です。
+</p>
+
+<p> なお、これらの結果は M.Hiroi のコーディング、実行したマシン、コンパイラなどの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4>●二段階ソート法の改良</h4>
+<p> 二段階ソート法は Type A のデータが多いほど高速にソートすることができます。伊東秀夫氏は論文の中で Type A のデータを増やす方法を提案されています。先頭 2 文字で分布数えソートを行うと、先頭文字 S1 と次の文字 S2 の関係だけではなく、3 番目の文字 S3 と S1 の関係を利用することができます。つまり、S1 と S2 の関係では Type B のデータでも、S1 &gt; S3 を満たせば Type A のデータとして扱うことができるのです。このページでは、最初の方法を ratio-1 と呼び、改良版を ratio-2 と呼ぶことにします。
+</p>
+
+<p> 先頭 2 文字で分布数えソートを行ったあと、S1 &lt;= S2 を満たす Type B の区間で、S1 と S3 を比較してデータを Type A と Type B に分離します。先頭 2 文字で分布数えソートを行っているので、区間には先頭 2 文字が同じデータしかありません。したがって、S1 と S3 (3 文字目) を比較してデータを分離することができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 二段階ソート法 (ratio-2)
+
+def suffix_sort():
+    # Type A のデータをセット
+    def set_type_a(i):
+        if i &gt; 0 and buff[i - 1] &gt; buff[i]:
+            c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+            idx[count_sum[c]] = i - 1
+            count_sum[c] += 1
+        if i &gt; 1 and buff[i - 2] &gt; buff[i] and buff[i - 2] &lt;= buff[i - 1]:
+            c = (buff[i - 2] &lt;&lt; 8) + buff[i - 1]
+            idx[count_sum[c]] = i - 2
+            count_sum[c] += 1
+    # 分布数えソート
+    count = [0] * SIZE
+    count_sum = [0] * (SIZE + 1)
+    for x in xrange(data_size):
+        count[(buff[x] &lt;&lt; 8) + buff[x + 1]] += 1
+    for x in xrange(1, SIZE + 1):
+        count_sum[x] = count[x - 1] + count_sum[x - 1]
+    for x in xrange(1, SIZE):
+        count[x] += count[x - 1]
+    for x in xrange(data_size - 1, -1, -1):
+        c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+        count[c] -= 1
+        idx[count[c]] = x
+    # two-stage sort
+    # Type B をソート 
+    for x in xrange(256):
+        for y in xrange(x, 256):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1]
+            # Type A (ratio-2) を分離
+            for n in xrange(low, high):
+                i = idx[n]
+                if buff[i] &gt; buff[i + 2]:
+                    idx[n] = idx[low]
+                    idx[low] = i
+                    low += 1
+            if high - low &gt; 1:
+                mqsort(low, high - 1, 2)
+    # Type A をセット
+    # 最初に最後尾のデータをチェック
+    set_type_a(data_size)
+    for x in xrange(data_size): set_type_a(idx[x])
+</pre>
+
+<p> まず、先頭 2 文字で分布数えソートを行います。次に、データを Type A と Type B に分離します。プログラムでは変数 x が先頭文字、変数 y が 2 番目の文字を表しています。x &gt; y は Type A の区間なのでソートする必要はありません。x &lt;= y の区間で先頭文字 buff[i] と 3 番目の文字 buff[i + 2] を比較して、データを Type A と Type B に分離します。Type A のデータは Type B よりも小さいので、区間の前半に集めます。そして、Type B のデータをソートします。なお、buff[data_size], buff[data_size + 1] に終端記号 0 を付加していることに注意してください。
+</p>
+
+<p> 関数 set_type_a で Type A のインデックスをセットする場合、1 文字前のデータだけではなく、2 文字前のデータもチェックすることに注意してください。buff[i - 1] &gt; buff[i] を満たす場合は ratio-1 なので今までと同じです。2 文字前のデータをチェックするときは、buff[i - 2] と buff[i] の関係が Type A であると同時に、buff[i - 2] と buff[i - 1] の関係が Type B であることをチェックします。
+</p>
+
+<p> あとはとくに難しいところはないと思います。説明は割愛いたしますので、詳細は <a href="pyalgo44.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> で suffix array を作成してみましょう。結果は suffix_sort の時間で、ファイルの入出力処理は含んでいません。結果は次にようになりました。
+</p>
+<pre>
+    表 : suffix array の作成 (suffix_sort の時間)
+
+  ファイル名      サイズ    LS    TS1             TS2
+  ---------------------------------------------------------------
+  alice29.txt    152,089   4.10   2.95  (74,618)  2.69  (53.507)
+  asyoulik.txt   125,179   3.25   2.29  (62,477)  2.04  (42,567)
+  cp.html         24,603   0.56   0.61  (12,901)  0.55   (8.981)
+  fields.c        11,150   0.28   0.34   (6,251)  0.33   (4,230)
+  grammar.lsp      3,721   0.12   0.16   (2,231)  0.18   (1,679)
+  kennedy.xls  1,029,744  31.14  26.82 (623,975) 22.85 (467,929)
+  lcet10.txt     426,754  12.62  10.59 (219,172)  9.17 (157,115)
+  plrabn12.txt   481,861  14.52   9.28 (234,061)  8.05 (162,222)
+  ptt5           513,216  24.33   ----            ----
+  sum             38,240   0.89   2.84  (23,496)  2.17  (18,559)
+  xargs.1          4,227   0.13   0.14   (2,053)  0.17   (1,351)
+  ---------------------------------------------------------------
+  合計         2,810,784  91.94   ----            ----
+
+  ファイル名   サイズ   LS    TS1           TS2
+  -------------------------------------------------------
+  repeat1.txt   2,600  0.14   7.86 (2,500)  7.58 (2,400)
+  repeat2.txt   5,200  0.25  29.56 (5,000) 28.40 (4,800)
+
+
+# 時間の単位 : 秒, () : ソートしたデータ数
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> LS が Larsson Sadakane 法、TS1 が二段階ソート法 ratio-1、TS2 が ratio-2 の結果です。ratio-2 の効果は大きく、ソートしたデータ数は ratio-1 よりも大幅に減少します。実行速度もほとんどのファイルで ratio-1 よりも速くなりました。ratio-2 の効果は十分に出ていると思います。ただし、ratio-1 と同様に ptt5 や repeat1,txt, repeat2.txt はとても遅くなります。
+</p>
+
+<p> なお、これらの結果は M.Hiroi のコーディング、実行したマシン、コンパイラなどの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4>●順位ソート法</h4>
+<p> ところで、伊東秀夫氏の論文<cite>『<a href="http://www.cs.titech.ac.jp/~tr/reports/2000/TR00-0003.pdf">文字列索引法とその自然言語処理への応用</a>』</cite> (.pdf) によると、Larsson Sadakane 法で用いた順位配列 (ランクテープル) は、二段階ソート法にも応用することができるそうです。ランクを使ってソートする方法を「順位 (ランク) ソート法」といいます。
+</p>
+<p> 二段階ソート法にランクソートを適用する場合、ソートが完了した時点でそのランクを更新していきます。具体的には、単純挿入ソートでソートを完了したときにランクを書き換えます。ランクを早期に更新していくことで、サフィックスの大小関係を文字で比較するよりも高速に判定できると思われます。
+</p>
+
+<p> プログラムのポイントはランクの更新処理です。最初、先頭 2 文字で分布数えソートを行い、配列 rank にランクを設定します。これは Larsson Sadakane 法と同じです。そして、マルチキークイックソートで各区間をソートします。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : マルチキークイックソート (順位ソート法)
+
+def mqsort(low, high, n = 0):
+    stack = []
+    while True:
+        if high - low &lt;= LIMIT:
+            insert_sort(low, high, n)
+            if len(stack) == 0: break
+            low, high, n = stack.pop()
+            continue
+        # 枢軸の選択
+        p = select_pivot(low, high, n)
+        # 4 分割
+        i = m1 = low
+        j = m2 = high
+        while True:
+            while i &lt;= j:
+                k = getrank(idx[i] + n) - p
+                if k &gt; 0: break
+                if k == 0:
+                    idx[i], idx[m1] = idx[m1], idx[i]
+                    m1 += 1
+                i += 1
+            while i &lt;= j:
+                k = getrank(idx[j] + n) - p
+                if k &lt; 0: break
+                if k == 0:
+                    idx[j], idx[m2] = idx[m2], idx[j]
+                    m2 -= 1
+                j -= 1
+            if i &gt; j: break
+            idx[i], idx[j] = idx[j], idx[i]
+            i += 1
+            j -= 1
+        # 等しいデータを中央に集める
+        for k in xrange(min(m1 - low, i - m1)):
+            idx[low + k], idx[j - k] = idx[j - k], idx[low + k]
+        m1 = low + (i - m1)
+        for k in xrange(min(high - m2, m2 - j)):
+            idx[i + k], idx[high - k] = idx[high - k], idx[i + k]
+        m2 = high - (m2 - j) + 1
+        if m2 &lt;= high: stack.append((m2, high, n))
+        if m1 &lt;= m2 - 1: stack.append((m1, m2 - 1, n + 2))
+        # &lt; の部分から処理する
+        high = m1 - 1
+</pre>
+<p> 関数 mqsort は配列 stack を使って再帰呼び出しを繰り返しに変換しています。ランクを書き換えるので、枢軸よりも小さな区間、等しい区間、大きな区間の順番でソートしていることに注意してください。この順番でソートする場合、ランクの値を N とすると、ランクは N 以下の値に書き換えます。N よりも大きな値に書き換えると正常に動作しません。
+</p>
+<p> このプログラムは Larsson Sadakane 法と同じく、区間の上限値でランクを初期化しています。したがって、ランクは上限値以下の値に書き換えられるので、この条件を満たしています。また、枢軸と等しい区間で次の文字を比較するとき、1 文字先ではなく 2 文字先のランクを比較することに注意してください。単純挿入ソートの場合でも、2 文字先のランクを比較していきます。
+</p>
+<p> ランクを区間の下限値で初期化して、ランクの値を下限値以上に書き換える方法もあります。この場合は、ソートする区間の順番を逆にしてください。つまり、枢軸よりも大きな区間、等しい区間、小さな区間の順番でソートします。どちらの方法でもランクソート法は正常に動作しますが、大きな区間からソートすると、データによっては極端に遅くなる場合があるようです。今回は小さな区間からソートしていくことにします。
+</p>
+<p> ratio-1 の場合はマルチキークイックソートをランクに対応させるだけでよいのですが、ratio-2 の場合はもう一つ修正点があります。ratio-2 で区間を Type A と Type B に分離したあと、Type A の部分のランクを書き換えないと、ランクソートは正常に動作しません。この処理を追加することを忘れないでください。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛いたします。詳細は下記プログラムリストをお読みください。
+</p>
+<ul>
+  <li><a href="pyalgo44.html#list3">プログラムリスト３ (ratio-1)</a>
+  <li><a href="pyalgo44.html#list4">プログラムリスト４ (ratio-2)</a>
+</ul>
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> で suffix array を作成してみましょう。結果は suffix_sort の時間で、ファイルの入出力処理は含んでいません。結果は次にようになりました。
+</p>
+<pre>
+    表 : suffix array の作成 (suffix_sort の時間)
+
+ファイル名      サイズ    LS    TS1    TS2    TSR1   TSR2
+----------------------------------------------------------
+alice29.txt    152,089   4.10   2.95   2.69   2.96   2.48
+asyoulik.txt   125,179   3.25   2.29   2.04   2.37   1.94
+cp.html         24,603   0.56   0.61   0.55   0.49   0.45
+fields.c        11,150   0.28   0.34   0.33   0.28   0.28
+grammar.lsp      3,721   0.12   0.16   0.18   0.15   0.17
+kennedy.xls  1,029,744  31.14  26.82  22.85  26.50  20.75
+lcet10.txt     426,754  12.62  10.59   9.17   9.33   7.54
+plrabn12.txt   481,861  14.52   9.28   8.05   9.69   7.75
+ptt5           513,216  24.33   ----   ----   ----   ----
+sum             38,240   0.89   2.84   2.17   0.93   0.85
+xargs.1          4,227   0.13   0.14   0.17   0.14   0.17
+----------------------------------------------------------
+合計         2,810,784  91.94   ----   ----   ----   ----
+
+ファイル名   サイズ    LS    TS1    TS2    TSR1   TSR2
+------------------------------------------------------
+repeat1.txt   2,600   0.14   7.86   7.58   0.24   0.25
+repeat2.txt   5,200   0.25  29.56  28.40   0.45   0.42
+repeat4.txt  10,400   0.47   ----   ----   0.97   0.86
+repeat8.txt  20,800   0.95   ----   ----   2.33   1.99
+
+# 時間の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> テキストファイルの場合、ratio-1 で比較するとランクソートの効果はほとんどありませんが、ratio-2 で比較すると効果があるようです。バイナリファイルの場合、データによってはランクソートが効果的なようで、sum の実行速度はとても速くなりました。特に repeat*.txt のように繰り返しの多いデータは、ランクソートの効果により実行速度はとても速くなりました。それでも、Larsson Sadakane 法よりは遅くなります。ランクソート法は、二段階ソート法の最悪時の性能を改善する効果があるようです。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<h4>●参考文献, URL</h4>
+<ol>
+  <li>伊東秀夫, 『Suffix Array の効率的な構築法』(.pdf), <a href="http://www.ricoh.co.jp/rdc/techreport/No27/index.html">RICOH TECHNICAL REPORT [No.27 2001]</a>
+  <li>伊東秀夫, 『<a href="http://www.cs.titech.ac.jp/~tr/reports/2000/TR00-0003.pdf">文字列索引法とその自然言語処理への応用</a>』(.pdf)
+  <li>広井誠, 『高性能圧縮ツール bsrc の改良 bsrc2（前編）』, Interface 2004 年 10 月号, ＣＱ出版社
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# mksa1.py : Suffix Array の構築 (two-stage sort : ratio-1)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, os.path
+from array import *
+
+# 定数
+SIZE = 256 * 256
+LIMIT = 10
+
+# 記号の取得
+def getcode(x):
+    if x &lt; data_size: return buff[x]
+    return -1
+
+# ソート用比較関数
+def compare(x, y, n):
+    for i in xrange(n, data_size - max(x, y)):
+        r = buff[x + i] - buff[y + i]
+        if r != 0: return r
+    return y - x
+
+# 挿入ソート
+def insert_sort(low, high, n):
+    for i in xrange(low + 1, high + 1):
+        temp = idx[i]
+        j = i - 1
+        while j &gt;= low and compare(temp, idx[j], n) &lt; 0:
+            idx[j + 1] = idx[j]
+            j -= 1
+        idx[j + 1] = temp
+
+# 枢軸の選択
+def select_pivot(low, high, n):
+    m = (high - low) / 4
+    a = getcode(idx[low + m] + n)
+    b = getcode(idx[low + m * 2] + n)
+    c = getcode(idx[low + m * 3] + n)
+    if a &gt; b:
+        tmp = a
+        a = b
+        b = tmp
+    if b &gt; c:
+        b = c
+        if a &gt; b: b = a
+    return b
+
+# マルチキークイックソート
+def mqsort(low, high, n = 0):
+    while True:
+        if high - low &lt;= LIMIT:
+            insert_sort(low, high, n)
+            return
+        # 枢軸
+        p = select_pivot(low, high, n)
+        # 4 分割
+        i = m1 = low
+        j = m2 = high
+        while True:
+            while i &lt;= j:
+                k = getcode(idx[i] + n) - p
+                if k &gt; 0: break
+                if k == 0:
+                    idx[i], idx[m1] = idx[m1], idx[i]
+                    m1 += 1
+                i += 1
+            while i &lt;= j:
+                k = getcode(idx[j] + n) - p
+                if k &lt; 0: break
+                if k == 0:
+                    idx[j], idx[m2] = idx[m2], idx[j]
+                    m2 -= 1
+                j -= 1
+            if i &gt; j: break
+            idx[i], idx[j] = idx[j], idx[i]
+            i += 1
+            j -= 1
+        # 等しいデータを中央に集める
+        for k in xrange(min(m1 - low, i - m1)):
+            idx[low + k], idx[j - k] = idx[j - k], idx[low + k]
+        m1 = low + (i - m1)
+        for k in xrange(min(high - m2, m2 - j)):
+            idx[i + k], idx[high - k] = idx[high - k], idx[i + k]
+        m2 = high - (m2 - j) + 1
+        if low &lt; m1 - 1: mqsort(low, m1 - 1, n)
+        if m2 &lt; high: mqsort(m2, high, n)
+        if m1 &gt;= m2: break
+        low = m1
+        high = m2 - 1
+        n += 1
+
+# 二段階ソート法 (ratio-1)
+def suffix_sort():
+    # Type A をセット
+    def set_type_a(i):
+        if i &gt; 0 and buff[i - 1] &gt; buff[i]:
+            c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+            idx[count_sum[c]] = i - 1
+            count_sum[c] += 1
+    # 分布数えソート
+    count = [0] * SIZE
+    count_sum = [0] * (SIZE + 1)
+    for x in xrange(data_size):
+        count[(buff[x] &lt;&lt; 8) + buff[x + 1]] += 1
+    for x in xrange(1, SIZE + 1):
+        count_sum[x] = count[x - 1] + count_sum[x - 1]
+    for x in xrange(1, SIZE):
+        count[x] += count[x - 1]
+    for x in xrange(data_size - 1, -1, -1):
+        c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+        count[c] -= 1
+        idx[count[c]] = x
+    # two-stage sort
+    # Type B をソート 
+    for x in xrange(256):
+        for y in xrange(x, 256):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1] - 1
+            if high - low &gt;= 1:
+                mqsort(low, high, 2)
+    # Type A をセット
+    # 最初に最後尾のデータをチェック
+    set_type_a(data_size)
+    for x in xrange(data_size): set_type_a(idx[x])
+
+# suffix array の構築
+def make_suffix_array(name):
+    global buff, idx, data_size
+    # 入力
+    data_size = os.path.getsize(name)
+    fin = open(name, 'rb')
+    buff = array('B')
+    buff.fromfile(fin, data_size)
+    buff.append(0)
+    idx = array('L')
+    for _ in xrange(data_size): idx.append(0)
+    # ソート
+    s = time.clock()
+    suffix_sort()
+    e = time.clock()
+    print "%.3f" % (e - s)
+    # 出力
+    name1 = os.path.basename(name) + '.idx'
+    fout = open(name1, 'wb')
+    idx.tofile(fout)
+    fin.close()
+    fout.close()
+
+#
+make_suffix_array(sys.argv[1])
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# mksa3.py : Suffix Array の構築 (two-stage sort : ratio-2)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, os.path
+from array import *
+
+# 定数
+SIZE = 256 * 256
+LIMIT = 10
+
+# 記号の取得
+def getcode(x):
+    if x &lt; data_size: return buff[x]
+    return -1
+
+# ソート用比較関数
+def compare(x, y, n):
+    for i in xrange(n, data_size - max(x, y)):
+        r = buff[x + i] - buff[y + i]
+        if r != 0: return r
+    return y - x
+
+# 挿入ソート
+def insert_sort(low, high, n):
+    for i in xrange(low + 1, high + 1):
+        temp = idx[i]
+        j = i - 1
+        while j &gt;= low and compare(temp, idx[j], n) &lt; 0:
+            idx[j + 1] = idx[j]
+            j -= 1
+        idx[j + 1] = temp
+
+# 枢軸の選択
+def select_pivot(low, high, n):
+    m = (high - low) / 4
+    a = getcode(idx[low + m] + n)
+    b = getcode(idx[low + m * 2] + n)
+    c = getcode(idx[low + m * 3] + n)
+    if a &gt; b:
+        tmp = a
+        a = b
+        b = tmp
+    if b &gt; c:
+        b = c
+        if a &gt; b: b = a
+    return b
+
+# マルチキークイックソート
+def mqsort(low, high, n = 0):
+    while True:
+        if high - low &lt;= LIMIT:
+            insert_sort(low, high, n)
+            return
+        # 枢軸
+        p = select_pivot(low, high, n)
+        # 4 分割
+        i = m1 = low
+        j = m2 = high
+        while True:
+            while i &lt;= j:
+                k = getcode(idx[i] + n) - p
+                if k &gt; 0: break
+                if k == 0:
+                    idx[i], idx[m1] = idx[m1], idx[i]
+                    m1 += 1
+                i += 1
+            while i &lt;= j:
+                k = getcode(idx[j] + n) - p
+                if k &lt; 0: break
+                if k == 0:
+                    idx[j], idx[m2] = idx[m2], idx[j]
+                    m2 -= 1
+                j -= 1
+            if i &gt; j: break
+            idx[i], idx[j] = idx[j], idx[i]
+            i += 1
+            j -= 1
+        # 等しいデータを中央に集める
+        for k in xrange(min(m1 - low, i - m1)):
+            idx[low + k], idx[j - k] = idx[j - k], idx[low + k]
+        m1 = low + (i - m1)
+        for k in xrange(min(high - m2, m2 - j)):
+            idx[i + k], idx[high - k] = idx[high - k], idx[i + k]
+        m2 = high - (m2 - j) + 1
+        if low &lt; m1 - 1: mqsort(low, m1 - 1, n)
+        if m2 &lt; high: mqsort(m2, high, n)
+        if m1 &gt;= m2: break
+        low = m1
+        high = m2 - 1
+        n += 1
+
+# 二段階ソート法 (ratio-2)
+def suffix_sort():
+    # Type A のデータをセット
+    def set_type_a(i):
+        if i &gt; 0 and buff[i - 1] &gt; buff[i]:
+            c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+            idx[count_sum[c]] = i - 1
+            count_sum[c] += 1
+        if i &gt; 1 and buff[i - 2] &gt; buff[i] and buff[i - 2] &lt;= buff[i - 1]:
+            c = (buff[i - 2] &lt;&lt; 8) + buff[i - 1]
+            idx[count_sum[c]] = i - 2
+            count_sum[c] += 1
+    # 分布数えソート
+    count = [0] * SIZE
+    count_sum = [0] * (SIZE + 1)
+    for x in xrange(data_size):
+        count[(buff[x] &lt;&lt; 8) + buff[x + 1]] += 1
+    for x in xrange(1, SIZE + 1):
+        count_sum[x] = count[x - 1] + count_sum[x - 1]
+    for x in xrange(1, SIZE):
+        count[x] += count[x - 1]
+    for x in xrange(data_size - 1, -1, -1):
+        c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+        count[c] -= 1
+        idx[count[c]] = x
+    # two-stage sort
+    # Type B をソート 
+    for x in xrange(256):
+        for y in xrange(x, 256):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1]
+            # Type A (ratio-2) を分離
+            for n in xrange(low, high):
+                i = idx[n]
+                if buff[i] &gt; buff[i + 2]:
+                    idx[n] = idx[low]
+                    idx[low] = i
+                    low += 1
+            if high - low &gt; 1:
+                mqsort(low, high - 1, 2)
+    # Type A をセット
+    # 最初に最後尾のデータをチェック
+    set_type_a(data_size)
+    for x in xrange(data_size): set_type_a(idx[x])
+
+# suffix array の構築
+def make_suffix_array(name):
+    global buff, idx, data_size
+    # 入力
+    data_size = os.path.getsize(name)
+    fin = open(name, 'rb')
+    buff = array('B')
+    buff.fromfile(fin, data_size)
+    buff.append(0)    # ratio-1
+    buff.append(0)    # ratio-2
+    idx = array('L')
+    for _ in xrange(data_size): idx.append(0)
+    # ソート
+    s = time.clock()
+    suffix_sort()
+    e = time.clock()
+    print "%.3f" % (e - s)
+    # 出力
+    name1 = os.path.basename(name) + '.idx'
+    fout = open(name1, 'wb')
+    idx.tofile(fout)
+    fin.close()
+    fout.close()
+
+#
+make_suffix_array(sys.argv[1])
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+# coding: utf-8
+#
+# mksa11.py : Suffix Array の構築 (two-stage sort + ランクソート)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, os.path
+from array import *
+
+# 定数
+SIZE = 256 * 256
+LIMIT = 10
+
+# ランクの取得
+def getrank(x):
+    if x &lt; data_size: return rank[x]
+    return -1
+
+# ソート用比較関数
+def compare(x, y, n):
+    for i in xrange(n, data_size - max(x, y), 2):
+        r = rank[x + i] - rank[y + i]
+        if r != 0: return r
+    return y - x
+
+# 挿入ソート
+def insert_sort(low, high, n):
+    for i in xrange(low + 1, high + 1):
+        temp = idx[i]
+        j = i - 1
+        while j &gt;= low and compare(temp, idx[j], n) &lt; 0:
+            idx[j + 1] = idx[j]
+            j -= 1
+        idx[j + 1] = temp
+    # ランクの設定
+    for i in xrange(low, high + 1):
+        rank[idx[i]] = i
+
+# 枢軸の選択
+def select_pivot(low, high, n):
+    m = (high - low) / 4
+    a = getrank(idx[low + m] + n)
+    b = getrank(idx[low + m * 2] + n)
+    c = getrank(idx[low + m * 3] + n)
+    if a &gt; b:
+        tmp = a
+        a = b
+        b = tmp
+    if b &gt; c:
+        b = c
+        if a &gt; b: b = a
+    return b
+
+# マルチキークイックソート
+def mqsort(low, high, n = 0):
+    stack = []
+    while True:
+        if high - low &lt;= LIMIT:
+            insert_sort(low, high, n)
+            if len(stack) == 0: break
+            low, high, n = stack.pop()
+            continue
+        #
+        p = select_pivot(low, high, n)
+        # 4 分割
+        i = m1 = low
+        j = m2 = high
+        while True:
+            while i &lt;= j:
+                k = getrank(idx[i] + n) - p
+                if k &gt; 0: break
+                if k == 0:
+                    idx[i], idx[m1] = idx[m1], idx[i]
+                    m1 += 1
+                i += 1
+            while i &lt;= j:
+                k = getrank(idx[j] + n) - p
+                if k &lt; 0: break
+                if k == 0:
+                    idx[j], idx[m2] = idx[m2], idx[j]
+                    m2 -= 1
+                j -= 1
+            if i &gt; j: break
+            idx[i], idx[j] = idx[j], idx[i]
+            i += 1
+            j -= 1
+        # 等しいデータを中央に集める
+        for k in xrange(min(m1 - low, i - m1)):
+            idx[low + k], idx[j - k] = idx[j - k], idx[low + k]
+        m1 = low + (i - m1)
+        for k in xrange(min(high - m2, m2 - j)):
+            idx[i + k], idx[high - k] = idx[high - k], idx[i + k]
+        m2 = high - (m2 - j) + 1
+        if m2 &lt;= high: stack.append((m2, high, n))
+        if m1 &lt;= m2 - 1: stack.append((m1, m2 - 1, n + 2))
+        # &lt; の部分から処理する
+        high = m1 - 1
+
+
+# 二段階ソート法 (ratio-1)
+def suffix_sort():
+    # Type A をセット
+    def set_type_a(i):
+        if i &gt; 0 and buff[i - 1] &gt; buff[i]:
+            c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+            idx[count_sum[c]] = i - 1
+            count_sum[c] += 1
+    # 分布数えソート
+    count = [0] * SIZE
+    count_sum = [0] * (SIZE + 1)
+    for x in xrange(data_size):
+        count[(buff[x] &lt;&lt; 8) + buff[x + 1]] += 1
+    for x in xrange(1, SIZE + 1):
+        count_sum[x] = count[x - 1] + count_sum[x - 1]
+    for x in xrange(1, SIZE):
+        count[x] += count[x - 1]
+    for x in xrange(data_size - 1, -1, -1):
+        c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+        count[c] -= 1
+        idx[count[c]] = x
+        rank[x] = count_sum[c + 1] - 1
+    # two-stage sort
+    # Type B をソート 
+    for x in xrange(256):
+        for y in xrange(x, 256):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1] - 1
+            if high - low &gt;= 1:
+                mqsort(low, high, 2)
+    # Type A をセット
+    # 最初に最後尾のデータをチェック
+    set_type_a(data_size)
+    for x in xrange(data_size): set_type_a(idx[x])
+
+# suffix array の構築
+def make_suffix_array(name):
+    global buff, idx, data_size, rank
+    # 入力
+    data_size = os.path.getsize(name)
+    fin = open(name, 'rb')
+    buff = array('B')
+    buff.fromfile(fin, data_size)
+    buff.append(0)
+    idx = array('L')
+    rank = array('L')
+    for _ in xrange(data_size):
+        idx.append(0)
+        rank.append(0)
+    # ソート
+    s = time.clock()
+    suffix_sort()
+    e = time.clock()
+    print "%.3f" % (e - s)
+    # 出力
+    name1 = os.path.basename(name) + '.idx'
+    fout = open(name1, 'wb')
+    idx.tofile(fout)
+    fin.close()
+    fout.close()
+
+#
+make_suffix_array(sys.argv[1])
+</pre>
+<hr>
+<h4 id="list4">●プログラムリスト４</h4>
+<pre class="list">
+# coding: utf-8
+#
+# mksa31.py : Suffix Array の構築 (two-stage sort + ランクソート)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, os.path
+from array import *
+
+
+# 定数
+SIZE = 256 * 256
+LIMIT = 10
+
+# ランクの取得
+def getrank(x):
+    if x &lt; data_size: return rank[x]
+    return -1
+
+# ソート用比較関数
+def compare(x, y, n):
+    for i in xrange(n, data_size - max(x, y), 2):
+        r = rank[x + i] - rank[y + i]
+        if r != 0: return r
+    return y - x
+
+# 挿入ソート
+def insert_sort(low, high, n):
+    for i in xrange(low + 1, high + 1):
+        temp = idx[i]
+        j = i - 1
+        while j &gt;= low and compare(temp, idx[j], n) &lt; 0:
+            idx[j + 1] = idx[j]
+            j -= 1
+        idx[j + 1] = temp
+    # ランクの設定
+    for i in xrange(low, high + 1):
+        rank[idx[i]] = i
+
+# 枢軸の選択
+def select_pivot(low, high, n):
+    m = (high - low) / 4
+    a = getrank(idx[low + m] + n)
+    b = getrank(idx[low + m * 2] + n)
+    c = getrank(idx[low + m * 3] + n)
+    if a &gt; b:
+        tmp = a
+        a = b
+        b = tmp
+    if b &gt; c:
+        b = c
+        if a &gt; b: b = a
+    return b
+
+# マルチキークイックソート
+def mqsort(low, high, n = 0):
+    stack = []
+    while True:
+        if high - low &lt;= LIMIT:
+            insert_sort(low, high, n)
+            if len(stack) == 0: break
+            low, high, n = stack.pop()
+            continue
+        #
+        p = select_pivot(low, high, n)
+        # 4 分割
+        i = m1 = low
+        j = m2 = high
+        while True:
+            while i &lt;= j:
+                k = getrank(idx[i] + n) - p
+                if k &gt; 0: break
+                if k == 0:
+                    idx[i], idx[m1] = idx[m1], idx[i]
+                    m1 += 1
+                i += 1
+            while i &lt;= j:
+                k = getrank(idx[j] + n) - p
+                if k &lt; 0: break
+                if k == 0:
+                    idx[j], idx[m2] = idx[m2], idx[j]
+                    m2 -= 1
+                j -= 1
+            if i &gt; j: break
+            idx[i], idx[j] = idx[j], idx[i]
+            i += 1
+            j -= 1
+        # 等しいデータを中央に集める
+        for k in xrange(min(m1 - low, i - m1)):
+            idx[low + k], idx[j - k] = idx[j - k], idx[low + k]
+        m1 = low + (i - m1)
+        for k in xrange(min(high - m2, m2 - j)):
+            idx[i + k], idx[high - k] = idx[high - k], idx[i + k]
+        m2 = high - (m2 - j) + 1
+        if m2 &lt;= high: stack.append((m2, high, n))
+        if m1 &lt;= m2 - 1: stack.append((m1, m2 - 1, n + 2))
+        # &lt; の部分から処理する
+        high = m1 - 1
+
+# 二段階ソート法 (ratio-2)
+def suffix_sort():
+    # Type A のデータをセット
+    def set_type_a(i):
+        if i &gt; 0 and buff[i - 1] &gt; buff[i]:
+            c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+            idx[count_sum[c]] = i - 1
+            count_sum[c] += 1
+        if i &gt; 1 and buff[i - 2] &gt; buff[i] and buff[i - 2] &lt;= buff[i - 1]:
+            c = (buff[i - 2] &lt;&lt; 8) + buff[i - 1]
+            idx[count_sum[c]] = i - 2
+            count_sum[c] += 1
+    # 分布数えソート
+    count = [0] * SIZE
+    count_sum = [0] * (SIZE + 1)
+    for x in xrange(data_size):
+        count[(buff[x] &lt;&lt; 8) + buff[x + 1]] += 1
+    for x in xrange(1, SIZE + 1):
+        count_sum[x] = count[x - 1] + count_sum[x - 1]
+    for x in xrange(1, SIZE):
+        count[x] += count[x - 1]
+    for x in xrange(data_size - 1, -1, -1):
+        c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+        count[c] -= 1
+        idx[count[c]] = x
+        rank[x] = count_sum[c + 1] - 1
+    # two-stage sort
+    # Type B をソート 
+    for x in xrange(256):
+        for y in xrange(x, 256):
+            low = low1 = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1]
+            # Type B (rate-2) を分離
+            for n in xrange(low, high):
+                i = idx[n]
+                if buff[i] &gt; buff[i + 2]:
+                    idx[n] = idx[low]
+                    idx[low] = i
+                    low += 1
+            if high - low &gt; 1:
+                # Type A のランクを更新
+                for z in xrange(low1, low):
+                    rank[idx[z]] = low - 1
+                mqsort(low, high - 1, 2)
+    # Type A をセット
+    # 最初に最後尾のデータをチェック
+    set_type_a(data_size)
+    for x in xrange(data_size): set_type_a(idx[x])
+
+# suffix array の構築
+def make_suffix_array(name):
+    global buff, idx, data_size, rank
+    # 入力
+    data_size = os.path.getsize(name)
+    fin = open(name, 'rb')
+    buff = array('B')
+    buff.fromfile(fin, data_size)
+    buff.append(0)
+    buff.append(0)
+    idx = array('L')
+    rank = array('L')
+    for _ in xrange(data_size):
+　　    idx.append(0)
+        rank.append(0)
+    # ソート
+    s = time.clock()
+    suffix_sort()
+    e = time.clock()
+    print "%.3f" % (e - s)
+    # 出力
+    name1 = os.path.basename(name) + '.idx'
+    fout = open(name1, 'wb')
+    idx.tofile(fout)
+    fin.close()
+    fout.close()
+
+#
+make_suffix_array(sys.argv[1])
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo43.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo45.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

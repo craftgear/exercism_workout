@@ -1,0 +1,1111 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881768</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb11.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb12.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>遅延ストリーム (3)</h3>
+<p> 前回まで作成した遅延ストリームは、stream-cons で遅延ストリームを生成するとき、ストリームの要素となる引数を評価していました。たとえば、(stream-cons (func x) ...) とすると、(func x) を評価した値がストリームの要素となります。ここで、ストリームにまだアクセスしていないのに、(func x) が評価されていることに注意してください。もし、(func x) がデータの入力処理だとすると、遅延ストリームを生成するときにデータをひとつ先読みしてしまうことになります。
+</p>
+<p> そこで、コンスセルの CAR 部と CDR 部をまとめて遅延評価することにします。この場合、遅延オブジェクトが遅延ストリームを表すことになります。Scheme のライブラリ SRFI-40 はこの方法で遅延ストリームを実装しています。今回は SRFI-40 をもっと単純にした方法で遅延ストリームを作ってみましょう。
+</p>
+
+<h4>●遅延ストリームを遅延オブジェクトで表す</h4>
+<p> 遅延ストリームを遅延オブジェクトで表す場合、その構造は次のようになります。
+</p>
+<pre class="list">
+リスト : 遅延ストリーム
+
+(defmacro stream-cons (a b)
+  `(delay (cons ,a ,b)))
+
+(defun stream-car (s) (car (force s)))
+(defun stream-cdr (s) (cdr (force s)))
+
+;; 終端
+(or (boundp 'stream-nil)
+    (defconstant stream-nil (delay nil)))
+(defun stream-null (s) (null (force s)))
+</pre>
+<p> stream-cons は `(cons ,a (delay ,b)) ではなく `(delay (cons ,a ,b)) とします。これで stream-cons の引数 a, b が遅延評価されます。stream-car と stream-cdr は遅延ストリーム s を force で評価してから car と cdr を適用します。遅延ストリームは遅延オブジェクトで表すので、終端の定義を (delay '()) とし、定数 stream-nil に格納します。終端のチェックを行う述語は stream-null とし、遅延ストリーム s を force で評価してから null でチェックします。
+</p>
+<h4>●stream-delay</h4>
+<p> ここで stream-null を評価すると、遅延ストリームが force されることに注意してください。たとえば、遅延ストリームを連結する stream-append を次のように定義すると問題が発生します。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの連結 (間違い版)
+
+;; 整数列を生成
+(defun range (low high)
+  (if (&gt; low high)
+      stream-nil
+    (stream-cons low (range (1+ low) high))))
+
+;; 遅延ストリームの連結 (間違い版)
+(defun stream-append-bad (s1 s2)
+  (if (stream-null s1)
+      s2
+    (stream-cons (stream-car s1)
+                 (stream-append-bad (stream-cdr s1) s2))))
+</pre>
+<p> stream-append-bad でストリームを生成するとき、stream-null で s1 が force されることになります。つまり、新しいストリームを生成する前に引数のストリームが評価されてしまうのです。次の例を見てください。
+</p>
+<pre>
+* (defvar *s1*)
+
+*S1*
+* (defvar *s2*)
+
+*S2*
+* (setq *s1* (stream-cons (progn (print "oops!") 1) stream-nil))
+
+#&lt;CLOSURE ...&gt;
+* (setq *s2* (stream-cons 2 stream-nil))
+
+#&lt;CLOSURE ...&gt;
+* (defvar *s3*)
+
+*S3*
+* (setq *s3* (stream-append-bad *s1* *s2*))
+
+"oops!"
+#&lt;CLOSURE ...&gt;
+* (stream-car *s3*)
+
+1
+* (stream-car (stream-cdr *s3*))
+
+2
+</pre>
+<p> *s1* と *s2* を連結した新しいストリーム *s3* を評価していないにもかかわらず、引数のストリーム *s1* が force されていることがわかります。この場合、stream-append の本体を delay と force で囲みます。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの連結 (修正版)
+
+(defun stream-append (s1 s2)
+  (delay
+    (force
+      (if (stream-null s1)
+          s2
+        (stream-cons (stream-car s1)
+                     (stream-append (stream-cdr s1) s2))))
+</pre>
+<p> delay と force で囲むのは無駄なように思いますが、これにより stream-append を評価して遅延ストリームを生成するとき、引数 s1 の遅延ストリームが force されずにすむわけです。
+</p>
+<p> 実際には、次に示すようなマクロを定義すると簡単です。
+</p>
+<pre class="list">
+リスト : 式 expr の遅延ストリームを返す
+
+(defmacro stream-delay (expr)
+  `(delay (force ,expr)))
+</pre>
+<pre class="list">
+リスト : 遅延ストリームの連結 (完成版)
+
+(defun stream-append (s1 s2)
+  (stream-delay
+   (if (stream-null s1)
+       s2
+     (stream-cons (stream-car s1)
+                  (stream-append (stream-cdr s1) s2)))))
+</pre>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (setq *s1* (stream-cons (progn (print "oops!") 1) stream-nil))
+
+#&lt;CLOSURE ...&gt;
+* (setq *s2* (stream-cons 2 stream-nil))
+
+#&lt;CLOSURE ...&gt;
+* (setq *s3* (stream-append *s1* *s2*))
+
+#&lt;CLOSURE ...&gt;
+* (stream-car *s3*)
+
+"oops!"
+1
+* (stream-car (stream-cdr *s3*))
+
+2
+</pre>
+<p> このように、stream-delay を使うことで、新しい遅延ストリームを生成するとき、引数のストリームが force されるのを防止することができます。
+</p>
+<p> 同様に stream-map や stream-filter など、遅延ストリームを受け取って新しい遅延ストリームを返す関数は stream-delay で囲む必要があります。詳細は <a href="clispb11a.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行速度の比較</h4>
+<p> それでは簡単な実行例として、素数を求めるプログラムで実行速度を比較してみましょう。
+</p>
+<pre class="list">
+リスト : 素数を求める
+
+(defvar *primes* (stream-cons 2 (stream-cons 3 (stream-cons 5 (primes-from 7)))))
+
+(defun primes-from (n)
+  (if (primep n)
+      (stream-cons n (primes-from (+ n 2)))
+    (primes-from (+ n 2))))
+
+(defun primep (n)
+  (every #'(lambda (p) (/= (mod n p) 0))
+         (stream-take-while #'(lambda (p) (&lt;= (* p p) n)) *primes*)))
+</pre>
+<p> 素数列 primes の定義は <a href="clispb10.html">遅延ストリーム (1)</a> で作成したものと同じです。(stream-ref primes 10000) の実行時間を求めたところ、結果は次のようになりました。
+</p>
+<pre class="item">
+lazy.l  : 0.172 秒
+lazy1.l : 0.234 秒
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, SBCL version 1.3.12
+</pre>
+<p> 今回の遅延ストリームのほうが少し遅くなりました。興味のある方はいろいろ試してみてください。
+</p>
+
+<h4>●問題点</h4>
+<p> 今回は単純に delay と force を使いましたが、この方法では末尾再帰的なアルゴリズムとの相性がよくないことがわかっているそうです。詳しい説明は Gauche (Scheme) のリファレンス <a href="http://practical-scheme.net/gauche/man/gauche-refj/Chi-Yan-Ping-Jia-.html">遅延評価</a> や Yutaka Hara さんの <a href="https://nacl-ltd.github.io/2016/05/31/delay-force.html">R7RSのdelay-forceとは何か</a> をお読みください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;;;
+;;; lazy1.l : 遅延評価と遅延ストリーム
+;;;
+;;;           Copyright (C) 2017 Makoto Hiroi
+;;;
+
+;;
+;; 遅延評価
+;;
+(defmacro delay (expr)
+  `(make-promise #'(lambda () ,expr)))
+
+(defun make-promise (f)
+  (let ((flag nil) (result nil))
+    #'(lambda ()
+        (unless flag
+          (let ((x (funcall f)))
+            (unless flag
+              (setf flag t
+                    result x))))
+        result)))
+
+(defun force (promise)
+  (funcall promise))
+
+;;
+;; 遅延ストリーム
+;;
+
+;; 遅延ストリームの生成
+;; 遅延オブジェクトでストリームを表す
+(defmacro stream-cons (a b)
+  `(delay (cons ,a ,b)))
+
+(defun stream-car (s) (car (force s)))
+(defun stream-cdr (s) (cdr (force s)))
+
+;; 終端
+(or (boundp 'stream-nil)
+    (defconstant stream-nil (delay nil)))
+(defun stream-null (s) (null (force s)))
+
+(defmacro stream-delay (expr)
+  `(delay (force ,expr)))
+
+;; 整数列を生成
+(defun range (low high)
+  (if (&gt; low high)
+      stream-nil
+    (stream-cons low (range (1+ low) high))))
+
+;; フィボナッチ数列
+(defun fibonacci (a b)
+  (stream-cons a (fibonacci b (+ a b))))
+
+;; 無限ストリームの生成
+(defun iterate (proc a)
+  (stream-cons a (iterate proc (funcall proc a))))
+
+;; リストを遅延ストリームに変換
+(defun list-to-stream (xs)
+  (if (null xs)
+      stream-nil
+    (stream-cons (car xs) (list-to-stream (cdr xs)))))
+
+;; n 番目の要素を求める
+(defun stream-ref (s n)
+  (do ((s s (stream-cdr s))
+       (n n (1- n)))
+      ((zerop n) (stream-car s))))
+
+;; 先頭から n 個の要素を取り出す
+(defun stream-take (s n)
+  (do ((s s (stream-cdr s))
+       (n n (1- n))
+       (a nil))
+      ((or (stream-null s) (zerop n)) (nreverse a))
+    (push (stream-car s) a)))
+
+;; 先頭から n 個の要素を取り除く
+(defun stream-drop (s n)
+  (do ((s s (stream-cdr s))
+       (n n (1- n)))
+      ((or (stream-null s) (zerop n)) s)))
+
+;; ストリームの結合
+(defun stream-append (s1 s2)
+  (stream-delay
+   (if (stream-null s1)
+       s2
+     (stream-cons (stream-car s1)
+                  (stream-append (stream-cdr s1) s2)))))
+
+(defun interleave (s1 s2)
+  (stream-delay
+   (if (stream-null s1)
+       s2
+     (stream-cons (stream-car s1)
+                  (interleave s2 (stream-cdr s1))))))
+
+;; 遅延評価版
+(defun stream-append-delay (s1 s2)
+  (stream-delay
+   (if (stream-null s1)
+       (force s2)
+     (stream-cons (stream-car s1)
+                  (stream-append-delay (stream-cdr s1) s2)))))
+
+(defun interleave-delay (s1 s2)
+  (stream-delay
+   (if (stream-null s1)
+       (force s2)
+     (stream-cons (stream-car s1)
+                  (interleave-delay (force s2) (cdr s1))))))
+
+;;
+;; 高階関数
+;;
+
+;; マップ関数
+(defun stream-map (proc &amp;rest s)
+  (stream-delay
+   (if (member-if #'stream-null s)
+       stream-nil
+     (stream-cons (apply proc (mapcar #'stream-car s))
+                  (apply #'stream-map proc (mapcar #'stream-cdr s))))))
+
+;; マッピングの結果を平坦化する
+(defun stream-flatmap (proc s)
+  (stream-delay
+   (if (stream-null s)
+       stream-nil
+     (stream-append-delay (funcall proc (stream-car s))
+                          (delay (stream-flatmap proc (stream-cdr s)))))))
+
+;; フィルター
+(defun stream-filter (pred s)
+  (stream-delay
+   (cond ((stream-null s) stream-nil)
+         ((funcall pred (stream-car s))
+          (stream-cons (stream-car s)
+                       (stream-filter pred (stream-cdr s))))
+         (t (stream-filter pred (stream-cdr s))))))
+
+;; 畳み込み
+(defun stream-fold-left (proc a s)
+  (if (stream-null s)
+      a
+    (stream-fold-left proc (funcall proc a (stream-car s)) (stream-cdr s))))
+
+(defun stream-fold-right (proc a s)
+  (if (stream-null s)
+      a
+    (funcall proc (stream-car s) (stream-fold-right proc a (stream-cdr s)))))
+
+;; 巡回
+(defun stream-for-each (proc s)
+  (cond ((not (stream-null s))
+         (funcall proc (stream-car s))
+         (stream-for-each proc (stream-cdr s)))))
+
+;;
+(defun stream-take-while (pred s)
+  (do ((s s (stream-cdr s))
+       (a nil))
+      ((not (funcall pred (stream-car s))) (nreverse a))
+    (push (stream-car s) a)))
+
+;;
+(defun stream-drop-while (pred s)
+  (do ((s s (stream-cdr s)))
+      ((not (funcall pred (stream-car s))) s)))
+
+;; 遅延ストリームの併合
+(defun stream-merge (s1 s2)
+  (stream-delay
+   (cond ((stream-null s1) s2)
+         ((stream-null s2) s1)
+         (t
+          (if (&lt;= (stream-car s1) (stream-car s2))
+              (stream-cons (stream-car s1) (stream-merge (stream-cdr s1) s2))
+            (stream-cons (stream-car s2) (stream-merge s1 (stream-cdr s2))))))))
+
+;;
+;; 集合演算
+;;
+
+;; 和集合
+(defun stream-union (s1 s2)
+  (stream-delay
+   (cond ((stream-null s1) s2)
+         ((stream-null s2) s1)
+         (t
+          (cond ((= (stream-car s1) (stream-car s2))
+                 (stream-cons (stream-car s1)
+                              (stream-union (stream-cdr s1) (stream-cdr s2))))
+                ((&lt; (stream-car s1) (stream-car s2))
+                 (stream-cons (stream-car s1)
+                              (stream-union (stream-cdr s1) s2)))
+                (t
+                 (stream-cons (stream-car s2)
+                              (stream-union s1 (stream-cdr s2)))))))))
+
+;; 積集合
+(defun stream-intersect (s1 s2)
+  (stream-delay
+   (cond ((or (stream-null s1) (stream-null s2)) nil)
+         ((= (stream-car s1) (stream-car s2))
+          (stream-cons (stream-car s1)
+                       (stream-intersect (stream-cdr s1) (stream-cdr s2))))
+         ((&lt; (stream-car s1) (stream-car s2))
+          (stream-intersect (stream-cdr s1) s2))
+         (t
+          (stream-intersect s1 (stream-cdr s2))))))
+
+
+;; 素数の生成
+(defun sieve (s)
+  (stream-cons (stream-car s)
+               (sieve (stream-filter #'(lambda (x) (/= (mod x (stream-car s)) 0))
+                                     (stream-cdr s)))))
+
+;; 別解
+(defvar *primes* (stream-cons 2 (stream-cons 3 (stream-cons 5 (primes-from 7)))))
+
+(defun primes-from (n)
+  (if (primep n)
+      (stream-cons n (primes-from (+ n 2)))
+    (primes-from (+ n 2))))
+
+(defun primep (n)
+  (every #'(lambda (p) (/= (mod n p) 0))
+         (stream-take-while #'(lambda (p) (&lt;= (* p p) n)) *primes*)))
+
+
+;; 順列の生成
+(defun make-perm (n s)
+  (if (zerop n)
+      (stream-cons nil stream-nil)
+    (stream-flatmap
+     #'(lambda (x)
+         (stream-map #'(lambda (y) (cons x y))
+                     (make-perm (1- n)
+                                (stream-filter #'(lambda (z) (not (eql x z))) s))))
+     s)))
+
+;; 8 Queen の解法
+(defun attack (x xs)
+  (labels ((attack-sub (x n ys)
+             (cond ((null ys) t)
+                   ((or (= (+ (car ys) n) x)
+                        (= (- (car ys) n) x))
+                    nil)
+                   (t (attack-sub x (1+ n) (cdr ys))))))
+    (attack-sub x 1 xs)))
+
+(defun queen (s)
+  (stream-delay
+   (if (stream-null s)
+       (stream-cons nil stream-nil)
+     (stream-filter
+      #'(lambda (ls)
+          (if (null ls)
+              t
+            (attack (car ls) (cdr ls))))
+      (stream-flatmap
+       #'(lambda (x)
+           (stream-map #'(lambda (y) (cons x y))
+                       (queen (stream-filter #'(lambda (z) (not (eql x z))) s))))
+       s)))))
+
+;; 木の巡回 (リストを木としてみる)
+(defun stream-of-tree (ls cont)
+  (cond ((null ls) (funcall cont))
+        ((atom ls)
+         (stream-cons ls (funcall cont)))
+        (t (stream-of-tree
+            (car ls)
+            #'(lambda () (stream-of-tree
+                          (cdr ls)
+                          #'(lambda () (funcall cont))))))))
+
+;; ツリーマッチング
+(defun same-fringe-p (tree1 tree2 &amp;key (test #'eql))
+  (labels ((iter (s1 s2)
+             (cond ((and (stream-null s1) (stream-null s2)) t)
+                   ((or (stream-null s1) (stream-null s2)) nil)
+                   ((funcall test (stream-car s1) (stream-car s2))
+                    (iter (stream-cdr s1) (stream-cdr s2)))
+                   (t nil))))
+    (iter (stream-of-tree tree1 #'(lambda () stream-nil))
+          (stream-of-tree tree2 #'(lambda () stream-nil)))))
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">シリーズ (series)</h3>
+<p> 前回は Scheme のライブラリ SRFI-40 を単純化した遅延ストリームを作成しましたが、Common Lisp にも遅延評価や遅延ストリームを扱うためのライブラリ (パッケージ) がいくつか公開されています。ここでは、<a href="clispb11a.html#cite">参考文献 1</a> 付録 A の「シリーズ (series)」を取り上げます。
+</p>
+<h4>●シリーズとは？</h4>
+<p> シリーズは Richard C. Waters 氏が開発された Common Lisp 用のパッケージです。<a href="clispb11a.html#cite">参考文献 1</a> 付録 A によると、<cite>『シリーズ (series) は列によく似たデータ構造で、列と同種の操作を行うことができる。』『シリーズは、ストリームのように非有界な要素の集合を表現でき、遅延評価を提供している。シリーズの各要素は、それが必要とされるまで計算されることはない。』とのことです。
+</p>
+<p> なお、今まで説明した遅延ストリームとシリーズでは使い方が大きく異なります。M.Hiroi は勉強不足でシリーズをまだよく理解していませんが、関数型言語の遅延ストリームのような使い方 (たとえば再帰的に数列を定義するなど) はできないと思います。それでも、便利な関数が多数用意されているので、無限列だけではなくいろいろなケースで使うことができるのではないかと思っています。今回は実際にシリーズを試してみましょう。
+</p>
+<h4>●インストール</h4>
+<p> シリーズのインストールは Quicklisp を使うと簡単です。Quicklisp は Zach Beane 氏が開発された Common Lisp 用のパッケージ管理ツールです。Web サイト <a href="https://www.quicklisp.org/beta/">Quicklisp beta</a> からファイル quicklisp.lisp をダウンロードし、REPL で以下のコマンドを実行するとインストールすることができます。
+</p>
+<pre>
+(load "quicklisp.lisp")
+(quicklisp-quickstart:install)
+(ql:add-to-init-file)
+</pre>
+<p> Quicklisp の説明は次のページが参考になると思います。
+</p>
+<ul>
+  <li><a href="http://dev.ariel-networks.com/wp/archives/365">モダンCommon Lisp: Quicklispによるライブラリ環境</a>, (深町英太郎さん)
+  <li><a href="http://keens.github.io/blog/2014/11/30/quicklisp/">require, ASDF, quicklispを正しく使う</a>, (κeen さん)
+  <li><a href="http://cl.cddddr.org/index.cgi?Quicklisp">Quicklisp - Common LISP users jp</a>
+</ul>
+<p> 有益な情報を公開されている作者の皆様に感謝いたします。
+</p>
+<p> あとは REPL で (ql:quickload :series) を実行すると、シリーズをダウンロードしてインストールすることができます。
+</p>
+<p> シリーズを使うときは (require :series) でパッケージをロードしてください。series:関数名 でシリーズの関数を使用することができます。また、(use-package :series) を実行すると、series: を省略することができます。
+</p>
+<pre>
+* (require :series)
+
+("SB-CLTL2" "SERIES")
+* (series:scan (list 1 2 3))
+
+#Z(1 2 3)
+* (use-package :series)
+
+T
+* (scan (list 1 2 3))
+
+#Z(1 2 3)
+</pre>
+<p> シリーズは #Z(...) で表記されます。(series::install) を実行すると、REPL で #Z(...) を入力することができます。
+</p>
+<pre>
+* (series::install)
+
+T
+* #Z(1 2 3)
+
+#Z(1 2 3)
+</pre>
+<h4>●シリーズの生成</h4>
+<p> 関数 series は引数を無限に繰り返すシリーズを返します。make-series は引数を格納したシリーズを返します。関数 scan は引数 (sequence) をシリーズに変換します。
+</p>
+<pre class="item">
+series arg &amp;rest args
+make-series arg &amp;rest args
+scan sequence
+scan type sequence
+</pre>
+<p> scan の引数 type は列の型を指定します。省略された場合は list になります。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (subseries (series 1 2 3 4 5) 0 15)
+
+#Z(1 2 3 4 5 1 2 3 4 5 1 2 3 4 5)
+* (make-series 1 2 3 4 5)
+
+#Z(1 2 3 4 5)
+* (scan '(a b c d e f))
+
+#Z(A B C D E F)
+* (scan 'vector #(1 2 3 4 5))
+
+#Z(1 2 3 4 5)
+</pre>
+<p> 関数 subseries は列関数 subseq のシリーズバージョンです。
+</p>
+<p> 数列の生成は関数 scan-range を使うと簡単です。
+</p>
+<pre class="item">
+scan-range &amp;key (:from 0) (:by 1) (:type 'number) :upto :below :downto :above :length
+</pre>
+<p> scan-range は :from から :by 刻みの数列 (シリーズ) を返します。:upto, :below, :downto, :above, :length は終了条件を指定します。終了条件が無い場合は無限列になります。
+</p>
+<ol>
+  <li>:upto<br>
+生成される数が :upto より小さいか等しい間は数を生成する
+  <li>:below<br>
+生成される数が :upto より小さい間は数を生成する
+  <li>:downto<br>
+生成される数が :downto より大きいか等しい間は数を生成する
+  <li>:above<br>
+生成される数が :above より大きい間は数を生成する
+  <li>:lenght<br>
+長さ :length のシリーズを生成する
+</ol>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (scan-range :from 1 :upto 10)
+
+#Z(1 2 3 4 5 6 7 8 9 10)
+* (scan-range :from 10 :by -1 :downto 0)
+
+#Z(10 9 8 7 6 5 4 3 2 1 0)
+* (scan-range :length 10)
+
+#Z(0 1 2 3 4 5 6 7 8 9)
+</pre>
+<p> もっと複雑なシリーズを生成する場合は高階関数 scan-fn を使います。
+</p>
+<pre class="item">
+scan-fn type init step &amp;optional test
+</pre>
+<p> init は初期値を与える関数、step は前項から次項を生成する関数、test は終了条件を表す述語です。type は init と step の返すデータ型を表します。init と step は多値を返すこともできます。その場合、返す値の数だけシリーズが生成されます。このとき、type は values 型指定子で複数の型を指定してください。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (scan-fn t #'(lambda () 1) #'1+ #'(lambda (x) (> x 20)))
+
+#Z(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20)
+* (scan-fn '(values integer integer) #'(lambda () (values 0 1))
+#'(lambda (a b) (values b (+ a b))) #'(lambda (a b) (> (+ a b) 10000)))
+
+#Z(0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584)
+#Z(1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181)
+</pre>
+<p> このほかにも、シリーズを生成する関数はいろいろ用意されています。詳しくはリファレンス <a href="http://quickdocs.org/series/api">series | Quickdocs</a> をお読みください。
+</p>
+<h4>●集積関数</h4>
+<p> シリーズの入力を元に、シリーズではない出力を生成する関数を「集積関数 (collector)」といいます。シリーズの要素を取り出す操作は集積関数として定義されています。
+</p>
+<pre class="item">
+collect-frist items &amp;optional (default nil)
+collect-last items &amp;optional (default nil)
+collect-nth n items &amp;optional (default nil)
+</pre>
+<p> collect-first は先頭要素を、collect-last は末尾の要素を、collect-nth は n 番目の要素を取り出して返します。要素がない場合は default の値が返されます。default が指定されていない場合は nil が返されます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (collect-first #Z(1 2 3 4 5))
+
+1
+* (collect-last #Z(1 2 3 4 5))
+
+5
+* (collect-nth 0 #Z(1 2 3 4 5))
+
+1
+* (collect-nth 4 #Z(1 2 3 4 5))
+
+5
+* (collect-nth 5 #Z(1 2 3 4 5))
+
+NIL
+</pre>
+<p> シリーズの長さは collect-length で求めることができます。
+</p>
+<pre>
+* (collect-length #Z(1 2 3 4 5))
+
+5
+* (collect-length #Z())
+
+0
+</pre>
+<p> collect-sum はシリーズの合計値を、collect-max, collect-min は最大値と最小値を求めます。
+</p>
+<pre>
+* (collect-sum #Z(1 2 3 4 5 6 7 8 9 10))
+
+55
+* (collect-max #Z(1 2 3 4 5 6 7 8 9 10))
+
+10
+* (collect-min #Z(1 2 3 4 5 6 7 8 9 10))
+
+1
+* (collect-min #Z())
+
+NIL
+</pre>
+<p> 関数 collect はシリーズを他のデータ型に変換します。
+</p>
+<pre class="item">
+collect items
+collect type items
+</pre>
+<p> 引数 type は変換するデータ型を指定します。type を省略すると list になります。
+</p>
+<pre>
+* (collect #Z(1 2 3 4 5))
+
+(1 2 3 4 5)
+* (collect 'vector #Z(1 2 3 4 5))
+
+#(1 2 3 4 5)
+</pre>
+<p> collect-append はシリーズの要素 (列型) を連結した新しい列を返します。
+</p>
+<pre class="item">
+collect-append items
+collect-append type items
+</pre>
+<p> 引数 type は変換するデータ型を指定します。type を省略すると list になります。
+</p>
+<pre>
+* (collect-append #Z((1 2) (3 4) (5 6)))
+
+(1 2 3 4 5 6)
+* (collect-append 'vector #Z((1 2) (3 4) (5 6)))
+
+#(1 2 3 4 5 6)
+* (collect-append 'vector #Z(#(1 2) #(3 4) #(5 6)))
+
+#(1 2 3 4 5 6)
+</pre>
+<p> 高階関数 collect-fn はシリーズの畳み込みを行います。
+</p>
+<pre class="item">
+collect-fn type init function &amp;rest items
+</pre>
+<p> init は初期値を与える関数、function は 2 引数の関数で、第 1 引数が累積変数、第 2 引数がシリーズの要素になります。引数 type は function が返す値のデータ型を指定します。
+</p>
+<pre>
+* (collect-fn 'integer #'(lambda () 0) #'+ #Z(1 2 3 4 5 6 7 8 9 10))
+
+55
+* (collect-fn 'list #'(lambda () nil) #'(lambda (a x) (cons x a)) #Z(1 2 3 4 5 6 7 8 9 10))
+
+(10 9 8 7 6 5 4 3 2 1)
+</pre>
+<p> 複数のシリーズを受け取るときは、init と function に多値を返す関数を指定します。この場合、scan-fn と同様に、type は values 型指定子で複数のデータ型を指定します。function の引数ですが、受け取るシリーズの個数が m 個とすると、最初に m 個の累積変数が渡され、そのあとに m 個のシリーズの要素が渡されます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (collect-fn '(values integer integer) #'(lambda () (values 0 0))
+#'(lambda (a b x y) (values (+ a x) (+ b y))) #Z(1 2 3 4) #Z(5 6 7 8))
+
+10
+26
+</pre>
+<p> なお、引数のシリーズが 1 つでも、init と function に多値を返す関数を指定することができます。この場合も function に渡される引数は累積変数が先で最後にシリーズの要素が渡されます。ようするに、init や function の返り値が次の function の呼び出し時の引数 (累積変数) に渡されるわけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (collect-fn '(values integer integer) #'(lambda () (values 0 0))
+#'(lambda (s n x) (values (+ s x) (1+ n))) #Z(1 2 3 4 5 6 7 8 9 10))
+
+55
+10
+</pre>
+<p> このように、要素の個数と合計値を同時に求めることができます。
+</p>
+<p> このほかにも、いろいろな集積関数が用意されています。詳しくはリファレンス <a href="http://quickdocs.org/series/api">series | Quickdocs</a> をお読みくださいませ。
+</p>
+<h4>●マッピング</h4>
+<p> 高階関数 map-fn はマッピングを行います。
+</p>
+<pre class="item">
+map-fn type function &amp;rest items
+</pre>
+<p> type は function が返す値のデータ型を指定します。もし、function が m 個の値を返すならば、map-fn は m 個のシリーズを返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (map-fn 'integer #'(lambda (x) (* x x)) #Z(1 2 3 4 5 6 7 8 9 10))
+
+#Z(1 4 9 16 25 36 49 64 81 100)
+* (map-fn t #'+ #Z(1 2 3 4 5) #Z(6 7 8 9 10))
+
+#Z(7 9 11 13 15)
+
+* (map-fn '(values integer rational) #'floor #Z(3/2 8/3 16/5))
+
+#Z(1 2 3)
+#Z(1/2 2/3 1/5)
+</pre>
+<p> なお、map-fn には略記法があって、map-fn t #'function は #Mfunction と記述することができます。ただし、(series::install) を評価しないと #M を使うことはできません。ご注意ください。
+</p>
+<pre>
+* (#M(lambda (x) (* x x)) #Z(1 2 3 4 5 6 7 8 9 10))
+
+#Z(1 4 9 16 25 36 49 64 81 100)
+* (#M+ #Z(1 2 3 4 5) #Z(6 7 8 9 10))
+
+#Z(7 9 11 13 15)
+* (#Mcons #Z(1 2 3 4 5) #Z(6 7 8 9 10))
+
+#Z((1 . 6) (2 . 7) (3 . 8) (4 . 9) (5 . 10))
+</pre>
+<p> #Mfunction が使える場所はリストの先頭 (関数の位置) だけです。
+</p>
+<p> シリーズには map-fn を簡単に使用するためのマクロ mapping が用意されています。
+</p>
+<pre class="item">
+(mapping ((x r) (y s)) ...) ≡ (map-fn t #'(lambda (x y) ...) r s)
+</pre>
+<pre>
+* (mapping ((x (scan-range :upto 10))) (* x x))
+
+#Z(0 1 4 9 16 25 36 49 64 81 100)
+</pre>
+<p> mapping はシリーズを返しますが、シリーズを作らずに nil を返すマクロ iterate も用意されています。
+</p>
+<pre>
+* (iterate ((x (scan-range :upto 10))) (print (* x x)))
+
+0
+1
+4
+9
+16
+25
+36
+49
+64
+81
+100
+NIL
+</pre>
+<h4>●フィルター</h4>
+<p> フィルターは関数 choose または高階関数 choose-if を使います。
+</p>
+<pre class="item">
+choose bools &amp;optional (items bools)
+choose-if pred items
+</pre>
+<p> choose の引数 bools は真偽値を格納したシリーズで、j 番目が nil であれば items の j 番目の要素を削除します。bools の長さ l が items よりも短い場合、items の l 版明光の要素はすべて削除されます。choose-if は列関数 remove-if-not のシリーズバージョンです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (choose #Z(t nil t nil t) #Z(1 2 3 4 5 6))
+
+#Z(1 3 5)
+* (choose-if #'evenp #Z(1 2 3 4 5 6 7 8 9 10))
+
+#Z(2 4 6 8 10)
+</pre>
+<h4>●変換関数</h4>
+<p> マッピングのように、シリーズから新しいシリーズを計算する関数を「変換関数 (transducer)」といいます。シリーズにはマッピングやフィルター以外にもいろいろな変換関数が用意されています。
+</p>
+<pre class="item">
+cotruncate &amp;rest items
+until bools &amp;rest items
+until-if pred &amp;&rest items
+</pre>
+<p> 引数のシリーズで最短の長さを k とします。cotruncate はシリーズの長さを k に揃えた新しいシリーズを返します。真偽値を格納したシリーズ bools において、nil ではない最初の要素の位置を k' とします。until はシリーズの長さを (min k k') に揃えます。第 1 引数のシリーズで述語 pred が真を返すまでの長さを k'' とします。until-if はシリーズの長さを (min k k'') に揃えます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (cotruncate #Z(1 2 3) #Z(4 5) #Z(6 7 8 9))
+
+#Z(1 2)
+#Z(4 5)
+#Z(6 7)
+* (until #Z(nil nil t nil) #Z(1 2 3 4 5) #Z(6 7 8 9))
+
+#Z(1 2)
+#Z(6 7)
+* (until-if #'minusp #Z(1 2 3 4 -1) #Z(5 6 7 8 9 10))
+
+#Z(1 2 3 4)
+#Z(5 6 7 8)
+</pre>
+<p> 関数 catenate は複数のシリーズを連結した新しいシリーズを返します。
+</p>
+<pre class="item">
+catenate &amp;rest items
+</pre>
+<pre>
+* (catenate #Z(1 2 3 4 5) #Z(6 7 8 9 10))
+
+#Z(1 2 3 4 5 6 7 8 9 10)
+* (catenate #Z(1 2 3 4 5) #Z() #Z(6 7 8 9 10))
+
+#Z(1 2 3 4 5 6 7 8 9 10)
+</pre>
+<p> 関数 mingle は 2 つのシリーズの要素を混合した新しいシリーズを返します。
+</p>
+<pre class="item">
+mingle items1 items2 comparator
+</pre>
+<p> mingle は items1 の要素 x と items2 の要素 y を (comparator x y) で比較して、真を返す場合は x を、偽を返す場合は y を新しいシリーズに格納します。もし、シリーズが comparator の順序で整列されていれば、mingle はマージと同じ結果になります。
+</p>
+<pre>
+* (mingle #Z(1 3 5 7 9) #Z(2 4 6 8 10) #'&lt;)
+
+#Z(1 2 3 4 5 6 7 8 9 10)
+* (mingle #Z(9 2 5 3 1) #Z(2 4 6 8 10) #'&lt;)
+
+#Z(2 4 6 8 9 2 5 3 1 10)
+</pre>
+<p> 高階関数 collecting-fn は collect-fn とよく似ていますが、シリーズを返すところが異なります。
+</p>
+<pre class="item">
+collecting-fn type init function &amp;rest items
+</pre>
+<p> collecting-fn は function の返り値を格納したシリーズを返します。function が多値を返す場合、その数だけシリーズを生成して返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (collecting-fn 'integer #'(lambda () 0) #'(lambda (a x) (+ a x)) (scan-range :from 1 :upto 20))
+
+#Z(1 3 6 10 15 21 28 36 45 55 66 78 91 105 120 136 153 171 190 210)
+* (collecting-fn 'integer #'(lambda () 1) #'(lambda (a x) (* a x)) (scan-range :from 1 :upto 20))
+
+#Z(1 2 6 24 120 720 5040 40320 362880 3628800 39916800 479001600 6227020800 
+87178291200 1307674368000 20922789888000 355687428096000 6402373705728000 
+121645100408832000 2432902008176640000)
+* (collecting-fn '(values integer integer) #'(lambda () (values 0 0))
+#'(lambda (s n x) (values (+ s x) (1+ n))) (scan-range :from 1 :upto 20))
+
+#Z(1 3 6 10 15 21 28 36 45 55 66 78 91 105 120 136 153 171 190 210)
+#Z(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20)
+</pre>
+<p> このほかにも、シリーズにはいろいろな関数が用意されています。詳しくはリファレンス <a href="http://quickdocs.org/series/api">series | Quickdocs</a> をお読みください。
+</p>
+<h4>●ジェネレータとギャザラ</h4>
+<p> パッケージ series には <a href="clispb11a.html#cite">参考文献 1</a> 付録 B に記述されている「ジェネレータ (generator)」と「ギャザラ (gather)」も含まれています。関数 generator はシリーズをジェネレータに変換し、マクロ next-in を使って要素を一つずつ取り出すことができます。
+</p>
+<pre class="item">
+generator items
+next-in gen [action]
+</pre>
+<p> next-in でジェネレータ gen が空の場合、action で指定された S 式を実行します。action が指定されていない場合はエラーが送出されます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (let ((g (generator (scan-range :from 1 :upto 10))))
+(loop (print (next-in g (return)))))
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+NIL
+</pre> 
+<p> ギャザラはシリーズに要素を追加して、指定した集積関数で結果を求める機能です。
+</p>
+<pre class="item">
+gatherer collector
+next-out gatherer item
+result-of gatherer
+</pre>
+<p> 関数 gatherer はギャザラを生成します。このとき、シリーズの集積関数 collector を指定します。関数 next-out は item を gatherer に追加します。reuslt-of は集積関数を評価して結果を求めます。
+</p>
+<pre>
+* (let ((g (gatherer #'collect))) (dotimes (x 10 (result-of g)) (next-out g x)))
+
+(0 1 2 3 4 5 6 7 8 9)
+* (let ((g (gatherer #'collect-sum))) (dotimes (x 10 (result-of g)) (next-out g (* x x))))
+
+285
+</pre>
+<h4>●簡単な例題</h4>
+<pre class="list">
+リスト : FizzBuzz 問題
+
+(defun change (n)
+  (cond ((zerop (mod n 15)) "FizzBuzz")
+        ((zerop (mod n 3))  "Fizz")
+        ((zerop (mod n 5))  "Buzz")
+        (t (format nil "~D" n))))
+
+(defun fizzbuzz ()
+  (#Mchange (scan-range :from 1 :upto 100)))
+
+;; 別解
+(defun fizzbuzz1 ()
+  (#M(lambda (x y z) (let ((s (concatenate 'string x y)))
+                       (if (string= s "") (format nil "~D" z) s)))
+     (series "" "" "Fizz")
+     (series "" "" "" "" "Buzz")
+     (scan-range :from 1 :upto 100)))
+</pre>
+<pre>
+* (fizzbuzz1)
+
+#Z("1" "2" "Fizz" "4" "Buzz" "Fizz" "7" "8" "Fizz" "Buzz" "11" "Fizz" "13" "14"
+"FizzBuzz" "16" "17" "Fizz" "19" "Buzz" "Fizz" "22" "23" "Fizz" "Buzz" "26" "Fizz"
+"28" "29" "FizzBuzz" "31" "32" "Fizz" "34" "Buzz" "Fizz" "37" "38" "Fizz" "Buzz" 
+"41" "Fizz" "43" "44" "FizzBuzz" "46" "47" "Fizz" "49" "Buzz" "Fizz" "52" "53" 
+"Fizz" "Buzz" "56" "Fizz" "58" "59" "FizzBuzz" "61" "62" "Fizz" "64" "Buzz" "Fizz" 
+"67" "68" "Fizz" "Buzz" "71" "Fizz" "73" "74" "FizzBuzz" "76" "77" "Fizz" "79" 
+"Buzz" "Fizz" "82" "83" "Fizz" "Buzz" "86" "Fizz" "88" "89" "FizzBuzz" "91" "92" 
+"Fizz" "94" "Buzz" "Fizz" "97" "98" "Fizz" "Buzz")
+</pre>
+<pre class="list">
+リスト : 三角数と四角数
+
+(defun triangular ()
+  (map-fn 'integer #'(lambda (x) (/ (* x (1+ x)) 2)) (scan-range :from 1)))
+
+(defun square ()
+  (map-fn 'integer #'(lambda (x) (* x x)) (scan-range :from 1)))
+</pre>
+<pre>
+* (subseries (triangular) 0 20)
+
+#Z(1 3 6 10 15 21 28 36 45 55 66 78 91 105 120 136 153 171 190 210)
+* (subseries (square) 0 20)
+
+#Z(1 4 9 16 25 36 49 64 81 100 121 144 169 196 225 256 289 324 361 400)
+</pre>
+<pre class="list">
+リスト : 三角錐数と四角錐数
+
+(defun triangular-pyramidal ()
+  (collecting-fn 'integer #'(lambda () 0) #'+ (triangular)))
+
+(defun square-pyramidal ()
+  (collecting-fn 'integer #'(lambda () 0) #'+ (square)))
+</pre>
+<pre>
+* (subseries (triangular-pyramidal) 0 20)
+
+#Z(1 4 10 20 35 56 84 120 165 220 286 364 455 560 680 816 969 1140 1330 1540)
+* (subseries (square-pyramidal) 0 20)
+
+#Z(1 5 14 30 55 91 140 204 285 385 506 650 819 1015 1240 1496 1785 2109 2470 2870)
+</pre>
+<pre class="list">
+リスト : フィボナッチ数列
+
+(defun fibonacci ()
+  (scan-fn '(values integer integer)
+           #'(lambda () (values 0 1))
+           #'(lambda (a b) (values b (+ a b)))))
+</pre>
+
+<pre>
+* (subseries (fibonacci) 0 40)
+
+#Z(0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 
+17711 28657 46368 75025 121393 196418 317811 514229 832040 1346269 2178309 3524578
+5702887 9227465 14930352 24157817 39088169 63245986)
+</pre>
+<ul>
+  <li>300,000,000 未満のフィボナッチ数の最大値を求める
+</ul>
+<pre>
+* (collect-last (until-if #'(lambda (x) (> x 300000000)) (fibonacci)))
+
+267914296
+</pre>
+<ul>
+  <li>300,000,000 未満のフィボナッチ数の総和を求める
+</ul>
+<pre>
+* (collect-sum (until-if #'(lambda (x) (> x 300000000)) (fibonacci)))
+
+701408732
+</pre>
+<ul>
+  <li>300,000,000 未満の偶数のフィボナッチ数の総和を求める
+</ul>
+<pre>
+* (collect-sum (choose-if #'evenp (until-if #'(lambda (x) (> x 300000000)) (fibonacci))))
+
+350704366
+</pre>
+<pre class="list">
+リスト : 素数
+
+(defun primep (n ps)
+  (do ((ps ps (cdr ps)))
+      ((> (* (car ps) (car ps)) n) t)
+    (if (zerop (mod n (car ps)))
+        (return))))
+
+(defun primes (n)
+  (collect-fn 'list
+              #'(lambda () (list 2))
+              #'(lambda (ps x) (if (primep x ps) (append ps (list x)) ps))
+              (scan-range :from 3 :by 2 :upto n)))
+</pre>
+<pre>
+* (primes 100)
+
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+* (primes 500)
+
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+ 107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199
+ 211 223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313
+ 317 331 337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433
+ 439 443 449 457 461 463 467 479 487 491 499)
+</pre>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>Guy L. Steele Jr., 『COMMON LISP 第 2 版』, 共立出版, 1991
+  <li><a href="http://series.sourceforge.net/">SERIES Common Lisp Package</a>, (本家)
+</ol>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb11.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb12.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

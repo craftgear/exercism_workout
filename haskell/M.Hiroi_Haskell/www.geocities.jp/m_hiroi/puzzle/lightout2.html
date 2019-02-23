@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 変形版「ライツアウト」</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881773</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>変形版「ライツアウト」</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p>  ライツアウトは「(株)タカラ」から1995年に発売されたパズルゲーム機で、光っているボタンをすべて消すことができればクリアとなります。ライツアウトのルールは拙作の <a href="lightout.html">ライツアウトの解法</a> をお読みください。
+</p>
+
+<p> ところで、ライツアウトの変形バージョンではボタンの色を増やした N 色ライツアウトが有名ですが、このほかにもボタンを押したときの反転パターンや盤面の形を変えたバージョンを考えることができます。ここでは 3 つの変形版「ライツアウト」を取り上げてみましょう。
+</p>
+
+<hr>
+<h4 id="x_pattern">●反転パターンをＸに変更</h4>
+<p> 最初にボタンを押したときの反転パターンを変更してみましょう。反転パターンは M.Hiroi が X68000 ユーザーだからというわけではありませんが、次のようなＸの形にしてみました。
+</p>
+
+<pre class="fig">
+  □□□□□      □□□□□  
+  □□□□□      □■□■□
+  □□□□□ ─→ □□■□□
+  □□□□□      □■□■□
+  □□□□□      □□□□□
+
+   中央のボタンを押した場合
+
+    図：反転パターンの変更
+</pre>
+
+<p> 基本的な法則はライツアウトと同じなので、ボタンを押す組み合わせは全部で 2^25 (2 の 25 乗)、約 32 万通りになります。このパターンだと上から 1 行ずつ消していく方法は使えませんが、細江万太郎さんが考案された「ライツアウトを連立方程式で解く方法」で高速に解くことができるはずです。興味のある方は、高橋謙一郎さんの <a href="http://www.ic-net.or.jp/home/takaken/">コンピュータ＆パズル</a> にある <a href="http://www.ic-net.or.jp/home/takaken/nt/light/light2.html"> 驚異のライツアウト解法ロジック</a> をお読みください。そこで、今回は解法プログラムではなく最長手数を調べることにしました。
+</p>
+
+<p> プログラムは <a href="lightout.html#light_max">ライツアウトの解法：最長手数を求める</a> の反転パターンを変更するだけです。結果は次のようになりました。
+</p>
+<pre>
+ 1手のパターン数     25
+ 2手のパターン数    300
+ 3手のパターン数   2300
+ 4手のパターン数  12442
+ 5手のパターン数  49402
+ 6手のパターン数 145824
+ 7手のパターン数 317136
+ 8手のパターン数 493505
+ 9手のパターン数 525929
+10手のパターン数 363348
+11手のパターン数 150868
+12手のパターン数  33156
+13手のパターン数   2916
+合計 2097152 個
+</pre>
+<p> 実行時間は M.Hiroi のオンボロマシン (Pentium 166 MHz) で約 42 秒、ライトがすべて消えている完成形も含めて全部で 2,097,152 通りとなりました。ライツアウトの 1/4 しかありません。最長手数も 13 手と短くなりました。パターンの総数が少ないので、ライツアウトよりも簡単なように思われます。ですが、実際のゲームでは 1 行ずつ消していく方法が使えないので、ライツアウトよりも難しく感じるかもしれませんね。
+</p>
+<p> <a href="lightout2.html#x_pattern_src">プログラムを読む</a>
+</p>
+<hr>
+<h4 id="plus_x">●点灯と消灯で反転パターンを変える</h4>
+<p> 次はボタンの点灯と消灯で反転パターンが異なるライツアウトを考えてみましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+  □□□      □■□    ■■■      □■□  
+  □□□ ─→ ■■■    ■■■ ─→ ■□■  
+  □□□      □■□    ■■■      □■□  
+
+   消灯時のパターン      点灯時のパターン
+    （どちらも中央のボタンを押した場合）
+
+            図：変形版ライツアウト
+</pre>
+<p> 上図に示すように、消灯しているボタンを押したときは今までと同じですが、点灯しているボタンを押すとＸの形（押したボタンと斜め 4 方向のボタン）に反転します。このパターンの面白いところは、同じボタンを 4 回押すと元の状態に戻ることです。次の図を見てください。
+</p>
+
+<pre class="fig">
+  □□□      □■□      ■■■      ■□■      □□□ 
+  □□□ ─→ ■■■ ─→ ■□■ ─→ □■□ ─→ □□□ 
+  □□□      □■□      ■■■      ■□■      □□□ 
+
+        図：同じボタンを 4 回押すと元の状態に戻る
+</pre>
+<p> 一見すると 4 色ライツアウトと同じようですが、ライトの状態はオン・オフの 2 種類しかないので、局面の総数はそれほど多くはないでしょう。5 行 5 列盤の場合、局面は最大で 2 ^ 25 = 33554432 通りですが、ライツアウトではその 1/4 の 8388608 通りしかありません。これより多くなるのか少なくなるのか、ちょっと興味があります。そこで、局面の総数と最長手数を求めるプログラムを作ってみました。
+</p>
+
+<p> 実行結果を示します。実行時間は M.Hiroi のオンボロマシン (Pentium 166 MHz) で約 200 秒かかりました。
+</p>
+<pre>
+ 1手のパターン数 25
+ 2手のパターン数 357
+ 3手のパターン数 4021
+ 4手のパターン数 37809
+ 5手のパターン数 299268
+ 6手のパターン数 1935410
+ 7手のパターン数 8667086
+ 8手のパターン数 16621708
+ 9手のパターン数 5852793
+10手のパターン数 135954
+合計 33554432 個
+</pre>
+<p> 局面の総数は初期状態を含めて 33554432 通りになりました。つまり、ライトがどんな点灯パターンでも必ず解くことができるわけです。この結果は予想していなかったので、M.Hiroi もびっくりしました。ライツアウトの最長手数は 15 手ですが、この変形版は 10 手と短くなりました。もしかすると、ライツアウトよりも簡単に解けるのかもしれませんね。
+</p>
+<p> <a href="lightout2.html#plus_x_src">プログラムを読む</a>
+</p>
+<hr>
+<h4 id="trr">●菱形ライツアウト</h4>
+<p> 最後は、下図のように盤面の形を菱形に変えてみましょう。
+</p>
+
+<pre class="fig">
+        □
+      □□□
+    □□□□□
+  □□□□□□□  
+    □□□□□
+      □□□
+        □
+
+図：菱形ライツアウト
+</pre>
+<p> ボタンは全部で 25 個あります。反転パターンはライツアウトと同じく、押したボタンと左右上下のボタンの状態が反転します。局面の総数と最長手数はライツアウトよりも増えるのか減るのか、プログラムを作って調べてみました。結果は次のようになりました。
+</p>
+<pre>
+ 1手のパターン数 25
+ 2手のパターン数 300
+ 3手のパターン数 2300
+ 4手のパターン数 12650
+ 5手のパターン数 53130
+ 6手のパターン数 177100
+ 7手のパターン数 480700
+ 8手のパターン数 1081575
+ 9手のパターン数 2042975
+10手のパターン数 3268760
+11手のパターン数 4457400
+12手のパターン数 5200300
+13手のパターン数 5200300
+14手のパターン数 4457400
+15手のパターン数 3268760
+16手のパターン数 2042975
+17手のパターン数 1081575
+18手のパターン数 480700
+19手のパターン数 177100
+20手のパターン数 53130
+21手のパターン数 12650
+22手のパターン数 2300
+23手のパターン数 300
+24手のパターン数 25
+25手のパターン数 1
+合計 33554432 個 （初期状態を含む）
+</pre>
+<p> 実行時間は M.Hiroi のオンボロマシン (Pentium 166 MHz) で約 4 分かかりました。生成した局面数は初期状態を含めて 33554432 通りあります。これは、どんな点灯パターンでも必ず解くことができることを表しています。それから、最長手数は 25 手、つまりすべてのボタンを押した場合になります。この局面は下図のようなパターンになります。
+</p>
+
+<pre class="fig">
+        □
+      ■■■
+    ■■■■■
+  □■■■■■□  
+    ■■■■■
+      ■■■
+        □
+
+図：最長手数の局面
+</pre>
+<p> <a href="lightout2.html#trr_src">プログラムを読む</a>
+</p>
+<hr>
+<h4 id="x_pattern_src">●プログラムリスト１</h4>
+<pre class="list">
+/*
+ * lo_x.c : パターンを X に変えたライツアウト
+ *          最長手数を求める
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;time.h&gt;
+
+#define MAX_SIZE 0x2000000
+#define SIZE     25
+
+/* チェックテーブル */
+char *check_table;
+
+/* 反転パターン */
+int pattern[SIZE] = {
+  0x0000041, 0x00000a2, 0x0000144, 0x0000288, 0x0000110,
+  0x0000822, 0x0001445, 0x000288a, 0x0005114, 0x0002208,
+  0x0010440, 0x00288a0, 0x0051140, 0x00a2280, 0x0044100,
+  0x0208800, 0x0511400, 0x0a22800, 0x1445000, 0x0882000,
+  0x0110000, 0x0228000, 0x0450000, 0x08a0000, 0x1040000,
+};
+
+/* ボタンを押す */
+int push_button( int now_pat, int move )
+{
+  int i;
+  int c = 0;
+  for( i = 0; i &lt; SIZE; i++ ){
+    int new_pat = now_pat ^ pattern[i];
+    if( !check_table[new_pat] ){
+      check_table[new_pat] = move;
+      c++;
+    }
+  }
+  return c;
+}
+
+/* 力任せの 32 万回ループ */
+void solve( void )
+{
+  int i, move, c, total = 1;
+  /* 最初は 0 からスタート */
+  move = 1;
+  c = push_button( 0, move );
+  total += c;
+  printf("%2d手のパターン数 %d\n", move, c );
+  check_table[0] = -1;
+
+  /* 2 手目以降の探索 */
+  for( ; move &lt; SIZE; move++ ){
+    c = 0;
+    for( i = 0; i &lt; MAX_SIZE; i++ ){
+      if( check_table[i] == move ){
+        c += push_button( i, move + 1 );
+      }
+    }
+    /* 新しいパターンが生成されなければ探索終了 */
+    if( c == 0 ) break;
+    printf("%2d手のパターン数 %d\n", move + 1, c );
+    total += c;
+  }
+  printf("合計 %d 個\n", total );
+}
+
+int main()
+{
+  int s, e;
+  /* メモリの確保 */
+  check_table = calloc( MAX_SIZE, sizeof( char ) );
+  if( check_table == NULL ){
+    fprintf( stderr, "Out of memory!!\n");
+    exit( 1 );
+  }
+  s = clock();
+  solve();
+  e = clock();
+  printf("時間 %d\n", e - s );
+  return 0;
+}
+</pre>
+<p><a href="lightout2.html#x_pattern">戻る</a>
+</p>
+<hr>
+<h4 id="plus_x_src">●プログラムリスト２</h4>
+<pre class="list">
+/*
+ * lo_plus_x.c : 変形版ライツアウト（＋とＸのパターン）
+ *               最長手数を求める
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;time.h&gt;
+
+#define MAX_SIZE 0x2000000
+#define SIZE     25
+
+/* チェックテーブル */
+char *check_table;
+
+/* on off チェックテーブル */
+int bit_on[SIZE];
+
+/* 反転パターン(+ pattern) */
+int pattern[SIZE] = {
+  0x0000023,  0x0000047,  0x000008e,  0x000011c,  0x0000218,
+  0x0000461,  0x00008e2,  0x00011c4,  0x0002388,  0x0004310,
+  0x0008c20,  0x0011c40,  0x0023880,  0x0047100,  0x0086200,
+  0x0118400,  0x0238800,  0x0471000,  0x08e2000,  0x10c4000,
+  0x0308000,  0x0710000,  0x0e20000,  0x1c40000,  0x1880000,
+};
+
+/* 反転パターン(X pattern) */
+int pattern_x[SIZE] = {
+  0x0000041,  0x00000a2,  0x0000144,  0x0000288,  0x0000110,
+  0x0000822,  0x0001445,  0x000288a,  0x0005114,  0x0002208,
+  0x0010440,  0x00288a0,  0x0051140,  0x00a2280,  0x0044100,
+  0x0208800,  0x0511400,  0x0a22800,  0x1445000,  0x0882000,
+  0x0110000,  0x0228000,  0x0450000,  0x08a0000,  0x1040000,
+};
+
+/*
+ * ボタンを押す
+ * 逆順だから消灯時が Ｘ で点灯時が ＋ になる
+ */
+int push_button( int now_pat, int move )
+{
+  int i;
+  int c = 0;
+  for( i = 0; i &lt; SIZE; i++ ){
+    int new_pat;
+    if( bit_on[i] &amp; now_pat ){
+      new_pat = now_pat ^ pattern[i];
+    } else {
+      new_pat = now_pat ^ pattern_x[i];
+    }
+    if( !check_table[new_pat] ){
+      check_table[new_pat] = move;
+      c++;
+    }
+  }
+  return c;
+}
+
+/* 力任せの 32 万回ループ */
+void solve( void )
+{
+  int i, move, c, total = 1;
+  /* 最初は 0 からスタート */
+  move = 1;
+  c = push_button( 0, move );
+  total += c;
+  printf("%2d手のパターン数 %d\n", move, c );
+  check_table[0] = -1;
+
+  /* 2 手目以降の探索 */
+  for( ; move &lt; SIZE; move++ ){
+    c = 0;
+    for( i = 0; i &lt; MAX_SIZE; i++ ){
+      if( check_table[i] == move ){
+        c += push_button( i, move + 1 );
+      }
+    }
+    /* 新しいパターンが生成されなければ探索終了 */
+    if( c == 0 ) break;
+    printf("%2d手のパターン数 %d\n", move + 1, c );
+    total += c;
+  }
+  printf("合計 %d 個\n", total );
+}
+
+int main()
+{
+  int i, s, e;
+  /* メモリの確保 */
+  check_table = calloc( MAX_SIZE, sizeof( char ) );
+  if( check_table == NULL ){
+    fprintf( stderr, "Out of memory!!\n");
+    exit( 1 );
+  }
+  /* 初期化 */
+  for( i = 0; i &lt; SIZE; i++ ) bit_on[i] = 1 &lt;&lt; i;
+  /* 実行 */
+  s = clock();
+  solve();
+  e = clock();
+  printf("時間 %d\n", e - s );
+  return 0;
+}
+</pre>
+<p><a href="lightout2.html#plus_x">戻る</a>
+</p>
+<hr>
+<h4 id="trr_src">●プログラムリスト３</h4>
+<pre class="list">
+/*
+ * lo_trr.c : 菱形ライトアウトの最長手数を求める
+ *
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;time.h&gt;
+
+#define MAX_SIZE 0x2000000
+#define SIZE     25
+
+/* チェックテーブル */
+char *check_table;
+
+/* 反転パターン */
+int pattern[SIZE];
+
+/*        座標
+           ０
+        １ ２ ３
+     ４ ５ ６ ７ ８
+  ９ 10 11 12 13 14 15
+     16 17 18 19 20
+        21 22 23
+           24
+*/
+const char pattern_data[][SIZE] = {
+  { 0, 2, -1},               /* 0 */
+  { 1, 2, 5, -1},            /* 1 */
+  { 0, 1, 2, 3, 6, -1},      /* 2 */
+  { 2, 3, 7, -1},            /* 3 */
+  { 4, 5, 10, -1},           /* 4 */
+  { 1, 4, 5, 6, 11, -1},     /* 5 */
+  { 2, 5, 6, 7, 12, -1},     /* 6 */
+  { 3, 6, 7, 8, 13, -1},     /* 7 */
+  { 7, 8, 14, -1},           /* 8 */
+  { 9, 10, -1},              /* 9 */
+  { 4, 9, 10, 11, 16, -1},   /* 10 */
+  { 5, 10, 11, 12, 17, -1},  /* 11 */
+  { 6, 11, 12, 13, 18, -1},  /* 12 */
+  { 7, 12, 13, 14, 19, -1},  /* 13 */
+  { 8, 13, 14, 15, 20, -1},  /* 14 */
+  { 14, 15, -1},             /* 15 */
+  { 10, 16, 17, -1},         /* 16 */
+  { 11, 16, 17, 18, 21, -1}, /* 17 */
+  { 12, 17, 18, 19, 22, -1}, /* 18 */
+  { 13, 18, 19, 20, 23, -1}, /* 19 */
+  { 14, 19, 20, -1},         /* 20 */
+  { 17, 21, 22, -1},         /* 21 */
+  { 18, 21, 22, 23, 24, -1}, /* 22 */
+  { 19, 22, 23, -1},         /* 23 */
+  { 22, 24, -1},             /* 24 */
+};
+
+/* 反転パターンを作る */
+void make_pattern( void )
+{
+  int i;
+  for( i = 0; i &lt; SIZE; i++ ){
+    int j, k,  pat = 0;
+    for( j = 0; (k = pattern_data[i][j]) != -1; j++ ){
+      pat += 1 &lt;&lt; k;
+    }
+    pattern[i] = pat;
+  }
+}
+
+/* ボタンを押す */
+int push_button( int now_pat, int move )
+{
+  int i;
+  int c = 0;
+  for( i = 0; i &lt; SIZE; i++ ){
+    int new_pat = now_pat ^ pattern[i];
+    if( !check_table[new_pat] ){
+      check_table[new_pat] = move;
+      c++;
+    }
+  }
+  return c;
+}
+
+/* 力任せの 32 万回 ループ */
+void solve( void )
+{
+  int i, move, c, total = 1;
+  /* 最初は 0 からスタート */
+  move = 1;
+  c = push_button( 0, move );
+  total += c;
+  printf("%2d手のパターン数 %d\n", move, c );
+  check_table[0] = -1;
+
+  /* 2 手目以降の探索 */
+  for( ; move &lt; SIZE; move++ ){
+    c = 0;
+    for( i = 0; i &lt; MAX_SIZE; i++ ){
+      if( check_table[i] == move ){
+        c += push_button( i, move + 1 );
+      }
+    }
+    /* 新しいパターンが生成されなければ探索終了 */
+    if( c == 0 ) break;
+    printf("%2d手のパターン数 %d\n", move + 1, c );
+    total += c;
+  }
+  printf("合計 %d 個\n", total );
+}
+
+int main()
+{
+  int s, e;
+  /* メモリの確保 */
+  check_table = calloc( MAX_SIZE, sizeof( char ) );
+  if( check_table == NULL ){
+    fprintf( stderr, "Out of memory!!\n");
+    exit( 1 );
+  }
+  make_pattern();
+  s = clock();
+  solve();
+  e = clock();
+  printf("時間 %d\n", e - s );
+  return 0;
+}
+</pre>
+<p><a href="lightout2.html#trr">戻る</a>
+</p>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2002,2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

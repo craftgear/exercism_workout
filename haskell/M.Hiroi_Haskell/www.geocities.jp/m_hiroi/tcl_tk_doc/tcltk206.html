@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Tcl/Tk お気楽 GUI プログラミング応用編</title>
+  <meta name="description" content="Tcl/Tk,GUI,プログラミング,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881832</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Tcl/Tk GUI Programming</h1>
+<h2>Tcl/Tk お気楽 GUI プログラミング応用編</h2>
+<div class="small">
+[ <a href="tcltk205.html">PrevPage</a> | <a href="tcltk_doc.html">Tcl/Tk GUI Programming</a> | <a href="tcltk207.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chapter15">Tcl Tips (1)</h3>
+<p> 応用編の最後に、これまで使う機会がなかった Tcl の機能をいくつか紹介しましょう。
+</p>
+<h4>●コマンド glob</h4>
+<p> glob はファイル名を取得するコマンドです。ひとつ以上のパターンを引数として受け取り、それと一致するファイル名をリストに格納して返します。glob で使用できる特殊文字（メタ文字）には、次の種類があります。
+</p>
+<table border=1>
+<caption>表：glob で使用できるメタ文字</caption>
+<tbody>
+  <tr><td>*    </td><td>任意の長さの文字列と一致 (空文字列も含む)</td></tr>
+  <tr><td>?    </td><td>任意の文字と一致</td></tr>
+  <tr><td>[...]</td><td>[ ] の中の文字と一致</td></tr>
+  <tr><td>\x   </td><td>\ の直後の文字と一致 (メタ文字を打ち消すために使用する)</td></tr>
+</tbody>
+</table>
+
+<p> これらのメタ文字は、コマンド lsearch のオプション -glob でも使用できます。* と ? は MS-DOS のワイルドカードと同じ働きをします。[ ] は中に含まれる文字と一致します。たとえば、foo.[ch] は foo.c と foo.h というファイル名と一致します。文字をハイフン ( - ) でつなぐと範囲を指定することができます。たとえば、foo[0-9].dat は foo0.dat から foo9.dat というファイル名と一致します。Tcl の場合、[ ] はコマンド置換を表すので、glob で使う場合は {foo[0-9].dat} のように { } で囲んでください。
+</p>
+<p> また、glob では { } を使った文字列の展開機能があります。コンマで区切った文字列を { } の中に指定すると、その文字列を展開してくれます。次の例を見てください。
+</p>
+<pre class="item">
+{foo,bar,test}.txt => foo.txt bar.txt test.txt
+foo.{txt,doc}      => foo.txt foo.doc
+</pre>
+<p> これはとても便利な機能ですね。glob で使う場合、{ } はリストとして扱われるので、{ } をそのまま渡すために全体を { } で囲む必要があります。ちょっとややこしいですが注意してください。
+</p>
+
+<p> パターンがスラッシュ ( / ) で終わっている場合、glob はディレクトリのみを検索します。たとえば、glob */ はカレントディレクトリにあるすべてのサブディレクトリをリストに格納して返します。それから、glob はパターンと一致するファイルが見つからないとエラーになります。これを回避するには、オプションに -nocomplain を指定します。この場合、glob はエラーを発生せずに空文字列を返します。
+</p>
+
+<h4>●配列の操作</h4>
+<p> Tcl の配列は、いわゆる「連想配列」のことです。Tcl には連想配列を操作するコマンド array が用意されているので、ここで詳しく説明しましょう。まず最初に基本的なコマンドを表に示します。
+</p>
+
+<table border=1>
+<caption>表：配列操作の基本的なコマンド</caption>
+<tbody>
+  <tr><td>array exists 名前</td><td>指定した名前の配列があれば 1 を、なければ 0 を返す。</td></tr>
+  <tr><td>array size 配列名</td><td>配列の要素数を返す。指定した配列がない場合は 0 を返す。</td></tr>
+  <tr><td>array get 配列名 [パターン]</td><td>パターンと一致する添字と値をリストに格納して返す。</td></tr>
+  <tr><td>array set 配列名 リスト</td><td>リストに格納されている添字と値を配列にセットする。</td></tr>
+  <tr><td>array names 配列名 [パターン]</td><td>パターンと一致する添字をリストに格納して返す。</td></tr>
+</tbody>
+</table>
+
+<p> array get のパターンには、glob と同じメタ文字を使用することができます。パターンが省略されるとすべての要素と値を取り出します。パターンと一致する添字がない場合は空文字列を返します。簡単な例を示しましょう。
+</p>
+<pre>
+% set foo(a) 10
+10
+% set foo(b) 20
+20
+% set foo(c) 30
+30
+% array get foo
+a 10 b 20 c 30
+% array get foo b
+b 20
+% array get foo d
+%                  &lt;-- 空文字列
+</pre>
+<p> 配列 foo にデータをセットし、array get でデータを取り出しています。データが取り出される順番は、連想配列の実装アルゴリズムに依存します。配列にセットした順番とか、添字でソートされるということはありません。ご注意くださいませ。
+</p>
+<p> array get の逆の働きをするコマンドが array set です。リストは array get が返すのと同じく、要素名と値が並んだ形式です。配列全体をコピーするコマンドは Tcl/Tk には用意されていませんが、array get と array set を使えば簡単に実現することができます。
+</p>
+
+<p> 配列に定義されている添字だけを返すコマンドが array names です。array get と同じく、パターンが省略されると、すべての添字をリストに格納して返します。これと foreach を組み合わせることで、配列のすべての要素にアクセスすることができます。簡単な使用例を示しましょう。
+</p>
+<pre>
+% array names foo
+a b c
+% set total 0
+0
+% foreach x [array names foo] {
+&gt; incr total $x
+&gt; }
+% set total
+60
+</pre>
+<p> foreach と array names を使って、配列 foo の要素の合計値を求めています。
+</p>
+<p> このほかに、配列の要素を順番に取り出していくコマンドが用意されています。
+</p>
+<table border=1>
+<caption>表：配列の要素を順番に取り出すコマンド</caption>
+<tbody>
+  <tr><td>array startsearch 配列名</td><td>検索を初期化し ID を返す</td></tr>
+  <tr><td>array nextelement 配列名 ID</td><td>次の添字 (なければ空文字列) を返す</td></tr>
+  <tr><td>array donesearch  配列名 ID</td><td>検索の終了</td></tr>
+  <tr><td>array anymore     配列名 ID</td><td>要素が残っていれば 1 を返す</td></tr>
+</tbody>
+</table>
+
+<p> 基本的には、array names と foreach の組み合わせで処理できるのですが、要素数が多い配列を処理する場合、これらのコマンドを使った方がリストを使わない分だけ効率的です。簡単な使用例を示しましょう。
+</p>
+<pre>
+% set i [array startsearch foo]
+s-1-foo
+% while {[set n [array nextelement foo $i]] != ""} {
+&gt; puts $n
+&gt; }
+a
+b
+c
+% array anymore foo $i
+0
+% array donesearch foo $i
+%
+</pre>
+<p> array startsearch が返す ID を変数 i に格納し、ほかのコマンドで使用します。array nextelement は要素ではなく添字を返すことに注意してください。検索の終了は array donesearch で Tcl に通知します。Tcl の内部では、検索に関する情報を保持しているので、このコマンドによりそれを破棄します。
+</p>
+
+<h4>●変数の操作</h4>
+<p> 配列以外のデータでは、変数やコマンドを調べるコマンド info があります。info にも複数のサブコマンドがありますが、よく使用するコマンドが info exists です。
+</p>
+<pre class="item">
+info exists 名前
+</pre>
+<p> 指定した名前の変数があれば 1 を、なければ 0 を返します。
+</p>
+
+<p> Tcl の場合、変数はコマンド set によって生成されます。これとは逆に、変数を削除するコマンドが unset です。
+</p>
+<pre class="item">
+unset 変数名 ...
+</pre>
+<p> 指定した名前の変数を削除します。変数名はいくつ指定してもかまいません。削除された変数は、そのあとでアクセスするとエラーになります。unset は通常の変数のほかに、配列の要素や配列全体を削除することができます。
+</p>
+
+<hr>
+<h3 id="chapter16">Tcl Tips (2)</h3>
+<h4>●値呼び出しと参照呼び出し</h4>
+<p> 一般に、関数の呼び出し方にはふたつの方法があります。ひとつが「値呼び出し」で、もうひとつが「参照呼び出し」です。最近のプログラミング言語は値呼び出しが主流で、Ｃ言語の関数や Tcl のプロシージャがそうです。逆に、Perl のサブルーチンは参照呼び出しになっています。
+</p>
+
+<p> 値呼び出しの考え方はとても簡単です。
+</p>
+<ol>
+  <li>受け取るデータを格納する変数 (仮引数) を用意する。
+  <li>データを引数に代入する。
+  <li>関数 (プロシージャ) の実行終了後、仮引数を廃棄する。
+</ol>
+<p>「仮引数」とは、プロシージャを定義するときに、データを受け取るために設定する変数のことです。これに対して、実際にプロシージャを呼び出すときに渡される引数のことを「実引数」といいます。値呼び出しの場合、仮引数は局所変数として扱われることに注意してください。
+</p>
+
+<p> ところで、値呼び出しでは実現できない処理があります。たとえば、変数の値を交換するプロシージャ swap を考えてみましょう。次のプログラムを見てください。
+</p>
+
+<pre class="list">
+リスト : 値の交換 (間違い)
+
+proc swap {a b} {
+  set temp $a
+  set a $b
+  set b $temp
+}
+
+# x と y の値交換
+proc foo {} {
+    set x 10
+    set y 20
+    puts "$x $y"
+    swap $x $y
+    puts "$x $y"
+}
+</pre>
+<p> foo を実行すると、次のような結果になります。
+</p>
+<pre>
+% foo
+10 20
+10 20
+</pre>
+<p> プロシージャ swap では引数 a, b の値を交換していますが、変数 x, y の値は swap を呼び出したあとでも交換されていません。理由は簡単ですね。swap の引数 a, b は局所変数なので、swap 内で a と b を交換しても、foo の変数 x と y を交換することにはならないからです。プロシージャは値呼び出しであるため、ほかのプロシージャの局所変数にアクセスすることはできないのです。
+</p>
+<p> Tcl で swap を実現するにはコマンド upvar を使います。
+</p>
+<pre class="item">
+upvar [level] otherVar1 myVar1 otherVar2 myVar2 ...
+</pre>
+<p> upvar はほかのプロシージャで使われている局所変数 (otherVar) を、実行中のプロシージャで使用する局所変数 (myVar) に関連づけます。その結果、myVar にアクセスすることは、otherVar にアクセスすることと同じになります。つまり、myVar の値を読み出すと、それは otherVar の値であり、myVar の値を書き換えると otherVar もその値になります。
+</p>
+
+<p> プロシージャの指定には level を使います。デフォルトの値は -1 で、実行中のプロシージャを呼び出したプロシージャとなります。たとえば、次のようにプロシージャを呼び出したとします。
+</p>
+
+<pre class="fig">
+          foo1 -> foo2 -> foo3 -> foo4
+  level   -3      -2      -1      upvar  
+
+            図 : level の指定
+</pre>
+<p> foo4 で upvar を使う場合、level が -1 であれば foo3 が対象になり、-2 であれば foo2 が、-3 であれば foo1 が対象になります。そして、foo1 で upvar を使うと大域変数をアクセスすることになります。
+</p>
+
+<pre class="list">
+リスト : 値の交換
+
+proc swap {a b} {
+    upvar $a aa $b bb
+    set temp $aa
+    set aa $bb
+    set bb $temp
+}
+</pre>
+<p> upvar を使うと swap は次のようにプログラムできます。<p> swap を呼び出すときは、変数名を渡すことに注意してください。swap では渡された変数名とプロシージャ内で使う局所変数を upvar で関連づけます。引数 a で渡された変数は aa に、引数 b で渡された変数は bb に関連づけられます。たとえば、次の例を見てください。
+</p>
+<pre class="list">
+proc foo {} {
+    set x 10
+    set y 20
+    puts "$x $y"
+    swap x y
+    puts "$x $y"
+}
+</pre>
+<pre>
+% foo
+10 20
+20 10
+</pre>
+<p> この場合、aa へのアクセスは foo 内の局所変数 x を、bb へのアクセスは y をアクセスすることになります。これで、foo の局所変数 x と y の値を交換することができます。
+</p>
+<h4>●プロシージャに配列を渡す場合</h4>
+<p>  upvar を使うとプロシージャに配列を渡すことができます。簡単な例題として、配列を表示するプロシージャを作ってみましょう。
+</p>
+
+<pre class="list">
+リスト : 配列を表示 (1)
+
+proc print_array {name opt} {
+    upvar $name a
+    foreach i [lsort $opt [array names a]] {
+        puts "$i -&gt; $a($i)"
+    }
+}
+</pre>
+
+<p> 引数 name に配列名を渡し、引数 opt でソートのオプションを指定します。upvar で name と変数 a の関連づけを行えば、a を介して配列にアクセスすることができます。array names で添字を取り出し、lsort でソートします。それを foreach で取り出して、puts で添字と値を出力します。では実際に試してみましょう
+</p>
+<pre>
+%for {set i 0} {$i &lt; 4} {incr i} {
+&gt;  set aa($i) [expr $i * $i]
+&gt;}
+% print_array aa -integer
+0 -&gt; 0
+1 -&gt; 1 
+2 -&gt; 4
+3 -&gt; 9
+</pre>
+<p> 配列 aa にデータをセットし、print_array で表示しています。ソートオプションは -integer なので、添字を整数値として扱い昇順で出力されます。
+</p>
+
+<h4>●可変個引数</h4>
+<p> ところで、lsort のオプションは複数指定することができますが、今回作成した print_array ではソートオプションに対応する引数はひとつしかないので、複数のオプションを指定することはできません。オプション用の引数を増やしてみても、オプションをひとつしか指定しない場合、残りの引数を省略することができないので、ダミーの値を入れることになり面倒です。Tcl では、引数の最後に args という特別な名前を指定すると、任意の数の引数をプロシージャに渡すことができます。これを「可変個引数」といいます。
+</p>
+<p> args より前の引数はいままでと同じですが、それらの引数に加えていくつでも引数を指定することができます。実引数はリストに格納され args にセットされます。余分な引数がない場合、args には空文字列がセットされます。簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+proc foo {a args} {
+  puts "a -&gt; $a"
+  puts "args -&gt; $args"
+}
+</pre>
+<pre>
+% foo 10 20 30
+a -&gt; 10
+args -&gt; 20 30
+% foo 10
+a -&gt; 10
+args -&gt;
+</pre>
+<p> args の前に引数 a があるので、最初の実引数は a にセットされ、残りの実引数はリストに格納され args にセットされます。引数は args だけでもかまいません。
+</p>
+<pre class="list">
+proc bar {args} {
+  puts "args -&gt; $args"
+}
+</pre>
+<pre>
+% bar 10 20
+args -&gt; 10 20
+% bar
+args -&gt;
+</pre>
+<p> プロシージャ bar の引数は args だけなので、引数がなくても呼び出すことができます。
+</p>
+<h4>●引数のデフォルト値</h4>
+<p> Tcl では、引数にデフォルト値を設定することができます。引数が省略された場合、デフォルト値が引数にセットされます。引数に {name value} という形式のリストが与えられた場合、引数 name のデフォルト値は value に設定されます。簡単な例を示しましょう。
+</p>
+<pre class="list">
+proc foo {a {b 1}} {
+  puts "a -&gt; $a"
+  puts "b -&gt; $b"
+}
+</pre>
+<pre>
+% foo 10
+a -&gt; 10
+b -&gt; 1
+% foo 10 20
+a -&gt; 10
+b -&gt; 20
+</pre>
+<p> プロシージャ foo の引数は a と b ですが、b のデフォルトは 1 に設定されています。引数に 10 を与えて foo を呼び出すと、a に 10 がセットされ、b の値はデフォルトの 1 になります。引数を 2 つ与えると、a と b には実引数がセットされます。つまり、実引数が省略された場合に限り、デフォルトの値が使われるのです。したがって、次のような使い方はできません。
+</p>
+<pre class="list">
+proc foo {{b 1} a} {
+    .....
+}
+</pre>
+<p> このように、通常の引数指定の前にデフォルトの設定を行うことはできません。また、args にもデフォルトの設定は行えません。
+</p>
+
+<h4>●コマンド eval の使い方</h4>
+<p> では複数のオプションが指定できるように、print_array を改造してみましょう。引数 opt を args に変更します。
+</p>
+
+<pre class="list">
+リスト : 配列を表示 (2)
+
+proc print_array {name args} {
+    upvar $name a
+    foreach i [lsort $args [array names a]] {
+        puts "$i -&gt; $a($i)"
+    }
+}
+</pre>
+
+<p> ところが、これでは動作しないのです。lsort でエラーが発生します。
+</p>
+<pre>
+% print_array aa -integer -decreasing
+bad option "-integer -decreasing": ..(省略)..
+</pre>
+<p> 2 つのオプションはリストにまとめられていて、それがそのまま lsort に渡されるためエラーになるのです。これを解決するためにはコマンド eval を使います。
+</p>
+
+<p> eval は引数を結合して新しい文字列を作成し、それをコマンドとして実行します。このとき、コマンドの文字列は再度解析されるため、リストにまとめられたオプションも、ひとつずつのオプションとして lsort に渡されます。
+</p>
+<p> もともと eval は Lisp で生まれた関数です。eval は evaluate の略で、「プログラムを評価する」という意味で使われます。ほかのプログラミング言語、たとえば Perl や Python、一部の BASIC でもサポートされている機能です。
+</p>
+<p> eval を実行するときはいままでのコマンドと同様に、引数には「変数置換」や「コマンド置換」が行われることに注意してください。したがって、次のようにプログラムすると正常に動作しません。
+</p>
+<pre class="list">
+[eval lsort $args [array names a]]
+</pre>
+<p> eval に渡される文字列は [array names a] ではなく、その実行結果である添字を格納したリストです。eval はリストをバラバラにして解析するので、lsort に渡される引数は、リストではなくその要素になってしまうのです。ここはエスケープシーケンスを使ってコマンド置換を抑制します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 配列を表示 (3)
+
+proc print_array1 {name args} {
+    upvar $name a
+    foreach i [eval lsort $args \[array names a\]] {
+        puts "$i -&gt; $a($i)"
+    }
+}
+</pre>
+
+<p> これで複数のオプションを指定しても正常に動作します。
+</p>
+
+<p> eval は文字列を Tcl スクリプトとして実行しますが、ファイルの内容を Tcl スクリプトとして実行するコマンドが source です。
+</p>
+<pre class="item">
+source ファイル名
+</pre>
+<p> source は指定されたファイルを読み込んで、その内容を Tcl スクリプトとして評価します。複数のアプリケーションで共通に使うプロシージャがある場合、それらをひとつのファイルにまとめておいて、そのファイルを source コマンドで読み込むといいでしょう。
+</p>
+<hr>
+<h3 id="chapter17">Tcl Tips (3)</h3>
+<h4>●パイプ (pipe) </h4>
+<p> Tcl/Tk から外部コマンドを実行する場合、コマンド exec のほかにもコマンド open を用いて、パイプラインをオープンすることで行うことができます。この場合、パイプを経由して起動した外部コマンドとデータのやり取りを行うことができます。
+</p>
+
+<h4>●コマンドラインのパイプ</h4>
+<p> シェルのコマンドラインで使うパイプは、あるプログラムの標準出力から出力されたデータを、ほかのプログラムの標準入力へ渡す働きをします。データを水の流れと考えれば、まさにパイプでプログラムを連結してデータを流し込むわけです。パイプは UNIX 系の OS はもちろんですが、MS-DOS や X68000 の Human68k にもある機能です。たとえば、次の例を見てください。
+</p>
+<pre>
+&gt; sort file.dat | uniq
+</pre>
+<p> sort はテキストファイルをソートするコマンド、uniq は重複行を削除するコマンドです。| がパイプを表していて、これで sort と uniq がパイプで接続されます。
+</p>
+<p> パイプの制御はシェル (MS-DOS ならば command.com、Human68k ならば command.x) が行います。ただし、Human68k や MS-DOS のように複数のプログラムを同時に実行できない環境では、次のようにファイルを経由してデータが渡されます。
+</p>
+<pre>
+sort file.dat &gt; temp
+uniq &lt; temp
+del temp
+</pre>
+<p> けっきょく MS-DOS や Human68k の場合、パイプといってもバッチ処理と同じになってしまいます。
+</p>
+
+<p> ところが、UNIX 系の OS や Windows のように、複数のプログラムを同時に実行できる環境では、ファイルを経由する必要はありません。パイプは「キュー」と同じと考えてください。もしも、パイプが満杯でデータを書き込むことができないのであれば、OS により書き込み側のプログラムは休眠状態に入ります。そして、パイプからデータが取り出されて書き込み可能な状態になると、OS は休眠中のプログラムを目覚めさせ、データをパイプに書き込みます。パイプが空の状態なのにデータを読み込もうとした場合は、これとは逆に読み込み側のプログラムが休眠状態になります。
+</p>
+
+<p> このような OS の働きにより、動作中のプログラム間でパイプを経由してデータをやり取りすることができるのです。これを「プロセス間通信」といいます。プロセスは、動作中のプログラムのことと考えてください。パイプを経由して双方向でデータをやり取りすることも可能です。プロセス間通信にはいろいろな方法がありますが、その中でもパイプは手軽に利用できる方法です。
+</p>
+
+<h4>●パイプの使い方</h4>
+<p> それでは、Tcl でパイプを使う方法を説明しましょう。Tcl でパイプをオープンするにはコマンド open を使います。open は、渡されたファイル名の最初の文字がパイプの記号 | だったならば、その引数をファイル名ではなくコマンドとして実行してパイプを生成します。次の例を見てください。
+</p>
+<pre class="list">
+set f1 [open "|prog1" r]
+set f2 [open "|prog2" w]
+</pre>
+<p> ファイルの場合と同様に、パイプをオープンする時はアクセスモードを指定します。そして、open はパイプにアクセスするための識別子 (文字列) を返します。
+</p>
+<p> 最初の例はパイプをリードオープンする場合です。コマンド prog1 を実行し、標準出力へ出力されたデータがパイプへ送り込まれ、それを gets で読み込むことができます。次の例はパイプをライトオープンする場合です。この場合、puts で標準出力へ出力されたデータは、パイプを経由して実行したコマンド prog2 の標準入力へ送り込まれます。最後はコマンド close でパイプを閉じることをお忘れなく。
+</p>
+
+<p> それから、Tcl ではパイプを双方向（読み書き両用）でオープンすることができます。この場合、起動したプログラムと双方向でデータをやり取りすることができます。次の例を見てください。
+</p>
+<pre class="list">
+set f3 [open "|prog3" r+]
+</pre>
+<p> アクセスモードの r や w の後ろに + を付けると更新モードになり、入力と出力の両方が可能になります。パイプの場合、r+ と w+ のどちらでもかまいませんが、通常のファイルで更新モードを指定する場合は、r と w の違いに注意してください。r+ ではファイルが存在しないとエラーになります。また、w+ で既存のファイルをオープンすると長さを 0 に切り詰めるため、そのファイルの内容が失われます。
+</p>
+
+<p> また、パイプを使う場合は出力データの「バッファリング」にも注意してください。一般に、データの入出力は 1 バイト単位で行うと効率が悪いので、データを溜めるバッファを用意するのが普通です。データを出力する場合は、バッファにデータを溜めておいて、
+</p>
+満杯になったらバッファの内容を掃き出すのです。Ｃ言語の標準入出力ライブラリにはバッファリング機能が組み込まれていますし、Tcl/Tk も入出力はバッファリングされています。
+このため、puts でデータを出力するだけでは、データをプログラムへ送ることができない場合もあるのです。
+<p> データをプログラムへ送り込むためには、バッファの内容を掃き出すコマンド flush を使ってください。もしくは、コマンド fconfigure でバッファリングモードを変更してもいいでしょう。
+</p>
+<pre class="item">
+fconfigure 識別子 -buffering 指定 -buffersize バイト数
+</pre>
+<ul>
+    <li><b>full</b> : バッファが満杯になるとフラッシュ
+    <li><b>line</b> : 改行文字に出会うたびにフラッシュ
+    <li><b>none</b> : 出力コマンドが実行されるたびにフラッシュ
+</ul>
+<p> オプション -buffering のデフォルトは full に設定されています。バッファのサイズはオプション -buffersize で変更することができます。
+</p>
+<p> 改行文字に出会った時にバッファをフラッシュする動作を「行バッファリング」といいます。一般に、標準出力の動作は行バッファリングですが、画面へ出力しない場合、たとえばファイルへのリダイレクトやパイプに接続されている場合は、フルバッファリングに切り替えるプログラムがあります。Tcl/Tk 側からデータを送っても、相手のプログラムが出力をバッファリングするため、Tcl/Tk 側でデータを受け取ることができず、プログラムが動作しないこともあるのです。簡単な例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : パイプの例題
+
+set f [open "|pipetest" "r+"]
+for {set i 0} {$i &lt; 5} {incr i} {
+    puts "$i を送ります\n"
+    puts $f $i
+    flush $f
+    gets $f line
+    puts "$line を受け取りました"
+    after 1000
+}
+close $f
+</pre>
+
+<p> このプログラムは tclsh で動作します。最初にパイプを双方向でオープンします。起動するプログラムは pipetest です。これはＣ言語で作成します。あとは 1 秒ごとに puts で数値を pipetest に送り、gets で pipetest からのデータを受け取ります。データを書き込んだ後は flush でバッファをフラッシュしていることに注意してください。
+</p>
+
+<p> 次は pipetest.c を作成します。
+</p>
+
+<pre class="list">
+リスト : piptest.c
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+#define SIZE 256
+
+int main()
+{
+  char buffer[SIZE];
+  while( fgets( buffer, SIZE, stdin ) != NULL ){
+    printf( "%d\n", atoi( buffer ) * 10 );
+    fflush( stdout );
+  }
+  return 0;
+}
+</pre>
+
+<p> プログラムの内容は簡単で、標準入力よりデータを受け取って整数値に変換し、それを 10 倍した値を標準出力へ書き出します。fflush() はバッファをフラッシュする関数です。
+</p>
+
+<p> このプログラムを DOS 窓で動作させる場合、fflsuh() が無くても正常に動作します。ところが、Tcl とパイプを使ってデータをやり取りする場合、標準出力へ書き出すデータがバッファリングされるため、fflush() でバッファをフラッシュしないと正常に動作しません。パイプを使う場合は、起動するプログラムの動作にも注意してください。
+</p>
+
+<h4>●ナンバープレースの解答表示</h4>
+<p> それでは、具体的なプログラム例を示しましょう。<A href="../tcltkgame.html">Tcl/Tk Mini Games</A> のパズルゲーム <A href="../tcltkgame.html#number">ナンバープレース</A> には、解答を表示する Answer 機能がありますが、この機能は双方向パイプを使って解法プログラムを起動することで実現しています。ここで詳しく説明しましょう。
+</p>
+
+<pre class="list">
+リスト : メニューの設定
+
+menu .m -type menubar
+. configure -menu .m
+.m add cascade -label "Games"  -under 0 -menu .m.m1
+.m add command -label "Retry"  -under 0 -command "retry_game"
+.m add command -label "Answer" -under 0 -command "get_answer"
+.m add command -label "Help"   -under 0 -command "help"
+</pre>
+
+<p> ナンバープレースでは、メニュー Answer が選択されたら get_answer を呼び出し、解法プログラムを起動して解答を表示します。get_answer は次のようになります。
+</p>
+
+<pre class="list">
+リスト : 解法プログラムを呼び出す
+
+proc get_answer {} {
+    global now_qes question board SIZE
+    load_data $now_qes
+    set cmdline [format "numpla%02d /U" $SIZE]
+    set f [open "|$cmdline" "r+"]
+    for {set y 0} {$y &lt; $SIZE} {incr y} {
+        for {set x 0} {$x &lt; $SIZE} {incr x} {
+            puts -nonewline $f [format "%3d" $board($x,$y)]
+        }
+        puts $f ""
+    }
+    flush $f
+    for {set y 0} {$y &lt; $SIZE} {incr y} {
+        set x 0
+        if {[gets $f line] &gt;= 0} {
+            foreach n [split $line " "] {
+                if {$board($x,$y) == 0} {
+                    write_number $n $x $y blue
+                }
+                incr x
+                if {$x == $SIZE} break
+            }
+        }
+    }
+    close $f
+}
+</pre>
+
+<p> 拙作のナンバープレースは、盤の大きさが 9 行 9 列、12 行 12 列、16 行 16 列の 3 種類あります。盤面は配列 board で表し、大きさは大域変数 SIZE に格納されています。解法プログラムは numpla09.exe のように、numpla に盤の大きさをつけたものです。変数 SIZE から起動するプログラム名を作成し、cmdline にセットします。
+</p>
+
+<p> 次に、パイプを読み書き両用でオープンし、board に格納されている数字を解法プログラムに送ります。データは 1 行に SIZE 個の数値を空白で区切って送ります。0 が空きマスを表します。データを書き込んだら flush でバッファをフラッシュします。
+</p>
+
+<p> データを送ったら、解法プログラムからの解答を受け取ります。解答は 1 行に SIZE 個の数値が空白で区切られた形式で送られます。gets で 1 行読み込み split で分割します。write_number は数字を board に書き込み、ウィンドウに表示するプロシージャです。データをすべて受け取ったならば close でパイプを閉じます。これで解答を表示することができます。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2001-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="tcltk205.html">PrevPage</a> | <a href="tcltk_doc.html">Tcl/Tk GUI Programming</a> | <a href="tcltk207.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

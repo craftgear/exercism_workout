@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881758</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj30.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj32.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>関数型電卓プログラムの作成 (4)</h3>
+<p> 今回は関数型電卓プログラムに新しいデータ型「ベクタ (vector) 」を追加してみましょう。
+</p>
+
+<h4>●ベクタの生成とアクセス方法</h4>
+<p> ベクタは SML/NJ の配列 (array) をそのまま使います。ベクタの生成は関数 makeVector と角カッコ [ ] で行います。makeVector は SML/NJ の関数 Array.array を呼び出すだけです。角カッコによるベクタの生成は Ruby や Python などスクリプト言語で使われている方法と同じです。文法は次のようになります。
+</p>
+<pre class="item">
+ベクタ生成式 = "[", [要素リスト], "]"
+要素リスト = 式, {",", 式 }
+</pre>
+<p> ベクタ生成式の処理は関数 factor で行います。式を評価した値がベクタの要素になります。ベクタ生成式は「式」なので、ベクタ生成式を入れ子にして多次元配列を実現することも可能です。
+</p>
+<p> ベクタのアクセスも角カッコを使います。文法は次のようになります。
+</p>
+<pre class="item">
+代入式 = 左辺値, "=", 式.
+左辺値 = 変数 | 変数, "[", 式, "]", {"[", 式, "]"}.
+
+  因子   = 数値 | ("+" | "-" | "not"), 因子 | "(", 式, ")" | 変数 | fn式 |
+           変数, "(", [引数リスト], ")" | fn式, "(", [引数リスト], ")" |
+           if式 | begin式 | while式 | let式 | リスト生成式 |
+           ベクタ生成式 | 変数, "[", 式, "]", {"[", 式, "]"}.
+</pre>
+<p> ベクタのアクセスは一般的な手続き型言語と同じです。a[0] はベクタ a の 0 番目の要素を取り出し、a[4] = 10 はベクタ a の 4 番目の要素を 10 に書き換えます。角カッコを 2 つ使うと入れ子の配列を 2 次元配列として利用することができます。簡単な例を示しましょう。
+</p>
+<pre>
+Calc&gt; a = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+[[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+Calc&gt; a[0];
+[1, 2, 3]
+Calc&gt; a[0][1];
+2
+Calc&gt; a[2];
+[7, 8, 9]
+Calc&gt; a[2][2];
+9
+</pre>
+<p> ベクタの中にベクタを入れることで 2 次元配列を表すことができます。a の 0 番目の要素はベクタ [1, 2, 3] で、そのベクタの 1 番目の要素は 2 です。この要素は角カッコを 2 つ使って a[0][1] とアクセスすることができます。a[0] で 0 番目のベクタを取り出し、そのベクタの 1 番目の要素を [1] で取り出します。同様に、a[2][2] の値は 9 になります。
+</p>
+<p> このほかに、組み込み関数としてデータ型を判定する述語 isVector と、ベクタの大きさを求める関数 len を追加します。
+</p>
+
+<h4>●データ型の定義</h4>
+<p> それではプログラムを作りましょう。最初に、ベクタを表すデータ型を定義します。
+</p>
+<pre class="list">
+リスト ; 式の定義
+
+datatype value = Nil                           (* 空を表す値 *)
+               | Integer of IntInf.int         (* 整数 *)
+               | Float of real                 (* 実数 *)
+               | Func of func                  (* 関数 *)
+               | Pair of value ref * value ref (* 連結リスト *)
+               | Vec  of value array           (* ベクタ *)
+and func = F1  of value -&gt; value
+         | F2  of (value * value) -&gt; value
+         | CLO of string list * expr * (string * value ref) list
+and expr = Val of value                      (* 値 *)
+         | Var of string                     (* 変数 *)
+         | Op1 of operator * expr            (* 単項演算子 *)
+         | Op2 of operator * expr * expr     (* 二項演算子 *)
+         | Ops of operator * expr * expr     (* 短絡演算子 *)
+         | Sel of expr * expr * expr         (* if expr then expr else expr end *)
+         | Whl of expr * expr                (* while expr do expr end *)
+         | Bgn of expr list                  (* begin expr, ... end *)
+         | Clo of string list * expr         (* fn (仮引数) body end *)
+         | Let of string list * expr list * expr (* let *)
+         | Rec of string list * expr list * expr (* let rec *)
+         | Lst of expr list                      (* リストの生成 *)
+         | Crv of expr list                      (* ベクタの生成 *)
+         | Ref of expr * expr list               (* ベクタのアクセス *)
+         | App of expr * expr list               (* 関数の適用 *)
+</pre>
+
+<p> value に Vec of value array を追加します。これでベクタの中には Nil, Integer, Float, Func, Pair, Vec を格納することができます。電卓プログラムから見ると、ベクタにはいろろいろなデータ型を混在させることができるわけです。expr には Crv of expr list と Ref of expr * expr list を追加します。Crv は角カッコでベクタを生成する処理に、Ref はベクタの要素にアクセスする処理に対応します。expr にベクタを格納している変数名を、expr list に添字を表す式を格納します。
+</p>
+
+<p> トークン (token) には '[' と ']' を表すトークン Lbra と Rbra を追加します。字句解析の処理は簡単なので説明は割愛します。詳細は <a href="smlnj31.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●値の表示</h4>
+<p> 次は値を表示する関数 print_value を修正します。
+</p>
+<pre class="list">
+リスト : 値の表示
+
+fun print_value x =
+    case x of
+         Nil =&gt; Nil
+       | Integer(n) =&gt; (print(IntInf.toString(n)); Nil)
+       | Float(n) =&gt; (print(Real.toString(n)); Nil)
+       | Func(_) =&gt; (print "&lt;Function&gt;"; Nil)
+       | Pair(_) =&gt; (print "("; print_pair(x); print ")"; Nil)
+       | Vec(_) =&gt; (print "["; print_vector(x); print "]"; Nil)
+and print_pair(Pair(ref x, ref y)) = (
+      case x of
+           Nil =&gt; (print "()"; Nil)
+         | _ =&gt; print_value x;
+      case y of
+           Nil =&gt; Nil
+         | Pair(_, _) =&gt; (print " "; print_pair y)
+         | _ =&gt; (print " . "; print_value y)
+    )
+|   print_pair x = print_value x
+and print_vector(Vec(v)) =
+    let
+      val i = ref 0
+      val k = Array.length(v)
+    in
+      while !i &lt; k - 1 do (
+        print_value(Array.sub(v, !i));
+        print ", ";
+        i := !i + 1
+      );
+      print_value(Array.sub(v, !i));
+      Nil
+    end
+|   print_vector x = print_value x
+</pre>
+<p> print_value の引数 x が Vec の場合、"[" を表示してから関数 print_vector で要素を表示します。最後に "]" を表示します。print_vector は while ループでベクタから順番に要素を取り出し、その値を print_value で表示します。要素はカンマ ',' で区切ります。
+</p>
+
+<h4>●ベクタの操作関数</h4>
+<p> 次はベクタの操作関数を定義します。
+</p>
+<pre class="list">
+リスト : ベクタの操作関数
+
+(* データ型の判定 *)
+fun isVector(Vec(_)) = True
+|   isVector(_) = False
+
+(* ベクタの生成 *)
+fun make_vector(Integer(size), v) =
+    Vec(Array.array(IntInf.toInt(size), v))
+|   make_vector(_, _) = raise Calc_run_error("Not Integer")
+
+(* ベクタの大きさ *)
+fun vector_length(Vec(v)) =
+    Integer(IntInf.fromInt(Array.length(v)))
+|   vector_length(_) = raise Calc_run_error("Not Vector")
+
+(* 大域変数 *)
+val global_env = ref [("sqrt",  ref (Func(F1(call_real_func1 Math.sqrt)))),
+
+                      ・・・ 省略 ・・・
+
+                      ("isVector",   ref (Func(F1 isVector))),
+                      ("makeVector", ref (Func(F2 make_vector))),
+                      ("len",        ref (Func(F1 vector_length))),
+                      ("nil",        ref Nil)]
+</pre>
+<p> isVector は引数がベクタならば真 (1) を返します。make_vector は大きさが size で、要素の値が v のベクタを生成して返します。vector_length はベクタの大きさを返します。それぞれ、変数 isVector, makeVector, len に関数として登録します。
+</p>
+
+<h4>●構文解析の修正</h4>
+<p> 次は、関数 factor にベクタを生成する処理と、ベクタの要素にアクセスする処理を追加します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : factor の修正
+
+and factor s =
+
+    ・・・ 省略 ・・・
+
+    | Lbra =&gt; (
+          get_token s;
+          let val args = get_comma_list(s, []) in
+            case !tokenBuff of
+                 Rbra =&gt; (get_token s; Crv(args))
+               | _ =&gt; raise Syntax_error("']' expected")
+          end
+        )
+
+    ・・・ 省略 ・・・
+
+    | Ident(name) =&gt; (
+        get_token s;
+        case !tokenBuff of
+             Lpar =&gt; App(Var(name), get_argument s)
+           | Lbra =&gt; Ref(Var(name), get_index s)
+           | _ =&gt; Var(name)
+      )
+
+    ・・・ 省略 ・・・
+
+(* ベクタの添字を取得する *)
+and get_index s =
+    let
+      fun iter a =
+          let 
+            val v = expression s
+          in
+            case !tokenBuff of
+                 Rbra =&gt; (get_token s;
+                          case !tokenBuff of
+                               Lbra =&gt; (get_token s; iter(v::a))
+                             | _ =&gt; rev(v::a))
+               | _ =&gt; raise Syntax_error("']' expected")
+          end
+    in
+      get_token s;
+      iter([])
+    end
+</pre>
+<p> 関数 factor でトークンが Lbra の場合、ベクタを生成する Crv を返します。まず、get_comma_list でカンマで区切られた式を取得して、変数 args にセットします。次に、トークンが Rbra であることを確認して、get_token で次のトークンを求めてから Crv(args) を返します。トークンが Rbra でない場合はエラーを送出します。
+</p>
+<p> トークンが Ident(name) で次のトークンが Lbra の場合、ベクタにアクセスする Ref を返します。添字は関数 get_index で取得します。局所関数 iter は添字を表す式を expression で取得して変数 v にセットします。そして、トークンが Rbra, Lbra と続いている場合、次の添字を取得するため iter を再帰呼び出しします。このとき、v を累積変数 a のリストに追加します。Rbra で終わっている場合は、v を a に追加してからリストを反転して返します。Rbra で終わっていない場合はエラーを送出します。
+</p>
+
+<p> もうひとつ、ベクタの要素を書き換える処理を関数 expression に追加します。
+</p>
+
+<pre class="list">
+リスト : ベクタの更新処理
+
+fun expression s =
+    let
+      fun iter v =
+        case !tokenBuff of
+             Oper(Assign) =&gt; (
+               case v of
+                    (Var(_) | Ref(_)) =&gt; (get_token s;
+                                          Op2(Assign, v, expression s))
+                  | _ =&gt; raise Syntax_error("invalid assign form")
+             )
+           | _ =&gt; v
+    in
+      iter(expr1 s)
+    end
+</pre>
+<p> 代入式の処理で、左辺値が変数 Var またはベクタのアクセス Ref であれば、代入処理を行う Op2(Assign, ...) を返します。
+</p>
+
+<h4>●eval_expr の修正</h4>
+<p> 最後に式を評価する関数 eval_expr を修正します。
+</p>
+<pre class="list">
+リスト : 式の評価
+
+(* ベクタの更新 *)
+fun update_vector(Vec(v), [x], w) = (Array.update(v, x, w); w)
+|   update_vector(Vec(v), x::xs, w) = update_vector(Array.sub(v, x), xs, w)
+|   update_vector(_, _, _) = raise Calc_run_error("Not Vector")
+
+(* ベクタの値を取得 *)
+fun get_vector(Vec(v), [x]) = Array.sub(v, x)
+|   get_vector(Vec(v), x::xs) = get_vector(Array.sub(v, x), xs)
+|   get_vector(_, _) = raise Calc_run_error("Not Vector")
+
+(* 式の評価 *)
+fun eval_expr(Val(n), _) = n
+
+    ・・・ 省略 ・・・
+
+|   eval_expr(Ref(expr, args), env) =
+    get_vector(eval_expr(expr, env), eval_index(args, env))
+|   eval_expr(Op2(Assign, expr1, expr2), env) =
+    let
+      val w = eval_expr(expr2, env)
+    in
+      case expr1 of
+           Var(name) =&gt; (case get_var(name, env) of
+                              NONE =&gt; (update(name, w); w)
+                            | SOME (_, v) =&gt; (v := w; w) )
+         | Ref(expr, args) =&gt; update_vector(eval_expr(expr, env),
+                                            eval_index(args, env),
+                                            w)
+         | _ =&gt; raise Calc_run_error("Illegal assign form")
+    end
+
+    ・・・ 省略 ・・・
+
+(* 添字の評価 *)
+and eval_index(args, env) =
+    map (fn e =&gt; case eval_expr(e, env) of
+                      Integer(n) =&gt; IntInf.toInt(n)
+                    | _ =&gt; raise Calc_run_error("Index is not Integer"))
+        args
+</pre>
+<p> 添字の評価は関数 eval_index で行います。map で args の要素 e を eval_expr で評価します。その結果が Integer であれば、それを IntInf.toInt で int に変換します。そうでなければエラーを送出します。添字の範囲チェックはサボって SML/NJ のシステムに任せることにしましょう。
+</p>
+<p> eval_expr の引数が Ref の場合、関数 get_vector でベクタの要素を取得します。添字を格納しているリストの要素がひとつの場合、Array.sub でその要素を返します。まだ、添字が残っている場合、Array.sub で要素を取り出して、get_vector を再帰呼び出しします。
+</p>
+<p> 代入処理 (Assign) の場合、ベクタの値を更新する処理は関数 update_vector で行います。添字を格納しているリストの要素がひとつの場合、Array.update で x 番目にある要素の値を w に書き換えます。まだ、添字が残っている場合、Array.sub で要素を取り出して、update_vector を再帰呼び出しします。
+</p>
+
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="smlnj31.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●簡単な実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+Calc&gt; a = [1,2,3,4,5];
+[1, 2, 3, 4, 5]
+Calc&gt; a[0];
+1
+Calc&gt; a[4];
+5
+Calc&gt; a[0] = 10;
+10
+Calc&gt; a;
+[10, 2, 3, 4, 5]
+Calc&gt; b = [[1,2,3],[4,5,6],[7,8,9]];
+[[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+Calc&gt; b[0];
+[1, 2, 3]
+Calc&gt; b[0][0];
+1
+Calc&gt; b[2][2];
+9
+Calc&gt; b[2][2] = 100;
+100
+Calc&gt; b;
+[[1, 2, 3], [4, 5, 6], [7, 8, 100]]
+Calc&gt; c = makeVector(10, 0);
+[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+Calc&gt; len(c);
+10
+</pre>
+<p> 正常に動作していますね。今回はここまでです。次回はベクタを使った簡単なサンプルプログラムを作ってみましょう。
+</p>
+
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+(*
+ * calc.sml : 電卓プログラム
+ *
+ *            Copyright (C) 2012 Makoto Hiroi
+ *
+ * (1) 四則演算の実装
+ * (2) 変数と組み込み関数の追加
+ * (3) ユーザー定義関数の追加
+ * (4) 論理演算子, 比較演算子, if の追加
+ * (5) begin, while の追加
+ * (6) 関数を値とし、匿名関数 (クロージャ) と let を追加
+ * (7) 連結リストの実装
+ * (8) ベクタの実装
+ *
+ *)
+
+open TextIO
+
+(* 例外 *)
+exception Calc_exit
+exception Syntax_error of string
+exception Calc_run_error of string
+
+(* 演算子の定義 *)
+datatype operator = Add | Sub | Mul | Quo | Mod | Assign
+                  | NOT | AND | OR 
+                  | EQ  | NE  | LT  | GT  | LE  | GE
+
+(* 式の定義 *)
+datatype value = Nil                           (* 空を表す値 *)
+               | Integer of IntInf.int         (* 整数 *)
+               | Float of real                 (* 実数 *)
+               | Func of func                  (* 関数 *)
+               | Pair of value ref * value ref (* 連結リスト *)
+               | Vec  of value array           (* ベクタ *)
+and func = F1  of value -&gt; value
+         | F2  of (value * value) -&gt; value
+         | CLO of string list * expr * (string * value ref) list
+and expr = Val of value                      (* 値 *)
+         | Var of string                     (* 変数 *)
+         | Op1 of operator * expr            (* 単項演算子 *)
+         | Op2 of operator * expr * expr     (* 二項演算子 *)
+         | Ops of operator * expr * expr     (* 短絡演算子 *)
+         | Sel of expr * expr * expr         (* if expr then expr else expr end *)
+         | Whl of expr * expr                (* while expr do expr end *)
+         | Bgn of expr list                  (* begin expr, ... end *)
+         | Clo of string list * expr         (* fn (仮引数) body end *)
+         | Let of string list * expr list * expr
+         | Rec of string list * expr list * expr
+         | Lst of expr list                  (* リストの生成 *)
+         | Crv of expr list                  (* ベクタの生成 *)
+         | Ref of expr * expr list           (* ベクタのアクセス *)
+         | App of expr * expr list           (* 関数の適用 *)
+
+(* トークンの定義 *)
+datatype token = Value of value         (* 値 *)
+               | Ident of string        (* 識別子 *)
+               | Oper of operator       (* 演算子 *)
+               | Lpar | Rpar            (* (, ) *)
+               | Lbra | Rbra            (* [, ] *)
+               | Semic                  (* ; *)
+               | Comma                  (* , *)
+               | DEF                    (* def *)
+               | END                    (* end *)
+               | IF                     (* if *)
+               | THEN                   (* then *)
+               | ELSE                   (* else *)
+               | WHL                    (* while *)
+               | DO                     (* do *)
+               | BGN                    (* begin *)
+               | FN                     (* fn *)
+               | LET                    (* let *)
+               | IN                     (* in *)
+               | REC                    (* rec *)
+               | LIST                   (* list *)
+               | Quit                   (* 終了 *)
+               | Others                 (* その他 *)
+
+
+(* value を real に変換 *)
+fun toReal(Float(v)) = v
+|   toReal(Integer(v)) = Real.fromLargeInt(v)
+|   toReal(_) = raise Calc_run_error("Not Number")
+
+(* 関数を呼び出す *)
+fun call_real_func1 f v = Float(f(toReal v))
+fun call_real_func2 f (v, w) = Float(f(toReal v, toReal w))
+
+(* 値の表示 *)
+fun print_value x =
+    case x of
+         Nil =&gt; Nil
+       | Integer(n) =&gt; (print(IntInf.toString(n)); Nil)
+       | Float(n) =&gt; (print(Real.toString(n)); Nil)
+       | Func(_) =&gt; (print "&lt;Function&gt;"; Nil)
+       | Pair(_) =&gt; (print "("; print_pair(x); print ")"; Nil)
+       | Vec(_) =&gt; (print "["; print_vector(x); print "]"; Nil)
+and print_pair(Pair(ref x, ref y)) = (
+      case x of
+           Nil =&gt; (print "()"; Nil)
+         | _ =&gt; print_value x;
+      case y of
+           Nil =&gt; Nil
+         | Pair(_, _) =&gt; (print " "; print_pair y)
+         | _ =&gt; (print " . "; print_value y)
+    )
+|   print_pair x = print_value x
+and print_vector(Vec(v)) =
+    let
+      val i = ref 0
+      val k = Array.length(v)
+    in
+      while !i &lt; k - 1 do (
+        print_value(Array.sub(v, !i));
+        print ", ";
+        i := !i + 1
+      );
+      print_value(Array.sub(v, !i));
+      Nil
+    end
+|   print_vector x = print_value x
+
+(* 文字の表示 *)
+fun print_char(n as Integer(x)) = (
+      output1(stdOut, chr(IntInf.toInt(x))); Nil
+    )
+|   print_char(_) = raise Calc_run_error("Not Integer")
+
+(* 型チェック *)
+val True = Integer(1)
+val False = Integer(0)
+
+fun isNil(Nil) = True
+|   isNil(_) = False
+
+fun isInteger(Integer(_)) = True
+|   isInteger(_) = False
+
+fun isFloat(Float(_)) = True
+|   isFloat(_) = False
+
+fun isFunction(Func(_)) = True
+|   isFunction(_) = False
+
+fun isPair(Pair(_, _)) = True
+|   isPair(_) = False
+
+fun isVector(Vec(_)) = True
+|   isVector(_) = False
+
+(* 連結リストの基本関数 *)
+fun car(Pair(ref x, _)) = x
+|   car(_) = raise Calc_run_error("Not Pair")
+
+fun cdr(Pair(_, ref y)) = y
+|   cdr(_) = raise Calc_run_error("Not Pair")
+
+fun cons(x, y) = Pair(ref x, ref y)
+
+fun setCar(Pair(x, _), z) = (x := z; z)
+|   setCar(_, _) = raise Calc_run_error("Not Pair")
+
+fun setCdr(Pair(_, y), z) = (y := z; z)
+|   setCdr(_, _) = raise Calc_run_error("Not Pair")
+
+(* ベクタの生成 *)
+fun make_vector(Integer(size), v) =
+    Vec(Array.array(IntInf.toInt(size), v))
+|   make_vector(_, _) = raise Calc_run_error("Not Integer")
+
+(* ベクタの大きさ *)
+fun vector_length(Vec(v)) =
+    Integer(IntInf.fromInt(Array.length(v)))
+|   vector_length(_) = raise Calc_run_error("Not Vector")
+
+(* 大域変数 *)
+val global_env = ref [("sqrt",  ref (Func(F1(call_real_func1 Math.sqrt)))),
+                      ("sin",   ref (Func(F1(call_real_func1 Math.sin)))),
+                      ("cos",   ref (Func(F1(call_real_func1 Math.cos)))),
+                      ("tan",   ref (Func(F1(call_real_func1 Math.tan)))),
+                      ("asin",  ref (Func(F1(call_real_func1 Math.asin)))),
+                      ("acos",  ref (Func(F1(call_real_func1 Math.acos)))),
+                      ("atan",  ref (Func(F1(call_real_func1 Math.atan)))),
+                      ("atan2", ref (Func(F2(call_real_func2 Math.atan2)))),
+                      ("exp",   ref (Func(F1(call_real_func1 Math.exp)))),
+                      ("pow",   ref (Func(F2(call_real_func2 Math.pow)))),
+                      ("ln",    ref (Func(F1(call_real_func1 Math.ln)))),
+                      ("log10", ref (Func(F1(call_real_func1 Math.log10)))),
+                      ("sinh",  ref (Func(F1(call_real_func1 Math.sinh)))),
+                      ("cosh",  ref (Func(F1(call_real_func1 Math.cosh)))),
+                      ("tanh",  ref (Func(F1(call_real_func1 Math.tanh)))),
+                      ("print",      ref (Func(F1 print_value))),
+                      ("putc",       ref (Func(F1 print_char))),
+                      ("isNil",      ref (Func(F1 isNil))),
+                      ("isInteger",  ref (Func(F1 isInteger))),
+                      ("isFloat",    ref (Func(F1 isFloat))),
+                      ("isFunction", ref (Func(F1 isFunction))),
+                      ("isPair",     ref (Func(F1 isPair))),
+                      ("isVector",   ref (Func(F1 isVector))),
+                      ("car",        ref (Func(F1 car))),
+                      ("cdr",        ref (Func(F1 cdr))),
+                      ("cons",       ref (Func(F2 cons))),
+                      ("setCar",     ref (Func(F2 setCar))),
+                      ("setCdr",     ref (Func(F2 setCdr))),
+                      ("makeVector", ref (Func(F2 make_vector))),
+                      ("len",        ref (Func(F1 vector_length))),
+                      ("nil",        ref Nil)]
+
+(* 探索 *)
+fun lookup name =
+    let
+      fun iter [] = NONE
+      |   iter ((x as (n, _))::xs) =
+          if n = name then SOME x else iter xs
+    in
+      iter(!global_env)
+    end
+
+(* 追加 *)
+fun update(name, value) = 
+    global_env := (name, ref value)::(!global_env)
+
+(* 切り出したトークンを格納するバッファ *)
+val tokenBuff = ref Others
+
+(* 整数の切り出し *)
+fun get_number s =
+    let
+      val buff = ref []
+      fun get_numeric() =
+          let val c = valOf(lookahead s) in
+            if Char.isDigit(c) then (
+              buff := valOf(input1 s) :: (!buff);
+              get_numeric()
+            ) else ()
+          end
+      fun check_float(c) =
+          case c of
+            #"." =&gt; true
+          | #"e" =&gt; true
+          | #"E" =&gt; true
+          | _ =&gt; false
+    in
+      get_numeric();    (* 整数部の取得 *)
+      if check_float(valOf(lookahead s)) then (
+        if valOf(lookahead s) = #"." then (
+          (* 小数部の取得 *)
+          buff := valOf(input1 s) :: (!buff);
+          get_numeric()
+        ) else ();
+        if Char.toUpper(valOf(lookahead s)) = #"E" then (
+          (* 指数形式 *)
+          buff := valOf(input1 s) :: (!buff);
+          let val c = valOf(lookahead s) in
+            if c = #"+" orelse c = #"-" then
+              buff := (valOf(input1 s)) :: (!buff)
+            else ()
+          end;
+          get_numeric()
+        ) else ();
+        tokenBuff := Value(Float(valOf(Real.fromString(implode(rev (!buff))))))
+      ) else
+        tokenBuff := Value(Integer(valOf(IntInf.fromString(implode(rev (!buff))))))
+    end
+
+(* 識別子の切り出し *)
+fun get_ident s =
+    let fun iter a =
+      if Char.isAlphaNum(valOf(lookahead s)) then
+        iter ((valOf(input1 s)) :: a)
+      else Ident(implode(rev a))
+    in
+      iter []
+    end
+
+(* トークンの切り出し *)
+fun get_token s =
+    let val c = valOf(lookahead s) in
+      if Char.isSpace(c) then (input1 s; get_token s)
+      else if Char.isDigit(c) then get_number s
+      else if Char.isAlpha(c) then
+        let val (id as Ident(name)) = get_ident s in
+          tokenBuff := (
+            case name of 
+                 "quit" =&gt; Quit
+               | "def"  =&gt; DEF
+               | "end"  =&gt; END
+               | "not"  =&gt; Oper(NOT)
+               | "and"  =&gt; Oper(AND)
+               | "or"   =&gt; Oper(OR)
+               | "if"   =&gt; IF
+               | "then" =&gt; THEN
+               | "else" =&gt; ELSE
+               | "while" =&gt; WHL
+               | "do"    =&gt; DO
+               | "begin" =&gt; BGN
+               | "fn"    =&gt; FN
+               | "let"   =&gt; LET
+               | "in"    =&gt; IN
+               | "rec"   =&gt; REC
+               | "list"  =&gt; LIST
+               | _       =&gt; id
+          )
+        end
+      else (
+        input1 s; (* s から c を取り除く *)
+        tokenBuff := (case c of
+            #"+" =&gt; Oper(Add)
+          | #"-" =&gt; Oper(Sub)
+          | #"*" =&gt; Oper(Mul)
+          | #"/" =&gt; Oper(Quo)
+          | #"%" =&gt; Oper(Mod)
+          | #"=" =&gt; (case valOf(lookahead s) of
+                          #"=" =&gt; (input1 s; Oper(EQ))
+                        | _ =&gt; Oper(Assign))
+          | #"!" =&gt; (case valOf(lookahead s) of
+                          #"=" =&gt; (input1 s; Oper(NE))
+                        | _ =&gt; Oper(NOT))
+          | #"&lt;" =&gt; (case valOf(lookahead s) of
+                          #"=" =&gt; (input1 s; Oper(LE))
+                        | _ =&gt; Oper(LT))
+          | #"&gt;" =&gt; (case valOf(lookahead s) of
+                          #"=" =&gt; (input1 s; Oper(GE))
+                        | _ =&gt; Oper(GT))
+          | #"(" =&gt; Lpar
+          | #")" =&gt; Rpar
+          | #"[" =&gt; Lbra
+          | #"]" =&gt; Rbra
+          | #";" =&gt; Semic
+          | #"," =&gt; Comma
+          | _    =&gt; Others
+        )
+      )
+    end
+
+(* 構文木の組み立て *)
+fun expression s =
+    let
+      fun iter v =
+        case !tokenBuff of
+             Oper(Assign) =&gt; (
+               case v of
+                    (Var(_) | Ref(_)) =&gt; (get_token s;
+                                          Op2(Assign, v, expression s))
+                  | _ =&gt; raise Syntax_error("invalid assign form")
+             )
+           | _ =&gt; v
+    in
+      iter(expr1 s)
+    end
+(* 論理演算子 and, or の処理 *)
+and expr1 s =
+    let
+      fun iter v =
+          case !tokenBuff of
+               Oper(AND) =&gt; (get_token s; iter(Ops(AND, v, expr2 s)))
+             | Oper(OR)  =&gt; (get_token s; iter(Ops(OR,  v, expr2 s)))
+             | _ =&gt; v
+    in
+      iter(expr2 s)
+    end
+(* 比較演算子の処理 *)
+and expr2 s =
+    let
+      fun iter v =
+          case !tokenBuff of
+               Oper(EQ) =&gt; (get_token s; iter(Op2(EQ, v, expr3 s)))
+             | Oper(NE) =&gt; (get_token s; iter(Op2(NE, v, expr3 s)))
+             | Oper(LT) =&gt; (get_token s; iter(Op2(LT, v, expr3 s)))
+             | Oper(GT) =&gt; (get_token s; iter(Op2(GT, v, expr3 s)))
+             | Oper(LE) =&gt; (get_token s; iter(Op2(LE, v, expr3 s)))
+             | Oper(GE) =&gt; (get_token s; iter(Op2(GE, v, expr3 s)))
+             | _ =&gt; v
+    in
+      iter(expr3 s)
+    end
+and expr3 s =
+    let
+      fun iter v =
+          case !tokenBuff of
+            Oper(Add) =&gt; (get_token s; iter(Op2(Add, v, term s)))
+          | Oper(Sub) =&gt; (get_token s; iter(Op2(Sub, v, term s)))
+          | _ =&gt; v
+    in
+      iter (term s)
+    end
+and term s =
+    let
+      fun iter v =
+          case !tokenBuff of
+            Oper(Mul) =&gt; (get_token s; iter(Op2(Mul, v, factor s)))
+          | Oper(Quo) =&gt; (get_token s; iter(Op2(Quo, v, factor s)))
+          | Oper(Mod) =&gt; (get_token s; iter(Op2(Mod, v, factor s)))
+          | _ =&gt; v
+    in
+      iter (factor s)
+    end
+and factor s =
+    case !tokenBuff of
+      Lpar =&gt; (
+          get_token s;
+          let
+            val v = expression s
+          in
+            case !tokenBuff of
+              Rpar =&gt; (get_token s; v)
+            | _ =&gt; raise Syntax_error("')' expected")
+          end
+
+        )
+    | Lbra =&gt; (
+          get_token s;
+          let val args = get_comma_list(s, []) in
+            case !tokenBuff of
+                 Rbra =&gt; (get_token s; Crv(args))
+               | _ =&gt; raise Syntax_error("']' expected")
+          end
+        )
+    | Value(n) =&gt; (get_token s; Val(n))
+    | Quit =&gt; raise Calc_exit
+    | IF =&gt; (get_token s; make_sel s)
+    | WHL =&gt; (get_token s; make_while s)
+    | BGN =&gt; (get_token s; make_begin s)
+    | FN  =&gt; (get_token s; make_clo s)
+    | LET =&gt; (get_token s; make_let s)
+    | LIST =&gt; (get_token s; make_list s)
+    | Oper(NOT) =&gt; (get_token s; Op1(NOT, factor s))
+    | Oper(Sub) =&gt; (get_token s; Op1(Sub, factor s))
+    | Oper(Add) =&gt; (get_token s; Op1(Add, factor s))
+    | Ident(name) =&gt; (
+        get_token s;
+        case !tokenBuff of
+             Lpar =&gt; App(Var(name), get_argument s)
+           | Lbra =&gt; Ref(Var(name), get_index s)
+           | _ =&gt; Var(name)
+      )
+    | _ =&gt; raise Syntax_error("unexpected token")
+(* カンマで区切られた式を取得 *)
+and get_comma_list(s, a) =
+    let val v = expression s in
+      case !tokenBuff of
+           Comma =&gt; (get_token s; get_comma_list(s, v::a))
+         | _ =&gt; rev(v::a)
+    end
+(* 引数の取得 *)
+and get_argument s =
+    case !tokenBuff of
+         Lpar =&gt; (get_token s;
+                  case !tokenBuff of
+                       Rpar =&gt; (get_token s; [])
+                     | _ =&gt; let val args = get_comma_list(s, []) in
+                              case !tokenBuff of
+                                   Rpar =&gt; (get_token s; args)
+                                 | _ =&gt; raise Syntax_error("unexpected token")
+                            end)
+       | _ =&gt; raise Syntax_error("'(' expected")
+(* 仮引数の取得 *)
+and get_parameter s =
+    let val parm = get_argument s in
+      map (fn x =&gt; case x of
+                        Var(name) =&gt; name
+                      | _ =&gt; raise Syntax_error("bad parameter"))
+          parm
+    end
+(* if *)
+and make_sel s =
+    let val test_form = expression s in
+      case !tokenBuff of
+           THEN =&gt; (
+             get_token s;
+             let val then_form = get_comma_list(s, []) in
+               case !tokenBuff of
+                    ELSE =&gt; (
+                      get_token s;
+                      let val else_form = get_comma_list(s, []) in
+                        case !tokenBuff of
+                             END =&gt; (get_token s;
+                                     Sel(test_form, Bgn(then_form), Bgn(else_form)))
+                           | _ =&gt; raise Syntax_error("end expected")
+                      end
+                    )
+                  | END =&gt; (get_token s;
+                            Sel(test_form, Bgn(then_form), Val(False)))
+                  | _ =&gt; raise Syntax_error("else or end expected")
+             end
+           )
+         | _ =&gt; raise Syntax_error("then expected")
+    end
+(* while *)
+and make_while s = 
+    let val test_form = expression s in
+      case !tokenBuff of
+           DO =&gt; (get_token s; Whl(test_form, make_begin s))
+         | _ =&gt; raise Syntax_error("do expected")
+    end
+(* begin *)
+and make_begin s =
+    let
+      val body = get_comma_list(s, [])
+    in
+      case !tokenBuff of
+           END =&gt; (get_token s; Bgn(body))
+         | _ =&gt; raise Syntax_error("end expected")
+    end
+(* closure *)
+and make_clo s =
+    let
+      val args = get_parameter s
+      val body = make_begin s
+    in
+      case !tokenBuff of
+           Lpar =&gt; App(Clo(args, body), get_argument s)
+         | _ =&gt; Clo(args, body)
+    end
+and make_let s =
+    let
+      fun iter(a, b) =
+          case !tokenBuff of
+               IN =&gt; (get_token s; (a, b, make_begin s))
+             | Comma =&gt; (get_token s; iter(a, b))
+             | _ =&gt; let val e1 = expression s in
+                      case e1 of
+                           Op2(Assign, Var(x), e2) =&gt; iter(x::a, e2::b)
+                         | _ =&gt; raise Syntax_error("invalid let form")
+                    end
+    in
+      case !tokenBuff of
+           REC =&gt; (get_token s; Rec(iter([], [])))
+         | _ =&gt; Let(iter([], []))
+    end
+and make_list s =
+    case !tokenBuff of
+         Lpar =&gt; (get_token s;
+                  let
+                    val args = get_comma_list(s, [])
+                  in
+                    case !tokenBuff of
+                         Rpar =&gt; (get_token s; Lst(args))
+                       | _ =&gt; raise Syntax_error("')' expected")
+                  end)
+       | _ =&gt; raise Syntax_error("'(' expected")
+(* ベクタの添字を取得する *)
+and get_index s =
+    let
+      fun iter a =
+          let 
+            val v = expression s
+          in
+            case !tokenBuff of
+                 Rbra =&gt; (get_token s;
+                          case !tokenBuff of
+                               Lbra =&gt; (get_token s; iter(v::a))
+                             | _ =&gt; rev(v::a))
+               | _ =&gt; raise Syntax_error("']' expected")
+          end
+    in
+      get_token s;
+      iter([])
+    end
+
+(* 変数束縛 *)
+fun add_binding([], _, a) = a
+|   add_binding(_, [], _) = raise Calc_run_error("not enough argument")
+|   add_binding(name::ps, x::xs, a) = add_binding(ps, xs, (name, ref x)::a)
+
+(* 変数を求める *)
+fun get_var(name, []) = lookup(name)
+|   get_var(name, (x as (n, _))::xs) =
+    if name = n then SOME x else get_var(name, xs)
+
+(* 真偽のチェック *)
+fun isTrue(Float(v))  = Real.!=(v, 0.0)
+|   isTrue(Integer(v)) = v &lt;&gt; 0
+|   isTrue(Nil) = false
+|   isTrue(_) = true
+
+(* 演算子の評価 *)
+fun eval_op(op1, op2, v, w) =
+    case (v, w) of
+         (Integer(n), Integer(m)) =&gt; Integer(op1(n, m))
+       | (Integer(n), Float(m)) =&gt; Float(op2(Real.fromLargeInt(n), m))
+       | (Float(n), Integer(m)) =&gt; Float(op2(n, Real.fromLargeInt(m)))
+       | (Float(n), Float(m)) =&gt; Float(op2(n, m))
+       | (_, _) =&gt; raise Calc_run_error("Not Number")
+
+fun eval_op_int(op1, v, w) =
+    case (v, w) of
+         (Integer(n), Integer(m)) =&gt; Integer(op1(n, m))
+       | (_, _) =&gt; raise Calc_run_error("Not Integer")
+
+(* 比較演算子の評価 *)
+fun eval_comp(op1, op2, v, w) =
+    case (v, w) of
+         (Integer(n), Integer(m)) =&gt;
+         if op1(n, m) then True else False
+       | (Integer(n), Float(m)) =&gt;
+         if op2(Real.fromLargeInt(n), m) then True else False
+       | (Float(n), Integer(m)) =&gt;
+         if op2(n, Real.fromLargeInt(m)) then True else False
+       | (Float(n), Float(m)) =&gt;
+         if op2(n, m) then True else False
+       | (_, _) =&gt; raise Calc_run_error("Not Number")
+
+(* ベクタの更新 *)
+fun update_vector(Vec(v), [x], w) = (Array.update(v, x, w); w)
+|   update_vector(Vec(v), x::xs, w) = update_vector(Array.sub(v, x), xs, w)
+|   update_vector(_, _, _) = raise Calc_run_error("Not Vector")
+
+(* ベクタの値を取得 *)
+fun get_vector(Vec(v), [x]) = Array.sub(v, x)
+|   get_vector(Vec(v), x::xs) = get_vector(Array.sub(v, x), xs)
+|   get_vector(_, _) = raise Calc_run_error("Not Vector")
+
+(* 式の評価 *)
+fun eval_expr(Val(n), _) = n
+|   eval_expr(Var(name), env) = (
+      case get_var(name, env) of
+           NONE =&gt; raise Calc_run_error("Unbound variable: " ^ name)
+         | SOME (_, ref v) =&gt; v
+    )
+|   eval_expr(Ref(expr, args), env) =
+    get_vector(eval_expr(expr, env), eval_index(args, env))
+|   eval_expr(Op2(Assign, expr1, expr2), env) =
+    let
+      val w = eval_expr(expr2, env)
+    in
+      case expr1 of
+           Var(name) =&gt; (case get_var(name, env) of
+                              NONE =&gt; (update(name, w); w)
+                            | SOME (_, v) =&gt; (v := w; w) )
+         | Ref(expr, args) =&gt; update_vector(eval_expr(expr, env),
+                                            eval_index(args, env),
+                                            w)
+         | _ =&gt; raise Calc_run_error("Illegal assign form")
+    end
+|   eval_expr(Op2(op2, expr1, expr2), env) = 
+    let
+      val v = eval_expr(expr1, env)
+      val w = eval_expr(expr2, env)
+    in
+      case op2 of
+           Add =&gt; eval_op(op +, op +, v, w)
+         | Sub =&gt; eval_op(op -, op -, v, w)
+         | Mul =&gt; eval_op(op *, op *, v, w)
+         | Quo =&gt; eval_op(op div, op /, v, w)
+         | Mod =&gt; eval_op_int(op mod,  v, w)
+         | EQ =&gt; eval_comp(op =, Real.==, v, w)
+         | NE =&gt; eval_comp(op &lt;&gt;, Real.!=, v, w)
+         | LT =&gt; eval_comp(op &lt;, op &lt;, v, w)
+         | GT =&gt; eval_comp(op &gt;, op &gt;, v, w)
+         | LE =&gt; eval_comp(op &lt;=, op &lt;=, v, w)
+         | GE =&gt; eval_comp(op &gt;=, op &gt;=, v, w)
+         | _  =&gt; raise Calc_run_error("Illegal operator")
+    end
+|   eval_expr(Op1(op1, expr1), env) =
+    let
+      val v = eval_expr(expr1, env)
+    in
+      case (op1, v) of
+           (Add, _) =&gt; v
+         | (Sub, Integer(n)) =&gt; Integer(~n)
+         | (Sub, Float(n)) =&gt; Float(~n)
+         | (NOT, _) =&gt; if isTrue(v) then False else True
+         | _ =&gt; raise Calc_run_error("Illegal expression")
+    end
+|   eval_expr(Ops(ops, expr1, expr2), env) =
+    let val v  = eval_expr(expr1, env) in
+      case ops of
+           AND =&gt; if isTrue(v) then eval_expr(expr2, env) else v
+         | OR  =&gt; if isTrue(v) then v else eval_expr(expr2, env)
+         | _   =&gt; raise Calc_run_error("Illegal operator")
+    end
+|   eval_expr(Sel(expr_c, expr_t, expr_e), env) =
+    if isTrue(eval_expr(expr_c, env))
+    then eval_expr(expr_t, env) else eval_expr(expr_e, env)
+|   eval_expr(App(expr, args), env) = (
+      case eval_expr(expr, env) of
+           Func f =&gt;
+             let
+               val vs = map (fn e =&gt; eval_expr(e, env)) args
+             in
+               case f of
+                    F1 f1 =&gt; f1(hd vs)
+                  | F2 f2 =&gt; f2(hd vs, hd (tl vs))
+                  | CLO(parm, body, clo) =&gt;
+                    eval_expr(body, add_binding(parm, vs, clo))
+             end
+         | _ =&gt; raise Calc_run_error("Not function")
+    )
+|   eval_expr(Whl(expr_c, expr_b), env) = (
+      while isTrue(eval_expr(expr_c, env)) do eval_expr(expr_b, env);
+      False
+    )
+|   eval_expr(Bgn(xs), env) =
+    let
+      fun iter [] = raise Calc_run_error("ivalid begin form")
+      |   iter [x] = eval_expr(x, env)
+      |   iter (x::xs) = (eval_expr(x, env); iter(xs))
+    in
+      iter(xs)
+    end
+|   eval_expr(Clo(args, expr), env) = Func(CLO(args, expr, env))
+|   eval_expr(Let(parm, args, body), env) =
+    eval_expr(body, 
+              ListPair.foldl (fn(n, e, a) =&gt; (n, ref (eval_expr(e, env)))::a)
+                             env
+                             (parm, args))
+|   eval_expr(Rec(parm, args, body), env) =
+    let
+      val new_env = foldl (fn(x, a) =&gt; (x, ref Nil)::a) env parm
+    in
+      ListPair.app (fn(p, e) =&gt;
+                      case get_var(p, new_env) of
+                           NONE =&gt; raise Calc_run_error("let rec error")
+                         | SOME (_, v) =&gt; v := eval_expr(e, new_env))
+                   (parm, args);
+      eval_expr(body, new_env)
+    end
+|   eval_expr(Lst(args), env) =
+    let
+      fun iter [] = Nil
+      |   iter(x::xs) = Pair(ref (eval_expr(x, env)), ref (iter(xs)))
+    in
+      iter args
+    end
+|   eval_expr(Crv(args), env) =
+    let
+      val v = Array.array(length(args), Nil)
+      fun iter(_, []) = Vec(v)
+      |   iter(i, x::xs) = (
+            Array.update(v, i, eval_expr(x, env));
+            iter(i + 1, xs)
+          )
+    in
+      iter(0, args)
+    end
+(* 添字の評価 *)
+and eval_index(args, env) =
+    map (fn e =&gt; case eval_expr(e, env) of
+                      Integer(n) =&gt; IntInf.toInt(n)
+                    | _ =&gt; raise Calc_run_error("Index is not Integer"))
+        args
+
+
+(* 実行 *)
+fun toplevel s = (
+    get_token s;
+    case !tokenBuff of
+      DEF =&gt; (
+        get_token s;
+        case !tokenBuff of
+             Ident(name) =&gt; (
+               get_token s;
+               let
+                 val a = get_parameter s
+                 val b = get_comma_list(s, [])
+               in
+                 case !tokenBuff of
+                      END =&gt; (update(name, Func(CLO(a, Bgn(b), [])));
+                              print (name ^ "\n"))
+                    | _ =&gt; raise Syntax_error("end expected")
+               end
+             )
+           | _ =&gt; raise Syntax_error("ivalid def form")
+    )
+    | _ =&gt; let val result = expression s in
+        case !tokenBuff of
+          Semic =&gt; ()
+        | Quit  =&gt; raise Calc_exit
+        | _ =&gt; raise Syntax_error("unexpected token");
+        print_value(eval_expr(result, []));
+        print "\n"
+      end
+)
+
+(* ファイルのロード *)
+fun load_library(filename) =
+    let
+      val a = openIn(filename)
+    in
+      (while true do toplevel(a)) handle
+          Option =&gt; ()
+        | Syntax_error(mes) =&gt; print("ERROR: " ^ mes ^ "\n")
+        | Calc_run_error(mes) =&gt; print("ERROR: " ^ mes ^ "\n")
+        | Div =&gt; print("ERROR: divide by zero\n")
+        | Subscript =&gt; print("ERROR: subscript out of bounds\n")
+        | err =&gt; raise err;
+      closeIn(a)
+    end
+
+fun calc(filename) = (
+    if filename &lt;&gt; "" then load_library(filename) else ();
+    while true do (
+      print "Calc&gt; ";
+      flushOut(stdOut);
+      toplevel(stdIn) handle 
+        Syntax_error(mes) =&gt; print("ERROR: " ^ mes ^ "\n")
+      | Calc_run_error(mes) =&gt; print("ERROR: " ^ mes ^ "\n")
+      | Div =&gt; print("ERROR: divide by zero\n")
+      | Subscript =&gt; print("ERROR: subscript out of bounds\n")
+      | err =&gt; raise err;
+      inputLine(stdIn)
+    )
+)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj30.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj32.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

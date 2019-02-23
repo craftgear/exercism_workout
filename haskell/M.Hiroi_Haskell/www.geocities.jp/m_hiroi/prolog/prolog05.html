@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Prolog プログラミング入門</title>
+  <meta name="description" content="Prolog,Prolog入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881779</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>お気楽 Prolog プログラミング入門</h2>
+<div class="small">
+[ <a href="prolog04.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog06.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap21">プログラムの操作</h3>
+<p> Prolog は、物事の間に成り立つ関係を定義していくことでプログラミングを行います。プログラムの実行中に新しい関係を定義したり、不用になった関係を削除したい場合もあるでしょう。Prolog には、プログラムを操作するための述語が用意されています。
+</p>
+<h4>●節の追加</h4>
+<p> まずは節を追加する述語から説明しましょう。述語 assert(Clause) はプログラムに節 Clause を追加します。簡単な例を示します。
+</p>
+<pre>
+?- assert(foo(a, b)).
+YES
+
+?- assert(foo(c, d)).
+YES
+
+?- assert((bar(X, Y) :- foo(X, Y))).
+X = _G366
+Y = _G367
+YES
+
+?- bar(X, Y).
+X = a
+Y = b ;
+
+X = c
+Y = d ;
+NO
+</pre>
+<p> 事実 foo(a, b) と foo(c, d) を定義します。次に規則 bar を定義します。規則を定義するときは、規則全体をカッコで囲んでください。SWI-Prolog はカッコをつけなくても動作しますが、そうしないとエラーになる処理系があるようです。実際に bar を実行してみると、きちんと定義されていることがわかりますね。
+</p>
+<p> assert のほかに、節を定義する術語に asserta があります。assert は節をプログラムの後ろに追加していきますが、asserta は節をプログラムの前に追加します。asserta を使って事実 foo(e, f) を追加してみましょう。
+</p>
+<pre>
+?- asserta(foo(e, f)).
+YES
+
+?- foo(X, Y).
+X = e
+Y = f ;
+
+X = a
+Y = b ;
+
+X = c
+Y = d ;
+NO
+</pre>
+<p> 事実 foo(a, b), foo(c, d) の前に、foo(e, f) が追加されたことがわかりますね。
+</p>
+<h4>●節の削除</h4>
+<p> 節を削除するには述語 retract(Clause) を使います。retract は Clause とマッチングする最初の節をプログラムから削除します。次の例を見てください。
+</p>
+<pre>
+?- retract(foo(X, Y)).
+X = e
+Y = f ;
+
+X = a
+Y = b
+YES
+
+?- foo(X, Y).
+X = c
+Y = d ;
+NO
+</pre>
+<p> 最初に foo(e, f) が削除され、バックトラックすると foo(a, b) が削除されます。もちろん、規則を削除することもできます。
+</p>
+<pre>
+?- retract((bar(X, Y) :- A)).
+X = _G312
+Y = _G313
+A = foo(_G312, _G313)
+YES
+
+?- bar(X, Y).
+NO
+</pre>
+<p> このように体部を変数で指定すると、連言になっている場合でも削除することができます。
+</p>
+<p> 節を全部取り除く述語に retractall があります。retractall(Head) は、Head とマッチングする頭部を持つ規則をすべて削除します。
+</p>
+<pre>
+?- retractall(foo(X, Y)).
+X = _G288
+Y = _G289 ;
+NO
+
+?- foo(X, Y).
+NO
+</pre>
+<p> 節を削除する述語は、このほかに abolish(Name, Args) があります。この述語は、名前 Name の述語の中から引数の個数が Args のものをすべて削除します。
+</p>
+<h4>●節へのアクセス</h4>
+<p> プログラムへアクセスするための述語には clause(Head, Body) があります。clause は Head とマッチングする頭部を持つ規則をプログラムの中から見つけ、体部を Body にセットします。Head には値を必ずセットしてください。自由変数のままではエラーになります。
+</p>
+<p> それでは、事実 foo(a, b), foo(c, d) が定義されているとして、clause を実行してみましょう。
+</p>
+<pre>
+?- clause(foo(X, Y), B).
+X = a
+Y = b
+B = true ;
+
+X = c
+Y = d
+B = true ;
+NO
+</pre>
+<p> 事実の体部は true なんですね。このほかに、プログラムを表示する述語 listing があります。listing は定義されているプログラムをすべて表示し、listing(Name) は名前が Name のプログラムをすべて表示します。
+</p>
+<h4>●グローバル変数のシミュレート</h4>
+<p> ほかのプログラミング言語には「グローバル変数」がありますが、Prolog にはありません。asserta と retract を使うことで、Prolog でもグローバル変数と同じ機能を実現することができます。</p><p> たとえば、gvar(Name, Val) という形で、名前 Name の値 Val を保持することにします。すると、値の書き換えは次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト：グローバル変数のシミュレート
+
+set_gvar(Name, X) :-
+    nonvar(Name), retract(gvar(Name, Val)), !, asserta(gvar(Name, X)).
+set_gvar(Name, X) :-
+    nonvar(Name), asserta(gvar(Name, X)).
+</pre>
+
+<p> 述語 nonvar(Name) は、変数 Name が自由変数だと失敗し、値がセットされていれば成功します。ここでは、変数 Name にグローバル変数として使う名前がセットされているかチェックしています。
+</p>
+<p> 次に、retract を使って節を削除します。Val は自由変数なので、Name がどんな値でもマッチングします。Val のかわりに無名変数を使っても大丈夫です。最後に、カットを通って asserta で新しい値 X をセットします。カットを使うのは、バックトラックしたときに次の規則を選択しないためです。
+</p>
+<p> 最初に値をセットするときは、述語 gvar が定義されていないので retract は失敗します。このとき、次の規則が選択されます。この規則は asserta で値をセットするだけです。
+</p>
+<p> それでは、実際に実行してみましょう。
+</p>
+<pre>
+?- set_gvar(test, 0).
+Yes
+
+?- gvar(test, X).
+X = 0 ;
+NO
+
+?- set_gvar(test, 10).
+YES
+
+?- gvar(test, X).
+X = 10 ;
+NO
+</pre>
+<p> きちんと動作していますね。ところで、SWI-Prolog にはこれと同等の機能を持つ flag という述語が用意されています。flag(Key, Old, New) は、指定した Key の値をリードして変数 Old にセットし、新しい値 New に書き換えます。Key に値がセットされていない場合、Old には整数値 0 がセットされます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+?- flag(count, N, N + 1).
+N = 0 ;
+NO
+
+?- flag(count, N, N + 1).
+N = 1 ;
+NO
+</pre>
+<p> flag を実行するたびに count の値がひとつ増えていきますね。最初は count の値が定義されていないので、N は 0 になります。したがって、新しい値 N + 1 は 1 となり、その値が count に書き込まれます。次に flag を実行すると、count の値は 1 であり、新しい値 2 がセットされます。このように、flag を使えば簡単にカウンタを実現することができます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap22">マスターマインド (1)</h3>
+<p> 今回は Prolog で簡単なゲームを作ってみましょう。ゲームは定番である<b>マスターマインド</b>にします。コンピュータ側は、0 から 9 までの中から重複しないように、数字を 4 つ選びます。私たちは数字だけではなく、その位置も当てなくてはいけません。
+</p>
+<p> 数字は合っているが位置が間違っている個数を cows で表し、数字も位置も合っている個数を bulls で表します。bulls が 4 になると正解というわけです。言葉で説明するとわかりにくいので、ゲームの進行状況を図に示します。
+</p>
+<pre class="fig">
+    (6 2 8 1)
+--------------------------------  
+1.  (0 1 2 3) : cows 2 : bulls 0
+2.  (1 0 4 5) : cows 1 : bulls 0
+3.  (2 3 5 6) : cows 2 : bulls 0
+4.  (3 2 7 4) : cows 0 : bulls 1
+5.  (3 6 0 8) : cows 2 : bulls 0
+6.  (6 2 8 1) : cows 0 : bulls 4
+
+  図：マスターマインドの動作例
+</pre>
+
+<h4>●数字を選ぶ</h4>
+<p> 最初に、コンピュータが数字を 4 つ選ぶ処理を作りましょう。この処理は簡単です。0 から 9 までの数字を乱数で発生させて、異なる数字を 4 つ選べばいいわけです。
+</p>
+<p> これを単純にプログラムしてもいいのですが、今回はリスト処理の例題もかねて、0 から 9 までの数字をリストに格納しておいて、その中から乱数で数字を選ぶことにします。選んだ数字はリストから削除して、次の数字はそのリストの中から選べばいいわけです。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：正解を作る
+
+make_correct(X) :-
+        make_correct_sub(0, [0,1,2,3,4,5,6,7,8,9], [], X).
+make_correct_sub(4, _, X, X) :- !.
+make_correct_sub(Num, List, Correct, X) :-
+        Index is random(10 - Num),
+        nth0(Index, List, Item),
+        delete(List, Item, Rest),
+        Num1 is Num + 1,
+        make_correct_sub(Num1, Rest, [Item | Correct], X).
+</pre>
+<p> make_correct(X) は選んだ数字をリストに格納して X にセットします。実際の処理は make_correct_sub が行います。SWI-Prolog の場合、乱数は random(Int) <SUP><A href="prolog05.html#note">[*1]</A></SUP> を使って発生させます。引数には正の整数値 Int を指定し、0 &lt= 値 &lt Int の範囲の乱数が生成されます。乱数の初期化は SWI-Prolog が起動したときに行われます。
+</p>
+<p> リストから要素を取り出す述語として、以前に retrieve を作りましたが、SWI-Prolog には nth0 とnth1 という述語が用意されています。nth0(Index, List, Elem) は、リスト List の Index 番目の要素が Elem である、という関係を表しています。nth0 は先頭の要素を 0 から数え、nth1 は先頭の要素を 1 から数えるという違いがあります。
+</p>
+<p> プログラムですが、まず乱数で要素を選び nth0 で取り出します。次に、delete で取り出した要素を削除し、第 3 引数のリストにセットします。Correct が累算変数であることに注意してください。あとは要素を 4 つ取り出せば終了です。簡単ですね。
+</p>
+<div class="note">
+-- <a name="note">note</a> --------<br>
+[*1] 乱数を生成する述語は、たいていの Prolog 処理系で定義されていると思います。random が使えない場合でも、ほかの述語（たとえば rand とか）ならあるかもしれません。使用されている Prolog のマニュアルをお読みくださいませ。
+</div>
+<h4>●数字の入力</h4>
+<p> 次は、数字の入力処理を作りましょう。ゲームを作る場合、インタフェースの設計が重要になるのですが、今回はおもいっきり簡単にさせてもらいます。4 つの数字はリストの形式で入力してもらい、それを述語 read で読み取ることにします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：数字の入力
+
+input_numbers(Numbers) :-
+    repeat,
+    format('Input 4 Numbers &gt; '),
+    read(Numbers),
+    length(Numbers, 4),
+    check_numbers(Numbers),
+    !.
+</pre>
+
+<p> input_numbers は失敗駆動ループを使っていて、正しいデータが入力されるまで繰り返します。read でリストを読み取ったら、length で要素が 4 つあることを確認します。次に、要素が正しいデータであるかチェックします。述語 check_numbers は、リストに 0 から 9 までの数値以外の要素が含まれていたり、数字が重複していないかチェックします。
+</p>
+<p> それでは check_numbers を作りましょう。再帰定義を使えば簡単にプログラムできます。
+</p>
+<pre class="list">
+リスト：数字のチェック
+
+check_numbers([]).
+check_numbers([N | Rest]) :-
+    integer(N),
+    0 =&lt; N,
+    N =&lt; 9,
+    not(member(N, Rest)),
+    check_numbers(Rest).
+</pre>
+
+<p> 重複のチェックは member を使えば簡単です。たとえば、[1, 2, 3, 1] と入力された場合、変数 N には 1、Rest には [2, 3, 1] がセットされているので、member(N, Rest) は成功します。この場合は数字に重複があるので、失敗しなければいけません。したがって、not で結果を反転させればいいわけです。
+</p>
+<p> データの入力には read を使うので、最後のピリオド ( . ) は忘れないで下さい。それから、リストのカッコを忘れるとシンタックスエラーが発生するため、ゲームは中断されてしまいます。本来ならば、もうちょっとマシな入力方法を考えた方がよいのですが、これは今後の課題といたしましょう。
+</p>
+<h4>●bulls と Cows を数える</h4>
+<p> 次は、bulls と cows を数えるプログラムを作ります。これも、再帰定義と累算変数を使えば簡単にプログラムできます。まずは、bulls を数える count_bulls を作ります。
+</p>
+<pre class="list">
+リスト：bulls を数える
+
+count_bulls(Correct, Data, C) :- count_bulls_sub(Correct, Data, 0, C).
+count_bulls_sub([], [], C, C).
+count_bulls_sub([X1 | L1], [X2 | L2], N, C) :-
+    (X1 =:= X2 -&gt; N1 is N + 1 ; N1 is N),
+    count_bulls_sub(L1, L2, N1, C).
+</pre>
+
+<p> count_bulls はリスト Correct と Data の要素を比較し、位置と値が等しい要素をカウントします。実際の処理は、count_bulls_sub が行います。第 3 引数がカウントするための累算変数です。処理は簡単で、リストの先頭から要素を順番に比較し、値が等しい場合は累算変数をカウントアップするだけです。
+</p>
+<p> 次に、cows をカウントするプログラムを作ります。いきなり cows  を数えようとすると難しいのですが、2 つのリストに共通の数字を数えることは簡単にできます。この方法では、bulls の個数を含んだ数を求めることになりますが、そこから bulls を引けば cows を求めることができるわけです。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：同じ数字を数える
+
+count_same_number(Correct, Data, C) :- count_same_sub(Correct, Data, 0, C).
+count_same_sub([], _, C, C).
+count_same_sub([X | L], Data, N, C) :-
+    (member(X, Data) -&gt; N1 is N + 1; N1 is N),
+    count_same_sub(L, Data, N1, C).
+</pre>
+
+<p> 基本的には count_bulls と同じです。今度は、要素同士の比較ではなく、一方のリストから要素を取り出して、それが他方のリストに含まれているかチェックします。これは述語 member を使えば簡単ですね。member(X, Data) で X が Data に含まれていれば、累算変数をカウントアップします。それから、リストからデータを取り出すのは、一方のリスト Correct だけなので、注意してくださいね。
+</p>
+<h4>●ゲーム本体</h4>
+<p> それでは、ゲーム本体を作りましょう。今回は回数を制限して、10 回以内で当てることができなかったらゲームオーバーとします。これも再帰を使ってプログラムします。
+</p>
+<pre class="list">
+リスト：ゲーム本体
+
+play(11, Correct) :-
+    format('Game Over, Correct is '), write(Correct), nl, !.
+play(N, Correct) :-
+    N &gt; 0,
+    input_numbers(Numbers),
+    count_bulls(Numbers, Correct, Bulls),
+    count_same_number(Numbers, Correct, Sames),
+    Cows is Sames - Bulls,
+    format('~d: Bulls is ~d, Cows is ~d~n', [N, Bulls, Cows]),
+    N1 is N + 1,
+    (Bulls =:= 4 -&gt; format('Good!!~n') ; play(N1, Correct)).
+</pre>
+
+<p> play(N, Correct) の引数 N が回数で、Correct が正解を表します。input_number で数字を入力したら、count_bulls と count_same_numbers で bulls と cows を計算し、format で bulls と cows を出力します。
+</p>
+<p> bulls が 4 であれば正解ですね。'Good!!' と表示してゲームを終了します。そうでなければ、play を再帰呼び出ししてゲームを続行します。もし、N が 11 になったら最初の規則が選択されます。10 回以内で当てることができなかったので、ゲームオーバーを表示して終了します。
+</p>
+<p> 最後にゲームを実行する述語 mastermind を作ります。
+</p>
+<pre class="list">
+リスト：ゲームの実行
+
+mastermind :-
+    make_correct(Correct),
+    format('***** Master Mind *****~n'),
+    play(1, Correct).
+</pre>
+<p> これは簡単ですね。make_correct で正解を作って play を呼び出すだけです。
+</p>
+<h4>●実行結果</h4>
+<p> では、実際にゲームをプレイしてみましょう。
+</p>
+<pre>
+?- mastermind.
+***** Master Mind *****
+Input 4 Numbers &gt; [0,1,2,3].
+1: bulls 0, cows 2
+Input 4 Numbers &gt; [4,5,6,7].
+2: bulls 0, cows 2
+Input 4 Numbers &gt; [6,7,0,1].
+3: bulls 0, cows 2
+Input 4 Numbers &gt; [2,0,4,6].
+4: bulls 1, cows 0
+Input 4 Numbers &gt; [3,0,7,5].
+5: bulls 0, cows 2
+Input 4 Numbers &gt; [1,3,5,6].
+6: bulls 2, cows 2
+Input 4 Numbers &gt; [5,3,1,6].
+Good!!
+
+Yes
+</pre>
+<p> 7 回で当てることができました。今回は 4 つの数字ですが、簡単だと思ったら 5 つに増やしてみる、逆に難しいと思ったら 3 つに減らしてみる、などいろいろ改造してみてください。次回は、コンピュータにマスターマインドを解かせてみましょう。お楽しみに。
+</p>
+
+<hr>
+<h4>●プログラムリスト</h4>
+</p><pre class="list">
+/*
+ * master0.swi : マスターマインド
+ *
+ */
+
+/*
+ * 正解を作る
+ *
+ */
+make_correct(X) :-
+        make_correct_sub(0, [0,1,2,3,4,5,6,7,8,9], [], X).
+make_correct_sub(4, _, X, X) :- !.
+make_correct_sub(Num, List, Correct, X) :-
+        Index is random(10 - Num),         % 0 &lt;= i &lt (10 - Num)
+        nth0(Index, List, Item),
+        delete(List, Item, Rest),
+        Num1 is Num + 1,
+        make_correct_sub(Num1, Rest, [Item | Correct], X).
+
+/*
+ * bulls を数える
+ *
+ */
+count_bulls(Correct, Data, C) :- count_bulls_sub(Correct, Data, 0, C).
+count_bulls_sub([], [], C, C).
+count_bulls_sub([X1 | L1], [X2 | L2], N, C) :-
+    (X1 =:= X2 -&gt; N1 is N + 1 ; N1 is N),
+    count_bulls_sub(L1, L2, N1, C).
+
+/*
+ * 同じ数字を数える
+ *
+ */
+count_same_number(Correct, Data, C) :- count_same_sub(Correct, Data, 0, C).
+count_same_sub([], _, C, C).
+count_same_sub([X | L], Data, N, C) :-
+    (member(X, Data) -&gt; N1 is N + 1; N1 is N),
+    count_same_sub(L, Data, N1, C).
+
+/*
+ * 数字のチェック
+ *
+ */
+check_numbers([]).
+check_numbers([N | Rest]) :-
+    integer(N),
+    0 =&lt N,
+    N =&lt 9,
+    not(member(N, Rest)),
+    check_numbers(Rest).
+
+/*
+ * 数字の入力
+ *
+ */
+input_numbers(Numbers) :-
+    repeat,
+    format('Input 4 Numbers &gt; '),
+    read(Numbers),
+    length(Numbers, 4),
+    check_numbers(Numbers),
+    !.
+
+/*
+ * 10 回以内に当てる
+ *
+ */
+play(11, Correct) :-
+format('Game Over, Correct is '), write(Correct), nl, !.
+play(N, Correct) :-
+    N &gt; 0,
+    input_numbers(Numbers),
+    count_bulls(Numbers, Correct, Bulls),
+    count_same_number(Numbers, Correct, Sames),
+    Cows is Sames - Bulls,
+    format('~d: Bulls is ~d, Cows is ~d~n', [N, Bulls, Cows]),
+    N1 is N + 1,
+    (Bulls =:= 4 -&gt; format('Good!!~n') ; play(N1, Correct)).
+
+/*
+ * ゲームの実行
+ *
+ */
+mastermind :-
+    make_correct(Correct),
+    format('***** Master Mind *****~n'),
+    play(1, Correct).
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap23">マスターマインド (2)</h3>
+<p> 前回のマスターマインドは、コンピュータが出した問題を私達が答えました。今回は逆に、私達が出した問題をコンピュータに答えてもらうことにします。それはちょっと難しいのではないか、と思った人もいるかもしれません。ところが、とても簡単な方法があるのです。
+</p>
+<h4>●コードの推測</h4>
+<p> このゲームでは、10 個の数字の中から 4 個選ぶわけですから、全体では 10 * 9 * 8 * 7 = 5040 通りのコードしかありません。この中から正解を見つける方法ですが、
+質問したコードとその結果を覚えておいて、それと矛盾しないコードを作るようにします。
+具体的には、4 つの数字の順列を生成し、それが今まで質問したコードと矛盾しないことを確かめます。これは生成検定法と同じです。
+</p>
+<p> 矛盾しているかチェックする方法も簡単です。生成したコードと質問したコードを比較して bulls と cows を求めます。この値が質問したコードの結果である bulls と cows の値と等しい場合、そのコードは矛盾していません。たとえば、次の例を考えてみてください。
+</p>
+<pre class="fig">
+(6 2 8 1) が正解の場合
+
+質問：(0 1 2 3) =&gt; bulls = 0, cows = 2
+
+  (0 1 2 3)  と比較する
+---------------------------------------------------
+  (0 X X X)  0 から始まるコードは bulls = 1
+             になるので矛盾する。
+  ・・・・
+
+  (1 0 3 4)  cows = 3, bulls = 0 になるので矛盾する 
+
+  ・・・・
+
+  (1 0 4 5)  cows = 2, bulls = 0 で矛盾しない。
+--------------------------------------------------- 
+
+質問：(1 0 4 5) =&gt; bulls = 0, cows = 1
+
+次は、(0 1 2 3) と (1 0 4 5) に矛盾しない数字を選ぶ 
+
+      図：マスターマインドの推測アルゴリズム
+</pre>
+<p> コード (0 1 2 3) の場合  bulls が 0 ですから、その位置にその数字は当てはまりません。したがって、(0 X X X) というコードは (0 1 2 3) と比較すると bulls が 1 となるので、矛盾していることがわかります。
+</p>
+<p> 次に (1 0 3 4) というコードを考えてみます。(0 1 2 3) の結果は cows が 2 ですから、その中で合っている数字は 2 つしかないわけです。ところが、(1 0 3 4) と (0 1 2 3) と比較すると cows が 3 になります。当たっている数字が 2 つしかないのに、同じ数字を 3 つ使うのでは矛盾していることになりますね。
+</p>
+<p> 次に (1 0 4 5) というコードと比較すると、bulls が 0 で cows が 2 となります。これは矛盾していないので、このコードを質問することにします。その結果が bulls = 0, cows = 1 となり、今度は (0 1 2 3) と (1 0 4 5) に矛盾しないコードを選択するのです。
+</p>
+<h4>●コードの生成</h4>
+<p> 最初に、コードを生成するプログラムを作りましょう。今回は 10 個の数字の中から 4 個の数字を選ぶのですから、生成したコードは 0 から 9 までのリストの部分集合と考えることができます。この場合、述語 selects を使って部分集合を生成すれば簡単に実現できます。selects は <A href="prolog02.html#chap12">集合としてのリスト</A> で作成しましたが、プログラムを再掲しておきます。
+</p>
+<pre class="list">
+リスト：部分集合を求める
+
+selects([], _).
+selects([X | Xs], Ys) :- select(X, Ys, Ys1), selects(Xs, Ys1).
+</pre>
+
+<p> selects を使うと、コードを生成するプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：コードの生成
+
+guess(Code) :-
+    selects([X1,X2,X3,X4], [0,1,2,3,4,5,6,7,8,9]),
+    Code = [X1,X2,X3,X4].
+</pre>
+
+<p> selects を使って、0 から 9 までの数字から異なる 4 つの数字を選びます。この場合、[X1, X2, X3, X4] を与えれば、各変数に異なる数字が割り当てられます。あとは Code と選んだ数字のリスト [X1, X2, X3, X4] をマッチングさせればいいわけです。これで述語 guess はバックトラックするたびに新しいコードを生成してくれます。
+</p>
+<h4>●コードのチェック</h4>
+<p> 質問したコードの結果は、節 query(Code, Bulls, Cows) として登録することにしましょう。登録は assert を使えば簡単ですね。そうすると、生成したコードと query に登録されたすべてのコードをチェックするプログラムは、次のようになります。
+</p>
+<pre class="list">
+リスト：矛盾があるかチェックする
+
+check(Code) :-
+    query(OldCode, Bulls, Cows),
+    count_bulls(OldCode, Code, Bulls1),
+    count_same_number(OldCode, Code, N),
+    Cows1 is N - Bulls1,
+    (Bulls =\= Bulls1 ; Cows =\= Cows1).
+</pre>
+<p> 述語 check は、矛盾があると成功する述語です。query に登録されたすべてのコードを調べるため、失敗駆動ループになっていることに注意してください。
+</p>
+<p> bulls の個数と cows の個数が等しい場合、Code は矛盾していません。この場合、最後の規則が失敗するので、query を再試行して次のコードをチェックします。逆に、bulls の個数か cows の個数が違う場合は矛盾しています。この場合、最後の規則が成功するので check は成功するのです。
+</p>
+<p> ところで、最初にプログラムを実行する場合、query がまったく定義されていないとエラーになってしまいます。また、プログラムを再実行する場合、登録された query を削除しなければいけませんね。そこで、query を初期化するプログラム cleanup を作ります。
+</p>
+<pre class="list">
+リスト：query の初期化
+
+cleanup :-
+    assert(query(0,0,0)),
+    retractall(query(X, Y, Z)).
+</pre>
+
+<p> 最初にダミーの query を登録します。次に、retractall で query を全部削除します。これで、プログラムを最初に実行するときでもエラーは発生しません。
+</p>
+<h4>●コードの登録</h4>
+<p> 次は、コードを質問をしてその結果を登録するプログラムを作ります。
+</p>
+<pre class="list">
+リスト：質問する
+
+ask(Correct, Code) :-
+    write(Code),
+    count_bulls(Correct, Code, Bulls),
+    count_same_number(Correct, Code, N),
+    Cows is N - Bulls,
+    assert(query(Code, Bulls, Cows)),
+    format(' bulls = ~d, Cows = ~d~n', [Bulls, Cows]),
+    Bulls =:= 4.
+</pre>
+<p> 述語 ask は、述語 guess と組み合わせて失敗駆動ループを形成するため、不正解の場合は失敗するようにプログラムしています。まず、コードと正解を比較して bulls を cows を求め、assert で query(Code, Bulls, Cows) を登録します。あとは、結果を表示して Bulls が 4 であるかチェックするだけです。
+</p>
+<h4>●メインプログラム</h4>
+<p> 最後にメインプログラムを作ります。
+</p>
+<pre class="list">
+リスト：メインプログラム
+
+mastermind :-
+    input_numbers(Correct),
+    cleanup,
+    guess(Code),
+    not(check(Code)),
+    ask(Correct, Code),
+    format('Good!!~n'),
+    !.
+</pre>
+
+<p> 最初に input_numbers でコードを入力し、cleanup で query を初期化します。
+guess でコードを生成し、check でコードをチェックします。check は矛盾があると成功する述語なので、not で結果を反転させています。次に、チェックしたコードを ask で質問します。ask は不正解であれば失敗するので、guess が再試行され新しいコードが生成されます。正解であれば ask は成功するので、Good!! と表示して終了します。これでプログラムは完成です。
+</p>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+?- mastermind.
+Input 4 Numbers &gt; [9,8,7,6].
+[0, 1, 2, 3] bulls = 0, Cows = 0
+[4, 5, 6, 7] bulls = 0, Cows = 2
+[5, 4, 8, 9] bulls = 0, Cows = 2
+[6, 7, 9, 8] bulls = 0, Cows = 4
+[8, 9, 7, 6] bulls = 2, Cows = 2
+[9, 8, 7, 6] bulls = 4, Cows = 0
+Good!!
+</pre>
+<p> きちんと動作していますね。質問回数ですが、5, 6 回 で当たる場合が多いようです。<a href="index.html#cite">参考文献 [5]</a> の <cite>『数当てゲーム (MOO, マスターマインド) 』</cite> によると、この方法では平均 5.56 回になるそうです。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+/*
+ * master1.swi : 「マスターマインド」解法プログラム
+ *
+ *                Copyright (C) 2001 Makoto Hiroi
+ */
+
+/*
+ * bulls を数える
+ */
+count_bulls(Correct, Data, C) :- count_bulls_sub(Correct, Data, 0, C).
+count_bulls_sub([], [], C, C).
+count_bulls_sub([X1 | L1], [X2 | L2], N, C) :-
+    (X1 =:= X2 -&gt; N1 is N + 1 ; N1 is N),
+    count_bulls_sub(L1, L2, N1, C).
+
+/*
+ * 同じ数字を数える
+ */
+count_same_number(Correct, Data, C) :- count_same_sub(Correct, Data, 0, C).
+count_same_sub([], _, C, C).
+count_same_sub([X | L], Data, N, C) :-
+    (member(X, Data) -&gt; N1 is N + 1; N1 is N),
+    count_same_sub(L, Data, N1, C).
+
+/*
+ * 数字のチェック
+ */
+check_numbers([]).
+check_numbers([N | Rest]) :-
+    integer(N),
+    0 =&lt N,
+    N =&lt 9,
+    not(member(N, Rest)),
+    check_numbers(Rest).
+
+/*
+ * 数字の入力
+ */
+input_numbers(Numbers) :-
+    repeat,
+    format('Input 4 Numbers &gt; '),
+    read(Numbers),
+    length(Numbers, 4),
+    check_numbers(Numbers),
+    !.
+
+/*
+ * 部分集合を求める
+ */
+selects([], _).
+selects([X | Xs], Ys) :- select(X, Ys, Ys1), selects(Xs, Ys1).
+
+/*
+ * ４つの数字を生成
+ */
+guess(Code) :-
+    selects([X1,X2,X3,X4], [0,1,2,3,4,5,6,7,8,9]),
+    Code = [X1,X2,X3,X4].
+
+
+/*
+ * チェック：矛盾があると成功する
+ */
+check(Code) :-
+    query(OldCode, Bulls, Cows),         % 失敗駆動ループ
+    count_bulls(OldCode, Code, Bulls1),
+    count_same_number(OldCode, Code, N),
+    Cows1 is N - Bulls1,
+    (Bulls =\= Bulls1 ; Cows =\= Cows1).
+
+/*
+ * 質問する
+ */
+ask(Correct, Code) :-
+    write(Code),
+    count_bulls(Correct, Code, Bulls),
+    count_same_number(Correct, Code, N),
+    Cows is N - Bulls,
+    assert(query(Code, Bulls, Cows)),
+    format(' bulls = ~d, Cows = ~d~n', [Bulls, Cows]),
+    Bulls =:= 4.
+
+/*
+ * query の初期化
+ */
+cleanup :-
+    assert(query(0,0,0)),         % いったん dummy を登録
+    retractall(query(X, Y, Z)).   % その後で全部削除
+
+/*
+ * 実行：失敗駆動ループ
+ */
+mastermind :-
+    input_numbers(Correct),
+    cleanup,
+    guess(Code),
+    not(check(Code)),
+    ask(Correct, Code),
+    format('Good!!~n'),
+    !.
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="prolog04.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog06.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

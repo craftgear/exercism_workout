@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Ruby プログラミング入門</title>
+  <meta name="description" content="Ruby,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881800</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>お気楽 Ruby プログラミング入門</h1>
+<h2>第 6 回 正規表現と文字列の置換</h2>
+<div class="small">
+[ <a href="abcruby05.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 前回は正規表現の基本的な使い方について説明しました。今回は正規表現の高度な使い方として後方参照と拡張記法、それから文字列の置換について説明します。とくに後方参照はとても強力な機能で、文字列の置換でも大きな効果を発揮します。
+</p>
+
+<h4>●後方参照</h4>
+<p> Ruby では、カッコ ( ) で正規表現をグループにまとめることができました。このほかに、カッコにはもう一つ機能があります。カッコはその中の正規表現と一致した文字列を覚えていて、あとからそれを使うことができるのです。これを「後方参照」といいます。
+</p>
+
+<p> 正規表現の中では、\num (num: 数字) でカッコと一致した文字列を参照することができます。いちばん左側にある ( が \1 に対応し、次の ( が \2、その次の ( が \3 というように、順番に数字がつけられます。カッコの数に制限はありません。簡単な例を示しましょう。
+</p>
+
+<pre class="item">
+/(\w+)\s+\1/
+</pre>
+
+<p> これは同じ単語が続けて出現する場合、たとえば "abc abc" のような文字列と一致します。まず (\w+) と abc が一致します。このとき、abc が記憶されます。次に、\s+ と空白文字が一致し、\1 と abc を照合します。\1 は最初のカッコですから、その値は abc です。したがって、"abc abc" と一致するのです。では、次の正規表現と一致する文字列はどうなるでしょうか。
+</p>
+
+<pre class="item">
+/(\w+)\s+(\w+)\s+\2\s+\1/
+</pre>
+
+<p> かなり複雑になりましたが、これは "abc def def abc" のような文字列と一致します。\2 と \1 の位置に注意してください。これを逆に \1\s+\2 とすれば、"abc def abc def" と一致することになります。
+</p>
+
+<p> カッコで記憶した文字列は、正規表現の外でも使うことができます。この場合、特殊変数 $1, $2, $3, ... で取り出すことができます。特殊変数の値は、それぞれ \1, \2, \3, ... に対応します。次の例を見てください。
+</p>
+
+<pre class="list">
+if /(\d{1,2}):(\d\d):(\d\d)/
+  hour = $1
+  min  = $2
+  sec  = $3
+  ...
+end
+</pre>
+
+<p> UNIX 系 OS の date コマンドは時刻を : で区切って表しています。このような文字列から、時、分、秒、を取り出します。最初のカッコが時間を表します。8:00:00 のように 1 文字しかない場合もあるので \d{1,2} と表しました。分、秒は必ず 2 文字あるので \d\d と表すことができます。2 番目のカッコが分、3 番目のカッコが秒を表します。照合が成功した場合、$1, $2, $3 には時間、分、秒、の値がセットされています。このように、カッコを使うことで正規表現と一致した部分文字列を簡単に取り出すことができます。
+</p>
+
+<h4>●正規表現のコンパイルと照合</h4>
+<p> 今までは正規表現との照合に演算子 =~ を使ってきましたが、Ruby では Regexp.new() または / / で正規表現をコンパイルして、メソッド match() で正規表現との照合を行うことができます。match() の基本的な動作は演算子 =~ と同じですが、照合結果をまとめたオブジェクト MatchData を返すところが異なります。
+</p>
+
+<p> 簡単な例を示します。
+</p>
+
+<pre>
+irb&gt; re = Regexp.new '\d+'   # re = /\d+/ と同じ
+=&gt; /\d+/
+irb&gt; m = re.match "abcd0123efgh"
+=&gt; #&lt;MatchData "0123"&gt;
+irb&gt; m[0]
+=&gt; "0123"
+irb&gt; m.begin(0)
+=&gt; 4
+irb&gt; m.end(0)
+=&gt; 8
+</pre>
+
+<p> Regexp.new() は引数に正規表現を指定します。その後ろに、正規表現の動作を指定することができます。たとえば、英大小文字を区別しないで検索したい場合は、定数 IGNORECASE を指定します。なお、Regexp.new() のかわりに / / を使うこともできます。どちらの場合も正規表現クラス Regexp のオブジェクトを生成して返します。オブジェクトの生成については、回を改めて詳しく説明する予定です。
+</p>
+
+<p> " で囲まれた文字列はエスケープ記号 (バックスラッシュまたは円記号) が有効なため、正規表現のメタ文字として使うにはエスケープ記号を二重に書かなければいけません。たとえば、 \d は \\d と書く必要があります。これでは面倒なので、シングルクオート ' を使って正規表現 \d+ を指定します。
+</p>
+
+<p> match() はクラス Regexp のメソッドで、文字列の中から正規表現と一致する部分列を検索します。Regexp のオブジェクトが変数 re にセットされているならば、re.match() と呼び出します。照合に成功した場合はクラス MatchData のオブジェクトを返します。失敗した場合は nil を返します。もちろん、正規表現で使用する特殊変数にも結果がセットされます。
+</p>
+
+<h4>●MatchData のメソッド</h4>
+<p> match() で 'abcd0123efgh' を \d+ で検索すると、"0123" とマッチングします。変数 m には MatchData のオブジェクトがセットされ、m[0] で一致した文字列 '0123' を取り出すことができます。一致した文字列の位置はメソッド m.begin(0), m.end(0) で求めることができます。
+</p>
+
+<p> MatchData の主なメソッドを表 1 に示します。
+</p>
+
+<table border=1>
+<caption>表 1 : MatchData の主なメソッド</caption>
+<thead>
+  <tr><th>メソッド名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>m[0]       </td><td> 正規表現と一致した文字列 ($&amp; と同じ)</td></tr>
+  <tr><td>m[n]       </td><td> n 番目の部分文字列 ($n と同じ) </td></tr>
+  <tr><td>begin(n)   </td><td> n 番目の部分文字列の開始位置</td></tr>
+  <tr><td>end(n)     </td><td> n 番目の部分文字列の終了位置</td></tr>
+  <tr><td>post_match </td><td> 一致した文字列の後の文字列 (&amp;' と同じ)</td></tr>
+  <tr><td>pre_match  </td><td> 一致した文字列の前の文字列 (&amp;` と同じ)</td></tr>
+  <tr><td>to_a       </td><td> $&amp;, $1, $2, ... を配列に格納して返す</td></tr>
+  <tr><td>captures   </td><td> $1, $2, ... を配列に格納して返す ($&amp; は含まれない)</td></tr>
+  <tr><td>values_at(n1, n2, ...)</td><td> 引数で指定された部分文字列を配列に格納して返す</td></tr>
+</tbody>
+</table>
+
+<p> MatchData にカッコ [ ] を適用することで部分文字列を取り出すことができます。また、カッコの中では配列と同様にスライス操作も行うことができます。それでは、簡単な例を示しましょう。
+</p>
+
+<pre>
+irb&gt; re = Regexp.new '(\w+)\s+(\w+)\s+\2\s+\1'
+=&gt; /(\w+)\s+(\w+)\s+\2\s+\1/
+irb&gt; m = re.match 'abc def def abc'
+=&gt; #&lt;MatchData "abc def def abc" 1:"abc" 2:"def"&gt;
+irb&gt; m[0]
+=&gt; "abc def def abc"
+irb&gt; m[1]
+=&gt; "abc"
+irb&gt; m[2]
+=&gt; "def"
+irb&gt; m.values_at 1, 2
+["abc", "def"]
+irb&gt; m.to_a
+=&gt; ["abc def def abc", "abc", "def"]
+</pre>
+
+<p> m[1] は最初のカッコで一致した文字列 "abc" を取り出し、m[2] は 2 番目のカッコで一致した文字列 "def" を取り出します。メソッド values_at() は複数のグループ番号を指定することができ、各グループで一致した文字列を配列に格納して返します。すべてのグループで一致した文字列を求める場合は、メソッド to_a() もしくは captures() を使うと便利です。
+</p>
+
+<p> たとえば、スラッシュで区切られた日付から年月日と取り出してみましょう。次の例を見てください。
+</p>
+
+<pre>
+irb&gt; re = Regexp.new '(\d+)/(\d+)/(\d+)'
+=&gt; /(\d+)\/(\d+)\/(\d+)/
+irb&gt; m = re.match "2008/04/05"
+=&gt; #&lt;MatchData "2008/04/04" 1:"2008" 2:"04" 3:"05"&gt;
+irb&gt; year, month, day = m.captures
+=&gt; ["2008", "04", "05"]
+irb&gt; year
+=&gt; "2008"
+irb&gt; month
+=&gt; "04"
+irb&gt; day
+=&gt; "05"
+</pre>
+
+<p> このように、各グループで一致した文字列を取り出して、変数にセットすることができます。
+</p>
+
+<h4>●拡張記法</h4>
+<p> Ruby の正規表現は拡張記法をサポートしています。拡張記法は (?...) で表します。? の後ろに続く文字で機能が決まります。拡張記法の正規表現を表 2 に示します。
+</p>
+
+<table border=1>
+<caption>表 2 : 正規表現の拡張記法</caption>
+<thead>
+  <tr><th>表記法</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td> (?:...)      </td><td> 正規表現をグループにまとめる（後方参照無し）</td></tr>
+  <tr><td> (?=...)      </td><td> 正規表現による位置指定（文字列を消費しない）</td></tr>
+  <tr><td> (?!...)      </td><td> 正規表現の否定による位置指定（文字列を消費しない）</td></tr>
+  <tr><td> (?&lt;name&gt;...) </td><td> グループに名前 name を付ける</td></tr>
+  <tr><td> (?'name'...) </td><td> 同上</td></tr>
+  <tr><td> \k&lt;name&gt;     </td><td> 名前指定参照</td></tr>
+  <tr><td> \k'name'     </td><td> 同上</td></tr>
+  <tr><td> (?#...)      </td><td> コメント</td></tr>
+</tbody>
+</table>
+
+<p> (?:...) は正規表現をグループ化しますが、一致した文字列は記憶しません。したがって、文字列を取り出したり後方参照に使うことはできません。
+</p>
+
+<pre>
+irb&gt; re = Regexp.new '(\w+)\s+(?:\w+)\s+(\w+)'
+=&gt; /(\w+)\s+(?:\w+)\s+(\w+)/
+irb&gt; m = re.match 'abc def ghi'
+=&gt; #&lt;MatchData "abc def ghi" 1:"abc" 2:"ghi"&gt;
+irb&gt; m[1]
+=&gt; "abc"
+irb&gt; m[2]
+=&gt; "ghi"
+irb&gt; m.captures
+=&gt; ["abc", "ghi"]
+</pre>
+
+<p> 最初の (\w+) と最後の (\w+) は一致した文字列を記憶しますが、真ん中の (?:\w+) は一致した文字列を記憶しません。captures() で文字列を取り出すと、1 番目が "abc" になり 2 番目が "ghi" になります。
+</p>
+
+<p> (?&lt;name&gt;...) はグループに名前 name を付けます。カッコ内の正規表現に一致した文字列は、\k&lt;name&gt; で後方参照することができます。
+</p>
+
+<pre>
+irb&gt; re = Regexp.new '(?&lt;word&gt;\w+)\s+\k&lt;word&gt;'
+=&gt; /(?&lt;word&gt;\w+)\s+\k&lt;word&gt;/
+irb&gt; m = re.match "abc abc"
+=&gt; #&lt;MatchData "abc abc" word:"abc"&gt;
+irb&gt; m["word"]
+=&gt; "abc"
+irb&gt; m[:word]
+=&gt; "abc"
+irb&gt; m[1]
+=&gt; "abc"
+</pre>
+
+<p> グループを番号で覚えるよりも名前を付けたほうがわかりやすくなります。グループと一致した部分文字列はハッシュと同じように m["word"] や m[:word] で取り出すことができます。もちろん、グループ番号を使ってもかまいません。
+</p>
+
+<p> (?=...) は位置を正規表現で指定します。その位置でカッコ内の正規表現と一致すれば、(?=...) のマッチングは成功になります。逆に、(?!...) の場合は、その位置でカッコ内の正規表現と一致しないときに、(?!...) のマッチングは成功します。
+</p>
+
+<pre>
+irb&gt; re = Regexp.new 'foo\s+(?=bar)'
+=&gt; /foo\s+(?=bar)/
+irb&gt; m = re.match "foo bar"
+=&gt; #&lt;MatchData "foo "&gt;
+irb&gt; m[0]
+=&gt; "foo "
+irb&gt; re = Regexp.new 'foo\s+(?!bar)'
+=&gt; /foo\s+(?!bar)/
+irb&gt; m = re.match "foo baz"
+=&gt; #&lt;MatchData "foo "&gt;
+irb&gt; m[0]
+=&gt; "foo "
+</pre>
+
+<p> どちらの正規表現も位置を指定するだけなので、カッコ内の正規表現と一致しても、マッチングの位置を前へ進めることはありません。この後ろに正規表現があれば、その位置からマッチングを開始します。
+</p>
+
+<p> また、(?=...) や (?!...) とマッチングした文字列は、正規表現と一致した文字列の中には含まれません。たとえば、foo\s+(?=bar) は 'foo bar' と一致しますが、$&amp; などで一致した文字列を取り出すと 'foo ' になります。
+</p>
+
+<p> このほかにも、Ruby の正規表現にはいろいろな機能が用意されています。詳細は Ruby のマニュアル、もしくは Ruby が正規表現エンジンとして利用しているライブラリ「鬼雲」のマニュアルをお読みください。
+</p>
+
+<h4>●文字列の置換</h4>
+<p> 次は文字列の置換を行うメソッドを説明しましょう。
+</p>
+
+<pre class="item">
+s.gsub(pattern, replace)
+s.gsub!(pattern, replace)
+s.sub(pattern, replace)
+s.sub!(pattern, replace)
+</pre>
+
+<p> メソッド gsub() は文字列 s の中から正規表現 pattern に一致する部分文字列をすべて replace に置き換えた文字列を返します。なお、引数 replace には後方参照を使うことができます。gsub!() は文字列 s を破壊的に修正します。sub() と sub!() は置換を 1 回だけ行います。あとの動作は gsub(), gsub!() と同じです。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+
+<pre>
+irb&gt; s = "abc def abc ghi"
+=&gt; "abc def abc ghi"
+irb&gt; s.gsub /abc/, "123"
+=&gt; "123 def 123 ghi"
+irb&gt; s
+=&gt; "abc def abc ghi"
+irb&gt; s.sub /abc/, "123"
+=&gt; "123 def abc ghi"
+irb&gt; s.sub! /abc/, "123"
+=&gt; "123 def abc ghi"
+irb&gt; s
+=&gt; "123 def abc ghi"
+</pre>
+
+<p> gsub() はすべての abc を 123 に置換しますが、sub() は先頭の abc だけしか置換しません。また、gsub(), sub() は元の文字列を破壊しませんが、gsub!() と sub!() は文字列を破壊的に修正します。
+</p>
+
+<p> 後方参照を使うと、一致した文字列を置換文字列に取り込むことができます。次の例を見てください。
+</p>
+
+<pre>
+irb&gt; s = "foo bar foo baz"
+=&gt; "foo bar foo baz"
+irb&gt; s.gsub /(b\w+)/, '[\1]'
+=&gt; "foo [bar] foo [baz]"
+</pre>
+
+<p> b で始まる英単語をカッコで記憶しておきます。そして、置換文字列に後方参照 \1 を使うと、検索で記憶した文字列を置換文字列の中に含めることができます。したがって、'[\1]' は検索した文字列を角カッコ [ ] で囲むように置換されます。
+</p>
+
+<h4>●文字列置換ツールの作成</h4>
+<p> gsub() を使うと文字列の置換ツールを簡単に作成することができます。リスト 1 を見てください。
+</p>
+
+<pre class="list">
+リスト 1 : 文字列置換ツール
+
+re = Regexp.new(ARGV[0])
+in_f = open ARGV[2], "r"
+
+while a = in_f.gets
+  print a.gsub re, ARGV[1]
+end
+
+in_f.close
+</pre>
+
+<p> ARGV[0] から正規表現を取り出して Regexp.new() でコンパイルします。入力ファイル名は ARGV[2] から取り出して、リードモードでオープンします。あとは、gets() で 1 行ずつ読み込み、メソッド gsub() で文字列を置換するだけです。置換文字列は ARGV[1] から取り出します。そして、その結果を print() で出力します。最後に close() でファイルをクローズします。
+</p>
+
+<p> プログラムをファイル gres.rb に保存して、シェルで次のように実行します。
+</p>
+
+<pre>
+$ ruby gres.rb 検索文字列 置換文字列 ファイル名
+</pre>
+
+<p> 実際に試してみてください。
+</p>
+
+<h4>●文字の置換</h4>
+<p> 今度は文字列ではなく、文字の置換を行うメソッド tr() と tr!() について説明します。
+</p>
+
+<pre class="item">
+tr(search-list, replace-list)
+tr!(search-list, replace-list)
+</pre>
+
+<p> これは UNIX 系の OS にあるコマンド tr と同じ動作をするメソッドです。tr は search-list にある文字を replace-list の対応する文字に置き換えます。tr() は元の文字列を破壊しませんが、tr!() は文字列を破壊的に修正することに注意してください。
+</p>
+
+<p> tr() は正規表現ではありませんが、便利な使い方ができます。ここで詳しく説明しましょう。まずは簡単な文字の置換からです。
+</p>
+
+<pre>
+irb&gt; a = "abcdabcdabcd"
+=&gt; "abcdabcdabcd"
+irb&gt; a.tr "a", "A"
+=&gt; "AbcdAbcdAbcd"
+</pre>
+
+<p> 文字 a に対応する文字は A ですね。したがって、文字列中の a はすべて A に置き換えられます。変換する文字は複数個指定することができます。
+</p>
+
+<pre>
+irb&gt; a.tr "ab", "AB"
+=&gt; "ABcdABcdABcd"
+</pre>
+
+<p> 文字 a は A に、b は B に置き換えられます。文字を並べるのはめんどうなので、ハイフン ( - ) 使って変換する文字の上限から下限までを示すことができます。
+</p>
+
+<pre>
+irb&gt; a.tr "a-z", "A-Z"
+=&gt; "ABCDABCDABCD"
+</pre>
+
+<p> この場合は、英小文字を英大文字に置き換えることになります。同様の操作は文字列のメソッド upcase() と downcase() で行うことができます。
+</p>
+
+<pre>
+irb&gt; b = "abcdABCD"
+=&gt; "abcdABCD"
+irb&gt; b.upcase
+=&gt; "ABCDABCD"
+irb&gt; b.downcase
+=&gt; "abcdabcd"
+</pre>
+
+<p> 元の文字列を破壊的に修正するメソッド upcase!() と downcase!() もあります。
+</p>
+
+<h4>●複数の文字を一つの文字に置換する</h4>
+<p> ある一連の文字を同じ文字に置換したい場合もあるでしょう。次の例を見てください。
+</p>
+
+<pre>
+irb&gt; s = "abcdefg01234567"
+=&gt; "abcdefgh01234567"
+irb&gt; s.tr "a-z", "a"
+=&gt; "aaaaaaaa01234567"
+irb&gt; s.tr "0-9", "n"
+=&gt; "abcdefghnnnnnnnn"
+irb&gt; s.tr "a-z", "A-D"
+=&gt; "ABCDDDDD01234567"
+</pre>
+
+<p> 最初の例は a から z の文字はすべて a に置き変わります。次の例は、0 から 9 までの文字が n に置き変わります。最後の例では、a から d が A から D に変わり、e から z の文字が D に変更されます。
+</p>
+
+<p> 置換後に同じ文字が続くとき、1 文字にまとめた方が都合がよい場合があります。メソッド tr_s() は、変換後に同じ文字が続いた場合は 1 文字に圧縮します。次の例を見てください。
+</p>
+
+<pre>
+irb&gt; s = "abcdABCDefghEFGH"
+irb&gt; s.tr "a-z", "a"
+=&gt; "aaaaABCDaaaaEFGH"
+irb&gt; s.tr_s "a-z", "a"
+=&gt; "aABCDaEFGH"
+</pre>
+
+<p> 連続している a が 1 文字に圧縮されていることがわかります。
+</p>
+
+<p> 今までは文字を置換するだけでしたが、文字を削除したい場合もあるでしょう。replace-list に空文字列を指定すると、search-list の文字を削除することができます。次の例を見てください。
+</p>
+
+<pre>
+irb&gt; s = "abcABCdefDEFghi"
+=&gt; "abcABCdefDEFghi"
+irb&gt; s.tr "a-z", ""
+=&gt; "ABCDEF"
+</pre>
+
+<p> 最初の例では、replace-list に文字を指定していないので、英小文字をすべて削除することになります。
+</p>
+
+<p> search-list の先頭に ^ をつけると、search-list で指定した文字以外の文字を replace-listの 1 文字に置き換えます。次の例を見てください。
+</p>
+
+<pre>
+irb&gt; s = "abcABCdefDEFghi"
+=&gt; "abcABCdefDEFghi"
+irb&gt; s.tr "^a-z", "A"
+=&gt; "abcAAAdefAAAghi"
+</pre>
+
+<p> 最初の例では、英小文字以外はすべて A に置き換わります。
+</p>
+
+<h4>●タブの展開</h4>
+<p> それでは簡単な例題として、タブを空白に展開するプログラムを作ってみましょう。ここではプログラムを簡単にするため、タブストップは 8 桁の固定とします。たとえば "ABC\tDEFG\tH" を表示すると、文字の位置は次のようになるでしょう。
+</p>
+
+<pre class="fig">
+１ ２ ３ ４ ５ ６ ７ ８ ９ 10 11 12 13 14 15 16 17
+---------------------------------------------------
+Ａ Ｂ Ｃ                Ｄ Ｅ Ｆ Ｇ             Ｈ
+
+
+                図 1 : タブ
+</pre>
+
+<p> タブは欄飛ばしの機能ですから、文字 D は次の欄の開始位置 9 桁目に、文字 H は 17 桁目に表示されます。変換する空白の個数は、次の式で求めることができます。
+</p>
+
+<pre class="item">
+空白数 = タブの長さ * 8 - その前の文字列の長さ % 8
+</pre>
+
+<p> 今まで説明した機能だけでプログラムを作ると、リスト 2 のようになります。
+</p>
+
+<pre class="list">
+リスト 2 : タブを空白に展開する
+
+def expand(file)
+  in_f = open file, "r"
+  while a = in_f.gets
+    while /\t+/ =~ a
+      n = $&amp;.size * 8 - $`.size % 8
+      a.sub! /\t+/, " " * n
+    end
+    print a
+  end
+end
+</pre>
+
+<p> タブを見つけたら sub!() で空白文字に展開して print() で出力します。このプログラムはタブを置換したあと、再び文字列の先頭からタブを探すことになるので効率的ではありません。そのかわり、簡単にプログラムを作ることができました。
+</p>
+
+<p> なお、Ruby の FAQ にはもっと簡単なプログラムが示されています。本稿では Ruby の特徴である「ブロック」をまだ説明していないので、少々まわりくどいプログラムになりました。
+</p>
+
+<h4>●空白をタブに置換</h4>
+<p> 今度は expand() とは逆に、空白をタブに変換する関数 unexpand() を作りましょう。これも簡単です。文字列を 8 文字ずつ分解し、末尾まで連続している空白をタブに置換すればいいのです。これは sub / +$/, "\t" で置換することができますが、このとき $ の使い方に注意が必要です。
+</p>
+
+<p> $ は行末と一致するメタ文字ですが、文字列のいちばん最後にある改行文字も行末と認識します。したがって、/abc$/ は "abc" と一致しますが、"abc\n" とも一致するのです。8 文字ずつに分解していくと、最後は 8 文字に満たない部分文字列が取り出される場合があります。このとき、文字列の最後に空白文字があると、それを無条件にタブへ置換してしまいます。これを回避するように工夫しましょう。プログラムはリスト 3 のようになります。
+</p>
+
+<pre class="list">
+リスト 3 : 空白をタブに置換する
+
+def unexpand(file)
+  in_f = open file, "r"
+  while a = in_f.gets
+    a.chomp!
+    i = 0
+    while i &lt; a.size
+      b = a[i, 8]
+      if b.size == 8
+        print b.gsub / +$/, "\t"
+      else
+        print b
+      end
+      i += 8
+    end
+    print "\n"
+  end
+end
+</pre>
+
+<p> 最初に、邪魔になる改行文字を chomp!() で取り除きます。次に、スライス操作で文字列を 8 文字ずつに分解します。そして、部分文字列の長さをチェックします。8 バイトあれば、空白をタブに置換して print() で出力します。そうでなければ、いちばん最後の部分文字列なので、置換を行わずに出力します。これで、最後に空白が残っていても、それをタブに置換することはありません。 
+</p>
+
+<p> Ruby には多くの機能があり、同じプログラムを作るにしてもいろいろな方法が考えられます。もっとクールな方法もあるでしょう。興味のある方はプログラムを作ってみてください。
+</p>
+
+<div class="column">
+<h4>●コラム gresreg</h4>
+<p> 今回作成したツール gres.rb は Global Regular Expression Substitution の略で、参考文献 1 に紹介されていたツールの名前を拝借したものです。UNIX 系 OS や Windows の標準的なコマンドにはありません。もしも、コマンドで同じような処理を行いたい場合は sed を使うことになるでしょう。複数のファイルを一括して処理する場合は、シェルスクリプトと sed を組み合わせて行います。sed は POSIX の基本正規表現しか使えませんが、簡単な置換処理であればこれで十分実用になります。
+</p>
+
+<p> sed では不十分な場合、今回のようにスクリプト言語で gres.rb のようなツールを作成してもよいのですが、実はもっと簡単な方法があります。筆者が愛用しているエディタに xyzzy があります。xyzzy は Windows で動作する Emacs 系のエディタですが、搭載されている xyzzy Lisp は Common Lisp に準拠している優れた処理系です。xyzzy のコマンド gresreg もしくは gresreg-dialog を使うと、複数のファイルの文字列を一括して置換することができます。
+</p>
+
+<p> たとえば、コマンド gresreg-dialog を実行すると入力用のダイアログが開いて、文字列の指定だけではなくファイル名やオプションの指定も行うことができます。サブディレクトリのファイルも置換することができるのでとても便利です。残念ながら本家の Emacs に gresreg はありませんが、Meadow には移植されているようです。探せば専用の文字列置換ツールも見つかると思いますが、いつも使っているエディタで簡単に処理できるのはありがたいことです。
+</p>
+</div>
+
+<h4>●おわりに</h4>
+<p> 2 回にわたって正規表現を使った文字列処理について詳しく説明しました。Ruby の正規表現はとても強力なので、うまく使いこなすと複雑な文字列処理でも簡単にプログラムを作ることができます。Ruby の正規表現はたくさんの機能があるので、一度に覚えようとすると大変です。わかるところから少しずつ使ってみてください。次回は、関数の再帰定義 (再帰呼び出し) について説明します。
+</p>
+
+<h4>●参考文献</h4>
+<ol>
+  <li>Dale Dougherty, 福崎俊博(訳), 『sed &amp; awk プログラミング』, 株式会社アスキー, 1991
+</ol>
+</section>
+<hr>
+<div align="right">
+初版 2008 年 11 月 1 日<br>
+改訂 2017 年 1 月 15 日
+</div>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008-2017 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcruby05.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby07.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881757</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj18.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj20.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>継続 (continuation)</h3>
+<p> 前回は「継続渡しスタイル」について説明しました。今回は SML/NJ 独自の拡張機能である「継続 (continuation) 」について説明します。
+</p>
+<p> なお、本ドキュメントは拙作のページ <a href="abcscm20.html">Scheme 入門: 継続と継続渡しスタイル</a> を SML/NJ 用に加筆・修正したものです。内容は重複していますが、あしからずご了承くださいませ。
+</p>
+
+<h4>●SML/NJ の継続</h4>
+<p> SML/NJ の場合、モジュール SMLofNJ.Cont を使って継続を取り扱います。Cont に用意されている基本的な関数を説明します。
+</p>
+<pre class="item">
+val callcc : ('a cont -&gt; 'a) -&gt; 'a
+val throw : 'a cont -&gt; 'a -&gt; 'b
+</pre>
+<p> 'a cont が継続を表すデータ型です。Scheme と違って継続のデータ型は関数ではありません。callcc は高階関数です。callcc に渡される関数は引数がひとつで、その引数に callcc が取り出した継続が渡されます。callcc は渡された関数を実行し、その結果が callcc の返り値になります。
+</p>
+<p> 取り出した継続の処理を実行するには throw を使います。throw cont x は継続 cont に x を渡して、取り出した処理 (継続) を実行します。このとき、現在実行中の処理は廃棄され、throw の引数 x が callcc の返り値になって cont が実行されます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+- open SMLofNJ.Cont;
+
+・・・省略・・・
+
+- 1 + 2 * callcc(fn k =&gt; 3);
+val it = 7 : int
+- 1 + 2 * callcc(fn k =&gt; (throw k 4; 3));
+val it = 9 : int
+</pre>
+<p> callcc に渡す匿名関数の引数 k に継続が渡されます。callcc によって取り出される継続 cont は、callcc の返り値を 2 倍して、その結果に 1 を加えるという処理になります。callcc の返り値を X とすると、継続は 1 + 2 * X という式で表すことができます。匿名関数では継続を実行せずに 3 をそのまま返しているので、1 + 2 * 3 をそのまま計算して値は 7 になります。
+</p>
+
+<p> 次の例では、匿名関数の中で throw k 4 を実行しています。継続を throw で実行しているので、現在の処理を破棄して、取り出した継続 1 + 2 * X を実行します。したがって、匿名関数で throw k 4 の後ろにある 3 を返す処理は実行されません。X の値は throw の引数 4 になるので、1 + 2 * 4 を評価して値は 9 になります。なお、今回の式では callcc の返り値は int に推論されるので、throw に渡す引数のデータ型が int 以外だとコンパイルエラーになります。
+</p>
+
+<p> 継続を変数に保存しておいて、あとから実行することもできます。ただし、SML/NJ には制限があって、次の例は Scheme では実行できても SML/NJ ではエラーになります。
+</p>
+<pre>
+- val c : int cont option ref = ref NONE;
+val c = ref NONE : int cont option ref
+- 1 + 2 * callcc(fn k =&gt; (c := SOME k; 3));
+val it = 7 : int
+- !c;
+val it = SOME cont : int cont option
+- throw (valOf(!c)) 10;
+stdIn:6.1-6.20 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+Error: throw from one top-level expression into another
+</pre>
+<p> 対話モードで式を評価する場合、最初に取り出した継続 k は 1 + 2 * X を計算して、式を入力した直後の状態に戻るところまでになります。ところが、throw で継続を実行しても、式 1 + 2 * callcc(...) を入力した直後の状態に戻ることはできません。戻ることができるのは throw ... を入力した直後の状態です。同じ状態に戻ることができないので、SML/NJ ではエラーになります。保存した継続の処理を再開する方法は後で詳しく説明します。
+</p>
+
+<p> ご参考までに Scheme (Gauche) での動作例を示します。
+</p>
+<pre>
+gosh&gt; (define *cont* #f)
+*cont*
+gosh&gt; (+ 1 (* 2 (call/cc (lambda (cont) (set! *cont* cont) 3))))
+7
+gosh&gt; (*cont* 10)
+21
+gosh&gt; (*cont* 100)
+201
+</pre>
+<p> ラムダ式 (匿名関数) の中で取り出した継続を大域変数 *cont* に保存します。継続で行う処理は (+ 1 (* 2 X)) なので、(*cont* 10) は (+ 1 (* 2 10)) を評価して値は 21 になります。同様に、(*cont* 100) は (+ 1 (* 2 100)) を評価して値は 201 になります。
+</p>
+
+<h4>●大域脱出</h4>
+<p> 継続を使うと、評価中の関数からほかの関数へ制御を移す「大域脱出 (global exit) 」を行うことができます。また、繰り返しを中断したり、再帰呼び出しの深いところからいっきに脱出するときにも継続を使うことができます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+- fun bar1(k) = print "bar1\n";
+val bar1 = fn : 'a -&gt; unit
+- fun bar2(k) = throw k ();
+val bar2 = fn : unit cont -&gt; 'a
+- fun bar3(k) = print "bar3\n";
+val bar3 = fn : 'a -&gt; unit
+- fun foo(k) = (bar1(k); bar2(k); bar3(k));
+val foo = fn : unit cont -&gt; unit
+- callcc(fn k =&gt; foo(k));
+bar1
+val it = () : unit
+</pre>
+<p> この様子を図に示すと、次のようになります。
+</p>
+
+<pre class="fig">
+ ┌──────┐
+ │   call/cc  │←──┐
+ └──────┘      │
+        ↓             │
+ ┌──────┐      │
+ │    foo     │──┐│
+ └──────┘    ││
+       ↓↑          ↓│
+ ┌──────┐  ┌ bar2 ───┐
+ │    bar1    │  │ throw k () │
+ └──────┘  └──────┘
+
+        図 : 大域脱出
+</pre>
+<p> 通常の関数呼び出しでは、呼び出し元の関数に制御が戻ります。ところが bar2 で throw k () が実行されると、callcc で取り出した継続に制御が移るので、呼び出し元の関数 foo を飛び越すことができるのです。その結果、callcc の返り値は unit になります。このように、継続を使って関数を飛び越えて制御を移すことができます。
+</p>
+
+<h4>●繰り返しの中断</h4>
+<p> 繰り返しの中断も簡単です。手続き型言語の場合、たとえば、Ｃ言語や Python などでは、while, for ループといった繰り返しは break で処理を中断することができますが、SML/NJ ではそれができません。この場合、次のように callcc を使うと簡単に実現できます。
+</p>
+<pre>
+- callcc(fn k =&gt; let val i = ref 0 in
+= while !i &lt; 10 do
+= if !i &lt; 5 then (print "oops!\n"; i := !i + 1)
+= else throw k () end);
+oops!
+oops!
+oops!
+oops!
+oops!
+val it = () : unit
+</pre>
+<p> このように、k に格納された継続を評価すれば、while ループを途中で中断することができます。また、二重ループからの脱出も簡単です。簡単な例を示します。
+</p>
+<pre>
+- callcc(fn k =&gt; let val i = ref 0 val j = ref 0 in
+= while !i &lt; 5 do (
+= while !j &lt; 5 do 
+= if !i + !j &lt; 5 then (print "oops!\n"; j := !j + 1) else throw k ();
+= i := !i + 1) end);
+oops!
+oops!
+oops!
+oops!
+oops!
+val it = () : unit
+</pre>
+<p> 継続を使うと高階関数の処理を途中で中断することもできます。たとえば、リストの要素をチェックし、不適当な要素を見つけた場合は空のリストを返すマップ関数 map_check を作ってみましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 高階関数の処理を中断する
+
+fun map_check f chk ls =
+    callcc(fn k =&gt; map (fn x =&gt; if chk x then throw k [] else f x) ls)
+</pre>
+<pre class="item">
+val map_check = fn : ('a -&gt; 'b) -&gt; ('a -&gt; bool) -&gt; 'a list -&gt; 'b list
+</pre>
+<p> 要素をチェックする述語は引数 chk に渡します。chk が真を返す場合は継続 k を実行して [ ] を返します。簡単な実行例を示します。
+</p>
+<pre>
+- map_check (fn x =&gt; x * x) (fn x =&gt; x &lt; 0) [1,2,3,4,5];
+val it = [1,4,9,16,25] : int list
+- map_check (fn x =&gt; x * x) (fn x =&gt; x &lt; 0) [1,2,3,~1,4,5];
+val it = [] : int list
+</pre>
+
+<h4>●再帰呼び出しからの脱出</h4>
+<p> 再帰呼び出しから脱出することも継続を使えば簡単です。リストの平坦化で作成した関数 flatten を継続を使って書き直してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 再帰呼び出しから脱出する
+
+fun flatten(xs) =
+    let
+      fun flatten_sub([], _) = []
+      |   flatten_sub([]::_, k) = throw k []
+      |   flatten_sub(x::xs, k) = x @ flatten_sub(xs, k)
+    in
+      callcc(fn k =&gt; flatten_sub(xs, k))
+    end
+</pre>
+<pre class="item">
+val flatten = fn : 'a list list -&gt; 'a list
+</pre>
+<p> flatten は関数 flatten_sub を呼び出します。このとき、継続 k を取り出して flatten_sub に渡します。flatten_sub は空の配列を見つけたら継続 k を実行します。すると、再帰呼び出しの処理は破棄されて flatten の処理に戻り、k に渡した空リストが返り値になります。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+- flatten([[1,2],[3,4],[5,6]]);
+val it = [1,2,3,4,5,6] : int list
+- flatten([[1,2],[3,4],[],[5,6]]);
+val it = [] : int list
+</pre>
+
+<h4>●継続の保存と再開</h4>
+<p> 脱出先の継続を変数に保存しておき、関数を呼び出すたびにそれを書き換えることで、他の変数に保存していた継続の処理を再開することができます。
+</p>
+<p> 簡単な例としてフィボナッチ数列を生成するジェネレータを作ってみましょう。実をいうと、この処理はクロージャを使うと簡単にプログラムできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : フィボナッチ数列の生成
+
+fun make_fibo() =
+    let
+      val n = ref (1, 1)
+    in
+      fn () =&gt; let
+                 val (a, b) = !n
+               in
+                 n := (b, a + b);
+                 a
+               end
+    end
+</pre>
+<pre class="item">
+val make_fibo = fn : unit -&gt; unit -&gt; int
+</pre>
+<p> make_fibo はフィボナッチ数列を生成するクロージャを返します。クロージャの中では、フィボナッチ数列の 2 項を変数 n に保存しておいて、その 2 項を使って次の項を生成するだけです。これで、クロージャを実行するたびに、次々とフィボナッチ数列の項を生成することができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+- val a = make_fibo();
+val a = fn : unit -&gt; int
+- a();
+val it = 1 : int
+- a();
+val it = 1 : int
+- a();
+val it = 2 : int
+- a();
+val it = 3 : int
+- a();
+val it = 5 : int
+- a();
+val it = 8 : int
+- a();
+val it = 13 : int
+</pre>
+<p> 継続でジェネレータを作る場合、ジェネレータを再帰呼び出しでプログラムします。そして、継続で再帰呼び出しを中断して値を返し、次にジェネレータを評価したとき、継続で保存した処理を再開すればいいわけです。
+</p>
+
+<p> 簡単そうに見えますが、継続を使ってプログラムを作るのはけっこう大変です。ここは <a href="http://www.sampou.org/scheme/t-y-scheme/">独習 Scheme 三週間</a> <a href="http://www.sampou.org/scheme/t-y-scheme/t-y-scheme-Z-H-15.html#node_sec_13.3">13.3  ツリーマッチング</a> を参考にプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : フィボナッチ数列の生成 (2)
+
+fun make_fibo1() =
+    let
+      val resume = ref NONE
+      val ret = ref NONE
+
+      fun iter(a, b) = (
+        ret := SOME (callcc(fn k =&gt; (
+                       resume := SOME k;
+                       throw (valOf(!ret)) a )));
+        iter(b, a + b) )
+    in
+      fn () =&gt; callcc(fn x =&gt; case !resume of
+                                   NONE =&gt; (ret := SOME x; iter(1, 1))
+                                 | (SOME k) =&gt; throw k x)
+    end
+</pre>
+<pre class="item">
+val make_fibo1 = fn : unit -&gt; unit -&gt; int
+</pre>
+<p> 関数 make_fibo1 はクロージャを返します。変数 resume に処理を再開するときの継続を、変数 ret に値を返すときに使う脱出用の継続をセットします。resume が NONE の場合は最初の呼び出しです。クロージャの中で継続 x を取り出して変数 ret にセットし、局所関数 iter を呼び出します。NONE でなければ、resume から継続 k を取り出して、throw で継続 k を実行します。このとき、引数として脱出用の継続 x を渡すところがポイントです。
+</p>
+<p> 局所関数 iter でフィボナッチ数列の値を返す場合、まず callcc で継続 k を取り出し、それを resume にセットします。次にクロージャを評価するとき、resume にセットした継続が実行されるので、中断した処理を再開することができます。それから、脱出先の継続 ret を実行して値 a を返します。これで処理が中断されて、クロージャの返り値が a になります。
+</p>
+<p> 次に、処理を再開したとき、throw の引数に脱出先の継続 x が渡されるので、変数 ret の値が書き換えられることに注意してください。この値を書き換えないと、最初にクロージャを呼び出したところまで戻ってしまうので、ジェネレータは正常に動作しません。簡単な例を示しましょう。
+</p>
+<pre>
+- val b = make_fibo1();
+val b = fn : unit -&gt; int
+- b();
+val it = 1 : int
+- b();
+Error: throw from one top-level expression into another
+</pre>
+<p> 対話モードでクロージャを単独で呼び出す場合、ret の値を書き換えないと、二番目の b() を呼び出したあと最初に b() を呼び出したときの脱出先に戻ろうとするため、SML/NJ ではエラーになります。ご注意くださいませ。
+</p>
+<p> それでは実行例を示します。
+</p>
+<pre>
+- val b = make_fibo1();
+val b = fn : unit -&gt; int
+- b();
+val it = 1 : int
+- b();
+val it = 1 : int
+- b();
+val it = 2 : int
+- b();
+val it = 3 : int
+- b();
+val it = 5 : int
+- b();
+val it = 8 : int
+- b();
+val it = 13 : int
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●リストの要素をひとつずつ取り出す</h4>
+<p> 複数の要素を格納するデータ構造を「コレクション (collection) 」とか「コンテナ (container) 」と呼びます。SML/NJ などの関数型言語は、高階関数を使ってコレクションの要素にアクセスすることができます。ここでは、コレクションから要素を一つずつ順番に取り出していく「ジェネレータ」を考えることにします。
+</p>
+<p> たとえば、リストのトップレベルの要素を一つずつ取り出していくジェネレータは、クロージャを使って簡単に実現することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : リストの要素を取り出す
+
+fun make_gen_list(ls) =
+    let
+      val xs = ref ls
+    in
+      fn () =&gt; case !xs of
+                    [] =&gt; NONE
+                  | (y::ys) =&gt; (xs := ys; SOME y)
+    end
+</pre>
+
+<p> 関数 make_gen_list はクロージャを返します。このクロージャを評価すると、リストの要素を順番に取り出して返します。処理内容は簡単で、リストの先頭を xs に保持し、パターン (y::ys) で要素 y を取り出したら、xs := ys で先頭の要素を取り除きます。これでクロージャを評価するたびに、リストの要素を一つずつ取り出していくことができます。
+</p>
+<p> それでは実行例を示します。
+</p>
+<pre class="item">
+val make_gen_list = fn : 'a list -&gt; unit -&gt; 'a option
+</pre>
+<pre>
+- val a = make_gen_list([1,2,3,4,5]);
+val a = fn : unit -&gt; int option
+- a();
+val it = SOME 1 : int option
+- a();
+val it = SOME 2 : int option
+- a();
+val it = SOME 3 : int option
+- a();
+val it = SOME 4 : int option
+- a();
+val it = SOME 5 : int option
+- a();
+val it = NONE : int option
+</pre>
+
+<p> 次は継続を使ってジェネレータを作ってみます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : リストの要素を取り出す (継続版)
+
+fun make_gen_list1(ls) =
+    let
+      val resume = ref NONE
+      val ret = ref NONE
+
+      fun iter([]) = throw (valOf(!ret)) NONE
+      |   iter(x::xs) = (
+            ret := SOME (callcc(fn k =&gt; (
+              resume := SOME k;
+              throw (valOf(!ret)) (SOME x) )));
+            iter(xs) )
+    in
+      fn () =&gt; callcc(fn k =&gt; case !resume of
+                                   NONE =&gt; (ret := SOME k; iter(ls))
+                                 | (SOME x) =&gt; throw x k )
+    end
+</pre>
+<p> 基本的な考え方はフィボナッチ数列のジェネレータを生成する関数 make_fibo1 と同じです。変数 resume に処理を再開するときの継続を、変数 ret に値を返すときに使う脱出用の継続をセットします。局所関数 iter の中で、継続 k を取り出して resume にセットし、脱出先継続 ret の値を書き換えます。この値を書き換えないと、最初にクロージャを呼び出したところまで戻ってしまい、ジェネレータとして正常に動作しません。たとえば、次のプログラムは無限ループになります。
+</p>
+
+<pre>
+- let val a = make_gen_list1([1,2,3]) in a(); a() end;
+(^C を入力)
+Interrupt
+</pre>
+<p> ret の値を書き換えないと、二番目の a() を呼び出したあと最初に a() を呼び出したときの脱出先に戻るため、二番目の a() が何度も呼び出されることになるのです。同様に、処理が終了した場合も継続 ret で脱出してください。そうしないと、関数呼び出しが終了して呼び出し元に戻る、つまり最初にクロージャを呼び出したところまで戻ってしまうのです。たとえば、次のプログラムは無限ループになります。
+</p>
+<pre>
+- let val a = make_gen_list1([1,2,3]) in a(); a(); a(); a() end;
+(^C を入力)
+Interrupt
+</pre>
+<p> 最後の a() でリストの要素がなくなって NONE を返すのですが、最初に呼び出した a() の返り値となるため無限ループになってしまいます。処理が終了したあと、必ず継続を使って脱出してください。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+- val a = make_gen_list1([1,2,3,4,5]);
+val a = fn : unit -&gt; int option
+- a();
+val it = SOME 1 : int option
+- a();
+val it = SOME 2 : int option
+- a();
+val it = SOME 3 : int option
+- a();
+val it = SOME 4 : int option
+- a();
+val it = SOME 5 : int option
+- a();
+val it = NONE : int option
+</pre>
+
+<h4>●木の要素をひとつずつ取り出す</h4>
+<p> リストのように、トップレベルの要素を取り出していくだけならば、継続を使わなくても簡単にプログラムできるのですが、「木」の要素を取り出していくことを考えると、プログラムはとたんに難しくなります。高階関数であれば、次のようになるでしょう。
+</p>
+<pre class="list">
+リスト : 木の高階関数
+
+(* 二分木 *)
+datatype 'a tree = Leaf of 'a | Node of 'a tree * 'a tree
+
+(* 巡回 *)
+fun for_each_tree f (Leaf x) = f(x)
+|   for_each_tree f (Node(left, right)) = (
+      for_each_tree f left;
+      for_each_tree f right
+    )
+</pre>
+<pre> class="item">
+val for_each_tree = fn : ('a -&gt; 'b) -&gt; 'a tree -&gt; 'b
+</pre>
+<p> 関数 for_each_tree は木の要素に関数 f を適用します。今回の二分木は、要素を節 (Node) ではなく葉 (Leaf) に格納します。f を適用するだけなので、for_each_tree を二重再帰しています。簡単な実行例を示しましょう。
+</p>
+<pre>
+- for_each_tree (fn x =&gt; print(Int.toString(x) ^ " "))
+= (Node(Node(Node(Leaf 1, Leaf 2), Node(Leaf 3, Leaf 4)), Leaf 5));
+1 2 3 4 5 val it = () : unit
+</pre>
+<p> 最後のユニット () は for_each_tree の返り値です。
+</p>
+
+<p> このような木構造のジェネレータを作る場合、木をたどってきた経路をクロージャに保存しておいて、再帰定義を使わずにプログラムを作ります。ところが、継続を使うと経路を保存しておく必要はありません。継続で再帰呼び出しを中断して要素を返し、次にジェネレータを評価したとき、継続で保存した処理を再開すればいいのです。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 木のイテレータ
+
+fun make_gen_tree(tree) =
+    let
+      val resume = ref NONE
+      val ret = ref NONE
+      fun for_each(tree) =
+          let
+            fun iter(Leaf x) =
+                ret := SOME (callcc(fn k =&gt; (
+                  resume := SOME k;
+                  throw (valOf(!ret)) (SOME x)
+                )))
+            |   iter(Node(left, right)) = (
+                  iter(left);
+                  iter(right)
+                )
+          in
+            iter(tree);
+            throw (valOf(!ret)) NONE
+          end
+    in
+      fn () =&gt; callcc(fn x =&gt; case !resume of
+                                   NONE =&gt; (ret := SOME x; for_each(tree))
+                                 | (SOME k) =&gt; throw k x)
+    end
+</pre>
+<p> 基本的な構造は今まで作成したジェネレータと同じです。変数 resume に処理を再開するときの継続を、変数 ret に値を返すときに使う脱出用の継続をセットします。局所関数 iter の中で、継続 k を取り出して resume にセットし、脱出先継続 ret の値を書き換えます。iter は局所関数 for_each から呼び出し、iter の呼び出しが終了したら、脱出用継続 ret を使って NONE を返します。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre class="item">
+val make_gen_tree = fn : 'a tree -&gt; unit -&gt; 'a option
+</pre>
+<pre>
+- val a = make_gen_tree(Node(Node(Node(Leaf 1, Leaf 2), Node(Leaf 3, Leaf 4)), Leaf 5));
+val a = fn : unit -&gt; int option
+- a();
+val it = SOME 1 : int option
+- a();
+val it = SOME 2 : int option
+- a();
+val it = SOME 3 : int option
+- a();
+val it = SOME 4 : int option
+- a();
+val it = SOME 5 : int option
+- a();
+val it = NONE : int option
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●ジェネレータを生成する関数</h4>
+<p> ところで、ジェネレータを作るためにわざわざ新しい関数を作るのは面倒ですね。高階関数からジェネレータを生成する関数があると便利です。実は、ジェネレータを生成する関数も作ることができます。Shiro Kawai さんの <a href="http://practical-scheme.net/index-j.html">Practical Scheme</a> <a href="http://practical-scheme.net/wiliki/wiliki.cgi">WiLiKi</a> にある <a href="http://practical-scheme.net/wiliki/wiliki.cgi?Scheme%3agenerator%E3%81%A8do%E3%81%A8while">Scheme:generatorとdoとwhile</a> を参考にプログラムを作ってみましょう。
+</p>
+<p> 関数名は make_gen とします。簡単な使用例を示します。
+</p>
+<pre>
+- val a = make_gen for_each_tree (Node(Node(Node(Leaf 1, Leaf 2), Node(Leaf 3, Leaf 4)), Leaf 5));
+val a = fn : unit -&gt; int option
+- a();
+val it = SOME 1 : int option
+- a();
+val it = SOME 2 : int option
+- a();
+val it = SOME 3 : int option
+- a();
+val it = SOME 4 : int option
+- a();
+val it = SOME 5 : int option
+- a();
+val it = NONE : int option
+
+- val b = make_gen app [1,2,3,4,5];
+val b = fn : unit -&gt; int option
+- b();
+val it = SOME 1 : int option
+- b();
+val it = SOME 2 : int option
+- b();
+val it = SOME 3 : int option
+- b();
+val it = SOME 4 : int option
+- b();
+val it = SOME 5 : int option
+- b();
+val it = NONE : int option
+</pre>
+<p> make_gen に渡す高階関数は、第 1 引数に関数を受け取ります。make_gen は高階関数を呼び出すとき、第 1 引数に関数を渡します。この関数の中で継続を使ってジェネレータを実現します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ジェネレータを生成する関数
+
+fun make_gen proc args =
+    let
+      val resume = ref NONE
+      val ret = ref NONE
+      fun iter () = (
+          proc (fn x =&gt; ret := SOME (callcc (fn k =&gt; (
+                 resume := SOME k;
+                 throw (valOf(!ret)) (SOME x) ))))
+               args;
+          throw (valOf(!ret)) NONE
+      )
+    in
+      fn () =&gt; callcc(fn x =&gt; case !resume of
+                                   NONE =&gt; (ret := SOME x; iter ())
+                                 | (SOME k) =&gt; throw k x)
+    end
+</pre>
+<pre class="item">
+val make_gen = fn : (('a -&gt; unit) -&gt; 'b -&gt; 'c) -&gt; 'b -&gt; unit -&gt; 'a option
+</pre>
+<p> make_gen の引数 proc が高階関数、args が proc に渡す引数です。局所関数 iter で proc を呼び出します。proc に渡す関数の本体は匿名関数です。proc でこの匿名関数を呼び出すと、継続 k を取り出して resume にセットし、継続 ret を評価して脱出します。これで匿名関数の引数 x がジェネレータの返り値になります。
+</p>
+<p> 次にジェネレータを評価すると、resume にセットされた継続が評価され、匿名関数の処理が終了して呼び出し元の proc に戻ります。つまり、proc の処理が再開されるというわけです。これでジェネレータを実現することができます。
+</p>
+
+<p> 簡単な例として、順列を生成するジェネレータを作ってみましょう。順列の生成については、拙作のページ <a href="smlnj04.html#yori03">ちょっと寄り道「順列の生成」</a> をお読みください。
+</p>
+
+<pre class="list">
+リスト : 順列の生成
+
+fun remove(x, xs) = List.filter (fn y =&gt; x &lt;&gt; y) xs
+
+fun permutation f ls =
+    let
+      fun perm([], a) = f (rev a)
+      |   perm(ls, a) =
+          app (fn x =&gt; perm(remove(x, ls), x::a)) ls
+    in
+      perm(ls, [])
+    end
+</pre>
+<p> permutation は高階関数で第 1 引数に関数を受け取るので、このまま make_gen に渡すことができます。それでは実行してみましょう。
+</p>
+<pre class="item">
+val permutation = fn : (''a list -&gt; unit) -&gt; ''a list -&gt; unit
+</pre>
+<pre>
+- val g = make_gen permutation [1,2,3];
+val g = fn : unit -&gt; int list option
+- g();
+val it = SOME [1,2,3] : int list option
+- g();
+val it = SOME [1,3,2] : int list option
+- g();
+val it = SOME [2,1,3] : int list option
+- g();
+val it = SOME [2,3,1] : int list option
+- g();
+val it = SOME [3,1,2] : int list option
+- g();
+val it = SOME [3,2,1] : int list option
+- g();
+val it = NONE : int list option
+</pre>
+<p> 正常に動作していますね。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj18.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj20.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

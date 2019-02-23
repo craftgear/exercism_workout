@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>続・お気楽 Java プログラミング入門</title>
+  <meta name="description" content="Java,Java入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881776</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Java Programming</h1>
+<h2>続・お気楽 Java プログラミング入門</h2>
+<div class="small">
+[ <a href="abcjava17.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava19.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>immutable な遅延ストリーム (前編)</h3>
+<p> 「ストリーム (stream)」はデータの流れを抽象化したデータ構造です。たとえば、ファイル入出力はストリームと考えることができます。また、配列や連結リストを使ってストリームを表すこともできます。ただし、単純な配列や連結リストでは有限個のデータの流れしか表すことができません。ところが、遅延評価を用いると擬似的に無限個のデータを表すことができるようになります。これを「遅延ストリーム」とか「遅延リスト」と呼びます。
+</p>
+<p> Java の Stream は遅延ストリームですが immutable ではありません。前回作成したクラス Delay&lt;T&gt; を使うと、完全ではありませんが関数型言語のような immutable な遅延ストリームを作ることができます。Java で immutable な遅延ストリームを使うことはほとんどないと思いますが、今回は Java のお勉強ということで、実際にプログラムを作ってみましょう。
+</p>
+<h4>●遅延ストリームの構造</h4>
+<p> 遅延ストリームの基本的な考え方は、必要になったときに新しいデータを生成することです。このときに遅延評価を用います。具体的にはデータを生成するメソッドを用意し、それを遅延評価してストリームに格納しておきます。そして、必要になった時点で遅延評価しておいたメソッドを呼び出して値を求めればよいわけです。
+</p>
+<p> 今回作成する遅延ストリームはクラス名を LazyStream&lt;E&gt; とし、パッケージ immutable 内に定義することにします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 遅延ストリーム
+
+package immutable;
+
+import java.util.*;
+import java.util.function.*;
+import immutable.*;
+
+public final class LazyStream&lt;E&gt; {
+  private final E item;
+  private final Delay&lt;LazyStream&lt;E&gt;&gt; next;
+
+  private LazyStream(E x, Supplier&lt;LazyStream&lt;E&gt;&gt; func) {
+    item = x;
+    next = Delay.delay(func);
+  }
+
+  // 終端
+  private final static LazyStream&lt;?&gt; NIL = new LazyStream&lt;&gt;(null, null);
+  public static &lt;E&gt; LazyStream&lt;E&gt; nil() {
+    @SuppressWarnings("unchecked")
+    LazyStream&lt;E&gt; t = (LazyStream&lt;E&gt;)NIL;
+    return t;
+  }
+
+  public boolean isEmpty() { return this == NIL; }
+
+  // メソッドの定義
+  ・・・省略・・・
+}
+</pre>
+<p> フィールド変数 item に先頭の要素を格納し、next に遅延ストリームを生成する Delay&lt;LazyStream&lt;E&gt;&gt; を格納します。これを force() することで、次の要素を格納した遅延ストリームを生成します。スタティック変数 NIL は遅延ストリームの終端 (空の遅延ストリーム) を表します。スタティックメソッド nil() は空の遅延ストリームを返し、メソッド isEmpty() は遅延ストリームが空であれば真を返します。
+</p>
+<p> 次は遅延ストリームを操作する基本的なメソッドを定義します。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの基本的な操作メソッド
+
+  // 遅延ストリームの生成
+  public static &lt;E&gt; LazyStream&lt;E&gt; cons(E x, Supplier&lt;LazyStream&lt;E&gt;&gt; func) {
+    return new LazyStream&lt;E&gt;(x, func);
+  }
+
+  // 先頭要素を取り出す
+  public E first() {
+    if (this == NIL)
+      throw new IndexOutOfBoundsException("LazyStream.first()");
+    return item;
+  }
+
+  // 先頭要素を取り除く
+  public LazyStream&lt;E&gt; rest() {
+    if (this == NIL)
+      throw new IndexOutOfBoundsException("LazyStream.rest()");
+    return next.force();
+  }
+</pre>
+<p> スタティックメソッド cons() は先頭要素が x の遅延ストリームを生成します。メソッド first() は遅延ストリームから要素を取り出して返します。メソッド rest() は遅延ストリームのフィールド変数 next を force() して、次の要素を格納した遅延ストリームを生成します。ようするに、これらのメソッドは連結リスト ImList のメソッド cons(), first(), rest() に、Lisp / Scheme でいえばリスト操作関数 cons, car, cdr に対応しているわけです。
+</p>
+<h4>●遅延ストリームの生成</h4>
+<p> それでは、遅延ストリームを生成するスタティックメソッドを作りましょう。たとえば、low 以上 high 以下の整数列を生成する遅延ストリームは次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 整数列を生成する遅延ストリーム
+
+  public static LazyStream&lt;Integer&gt; iota(int low, int high) {
+    if (low &gt; high)
+      return nil();
+    else
+      return cons(low, () -&gt; iota(low + 1, high));
+  }
+</pre>
+<p> メソッド iota() は遅延ストリームを生成して返します。cons() の第 1 引数が現時点でのデータになります。第 2 引数にはラムダ式を渡して、その中で iota() を呼び出します。rest() を実行すると、遅延オブジェクトに格納されたラムダ式が評価され、その本体である iota() が実行されて次のデータを格納した遅延ストリームが返されます。その遅延ストリームに対してさらに rest() を実行すると、その次のデータを得ることができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : 整数列の生成
+
+import immutable.*;
+
+public class sample180 {
+  public static void main(String[] args) {
+    LazyStream&lt;Integer&gt; xs0 = LazyStream.iota(1, 10);
+    System.out.println(xs0.first());
+    System.out.println(xs0.rest().first());
+    System.out.println(xs0.rest().rest().first());
+
+    LazyStream&lt;Integer&gt; xs1 = xs0;
+    while (!xs1.isEmpty()) {
+      System.out.println(xs1.first());
+      xs1 = xs1.rest();
+    }
+
+    System.out.println(xs0.first());
+    System.out.println(xs0.rest().first());
+    System.out.println(xs0.rest().rest().first());
+  }
+}
+</pre>
+<pre>
+C&gt;java sample180
+1
+2
+3
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+1
+2
+3
+</pre>
+<p> 遅延ストリーム xs0 に rest() を適用することで、次々とデータを生成することができます。また、while ループの中で変数 xs1 の値を書き換えれば、遅延ストリームの要素を順番に取り出していくことができます。このとき、遅延ストリーム自体の値は書き換えられていないことに注意してください。xs0 の値を書き換えない限り、xs0.first() の値は 1 で、xs0.rest().first() の値は 2 のままです。
+</p>
+<h4>●無限ストリームの生成</h4>
+<p> 次は無限ストリームを生成するスタティックメソッドを作りましょう。次のリストを見てください。
+<pre class="list">
+リスト : 無限ストリームの生成
+
+  // x を繰り返し出力する
+  public static &lt;E&gt; LazyStream&lt;E&gt; repeat(E x) {
+    return cons(x, () -&gt; repeat(x));
+  }
+
+  // メソッド func が生成する値を遅延ストリームに格納する
+  public static &lt;E&gt; LazyStream&lt;E&gt; generate(Supplier&lt;E&gt; func) {
+    return cons(func.get(), () -&gt; generate(func));
+  }
+
+  // 前項にメソッドを適用して次項を生成する
+  public static &lt;E&gt; LazyStream&lt;E&gt; iterate(E a, Function&lt;E, E&gt; func) {
+    return cons(a, () -&gt; iterate(func.apply(a), func));
+  }
+</pre>
+<p> メソッド repeat() は引数 x を無限に出力する遅延ストリームを生成します。cons() の第 1 引数に x を渡して、第 2 引数のラムダ式で repeat(x) を呼び出すだけです。メソッド generate() は引数のメソッド func が生成する値を遅延ストリームに格納します。cons() の第 1 引数に func.get() の返り値を渡して、ラムダ式で generate(func) を呼び出すだけです。
+</p>
+<p> メソッド iterate() は、第 1 引数に初項を指定して、第 2 引数のメソッドで前項から次項を生成します。これは cons() の第 1 引数に a を渡して、ラムダ式の中で iterate() の第 1 引数に func.apply(a) の返り値をセットするだけです。これで、引数 a の値から次項の値を求めることができます。
+</p>
+<p> もう一つ、簡単な例を示しましょう。多倍長整数 (BigInteger) でフィボナッチ数列を生成する遅延ストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 無限ストリームの実行例
+
+import java.math.*;
+import immutable.*;
+
+public class sample181 {
+  // フィボナッチ数列
+  static LazyStream&lt;BigInteger&gt; fibonacci(BigInteger a, BigInteger b) {
+    return LazyStream.cons(a, () -&gt; fibonacci(b, a.add(b)));
+  }
+  
+  public static void main(String[] args) {
+    LazyStream&lt;Integer&gt; xs = LazyStream.repeat(1);
+    for (int i = 0; i &lt; 16; i++) {
+      System.out.print(xs.first() + " ");
+      xs = xs.rest();
+    }
+    System.out.println("");
+    LazyStream&lt;Integer&gt; ys = LazyStream.iterate(1, x -&gt; x + 2);
+    for (int i = 0; i &lt; 16; i++) {
+      System.out.print(ys.first() + " ");
+      ys = ys.rest();
+    }
+    System.out.println("");
+    LazyStream&lt;BigInteger&gt; fibo = fibonacci(BigInteger.ZERO, BigInteger.ONE);
+    for (int i = 0; i &lt; 50; i++) {
+      System.out.print(fibo.first() + " ");
+      fibo = fibo.rest();
+    }
+  }
+}
+</pre>
+<pre>
+C&gt;java sample181
+1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+1 3 5 7 9 11 13 15 17 19 21 23 25 27 29 31
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 
+28657 46368 75025 121393 196418 317811 514229 832040 1346269 2178309 3524578 5702887 
+9227465 14930352 24157817 39088169 63245986 102334155 165580141 267914296
+433494437 701408733 1134903170 1836311903 2971215073 4807526976 7778742049
+</pre>
+<p> repeat(1) は無限に 1 を出力する遅延ストリームを生成します。iterate(1, x -&gt; x + 2) は無限の奇数列を生成する遅延ストリームになります。メソッド fibonacci() の引数 a がフィボナッチ数列の最初の項で、b が次の項です。したがって、ラムダ式に fibonacci(b, a.add(b)) を格納しておけば、rest() を実行することでフィボナッチ数列を生成することができます。
+</p>
+<h4>●遅延ストリームの操作メソッド</h4>
+<p> 次は遅延ストリームを操作するメソッドを作りましょう。最初は n 番目の要素を求めるメソッド get() です。
+</p>
+<pre class="list">
+リスト : n 番目の要素を求める
+
+  public E get(int n) {
+    LazyStream&lt;E&gt; xs = this;
+    while (n-- &gt; 0) {
+      xs = xs.rest();
+    }
+    return xs.first();
+  }
+</pre>
+<p> get() は rest() を n 回繰り返して n 番目の要素を求めるだけです。
+</p>
+<p> 遅延ストリームから n 個の要素を取り出して List&lt;E&gt; に格納して返すメソッド take() と先頭から n 個の要素を取り除くメソッド drop() も同様にプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 要素を n 個取り出して List&lt;E&gt; に格納して返す
+
+  public List&lt;E&gt; take(int n) {
+    LazyStream&lt;E&gt; xs = this;
+    List&lt;E&gt; ys = new ArrayList&lt;&gt;();
+    while (n-- &gt; 0 &amp;&amp; xs != NIL) {
+      ys.add(xs.first());
+      xs = xs.rest();
+    }
+    return ys;
+  }
+</pre>
+<div class="note">
+-- [修正 (2016/12/24)] --------<br>
+take() の返り値のデータ型を ImList&lt;E&gt; から List&lt;E&gt; に変更
+</div>
+<pre class="list">
+リスト : 先頭から n 個要素を取り除く
+
+  public LazyStream&lt;E&gt; drop(int n) {
+    LazyStream&lt;E&gt; xs = this;
+    while (n-- &gt; 0 &amp;&amp; xs != NIL) {
+      xs = xs.rest();
+    }
+    return xs;
+  }
+</pre>
+<p> take() は while ループで first() と rest() を n 回繰り返し、要素を ArrayList&lt;E&gt; に格納して返します。drop() は rest() を n 回繰り返すだけです。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre class="list">
+リスト : get(), take(), drop() の実行例
+
+import java.math.*;
+import immutable.*;
+
+public class sample182 {
+  static LazyStream&lt;BigInteger&gt; fibonacci(BigInteger a, BigInteger b) {
+    return LazyStream.cons(a, () -&gt; fibonacci(b, a.add(b)));
+  }
+  
+  public static void main(String[] args) {
+    LazyStream&lt;BigInteger&gt; fibo = fibonacci(BigInteger.ZERO, BigInteger.ONE);
+    for (int i = 0; i &lt; 20; i++)
+      System.out.print(fibo.get(i) + " ");
+    System.out.println("");
+    System.out.println(fibo.take(20));
+    System.out.println(fibo.drop(40).take(10));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample182
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+[0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181]
+[102334155, 165580141, 267914296, 433494437, 701408733, 1134903170, 1836311903,
+2971215073, 4807526976, 7778742049]
+</pre>
+<p> 変数 fibo にフィボナッチ数列を生成する遅延ストリームをセットします。get() で順番に要素を 20 個取り出すと、その値はフィボナッチ数列になっていますね。take() を使うと取り出した要素を ArrayList に格納することができます。drop() で 40 個の要素を取り除き、take() で 10 個の要素を取り出します。すると、その要素は 40 番目以降のフィボナッチ数列になります。
+</p>
+
+<h4>●遅延ストリームの連結</h4>
+<p> 次は、2 つの遅延ストリームを受け取って 1 つの遅延ストリームを返すメソッドを考えてみましょう。一番簡単な操作は 2 つの遅延ストリームを連結することです。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの連結
+
+  public LazyStream&lt;E&gt; append(LazyStream&lt;E&gt; ys) {
+    if (this == NIL)
+      return ys;
+    else
+      return cons(first(), () -&gt; rest().append(ys));
+  }
+</pre>
+<p> メソッド append() は自分 (this) と引数の遅延ストリーム xs を連結した遅延ストリームを返します。処理は簡単で、自分の要素を順番に取り出していき、空になったら ys を返すだけです。
+</p>
+<p> 次は 2 つの遅延ストリームの要素を交互に出力する遅延ストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの要素を交互に出力
+
+  public LazyStream&lt;E&gt; interleave(LazyStream&lt;E&gt; ys) {
+    if (this == NIL)
+      return ys;
+    else
+      return cons(first(), () -&gt; ys.interleave(rest()));
+  }
+</pre>
+<p> メソッド interleave() は、自分の要素を新しい遅延ストリームに格納したら、次は引数 ys の要素を新しい遅延ストリームに格納します。これはラムダ式で interleave() を呼び出すとき、ys に対して interleave() を呼び出して、その引数に rest() の返り値を渡すだけです。これで要素を交互に出力することができます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : append() と interleave() の実行例
+
+import immutable.*;
+
+public class sample183 {
+  public static void main(String[] args) {
+    LazyStream&lt;Integer&gt; xs = LazyStream.iota(1, 8);
+    LazyStream&lt;Integer&gt; ys = LazyStream.iota(1, 8);
+    System.out.println(xs.append(ys).take(16));
+    LazyStream&lt;Integer&gt; ones = LazyStream.repeat(1);
+    LazyStream&lt;Integer&gt; twos = LazyStream.repeat(2);
+    System.out.println(ones.append(twos).take(16));
+    System.out.println(ones.interleave(twos).take(16));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample183
+[1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, 7, 8]
+[1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+[1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+</pre>
+<p> append() の場合、無限ストリーム ones と twos を連結することはできません。ones の要素である 1 をずっと出力するだけです。ところが、interleave() ならば無限ストリームにも対応することができます。ones と twos を interleave() で連結すると、1 と 2 が交互に出力されます。
+</p>
+
+<h4>●高階関数</h4>
+<p> 次は、遅延ストリーム用の高階関数を作りましょう。
+</p>
+<pre class="list">
+リスト : 高階関数
+
+  // マッピング
+  public &lt;U&gt; LazyStream&lt;U&gt; map(Function&lt;? super E, ? extends U&gt; func) {
+    if (this == NIL)
+      return nil();
+    else
+      return cons(func.apply(first()), () -&gt; rest().map(func));
+  }
+
+  // フィルター
+  public LazyStream&lt;E&gt; filter(Predicate&lt;E&gt; pred) {
+    LazyStream&lt;E&gt; xs = this;
+    while (xs != NIL) {
+      if (pred.test(xs.first())) {
+        LazyStream&lt;E&gt; ys = xs;
+        return cons(ys.first(), () -&gt; ys.rest().filter(pred));
+      }
+      xs = xs.rest();
+    }
+    return nil();
+  }
+
+  // 畳み込み
+  public &lt;U&gt; U foldLeft(BiFunction&lt;U, ? super E, U&gt; func, U a) {
+    LazyStream&lt;E&gt; xs = this;
+    while (xs != NIL) {
+      a = func.apply(a, xs.first());
+      xs = xs.rest();
+    }
+    return a;
+  }
+
+  public &lt;U&gt; U foldRight(BiFunction&lt;? super E, U, U&gt; func, U a) {
+    if (this == NIL)
+      return a;
+    else
+      return func.apply(first(), rest().foldRight(func, a));
+  }
+  
+  // 巡回
+  public void forEach(Consumer&lt;? super E&gt; func) {
+    LazyStream&lt;E&gt; xs = this;
+    while (xs != NIL) {
+      func.accept(xs.first());
+      xs = xs.rest();
+    }
+  }
+</pre>
+<p> map() は遅延ストリームの要素にメソッド func を適用し、その返り値を新しい遅延ストリームに格納して返します。filter() は述語 pred が真を返す要素だけを新しい遅延ストリームに格納して返します。
+</p>
+<p> foldLeft() と foldRight() は遅延ストリームに対して畳み込みを行います。forEach() は遅延ストリームの要素にメソッド func を適用します。無限ストリームの場合、これらのメソッドは処理が終了しないので注意してください。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre class="list">
+リスト : 高階関数のテスト
+
+import immutable.*;
+
+public class sample184 {
+  public static void main(String[] args) {
+    LazyStream&lt;Integer&gt; xs = LazyStream.iota(1, 20);
+    xs.map(x -&gt; x * x).forEach(x -&gt; System.out.print(x + " "));
+    System.out.println("");
+    xs.filter(x -&gt; x % 2 == 0).forEach(x -&gt; System.out.print(x + " "));
+    System.out.println("");
+    System.out.println(xs.foldLeft((a, x) -&gt; a + x, 0));
+    System.out.println(xs.foldRight((x, a) -&gt; a + x, 0));
+    System.out.println(xs.foldLeft((a, x) -&gt; ImList.cons(x, a), ImList.nil()));
+    System.out.println(xs.foldRight((x, a) -&gt; ImList.cons(x, a), ImList.nil()));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample184
+1 4 9 16 25 36 49 64 81 100 121 144 169 196 225 256 289 324 361 400
+2 4 6 8 10 12 14 16 18 20
+210
+210
+(20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1)
+(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20)
+</pre>
+<p> 変数 xs に 1 から 20 までの整数列を生成する遅延ストリームをセットします。map() にラムダ式 x -&gt; x * x を渡すと、要素を 2 乗した遅延ストリームを生成することができます。filter() にラムダ式 x -&gt; x % 2 == 0 を渡すと、偶数の要素を取り出すことができます。これらの遅延ストリームに forEach() を適用すると、要素を順番に取り出して出力することができます。
+</p>
+<p> xs は有限個の遅延ストリームなので畳み込みを行うことができます。foldLeft() と foldRight() で要素の合計値を求めると 210 になります。連結リスト ImList&lt;E&gt; のメソッド cons() を適用すると、遅延ストリームの要素を連結リストに格納することができます。
+</p>
+<h4>●flatMap()</h4>
+<p> 次は高階関数 flatMap() を作りましょう。このとき、次のように append() を使って flatMap() を定義すると問題が発生します。
+</p>
+<pre class="list">
+リスト : flatMap() の定義 (間違い)
+
+  public &lt;U&gt; LazyStream&lt;U&gt; flatMapBad(Function&lt;? super E, LazyStream&lt;U&gt;&gt; func) {
+    if (this == NIL)
+      return nil();
+    else
+      return func.apply(first()).append(rest().flatMapBad(func));
+  }
+</pre>
+<p> Java のメソッドは正格評価なので、append() を実行する前に引数が評価されます。つまり、flatMapBad() の評価は遅延されるのではなく、遅延ストリームが空になるまで flatMapBad() が再帰呼び出しされるのです。これでは無限ストリームに対応することができません。
+</p>
+<p> そこで、引数に遅延オブジェクトを受け取るメソッド lazyAppend() を作ることにします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : lazyAppend() と flatMap()
+
+  public LazyStream&lt;E&gt; lazyAppend(Delay&lt;LazyStream&lt;E&gt;&gt; ys) {
+    if (this == NIL)
+      return ys.force();
+    else
+      return cons(first(), () -&gt; rest().lazyAppend(ys));
+  }
+
+  public &lt;U&gt; LazyStream&lt;U&gt; flatMap(Function&lt;? super E, LazyStream&lt;U&gt;&gt; func) {
+    if (this == NIL)
+      return nil();
+    else
+      return func.apply(first()).lazyAppend(Delay.delay(() -&gt; rest().flatMap(func)));
+  }
+</pre>
+<p> lazyAppend() は append() とほぼ同じですが、遅延ストリームが空になったら遅延オブジェクト ys を force() で評価するところが異なります。flatMap() では、appned() のかわりに lazyAppend() を呼び出します。このとき、delay() で生成した遅延オブジェクトを引数に渡します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre class="list">
+リスト : flatMap() の使用例
+
+import immutable.*;
+
+public class sample185 {
+  public static void main(String[] args) {
+    LazyStream&lt;Integer&gt; xs = LazyStream.iterate(1, x -&gt; x + 1);
+    System.out.println(xs.flatMap(x -&gt; LazyStream.fill(x, x)).take(55));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample185
+[1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7
+, 7, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10,
+10, 10, 10, 10]
+</pre>
+<p> fill(n, x) は LazyStream のスタティックメソッドで、要素 x を n 個格納した遅延ストリームを返します。xs は無限ストリームになりますが、flatMap() は正常に動作していますね。
+</p>
+<h4>●takeWhile() と dropWhile()</h4>
+<p> 次は、遅延ストリームの先頭から述語が真を返す要素を取り出す takeWhile() と要素を取り除く dropWhile() を作ります。
+</p>
+<pre class="list">
+リスト : takeWhile() と dropWhile()
+
+  // 先頭から述語 pred が真を返す要素をリストに格納して返す
+  public List&lt;E&gt; takeWhile(Predicate&lt;E&gt; pred) {
+    LazyStream&lt;E&gt; xs = this;
+    List&lt;E&gt; ys = new ArrayList&lt;&gt;();
+    while (xs != NIL &amp;&amp; pred.test(xs.first())) {
+      ys.add(xs.first());
+      xs = xs.rest();
+    }
+    return ys;
+  }
+
+  // 先頭から述語 pred が真を返す要素を取り除く
+  public LazyStream&lt;E&gt; dropWhile(Predicate&lt;E&gt; pred) {
+    LazyStream&lt;E&gt; xs = this;
+    while (xs != NIL &amp;&amp; pred.test(xs.first())) xs = xs.rest();
+    return xs;
+  }
+}
+</pre>
+<div class="note">
+-- [修正 (2016/12/24)] --------<br>
+takeWhile() の返り値のデータ型を ImList&lt;E&gt; から List&lt;E&gt; に変更
+</div>
+<p> どちらのメソッドも難しいところはないと思います。簡単な実行例を示しましょう。
+</p>
+<pre class="list">
+リスト : takeWhile() と dropWhile() の使用例
+
+import immutable.*;
+
+public class sample186 {
+  public static void main(String[] args) {
+    LazyStream&lt;Integer&gt; xs = LazyStream.iota(1, 20);
+    System.out.println(xs.takeWhile(x -&gt; x &lt; 10));
+    xs.dropWhile(x -&gt; x &lt; 10).forEach(System.out::println);
+  }
+}
+</pre>
+<pre>
+C&gt;java sample186
+[1, 2, 3, 4, 5, 6, 7, 8, 9]
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+</pre>
+<h4>●遅延ストリームへの変換</h4>
+<p> 次は、コレクション List&lt;E&gt; と連結リスト ImList&lt;E&gt; を遅延ストリームに変換するスタティックメソッド of() を作ります。
+</p>
+<pre class="list">
+リスト : スタティックメソッド of()
+
+  // ImList&lt;E&gt; を LazyStream&lt;E&gt; に変換する
+  public static &lt;E&gt; LazyStream&lt;E&gt; of(ImList&lt;? extends E&gt; xs) {
+    if (xs.isEmpty())
+      return nil();
+    else
+      return cons(xs.first(), () -&gt; of(xs.rest()));
+  }
+  
+  // List&lt;E&gt; を LazyStream&lt;E&gt; に変換する
+  private static &lt;E&gt; LazyStream&lt;E&gt; of(List&lt;? extends E&gt; xs, int n) {
+    if (n == xs.size())
+      return nil();
+    else
+      return cons(xs.get(n), () -&gt; of(xs, n + 1));
+  }
+  
+  public static &lt;E&gt; LazyStream&lt;E&gt; of(List&lt;? extends E&gt; xs) {
+    return of(xs, 0);
+  }
+</pre>
+<p> どちらのメソッドも先頭から要素を順番に取り出して、遅延ストリームに格納して返すだけです。簡単な実行例を示します。
+</p>
+<pre class="list">
+リスト : LazyStream.of() の例
+
+import java.util.*;
+import immutable.*;
+
+public class sample187 {
+  public static void main(String[] args) {
+    List&lt;Integer&gt; a = Arrays.asList(1,2,3,4,5,6,7,8);
+    LazyStream&lt;Integer&gt; xs = LazyStream.of(a);
+    xs.forEach(System.out::println);
+    ImList&lt;String&gt; b = ImList.of("foo", "bar", "baz", "oops");
+    LazyStream&lt;String&gt; ys = LazyStream.of(b);
+    ys.forEach(System.out::println);
+  }
+}
+</pre>
+<pre>
+C&gt;java sample187
+1
+2
+3
+4
+5
+6
+7
+8
+foo
+bar
+baz
+oops
+</pre>
+<p> 今回はここまでです。次回は遅延ストリームを使っていろいろなプログラムを作ってみましょう。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// LazyStream.java : immutable な遅延ストリーム
+//
+//                   Copyright (C) 2016 Makoto Hiroi
+//
+package immutable;
+
+import java.util.*;
+import java.util.function.*;
+import immutable.*;
+
+public final class LazyStream&lt;E&gt; {
+  private final E item;
+  private final Delay&lt;LazyStream&lt;E&gt;&gt; next;
+
+  private LazyStream(E x, Supplier&lt;LazyStream&lt;E&gt;&gt; func) {
+    item = x;
+    next = Delay.delay(func);
+  }
+
+  // 終端
+  private final static LazyStream&lt;?&gt; NIL = new LazyStream&lt;&gt;(null, null);
+  public static &lt;E&gt; LazyStream&lt;E&gt; nil() {
+    @SuppressWarnings("unchecked")
+    LazyStream&lt;E&gt; t = (LazyStream&lt;E&gt;)NIL;
+    return t;
+  }
+
+  public boolean isEmpty() { return this == NIL; }
+
+  //
+  // 遅延ストリームの生成
+  //
+
+  // 要素 x を格納した遅延ストリームを生成する
+  public static &lt;E&gt; LazyStream&lt;E&gt; cons(E x, Supplier&lt;LazyStream&lt;E&gt;&gt; func) {
+    return new LazyStream&lt;E&gt;(x, func);
+  }
+
+  // 初項を a とし、前項に func を適用して次項を生成する
+  public static &lt;E&gt; LazyStream&lt;E&gt; iterate(E a, Function&lt;E, E&gt; func) {
+    return cons(a, () -&gt; iterate(func.apply(a), func));
+  }
+
+  // func の返り値を要素とする遅延ストリームを生成する
+  public static &lt;E&gt; LazyStream&lt;E&gt; generate(Supplier&lt;E&gt; func) {
+    return cons(func.get(), () -&gt; generate(func));
+  }
+
+  // 要素が x の遅延ストリームを生成する
+  public static &lt;E&gt; LazyStream&lt;E&gt; repeat(E x) {
+    return cons(x, () -&gt; repeat(x));
+  }
+
+  // n 個の x を格納する遅延ストリームを生成する
+  public static &lt;E&gt; LazyStream&lt;E&gt; fill(int n, E x) {
+    if (n &lt;= 0)
+      return nil();
+    else
+      return cons(x, () -&gt; fill(n - 1, x));
+  }
+  
+  // ImList&lt;E&gt; を LazyStream&lt;E&gt; に変換する
+  public static &lt;E&gt; LazyStream&lt;E&gt; of(ImList&lt;? extends E&gt; xs) {
+    if (xs.isEmpty())
+      return nil();
+    else
+      return cons(xs.first(), () -&gt; of(xs.rest()));
+  }
+  
+  // List&lt;E&gt; を LazyStream&lt;E&gt; に変換する
+  private static &lt;E&gt; LazyStream&lt;E&gt; of(List&lt;? extends E&gt; xs, int n) {
+    if (n == xs.size())
+      return nil();
+    else
+      return cons(xs.get(n), () -&gt; of(xs, n + 1));
+  }
+  
+  public static &lt;E&gt; LazyStream&lt;E&gt; of(List&lt;? extends E&gt; xs) {
+    return of(xs, 0);
+  }
+  
+  // 整数列 (low 以上 high 以下) を生成する
+  public static LazyStream&lt;Integer&gt; iota(int low, int high) {
+    if (low &gt; high)
+      return nil();
+    else
+      return cons(low, () -&gt; iota(low + 1, high));
+  }
+
+  // 2 つ遅延ストリームを func で結合する
+  public static &lt;T, U, V&gt; LazyStream&lt;V&gt; zipWith(BiFunction&lt;? super T, ? super U, ? extends V&gt; func, LazyStream&lt;T&gt; xs, LazyStream&lt;U&gt; ys) {
+    if (xs == NIL || ys == NIL)
+      return nil();
+    else
+      return cons(func.apply(xs.first(), ys.first()), () -&gt; zipWith(func, xs.rest(), ys.rest()));
+  }
+
+  // 併合
+  public static &lt;E extends Comparable&lt;E&gt;&gt; LazyStream&lt;E&gt; merge(LazyStream&lt;E&gt; xs, LazyStream&lt;E&gt; ys) {
+    if (xs == NIL) {
+      return ys;
+    } else if (ys == NIL) {
+      return xs;
+    } else {
+      E x = xs.first();
+      E y = ys.first();
+      int r = x.compareTo(y);
+      if (r &lt;= 0)
+        return cons(x, () -&gt; merge(xs.rest(), ys));
+      else
+        return cons(y, () -&gt; merge(xs, ys.rest()));
+    }
+  }
+
+  // 和集合
+  public static &lt;E extends Comparable&lt;E&gt;&gt; LazyStream&lt;E&gt; union(LazyStream&lt;E&gt; xs, LazyStream&lt;E&gt; ys) {
+    if (xs == NIL) {
+      return ys;
+    } else if (ys == NIL) {
+      return xs;
+    } else {
+      E x = xs.first();
+      E y = ys.first();
+      int r = x.compareTo(y);
+      if (r &lt; 0)
+        return cons(x, () -&gt; union(xs.rest(), ys));
+      else if (r &gt; 0)
+        return cons(y, () -&gt; union(xs, ys.rest()));
+      else
+        return cons(x, () -&gt; union(xs.rest(), ys.rest()));
+    }
+  }
+
+  // 積集合
+  public static &lt;E extends Comparable&lt;E&gt;&gt; LazyStream&lt;E&gt; intersection(LazyStream&lt;E&gt; xs, LazyStream&lt;E&gt; ys) {
+    if (xs == NIL) {
+      return nil();
+    } else if (ys == NIL) {
+      return nil();
+    } else {
+      while (true) {
+        E x = xs.first();
+        E y = ys.first();
+        int r = x.compareTo(y);
+        if (r == 0) {
+          LazyStream&lt;E&gt; xs1 = xs;
+          LazyStream&lt;E&gt; ys1 = ys;
+          return cons(x, () -&gt; intersection(xs1.rest(), ys1.rest()));
+        } else if (r &lt; 0) {
+          xs = xs.dropWhile(x1 -&gt; x1.compareTo(y) &lt; 0);
+        } else {
+          ys = ys.dropWhile(y1 -&gt; x.compareTo(y1) &gt; 0);
+        }
+      }
+    }
+  }
+
+  //
+  // 基本操作
+  //
+  
+  // 先頭要素を参照する
+  public E first() {
+    if (this == NIL)
+      throw new IndexOutOfBoundsException("LazyStream.first()");
+    return item;
+  }
+
+  // 次の要素を格納した遅延ストリームを返す
+  public LazyStream&lt;E&gt; rest() {
+    if (this == NIL)
+      throw new IndexOutOfBoundsException("LazyStream.rest()");
+    return next.force();
+  }
+
+  // n 番目の要素を参照する
+  public E get(int n) {
+    LazyStream&lt;E&gt; xs = this;
+    while (n-- &gt; 0) {
+      xs = xs.rest();
+    }
+    return xs.first();
+  }
+
+  // 要素を n 個取り出して List&lt;E&gt; に格納して返す
+  public List&lt;E&gt; take(int n) {
+    LazyStream&lt;E&gt; xs = this;
+    List&lt;E&gt; ys = new ArrayList&lt;&gt;();
+    while (n-- &gt; 0 &amp;&amp; xs != NIL) {
+      ys.add(xs.first());
+      xs = xs.rest();
+    }
+    return ys;
+  }
+
+  // 要素を n 個取り除く
+  public LazyStream&lt;E&gt; drop(int n) {
+    LazyStream&lt;E&gt; xs = this;
+    while (n-- &gt; 0 &amp;&amp; xs != NIL) {
+      xs = xs.rest();
+    }
+    return xs;
+  }
+
+  // 遅延ストリームの連結
+  public LazyStream&lt;E&gt; append(LazyStream&lt;E&gt; ys) {
+    if (this == NIL)
+      return ys;
+    else
+      return cons(first(), () -&gt; rest().append(ys));
+  }
+
+  public LazyStream&lt;E&gt; lazyAppend(Delay&lt;LazyStream&lt;E&gt;&gt; ys) {
+    if (this == NIL)
+      return ys.force();
+    else
+      return cons(first(), () -&gt; rest().lazyAppend(ys));
+  }
+
+  public LazyStream&lt;E&gt; interleave(LazyStream&lt;E&gt; ys) {
+    if (this == NIL)
+      return ys;
+    else
+      return cons(first(), () -&gt; ys.interleave(rest()));
+  }
+
+  //
+  // 高階関数
+  //
+
+  // マッピング
+  public &lt;U&gt; LazyStream&lt;U&gt; map(Function&lt;? super E, ? extends U&gt; func) {
+    if (this == NIL)
+      return nil();
+    else
+      return cons(func.apply(first()), () -&gt; rest().map(func));
+  }
+
+  public &lt;U&gt; LazyStream&lt;U&gt; flatMap(Function&lt;? super E, LazyStream&lt;U&gt;&gt; func) {
+    if (this == NIL)
+      return nil();
+    else
+      return func.apply(first()).lazyAppend(Delay.delay(() -&gt; rest().flatMap(func)));
+  }
+
+  // フィルター
+  public LazyStream&lt;E&gt; filter(Predicate&lt;E&gt; pred) {
+    LazyStream&lt;E&gt; xs = this;
+    while (xs != NIL) {
+      if (pred.test(xs.first())) {
+        LazyStream&lt;E&gt; ys = xs;
+        return cons(ys.first(), () -&gt; ys.rest().filter(pred));
+      }
+      xs = xs.rest();
+    }
+    return nil();
+  }
+
+  // 畳み込み
+  public &lt;U&gt; U foldLeft(BiFunction&lt;U, ? super E, U&gt; func, U a) {
+    LazyStream&lt;E&gt; xs = this;
+    while (xs != NIL) {
+      a = func.apply(a, xs.first());
+      xs = xs.rest();
+    }
+    return a;
+  }
+
+  public &lt;U&gt; U foldRight(BiFunction&lt;? super E, U, U&gt; func, U a) {
+    if (this == NIL)
+      return a;
+    else
+      return func.apply(first(), rest().foldRight(func, a));
+  }
+  
+  // 巡回
+  public void forEach(Consumer&lt;? super E&gt; func) {
+    LazyStream&lt;E&gt; xs = this;
+    while (xs != NIL) {
+      func.accept(xs.first());
+      xs = xs.rest();
+    }
+  }
+
+  // 先頭から述語 pred が真を返す要素を List&lt;E&gt; に格納して返す
+  public List&lt;E&gt; takeWhile(Predicate&lt;E&gt; pred) {
+    LazyStream&lt;E&gt; xs = this;
+    List&lt;E&gt; ys = new ArrayList&lt;&gt;();
+    while (xs != NIL &amp;&amp; pred.test(xs.first())) {
+      ys.add(xs.first());
+      xs = xs.rest();
+    }
+    return ys;
+  }
+
+  // 先頭から述語 pred が真を返す要素を取り除く
+  public LazyStream&lt;E&gt; dropWhile(Predicate&lt;E&gt; pred) {
+    LazyStream&lt;E&gt; xs = this;
+    while (xs != NIL &amp;&amp; pred.test(xs.first())) {
+      xs = xs.rest();
+    }
+    return xs;
+  }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcjava17.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava19.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

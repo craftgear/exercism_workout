@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Lua プログラミング超入門</title>
+  <meta name="description" content="Lua,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881802</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lua Programming</h1>
+<h2>お気楽 Lua プログラミング超入門</h2>
+<div class="small">
+[ <a href="lua04.html">PrevPage</a> | <a href="lua.html">L u a</a> | <a href="lua06.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap10">Lua でオブジェクト指向</h3>
+<p> 一般的なオブジェクト指向言語の場合、まず最初にクラスを定義し、それを元にしてインスタンス (オブジェクト) を生成します。これは Smalltalk, Ｃ++, Java などポピュラーなオブジェクト指向言語や Ruby, Python などのスクリプト言語でも同じです。このようにクラスを中心としたオブジェクト指向を「クラスベース」といいます。
+</p>
+
+<p> クラスはオブジェクト指向機能の中心で、クラスがなければ何も始まらないと思われる方もいるでしょう。ところが、クラスが存在しないオブジェクト指向もあります。これを「プロトタイプベース」といいます。もしくは「インスタンスベース」と呼ばれることもあるようです。代表的な言語として Self や JavaScript があります。
+</p>
+
+<p> プロトタイプベースの言語では、元となるインスタンスをコピーすることで新しいインスタンスを生成します。このコピー元のインスタンスを「プロトタイプ」といいます。そして、新しいインスタンスに必要となる機能 (メソッドなど) を追加します。このインスタンスが新たなプロトタイプとなり、あとはこのプロトタイプを必要な分だけコピーしてインスタンスを生成すればいいわけです。
+</p>
+
+<p> 今回は JavaScript を参考に、Lua で簡単なオブジェクト指向プログラミングに挑戦してみましょう。なお、Lua でオブジェクト指向を実現する場合、いろいろな方法が考えられています。英語ですが <a href="http://lua-users.org/wiki/">lua-users wiki</a> の <a href="http://lua-users.org/wiki/SampleCode">SampleCode</a> には、オブジェクト指向のサンプルプログラムが掲載されています。興味のある方はお読みくださいませ。
+</p>
+
+<h4>●オブジェクトの生成</h4>
+<p> Lua でオブジェクト指向を実現する場合、オブジェクトをテーブル (ハッシュ) で表します。これをインスタンスと考えます。キーに対応するハッシュの領域をフィールドと呼ぶことにすると、フィールドにデータを格納すればインスタンス変数になり、関数を格納すればメソッドとして呼び出すことができます。このようなインスタンスを生成する関数 (コンストラクタ) を考えます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 1 : コンストラクタの定義
+
+Foo = {}
+
+function Foo.new(a, b)
+  return {a = a, b = b}
+end
+</pre>
+<p> グローバル変数 Foo に空のハッシュをセットします。そして、function で Foo.new(a, b) という関数を作ります。この場合、Foo の中に new というフィールドが作成され、そこに関数がセットされます。Foo.new はハッシュ {a = a, b = b} を生成して返すだけです。これがインスタンスになります。
+</p>
+
+<p> それでは実際にインスタンスを生成してみましょう。
+</p>
+<pre>
+&gt; x = Foo.new(10, 20)
+&gt; x
+{a=10,b=20}
+&gt; x.a
+10
+&gt; x.b
+20
+&gt; y = Foo.new(100, 200)
+&gt; y
+{a=100,b=200}
+&gt; y.a
+100
+&gt; y.b
+200
+</pre>
+<p> Lua の場合、ハッシュのアクセス方法は [ ] だけではなく、object.name でもアクセスすることができます。x.a は x["a"] と同じ意味です。ただし、x.1 のように数値を直接指定することはできません。この場合は [ ] を使って x[1] とします。なお、Lua にはアクセスを制限する機能はありません。どこからでもアクセスすることができます。
+</p>
+
+<h4>●メソッドの定義</h4>
+<p> Lua の場合、インスタンスのフィールドに関数をセットすれば、それをメソッドとして呼び出すことができます。メソッドの呼び出しは object.method(self, ...) になります。このとき、メソッドの第 1 引数 self に object を渡します。method はこの引数を使って呼び出したオブジェクト (object) を参照することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 2 : メソッドの定義 (1)
+
+Foo = {}
+
+function Foo.new(a, b)
+  return {
+    a = a,
+    b = b,
+    get_a = function(self) return self.a end,
+    get_b = function(self) return self.b end,
+    set_a = function(self, x) self.a = x end,
+    set_b = function(self, x) self.b = x end
+  }
+end
+</pre>
+<p> コンストラクタ Foo.new の中でメソッド get_a, get_b, set_a, set_b を定義します。匿名関数で関数を生成してフィールドにセットするだけなので簡単です。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+&gt; x = Foo.new(10, 20)
+&gt; x.get_a(x)
+10
+&gt; x:get_a()
+10
+&gt; x:set_a(100)
+&gt; x:get_a()
+100
+&gt; x:get_b()
+20
+&gt; x:set_b(200)
+&gt; x:get_b()
+200
+</pre>
+<p> メソッドを呼び出すとき、object:method() のようにオブジェクトとメソッド名をコロン ( : ) で区切ると、object の値が第 1 引数 self に渡されます。たとえば、x.get_a(x) は x のインスタンス変数 a の値を求めますが、これを x:get_a() と書くことができます。これはとても便利な書式です。
+</p>
+
+<p> ところで、この方法ではインスタンスを生成するたびに、新たな関数が生成されてインスタンスにセットされます。同じ処理を行う関数をいくつも作るのは無駄ですね。そこで、メソッド用の関数を定義して、それをインスタンスにセットすることにしましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 3 : メソッドの定義 (2)
+
+Foo = {}
+
+function Foo.new(a, b)
+  local function get_a(self) return self.a end
+  local function get_b(self) return self.b end
+  local function set_a(self, x) self.a = x end
+  local function set_b(self, x) self.b = x end
+  return {
+    a = a,
+    b = b,
+    get_a = get_a,
+    get_b = get_b,
+    set_a = set_a,
+    set_b = set_b
+  }
+end
+</pre>
+<p> Foo.new の中で局所関数 get_a, get_b, set_a, set_b を定義し、それをインスタンスにセットします。これで、無駄な関数の生成を抑えることができます。ただし、この方法でもメソッドは個々のインスタンスに格納されるので、メモリを余分に使うことになります。この問題は「メタテーブル」という機能を使うと解決することができます。
+</p>
+
+<h4>●メタテーブル</h4>
+<p> Lua はどのデータでも「メタテーブル (meta-table) 」を持つことができます。メタテーブルは、そのデータに対して特殊な演算をしたときの挙動を定義するものです。テーブル以外のデータは、その型ごとにひとつのメタテーブルを持っています。このメタテーブルを変更することはできません。
+</p>
+<p> これに対しテーブルの場合は、テーブルごとにメタテーブルを設定することができます。メタテーブルの特定のフィールドに関数やデータを定義することで、そのフィールドに対応する動作を定義することができます。詳細は Lua のリファレンスマニュアルをお読みください。
+</p>
+
+<p> Lua の場合、テーブルからフィールドを参照するとき、そのテーブルに該当するフィールドが見つからないとエラーになります。ところが、そのテーブルにメタテーブルが設定されていて、さらにメタテーブルの __index フィールドにテーブルがセットされている場合、そのテーブルからフィールドを探索します。そのテーブルでも見つからない場合は同じ処理を繰り返します。つまり、そのテーブルにメタテーブルがあり、さらに __index でテーブルが指定されていれば、__index で指定されたテーブルを探索するわけです。
+</p>
+
+<p> メタテーブルを使うと、メソッドの情報をインスタンスから他のオブジェクトへ移すことができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 4 : メソッドの定義 (3)
+
+-- クラス定義
+Foo = {}
+
+-- メソッド定義
+function Foo.get_a(self) return self.a end
+function Foo.get_b(self) return self.b end
+function Foo.set_a(self, x) self.a = x end
+function Foo.set_b(self, x) self.b = x end
+
+-- コンストラクタ
+function Foo.new(a, b)
+  local obj = {a = a, b = b}
+  -- メタテーブルセット
+  return setmetatable(obj, {__index = Foo})
+end
+</pre>
+
+<p> メソッドは Foo のフィールドに格納します。クラスベースのオブジェクト指向に慣れている方ならば、Foo を「クラス」と考えるとわかりやすいかもしれません。そして、Foo.new で生成したインスタンス obj にメタテーブルを設定します。
+</p>
+<p> 関数 setmetatable(obj, metatable) は obj のメタテーブルを metatable に設定します。返り値は第 1 引数の obj です。メタテーブルのフィールド __index に Foo を指定すると、obj で見つからないフィールドは、Foo から探索されるようになります。つまり、メソッドは Foo で定義されたものが実行されるわけです。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; Foo
+{get_a=function: 00419288,set_a=function: 00419338,set_b=function: 004193E0,
+get_b=function: 004192D0,new=function: 00419400}
+&gt; x = Foo.new(10,20)
+&gt; x:get_a()
+10
+&gt; x:get_b()
+20
+&gt; x:set_a(100)
+&gt; x:get_a()
+100
+&gt; x:set_b(200)
+&gt; x:get_b()
+200
+</pre>
+<p> Foo.new で生成したインスタンスにはインスタンス変数 a, b しかありませんが、メタテーブルを設定することにより、Foo で定義されているメソッド get_a, get_b, set_a, set_b を呼び出すことができます。
+</p>
+
+<p> ところで、関数 (メソッド) の定義にコロンを使うと、次のように書き直すことができます。
+</p>
+<pre class="list">
+リスト 5 : メソッド定義 (4)
+
+function Foo:get_a() return self.a end
+function Foo:get_b() return self.b end
+function Foo:set_a(x) self.a = x end
+function Foo:set_b(x) self.b = x end
+</pre>
+<p> function foo:bar(...) ... end は function foo.bar(self, ...) ... end に変換されます。これも便利な書式です。
+</p>
+
+<h4>●ポリモーフィズム</h4>
+<p> 一般的なオブジェクト指向の場合、メソッドはオブジェクトと結びついた関数です。オブジェクト指向プログラミングでは、ほかの関数から直接オブジェクトを操作することはせず、メソッドを呼び出すことで行います。メソッドは、クラスが異なっていれば同じ名前のメソッドを定義することができます。たとえば、クラス Foo1 にメソッド bar() が定義されていても、クラス Foo2 に同名のメソッド bar() を定義することができます。
+</p>
+
+<p> そして、ここからが重要なのですが、あるオブジェクトに対してメソッド bar() を呼び出した場合、それが Foo1 から作られたオブジェクトであれば、Foo1 で定義された bar() が実行され、Foo2 から作られたオブジェクトであれば、Foo2 で定義された bar() が実行されるのです。このように、オブジェクトが属するクラスによって、実行されるメソッドが異なるのです。この機能を「ポリモーフィズム(polymorphism) 」と呼びます。これにより、オブジェクトは自分が行うべき適切な処理を実行することができます。
+</p>
+
+<p> それでは簡単な例題として、点と表すオブジェクトを作ってみましょう。コンストラクタ Point.new で作成するインスタンスは 2 次元座標を表し、Point3D.new で作成するインスタンスは 3 次元座標を表します。それぞれ、2 点間の距離を計算するメソッド distance を定義します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 6 : Point と Point3D
+
+-- 2 次元座標
+Point = {}
+
+function Point.new(x, y)
+  local obj = {x = x, y = y}
+  return setmetatable(obj, {__index = Point})
+end
+
+-- 距離を求める
+function Point.distance(p1, p2)
+  local dx = p1.x - p2.x
+  local dy = p1.y - p2.y
+  return math.sqrt(dx * dx + dy * dy)
+end
+
+-- 3 次元座標
+Point3D = {}
+
+function Point3D.new(x, y, z)
+  local obj = {x = x, y = y, z = z}
+  return setmetatable(obj, {__index = Point3D})
+end
+
+-- 距離を求める
+function Point3D.distance(p1, p2)
+  local dx = p1.x - p2.x
+  local dy = p1.y - p2.y
+  local dz = p1.z - p2.z
+  return math.sqrt(dx * dx + dy * dy + dz * dz)
+end
+</pre>
+
+<p> コンストラクタ Point.new, Point3D.new は座標を受け取り、それをインスタンスにセットします。ここで、インスタンスにセットされるメタテーブルは、コンストラクタによって異なることに注意してください。メタテーブルによりインスタンスが属するクラスを設定する、と考えてもらってもかまいません。メソッド distance は引数 p1, p2 にインスタンスを受け取り、p1 と p2 の距離を計算します。math.sqrt は平方根を求める関数です。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+&gt; p1 = Point.new(0, 0)
+&gt; p1
+{y=0,x=0}
+&gt; p2 = Point.new(10, 10)
+&gt; p2
+{y=10,x=10}
+&gt; p3 = Point3D.new(0, 0, 0)
+&gt; p3
+{y=0,x=0,z=0}
+&gt; p4 = Point3D.new(10, 10, 10)
+&gt; p4
+{y=10,x=10,z=10}
+&gt; p1:distance(p2)
+14.142135623731
+&gt; p3:distance(p4)
+17.320508075689
+</pre>
+<p> このように、コロンの左側のオブジェクトによって適切なメソッドが呼び出され、ポリモーフィズム (polymorphism) がきちんと働いていることがわかります。
+</p>
+
+<h4>●クラス変数</h4>
+<p> インスタンス変数は個々のインスタンスに格納される変数です。その値はインスタンスによって変わります。オブジェクト指向言語の中には、クラスで共通の変数や定数を定義する機能があります。これを「クラス変数」といいます。Lua の場合、メタテーブルで指定したハッシュに変数を追加すれば、どのインスタンスからでも参照することができます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt; Foo = {}
+&gt; function Foo.new(a) return setmetatable({a = a}, {__index = Foo}) end
+&gt; Foo.bar = 10
+&gt; x = Foo.new(1)
+&gt; y = Foo.new(2)
+&gt; x.a
+1
+&gt; y.a
+2
+&gt; x.bar
+10
+&gt; y.bar
+10
+</pre>
+
+<p> Foo.bar がクラス変数になります。Foo.new でインスタンスを生成して、変数 x, y にセットします。x.bar と y.bar は同じフィールド bar を参照するので、同じ値 10 になります。
+</p>
+<p> bar の値を書き換える場合は注意が必要です。次の例を見てください。
+</p>
+<pre>
+&gt; Foo.bar = 20
+&gt; x.bar
+20
+&gt; y.bar
+20
+&gt; x.bar = 30
+&gt; x.bar
+30
+&gt; y.bar
+20
+&gt; Foo.bar
+20
+&gt; x
+{a=1,bar=30}
+</pre>
+<p> 最初の例は Foo.bar の値を書き換えています。この場合、x.bar と y.bar は書き換えた値 20 になります。次に、x.bar = 30 を実行します。このとき、インスタンス x にフィールド bar が存在しないことに注意してください。
+</p>
+<p> メタテーブルのフィールド __index は、テーブルを参照するときの動作を指定するものです。テーブルの値を更新する動作は別のフィールド (__newindex) で指定します。デフォルトの動作は、テーブルにフィールドが存在しない場合、そのテーブルにフィールドを登録し、そこに値を代入します。つまり、インスタンス x にフィールド bar が作られて、そこに 30 がセットされるのです。この場合、Foo.bar は 20 のままなので、y.bar の値は 20 になります。x.bar の値は x のフィールド bar を参照するので 30 になります。
+</p>
+
+<p> メタテーブルの指定で {__index = Foo, __newindex = Foo} とすると、x.bar = 30 は Foo のフィールド bar の値を書き換えるようになります。ただし、今後のこと (継承など) を考えると、不都合が生じる場合があるので __newindex の指定は行わないものとします。クラス変数は次のようなアクセス関数を用意するといいでしょう。
+</p>
+
+<pre class="list">
+リスト 7 : クラス変数のアクセスメソッド
+
+Foo = {}
+
+-- コンストラクタ
+function Foo.new(a)
+  local obj = {a = a}
+  return setmetatable(obj, {__index = Foo})
+end
+
+-- クラス変数
+Foo.bar = 10
+
+-- クラスメソッド
+function Foo.show() return Foo.bar end
+function Foo.update(x) Foo.bar = x end
+
+-- メソッド
+function Foo:get_a() return self.a end
+function Foo:set_a(x) self.a = x end
+</pre>
+
+<p> メソッド show で Foo.bar の値を参照し、update で Foo.bar の値を更新します。簡単な例を示しましょう。
+</p>
+
+<pre>
+&gt; x = Foo.new(1)
+&gt; x:get_a()
+1
+&gt; Foo.show()
+10
+&gt; Foo.update(100)
+&gt; Foo.show()
+100
+</pre>
+<p> show と update は、クラスベースオブジェクト指向でいうところの「クラスメソッド」という機能に相当します。
+</p>
+
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap11">連結リスト</h3>
+<p> 今回は簡単な例題として、「連結リスト (Linked List) 」という基本的なデータ構造を作ってみましょう。なお、今回のプログラムは <a href="index.html#python_abc">お気楽 Python プログラミング入門</a> <a href="python05.html#chap11">連結リスト</a> のプログラムを Lua で書き直したものです。内容は重複していますが、あしからずご了承ください。
+</p>
+
+<p> 連結リストはデータを一方向につなげたデータ構造です。リストを操作するプログラミング言語では Lisp が有名ですが、Lisp で扱うリストが連結リストです。図 1 に連結リストの構造を示します。
+</p>
+<pre class="fig">
+(1)変数
+  ┌─┐    ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  
+  │・┼─→│10│・┼→│20│・┼→│30│／│ ／：終端(null)
+  └─┘    └─┴─┘  └─┴─┘  └─┴─┘  
+
+(2)ヘッダセル
+  ┌─┬─┐    ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  
+  │  │・┼─→│10│・┼→│20│・┼→│30│／│ ／：終端(null)
+  └─┴─┘    └─┴─┘  └─┴─┘  └─┴─┘  
+
+                図 1 : 連結リスト
+</pre>
+<p> 連結リストはセル (cell) というデータを繋げて作ります。セルにはデータを格納する場所と、次のセルを指し示す場所から構成されます。図 1 でいうと、箱がひとつのセルを表していて、左側にデータを格納し、右側に次のセルへの参照を格納します。リストの終わりを示すため、最後のセルの右側には特別な値（たとえば null）を格納します。そして、図 1 (1) のように先頭セルへの参照を変数に格納しておけば、この変数を使って連結リストにアクセスすることができます。また、図 1 (2) のようにヘッダセルを用意する方法もあります。
+</p>
+<h4>●コンストラクタの定義</h4>
+<p> それではプログラムを作りましょう。まずは、セル Cell と連結リスト List のコンストラクタを作成します。
+</p>
+<pre class="list">
+リスト 8 : コンストラクタの定義
+
+-- セルの定義
+Cell = {}
+
+-- コンストラクタ
+function Cell.new(data, link)
+  return {data = data, link = link}
+end
+
+-- リストの定義
+List = {}
+
+-- コンストラクタ
+function List.new(...)
+  local obj = {top = Cell.new(nil, nil)}
+  local cp = obj.top
+  setmetatable(obj, {__index = List})
+  for i = 1, select("#", ...) do
+    local x = select(i, ...)
+    cp.link = Cell.new(x, nil)
+    cp = cp.link
+  end
+  return obj
+end
+</pre>
+<p> Cell.new はセルを作成します。フィールド data にデータを格納し、フィールド link に接続するセルへの参照を格納します。List.new は連結リストのオブジェクトを生成します。今回は図 1 (2) の方法でプログラムします。List が生成したインスタンスのフィールド top にはヘッダーセルを格納します。List.new は可変個の引数を受け取るようにすると便利です。可変引数式から要素 x を取り出し、連結リストの最後尾に x を追加していきます。
+</p>
+<h4>●メソッドの定義</h4>
+<p> あとはメソッドを定義するだけです。今回作成するメソッドを表 1 に示します。
+</p>
+<table border=1>
+<caption>表 1 : List の操作メソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>ls:at(n)  </td><td>n 番目の要素を求める</td></tr>
+  <tr><td>ls:insert(n, x) </td><td>n 番目の位置にデータ x を挿入する</td></tr>
+  <tr><td>ls:remove(n) </td><td>n 番目の要素を削除する</td></tr>
+  <tr><td>ls:isEmpty() </td><td>連結リストが空の場合は真を返す</td></tr>
+  <tr><td>ls:each(func)</td><td>要素に関数 func を適用する</td></tr>
+</tbody>
+</table>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 9 : メソッドの定義 (1)
+
+-- 作業用メソッド : n 番目のセルを返す
+function List:_nth(n)
+  local cp = self.top
+  local i = 0
+  while cp do
+    if n == i then
+      return cp
+    else
+      cp = cp.link
+      i = i + 1
+    end
+  end
+  return nil
+end
+
+-- n 番目の要素を返す
+function List:at(n)
+  local cp = self:_nth(n)
+  if cp then
+    return cp.data
+  else
+    return nil
+  end
+end
+
+-- n 番目にデータを挿入
+function List:insert(n, x)
+  local cp = self:_nth(n - 1)
+  if cp then
+    cp.link = Cell.new(x, cp.link)
+    return x
+  else
+    return nil
+  end
+end
+
+-- n 番目の要素を削除
+function List:remove(n)
+  local cp = self:_nth(n - 1)
+  if cp and cp.link then
+    local data = cp.link.data
+    cp.link = cp.link.link
+    return data
+  else
+    return nil
+  end
+end
+
+-- 巡回
+function List:each(func)
+  local cp = self.top.link
+  while cp do
+    func(cp.data)
+    cp = cp.link
+  end
+end
+
+-- 空リストか
+function List:isEmpty()
+  return self.top.link == nil
+end
+</pre>
+<p> _nth は n 番目のセルを求める作業用のメソッドです。at, insert, remove は _nth を使うと簡単にプログラムすることができます。詳しい説明は <a href="index.html#python_abc">お気楽 Python プログラミング入門</a> <a href="python05.html#chap11">連結リスト</a> をお読みください。
+</p>
+
+<p> それでは、簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; a = List.new()
+&gt; for x = 1, 5 do a:insert(1, x) end
+&gt; a
+{top={link={data=5,link={data=4,link={data=3,link={data=2,link={data=1}}}}}}}
+&gt; a:at(1)
+5
+&gt; a:at(5)
+1
+&gt; a:each(print)
+5
+4
+3
+2
+1
+&gt; a:remove(1)
+5
+&gt; a:each(print)
+4
+3
+2
+1
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●データの変換</h4>
+<p> このほかに、連結リストを配列に変換するメソッド toArray と文字列に変換するメソッド toString を定義すると便利です。リスト 10 を見てください。
+</p>
+<pre class="list">
+リスト 10 : データの変換
+
+-- 配列に変換
+function List:toArray()
+  local ary = {}
+  self:each(function(x) table.insert(ary, x) end)
+  return ary
+end
+
+-- 文字列に変換
+function List:toString()
+  return '(' .. table.concat(self:toArray(), ',') .. ')'
+end
+</pre>
+<p> toArray はメソッド each を使うと簡単です。each で先頭から順番に要素にアクセスし、それを配列 ary に insert で追加するだけです。最後に配列を返します。
+</p>
+
+<p> toString も簡単です。連結リストを toArray で配列に変換し、要素を関数 concat で連結します。各要素は concat で文字列に変換され、カンマ ( , ) をはさんで連結されます。
+</p>
+
+<p> それでは簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; a = List.new(1,2,3,4,5)
+&gt; a
+{top={link={data=1,link={data=2,link={data=3,link={data=4,link={data=5}}}}}}}
+&gt; a:toArray()
+{1,2,3,4,5}
+&gt; a:toString()
+'(1,2,3,4,5)'
+</pre>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+--
+-- linklist.lua : 連結リスト
+--
+--                Copyright (C) 2011 Makoto Hiroi
+--
+
+-- セルの定義
+Cell = {}
+
+-- コンストラクタ
+function Cell.new(data, link)
+  return {data = data, link = link}
+end
+
+-- リストの定義
+List = {}
+function List.new(...)
+  local obj = {top = Cell.new(nil, nil)}
+  local cp = obj.top
+  setmetatable(obj, {__index = List})
+  for i = 1, select("#", ...) do
+    local x = select(i, ...)
+    cp.link = Cell.new(x, nil)
+    cp = cp.link
+  end
+  return obj
+end
+
+-- メソッドの定義
+
+-- 作業用メソッド : n 番目のセルを返す
+function List:_nth(n)
+  local cp = self.top
+  local i = 0
+  while cp do
+    if n == i then
+      return cp
+    else
+      cp = cp.link
+      i = i + 1
+    end
+  end
+  return nil
+end
+
+-- n 番目の要素を返す
+function List:at(n)
+  local cp = self:_nth(n)
+  if cp then
+    return cp.data
+  else
+    return nil
+  end
+end
+
+-- n 番目にデータを挿入
+function List:insert(n, x)
+  local cp = self:_nth(n - 1)
+  if cp then
+    cp.link = Cell.new(x, cp.link)
+    return x
+  else
+    return nil
+  end
+end
+
+-- n 番目の要素を削除
+function List:remove(n)
+  local cp = self:_nth(n - 1)
+  if cp and cp.link then
+    local data = cp.link.data
+    cp.link = cp.link.link
+    return data
+  else
+    return nil
+  end
+end
+
+-- 巡回
+function List:each(func)
+  local cp = self.top.link
+  while cp do
+    func(cp.data)
+    cp = cp.link
+  end
+end
+
+-- 空リストか
+function List:isEmpty()
+  return self.top.link == nil
+end
+
+-- 配列に変換
+function List:toArray()
+  local ary = {}
+  self:each(function(x) table.insert(ary, x) end)
+  return ary
+end
+
+-- 文字列に変換
+function List:toString()
+  return '(' .. table.concat(self:toArray(), ',') .. ')'
+end
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="lua04.html">PrevPage</a> | <a href="lua.html">L u a</a> | <a href="lua06.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

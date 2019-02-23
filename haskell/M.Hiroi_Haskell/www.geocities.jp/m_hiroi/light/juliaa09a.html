@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Julia プログラミング超入門</title>
+  <meta name="description" content="Julia 入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881803</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="ce">
+<h1>Julia Language Programming</h1>
+<h2>お気楽 Julia プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>遅延ストリーム (後編)</h3>
+<h4>●遅延ストリームの併合</h4>
+<p> 次は、要素を昇順に出力する 2 つの遅延ストリームを併合 (マージ: merge) する処理を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームのマージ
+
+function Base.merge(s1::LazyStream, s2::LazyStream)
+    if isempty(s1)
+        s2
+    elseif isempty(s2)
+        s1
+    elseif head(s1) &lt;= head(s2)
+        @cons(head(s1), merge(tail(s1), s2))
+    else
+        @cons(head(s2), merge(s1, tail(s2)))
+    end
+end
+</pre>
+<p> 関数 merge() は 2 つの遅延ストリーム s1 と s2 を併合して新しい遅延ストリームを返します。s1 が空であれば s2 を返し、s2 が空ならば s1 を返します。そうでなければ、遅延ストリームの先頭要素を比較して、小さいほうを新しい遅延ストリームに格納します。head(s1) を格納したときは s1 に tail() を、head(s2) のときは s2 に tail() を適用することをお忘れなく。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; s1 = integers(1, 10)
+LazyStream(1, ?)
+
+julia&gt; s2 = map(x -&gt; 2x, s1)
+LazyStream(2, ?)
+
+julia&gt; s3 = merge(s1, s2)
+LazyStream(1, ?)
+
+julia&gt; foreach(x -&gt; print("$x "), s3)
+1 2 2 3 4 4 5 6 6 7 8 8 9 10 10 12 14 16 18 20
+</pre>
+<h4>●集合演算</h4>
+<p> ここで、遅延ストリームには重複要素が存在せず、要素は昇順に出力されることを前提にすると、遅延ストリームでも集合演算を行うことができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 集合演算
+
+# 重複要素の削除
+function Base.unique(s::LazyStream)
+    if isempty(s)
+        nils
+    else
+        @cons(head(s), unique(dropwhile(x -&gt; x == head(s), tail(s))))
+    end
+end
+
+# 和集合
+function Base.union(s1::LazyStream, s2::LazyStream)
+    if isempty(s1)
+        s2
+    elseif isempty(s2)
+        s1
+    elseif head(s1) &lt; head(s2)
+        @cons(head(s1), union(tail(s1), s2))
+    elseif head(s1) == head(s2)
+        @cons(head(s1), union(tail(s1), tail(s2)))
+    else
+        @cons(head(s2), union(s1, tail(s2)))
+    end
+end
+
+# 積集合
+function Base.intersect(s1::LazyStream, s2::LazyStream)
+    while !isempty(s1) && !isempty(s2)
+        if head(s1) == head(s2)
+            return @cons(head(s1), intersect(tail(s1), tail(s2)))
+        elseif head(s1) &lt; head(s2)
+            s1 = tail(s1)
+        else
+            s2 = tail(s2)
+        end
+    end
+    nils
+end
+</pre>
+<p> 関数 unique() は遅延ストリーム s1 の重複要素を削除します。これは dropwhile() を使えば簡単です。関数 union() は遅延ストリーム s1 と s2 の先頭要素を比較して、小さいほうを新しい遅延ストリームに追加します。等しい場合は s1 の要素だけを追加します。このとき、s1 と s2 の両方から先頭要素を取り除くことに注意してください。なお、union() は unique(merge(s1, s2)) でも実現できますが、余分な遅延ストリームを作らない分だけ union() のほうが効率的です。
+</p>
+<p> 関数 intersect() は遅延ストリーム s1 と s2 から先頭要素を比較して、等しい場合は要素を新しい遅延ストリームに追加します。s1 の要素が小さい場合は s1 に tail() を適用し、そうでなければ s2 に tail() を適用します。あとは while ループで同じ処理を繰り返すだけです。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; foreach(x -&gt; print("$x "), s3)
+1 2 2 3 4 4 5 6 6 7 8 8 9 10 10 12 14 16 18 20
+
+julia&gt; foreach(x -&gt; print("$x "), unique(s3))
+1 2 3 4 5 6 7 8 9 10 12 14 16 18 20
+
+julia&gt; ints = unfold(x -&gt; x + 1, 1)
+LazyStream(1, ?)
+
+julia&gt; triangular = map(x -&gt; div(x * (x + 1), 2), ints)
+LazyStream(1, ?)
+
+julia&gt; square = map(x -&gt; x * x, ints)
+LazyStream(1, ?)
+
+julia&gt; foreach(x -&gt; print("$x "), take(triangular, 20))
+1 3 6 10 15 21 28 36 45 55 66 78 91 105 120 136 153 171 190 210
+
+julia&gt; foreach(x -&gt; print("$x "), take(square, 20))
+1 4 9 16 25 36 49 64 81 100 121 144 169 196 225 256 289 324 361 400
+
+julia&gt; foreach(x -&gt; print("$x "), take(union(triangular, square), 20))
+1 3 4 6 9 10 15 16 21 25 28 36 45 49 55 64 66 78 81 91
+
+julia&gt; foreach(x -&gt; print("$x "), take(intersect(triangular, square), 7))
+1 36 1225 41616 1413721 48024900 1631432881
+</pre>
+<p> 遅延ストリーム triangular は「三角数」、square は「四角数」を表します。これらの遅延ストリームを union() でまとめると、三角数または四角数の数列になります。intersect() でまとめると、三角数かつ四角数の数列 (平方三角数) になります。平方三角数は拙作のページ <a href="../puzzle/index.html">Puzzle DE Progamming</a> <a href="../puzzle/polynum.html">多角数</a> でも取り上げています。興味のある方はお読みくださいませ。
+</p>
+
+<h4>●ハミングの問題</h4>
+<p> 次は「ハミングの問題」を解いてみましょう。
+</p>
+<div class="question">
+<b>[ハミングの問題]</b><br>
+<p> 7 以上の素数で割り切れない正の整数を小さい順に N 個求めよ
+</p>
+<a name="cite0130">参考文献</a> : 奥村晴彦,『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991 (361 ページより引用)
+</div>
+<p> 7 以上の素数で割り切れない正の整数は、素因子が 2, 3, 5 しかない自然数のことで、これを「ハミング数 (Hamming Numbers)」といいます。ハミング数は素因数分解したとき、2<sup>i</sup> * 3<sup>j</sup> * 5<sup>k</sup> (i, j, k &gt;= 0) の形式になります。たとえば、100 以下のハミング数は次のようになります。
+</p>
+<pre class="item">
+1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30, 32, 36, 40, 45, 48, 50, 
+54, 60, 64, 72, 75, 80, 81, 90, 96, 100
+</pre>
+<p> ハミングの問題は拙作のページ <a href="juliaa15.html">数で遊ぼう</a> で取り上げましたが、遅延ストリームを使うともっと簡単に解くことができます。小さい順にハミング数を出力する遅延ストリームを hs としましょう。hs は 1 から始まるので次のように定義できます。
+</p>
+<pre class="item">
+hs = @cons(1, ...);
+</pre>
+<p> 最初の要素は 1 なので、それに 2, 3, 5 を掛け算した値 (2, 3, 5) もハミング数になります。これらの値は map(x -&gt; 2x, hs), map(x -&gt; 3x, hs), map(x -&gt; 5x, hs) で生成することができます。あとは、これらの遅延ストリームをひとつにまとめて、小さい順に出力する遅延ストリームを作ればいいわけです。hs の定義は次のようになります。
+</p>
+<pre class="item">
+hs = @cons(1, union(union(map(x -&gt; 2x, hs), map(x -&gt; 3x, hs)), map(x -&gt; 5x, hs)))
+</pre>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+julia&gt; hs = @cons(1, union(union(map(x -&gt; 2x, hs), map(x -&gt; 3x, hs)), map(x -&gt; 5x, hs)))
+LazyStream(1, ?)
+
+julia&gt; foreach(x -&gt; print("$x "), take(hs, 100))
+1 2 3 4 5 6 8 9 10 12 15 16 18 20 24 25 27 30 32 36 40 45 48 50 54 60 64 72 75 80 81 90 96 100 108 120 125 128 135 
+144 150 160 162 180 192 200 216 225 240 243 250 256 270 288 300 320 324 360 375 384 400 405 432 450 480 486 500 512 
+540 576 600 625 640 648 675 720 729 750 768 800 810 864 900 960 972 1000 1024 1080 1125 1152 1200 1215 1250 1280 
+1296 1350 1440 1458 1500 1536
+</pre>
+
+<h4>●順列の生成</h4>
+<p> 順列を生成する遅延ストリームも簡単にプログラムすることができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 順列の生成
+
+function permutations(n::Int, s::LazyStream)
+    if n == 0
+        @cons([], nils)
+    else
+        flatmap(s) do x
+            map(y -&gt; vcat([x], y),
+                permutations(n - 1, filter(z -&gt; x != z, s)))
+        end
+    end
+end
+</pre>
+<p> 関数 permutations() の引数 n は選択する要素の個数、s は要素を格納した遅延ストリームです。n が 0 になったら、選択する要素はもうありません。空の配列 [] を格納した遅延ストリームを返します。
+</p>
+<p> 要素の選択は flatmap() で行います。この場合、遅延ストリーム s の要素を先頭から順番に選択することになります。ブロックの引数 x に選んだ要素が渡されます。ブロックで permutations() を呼び出すときは x を filter() で削除します。これで x を取り除いた順列を生成することができます。あとは map() で配列 y の先頭に x を追加します。vcat() で [x] と y を連結した新しい配列を生成していることに注意してください。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+julia&gt; foreach(print, permutations(4, integers(1, 4)))
+Any[1, 2, 3, 4]Any[1, 2, 4, 3]Any[1, 3, 2, 4]Any[1, 3, 4, 2]Any[1, 4, 2, 3]Any[1, 4, 3, 2]Any[2, 1, 3, 4]Any[2, 1, 4, 3]
+Any[2, 3, 1, 4]Any[2, 3, 4, 1]Any[2, 4, 1, 3]Any[2, 4, 3, 1]Any[3, 1, 2, 4]Any[3, 1, 4, 2]Any[3, 2, 1, 4]Any[3, 2, 4, 1]
+Any[3, 4, 1, 2]Any[3, 4, 2, 1]Any[4, 1, 2, 3]Any[4, 1, 3, 2]Any[4, 2, 1, 3]Any[4, 2, 3, 1]Any[4, 3, 1, 2]Any[4, 3, 2, 1]
+</pre>
+
+
+</pre>
+
+
+<h4>●組み合わせの生成</h4>
+<p> 次は組み合わせを生成する遅延ストリームです。
+</p>
+<pre class="list">
+リスト : 組み合わせの生成
+
+function combinations(n::Int, s::LazyStream)
+    if n == 0
+        @cons([], nils)
+    elseif isempty(s)
+        nils
+    else
+        append_delay(map(y -&gt; vcat([head(s)], y), combinations(n - 1, tail(s))),
+                     @delay combinations(n, tail(s)))
+    end
+end
+</pre>
+<p> combinations() の第 1 引数が選択する要素の個数、第 2 引数が要素を格納した遅延ストリームです。n が 0 の場合、選択する要素がないので空の配列を格納した遅延ストリームを返します。s が空の場合、選択する要素がないので空の遅延ストリームを返します。
+</p>
+<p> そうでなければ s の先頭要素を選びます。残りの要素 tail(s) から n - 1 個を選ぶ組み合わせを combinations() で求め、その先頭に head(s) を追加します。あとは、tail(s) から n 個を選ぶ組み合わせを combinations() で求めて append_dellay() で連結します。遅延ストリームと空の遅延ストリームの連結は前者の値になるので、combinations() が空の遅延ストリームを返しても正常に動作します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+julia&gt; foreach(println, combinations(3, integers(1, 5)))
+Any[1, 2, 3]
+Any[1, 2, 4]
+Any[1, 2, 5]
+Any[1, 3, 4]
+Any[1, 3, 5]
+Any[1, 4, 5]
+Any[2, 3, 4]
+Any[2, 3, 5]
+Any[2, 4, 5]
+Any[3, 4, 5]
+</pre>
+<h4>●エラトステネスの篩</h4>
+<p> 最後に簡単な例題として、ストリームを使って素数を求めるプログラムを作ってみましょう。まず最初に、2 から始まる整数列を生成するストリームを用意します。2 は素数なので、素数ストリームの要素になります。次に、この整数列から 2 で割り切れる整数を取り除き除きます。これは filter() を使うと簡単です。
+</p>
+<p> 2 で割り切れる整数が取り除かれたので、次の要素は 3 になります。今度は 3 で割り切れる整数を取り除けばいいのです。これも filter() を使えば簡単です。このとき、入力用のストリームは 2 で割り切れる整数が取り除かれています。したがって、このストリームに対して 3 で割り切れる整数を取り除くように filter() を設定すればいいわけです。
+</p>
+
+<p> このように、素数を見つけたらそれで割り切れる整数を取り除いていくアルゴリズムを「エラトステネスの篩」といいます。ようするに、2 から始まる整数ストリームに対して、見つけた素数 2, 3, 5, 7, 11, ... を順番に fiter() で設定して、素数でない整数をふるい落としていくわけです。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 素数の生成
+
+function sieve(s)
+    if isempty(s)
+        s
+    else
+        x = head(s)
+        @cons(x, sieve(filter(n -&gt; n % x != 0, tail(s))))
+    end
+end
+</pre>
+<p> sieve には 2 から始まる整数列を生成するストリームを渡します。tail() でプロミスを force すると、filter() により整数列から 2 で割り切れる整数を取り除いたストリームが返されます。次の要素 3 を取り出すとき、このストリームに対して 3 で割り切れる整数を取り除くことになるので、2 と 3 で割り切れる整数が取り除かれることになります。次の要素は 5 になりますが、そのストリームからさらに 5 で割り切れる整数が filter() で取り除かれることになります。
+</p>
+
+<p> このように filter() を重ねて設定していくことで、素数でない整数をふるい落としていくことができるわけです。それでは実行してみましょう。
+</p>
+<pre>
+julia&gt; ps = sieve(unfold(x -&gt; x + 1, 2))
+LazyStream(2, ?)
+
+julia&gt; foreach(x -&gt; print("$x "), take(ps, 25))
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97
+julia&gt; foreach(x -&gt; print("$x "), take(ps, 100))
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103 107 109 113 127 131 137 139 149 151 
+157 163 167 173 179 181 191 193 197 199 211 223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 
+317 331 337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449 457 461 463 467 479 487 491 
+499 503 509 521 523 541
+</pre>
+<p> unfold() で 2 から始まる整数列を sieve() に渡します。100 以下の素数は全部で 25 個あります。
+</p>
+<h4>●双子素数</h4>
+<p> 差が 2 である素数の組を「双子素数 (twin prime)」といいます。素数列 sieve() を使うと双子素数は簡単に求めることができます。
+</p>
+<pre>
+julia&gt;  ps = sieve(unfold(x -&gt; x + 1, 2))
+LazyStream(2, ?)
+
+julia&gt; tps = filter(x -&gt; x[2] - x[1] == 2, map((x, y) -&gt; (x, y), ps, tail(ps)))
+LazyStream((3, 5), ?)
+
+julia&gt; foreach(print, takewhile(x -&gt; x[2] &lt; 5000, tps))
+(3, 5)(5, 7)(11, 13)(17, 19)(29, 31)(41, 43)(59, 61)(71, 73)(101, 103)(107, 109)(137, 139)(149, 151)(179, 181)
+(191, 193)(197, 199)(227, 229)(239, 241)(269, 271)(281, 283)(311, 313)(347, 349)(419, 421)(431, 433)(461, 463)
+(521, 523)(569, 571)(599, 601)(617, 619)(641, 643)(659, 661)(809, 811)(821, 823)(827, 829)(857, 859)(881, 883)
+(1019, 1021)(1031, 1033)(1049, 1051)(1061, 1063)(1091, 1093)(1151, 1153)(1229, 1231)(1277, 1279)(1289, 1291)
+(1301, 1303)(1319, 1321)(1427, 1429)(1451, 1453)(1481, 1483)(1487, 1489)(1607, 1609)(1619, 1621)(1667, 1669)
+(1697, 1699)(1721, 1723)(1787, 1789)(1871, 1873)(1877, 1879)(1931, 1933)(1949, 1951)(1997, 1999)(2027, 2029)
+(2081, 2083)(2087, 2089)(2111, 2113)(2129, 2131)(2141, 2143)(2237, 2239)(2267, 2269)(2309, 2311)(2339, 2341)
+(2381, 2383)(2549, 2551)(2591, 2593)(2657, 2659)(2687, 2689)(2711, 2713)(2729, 2731)(2789, 2791)(2801, 2803)
+(2969, 2971)(2999, 3001)(3119, 3121)(3167, 3169)(3251, 3253)(3257, 3259)(3299, 3301)(3329, 3331)(3359, 3361)
+(3371, 3373)(3389, 3391)(3461, 3463)(3467, 3469)(3527, 3529)(3539, 3541)(3557, 3559)(3581, 3583)(3671, 3673)
+(3767, 3769)(3821, 3823)(3851, 3853)(3917, 3919)(3929, 3931)(4001, 4003)(4019, 4021)(4049, 4051)(4091, 4093)
+(4127, 4129)(4157, 4159)(4217, 4219)(4229, 4231)(4241, 4243)(4259, 4261)(4271, 4273)(4337, 4339)(4421, 4423)
+(4481, 4483)(4517, 4519)(4547, 4549)(4637, 4639)(4649, 4651)(4721, 4723)(4787, 4789)(4799, 4801)(4931, 4933)
+(4967, 4969)
+</pre>
+<p> ところで、<a href="https://ja.wikipedia.org/wiki/%E5%8F%8C%E5%AD%90%E7%B4%A0%E6%95%B0">双子素数 - Wikipedia</a> によると、『双子素数は無数に存在するかという問題、いわゆる「双子素数の予想」や「双子素数の問題」は、いまだに数学上の未解決問題である。無数に存在するだろう、とは、多くの数論学者が予想している。』 とのことです。
+</p>
+
+<h4>●sieve() よりも高速な方法</h4>
+<p> 関数 sieve() は簡単にプログラムできますが、生成する素数の個数が多くなると、その実行速度はかなり遅くなります。実をいうと、sieve() なみに簡単で sieve() よりも高速な方法があります。
+</p>
+
+<p> 整数 n が素数か確かめる簡単な方法は、√n 以下の素数で割り切れるか試してみることです。割り切れる素数 m があれば、n は素数ではありません。そうでなければ、n は素数であることがわかります。
+</p>
+<p> これをそのままプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 素数列の生成
+
+# 素数列 (遅延ストリーム)
+primes = @cons(2, @cons(3, @cons(5, primesfrom(7))))
+
+# 素数の生成
+function primesfrom(n)
+    while true
+        if isprime(n)
+            return @cons(n, primesfrom(n + 2))
+        end
+        n += 2
+    end
+end
+
+# n は素数か
+function isprime(n)
+    all(x -&gt; n % x != 0, takewhile(p -&gt; p * p &lt;= n, primes))
+end
+</pre>
+<p> 変数 primes は無限の素数列を表します。実際に素数を生成する処理は関数 primesfrom() で行います。primesfrom() は関数 isprime() を呼び出して n が素数かチェックします。そうであれば、@cons で n を遅延ストリームに追加します。そうでなければ primesfrom() を格納した遅延ストリームを返します。偶数は素数ではないので、引数 n には奇数を与えていることに注意してください。
+</p>
+<p> isprime() も簡単です。takewhile() で primes から √n 以下の素数列を取り出します。√n 以下の素数は生成済みなので、primes から要素を取り出すことが可能です。ここでは√n のかわりに条件を p * p &lt;= n としています。あとは関数 all() を使って、取り出した素数で n が割り切れないことを確認するだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+julia&gt; foreach(x -&gt; print("$x "), take(primes, 25))
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97
+julia&gt; foreach(x -&gt; print("$x "), take(primes, 100))
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103 107 109 113 127 131 137 139 149 151 
+157 163 167 173 179 181 191 193 197 199 211 223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 
+317 331 337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449 457 461 463 467 479 487 491 
+499 503 509 521 523 541
+julia&gt; nth(primes, 100)
+541
+</pre>
+<p> 実行時間ですが、nth() で 5000 番目の素数を求めてみました。実行環境は Windows 10, Intel Core i5-6200U 2.30GHz です。
+</p>
+<pre>
+julia&gt; @time nth(ps, 5000)
+  5.842496 seconds (75.84 M allocations: 1.696 GiB, 56.55% gc time)
+48611
+
+julia&gt; @time nth(primes, 5000)
+  0.212975 seconds (2.20 M allocations: 55.189 MiB, 8.65% gc time)
+48611
+</pre>
+<p> sieve() よりも primes のほうが速くなりました。実をいうと isprime() には無駄な処理があります。takewhile() で新たな遅延ストリームを作り、all() に渡すときにそれをイテレータに変換しています。この無駄を省くともっと速くなります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : isprime() の改良版
+
+function isprime1(n)
+    s = primes
+    while true
+        x = head(s)
+        if n % x == 0
+            return false
+        elseif x * x &gt; n
+            return true
+        end
+        s = tail(s)
+    end
+end
+</pre>
+<p> √n 以下の素数は生成済みなので、while ループで primes から素数を順番に head() で取り出して変数 x にセットします。n が素数 x で割り切れれば false を返します。x が √n よりも大きければ true を返します。ここでは√n のかわりに条件を x * x &gt; n としています。
+</p>
+<p> ようは自分で primes をたどってチェックしているだけです。プログラムは少々複雑になりますが、こちらのほうが速くなります。実行結果は次のようになりました。
+</p>
+<pre>
+julia&gt; @time nth(primes, 5000)
+  0.071455 seconds (790.26 k allocations: 13.340 MiB)
+48611
+</pre>
+<p> 興味のある方はいろいろ試してみてください。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li><a href="https://sicp.iijlab.net/fulltext/">計算機プログラムの構造と解釈 (第二版)</a> <a href="https://sicp.iijlab.net/fulltext/x350.html">3.5 ストリーム</a>
+  <li><a href="http://practical-scheme.net/gauche/man/gauche-refj/Chi-Yan-Ping-Jia-.html#g_t_9045_5ef6_8a55_4fa1">Gauche ユーザリファレンス: 6.19 遅延評価</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+#
+# lazy.jl : 遅延評価と遅延ストリーム
+#
+#           Copyright (C) 2016-2018 Makoto Hiroi
+#
+
+#
+# 遅延評価
+#
+
+# プロミス
+mutable struct Promise
+    func
+    flag::Bool
+    value
+end
+
+macro delay(expr)
+    :(Promise(() -&gt; $(esc(expr)), false, nothing))
+end
+
+function force(p::Promise)
+    if !p.flag
+        p.value = p.func()
+        p.flag = true
+    end
+    p.value
+end
+
+#
+# 遅延ストリーム
+#
+abstract type LazyStream end
+
+# 終端
+struct Nil &lt;: LazyStream
+end
+
+# 定数
+const nils = Nil()
+
+# 終端の判定
+Base.isempty(s::LazyStream) = s === nils
+
+# 遅延ストリーム
+struct Cons &lt;: LazyStream
+    head
+    tail::Promise
+end
+
+# ストリームを生成するマクロ
+macro cons(x, s)
+esc(:(Cons($x, @delay $s)))
+end
+
+# アクセス関数
+head(s::Nil) = nils
+head(s::Cons) = s.head
+tail(s::Nil) = nils
+tail(s::Cons) = force(s.tail)
+
+# イテレータ
+function Base.iterate(s::LazyStream, state = s)
+    if isempty(state)
+        nothing
+    else
+        (head(state), tail(state))
+    end
+end
+
+# 表示
+function Base.show(io::IO, s::LazyStream)
+    if isempty(s)
+        print(io, "LazyStream()")
+    else
+        print(io, "LazyStream($(head(s)), ?)")
+    end
+end
+
+# n 番目の要素を求める
+function nth(s::LazyStream, n::Int)
+    while n &gt; 1
+        if isempty(s)
+            error("nth: empty stream")
+        end
+        s = tail(s)
+        n -= 1
+    end
+    head(s)
+end
+
+# 先頭から n 個の要素を取り出す
+function take(s::LazyStream, n::Int)
+    if isempty(s) || n &lt;= 0
+        nils
+    else
+        @cons(head(s), take(tail(s), n - 1))
+    end
+end
+
+# 先頭から n 個の要素を取り除く
+function drop(s::LazyStream, n::Int)
+    while !isempty(s) &amp;&amp; n &gt; 0
+        s = tail(s)
+        n -= 1
+    end
+    s
+end
+
+# 遅延ストリームの連結
+function append(s1::LazyStream, s2::LazyStream)
+    if isempty(s1)
+        s2
+    else
+        @cons(head(s1), append(tail(s1), s2))
+    end
+end
+
+function interleave(s1::LazyStream, s2::LazyStream)
+    if isempty(s1)
+        s2
+    else
+        @cons(head(s1), interleave(s2, tail(s1)))
+    end
+end
+
+# 遅延ストリームの反転
+function reverse(s::LazyStream)
+    if isempty(s)
+        nils
+    else
+        append(reverse(tail(s)), @cons(head(s), nils))
+    end
+end
+
+#
+# 高階関数
+#
+
+# マッピング
+function Base.map(func::Function, xs::LazyStream...)
+    if any(isempty, xs)
+        nils
+    else
+        @cons(func(map(head, xs)...), map(func, map(tail, xs)...))
+    end
+end
+
+# フィルター
+function Base.filter(pred::Function, s::LazyStream)
+    while !isempty(s)
+        if pred(head(s))
+            return @cons(head(s), filter(pred, tail(s)))
+        end
+        s = tail(s)
+    end
+    nils
+end
+
+# 畳み込み
+# foldl は Julia の関数で OK
+function Base.foldr(func::Function, s::LazyStream, a)
+    if isempty(s)
+        a
+    else
+        func(head(s), foldr(func, tail(s), a))
+    end
+end
+
+# 巡回
+function Base.foreach(func::Function, s::LazyStream)
+    for x = s func(x) end
+end
+
+# 遅延ストリームの連結 (遅延評価版)
+function append_delay(s1::LazyStream, s2::Promise)
+    if isempty(s1)
+        force(s2)
+    else
+        @cons(head(s1), append_delay(tail(s1), s2))
+    end
+end
+
+# 遅延ストリームの平坦化
+function flatmap(func::Function, s::LazyStream)
+    if isempty(s)
+        s
+    else
+        append_delay(func(head(s)), @delay flatmap(func, tail(s)))
+    end
+end
+
+# 関数 pred が真を返す間、先頭から要素を取り出す
+function takewhile(pred, s::LazyStream)
+    if isempty(s) || !pred(head(s))
+        nils
+    else
+        @cons(head(s), takewhile(pred, tail(s)))
+    end
+end
+
+# 関数 pred が真を返す間、先頭から要素を取り除く
+function dropwhile(pred, s::LazyStream)
+    while !isempty(s) &amp;&amp; pred(head(s))
+        s = tail(s)
+    end
+    s
+end
+
+# 整数列の生成
+function integers(low, high)
+    if low &gt; high
+        nils
+    else
+        @cons(low, integers(low + 1, high))
+    end
+end
+
+# フィボナッチ数列の生成
+fibonacci(a, b) = @cons(a, fibonacci(b, a + b))
+
+# 遅延ストリームの生成 (逆畳み込み)
+function unfold(iter, seed, cond = _ -&gt; false)
+    if cond(seed)
+        nils
+    else
+        @cons(seed, unfold(iter, iter(seed), cond))
+    end
+end
+
+# イテレータからの変換
+function tolazy(iter, state = nothing)
+    next = state === nothing ? iterate(iter) : iterate(iter, state)
+    if next === nothing
+        nils
+    else
+        @cons(next[1], tolazy(iter, next[2]))
+    end
+end
+
+# 直積集合 (有限)
+function product(s1::LazyStream, s2::LazyStream)
+    flatmap(x -&gt; map(y -&gt; (x, y), s2), s1)
+end
+
+# 直積集合 (無限)
+function product_inf(s1::LazyStream, s2::LazyStream, n = 1)
+    append_delay(map((x, y) -&gt; (x, y), take(s1, n), reverse(take(s2, n))),
+                 @delay product_inf(s1, s2, n + 1))
+end
+
+#
+# 格子点の生成
+#
+
+# 2 次元
+lattice2() = unfold(st -&gt; st[1] == 0 ? (st[2] + 1, 0) : (st[1] - 1, st[2] + 1), (0, 0))
+
+# d 次元
+function lattice_sub(d::Int, n::Int)
+    if d == 1
+        @cons((n,), nils)
+    elseif n == 0
+        @cons(Tuple(zeros(Int, d)), nils)
+    else
+        flatmap(x -&gt; map(xs -&gt; (x, xs...), lattice_sub(d - 1, n - x)), tolazy(0 : n))
+    end
+end
+
+function lattice(d::Int)
+    flatmap(n -&gt; lattice_sub(d, n), unfold(x -&gt; x + 1, 0))
+end
+
+#
+# 遅延ストリームの併合
+#
+function Base.merge(s1::LazyStream, s2::LazyStream)
+    if isempty(s1)
+        s2
+    elseif isempty(s2)
+        s1
+    elseif head(s1) &lt;= head(s2)
+        @cons(head(s1), merge(tail(s1), s2))
+    else
+        @cons(head(s2), merge(s1, tail(s2)))
+    end
+end
+
+#
+# 集合演算
+#
+
+# 重複要素の削除
+function Base.unique(s::LazyStream)
+    if isempty(s)
+        nils
+    else
+        @cons(head(s), unique(dropwhile(x -&gt; x == head(s), tail(s))))
+    end
+end
+
+# 和集合
+function Base.union(s1::LazyStream, s2::LazyStream)
+    if isempty(s1)
+        s2
+    elseif isempty(s2)
+        s1
+    elseif head(s1) &lt; head(s2)
+        @cons(head(s1), union(tail(s1), s2))
+    elseif head(s1) == head(s2)
+        @cons(head(s1), union(tail(s1), tail(s2)))
+    else
+        @cons(head(s2), union(s1, tail(s2)))
+    end
+end
+
+# 積集合
+function Base.intersect(s1::LazyStream, s2::LazyStream)
+    while !isempty(s1) &amp;&amp; !isempty(s2)
+        if head(s1) == head(s2)
+            return @cons(head(s1), intersect(tail(s1), tail(s2)))
+        elseif head(s1) &lt; head(s2)
+            s1 = tail(s1)
+        else
+            s2 = tail(s2)
+        end
+    end
+    nils
+end
+
+#
+# 順列
+#
+function permutations(n::Int, s::LazyStream)
+    if n == 0
+        @cons([], nils)
+    else
+        flatmap(s) do x
+            map(y -&gt; vcat([x], y),
+                permutations(n - 1, filter(z -&gt; x != z, s)))
+        end
+    end
+end
+
+#
+# 組み合わせ
+#
+function combinations(n::Int, s::LazyStream)
+    if n == 0
+        @cons([], nils)
+    elseif isempty(s)
+        nils
+    else
+        append_delay(map(y -&gt; vcat([head(s)], y), combinations(n - 1, tail(s))),
+                     @delay combinations(n, tail(s)))
+    end
+end
+
+#
+# エラトステネスの篩
+#
+function sieve(s)
+    if isempty(s)
+        s
+    else
+        x = head(s)
+        @cons(x, sieve(filter(n -&gt; n % x != 0, tail(s))))
+    end
+end
+
+# 素数列 (遅延ストリーム)
+primes = @cons(2, @cons(3, @cons(5, primesfrom(7))))
+
+# 素数の生成
+function primesfrom(n)
+    while true
+        if isprime(n)
+            return @cons(n, primesfrom(n + 2))
+        end
+        n += 2
+    end
+end
+
+# n は素数か
+function isprime(n)
+    all(x -&gt; n % x != 0, takewhile(p -&gt; p * p &lt;= n, primes))
+end
+
+# こちらのほうがもっと速い
+function isprime1(n)
+    s = primes
+    while true
+        x = head(s)
+        if n % x == 0
+            return false
+        elseif x * x &gt; n
+            return true
+        end
+        s = tail(s)
+    end
+end
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016-2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

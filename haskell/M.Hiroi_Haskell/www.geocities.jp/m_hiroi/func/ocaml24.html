@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 OCaml プログラミング入門</title>
+  <meta name="description" content="OCaml,ML,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881751</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 OCaml プログラミング入門</h2>
+<div class="small">
+[ <a href="ocaml23.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml25.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">遅延ストリーム (2)</h3>
+<p> 遅延ストリームの続きです。今回は遅延ストリームを使った応用例として、素数や順列を生成するプログラムを作ってみましょう。
+</p>
+
+<h4>●遅延ストリームの操作関数 (2)</h4>
+<p> まずは最初に、2 つの遅延ストリームを受け取って 1 つのストリームを返す関数を考えます。一番簡単な操作は 2 つのストリームを結合することです。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 1 : 遅延ストリームの結合
+
+let rec stream_append s1 s2 =
+  match s1 with
+    Nils -&gt; s2
+  | Cons (x, tail) -&gt; Cons (x, lazy (stream_append (force tail) s2))
+</pre>
+
+<p> 関数 stream_append はストリーム s1 と s2 を結合したストリームを返します。処理は簡単で、s1 の要素を順番に取り出していき、s1 が空になったら s2 を返すだけです。stream_append の型は次のようになります。
+</p>
+<pre class="item">
+val stream_append : 'a stream -&gt; 'a stream -&gt; 'a stream = &lt;fun&gt;
+</pre>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+# let s1 = intgen 1 4;;
+val s1 : int stream = Cons (1, &lt;lazy&gt;)
+# let s2 = intgen 11 14;;
+val s2 : int stream = Cons (11, &lt;lazy&gt;)
+# let s3 = stream_append s1 s2;;
+val s3 : int stream = Cons (1, &lt;lazy&gt;)
+# stream_take s3 8;;
+- : int list = [1; 2; 3; 4; 11; 12; 13; 14]
+</pre>
+<p> 次はストリーム s1 と s2 の要素を交互に出力するストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 2 : ストリームの要素を交互に出力
+
+let rec interleave s1 s2 =
+  match s1 with
+    Nils -&gt; s2
+  | Cons (x, tail) -&gt; Cons (x, lazy (interleave s2 (force tail)))
+</pre>
+
+<p> 関数 interleave はストリーム s1 と s2 を受け取ります。そして、s1 の要素を新しいストリームに格納したら、次は s2 の要素を新しいストリームに格納します。これは遅延オブジェクトで interleave を呼び出すとき、引数 s1 と s2 の順番を交換するだけです。このとき、s1 は tail を force して次の要素を求めます。これで s1 と s2 の要素を交互に出力することができます。
+</p>
+<p> interleave の型は次のようになります。
+</p>
+<pre class="item">
+val interleave : 'a stream -&gt; 'a stream -&gt; 'a stream = &lt;fun&gt;
+</pre>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+# let s4 = interleave s1 s2;;
+val s4 : int stream = Cons (1, &lt;lazy&gt;)
+# stream_take s4 8;;
+- : int list = [1; 11; 2; 12; 3; 13; 4; 14]
+</pre>
+
+<p> stream_append の場合、無限ストリームを結合することはできませんが、interleave ならば無限ストリームにも対応することができます。簡単な例を示しましょう。
+</p>
+<pre>
+# let rec ones = Cons (1, lazy ones);;
+val ones : int stream = Cons (1, &lt;lazy&gt;)
+# stream_take ones 10;;
+- : int list = [1; 1; 1; 1; 1; 1; 1; 1; 1; 1]
+# let rec twos = Cons (2, lazy twos);;
+val twos : int stream = Cons (2, &lt;lazy&gt;)
+# stream_take twos 10;;
+- : int list = [2; 2; 2; 2; 2; 2; 2; 2; 2; 2]
+# stream_take (interleave ones twos) 10;;
+- : int list = [1; 2; 1; 2; 1; 2; 1; 2; 1; 2]
+</pre>
+
+<p> ones は 1 を無限に出力するストリームで、twos は 2 を無限に出力するストリームです。stream_append で ones と twos を結合しても無限に 1 を出力するだけですが、interleave で ones と twos を結合すれば、1 と 2 を交互に出力することができます。これで無限ストリームの要素を混ぜ合わせることができます。
+</p>
+
+<h4>●高階関数 (2)</h4>
+<p> 2 つのストリームを受け取るマップ関数 stream_map2 も簡単です。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト 3 : マップ関数
+
+let rec stream_map2 func s1 s2 =
+  match (s1, s2) with
+    (Nils, _) | (_, Nils) -&gt; Nils
+  | (Cons(x, t1), Cons(y, t2)) -&gt;
+     Cons(func x y, lazy (stream_map2 func (force t1) (force t2)))
+</pre>
+<p> ストリーム s1 と s2 から要素 x, y を取り出し、func x y の評価結果を新しいストリームに格納します。stream_map2 の型は次のようになります。
+</p>
+
+<pre class="item">
+val stream_map2 : ('a -&gt; 'b -&gt; 'c) -&gt; 'a stream -&gt; 'b stream -&gt; 'c stream = &lt;fun&gt;
+</pre>
+<p> stream_map2 を使うと、ストリームに対していろいろな処理を定義することができます。次の例を見てください。
+</p>
+<pre>
+# let add_stream s1 s2 = stream_map2 (+) s1 s2;;
+val add_stream : int stream -&gt; int stream -&gt; int stream = &lt;fun&gt;
+# let s1 = intgen 1 4;;
+val s1 : int stream = Cons (1, &lt;lazy&gt;)
+# let s2 = intgen 11 14;;
+val s2 : int stream = Cons (11, &lt;lazy&gt;)
+# let s5 = add_stream s1 s2;;
+val s5 : int stream = Cons (12, &lt;lazy&gt;)
+# stream_take s5 4;;
+- : int list = [12; 14; 16; 18]
+</pre>
+<p> add_stream は s1 と s2 の要素を加算したストリームを返します。この add_stream を使うと、整数を生成するストリームは次のように定義することができます。
+</p>
+<pre>
+# let rec ones = Cons(1, lazy ones);;
+val ones : int stream = Cons (1, &lt;lazy&gt;)
+# let rec ints = Cons(1, lazy (add_stream ones ints));;
+val ints : int stream = Cons (1, &lt;lazy&gt;)
+# stream_take ints 10;;
+- : int list = [1; 2; 3; 4; 5; 6; 7; 8; 9; 10]
+</pre>
+<p> ストリーム ints は、現在の ints に 1 を足し算することで整数を生成しています。これで整数が生成できるとは不思議ですね。ints の動作を図に示すと、次のようになります。
+</p>
+<pre class="fig">
+let rec ones = Cons(1, lazy ones)
+             = Cons(1, lazy_obj1)
+
+let rec ints = Cons(1, lazy (add_stream ones ints))
+             = Cons(1, lazy_obj2)
+
+lazy_obj2 =&gt; Cons(1, lazy_obj1), Cons(1, lazy_obj2) -&gt;
+             Cons(1+1, lazy (add_stream (force lazy_obj1) (force lazy_obj2)))
+          =&gt; Cons(2, lazy (add_stream (force lazy_obj1) (force lazy_obj2)))
+          =&gt; Cons(2, lazy_obj3)
+
+lazy_obj3 =&gt; Cons(1, lazy_obj1), Cons(2, lazy_obj3) -&gt; ...
+          =&gt; Cons(3, lazy (add_stream (force lazy_obj1) (force lazy_obj3)))
+          =&gt; Cons(3, lazy_obj4)
+
+        図 1 : ストリーム ints の動作
+</pre>
+<p> ones を Cons(1, lazy_obj1) と表し、ints を Cons(1, lazy_obj2) と表します。lazy_obj は遅延オブジェクトを表します。ints で次の要素を生成するとき、lazy_obj2 を force します。すると、add_stream (stream_map2) に ones と ints が適用され、ストリームの要素 2 と遅延オブジェクト lazy_obj3 が生成されます。このとき、lazy_obj3 の内容は add_stream (force lazy_obj1) (force lazy_obj2) になります。
+</p>
+<p> 次の要素を生成するときは、lazy_obj3 を force します。lazy_obj1 は Cons(1, lazy_obj1) に、lazy_obj2 は Cons(2, lazy_obj3) に評価されるので、ストリームの要素は 1 + 2 = 3 になり、遅延オブジェクト lazy_obj4 の内容は add_stream (force lazy_obj1) (force lazy_obj3) になります。そして、この遅延オブジェクトを force することで次の要素を求めることができます。
+</p>
+<p> このように、遅延オブジェクトの中に現時点の整数を保持しておき、そこに 1 を足し算することで整数列を生成しているわけです。ここで、遅延オブジェクトは評価結果をキャッシュしているので、整数 n の次の値を簡単に計算できることに注意してください。もしも、遅延オブジェクトを単純なクロージャで実装した場合、整数 n を求めるため再計算が行われるので、効率はとても悪くなります。
+</p>
+
+<p> 同様の方法でフィボナッチ数列を生成するストリームを定義することができます。
+</p>
+<pre class="list">
+リスト 4 : フィボナッチ数列の生成
+
+(* ストリームの次の要素を求める *)
+let stream_tail = function
+  Nils -&gt; raise Empty_stream
+| Cons(_, tail) -&gt; force tail
+
+(* フィボナッチ数列 *)
+let rec fibs = Cons(1, lazy (Cons (1, lazy (add_stream (stream_tail fibs) fibs))))
+</pre>
+<pre class="item">
+val stream_tail : 'a stream -&gt; 'a stream = &lt;fun&gt;
+val fibs : int stream = Cons (1, &lt;lazy&gt;)
+</pre>
+<p> fibs が現在のフィボナッチ数列を表していて、stream_tail fibs で次の要素を求めます。そして、それらを足し算することで、その次の要素を求めています。この場合、ストリームの初期値として 2 つの要素が必要になることに注意してください。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+# stream_take fibs 10;;
+- : int list = [1; 1; 2; 3; 5; 8; 13; 21; 34; 55]
+</pre>
+<p> このように、2 つのストリームを使ってフィボナッチ数列を生成することができます。
+</p>
+
+<h4>●組 (pair) を生成するストリーム</h4>
+<p> それでは簡単な例題として、2 つのストリームからその要素の組み合わせを生成するストリームを作りましょう。要素が n 個のストリームの場合、組み合わせは n * n 個あります。次の図を見てください。
+</p>
+<pre class="fig">
+(a0, b0) (a0, b1) (a0, b2) ... (a0, bn)
+(a1, b0) (a1, b1) (a1, b2) ... (a1, bn)
+(a2, b0) (a2, b1) (a2, b2) ... (a2, bn)
+
+                           ...
+
+(an, b0) (an, b1) (an, b2) ... (an, bn)
+
+        図 2 : n * n 個の組
+</pre>
+<p> この組み合わせを生成するストリームは簡単にプログラムできるように思います。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 5 : 組を生成するストリーム
+
+let rec pair_stream s1 s2 =
+  match s1 with
+    Nils -&gt; Nils
+  | Cons(x, t1) -&gt; stream_append (stream_map (fun z -&gt; (x, z)) s2)
+                                 (pair_stream (force t1) s2)
+
+</pre>
+<p> 関数 pair_stream はストリーム s1 と s2 の要素の組を出力します。最初に、s1 の要素 x を取り出して、stream_map で x と s2 の要素の組を生成します。それを stream_append で出力してから、pair_stream を再帰呼び出しして s1 の次の要素と s2 の組を求めます。とても簡単なプログラムですが、実は重大な欠点があります。これはあとで説明します。
+</p>
+<p> pair_stream の型は次のようになります。
+</p>
+<pre class="item">
+val pair_stream : 'a stream -&gt; 'b stream -&gt; ('a * 'b) stream = &lt;fun&gt;
+</pre>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+# let s1 = intgen 1 4;;
+val s1 : int stream = Cons (1, &lt;lazy&gt;)
+# let s2 = intgen 11 14;;
+val s2 : int stream = Cons (11, &lt;lazy&gt;)
+# let s3 = pair_stream s1 s2;;
+val s3 : (int * int) stream = Cons ((1, 11), &lt;lazy&gt;)
+# stream_take s3 16;;
+- : (int * int) list =
+[(1, 11); (1, 12); (1, 13); (1, 14); (2, 11); (2, 12); (2, 13); (2, 14);
+ (3, 11); (3, 12); (3, 13); (3, 14); (4, 11); (4, 12); (4, 13); (4, 14)]
+</pre>
+<p> 正常に動作しているように見えますが、実は遅延ストリームとしては機能していないのです。stream_map に渡す匿名関数で生成した組を表示すると、次のようになります。
+</p>
+
+<pre>
+# let s1 = intgen 1 4;;
+val s1 : int stream = Cons (1, &lt;lazy&gt;)
+# let s2 = intgen 11 14;;
+val s2 : int stream = Cons (11, &lt;lazy&gt;)
+# let s3 = pair_stream s1 s2;;
+(4, 11)
+(3, 11)
+(2, 11)
+(1, 11)
+val s3 : (int * int) stream = Cons ((1, 11), &lt;lazy&gt;)
+# stream_take s3 16;;
+(1, 12)
+(1, 13)
+(1, 14)
+(2, 12)
+(2, 13)
+(2, 14)
+(3, 12)
+(3, 13)
+(3, 14)
+(4, 12)
+(4, 13)
+(4, 14)
+- : (int * int) list =
+[(1, 11); (1, 12); (1, 13); (1, 14); (2, 11); (2, 12); (2, 13); (2, 14);
+ (3, 11); (3, 12); (3, 13); (3, 14); (4, 11); (4, 12); (4, 13); (4, 14)]
+</pre>
+
+<p> 最初に 4 つの組が生成されています。これは stream_append の第 2 引数で pair_stream を再帰呼び出ししているために起こります。OCaml の関数は「値呼び」なので、引数は必ず評価されます。したがって、stream_append を評価する前に引数である stream_map と pair_stream が評価され、s1 の要素 1, 2, 3, 4 に対応するストリームが生成されるのです。
+</p>
+
+<p> このような場合、stream_append の第 2 引数を遅延評価するとうまくいきます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 6 : ストリームの結合 (遅延評価版)
+
+let rec stream_append_delay s1 s2 =
+  match s1 with
+    Nils -&gt; force s2
+  | Cons (x, tail) -&gt; Cons (x, lazy (stream_append_delay (force tail) s2))
+</pre>
+<p> 関数 stream_append_delay の引数 s2 には遅延オブジェクトが渡されるので、s1 が Nils になったら force s2 を返すようにします。関数の型は次のようになります。
+</p>
+<pre class="item">
+val stream_append_delay : 'a stream -&gt; 'a stream Lazy.t -&gt; 'a stream = &lt;fun&gt;
+</pre>
+<p> 次は pair_stream を修正します。
+</p>
+<pre class="list">
+リスト 7 : 組を生成するストリーム
+
+let rec pair_stream s1 s2 =
+  match s1 with
+    Nils -&gt; Nils
+  | Cons(x, t1) -&gt; stream_append_delay (stream_map (fun z -&gt; (x, z)) s2)
+                                       (lazy (pair_stream (force t1) s2))
+</pre>
+<p> stream_append のかわりに stream_append_delay を使い、その第 2 引数を lazy で遅延評価します。プログラムの修正はこれだけです。
+</p>
+<p> それでは実行してみましょう。なお、動作を確認するため、匿名関数で生成した組を表示するようにしています。
+</p>
+<pre>
+# let s1 = intgen 1 4;;
+val s1 : int stream = Cons (1, &lt;lazy&gt;)
+# let s2 = intgen 11 14;;
+val s2 : int stream = Cons (11, &lt;lazy&gt;)
+# let s3 = pair_stream s1 s2;;
+(1, 11)
+val s3 : (int * int) stream = Cons ((1, 11), &lt;lazy&gt;)
+# stream_take s3 16;;
+(1, 12)
+(1, 13)
+(1, 14)
+(2, 11)
+(2, 12)
+(2, 13)
+(2, 14)
+(3, 11)
+(3, 12)
+(3, 13)
+(3, 14)
+(4, 11)
+(4, 12)
+(4, 13)
+(4, 14)
+- : (int * int) list =
+[(1, 11); (1, 12); (1, 13); (1, 14); (2, 11); (2, 12); (2, 13); (2, 14);
+ (3, 11); (3, 12); (3, 13); (3, 14); (4, 11); (4, 12); (4, 13); (4, 14)]
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●無限ストリームで組 (pair) を生成する場合</h4>
+<p> ところで、pair_stream は無限ストリームに対応していません。実際、引数 s2 に無限ストリームを渡した場合、引数 s1 の最初の要素を a0 とすると (a0, s2 の要素) という組しか生成されません。そこで、図 3 に示すように、対角線上に組を生成していくことにします。
+</p>
+<pre class="fig">
+   | a0  a1  a2  a3  a4  a5
+---+-----------------------------
+b0 | 1   2   4   7   11  16  ...
+   |
+b1 | 3   5   8   12  17  ...
+   |
+b2 | 6   9   13  18  ...
+   |
+b3 | 10  14  19  ...
+   |
+b4 | 15  20  ...
+   |
+b5 | 21 ...
+   |
+   | ...
+   |
+
+図 3 : 無限ストリームによる組の生成
+</pre>
+<p> ちなみに、このように順番を決めると、要素 (ai, bj) [ただし i &gt;= 0, j &gt;= 0] の番号 n は次の式で求めることができます。
+</p>
+<pre class="item">
+n = (i + j + 1) * (i + j) / 2 + j + 1
+</pre>
+<p> それではプログラムを作りましょう。a0, a1, a2, ... を生成するストリームを s1 とし、b0, b1, b2, ... を生成するストリームを s2 とします。プログラムのポイントは、s1 の要素 ai と s2 の組を生成するストリームを順番に生成してリストに格納するところです。そして、そのリストに格納されたストリームの先頭要素を取り出していくと、対角線上に並んだ組を順番に生成することができます。次の図を見てください。
+</p>
+<pre class="fig">
+x0 = (a0, b0), (a0, b1), (a0, b2), ...
+x1 = (a1, b0), (a1, b1), (a1, b2), ...
+x2 = (a2, b0), (a2, b1), (a2, b2), ...
+
+[x0(0)] =&gt; 先頭要素を取り出す   =&gt; [(a0, b0)]
+        =&gt; 次の要素を求める     =&gt; [x0(1)]
+        =&gt; ストリームを追加する =&gt; [x1(0); x0(1)]
+
+[x1(0); x0(1)] =&gt; 先頭要素を取り出す   =&gt; [(a1, b0), (a0, b1)]
+               =&gt; 次の要素を求める     =&gt; [x1(1); x0(2)]
+               =&gt; ストリームを追加する =&gt; [x2(0); x1(1); x0(2)]
+
+        図 4 : 対角線上に組を生成する動作
+</pre>
+
+<p> 最初は a0 と s2 の組を生成するストリーム x0 をリストに格納します。次に、リストのストリームから先頭要素を取り出します。この場合は [(a0, b0)] になります。そして、ストリームの次の要素を求めます。x0(0) は x0(1) になります。
+</p>
+<p> 次に、a1 と s2 の組を生成するストリーム x1 をリストに格納します。このリストに対して、ストリームから先頭要素を取り出すと、[(a1, b0), (a0, b1)] になります。あとは同様に次の要素を求めて、新しいストリーム x2 を追加します。このリストから先頭要素を取り出すと、[(a2, b0), (a1, b1), (a0, b2)] となります。あとは、これを繰り返していくことで、対角線上の組を順番に生成することができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 8 : 無限ストリームによる組の生成
+
+(* ストリームの先頭要素を取り出す *)
+let stream_head = function
+  Nils -&gt; raise Empty_stream
+| Cons (x, _) -&gt; x
+
+(* リストをストリームに変換 *)
+let rec stream_of_list = function
+  [] -&gt; Nils
+| x :: xs -&gt; Cons(x, lazy (stream_of_list xs))
+
+(* s1 と s2 の組を生成する *)
+let rec pair_stream1 s1 s2 =
+  let make_pairs s1 = stream_map (fun x -&gt; ((stream_head s1), x)) s2 in
+  let rec pairs s1 ls =
+    stream_append_delay
+      (stream_of_list (List.map stream_head ls))
+      (lazy (pairs (stream_tail s1)
+                   (make_pairs s1 :: List.map stream_tail ls)))
+  in
+    pairs (stream_tail s1) [make_pairs s1]
+</pre>
+<pre class="item">
+val stream_head : 'a stream -&gt; 'a = &lt;fun&gt;
+val stream_of_list : 'a list -&gt; 'a stream = &lt;fun&gt;
+val pair_stream1 : 'a stream -&gt; 'b stream -&gt; ('a * 'b) stream = &lt;fun&gt;
+</pre>
+
+<p> 関数 stream_head はストリームの先頭要素を返します。関数 stream_of_list は引数のリストをストリームに変換します。関数 pair_stream1 はストリーム s1 と s2 の要素の組を生成するストリームを返します。実際の処理は局所関数 pairs で行います。
+</p>
+<p> 局所関数 make_pairs は s1 の先頭要素と s2 の組を生成するストリームを返します。この処理は stream_map を使うと簡単ですね。stream_head で s1 の先頭要素を取り出して s2 の要素 x との組を生成します。
+</p>
+<p> pairs の引数 s1 がストリームで、ls がストリームを格納するリストです。まず、ls に格納されたストリームから先頭要素を取り出します。これは List.map を使うと簡単です。返り値はリストなので、これを stream_of_list でストリームに変換します。
+</p>
+<p> 次に、pairs を再帰呼び出しします。ストリームの結合には stream_append_delay を使うことに注意してください。pairs を再帰呼び出しするとき、stream_tail で s1 の次の要素を求め、List.map stream_tail で ls に格納されたストリームの次の要素を求めます。そのリストに新しいストリームを make_pairs で生成して追加します。これで次の対角線上に並んだ組を生成することができます。
+</p>
+
+<p> それでは実行例を示しましょう。
+</p>
+<pre>
+# let s = pair_stream1 ints ints;;
+val s : (int * int) stream = Cons ((1, 1), &lt;lazy&gt;)
+# stream_take s 21;;
+- : (int * int) list =
+[(1, 1); (2, 1); (1, 2); (3, 1); (2, 2); (1, 3); (4, 1); (3, 2); (2, 3);
+ (1, 4); (5, 1); (4, 2); (3, 3); (2, 4); (1, 5); (6, 1); (5, 2); (4, 3);
+ (3, 4); (2, 5); (1, 6)]
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●素数の生成</h4>
+<p> 次はストリームを使って素数を求めるプログラムを作ってみましょう。考え方は簡単です。最初に、2 から始まる整数列を生成するストリームを用意します。2 は素数なので、素数ストリームの要素になります。次に、この整数列から 2 で割り切れる整数を取り除き除きます。これは stream_filter を使うと簡単です。
+</p>
+
+<p> 2 で割り切れる整数が取り除かれたので、次の要素は 3 になります。今度は 3 で割り切れる整数を取り除けばいいのです。これも stream_filter を使えば簡単です。このとき、入力用のストリームは 2 で割り切れる整数が取り除かれています。したがって、このストリームに対して 3 で割り切れる整数を取り除くように stream_filter を設定すればいいわけです。
+</p>
+
+<p> このように、素数を見つけたらそれで割り切れる整数を取り除いていくアルゴリズムを「エラトステネスの篩」といいます。ようするに、2 から始まる整数ストリームに対して、見つけた素数 2, 3, 5, 7, 11, ... を順番に stream_fiter で設定して素数でない整数をふるい落としていくわけです。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト 9 : 素数の生成
+
+let rec sieve = function
+  Nils -&gt; raise Empty_stream
+| Cons (x, tail) -&gt; Cons (x, lazy (sieve (stream_filter
+                                               (fun a -&gt; a mod x &lt;&gt; 0)
+                                               (force tail))))
+</pre>
+<pre class="item">
+val sieve : int stream -&gt; int stream = &lt;fun&gt;
+</pre>
+<p> sieve には 2 から始まる整数列を生成するストリームを渡します。Cons の遅延オブジェクトを force すると、stream_filter により整数列から 2 で割り切れる整数を取り除いたストリームが返されます。次の要素 3 を取り出すとき、このストリームに対して 3 で割り切れる整数を取り除くことになるので、2 と 3 で割り切れる整数が取り除かれることになります。次の要素は 5 になりますが、そのストリームからさらに 5 で割り切れる整数が stream_filter で取り除かれることになります。
+</p>
+
+<p> このように stream_filter が設定されていくことで、素数でない整数をふるい落としていくことができるわけです。それでは実行してみましょう。
+</p>
+<pre>
+# let s1 = sieve (intgen 2 1000);;
+val s1 : int stream = Cons (2, &lt;lazy&gt;)
+# stream_take s1 25;;
+- : int list =
+[2; 3; 5; 7; 11; 13; 17; 19; 23; 29; 31; 37; 41; 43; 47; 53; 59; 61; 67; 71;
+ 73; 79; 83; 89; 97]
+</pre>
+
+<h4>●順列の生成</h4>
+<p> 次は遅延ストリームを使って順列を生成するプログラムを作ってみましょう。遅延ストリームを使う場合、再帰呼び出しの一番深いところで順列が完成するようにプログラムするとうまくいきません。要素が n 個の順列を生成する場合、n - 1 個の順列を生成するストリームを生成し、そこに要素を一つ加えて n 個の順列を生成すると考えます。
+</p>
+
+<p> まずは簡単な例として、遅延ストリームではなく、リストを使ってプログラムを作ってみます。リスト 10 を見てください。
+</p>
+
+<pre class="list">
+リスト 10 : 順列の生成
+
+(* 要素の削除 *)
+let remove x ls = List.filter (fun y -&gt; x &lt;&gt; y) ls
+
+(* リストの平坦化 *)
+let rec flatten = function
+  [] -&gt; []
+| x::xs -&gt; x @ (flatten xs)
+
+(* map func ls の結果を平坦化する *)
+let flatmap func ls = flatten (List.map func ls)
+
+(* 順列の生成 *)
+let rec perm n ls =
+  if n = 0 then [[]]
+  else flatmap (fun x -&gt; List.map (fun y -&gt; x :: y)
+                                  (perm (n - 1) (remove x ls)))
+               ls
+</pre>
+
+<p> 関数 perm は引数のリスト ls から n 個を選ぶ順列を生成し、それをリストに格納して返します。n = 0 が再帰の停止条件で、空リストを格納したリストを返します。このリストに対して要素を追加します。この処理は map を二重に使うと簡単に実現できそうです。次の例を見てください。
+</p>
+<pre>
+# List.map (fun x -&gt; 5::x) [[1];[2];[3];[4]];;
+- : int list list = [[5; 1]; [5; 2]; [5; 3]; [5; 4]]
+# List.map (fun y -&gt; List.map (fun x -&gt; y::x) [[1];[2];[3];[4]]) [5;6];;
+- : int list list list =
+[[[5; 1]; [5; 2]; [5; 3]; [5; 4]]; [[6; 1]; [6; 2]; [6; 3]; [6; 4]]]
+</pre>
+<p> リストの各要素に 5 を追加したい場合、List.map を使うと簡単ですね。次は、リスト [5; 6] の各要素を追加したリストを求めることを考えます。List.map を二重にして、[5; 6] の要素を匿名関数の引数 y に渡します。次の List.map で y をリストに追加します。すると、返り値のリストの型は int list list list になります。map を二重にしているので、リストの階層が 1 段深くなるわけです。
+</p>
+<p> そこで、リストのリストを平坦化する関数 flatten を使います。プログラムは簡単です。リストの先頭要素 x を取り出して、x と次の要素を @ で結合すればいいわけです。たとえば、flatten [[1]; [2]; [3]] は [1] と [2] と [3] を @ で結合するので、[1; 2; 3] になります。flatten のデータ型は次のようになります。
+</p>
+
+<pre class="item">
+val flatten : 'a list list -&gt; 'a list = &lt;fun&gt;
+</pre>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+# flatten (List.map (fun y -&gt; List.map (fun x -&gt; y::x) [[1];[2];[3];[4]]) [5;6])
+;;
+- : int list list =
+[[5; 1]; [5; 2]; [5; 3]; [5; 4]; [6; 1]; [6; 2]; [6; 3]; [6; 4]]
+</pre>
+<p> 実際のプログラムでは flatten と map を組み合わせた関数 flatmap を定義しておくと便利です。
+</p>
+
+<p> 関数 perm の説明に戻ります。匿名関数の中で perm を再帰呼び出しをして、n - 1 個を選ぶ順列を生成します。そして、その返り値にリスト ls の要素 x を追加すれば、n 個の順列を生成することができます。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+# perm 4 [1;2;3;4];;
+- : int list list =
+[[1; 2; 3; 4]; [1; 2; 4; 3]; [1; 3; 2; 4]; [1; 3; 4; 2]; [1; 4; 2; 3];
+ [1; 4; 3; 2]; [2; 1; 3; 4]; [2; 1; 4; 3]; [2; 3; 1; 4]; [2; 3; 4; 1];
+ [2; 4; 1; 3]; [2; 4; 3; 1]; [3; 1; 2; 4]; [3; 1; 4; 2]; [3; 2; 1; 4];
+ [3; 2; 4; 1]; [3; 4; 1; 2]; [3; 4; 2; 1]; [4; 1; 2; 3]; [4; 1; 3; 2];
+ [4; 2; 1; 3]; [4; 2; 3; 1]; [4; 3; 1; 2]; [4; 3; 2; 1]]
+</pre>
+<h4>●遅延ストリーム版</h4>
+<p> それでは、遅延ストリームを使ったプログラムを作ります。
+</p>
+<pre class="list">
+リスト 11 : 遅延ストリームによる順列の生成
+
+(* ストリームの平坦化 *)
+let rec stream_flatten = function
+  Nils -&gt; Nils
+| Cons (head, tail) -&gt; stream_append_delay head
+                                           (lazy (stream_flatten (force tail)))
+
+(* stream_map の結果を平坦化する *)
+let rec stream_flatmap proc s =
+  stream_flatten (stream_map proc s)
+
+(* 順列の生成 *)
+let rec make_perm n s =
+  if n = 0 then Cons([], lazy Nils)
+  else
+    stream_flatmap
+      (fun x -&gt; stream_map (fun y -&gt; x::y)
+                           (make_perm (n - 1) (stream_filter (fun z -&gt; z &lt;&gt; x) s)))
+      s
+</pre>
+<pre class="item">
+val stream_flatten : 'a stream stream -&gt; 'a stream = &lt;fun&gt;
+val stream_flatmap : ('a -&gt; 'b stream) -&gt; 'a stream -&gt; 'b stream = &lt;fun&gt;
+val make_perm : int -&gt; 'a stream -&gt; 'a list stream = &lt;fun&gt;
+</pre>
+<p> flatten のかわりに stream_flatten を、flatmap のかわりに stream_flatmap を用意します。stream_map を二重に使うので、ストリームの中にストリームが格納されます。これを平坦化するために stream_flatten を使います。stream_flatten はストリームの先頭要素 head を取り出し、stream_apeend_delay で head のストリームと残りのストリームを結合します。
+</p>
+<p> 関数 make_perm はストリーム s の中から要素を n 個選ぶ順列を生成します。n = 0 の場合は空リストを格納したストリームを返します。あとは、stream_flatmap の匿名関数の中で、make_perm を再帰呼び出しして n - 1 個を選ぶ順列を生成します。ストリーム s から要素 x を取り除くため、stream_filter を使っています。これで順列を生成するストリームを作ることができます。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+# let s = make_perm 4 (intgen 1 4);;
+val s : int list stream = Cons ([1; 2; 3; 4], &lt;lazy&gt;)
+# stream_take s 24;;
+- : int list list =
+[[1; 2; 3; 4]; [1; 2; 4; 3]; [1; 3; 2; 4]; [1; 3; 4; 2]; [1; 4; 2; 3];
+ [1; 4; 3; 2]; [2; 1; 3; 4]; [2; 1; 4; 3]; [2; 3; 1; 4]; [2; 3; 4; 1];
+ [2; 4; 1; 3]; [2; 4; 3; 1]; [3; 1; 2; 4]; [3; 1; 4; 2]; [3; 2; 1; 4];
+ [3; 2; 4; 1]; [3; 4; 1; 2]; [3; 4; 2; 1]; [4; 1; 2; 3]; [4; 1; 3; 2];
+ [4; 2; 1; 3]; [4; 2; 3; 1]; [4; 3; 1; 2]; [4; 3; 2; 1]]
+</pre>
+<p> 24 通りの順列をすべて求めることができました。
+</p>
+<h4>●８クイーンの解法</h4>
+<p> 同様に、遅延ストリームを使って 8 クイーンを解くことができます。
+</p>
+<pre class="list">
+リスト 12 : 8 クイーンの解法 (遅延ストリーム版)
+
+let attack x xs =
+  let rec attack_sub x n = function
+      [] -&gt; true
+    | y :: ys -&gt; if x = y + n || x = y - n then false
+                 else attack_sub x (n + 1) ys
+  in
+    attack_sub x 1 xs
+
+let rec queen s =
+  if s = Nils then Cons([], lazy Nils)
+  else
+    stream_filter
+      (fun ls -&gt; match ls with
+                   [] -&gt; true
+                 | x::xs -&gt; attack x xs)
+      (stream_flatmap
+        (fun x -&gt; stream_map (fun y -&gt; x::y)
+                             (queen (stream_filter (fun z -&gt; z &lt;&gt; x) s)))
+        s)
+</pre>
+<pre class="item">
+val attack : int -&gt; int list -&gt; bool = &lt;fun&gt;
+val queen : int stream -&gt; int list stream = &lt;fun&gt;
+</pre>
+<p> 関数 queen は make_perm とほぼ同じですが、stream_filter を使って追加したクイーンが他のクイーンと衝突しているものを取り除いています。衝突をチェックする関数 attack は <a href="ocaml08.html#chap02">バックトラック法</a> の 8 クイーンで作成したものと同じです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+# stream_take (queen (intgen 1 8)) 10;;
+- : int list list =
+[[1; 5; 8; 6; 3; 7; 2; 4]; [1; 6; 8; 3; 7; 4; 2; 5];
+ [1; 7; 4; 6; 8; 2; 5; 3]; [1; 7; 5; 8; 2; 4; 6; 3];
+ [2; 4; 6; 8; 3; 1; 7; 5]; [2; 5; 7; 1; 3; 8; 6; 4];
+ [2; 5; 7; 4; 1; 8; 6; 3]; [2; 6; 1; 7; 4; 8; 3; 5];
+ [2; 6; 8; 3; 1; 4; 7; 5]; [2; 7; 3; 6; 8; 5; 1; 4]]
+</pre>
+<p> 解の総数は全部で 92 通りあります。遅延ストリームを使うと、必要な分だけの計算しか行われないので効率的です。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li><a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs (SICP)"</a> <a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-24.html#%_sec_3.5">3.5  Streams</a>
+</ol>
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+(*
+ * lazy_stream.ml : 遅延ストリーム
+ *
+ *                  Copyright (C) 2008 Makoto Hiroi
+ *)
+
+open Lazy;;
+
+(* 例外 *)
+exception Empty_stream
+
+(* データ型 *)
+type 'a stream = Nils | Cons of 'a * 'a stream lazy_t
+
+(* アクセス関数 *)
+
+(* ストリームの先頭要素を取り出す *)
+let stream_head = function
+  Nils -&gt; raise Empty_stream
+| Cons (x, _) -&gt; x
+
+(* ストリームの次の要素を求める *)
+let stream_tail = function
+  Nils -&gt; raise Empty_stream
+| Cons(_, tail) -&gt; force tail
+
+(* n 番目の要素を求める *)
+let rec stream_ref s n =
+  match s with
+    Nils -&gt; raise Empty_stream
+  | Cons (x, _) when n = 1 -&gt; x
+  | Cons (_, tail) -&gt; stream_ref (force tail) (n - 1)
+
+(* n 個の要素を取り出してリストに格納する *)
+let rec stream_take s n =
+  match s with
+    Nils -&gt; raise Empty_stream
+  | Cons(x, tail) -&gt;
+      if n = 1 then [x]
+      else x :: stream_take (force tail) (n - 1)
+
+(* ストリームの結合 *)
+let rec stream_append s1 s2 =
+  match s1 with
+    Nils -&gt; s2
+  | Cons (x, tail) -&gt; Cons (x, lazy (stream_append (force tail) s2))
+
+let rec interleave s1 s2 =
+  match s1 with
+    Nils -&gt; s2
+  | Cons (x, tail) -&gt; Cons (x, lazy (interleave s2 (force tail)))
+
+let rec stream_append_delay s1 s2 =
+  match s1 with
+    Nils -&gt; force s2
+  | Cons (x, tail) -&gt; Cons (x, lazy (stream_append_delay (force tail) s2))
+
+let rec interleave_delay s1 s2 =
+  match s1 with
+    Nils -&gt; force s2
+  | Cons (x, tail) -&gt; Cons (x, lazy (interleave_delay (force s2) tail))
+
+
+(* 高階関数 *)
+
+(* マップ関数 *)
+let rec stream_map proc = function
+  Nils -&gt; Nils
+| Cons (x, tail) -&gt; Cons (proc x, lazy (stream_map proc (force tail)))
+
+let rec stream_map2 proc s1 s2 =
+  match (s1, s2) with
+    (Nils, _) | (_, Nils) -&gt; Nils
+  | (Cons(x, t1), Cons(y, t2)) -&gt;
+     Cons(proc x y, lazy (stream_map2 proc (force t1) (force t2)))
+
+let add_stream s1 s2 = stream_map2 (+) s1 s2
+
+(* フィルター *)
+let rec stream_filter pred = function
+  Nils -&gt; Nils
+| Cons (x, tail) when pred x -&gt;
+    Cons(x, lazy (stream_filter pred (force tail)))
+| Cons (_, tail) -&gt; stream_filter pred (force tail)
+
+(* 畳み込み *)
+let rec stream_fold_left proc a = function
+  Nils -&gt; a
+| Cons (x, tail) -&gt; stream_fold_left proc (proc a x) (force tail)
+
+let rec stream_fold_right proc a = function
+  Nils -&gt; a
+| Cons (x, tail) -&gt; proc x (stream_fold_right proc a (force tail))
+
+
+(* ストリームの生成 *)
+
+(* low から high までの整数列 *)
+let rec intgen low high =
+  if low &gt; high then Nils
+  else Cons (low, lazy (intgen (low + 1) high))
+
+(* 無限ストリーム *)
+let rec integers x = Cons (x, lazy (integers (x + 1)))
+
+let rec ones = Cons (1, lazy ones)
+let rec ints = Cons (1, lazy (add_stream ones ints))
+
+(* フィボナッチ数列 *)
+let rec fibgen a b = Cons (a, lazy (fibgen b (a + b)))
+
+let rec fibs = Cons (1, lazy (Cons (1, lazy (add_stream (stream_tail fibs) fibs))))
+
+(* 素数の生成 *)
+let rec sieve = function
+  Nils -&gt; raise Empty_stream
+| Cons (x, tail) -&gt; Cons (x, lazy (sieve (stream_filter
+                                               (fun a -&gt; a mod x &lt;&gt; 0)
+                                               (force tail))))
+
+(* 組の生成 *)
+
+let rec pair_stream s1 s2 =
+  match s1 with
+    Nils -&gt; Nils
+  | Cons(x, t1) -&gt; stream_append_delay (stream_map (fun z -&gt; (x, z)) s2)
+                                       (lazy (pair_stream (force t1) s2))
+
+let rec stream_of_list = function
+  [] -&gt; Nils
+| x :: xs -&gt; Cons(x, lazy (stream_of_list xs))
+
+let rec pair_stream2 s1 s2 =
+  let make_pairs s1 = stream_map (fun x -&gt; ((stream_head s1), x)) s2 in
+  let rec pairs s1 ls =
+    stream_append_delay
+      (stream_of_list (List.map stream_head ls))
+      (lazy (pairs (stream_tail s1)
+                   (make_pairs s1 :: List.map stream_tail ls)))
+  in
+    pairs (stream_tail s1) [make_pairs s1]
+
+
+(* 順列の生成 *)
+
+(* ストリームの平坦化 *)
+let rec stream_flatten = function
+  Nils -&gt; Nils
+| Cons (head, tail) -&gt; stream_append_delay head (lazy (stream_flatten (force tail)))
+
+(* stream_map の結果を平坦化する *)
+let rec stream_flatmap proc s =
+  stream_flatten (stream_map proc s)
+
+(* 順列の生成 *)
+let rec make_perm n s =
+  if n = 0 then Cons([], lazy Nils)
+  else
+    stream_flatmap
+      (fun x -&gt; stream_map (fun y -&gt; x::y)
+                           (make_perm (n - 1) (stream_filter (fun z -&gt; z &lt;&gt; x) s)))
+      s
+
+
+(* 8 Queen *)
+
+(* 衝突のチェック *)
+let attack x xs =
+  let rec attack_sub x n = function
+      [] -&gt; true
+    | y :: ys -&gt; if x = y + n || x = y - n then false
+                 else attack_sub x (n + 1) ys
+  in
+    attack_sub x 1 xs
+
+(* 8 Queen の解法 *)
+let rec queen s =
+  if s = Nils then Cons([], lazy Nils)
+  else
+    stream_filter
+      (fun ls -&gt; match ls with
+                   [] -&gt; true
+                 | x::xs -&gt; attack x xs)
+      (stream_flatmap
+        (fun x -&gt; stream_map (fun y -&gt; x::y)
+                             (queen (stream_filter (fun z -&gt; z &lt;&gt; x) s)))
+        s)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ocaml23.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml25.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

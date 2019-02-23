@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881789</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell06.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell08.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>データ型の定義</h3>
+<h4>●data 宣言</h4>
+<p> 近代的なプログラミング言語は、ユーザーが既存のデータ型を組み合わせて、新しいデータ型を定義する機能を持っています。Haskell の場合、タプルを使って新しいデータ型を表すことができますが、もうひとつ重要な方法に data 宣言があります。data 宣言の構文を示します。
+</p>
+<pre class="fig">
+data 型構築子 型変数 ... =
+    データ構築子A 型式A ...
+|   データ構築子B 型式B ...
+          .....
+|   データ構築子N 型式N ...
+</pre>
+<p> 「型構築子 (type constructor) 」はデータ型の名前を定義します。型構築子は必要であれば引数に型変数を指定することができます。「データ構築子 (data constructor) 」は実際の値を生成するときやパターンマッチングのときに使用します。縦線 ( | ) は「または」を意味していて、複数のデータ構築子のうちのひとつが実際のデータになります。型構築子とデータ構築子は英大文字から始めます。なお、データ構築子のなかに型構築子と同じ名前があってもかまいません。
+</p>
+<p> 型式とはデータ型を表す式のことで、基本的なデータ型である Integer, Double, String, Bool などのほかに、関数型、タプル、リスト、型変数などがあります。ようするに、データ構築子に格納されるデータの型を表します。格納するデータがない場合は省略することができます。型式が複数指定されている場合は、複数のデータが格納されます。
+</p>
+<p> たとえば、真偽値を表すデータ型 Bool は次のように定義することができます。
+</p>
+<pre class="list">
+リスト : Bool の定義
+
+data Bool = False | True
+</pre>
+<p> Bool が型構築子で、データ構築子が False と True です。したがって、Bool の値は False または True のどちらかになります。
+</p>
+<p> もうひとつ簡単な data 宣言の例を示しましょう。
+</p>
+<pre>
+Prelude&gt; data Fruit = Apple | Orange | Grape deriving Show
+Prelude&gt; Apple
+Apple
+Prelude&gt; :t Apple
+Apple :: Fruit
+Prelude&gt; Orange
+Orange
+Prelude&gt; :t Orange
+Orange :: Fruit
+Prelude&gt; Grape
+Grape
+Prelude&gt; :t Grape
+Grape :: Fruit
+</pre>
+<p> Fruit というデータ型は Apple, Orange, Grape から構成されます。このあと、Apple, Orange, Grape を Haskell のプログラムで使うことができます。ただし、このままではデータを表示することができません。Fruit を型クラス Show のインスタンスにする必要があるのです。
+</p>
+<p> Apple を "Apple" と変換するだけでよければ、deriving で Show を指定してください。複数の型クラスを指定する場合はカッコで囲んでカンマ ( , ) で区切ります。deriving は data 宣言で定義されたデータ型を自動的に指定された型クラスのインスタンスになるように設定します。これで、デフォルトの実装を利用することができます。なお、deriving で指定できる型クラスは Eq, Ord, Enum, Bounded, Show, Read です。
+</p>
+
+<p> また、次のように Fruit をタプルやリストに入れることもできます。
+</p>
+<pre>
+Prelude&gt; let a = [Apple, Orange, Grape]
+Prelude&gt; a
+[Apple,Orange,Grape]
+Prelude&gt; :t a
+a :: [Fruit]
+Prelude&gt; let b = (Apple, Orange)
+Prelude&gt; b
+(Apple,Orange)
+Prelude&gt; :t b
+b :: (Fruit, Fruit)
+Prelude&gt; let c = (Grape, 100)
+Prelude&gt; c
+(Grape,100)
+Prelude&gt; :t c
+c :: (Fruit, Integer)
+</pre>
+<h4>●型式の指定</h4>
+<p> 次はデータ構築子で型式を指定する例を見てみましょう。たとえば、次のように Number というデータ型を定義します。
+</p>
+<pre>
+Prelude&gt; data Number = INT Integer | REAL Double deriving Show
+Prelude&gt; INT 10
+INT 10
+Prelude&gt; :t INT 10
+INT 10 :: Number
+Prelude&gt; REAL 1.234
+REAL 1.234
+Prelude&gt; :t REAL 1.234
+REAL 1.234 :: Number
+
+Prelude&gt; let n = [INT 1, REAL 2.5, INT 3, REAL 4.25, INT 5]
+Prelude&gt; n
+[INT 1,REAL 2.5,INT 3,REAL 4.25,INT 5]
+Prelude&gt; :t n
+n :: [Number]
+</pre>
+<p> Number は数を表すデータ型で、整数 (Integer) または実数 (Double) を格納します。INT Integer によりデータ構築子 INT のデータ型は Integer と定義され、REAL Double でデータ構築子 REAL のデータ型は Double と定義されます。
+</p>
+<p> Number の生成はデータ構築子を使います。INT 10 または REAL 1.1234 で Number 型のデータが生成されます。INT(10) や REAL(1.1) のようにカッコで囲んでもかまいません。最後の例のように、Number 型のデータをリストに格納することができます。このように新しいデータ型 Number を定義することで、整数と実数をいっしょにリストに格納することができます。
+</p>
+
+<h4>●パターンマッチング</h4>
+<p> データ構築子は「パターン」として使うことができます。たとえば、Number 型のリストにおいて、整数の合計値と実数の合計値を求める関数 number_sum を作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 整数と実数の合計値を別々に求める
+
+number_sum :: [Number] -&gt; (Integer, Double)
+number_sum []     = (0, 0)
+number_sum (x:xs) =
+  case x of
+    INT  n -&gt; (a + n, b)
+    REAL n -&gt; (a, b + n)
+  where (a, b) = number_sum xs
+</pre>
+<p> number_sum は整数と実数の合計を求め、タプル (Integer, Double) にして返します。引数が空リストであればタプル (0, 0) を返します。そうでなければ、リストを x : xs で分解し、where 節で number_sum を再帰呼び出しして、その返り値を (a, b) にセットします。そして、case 式で要素 x とパターンマッチングを行います。
+</p>
+<p> x と INT n がマッチングすれば、n は Integer であることがわかります。タプル (a + n, b) を返します。REAL n とマッチングすれば、n は Double であることがわかります。タプル (a, b + n) を返します。これで整数と実数の合計値を求めることができます。
+</p>
+
+<p> それでは実行例を示します。
+</p>
+<pre>
+*Main&gt; number_sum [INT 1, INT 2, REAL 1.5, REAL 2.5, INT 3, REAL 3.5]
+(6,7.5)
+</pre>
+<h4>●型変数の使い方</h4>
+<p> 型変数を使うとリストのような多相的なデータ型を作ることができます。簡単な例として、Haskell に定義されているデータ型 Maybe を見てみましょう。Maybe の定義を示します。
+</p>
+<pre class="item">
+data Maybe a = Nothing | Just a
+</pre>
+<p> 型変数は型構築子と記号 = の間に指定します。複数の型変数を使う場合は a b c のように空白で区切って指定します。これはカリー化関数と同じ方法で、実際に部分適用も可能です。Maybe はデータの有無を表すデータ型です。データが無い場合は Nothing を、データが有る場合は Just を使います。Just の型式は型変数 a なので、どのデータ型でも Maybe に格納することができます。次の例を見てください。
+</p>
+<pre>
+*Main&gt; Nothing
+Nothing
+*Main&gt; :t Nothing
+Nothing :: Maybe a
+*Main&gt; Just 10
+Just 10
+*Main&gt; :t Just 10
+Just 10 :: Num a =&gt; Maybe a
+*Main&gt; Just "foo"
+Just "foo"
+*Main&gt; :t Just "foo"
+Just "foo" :: Maybe [Char]
+</pre>
+<p> Nothing だけではデータ型を定めることができないので、データ型は Maybe a と表示されます。Just 10 の場合、与えられたデータ型が数値なので Num a =&gt; Maybe a になります。同様に、Just "foo" のデータ型は Maybe [Char] になります。
+</p>
+<p> たとえば、リストからデータを探索する処理を考えてみましょう。<a href="haskell02.html">再帰定義</a> の「リストの探索」で作成した関数 member は、データが見つかれば残りのリストを、見つからなければ空リスト [ ] を返すように作りました。見つけたデータをそのまま返さないのは、データが見つからない場合の返り値 [ ] とデータ型を一致させるためです。Haskell はデータ型を厳密にチェックするプログラミング言語なので、異なるデータ型を返すことはできないのです。
+</p>
+<p> このような場合、役に立つのが Maybe です。見つけたデータをそのまま返さずに、Maybe に格納して返せばいいわけです。簡単な例として、リストの中から述語を満たす要素を探す関数 find_if を作ってみましょう。Haskell のライブラリ (モジュール) Data.List には find という同じ機能を持つ関数が用意されていますが、私達でも簡単に作ることができます。ちなみに、関数名は Common Lisp (find-if) から拝借しました。
+</p>
+
+<pre class="list">
+リスト : リストの探索
+
+find_if :: (a -&gt; Bool) -&gt; [a] -&gt; Maybe a
+find_if _ [] = Nothing
+find_if p (x:xs)
+  | p x       = Just x
+  | otherwise = find_if p xs
+</pre>
+
+<p> 最初の節で、データが見つからない場合は Nothing を返します。次の節で、述語 p x  が真を返せば Just x を返します。そうでなければ、find_if を再帰呼び出しして次の要素を調べます。
+</p>
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; find_if even [1,2,3,4,5,6]
+Just 2
+*Main&gt; find_if odd [1,2,3,4,5,6]
+Just 1
+*Main&gt; find_if even [1,3,5,7,9]
+Nothing
+*Main&gt; find_if odd [2,4,6,8]
+Nothing
+</pre>
+
+<h4>●再帰的なデータ型</h4>
+<p> data 宣言は再帰的なデータ構造も定義することができます。たとえば、連結リスト (linked list) は次のように定義できます。
+</p>
+<pre class="item">
+data LinkedList a = Nil | Cell a (LinkedList a)
+</pre>
+<p> Nil が連結リストの終端を表し、Cell がコンスセルを表します。最初の要素が格納するデータになり、2 番目の要素が次の Cell を格納するデータになります。これで Haskell のリストと同等の多相的なデータ型になります。次の例を見てください。
+</p>
+<pre>
+Prelude&gt; data LinkedList a = Nil | Cell a (LinkedList a) deriving Show
+Prelude&gt; let a = Cell 1 Nil
+Prelude&gt; a
+Cell 1 Nil
+Prelude&gt; let b = Cell 2 a
+Prelude&gt; b
+Cell 2 (Cell 1 Nil)
+Prelude&gt; let c = Cell 3 b
+Prelude&gt; c
+Cell 3 (Cell 2 (Cell 1 Nil))
+Prelude&gt; :t c
+c :: LinkedList Integer
+</pre>
+<p> このように、Cell と Nil を使って LinkedList を組み立てることができます。ようするに、データ構築子 Cell がリストのコンス演算子 ( : ) と同じ働きをしているわけです。実際、Haskell のリストは次のように定義されています。
+</p>
+<pre class="item">
+data [a] = [] | a : [a]
+</pre>
+<p> リストのデータ型は [ ] で表され、[a] は [ ] a と同じ意味になります。これで多相的なリスト構造を実現できるのですから、Haskell の型システムは柔軟で強力な機能だと思います。
+</p>
+
+<h4>●連想リスト</h4>
+<p> それでは簡単な例題として、「連想リスト (association list : a-list) 」を取り上げます。Haskell の場合、連想リストはデータ型 [(a, b)] で表すことができるので、わざわざ新しいデータ型を作る必要はないのですが、今回は Haskell の学習ということで、あえて｢連想リスト」を表すデータ型とその操作関数を作成します。最初に data 宣言でデータ型を定義します。
+</p>
+
+<pre class="list">
+リスト : 連想リストの定義
+
+data Alist k v = Nil | Cell k v (Alist k v) deriving Show
+</pre>
+
+<p> 型構築子は Alist にしました。型変数 k がキーのデータ型を表し、型変数 v が値のデータ型を表します。連想リストのデータ型は Alist k v になります。Nil が空の連想リストを表します。Cell の内部では k と v をタプル (k, v) に格納する必要はないので、Cell の型式は k v (Alist k v) になります。
+</p>
+
+<p> 最初に連想リストを生成する関数を作りましょう。関数名 acons, pairlis は Common Lisp から拝借しました。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 連想リストの生成
+
+acons :: a -&gt; b -&gt; Alist a b -&gt; Alist a b
+acons k v xs = Cell k v xs
+
+pairlis :: [a] -&gt; [b] -&gt; Alist a b
+pairlis (x:xs) (y:ys) = Cell x y (pairlis xs ys)
+pairlis _      _      = Nil
+
+fromList :: [(a, b)] -&gt; Alist a b
+fromList [] = Nil
+fromList ((x, y):zs) = Cell x y (fromList zs)
+</pre>
+
+<p> 関数 acons はキー k と値 v と連想リスト xs を受け取り、xs の先頭に k と v を追加します。関数 pairlis は 2 つのリストを受け取り、第 1 引数のリストの要素がキー、第 2 引数のリストの要素が値となる連想リストを生成します。引数のリストの長さが違う場合は短い方に合わせます。最初の節で、どちらのリストも分解できるのであれば、Cell を生成して x と y を格納します。そうれなければ、どちらかのリストが空リストなので Nil を返します。
+</p>
+<p> 関数 fromList はタプル (a, b) を格納したリストを連想リストへ変換します。a がキーのデータ型、b が値のデータ型になります。引数が空リストの場合は Nil を返します。そうでなければ、パターン (x, y):zs とマッチングするので、キー x, データ y を Cell に格納して fromList を再帰呼び出しします。
+</p>
+
+<p> 次はデータを探索する関数を作ります。関数 assoc は指定したキーと等しいキーを探します。関数 assoc_if は述語が真となるキーを探します。どちらの関数も、見つけたキーと値をタプルにして Maybe 型に格納して返します。見つからない場合は Nothing を返します。
+</p>
+
+<pre class="list">
+リスト : 連想リストの探索
+
+assoc :: Eq a =&gt; a -&gt; Alist a b -&gt; Maybe (a, b)
+assoc _ Nil = Nothing
+assoc x (Cell k v xs)
+  | x == k    = Just (k, v)
+  | otherwise = assoc x xs
+
+assoc_if :: Eq a =&gt; (a -&gt; Bool) -&gt; Alist a b -&gt; Maybe (a, b)
+assoc_if _ Nil = Nothing
+assoc_if p (Cell k v xs)
+  | p k       = Just (k, v)
+  | otherwise = assoc_if p xs
+</pre>
+
+<p> どちらの関数もパターンマッチングで Cell 内のデータを取り出しています。k がキーで、v が値、xs が次の Cell です。連想リストが空 (Nil) の場合は Maybe 型の Nothing を返します。assoc は引数 x とキー k を比較して、等しければ Just (k, v) を返します。assoc_if は p k の評価結果が真であれば Just (k, v) を返します。
+</p>
+
+<p> このほかに、ユーティリティー関数として連想リストからキーを取り出す keys, 値を取り出す values, リストに変換する toList を定義します。
+</p>
+<pre class="list">
+リスト : ユーティリティー関数
+
+-- キーを取り出す
+keys :: Alist k v -&gt; [k]
+keys Nil = []
+keys (Cell k _ xs) = k : keys xs
+
+-- データを取り出す
+values :: Alist k v -&gt; [v]
+values Nil = []
+values (Cell _ v xs) = v : values xs
+
+-- リストに変換
+toList :: Alist k v -&gt; [(k, v)]
+toList Nil = []
+toList (Cell k v xs) = (k, v) : toList xs
+</pre>
+<p> どの関数も難しいところはないと思います。
+</p>
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; let a = acons 1 10 Nil
+*Main&gt; a
+Cell 1 10 Nil
+*Main&gt; let b = acons 2 12 a
+*Main&gt; b
+Cell 2 12 (Cell 1 10 Nil)
+*Main&gt; :t b
+b :: Alist Integer Integer
+*Main&gt; let c = pairlis ['a' .. 'e'] [1 .. 5]
+*Main&gt; c
+Cell 'a' 1 (Cell 'b' 2 (Cell 'c' 3 (Cell 'd' 4 (Cell 'e' 5 Nil))))
+*Main&gt; :t c
+c :: Alist Char Integer
+*Main&gt; let d = fromList [(1, 2), (3, 4), (5, 6)]
+*Main&gt; d
+Cell 1 2 (Cell 3 4 (Cell 5 6 Nil))
+
+*Main&gt; assoc 'c' c
+Just ('c',3)
+*Main&gt; assoc 'f' c
+Nothing
+*Main&gt; assoc_if (&gt;'d') c
+Just ('e',5)
+*Main&gt; assoc_if (&gt;'e') c
+Nothing
+
+*Main&gt; keys c
+"abcde"
+*Main&gt; values c
+[1,2,3,4,5]
+*Main&gt; toList c
+[('a',1),('b',2),('c',3),('d',4),('e',5)]
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●レコードの定義</h4>
+<p> 次は「レコード (record) 」について説明します。レコードはデータ構築子の型式に名前を付けたものです。レコードは data 宣言で次のように定義します。
+</p>
+<pre class="fig">
+data 型構築子 型変数 ... =
+    データ構築子A {フィールド名A1 :: 型A1, フィールド名A2 :: 型A2, ... , フィールド名An :: 型An}
+  | ...
+  | データ構築子Z {フィールド名Z1 :: 型Z1, フィールド名Z2 :: 型Z2, ... , フィールド名Zn :: 型Zn}
+</pre>
+<p> データ構築子の後ろに中カッコ { } で本体を定義します。要素は "フィールド名 :: 型" の形式で指定してカンマで区切ります。なお、異なるデータ型で同じフィールド名を使用することはできません。
+</p>
+<h4>●レコードの生成</h4>
+<p> レコードは次の形式で生成します。
+</p>
+<pre class="item">
+データ構築子 { フィールド名1 = 式1, フィールド名2 = 式2, ... , フィールド名n = 式n }
+</pre>
+<p> 式の評価結果がフィールドの値になります。簡単な例を示しましょう。
+</p>
+<pre>
+Prelude&gt; data Foo = Foo {bar :: Integer, baz :: Double} deriving Show
+Prelude&gt; let a = Foo {bar = 100, baz = 1.234}
+Prelude&gt; a
+Foo {bar = 100, baz = 1.234}
+
+Prelude&gt; bar a
+100
+Prelude&gt; :t bar
+bar :: Foo -&gt; Integer
+Prelude&gt; baz a
+1.234
+Prelude&gt; :t baz
+baz :: Foo -&gt; Double
+
+Prelude&gt; Foo 100 123.45
+Foo {bar = 100, baz = 123.45}
+</pre>
+<p> レコードの場合、フィールド名はアクセス関数として利用することができます。最後の例のように、データの順番が同じ (データ型が一致する) 場合は、レコード形式でなくてもデータを生成することができます。
+</p>
+
+<h4>●レコードのパターンマッチング</h4>
+<p> もちろん、レコードでもパターンマッチングを使うことができます。次の例を見てください。
+</p>
+<pre>
+Prelude&gt; let Foo {bar=x, baz=y} = a
+Prelude&gt; x
+100
+Prelude&gt; y
+1.234
+Prelude&gt; let Foo {baz=z} = a
+Prelude&gt; z
+1.234
+</pre>
+
+<p> "フィールド = パターン" とするとフィールドの値とパターンを照合します。Foo {bar = x, baz = y} は変数 x とフィールド bar の値、変数 y とフィールド bar の値がマッチングして、x = 10, y = 1.234 になります。また、レコードのパターンマッチングは、必要なフィールドだけを指定することができます。すべてのフィールドを指定する必要はありません。
+</p>
+
+<h4>●多相的なレコード</h4>
+<p> レコードは型変数を使って多相的なデータ構造を定義することができます。簡単な例題として、レコードを使って連想リストを作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 連想リストの定義
+
+data Alist' k v = Nil' | Cell' {key :: k, value :: v, rest :: Alist' k v}
+  deriving Show
+</pre>
+<p> 型構築子を Alist' とし、キーと値を表す型変数 k, v を指定します。空リストをデータ構築子 Nil' で表し、データを格納するセルをデータ構築子 Cell' で表します。そして、Cell' の型式をレコードで定義します。レコード名 key のデータ型は k、value のデータ型が v、rest のデータ型が Alist' k v となります。
+</p>
+
+<p> 連想リストを生成する関数 acons', pairlis', fromList' は次のようになります。
+</p>
+<pre class="list">
+リスト : 連想リストの生成
+
+acons' :: a -&gt; b -&gt; Alist' a b -&gt; Alist' a b
+acons' k v xs = Cell' {key = k, value = v, rest = xs}
+
+pairlis' :: [a] -&gt; [b] -&gt; Alist' a b
+pairlis' (x:xs) (y:ys) = Cell' {key = x, value = y, rest = pairlis' xs ys}
+pairlis' _      _      = Nil'
+
+fromList' :: [(a, b)] -&gt; Alist' a b
+fromList' [] = Nil'
+formList' ((x, y):zs) = Cell' {key = x, value = y, rest = fromList' zs}
+</pre>
+<p> どの関数もキーと値をレコードに格納するだけです。
+</p>
+
+<p> データを探索する関数 assoc' と assoc_if' は次のようになります。
+</p>
+<pre class="list">
+リスト : 連想リストの探索
+
+assoc' :: Eq a =&gt; a -&gt; Alist' a b -&gt; Maybe (a, b)
+assoc' _ Nil' = Nothing
+assoc' z (Cell' {key = x, value = y, rest = xs})
+  | z == x    = Just (x, y)
+  | otherwise = assoc' z xs
+
+assoc_if' :: (a -&gt; Bool) -&gt; Alist' a b -&gt; Maybe (a, b)
+assoc_if' _ Nil' = Nothing
+assoc_if' p (Cell' {key = x, value = y, rest = xs})
+  | p x       = Just (x, y)
+  | otherwise = assoc_if' p xs
+</pre>
+<p> どちらの関数もパターンマッチングでレコードからデータを取り出します。レコードはフィールドに名前が付いているのでデータの順番を気にする必要はなく、わかりやすいプログラムになると思います。
+</p>
+<p> ユーティリティー関数は次のようになります。
+</p>
+<pre class="list">
+リスト : ユーティリティー関数
+
+-- キーを取り出す
+keys' :: Alist' a b -&gt; [a]
+keys' Nil' = []
+keys' (Cell' {key = x, rest = xs}) = x : keys' xs
+
+-- データを取り出す
+values' :: Alist' a b -&gt; [b]
+values' Nil' = []
+values' (Cell' {value = v, rest = xs}) = v : values' xs
+
+-- リストに変換する
+toList' :: Alist' a b -&gt; [(a, b)]
+toList' Nil' = []
+toList' (Cell' {key = x, value = y, rest = xs}) = (x, y) : toList' xs
+</pre>
+<p> これも難しいところはないと思います。
+</p>
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; let a = acons' 1 10 Nil'
+*Main&gt; a
+Cell' {key = 1, value = 10, rest = Nil'}
+*Main&gt; let b = acons' 2 20 a
+*Main&gt; b
+Cell' {key = 2, value = 20, rest = Cell' {key = 1, value = 10, rest = Nil'}}
+*Main&gt; let c = acons' 3 40 b
+*Main&gt; c
+Cell' {key = 3, value = 40, rest = Cell' {key = 2, value = 20, rest = Cell' 
+{key = 1, value = 10, rest = Nil'}}}
+*Main&gt; :t c
+c :: Alist' Integer Integer
+*Main&gt; let d = pairlis' ['a' .. 'e'] [1 .. 5]
+*Main&gt; d
+Cell' {key = 'a', value = 1, rest = Cell' {key = 'b', value = 2, rest = Cell'
+{key = 'c', value = 3, rest = Cell' {key = 'd', value = 4, rest = Cell' 
+{key = 'e', value = 5, rest = Nil'}}}}}
+*Main&gt; fromList' [(1, 2), (3, 4), (5, 6)]
+Cell' {key = 1, value = 2, rest = Cell' {key = 3, value = 4, rest = Cell' 
+{key = 5, value = 6, rest = Nil'}}}
+
+*Main&gt; assoc' 'c' d
+Just ('c',3)
+*Main&gt; assoc' 'f' d
+Nothing
+*Main&gt; assoc_if' (&gt;'d') d
+Just ('e',5)
+*Main&gt; assoc_if' (&gt;'e') d
+Nothing
+
+*Main&gt; keys' d
+"abcde"
+*Main&gt; values' d
+[1,2,3,4,5]
+*Main&gt; toList' d
+[('a',1),('b',2),('c',3),('d',4),('e',5)]
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●インスタンスの設定</h4>
+<p> ところで、今まで作成したデータ型はどれも deriving で型クラス Show のインスタンスに設定しました。これは私たちユーザーが手動で行うこともできます。ここでデータ型を型クラスのインスタンスに設定する方法について説明します。
+</p>
+<p> 簡単な例題として、果物を表すデータ型 Fruit を取り上げます。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+data Fruit = Apple | Grape | Orange
+</pre>
+<p> 型クラスやデータ型の情報は ghci のコマンド :info (:i) で見ることができます。
+</p>
+<pre>
+*Main&gt; :i Show
+class Show a where
+  showsPrec :: Int -&gt; a -&gt; ShowS
+  show :: a -&gt; String
+  showList :: [a] -&gt; ShowS
+</pre>
+<p> 型クラスは class を使って定義します。このあと型クラス名、必要であれば型変数を書きます。そして、 where のあとに型クラスに属する関数 (演算子) の型を定義します。<p> Show にはいくつか関数が定義されていますが、show を実装するとデータ型を文字列に変換して画面に表示できるようになります。
+</p>
+<p> データ型は instance 宣言を使って型クラスのインスタンスに設定することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : インスタンスの設定 (1)
+
+instance Show Fruit where
+  show Apple  = "Apple"
+  show Grape  = "Grape"
+  show Orange = "Orange"
+</pre>
+<p> instance のあとに型クラスを、そのあとにインスタンスにするデータ型を書きます。そして、where のあとに関数の実装を定義します。ここでは単純にデータ構築子をそのまま文字列に変換しているだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; Apple
+Apple
+*Main&gt; Orange
+Orange
+*Main&gt; Grape
+Grape
+*Main&gt; [Apple, Orange, Grape]
+[Apple,Orange,Grape]
+</pre>
+<p> ところで、多相型関数はひとつの関数定義で複数のデータ型に対応することができました。関数 show も複数のデータ型に対応することができますが、データ型によって異なる処理を実装しています。これを関数 (演算子) の「多重定義 (over loading) 」とか「アドホック多相」といいます。多重定義は ML 系の言語 (SML/NJ, OCaml など) にはない Haskell の特徴のひとつです。
+</p>
+<p> もうひとつ簡単な例題として、連想リスト Alist を型クラス Show のインスタンスにしてみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : インスタンスの設定 (2)
+
+instance (Show k, Show v) =&gt; Show (Alist k v) where
+  show Nil = "Nil"
+  show (Cell k v xs) =
+    "Cell " ++ show k ++ " " ++ show v ++ " " ++
+    case xs of
+      Nil -&gt; "Nil"
+      _   -&gt; "(" ++ show xs ++ ")"
+</pre>
+<p> Alist は多相型のデータなので、型の指定は (Alist k v) とします。また、格納しているキーとデータを表示するためには、それらのデータ型が Show のインスタンスであることが必要です。そのため、記号 =&gt; の左辺に型クラス制約 (Show k, Show v) を指定します。
+</p>
+<p> show の実装は簡単です。引数が Nil の場合は "Nil" を返します。引数が Cell の場合、"Cell k v " の形式に変換します。そして、xs が Nil の場合は "Nil" を連結します。そうでなければ、show xs を再帰呼び出しして、それをカッコで囲みます。これでデフォルトの表示と同じになります。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; Nil
+Nil
+*Main&gt; Cell 1 2 Nil
+Cell 1 2 Nil
+*Main&gt; pairlis ["foo", "bar", "baz"] [1,2,3]
+Cell "foo" 1 (Cell "bar" 2 (Cell "baz" 3 Nil))
+</pre>
+<p> また、次のように連想リストをリストに変換して表示することもできます。
+</p>
+<pre class="list">
+リスト : インスタンスの設定 (3)
+
+instance (Show k, Show v) =&gt; Show (Alist' k v) where
+  show xs = "Alist' " ++ show (toList' xs)
+</pre>
+<pre>
+*Main&gt; pairlis' [1..5] [11..15]
+Alist' [(1,11),(2,12),(3,13),(4,14),(5,15)]
+</pre>
+<h4>●型クラス Eq の場合</h4>
+<p> 次は型クラス Eq の場合を見てみましょう。Eq は次のように定義されています。
+</p>
+<pre class="list">
+リスト : Eq の定義 (抜粋)
+
+class Eq a where
+  (==) :: a -&gt; a -&gt; Bool
+  (/=) :: a -&gt; a -&gt; Bool
+  x == y = not (x /= y)
+  x /= y = not (x == y)
+</pre>
+<p> Eq は等値演算子の型だけではなく、演算子の定義も実装されています。これを「デフォルト実装」と呼びます。型クラスのインスタンスになるデータ型で、演算子の実装が省略されている場合、型クラスで定義されているデフォルト実装が適用されます。Eq の場合、== は /= を使って、/= は == を使って定義されていますね。つまり、== を実装すれば /= はデフォルト実装で済ますことができるわけです。
+</p>
+<p> 中置演算子を定義する場合は "引数x 演算子 引数y = 式" という形式になります。関数と同じ形式で定義したい場合は演算子をカッコで囲んで、"(演算子) 引数x 引数y = 式" としてください。
+</p>
+<p> Fruit を Eq のインスタンスにすると次のようになります。
+</p>
+<pre class="list">
+リスト : Eq の指定
+
+instance Eq Fruit where
+  Apple  == Apple  = True
+  Grape  == Grape  = True
+  Orange == Orange = True
+  _      == _      = False
+</pre>
+<p> プログラムは簡単ですね。それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; Apple == Apple
+True
+*Main&gt; Apple == Orange
+False
+*Main&gt; Apple /= Orange
+True
+*Main&gt; Orange == Grape
+False
+*Main&gt; Orange /= Orange
+False
+</pre>
+<p> 次は連想リスト Alist を型クラス Eq のインスタンスにしてみましょう。Alist にはキーと値がありますが、今回は等値の判定にキーだけを使うことにしましょう。並び方には関係なく、キーがすべて等しい場合、等値演算子 == は真を返すことにします。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : Eq の指定 (2)
+
+instance Eq k =&gt; Eq (Alist k v) where
+  xs == ys = subset xs1 ys1 &amp;&amp; subset ys1 xs1
+    where xs1 = keys xs
+          ys1 = keys ys
+</pre>
+<p> キーで等値を判定するので、型クラス制約に Eq k を指定します。関数 subset xs ys はリスト xs がリスト ys の部分集合であれば真を返します。subset xs ys &amp;&amp; subset ys xs であれば、xs と ys は同じ集合であることがわかります。プログラムでは、関数 keys で連想リスト xs, ys からキーを取り出して xs1, ys1 にセットし、それを subset で判定します。
+</p>
+
+<p> 関数 subset は簡単にプログラムできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 部分集合の判定
+
+subset :: Eq a =&gt; [a] -&gt; [a] -&gt; Bool
+subset [] _  = True
+subset (x:xs) ys
+  | x `elem` ys = subset xs ys
+  | otherwise   = False
+</pre>
+<p> リスト xs の要素を取り出し、それがリスト ys に含まれているか関数 elem を使ってチェックします。そうであれば次の要素を調べます。そうでなければ、xs は ys の部分集合ではないので False を返します。xs が空リストの場合、すべての要素が ys にあるるので True を返します。また、最初の節は "空集合 [ ] は ys の部分集合" であることも表しています。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; subset [1,2,3] [4,3,2,1]
+True
+*Main&gt; subset [1,2,3,4] [4,3,2,1]
+True
+*Main&gt; subset [1,2,3,4,5] [4,3,2,1]
+False
+*Main&gt; let a = Cell 'a' 1 (Cell 'b' 2 (Cell 'c' 3 Nil))
+*Main&gt; a
+Cell 'a' 1 (Cell 'b' 2 (Cell 'c' 3 Nil))
+*Main&gt; let b = Cell 'b' 1 (Cell 'c' 2 (Cell 'a' 3 Nil))
+*Main&gt; b
+Cell 'b' 1 (Cell 'c' 2 (Cell 'a' 3 Nil))
+*Main&gt; a == b
+True
+*Main&gt; let c = Cell 'b' 1 (Cell 'd' 2 (Cell 'a' 3 Nil))
+*Main&gt; c
+Cell 'b' 1 (Cell 'd' 2 (Cell 'a' 3 Nil))
+*Main&gt; a == c
+False
+*Main&gt; a /= c
+True
+</pre>
+<h4>●型クラス Ord の場合</h4>
+<p> 型クラスは他の型クラスの性質を引き継ぐことができます。これを「継承」と呼ぶことにしましょう。たとえば、比較演算子を定義している型クラス Ord は型クラス Eq を継承しています。実際に :i コマンドで調べてみましょう。
+</p>
+<pre>
+*Main&gt; :i Ord
+class Eq a =&gt; Ord a where
+  compare :: a -&gt; a -&gt; Ordering
+  (&lt;) :: a -&gt; a -&gt; Bool
+  (&gt;=) :: a -&gt; a -&gt; Bool
+  (&gt;) :: a -&gt; a -&gt; Bool
+  (&lt;=) :: a -&gt; a -&gt; Bool
+  max :: a -&gt; a -&gt; a
+  min :: a -&gt; a -&gt; a
+*Main&gt; :i Ordering
+data Ordering = LT | EQ | GT    -- Defined in `GHC.Types'
+</pre>
+<p> Ord は型クラスなので class で定義します。Eq を継承する場合、class のあとに Eq a =&gt; と指定します。データ型を定義するときの「型クラス制約」と同じ書き方です。=&gt; の左辺に指定された型クラスが継承されます。Ord は Eq を継承しているので、型クラス制約に Ord を指定すれば、等値演算子も使用することができます。
+</p>
+
+<p> Ord の場合、関数 compare を実装すれば、あとの演算子 (関数) はデフォルト実装で動作します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : Ord の指定
+
+instance Ord Fruit where
+  Apple  `compare` Grape  = LT
+  Apple  `compare` Orange = LT
+  Grape  `compare` Apple  = GT
+  Grape  `compare` Orange = LT
+  Orange `compare` Apple  = GT
+  Orange `compare` Grape  = GT
+  _      `compare` _      = EQ
+</pre>
+<p> データ型 Ordering のデータ構築子 LT, EQ, GT はそれぞれ less than, equal, greater than の意味です。Fruit の大小関係は data 宣言で並べた順番、つまり Apple &lt; Grape &lt; Orange とします。LT, GT のパターンを記述すると、残りのパターンは EQ となります。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; Apple &lt; Grape
+True
+*Main&gt; Grape &lt; Orange
+True
+*Main&gt; Apple &gt; Orange
+False
+*Main&gt; max Apple Orange
+Orange
+*Main&gt; min Grape Orange
+Grape
+</pre>
+<p> なお、これら基本的な動作は私たちがプログラムする必要はなく、すべて deriving (Show, Eq, Ord) で自動的に実装することができます。デフォルト以外の動作は、自分でプログラムする必要があります。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell06.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell08.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

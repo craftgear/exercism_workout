@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scala プログラミング入門</title>
+  <meta name="description" content="Scala,Scala入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881778</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scala Programming</h1>
+<h2>お気楽 Scala プログラミング入門</h2>
+<div class="small">
+[ <a href="scala12.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala14.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>多相クラス</h3>
+<p> Scala のクラスは関数 (メソッド) と同様に、型パラメータを使って多相的なクラスを定義することができます。これを「多相クラス (polymorphic class) 」といいます。今回は多相クラスについて説明します。
+</p>
+
+<h4>●クラスの型パラメータ</h4>
+<p> クラスの型パラメータは次のように指定します。
+</p>
+<pre class="item">
+class クラス名[型パラメータ1, 型パラメータ2, ...](引数, ...) { ... }
+</pre>
+<p> クラス名の後ろの角カッコ [ ] に型パラメータを指定します。そして、コンストラクタ引数やクラスの本体で型パラメータを参照します。リストと同様に、型は "クラス名[型]" で表されます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; class Foo[A](val x: A)
+defined class Foo
+
+scala&gt; val a: Foo[Int] = new Foo(100)
+a: Foo[Int] = Foo@f6515b
+
+scala&gt; a.x
+res0: Int = 100
+
+scala&gt; val b = new Foo[Double](1.234)
+b: Foo[Double] = Foo@d279ec
+
+scala&gt; b.x
+res1: Double = 1.234
+
+scala&gt; val c = new Foo("hello")
+c: Foo[String] = Foo@cda2c2
+
+scala&gt; c.x
+res2: String = hello
+</pre>
+<p> クラス Foo のフィールド変数 x の型は、型パラメータ A で定義されています。インスタンスを生成するとき、変数で実際の型を指定してもいいですし、Foo の後ろで型を指定してもかまいません。また、最後の例のように型を指定しなくても、Scala が型推論で型を決めてくれます。
+</p>
+
+<p> 多相クラスを使うと、タプルのようなデータ構造を作るのも簡単です。たとえば、2 つのデータを格納するクラス Pair は次のようになります。
+</p>
+<pre>
+scala&gt; case class Pair[A, B](fst: A, snd: B)
+defined class Pair
+
+scala&gt; val a = Pair("foo", 10)
+a: Pair[String,Int] = Pair(foo,10)
+
+scala&gt; a.fst
+res0: String = foo
+
+scala&gt; a.snd
+res1: Int = 10
+
+scala&gt; val b = Pair("bar", Pair(1, 2))
+b: Pair[String,Pair[Int,Int]] = Pair(bar,Pair(1,2))
+
+scala&gt; b.fst
+res2: String = bar
+
+scala&gt; b.snd
+res3: Pair[Int,Int] = Pair(1,2)
+
+scala&gt; b.snd.fst
+res4: Int = 1
+</pre>
+<p> case クラスで Pair を定義します。型パラメータは A, B の 2 つで、先頭の要素 (fst) の型を A で、2 番目の要素 (snd) の型を B で表しています。インスタンスを生成するとき、Pair("foo", 10) とすると、文字列と整数を格納する Pair が生成されます。型は Pair[String, Int] になります。要素は fst, snd で取り出すことができますが、Pair は case クラスなのでパターンマッチングでアクセスすることもできます。また、タプルと同様に Pair の中に Pair を格納することもできます。
+</p>
+
+<h4>●双方向リスト</h4>
+<p> それでは、多相クラスの簡単な例題として、「双方向リスト (doubly-linked list) 」という mutable なデータ構造を作ってみましょう。拙作のページで作成した <a href="scala10.html">連結リスト</a> のセル (cell) は、データを格納する item と次のセルを参照する next から構成されています。これに対し、双方向リストは次のセルだけでなく、前のセルも格納するデータ構造です。次の図を見てください。
+</p>
+
+<pre class="fig">
+     preV    NEXT      preV    NEXT      preV    NEXT
+    ┌─┬─┬─┐    ┌─┬─┬─┐    ┌─┬─┬─┐
+←─┼  │  │  │←─┼  │  │  │←─┼  │  │  │←─  
+─→│  │  │  ┼─→│  │  │  ┼─→│  │  │  ┼─→  
+    └─┴─┴─┘    └─┴─┴─┘    └─┴─┴─┘
+         DATA              DATA              DATA
+
+                   図 : 双方向リスト
+</pre>
+<p> 連結リストは後方向にしかセルをたどることができませんが、双方向リストは前後どちらの方向へもセルをたどることができます。また、セルを削除する場合も、前後のセルがわかるので簡単に削除することができます。
+</p>
+
+<p> 双方向リストを使う場合、ヘッダセルを用意してリストを環状に構成する方法が一般的です。次の図を見てください。
+</p>
+
+<pre class="fig">
+ 変数 ──┐
+          ↓
+          ヘッダセル
+        ┌─┬─┬─┐
+  ┌←─┼  │  │  │←───────────────────┐  
+  │┌→│  │  │  ┼─→─────────────────┐│
+  ││  └─┴─┴─┘                                      ││
+  ││   NEXT    preV                                       ││
+  ││                                                      ││
+  ││   cell A            cell B            cell C         ││
+  ││  ┌─┬─┬─┐    ┌─┬─┬─┐    ┌─┬─┬─┐  ││
+  │└←┼  │Ａ│  │←─┼  │Ｂ│  │←─┼  │Ｃ│  │←┘│
+  └─→│  │  │  ┼─→│  │  │  ┼─→│  │  │  ┼─→┘
+        └─┴─┴─┘    └─┴─┴─┘    └─┴─┴─┘
+         preV    NEXT      preV    NEXT      preV    NEXT
+
+                     図 : 環状リスト (1)
+</pre>
+<p> ヘッダセルにはデータを格納しません。ヘッダセルの NEXT が参照するセルが先頭で、preV が参照するセルが最後尾になります。ヘッダセルが先頭と最後尾のセルを参照しているので、両端でのデータ操作が簡単にできます。
+</p>
+
+<p> データがない空リストの場合は、次の図に示すようにセルを参照する NEXT と preV の値はヘッダセル自身になります。
+</p>
+
+<pre class="fig">
+    ┌───────────┐
+    │    ┌─┬─┬─┐    │
+    └←─┼  │  │  │←─┘
+    ┌─→│  │  │  ┼─→┐
+    │    └─┴─┴─┘    │
+    └───────────┘
+
+データがない場合はヘッダセル自身を格納
+
+        図 : 環状リスト (2)
+</pre>
+
+<p> このようにすると、空リストへデータを挿入する場合や、データを削除して空リストになる場合で、プログラムが簡単になるという利点があります。これは、実際にプログラムを作ってみるとわかります。
+</p>
+
+<h4>●双方向リストの仕様</h4>
+<p> それでは実際に双方向リストを Scala でプログラムしてみましょう。双方向リストのクラス名は DList[A] とします。最初に作成するメソッドを下表に示します。
+</p>
+
+<table border=1>
+<caption>表 : 双方向リスト (DList[A]) のメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>apply(n: Int): A </td><td>n 番目の要素を求める。</td></tr>
+  <tr><td>update(n: Int, x: A): Unit </td><td>n 番目の要素をデータ x に書き換える。</td></tr>
+  <tr><td>insert(n: Int, x: A): Boolean </td><td>n 番目の位置にデータ x を挿入する。</td></tr>
+  <tr><td>delete(n: Int): A </td><td>n 番目の要素を削除する。</td></tr>
+  <tr><td>mapInto(f: A =&gt; A): Unit</td><td>要素に関数 f を適用して、その返り値に書き換える。</td></tr>
+  <tr><td>positionIf(f: A =&gt; Boolean): Int</td><td>関数 f が真を返す要素の位置を返す。見つからない場合は -1 を返す。</td></tr>
+  <tr><td>deleteIf(f: A =&gt; Boolean): Int</td><td>関数 f が真を返す要素を削除する。削除した個数を返す。</td></tr>
+  <tr><td>foldl[B](a: B, f: (B, A) =&gt; B): B</td><td>リストの先頭から畳み込みを行う。</td></tr>
+  <tr><td>foldr[B](a: B, f: (A, B) =&gt; B): B</td><td>リストの末尾から畳み込みを行う。</td></tr>
+  <tr><td>foreach(f: A =&gt; Unit): Unit</td><td>要素に関数 f を適用する。</td></tr>
+  <tr><td>isEmpty(): Boolean    </td><td>連結リストが空の場合は真を返す。</td></tr>
+  <tr><td>length(): Int    </td><td>要素の個数を返す。</td></tr>
+  <tr><td>clear(): Unit    </td><td>連結リストを空にする。</td></tr>
+</tbody>
+</table>
+<p> 基本的には <a href="scala10.html">連結リスト</a> と同じメソッドですが、双方向リストを多相クラスとして定義するので、格納する要素の型を型パラメータ A で表します。畳み込みを行うメソッド foldl, foldr は 2 つの型パラメータを使います。要素の型が A で、累積変数と返り値の型を B で表します。引数 f の型は foldl が (B, A) =&gt; B で、foldr が (A, B) =&gt; B になります。
+</p>
+
+<p> メソッド apply, update. insert, delete の引数 n は整数値で、負の場合は後ろから数えることにします。たとえば、双方向リストのインスタンスを a とすると、a(0) は先頭の要素を、a(-1) は最後尾の要素を参照します。
+</p>
+<p> insert は指定した位置 n にデータを挿入します。たとえば、a.insert(0, x) は双方向リストの先頭に x を追加します。a.insert(-1, x) は双方向リストの最後尾に x を追加します。つまり、追加するデータ x が n 番目の要素になるわけです。
+</p>
+
+<h4>●クラスの定義</h4>
+<p> 次はクラスを定義します。
+</p>
+<pre class="list">
+リスト : 双方向リストの定義
+
+// セル
+class Cell[A](var prev: Cell[A] = null, var next: Cell[A] = null)
+class ItemCell[A](var item: A) extends Cell[A]
+
+class DList[A] {
+  private val head: Cell[A] = new Cell()
+  head.prev = head
+  head.next = head
+  //
+  // メソッドの定義 (省略)
+  //
+}
+</pre>
+
+<p> Cell[A] は前後のセルを格納するフィールド変数 prev と next だけを持っています。それから、Cell[A] を継承して、要素を格納するセル ItemCell[A] を定義します。DList[A] はヘッダーセルを格納するフィールド変数 head を持っています。ヘッダーセルは Cell[A] で表します。このヘッダーセルに要素を格納した ItemCell[A] を追加します。ヘッダセルの prev と next は head に初期化します。これで双方向リストは空リストになります。
+</p>
+
+<h4>●データの参照</h4>
+<p> 次はデータを参照するメソッド apply を作ります。
+</p>
+
+<pre class="list">
+リスト : データの参照
+
+  // n 番目のセルを求める
+  private def _nth(n: Int): Cell[A] = {
+    val m = if (n &gt;= 0) n else n.abs - 1
+    var cp = if (n &gt;= 0) head.next else head.prev
+    var i = 0
+    while (cp != head) {
+      if (i == m) return cp
+      cp = if (n &gt;= 0) cp.next else cp.prev
+      i += 1
+    }
+    cp
+  }
+
+  // 参照
+  def apply(n: Int): A =
+    _nth(n) match {
+      case that: ItemCell[A] =&gt; that.item
+      case _ =&gt; throw new Exception("DList.apply: out of range")
+    }
+</pre>
+
+<p> 最初に n 番目のセルを求める作業用メソッド _nth を定義します。n が 0 以上であれば、リストを next 方向にたどり、n が負の場合は prev 方向にたどります。あとは、連結リストのメソッド _nth とほとんど同じです。
+</p>
+<p> apply は _nth を呼び出して該当セルを求めます。_nth の返り値の型は Cell[A] なので、match で型が ItemCell[A] かチェックします。そうであれば、格納している要素 that.item を返します。そうでなければ、ヘッダーセルなのでエラーを送出します。
+</p>
+
+<h4>●データの更新</h4>
+<p> 次はデータを更新するメソッド update を作ります。
+</p>
+<pre class="list">
+リスト : データの更新
+
+  def update(n: Int, x: A): Unit =
+    _nth(n) match {
+      case that: ItemCell[A] =&gt; that.item = x
+      case _ =&gt; throw new Exception("DList.update: out of range")
+    }
+</pre>
+<p> _nth で書き換えるセルを求めて match で型チェックします。ItemCell[A] ならば that.item を x に書き換えます。そうでなければ、エラーを送出します。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データを挿入するメソッド insert を作ります。たとえば、セル X の次 (next) にデータを挿入する場合を考えてみましょう。
+</p>
+<pre class="fig">
+         X            Y
+  W &lt;--&gt; [W| |Y] &lt;--&gt; [X| |Z] &lt;--&gt; Z
+
+        X の next に A を挿入
+
+         X            A            Y
+  W &lt;--&gt; [W| |A] &lt;--&gt; [X| |Y] &lt;--&gt; [A| |Z] &lt;--&gt; Z  
+
+ 【注意】[P|  |N] はセルを表す。P : prev, N : next  
+
+                図 : データの挿入
+</pre>
+<p> この場合は X の next と Y の prev を A に書き換え、A の prev と next には X と Y をセットします。また、このままの処理で空リストにデータを挿入することもできます。次の図を見てください。
+</p>
+
+<pre class="fig">
+  H            A
+  [H| |H]      [?| |?]
+
+  H            A
+  [A| |A] &lt;--&gt; [H| |H]  
+
+  図 : 空リストへデータを挿入
+</pre>
+
+<p> 上図に示すように、ヘッダセル H の prev と next は自分自身を格納しているので、H.next, H.prev は H 自身となります。したがって、A の prev と next には H がセットされ、H の prev と next には A がセットされるのです。これで、空リストにデータを挿入することができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データの挿入
+
+  private def insertCell(p: Cell[A], q: Cell[A], x: A): Unit = {
+    val cp = new ItemCell(x)
+    cp.prev = p
+    cp.next = q
+    p.next = cp
+    q.prev = cp
+  }
+
+  def insert(n: Int, x: A): Unit =
+    if (n == 0) insertCell(head, head.next, x)
+    else if (n == -1) insertCell(head.prev, head, x)
+    else _nth(if (n &gt;= 0) n - 1 else n + 1) match {
+           case that: ItemCell[A] =&gt;
+             if (n &gt;= 0) insertCell(that, that.next, x)
+             else insertCell(that.prev, that, x)
+           case _ =&gt; throw new Exception("DList.insert: out of range")
+         }
+</pre>
+
+<p> メソッド insertCell は新しいセル cp を生成して、それをセル p と q の間に挿入します。セルの順番は next 方向で p --&gt; cp --&gt; q です。したがって、cp.prev が p で、cp.next が q になります。それから、p.next が cp で、q.prev が cp になります。
+</p>
+<p> n == 0 のときは、双方向リストの先頭にデータを挿入します。これは insertCell で head と head.next の間に新しいセルを挿入するだけです。n == -1 のときは、双方向リストの末尾にデータを挿入します。insertCell で head.prev と head の間にセルを挿入します。
+</p>
+<p> それ以外の場合は _nth で n - 1 番目のセルを求めます。n が負の場合は n + 1 番目のセルになることに注意してください。セル (that) が見つかった場合、n が 0 以上であれば、that と that.next の間にセルを挿入します。n が負の場合は that.prev と that の間にセルを挿入します。
+</p>
+
+<h4>●データの削除</h4>
+<p> 次は、データを削除するメソッド delete を作ります。次の図を見てください。
+</p>
+<pre class="fig">
+         X            A            Y
+  W &lt;--&gt; [W| |A] &lt;--&gt; [X| |Y] &lt;--&gt; [A| |Z] &lt;--&gt; Z  
+
+        H の next のセル A を削除
+
+         X            A           Y
+  W &lt;--&gt; [W| |Y]      [X| |Y]     [X| |Z] &lt;--&gt; Z
+              ↑                  ↑
+              └─────────┘
+
+                図 : データの削除
+</pre>
+<p> データの削除はとても簡単です。削除するセル A の前後のセルの next と prev を書き換えるだけです。上図の場合、X の next を Y に、Y の prev を X に書き換えます。これでセル A を双方向リストから外すことができます。
+</p>
+<p> ところで、最後のデータを削除する場合もこのままの処理で大丈夫です。次の図を見てください。
+</p>
+
+<pre class="fig">
+  H            A             H
+  [A| |A] &lt;--&gt; [H| |H]  ===&gt; [H| |H]  
+
+        図 : 最後のデータを削除
+</pre>
+
+<p> セル A の next と prev はヘッダセル H を格納しています。したがって、A の次のセル A.next は H になり、その prev は H に書き換えられます。A の後ろのセル A.prev も H になり、その next は H に書き換えられるので、双方向リストは空の状態になります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの削除
+
+  def delete(n: Int): A =
+    _nth(n) match {
+      case that: ItemCell[A] =&gt; {
+        that.prev.next = that.next
+        that.next.prev = that.prev
+        that.item
+      }
+      case _ =&gt; throw new Exception("DList.delete: out of range")
+    }
+</pre>
+
+<p> _nth で削除するセルを求めて match で型チェックします。ItemCell[A] であれば、一つ前のセル that.prev の next を一つ後ろのセル that.next に書き換えます。それから、that.next の prev を that.prev に書き換えます。これでセル (that) をリンクから外すことができます。最後に that.item を返します。
+</p>
+
+<p> あとのプログラムは連結リストと同様にリストをたどって処理を行うだけなので、特に難しいところはないと思います。詳細は <a href="scala13.html#list1">プログラムリスト</a> をお読みくださいませ。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは、簡単な実行例を示しましょう。
+</p>
+<pre>
+scala&gt; val a = new DList[Int]
+a: DList[Int] = DList()
+
+scala&gt; for (i &lt;- 0 to 9) a.insert(-1, i)
+
+scala&gt; a
+res1: DList[Int] = DList(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; a(0)
+res2: Int = 0
+
+scala&gt; a(9)
+res3: Int = 9
+
+scala&gt; a(-1)
+res4: Int = 9
+
+scala&gt; a(-10)
+res5: Int = 0
+
+scala&gt; a(0) = 100
+
+scala&gt; a(-1) = 200
+
+scala&gt; a
+res8: DList[Int] = DList(100, 1, 2, 3, 4, 5, 6, 7, 8, 200)
+
+scala&gt; a.delete(0)
+res9: Int = 100
+
+scala&gt; a.delete(-1)
+res10: Int = 200
+
+scala&gt; a
+res11: DList[Int] = DList(1, 2, 3, 4, 5, 6, 7, 8)
+
+scala&gt; a.mapInto((x:Int) =&gt; x * x)
+
+scala&gt; a
+res13: DList[Int] = DList(1, 4, 9, 16, 25, 36, 49, 64)
+
+scala&gt; a.deleteIf(_ % 2 == 0)
+
+scala&gt; a
+res15: DList[Int] = DList(1, 9, 25, 49)
+
+scala&gt; a.length
+res16: Int = 4
+
+scala&gt; a.isEmpty
+res17: Boolean = false
+
+scala&gt; a.clear
+
+scala&gt; a.isEmpty
+res19: Boolean = true
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●制限付きリスト</h4>
+<p> 今度は DList を継承して、格納する要素数を制限するリスト FixedList というクラスを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 制限付き連結リスト
+
+class FixedList[A](val limit: Int) extends DList[A] {
+  private var size = 0
+
+  override def insert(n: Int, x: A): Unit = {
+    if (size &gt;= limit) throw new Exception("FixedList.insert: List is Full")
+    super.insert(n, x)
+    size += 1
+  }
+
+  override def delete(n: Int): A = {
+    val x = super.delete(n)
+    size -= 1
+    x
+  }
+
+  override def deleteIf(f: A =&gt; Boolean): Int = {
+    val c = super.deleteIf(f)
+    size -= c
+    c
+  }
+
+  override def length(): Int = size
+  def isFull(): Boolean = size == limit
+}
+</pre>
+<p> スーパークラスを指定するとき、DList には型パラメータ A を必ず付けてください。FixedList は指定した上限値までしか要素を格納できません。DList で要素を追加するメソッドは insert で、削除するメソッドは delete と deleteIf です。この 3 つのメソッドをオーバーライドすることで、FixedList の機能を実現することができます。
+</p>
+
+<p> FixedList は DList を継承するので、スーパークラスに DList を指定します。コンストラクタ引数で上限値 limit を受け取り、フィールド変数 size を 0 で初期化します。size は連結リストに格納されている要素数を表します。
+</p>
+
+<p> insert では limit と size を比較して、size が limit よりも小さい場合はデータを挿入します。スーパークラスのメソッド insert を呼び出して size を +1 します。delete の場合は、スーパークラスのメソッド delete を呼び出して size を -1 します。deleteIf の場合もスーパークラスのメソッドを呼び出して、size から削除した個数 c を引き算します。これで、連結リストに格納される要素数を管理することができます。
+</p>
+
+<p> あと、せっかくデータ数を size に保持しているので、メソッド length をオーバーライドして size を返すようにします。また、連結リストが満杯か判定する述語 isFull を追加します。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+scala&gt; val a = new FixedList[Int](8)
+a: FixedList[Int] = DList()
+
+scala&gt; for (i &lt;- 1 to 8) a.insert(-1, i)
+
+scala&gt; a
+res3: FixedList[Int] = DList(1, 2, 3, 4, 5, 6, 7, 8)
+
+scala&gt; a.isFull
+res4: Boolean = true
+
+scala&gt; a.insert(0, 0)
+java.lang.Exception: FixedList.insert: List is Full
+  at FixedList.insert(<console>:15)
+  ... 32 elided
+
+scala&gt; a.delete(-1)
+res6: Int = 8
+
+scala&gt; a.isFull
+res7: Boolean = false
+
+scala&gt; a.insert(0, 0)
+
+scala&gt; a
+res9: FixedList[Int] = DList(0, 1, 2, 3, 4, 5, 6, 7)
+
+scala&gt; a.isFull
+res10: Boolean = true
+
+scala&gt; a.deleteIf(_ % 2 == 0)
+res11: Int = 4
+
+scala&gt; a
+res12: FixedList[Int] = DList(1, 3, 5, 7)
+
+scala&gt; a.isFull
+res13: Boolean = false
+
+scala&gt; for (i &lt;- 11 to 14) a.insert(-1, i)
+
+scala&gt; a
+res15: FixedList[Int] = DList(1, 3, 5, 7, 11, 12, 13, 14)
+
+scala&gt; a.isFull
+res16: Boolean = true
+</pre>
+<p> このように DList を継承することで、FixedList を簡単にプログラムすることができます。
+</p>
+<h4>●スタック</h4>
+<p> 次は双方向リストを使って「スタック (stack) 」という基本的なデータ構造を作ってみましょう。下図を見てください。
+</p>
+<pre class="fig">
+    |-----|     |[ A ]|     |[ B ]|     |[ A ]|     |-----|
+    |  |  |     |-----|     |[ A ]|     |-----|     |  |  |
+    |  |  |     |  |  |     |-----|     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    +-----+     +-----+     +-----+     +-----+     +-----+
+  1. 空の状態  2. PUSH A   3. PUSH B   4. POP B    5. POP A  
+
+                   図 : スタックの動作例
+</pre>
+<p> 図はバネがついた容器を表していて、上から品物を出し入れすることができます。初めは空の状態です。ここに品物を乗せると、重さによってバネを圧縮し、品物が容器に格納されます。さらにもうひとつ品物を上に乗せると、さらにバネを圧縮し、その品物も容器に格納することができます。バネが限界まで圧縮されると、もう品物は追加できなくなります。取り出す場合は、上にある品物から行います。ひとつ取り出すと、その分バネが伸びて下にある品物が上に押し出されます。
+</p>
+
+<p> この容器の動作がスタックの動作になります。スタックにデータを追加する操作をプッシュ (PUSH) といい、スタックからデータを取り出す操作をポップ (POP) といいます。品物をデータに見立てれば、データ A をスタックにプッシュし (2)、次にデータ B をプッシュします (3)。データを取り出す場合、あとから入れたデータ B が先にポップされ (4)、その次にデータ A がポップされてスタックが空になります (5)。
+</p>
+
+<p> このように、スタックはあとから入れたデータが先に取り出されるので、後入れ先出し (LIFO : Last-In, First-Out) と呼ばれます。 
+</p>
+
+
+<h4>●継承は is-a 関係を表す</h4>
+<p> 今まで説明したように、オブジェクトは関数とデータをひとつにまとめたものです。オブジェクト指向プログラミングは、このオブジェクトを部品として扱います。実際には、クラス単位でプログラムを作るので、クラス間の関係がとても重要になります。ここで、クラス間の関係 is-a と has-a を簡単に説明します。
+</p>
+
+<p> is-a 関係は X is a Y. の略で、「X は Y の一種である」という意味になります。X がサブクラスで Y をスーパークラスと考えると、is-a 関係は継承で表すことができます。たとえば、FixedList は格納する要素数に制限がありますが双方向リストの一種であることは明らかです。FixedList クラスは DList クラスを継承することで簡単に実装できましたが、それは双方向リストとの間に is-a 関係があるからです。
+</p>
+
+<p> has-a 関係は X has a Y. の略で、「X は Y を持っている」という意味です。たとえば、車にはエンジンやタイヤがありますが、車とエンジンやタイヤに成り立つ関係が has-a です。車はエンジンやタイヤがないと走ることができません。このように、has-a 関係は「X が成立するのに欠かせない要素が Y である」という関係を表しています。
+</p>
+
+<p> has-a 関係のほかに、is-implemented-using という関係があります。これは X is implemented using Y. の略で、「X は Y を使って実装される」という意味です。たとえば、スタックの場合、配列でも連結リストでも実装することが可能です。つまり、Y の種類によらず X を実現できる関係が is-implemented-using 関係なのです。
+</p>
+
+<p> 一般に、has-a 関係や is-implemented-using 関係は、クラス X のインスタンス変数にクラス Y のオブジェクト（インスタンス）を格納することで表します。これを「X は Y を包含している」といいます。そして、これらの関係を表すのに継承を使ってはいけない、ということに注意してください。
+</p>
+
+<p> たとえば、双方向リストを継承してスタックを作ることを考えてみましょう。PUSH は双方向リストの先頭にデータを追加することで、POP は双方向リストの先頭からデータを取り出すことで簡単に実現できます。しかし、双方向リストを継承すると、ほかの操作も可能になります。スタックの途中にデータを追加したり、途中からデータを取り出すなど、スタックを破壊する危険な操作が可能になってしまいます。
+</p>
+
+<p> また、クラスの関係を考えた場合、スタックと双方向リストには is-a 関係は成り立ちません。ところが、継承を使うとデータ型も引き継がれるため、プログラムの上でもスタックは双方向リストの一種になってしまいます。継承は強力な機能ですが万能ではありません。クラス間の関係を考えて、適切に使うことが大切です。 
+</p>
+
+<h4>●mutable なスタックの実装</h4>
+<p> それでは、実際に双方向リストを使って mutable なスタックを実装してみましょう。クラス名は Stack とし、下表に示すメソッドを定義します。
+</p>
+<table border=1>
+<caption>表 : スタックのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>push(x: A): Unit  </td><td>スタックにデータを追加する</td></tr>
+  <tr><td>pop(): A    </td><td>スタックからデータを取り出す</td></tr>
+  <tr><td>front(): A    </td><td>スタックの先頭データを返す</td></tr>
+  <tr><td>length(): Int    </td><td>要素の個数を返す</td></tr>
+  <tr><td>isEmpty(): Booelan</td><td>スタックが空ならば true を返す</td></tr>
+  <tr><td>clear(): Unit    </td><td>スタックを空にする</td></tr>
+</tbody>
+</table>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : スタック
+
+class Stack[A] {
+  val top = new DList[A]
+
+  def push(x: A): Unit = top.insert(0, x)
+
+  def pop(): A =
+    if (top.isEmpty) throw new Exception("Stack is Empty")
+    else top.delete(0)
+
+  def front(): A =
+    if (top.isEmpty) throw new Exception("Stack is Empty")
+    else top(0)
+
+  def length(): Int = top.length
+
+  def isEmpty(): Boolean = top.isEmpty
+
+  def clear(): Unit = top.clear
+}
+</pre>
+<p> Stack のフィールド変数 top に DList のインスタンスをセットします。このときも DList に型パラメータ A を忘れずに指定してください。もしくは、変数 top で型 DList[A] を指定してもかまいません。
+</p>
+
+<p> メソッド push はスタックにデータ x を追加します。これはリストの先頭に x を追加すればいいので、メソッド insert(0, x) を呼び出すだけです。メソッド pop はリストの先頭の要素を削除してそれを返せばよいので、メソッド delete(0) を呼び出すだけです。後のメソッドも、DList の適切なメソッドを呼び出すだけです。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+
+<pre>
+scala&gt; val a = new Stack[Int]
+a: Stack[Int] = Stack@82c44a
+
+scala&gt; for (i &lt;- 1 to 8) a.push(i)
+
+scala&gt; a.length
+res1: Int = 8
+
+scala&gt; a.isEmpty
+res2: Boolean = false
+
+scala&gt; while (!a.isEmpty) println(a.pop)
+8
+7
+6
+5
+4
+3
+2
+1
+
+scala&gt; a.isEmpty
+res4: Boolean = true
+</pre>
+
+<p> スタックに 1 から 8 まで push で格納し pop でデータを取り出すと 8, 7, ..., 2, 1 になります。このように、スタックは後から入れたデータが先に取り出されます。
+</p>
+
+<h4>●キュー</h4>
+<p> 次は「キュー (queue) 」という基本的なデータ構造を作ってみましょう。たとえばチケットを買う場合、カウンタの前に並んで順番を待たなくてはいけません。キューはカウンタの前に並ぶ行列と考えてください。列の先頭にいる人から順番にチケットを買うことができますが、あとから来た人は列の後ろに並ばなくてはいけません。列の先頭まで進むと、チケットを購入することができます。これを表したのが次の図です。
+</p>
+<pre class="fig">
+ out                            in
+    ──────────────
+&lt;=  A  B  C  D  E  .  .  .  Z    &lt;=
+    ──────────────
+
+       図 : キューの動作
+</pre>
+<p> このように、キューはデータを取り出すときは列の先頭から行い、データを追加するときは列の後ろへ行います。このため、キューは「待ち行列」とか「先入れ先出し (FIFO : first-in, first-out) 」と呼ばれます。
+</p>
+
+<h4>●mutable なキューの実装</h4>
+<p> それでは、DList を使ってキューを作ってみましょう。定義するメソッドを次の表に示します。
+</p>
+
+<table border=1>
+<caption>表 : キューのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>enqueue(x: A): Unit</td><td>キューにデータを追加する</td></tr>
+  <tr><td>dequeue(): Option[A] </td><td>キューからデータを取り出す</td></tr>
+  <tr><td>peek(): Option[A] </td><td>キューの先頭データを参照する</td></tr>
+  <tr><td>isEmpty(): Boolean </td><td>キューが空ならば true を返す</td></tr>
+  <tr><td>length(): Int</td><td>キューに格納された要素の個数を返す</td></tr>
+  <tr><td>clear(): Unit </td><td>キューを空にする</td></tr>
+</tbody>
+</table>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : キュー
+
+class Queue[A] {
+  private val q = new DList[A]
+
+  def enqueue(x: A): Unit = q.insert(-1, x)
+
+  def dequeue(): A = {
+    if (q.isEmpty) throw new Exception("Queue is Empty")
+    q.delete(0)
+  }
+
+  def peek(): A = {
+    if (q.isEmpty) throw new Exception("Queue is Empty")
+    q(0)
+  }
+
+  def isEmpty(): Boolean = q.isEmpty
+
+  def length(): Int = q.length
+
+  def clear(): Unit = q.clear
+}
+</pre>
+<p> enqueue は双方向リストの末尾にデータを追加すればいいので q.insert(-1. x) を呼び出します。dequeu は先頭データを取り出せばいいので、q.delete(0) を呼び出します。あとのメソッドも DList の適切なメソッドを呼び出すだけです。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; val a = new Queue[Int]
+a: Queue[Int] = Queue@1a5d4f9
+
+scala&gt; for (i &lt;- 1 to 8) a.enqueue(i)
+
+scala&gt; a.length
+res2: Int = 8
+
+scala&gt; a.isEmpty
+res3: Boolean = false
+
+scala&gt; while (!a.isEmpty) println(a.dequeue)
+1
+2
+3
+4
+5
+6
+7
+8
+
+scala&gt; a.isEmpty
+res5: Boolean = true
+</pre>
+<p> キューに 1 から 8 まで enqueue で格納して、dequeue でデータを取り出すと 1, 2,  ..., 7, 8 になります。スタックとは逆に、キューはデータを入れた順番にデータが取り出されます。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// DList.scala : doubly-linked list
+//
+//               Copyright (C) 2014 Makoto Hiroi
+//
+
+// セル
+class Cell[A](var prev: Cell[A] = null, var next: Cell[A] = null)
+class ItemCell[A](var item: A) extends Cell[A]
+
+// 双方向リスト
+class DList[A] {
+  private val head: Cell[A] = new Cell()
+  head.prev = head
+  head.next = head
+
+  // 作業用メソッド
+  private def _nth(n: Int): Cell[A] = {
+    val m = if (n &gt;= 0) n else n.abs - 1
+    var cp = if (n &gt;= 0) head.next else head.prev
+    var i = 0
+    while (cp != head) {
+      if (i == m) return cp
+      cp = if (n &gt;= 0) cp.next else cp.prev
+      i += 1
+    }
+    cp
+  }
+
+  // 参照
+  def apply(n: Int): A =
+    _nth(n) match {
+      case that: ItemCell[A] =&gt; that.item
+      case _ =&gt; throw new Exception("DList.apply: out of range")
+    }
+
+  // 更新
+  def update(n: Int, x: A): Unit =
+    _nth(n) match {
+      case that: ItemCell[A] =&gt; that.item = x
+      case _ =&gt; throw new Exception("DList.update: out of range")
+    }
+
+  // 削除
+  def delete(n: Int): A =
+    _nth(n) match {
+      case that: ItemCell[A] =&gt; {
+        that.prev.next = that.next
+        that.next.prev = that.prev
+        that.item
+      }
+      case _ =&gt; throw new Exception("DList.delete: out of range")
+    }
+
+  // セルの挿入
+  private def insertCell(p: Cell[A], q: Cell[A], x: A): Unit = {
+    val cp = new ItemCell(x)
+    cp.prev = p
+    cp.next = q
+    p.next = cp
+    q.prev = cp
+  }
+
+  // 挿入
+  def insert(n: Int, x: A): Unit =
+    if (n == 0) insertCell(head, head.next, x)
+    else if (n == -1) insertCell(head.prev, head, x)
+    else _nth(if (n &gt;= 0) n - 1 else n + 1) match {
+           case that: ItemCell[A] =&gt;
+             if (n &gt;= 0) insertCell(that, that.next, x)
+             else insertCell(that.prev, that, x)
+           case _ =&gt; throw new Exception("DList.insert: out of range")
+         }
+
+  // 長さ
+  def length(): Int = {
+    var n = 0
+    var cp = head.next
+    while (cp != head) {
+      n += 1
+      cp = cp.next
+    }
+    n
+  }
+
+  // マッピング
+  def mapInto(f: A =&gt; A) {
+    var cp = head.next
+    while (cp != head) {
+      cp match {
+        case that: ItemCell[A] =&gt; that.item = f(that.item)
+      }
+      cp = cp.next
+    }
+  }
+
+  // 探索
+  def positionIf(f: A =&gt; Boolean): Int = {
+    var cp = head.next
+    var i = 0
+    while (cp != head) {
+      cp match {
+        case that: ItemCell[A] =&gt; if (f(that.item)) return i
+      }
+      i += 1
+      cp = cp.next
+    }
+    -1
+  }
+
+  // フィルター
+  def deleteIf(f: A =&gt; Boolean): Int = {
+    var cp = head.next
+    var c = 0
+    while (cp != head) {
+      cp match {
+        case that: ItemCell[A] =&gt;
+          if (f(that.item)) {
+            that.prev.next = that.next
+            that.next.prev = that.prev
+            c += 1
+          }
+      }
+      cp = cp.next
+    }
+    c
+  }
+
+  // 畳み込み
+  def foldl[B](a: B, f: (B, A) =&gt; B): B = {
+    var cp = head.next
+    var acc = a
+    while (cp != head) {
+      cp match {
+        case that: ItemCell[A] =&gt; acc = f(acc, that.item)
+      }
+      cp = cp.next
+    }
+    acc
+  }
+
+  def foldr[B](a: B, f: (A, B) =&gt; B): B = {
+    var cp = head.prev
+    var acc = a
+    while (cp != head) {
+      cp match {
+        case that: ItemCell[A] =&gt; acc = f(that.item, acc)
+      }
+      cp = cp.prev
+    }
+    acc
+  }
+
+  // 巡回
+  def foreach(f: A =&gt; Unit) {
+    var cp = head.next
+    while (cp != head) {
+      cp match {
+        case that: ItemCell[A] =&gt; f(that.item)
+      }
+      cp = cp.next
+    }
+  }
+
+  // 空リストか？
+  def isEmpty(): Boolean = head == head.next
+
+  // リストを空にする
+  def clear(): Unit = {
+    head.prev = head
+    head.next = head
+  }
+
+  override def toString: String = {
+    var s = "DList("
+    var cp = head.next
+    while (cp != head) {
+      cp match {
+        case that: ItemCell[A] =&gt; 
+          if (cp.next == head) s += that.item else s += that.item + ", "
+        case _ =&gt; ()
+      }
+      cp = cp.next
+    }
+    s += ")"
+    s
+  }
+}
+
+//
+// 制限付きリスト
+//
+class FixedList[A](val limit: Int) extends DList[A] {
+  private var size = 0
+
+  override def insert(n: Int, x: A): Unit = {
+    if (size &gt;= limit) throw new Exception("FixedList.insert: List is Full")
+    super.insert(n, x)
+    size += 1
+  }
+
+  override def delete(n: Int): A = {
+    val x = super.delete(n)
+    size -= 1
+    x
+  }
+
+  override def deleteIf(f: A =&gt; Boolean): Int = {
+    val c = super.deleteIf(f)
+    size -= c
+    c
+  }
+
+  override def length(): Int = size
+  def isFull(): Boolean = size == limit
+}
+
+//
+// スタック
+//
+class Stack[A] {
+  private val top = new DList[A]
+
+  def push(x: A): Unit = top.insert(0, x)
+
+  def pop(): A =
+    if (top.isEmpty) throw new Exception("Stack is Empty")
+    else top.delete(0)
+
+  def front(): A =
+    if (top.isEmpty) throw new Exception("Stack is Empty")
+    else top(0)
+
+  def length(): Int = top.length
+
+  def isEmpty(): Boolean = top.isEmpty
+
+  def clear(): Unit = top.clear
+}
+
+//
+// キュー
+//
+class Queue[A] {
+  private val q = new DList[A]
+
+  def enqueue(x: A): Unit = q.insert(-1, x)
+
+  def dequeue(): A = {
+    if (q.isEmpty) throw new Exception("Queue is Empty")
+    q.delete(0)
+  }
+
+  def peek(): A = {
+    if (q.isEmpty) throw new Exception("Queue is Empty")
+    q(0)
+  }
+
+  def isEmpty(): Boolean = q.isEmpty
+
+  def length(): Int = q.length
+
+  def clear(): Unit = q.clear
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b> Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="scala12.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala14.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

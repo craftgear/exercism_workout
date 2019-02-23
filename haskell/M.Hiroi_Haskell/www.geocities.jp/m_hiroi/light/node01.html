@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Node.js 超入門</title>
+  <meta name="description" content="JavaScript,Underscore.js,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881858</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>お気楽 Node.js 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="node.html">Node.js</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3 id="chap01">Node.js の基礎知識</h3>
+<p> Node.js は JavaScript で Web アプリケーションを作成するためのプラットフォームです。一般に、Web アプリケーションはサーバーサイドとクライアントサイドに分けることができます。通常、JavaScript はクライアントサイドで用いられるプログラミング言語ですが、Node.js を使うとサーバーサイドの開発にも JavaScript を用いることができます。これをサーバーサイド JavaScript と呼びますが、現在もっとも有名なプラットフォームが Node.js です。
+</p>
+<p> まずは最初に、基本となるサーバークライアントモデルについて簡単に説明します。
+</p>
+<h4>●サーバークライアントモデル</h4>
+<p> 私達が Web ページを閲覧する場合、普通は「ブラウザ (browser)」を使います。フリーで利用できるブラウザはいろいろありますが、M.Hiroi は Google Chrome を愛用しています。Web ページは Web サーバーのハードディスクに保管されているのが普通です。本稿では、Web サーバーのことをサーバーと略して記述することにします。
+</p>
+<p> サーバーは世界中にたくさんあり、インターネットでつながれています。ブラウザは私達の要求 (リクエスト) を受け付け、インターネットを介してサーバーへ伝えます。そして、該当するサーバーからブラウザへデータが送られ、ブラウザ上で Web ページが表示されます。この関係を図に表すと、次のようになります。
+</p>
+<pre class="fig">
+┌─────┐──要求─→ ┌─────┐
+│ ブラウザ │             │ サーバー │
+└─────┘←─応答── └─────┘
+                                 ↑
+                                 │
+                           ┌─────┐
+                           │ Web Page │（ハードディスク）
+                           └─────┘
+
+              図 : ブラウザとサーバーの関係
+</pre>
+<p> このような仕組みを「サーバークライアントモデル」といいます。サービスを提供するサーバーを用意して、顧客・利用者 (クライアント) がそれを利用する、というスタイルです。このため、ブラウザは WWW クライアントとか Web クライアントと呼ばれることがあります。サーバークライアントモデルは、インターネットに限らず会社やグループ内でネットを構築する場合でも使われるモデルです。
+</p>
+<p> サーバーとクライアントには、通信を行うための手順 (プロトコル) が決まられています。ブラウザとサーバーの間では、HTTP というプロトコルが使われます。Web ページの住所である URL をブラウザに入力するとき、先頭に http をつけますが、これはプロトコルに HTTP を使うことを表しています。このほかにも、ファイル転送用のプロトコル ftp や電子メール用のプロトコル SMTP, POP3 などがあります。
+</p>
+<p> 通常、Web ページは HTML (Hyper Text Markup Language) という言語で書かれています。HTML は通常のテキストデータであり、エディタで簡単に作成できるものです。HTML の基本型は次のようになります。
+</p>
+<pre class="list">
+リスト : index.html
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;お気楽 Node.js 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;hello, world&lt;/h1&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> HTML はテキストにタグを埋め込むことで、いろいろな情報を表します。タグは &lt;title&gt; のように &lt; と &gt; で囲み、 &lt;title&gt; と &lt;/title&gt; のように対になって使われる場合が多いです。これを開始タグと終了タグといいます。このようなタグを使うことで、テキスト以外のコンテンツでも表示させることができます。ブラウザはサーバーから送られてきた HTML ファイルを解釈して、私たちが使っているパソコンの画面上にそれを表示するわけです。
+</p>
+<h4>●静的コンテンツと動的コンテンツ</h4>
+<p> ここで、ブラウザはサーバーから送られてきた HTML ファイルを表示していることに注意してください。ふつうはハードディスクに保管されている HTML ファイルをブラウザへ送ります。このため、Web サーバー上の HTML ファイルを書き換えない限り、何度アクセスしても同じ内容が表示されます。これを「静的コンテンツ」とか「静的なページ」といいます。
+</p>
+<p> もしも、リクエストのたびにファイルの内容を変更することができれば、ブラウザに異なる内容を表示させることができます。これを「動的コンテンツ」とか「動的なページ」といいます。このような処理は CGI (Common Gateway Interface) を使うことで実現できます。
+</p>
+<p> CGI はブラウザから入力されたデータを外部のプログラムに渡して処理を行い、その結果をブラウザへ返すための仕組みです。たとえば、インターネットでは Google や Bing といった検索サイトで Web ページを検索することができます。これは、ブラウザから入力されたデータをキーとしてデータベースを検索し、その結果を HTML 形式でブラウザへ返すことで、画面に検索結果を表示しています。これを図に表すと次のようになります。
+</p>
+<pre class="fig">
+┌─────┐─要求→ ┌─────┐─起動→ ┌───────┐
+│ ブラウザ │         │ サーバー │         │CGI プログラム│
+└─────┘←応答─ └─────┘←結果─ └───────┘
+
+                     図 : ＣＧＩプログラムの起動
+</pre>
+<p> サーバーはブラウザからの要求に応じて、プログラムを起動します。起動されたプログラムは、サーバー経由でブラウザからのデータを受け取り、必要な処理を行って、その結果をサーバーに返します。サーバーはその結果をブラウザに返すだけです。プログラムの起動方法と出力結果の返し方には約束事があり、これを CGI と呼びます。そして、サーバーで実行されるプログラムを CGI プログラムとか CGI スクリプトと呼びます。
+</p>
+<p> CGI を使ってホームページの内容を部分的に変化させたい場合、SSI (Server Side Include) を使うと簡単に実現できます。SSI は「サーバーサイドインクルート」と呼ばれ、ブラウザから要求されている HTML ファイルに、その時点での情報を追加する機能です。SSI も外部プログラムを起動することができます。
+</p>
+<p> ブラウザはサーバーから受け取る HTML 形式のデータを表示するだけなので、ハードディスクに格納されているファイルの代わりに、CGI プログラムで HTML 形式のデータを生成することで、アクセスするたびに異なる内容を表示させることができるわけです。
+</p>
+
+<h4>●Node.js の特徴</h4>
+<p> CGI 用のプログラミング言語といえば Perl が有名ですが、環境変数と標準入出力を扱うことができる言語であれば何でもかまいません。もちろん、Node.js を使って CGI スクリプトを作成することは可能ですが、それは Node.js 本来の使い方ではありません。JavaScript を使ってサーバーを構築することが Node.js の目的です。サーバーを作るのは大変難しいと思われるかもしれません。ところが、Node.js にはサーバー用の部品があらかじめライブラリに用意されているので、それらを使って比較的簡単にサーバーを構築できるようになっています。
+</p>
+<p> そして、Node.js は動的コンテンツも JavaScript を使って簡単に作成することができます。たとえば、HTML ファイルの雛型 (テンプレート) を用意しておいて、テンプレートエンジンを使って実際の HTML ファイルを生成します。Node.js にはいろいろなテンプレートエンジンがライブラリに用意されています。CGI のように外部プログラムを実行する必要はなく、Node.js の中だけで処理することができます。
+</p>
+<p> もう一つ Node.js の大きな特徴に「イベントループ」と「ノンブロッキング I/O」があります。サーバーはリクエストを受け付けて処理を実行するとき、リクエストごとにスレッド (またはプロセス) を生成する方式と、メインスレッドひとつで複数のリクエストに対応する方式の 2 つに大別することができます。前者の場合、スレッドを生成するたびにメモリを消費するので、一度に大量のリクエストが来るとメモリの制限により、それらすべてに対応するのは難しくなります。これを「C10K 問題 (クライアント 1 万台問題)」といいます。
+</p>
+<p> 後者の場合、新しいスレッドを生成しないのでメモリの消費が少なく、大量のリクエストにも対応することが可能になります。Node.js は後者の方式で、ここで用いられる技術がイベントループとノンブロッキング I/O です。これらの技術により Node.js は C10K 問題を解決しています。
+</p>
+
+<h4>●イベントループとノンブロッキング I/O</h4>
+<p> イベントループは「イベント駆動 (イベントドリブン) 型」のプログラムが持っている中心的な制御構造です。たとえば、GUI アプリケーションやブラウザを考えてみましょう。これらのアプリケーションは、ユーザーからの入力 (リクエスト) やシステムの状態変化など、あるイベントをきっかけに処理を実行します。このようなプログラムは、一般に次のようなメインルーチンを持っています。
+</p>
+<ol>
+  <li>初期化
+  <li>イベントを取得する
+  <li>イベントの種類に応じて処理を振り分ける
+  <li>2 に戻る
+</ol>
+<p> 2 から 4 を「イベントループ」と呼び、アプリケーションはユーザーからの入力 (リクエスト) などのイベントを待ちます。そして、3 の処理に対応する機能を「バインディング (binding)」といいます。バインディングはイベントが発生したときに、それに応じて実行するプログラムを設定します。このプログラムを「イベントハンドラ」とか「コールバック関数」と呼びます。Node.js にもイベントループがあります。
+</p>
+<p> 一般に、イベントは非同期に発生するので、それに対応するコールバック関数も非同期に実行されることになります。JavaScript はシングルスレッドのプログラミング言語なので、複数のプログラムを同時に実行することはできません。このため、ブラウザの JavaScript 処理系や Node.js では、イベントが発生したら対応するコールバック関数をすぐに実行するのではなく、いったんキュー (queue, 待ち行列) に登録しておいて、あとでキューからコールバック関数を取り出して順番に処理するようになっています。
+</p>
+<p> コールバック関数はイベントだけではなく、時間がかかる処理を実行するときにも使われます。たとえば、ファイル入出力や通信などの処理を行う場合、それが終了するまで待っていると、Node.js では他の処理を実行することができなくなります。このため、入出力処理はバックグランドで行うようにし、処理が完了したら渡されたコールバック関数をキューに登録します。これにより、メインスレッドでは入出力処理の終了を待たずに次の処理を実行することができます。これをノンブロッキング I/O といいます。
+</p>
+<p> 簡単な例を示しましょう。関数 setTimeout() を使うと、指定した時間後にコールバック関数を実行することができます。
+</p>
+<pre class="item">
+setTimeout(callback, after [, args, ...])
+</pre>
+<p> 引数 callback は after msec 後に実行するコールバック関数です。callback に与える引数は after の後ろに指定することができます。
+</p>
+<p> それでは実際に Node.js の REPL で試してみましょう。
+</p>
+<pre>
+&gt; function foo() {
+... console.log("foo start");
+... setTimeout(console.log, 2000, "oops!!")
+... setTimeout(console.log, 1000, "oops!")
+... console.log("foo end");
+... }
+undefined
+&gt; foo()
+foo start
+foo end
+undefined
+&gt; oops!
+oops!!
+</pre>
+<p> 関数 foo() は最初に foo start を表示し、次に setTimeout() を実行します。これらの処理はすぐに終了するので、最後に foo end を表示します。setTimeout() が次の処理を止めていないことがわかると思います。これがノンブロッキングの動作です。もしも、setTimeout() がビジーループで実装されていると、指定した時間経過しないかぎり次の処理に進むことができなくなります。これがブロッキングの動作になります。
+</p>
+<p> foo() の処理を終了すると REPL に戻りますが、そこでキューの状態を監視していて、キューにコールバック関数が登録されているならば、それを順番に取り出して実行します。その結果、1 秒後と 2 秒後に oops! と oops!! が表示されます。
+</p>
+
+<h4>●テキストの出力</h4>
+<p> それでは Node.js を使って、とても簡単なサーバーを作ってみましょう。このサーバーはリクエストを受け付けたらテキスト hello, world を返すだけです。Node.js の場合、ライブラリは「モジュール (module)」 <sup><a href="node01.html#note1">[*1]</a></sup> として用意されています。モジュールは require('module') で読み込むことができます。require() は引数の module を読み込み、そのモジュールに含まれるメソッドやクラスを格納したオブジェクトを返します。
+</p>
+<p> サーバーを作るときはモジュール http を使います。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : テキストを返すサーバー
+
+const http = require('http'),
+      server = http.createServer();
+server.on('request', (req, res) =&gt; {
+  res.writeHead(200, {'Content-Type': 'text/plain'});
+  res.write('hello, world');
+  res.end();
+});
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> 最初にモジュール http を読み込み、それを変数 http にセットします。サーバーを生成するにはメソッド createServer() を使います。生成したサーバーオブジェクトを変数 server にセットします。そして、メソッド on() を使ってイベント 'request' に対応するコールバック関数を登録します。request はブラウザからのリクエストを表すイベントです。なお、このコールバック関数は createSever() に引数として渡すこともできます。
+</p>
+<p> アロー関数の引数 req はブラウザからのリクエストを表す http.IncomingMessage のオブジェクト、res はブラウザに返すレスポンスを表す http.ServerResponse のオブジェクトです。res にいろいろなデータを書き込んで最後にメソッド end() を実行すると、それがレスポンスとしてブラウザに返されます。
+</p>
+<p> 最初はメソッド writeHead() で HTTP ヘッダを書き込みます。第 1 引数が HTTP レスポンスコードで、200 はリクエストが成功したことを表すコードです。第 2 引数には HTTP ヘッダをオブジェクトに格納して渡します。Content-Type はコンテントタイプと呼ばれる重要なヘッダで、これから送るデータの種類を表します。text/plain は単純なテキスト形式を表します。主な HTTP ヘッダとコンテントタイプの種類 (MIMEタイプ) を示します。
+</p>
+<table border=1>
+<caption>表：主な HTTP ヘッダの種類</caption>
+<tr><th>HTTP ヘッダ</th><th>ヘッダの内容</th></tr>
+<tr><td>Content-type   </td><td>データの種類(MIMEタイプ)</td></tr>
+<tr><td>Content-length </td><td>データの長さ(バイト数)</td></tr>
+<tr><td>Expires        </td><td>有効期限</td></tr>
+<tr><td>Pragma         </td><td>キャッシュ制御用</td></tr>
+<tr><td>Location       </td><td>指定した URL にあるデータを送信</td></tr>
+<tr><td>Status         </td><td>ステータス</td></tr>
+<tr><td>Set-Cookie     </td><td>クッキー用</td></tr>
+<tr><td>Refresh        </td><td>再ロード用</td></tr>
+</table>
+<br>
+<table border=1>
+<caption>表：主なコンテントタイプの種類</caption>
+<tr><th>タイプ</th><th>送られるもの</th></tr>
+<tr><td>text/html  </td><td>HTML 形式のテキスト</td></tr>
+<tr><td>text/plain </td><td>単純なテキスト</td></tr>
+<tr><td>text/css   </td><td>CSS 形式のテキスト</td></tr>
+<tr><td>application/javascript</td></td><td>JavaScript のプログラム</td></tr>
+<tr><td>image/gif  </td><td>gif  形式の画像</td></tr>
+<tr><td>image/png  </td><td>png  形式の画像</td></tr>
+<tr><td>image/jpeg </td><td>jpeg 形式の画像</td></tr>
+</table>
+<p> メソッド listen() を実行すると、指定されたホスト名とポート番号でリクエストを待ちます。第 1 引数がポート番号です。通常、HTTP はポート 80 を使用しますが、今回は 1337 としました。第 2 引数にはホスト名または IP アドレスを指定します。IP アドレスはコンピュータを識別するための番号です。単なる番号では覚えにくいので、私たちは www.geocities.jp のように名前を使います。
+</p>
+<p> ホスト名 localhost を IP アドレスで表すと 127.0.0.1 になります。127.0.0.1 は自分自身を表す特別な IP アドレスです。127.0.0.1 を指定すると、自分のコンピュータで動作しているサーバーにアクセスすることになります。最後に、サーバーが動いていることを示すメッセージを表示します。
+</p>
+<p> サーバーの起動は簡単です。ファイル名を sample01.js とすると、シェルで node sample01.js を実行するだけです。
+</p>
+<pre>
+C&gt;node sample01.js
+server listening...
+</pre>
+<p> サーバーを停止するには Ctrl-C を入力してください。この状態でブラウザに URL (localhost:1337) を入力すると、hello, world と表示されます。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a>　Node.js のモジュールは ECMAScript2015 (ES2015) に準拠したものではありません。
+</div>
+<h4>●HTML 形式の出力</h4>
+<p> HTML 形式でテキストを出力することも簡単です。次のリストを見てください。 
+</p>
+<pre class="list">
+リスト : HTML を出力するサーバー
+
+const http = require('http'),
+      server = http.createServer();
+server.on('request', (req, res) =&gt; {
+  res.writeHead(200, {'Content-Type': 'text/html'});
+  res.write('&lt;html&gt;&lt;body&gt;&lt;h1&gt;hello, world&lt;/h1&gt;&lt;/body&gt;&lt;/html&gt;');
+  res.end();
+});
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> Content-Type を text/html に変更し、write() で HTML 形式のテキストを書き込むだけです。
+</p>
+<h4>●HTML ファイルの読み込み</h4>
+<p> HTML ファイルをブラウザに返す場合はモジュール fs を使います。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 簡単なサーバー (3)
+
+const http = require('http'),
+      fs = require('fs'),
+      server = http.createServer();
+server.on('request', (req, res) =&gt; {
+  fs.readFile(__dirname + '/public_html/index.html', 'utf-8', (err, data) =&gt; {
+    if (err) {
+      res.writeHead(404, {'Content-Type': 'text/plain'});
+      res.write('not found');
+    } else {
+      res.writeHead(200, {'Content-Type': 'text/html'});
+      res.write(data);
+    }
+    res.end();
+  });
+});
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> HTML ファイルを格納するディレクトリ public_html をカレントディレクトリに作成し、そこに index.html を格納します。カレントディレクトリは変数 __dirname で取得することができます。モジュール fs にはファイル入出力関連の便利なメソッドがたくさん用意されています。ファイルの読み込みはメソッド readFile() で行います。
+</p>
+<pre class="item">
+fs.readFile(filename, [,encoding], callback)
+</pre>
+<p> filename がファイル名、encoding が文字コード、callback がコールバック関数です。encoding を指定すると、読み込んだデータは文字列に変換されて callback の第 2 引数に渡されます。encoding を省略する、または null を指定すると、読み込んだデータをそのままバッファ (Buffer クラスのオブジェクト) に格納して渡します。Buffer は生のデータを扱うためのクラスです。バイナリファイルを読み込むときは null を指定してください。readFile() はノンブロッキング I/O なので、ファイルの読み込みが終了するとコールバック関数が実行されます。
+</p>
+<p> アロー関数の第 1 引数 err にエラー情報、第 2 引数 data に読み込んだデータが渡されます。最初に err をチェックします。エラーであればファイルが見つからなかったとして、テキストで not found を返します。この場合、HTTP レスポンスコードは 404 になります。読み込みが正常に終了したら、メソッド write() で data を書き込むだけです。なお、このプログラムは encoding に utf-8 を指定しましたが、データの加工が不要な静的コンテンツであれば、encoding に null を指定してバッファをそのまま write() に渡すこともできます。
+</p>
+<h4>●URL の取得</h4>
+<p> ユーザーが入力した URL は、http.IncomingMessage のプロパティ headers や url から取得することができます。headers にはたくさんの情報がありますが、ホスト名とポート番号は headers.host で、それ以降のデータは url に格納されています。簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : URL の取得
+
+const http = require('http'),
+      server = http.createServer();
+server.on('request', (req, res) =&gt; {
+  res.writeHead(200, {'Content-Type': 'text/plain'});
+  res.write('hello, ' + req.headers.host + req.url);
+  res.end();
+});
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> headers.host と url をテキストで返しているだけです。実際に URL を入力すると、次のように表示されます、
+</p>
+<pre class="item">
+localhost:1337            =&gt; hello, localhost:1337/
+localhost:1337/about      =&gt; hello, localhost:1337/about
+localhost:1337/index.html =&gt; hello, localhost:1337/index.html
+</pre>
+<p> ホスト名だけの入力だと url の値は '/' になります。それ以外の場合は入力されたデータがそのまま url に格納されます。URL の解析にはモジュール url を使用します。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; const url = require('url');
+undefined
+&gt; url.parse('http://localhost:1337/index.html?foo=123&amp;bar=456');
+Url {
+  protocol: 'http:',
+  slashes: true,
+  auth: null,
+  host: 'localhost:1337',
+  port: '1337',
+  hostname: 'localhost',
+  hash: null,
+  search: '?foo=123&amp;bar=456',
+  query: 'foo=123&amp;bar=456',
+  pathname: '/index.html',
+  path: '/index.html?foo=123&amp;bar=456',
+  href: 'http://localhost:1337/index.html?foo=123&amp;bar=456' }
+</pre>
+<p> URL の解析はメソッド parse() で行います。slash は http: の後ろに // がある場合は true になります。auth には認証情報 (ユーザー名:パスワード)、hash はハッシュタグ (#) の値、search と query にはクエリ文字列の情報がセットされます。これはあとで説明します。リクエストされたファイル名は pathname で取得することができます。
+</p>
+<p> クエリ文字列はブラウザからサーバーにデータを送信するための表記法です。URL の末尾に ? を付け、そのあとに 名前=値 の形式で記述します。値が複数あるときは &amp; で区切ります。parse() の第 2 引数に true を指定すると、クエリ文字列の解析が行われ、その結果が query に格納されます。上の例であれば query: { foo: '123', bar: '456' } となります。なお、クエリ文字列の解析はモジュール querystring でも行うことができます。
+</p>
+<h4>●簡単なサーバー</h4>
+<p> 最後に簡単な例題として、静的コンテンツ用の簡単なサーバーを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+//
+// mysever.js : 静的コンテンツ用の簡単なサーバー
+//
+//               Copyright (C) 2017 Makoto Hiroi
+//
+const http = require('http'),
+      fs = require('fs'),
+      url = require('url'),
+      path = require('path'),
+      mimeType = {
+        '.html': 'text/html',
+        '.txt': 'text/plain',
+        '.css': 'text/css',
+        '.js': 'application/javascript',
+        '.gif': 'image/gif',
+        '.jpg': 'image/jpeg',
+        '.png': 'image/png'
+      },
+      server = http.createServer();
+
+// ファイルの送信
+function sendFile(filename, res) {
+  fs.readFile('.' + filename, (err, data) =&gt; {
+    if (err) {
+      res.writeHead(404, {'Content-Type': 'text/plain'});
+      res.write('not found');
+    } else {
+      const ext = path.extname(filename);
+      res.writeHead(200, {'Content-Type': mimeType[ext]});
+      res.write(data);
+    }
+    res.end();
+  });
+}
+
+server.on('request', (req, res) =&gt; {
+  const u = url.parse(req.url);
+  if (u.pathname[u.pathname.length - 1] == '/') {
+    sendFile(u.pathname + 'index.html', res);
+  } else {
+    sendFile(u.pathname, res);
+  }
+});
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> mineType はファイルの拡張子から MIME タイプを求めるために使います。ファイル名を解析するためにモジュール path を読み込みます。拡張子はメソッド extname() で求めることができます。なお、MIME タイプを求める処理は、モジュール mime を使うともっと簡単に記述することができます。なお、mime は Node.js の標準ライブラリに入っていないので、npm (Node Package Manager) を使ってインストールする必要があります。npm は Node.js といっしょにインストールされているので、すぐに使うことができます。npm の使い方は回を改めて説明する予定です。
+</p>
+<p> 関数 sendFile() は引数 filename のファイルを読み込み、それをブラウザに返します。filename の先頭には '/' がついていることに注意してください。このプログラムではカレントディレクトリをルート (URL の '/') に設定したいので、filename の先頭にドット '.' を付加しています。ファイルを正常に読み込むことができたら、extname(filename) で拡張子を求めて変数 ext にセットします。そして、HTTP ヘッダを送信するとき、mimeType[ext] から MIME タイプを求めます。とりあえず、MIME タイプは H.Hiroi's Home Page を閲覧できる最低限のものを定義しています。
+</p>
+<p> server.on() のコールバック関数では、最初に url.parse() で req.url を解析し、その結果を変数 u にセットします。u.pathname の末尾文字が '/' であれば、index.html を補ってファイルを読み込みます。それ以外の場合はファイル u.pathname を読み込みます。簡単なプログラムですが、これでも静的コンテンツのサーバーとして機能します。興味のある方は実際に動かしてみてください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="node.html">Node.js</a> ]
+</div>
+</body>
+</html><!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

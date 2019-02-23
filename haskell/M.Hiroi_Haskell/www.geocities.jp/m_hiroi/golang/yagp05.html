@@ -1,0 +1,1136 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Yet Another Golang Problems</title>
+  <meta name="description" content="Go,Golang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881807</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Go Language Programming</h1>
+<h2>Yet Another Golang Problems</h2>
+<div class="small">
+[ <a href="yagp04.html">PrevPage</a> | <a href="index.html#yagp">Golang</a> | <a href="yagp06.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h4>●問題41</h4>
+<p> Lisp 風のシンプルな連結リストライブラリ slist を作成します。Lisp のリストは複数の「コンスセル (cons cell) 」を連結したものです。ひとつのコンスセルには、データを格納する CAR (カー) という場所と、次のセルを連結する CDR (クダー) という場所からなっています。次の図を見てください。
+</p>
+<pre class="fig">
+ CAR CDR       CAR CDR  
+┌─┬─┐    ┌─┬─┐
+│・│・┼─→│・│・┼→終端 (nil)
+└┼┴─┘    └┼┴─┘
+  ↓            ↓
+  １            ２
+
+            図 : リストの構造
+</pre>
+<p> 上図では、コンスセルを箱で表しています。左側の CAR がデータを格納する場所で、CDR が次のコンスセルと連結しています。上図の例では、先頭のコンスセルの CAR には 1 が格納され、CDR は次のコンスセルと連結しています。2 番目のコンスセルには CAR に 2 というデータが格納されています。このあとに接続されるコンスセルはもうないので、CDR にはリストの終わりを示す特別なデータ (nil) が格納されます。このようなリストを Lisp では (1 2) と表記します。
+</p>
+
+<p> Lisp のリストは CAR にリストを格納して、リストを入れ子にすることができます。次の図を見てください。
+</p>
+
+<pre class="fig">
+ ┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+ │・│・┼→│・│・┼→│・│／│  ／ : nil
+ └┼┴─┘  └┼┴─┘  └┼┴─┘
+   ↓          │          │
+   １          │          │
+               │          ↓
+               │        ┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+               │        │・│・┼→│・│・┼→│・│／│
+               │        └┼┴─┘  └┼┴─┘  └┼┴─┘
+               │          ↓          ↓          ↓
+               │          ３         １２        １３
+               ↓
+             ┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+             │・│・┼→│・│・┼→│・│／│
+             └┼┴─┘  └┼┴─┘  └┼┴─┘
+               ↓          ↓          ↓
+               ２         １０        １１
+
+                  図 : リストの階層構造
+</pre>
+<p> 上図のリストを Lisp で記述すると (1 (2 10 11) (3 12 13)) になります。なお、Lisp のリストは CDR 部にコンスセルと nil だけではなく他の値を格納することができますが、今回はプログラムを簡単にするため、CDR 部にはコンスセルと nil だけしか格納できないものとします。
+</p>
+
+<p> 今回はコンスセルを次のように定義します。
+</p>
+<pre class="list">
+リスト : セルの定義
+
+type Any interface{}
+
+type Cell struct {
+    item Any
+    next *Cell
+}
+</pre>
+<p> セルを生成する関数 Cons, リストの先頭要素を取り出す関数 Car, リストの先頭要素を取り除く関数 Cdr を定義してください。なお、リストの終端は nil で表し、Car と Cdr は引数が nil であれば nil を返すものとします。
+</p>
+<pre class="item">
+func Cons(x Any, xs *Cell) *Cell
+func Car(xs *Cell) Any
+func Cdr(xs *Cell) *Cell
+</pre>
+<pre>
+Cons(1, nil) =&gt; (1)
+Cons(2, Cons(1, nil)) =&gt; (2 1)
+
+Car(Cons(1, nil)) =&gt; 1
+Cdr(Cons(1, nil)) =&gt; ()
+
+Car(Cons(2, Cons(1, nil)) =&gt; 2
+Cdr(Cons(2, Cons(1, nil)) =&gt; (1)
+</pre>
+<p><a href="yagp05.html#ans41">解答</a>
+</p>
+
+<h4>●問題42</h4>
+<p> 引数 x がセル以外であれば真を返す述語 Atom, x がリスト (nil も含む) であれば真を返す述語 Listp, x がセルであれば真を返す述語 Consp, x が空リスト (nil) であれば真を返す述語 Null を定義してください。
+</p>
+<pre class="item">
+func Atom(x Any) bool
+func Listp(x Any) bool
+func Consp(x Any) bool
+func Null(x *Cell) bool
+</pre>
+<pre>
+Atom(1) =&gt; true
+Atom(Cons(1, nil)) =&gt; false
+
+Listp(1) =&gt; false
+Listp(Cons(1, nil)) =&gt; true
+Listp(Cdr(Cons(1, nil))) =&gt; true
+
+Consp(1) =&gt; false
+Consp(Cons(1, nil)) =&gt; true
+Consp(Cdr(Cons(1, nil))) =&gt; false
+
+Null(Cdr(Cons(1, nil))) =&gt; true
+Null(Cdr(Cons(2, Cons(1, nil)))) =&gt; false
+</pre>
+<p><a href="yagp05.html#ans42">解答</a>
+</p>
+
+<h4>●問題43</h4>
+<p> リスト xs を Lisp 風に表示する関数 Print とリストを文字列に変換して返す関数 Sprint を定義してください。
+</p>
+<pre class="item">
+func Print(xs Any) 
+func Sprint(xs Any) string
+</pre>
+<pre>
+Sprint(Cons(1, nil)) =&gt; "(1)"
+Sprint(Cons(3, Cons(2, Cons(1, nil)))) =&gt; "(3 2 1)"
+Sprint(Cons(Cons(3, nil), Cons(Cons(2, nil), Cons(Cons(1, nil), nil)))) =&gt; "((3) (2) (1))"
+</pre>
+<p><a href="yagp05.html#ans43">解答</a>
+</p>
+
+<h4>●問題44</h4>
+<p> 可変個の引数をリストに格納して返す関数 List, リスト xs の n 番目の要素を参照する関数 Nth, 2 つのリスト xs, ys を連結する関数 Append, リスト xs を反転する関数 Reverse, リスト xs の長さ (要素の個数) を求める関数 Length を定義してください。
+</p>
+<pre class="item">
+func List(xs ... Any) *Cell
+func Nth(xs *Cell, n int) (Any, bool)
+func Append(xs, ys *Cell) *Cell
+func Reverse(xs *Cell) *Cell
+func Length(xs *Cell) int
+</pre>
+<pre>
+List(1, 2, 3, 4) =&gt; (1 2 3 4)
+
+Nth(List(1, 2, 3, 4), 0) =&gt; 1 true
+Nth(List(1, 2, 3, 4), 3) =&gt; 4 true
+Nth(List(1, 2, 3, 4), 4) =&gt; nil true
+
+Append(List(1, 2, 3), List(4, 5, 6)) =&gt; (1 2 3 4 5 6)
+
+Reverse(List(1, 2, 3, 4, 5)) =&gt; (5 4 3 2 1)
+
+Lenght(List(1, 2, 3, 4, 5)) =&gt; 5
+</pre>
+<p><a href="yagp05.html#ans44">解答</a>
+</p>
+<h4>●問題45</h4>
+<p> リスト xs の先頭から n 個の要素を取り出す関数 Take, xs の先頭から n 個の要素を取り除く関数 Drop, xs の後ろから n 個の要素を取り出す関数 Last, xs の後ろから n 個の要素を取り除く関数 ButLast を定義してください。
+</p>
+<pre class="item">
+func Take(xs *Cell, n int) *Cell
+func Drop(xs *Cell, n int) *Cell
+func Last(xs *Cell, n int) *Cell
+func ButLast(xs *Cell, n int) *Cell
+</pre>
+<pre>
+Take(List(1, 2, 3, 4), 0) =&gt; ()
+Take(List(1, 2, 3, 4), 2) =&gt; (1 2)
+Take(List(1, 2, 3, 4), 4) =&gt; (1 2 3 4)
+
+Drop(List(1, 2, 3, 4), 0) =&gt; (1 2 3 4)
+Drop(List(1, 2, 3, 4), 2) =&gt; (3 4)
+Drop(List(1, 2, 3, 4), 4) =&gt; ()
+
+Last(List(1, 2, 3, 4, 5), 1) =&gt; (5)
+Last(List(1, 2, 3, 4, 5), 2) =&gt; (4 5)
+Last(List(1, 2, 3, 4, 5), 4) =&gt; (2 3 4 5)
+
+ButLast(List(1, 2, 3, 4, 5), 1) =&gt; (1 2 3 4)
+ButLast(List(1, 2, 3, 4, 5), 2) =&gt; (1 2 3)
+ButLast(List(1, 2, 3, 4, 5), 4) =&gt; (1)
+</pre>
+<p><a href="yagp05.html#ans45">解答</a>
+</p>
+<h4>●問題46</h4>
+<p> 引数 xs, ys の等値を判定する述語 Equal を定義してください。
+</p>
+<pre class="item">
+func Equal(xs, ys Any) bool
+</pre>
+<p> 引数 xs, ys の型がインターフェースの場合、実際の値が演算子 == で比較できる型であれば、== で等値を判定することができます。xs と ys の型が異なるときは false になります。xs と ys がリストの場合、型はポインタになるので、== はアドレスを比較して等値を判定します。リストの内容を比較するわけではないので、== で等値判定することはできません。
+</p>
+<p> この場合、リストの要素同士が等しいかチェックしていきます。リストは入れ子にすることができるので、要素のチェックは Equal を再帰呼び出しすると簡単です。すべての要素が Equal を満たしていれば、2 つのリストは等しいことになります。
+</p>
+<pre>
+Equal(1, 1) =&gt; true
+Equal(1, 1.0) =&gt; false
+Equal(List(1, 2, 3), List(1, 2, 3)) =&gt; true
+Equal(List(Cons(1, nil), 2, 3), List(Cons(1, nil), 2, 3)) =&gt; true
+Equal(List(Cons(1, nil), 2, 3), List(Cons(5, nil), 2, 3)) =&gt; false
+</pre>
+<p><a href="yagp05.html#ans46">解答</a>
+</p>
+<h4>●問題47</h4>
+<p> 高階関数 MapCar, Filter, Foldl, Foldr, ForEach を定義してください。
+</p>
+<pre class="item">
+func MapCar(f func(x Any) Any, xs *Cell) *Cell
+func Filter(f func(x Any) bool, xs *Cell) *Cell
+func Foldl(f func(a, x Any) Any, g Any, xs *Cell) Any
+func Foldr(f func(x, a Any) Any, g Any, xs *Cell) Any
+func ForEach(f func(x Any), xs *Cell)
+</pre>
+<pre>
+times := func(x Any) Any { return x.(int) * 2 }
+MapCar(times, List(1, 2, 3, 4, 5)) =&gt; (1 4 6 8 10)
+
+isOdd := func(x Any) bool { return x.(int) % 2 != 0 }
+Filter(isOdd, List(1, 2, 3, 4, 5)) =&gt; (1 3 5)
+
+add := func(x, y Any) Any { return x.(int) + y.(int) }
+Foldl(add, 0, List(1, 2, 3, 4, 5)) =&gt; 15
+Foldr(add, 0, List(1, 2, 3, 4, 5)) =&gt; 15
+
+var Nil *Cell
+xcons := func(x, y Any) Any { return Cons(y, x.(*Cell)) }
+Foldl(xcons, Nil, List(1, 2, 3, 4, 5)) =&gt; (1 2 3 4 5)
+
+kons := func(x, y Any) Any { return Cons(x, y.(*Cell)) }
+Foldr(Kons, Nil, List(1, 2, 3, 4, 5)) =&gt; (5 4 3 2 1)
+
+ForEach(func(x Any){ fmt.Println(x) }, List(1,2,3,4,5)) =&gt; (画面に出力)
+1
+2
+3
+4
+5
+</pre>
+<p><a href="yagp05.html#ans47">解答</a>
+</p>
+<h4>●問題48</h4>
+<p> リスト xs から x を探索する関数 Member, Find, Position, x と等しい要素をカウントする関数 Count, 高階関数 MemberIf, FindIf, PositionIf, CountIf を定義してください。
+</p>
+<pre class="item">
+func Member(x Any, xs *Cell) *Cell
+func MemberIf(f func(x Any) bool, xs *Cell) *Cell
+func Find(x Any, xs *Cell) bool
+func FindIf(f func(x Any) bool, xs *Cell) (Any, bool)
+func Position(x Any, xs *Cell) int
+func PositionIf(f func(x Any) bool, xs *Cell) int
+func Count(x Any, xs *Cell) int
+func CountIf(f func(x Any) bool, xs *Cell) int
+</pre>
+<p> Member は xs の中に x が含まれているか調べます。もし見つからなければ nil を返します。見つけた場合は、それ以降のリストの残りを返します。Find は x を見つけたら true を返します。Position は x を見つけたらその位置を、見つからない場合は -1 を返します。
+</p>
+<pre>
+xs := List(1, 2, 3, 4, 5)
+Member(1, xs) =&gt; (1 2 3 4 5)
+Member(3, xs) =&gt; (3 4 5)
+Member(5, xs) =&gt; (5)
+Member(6, xs) =&gt; ()
+
+isEven := func(x Any) bool { return x.(int) % 2 == 0 }
+MemberIf(isEven, xs) =&gt; (2 3 4 5)
+
+Find(3, xs) =&gt; true
+Find(6, xs) =&gt; false
+FindIf(isEven, xs) =&gt; 2 true
+
+Position(3, xs) =&gt; 2
+PositionIf(isEven, xs) =&gt; 1
+
+Count(3, xs) =&gt; 1
+CountIf(isEven, xs) =&gt; 3
+</pre>
+<p><a href="yagp05.html#ans48">解答</a>
+</p>
+
+<h4>●問題49</h4>
+<p> リスト xs から x と等しい要素を削除する関数 Remove と、述語 f が真を返す要素を削除する高階関数 RemoveIf, x と等しい要素を y と置換する関数 Substitute, 述語 f が真を返す要素を引数 y と置換する関数 SubstituteIf を定義してください。
+</p>
+<pre class="item">
+func Remove(x Any, xs *Cell) *Cell
+func RemoveIf(f func(x Any) bool, xs *Cell) *Cell
+func Substitute(x, y Any, xs *Cell) *Cell
+func SubstituteIf(f func(x Any) bool, y Any, xs *Cell) *Cell
+</pre>
+<pre>
+xs := List(1, 2, 3, 4, 5)
+Remove(3, xs) =&gt; (1 2 4 5)
+
+isEven := func(x Any) bool { return x.(int) % 2 == 0 }
+RemoveIf(isEven, xs) =&gt; (1 3 5)
+
+Substitute(3, 30, xs) =&gt; (1 2 30 4 5)
+SubstituteIf(isEven, 100, xs) =&gt; (1 100 3 100 5)
+</pre>
+<p><a href="yagp05.html#ans49">解答</a>
+</p>
+<h4>●問題50</h4>
+<p> 2 つのリスト xs, ys を受け取り、同じ位置にある要素をリストにまとめ、それをリストに格納して返す関数 Zip, Zip したリストを元に戻す関数 UnZip, 連想リスト xs からキー x とその値を探索する関数 Assoc, 連想リスト xs から述語 f が真を返すキーと値を求める関数 AssocIf を定義してください。
+</p>
+<pre class="item">
+func Zip(xs, ys *Cell) *Cell
+func UnZip(xs *Cell) (*Cell, *Cell)
+func Assoc(x Any, xs *Cell) *Cell
+func AssocIf(f func(x Any) bool, xs *Cell) *Cell
+</pre>
+<pre>
+xs := Zip(List("a", "b", "c"), List(4, 5, 6))
+xs =&gt; (("a" 4) ("b" 5) ("c" 6))
+UnZip(xs) =&gt; ("a" "b" "c") (4 5 6)
+
+Assoc("a", xs) =&gt; ("a" 4)
+Assoc("d", xs) =&gt; ()
+
+AssocIf(func(x Any) { return x.(string) == "c" }, xs) =&gt; ("c" 6)
+</pre>
+
+<p><a href="yagp05.html#ans50">解答</a>
+</p>
+<hr>
+<h4 id="ans41">●解答41</h4>
+<pre class="list">
+リスト : リストの基本操作
+
+// セルの生成
+func Cons(x Any, xs *Cell) *Cell {
+    return &amp;Cell{x, xs}
+}
+// 要素を取り出す
+func Car(xs *Cell) Any {
+    if xs == nil { return nil }
+    return xs.item
+}
+
+// 先頭要素を取り除く
+func Cdr(xs *Cell) *Cell {
+    if xs == nil { return nil }
+    return xs.next
+}
+</pre>
+<p> Cons は引数 x をセルの item に、xs をセルの next にセットして返すだけです。Car はセルの item を返し、Cdr はセルの next を返します。
+</p>
+
+<h4 id="ans42">●解答42</h4>
+<pre class="list">
+リスト : 基本的な述語
+
+// アトムか？
+func Atom(x Any) bool {
+    _, ok := x.(*Cell)
+    return !ok
+}
+
+// セルか？
+func Consp(x Any) bool {
+    xs, ok := x.(*Cell)
+    return ok &amp;&amp; xs != nil
+}
+
+// リストか？
+func Listp(x Any) bool {
+    _, ok := x.(*Cell)
+    return ok
+}
+
+// 空リストか？
+func Null(xs *Cell) bool {
+    return xs == nil
+}
+</pre>
+<p> Atom は型アサーションで引数 x がセルかチェックし、そうでなければ true を返します。Consp は型アサーションで引数 x がセルかチェックします。セルでかつ nil でなければ true を返します。Listp は引数 x がセルか型アサーションで調べるだけです。Null は引数 xs と nil を演算子 == で比較するだけです。
+</p>
+
+<h4 id="ans43">●解答43</h4>
+<pre class="list">
+リスト : リストの表示
+
+func sprintList(xs *Cell) string {
+    s := "("
+    for ; !Null(xs); xs = Cdr(xs) {
+        s += Sprint(Car(xs))
+        if !Null(Cdr(xs)) {
+            s += " "
+        }
+    }
+    s += ")"
+    return s
+}
+
+func Sprint(x Any) string {
+    if Listp(x) {
+        return sprintList(x.(*Cell))
+    } else {
+        return fmt.Sprint(x)
+    }
+}
+
+func Print(x Any) {
+    fmt.Print(Sprint(x))
+}
+
+func Println(x Any) {
+    fmt.Println(Sprint(x))
+}
+</pre>
+<p> Sprint は引数 x がリストか Listp でチェックし、そうであれば関数 sprintList を呼び出します。そうでなければ、fmt.Sprint で x を文字列に変換します。sprintList は最初に変数 s を "(" に初期化します。そして、for ループでリスト xs を順番にたどり、Sprint を再帰呼び出しして要素 Car(xs) を文字列に変換します。これで Car(xs) がリストの場合でも文字列に変換することができます。次に、Cdr(xs) が空リストか Null でチェックして、そうでなければ次の要素があるので s に空白文字を連結します。最後に s と ")" を連結して返すだけです。
+</p>
+<p> Print と Println は Sprint を呼び出して引数 x を文字列に変換し、fmt.Print または fmt.Println で画面に表示します。
+</p>
+<h4 id="ans44">●解答44</h4>
+<pre class="list">
+リスト : リスト操作関数
+
+// リストの生成
+func List(xs... Any) *Cell {
+    var zs *Cell
+    for i := len(xs) - 1; i &gt;= 0; i-- {
+        zs = Cons(xs[i], zs)
+    }
+    return zs
+}
+
+// リストの参照
+func Nth(xs *Cell, n int) (Any, bool) {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if n == 0 {
+            return Car(xs), true
+        }
+        n--
+    }
+    return nil, false
+}
+
+// 反転
+func Reverse(xs *Cell) *Cell {
+    var zs *Cell
+    for ; !Null(xs); xs = Cdr(xs) {
+        zs = Cons(Car(xs), zs)
+    }
+    return zs
+}
+
+// 長さ
+func Length(xs *Cell) int {
+    c := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        c++
+    }
+    return c
+}
+
+// 連結
+func Append(xs, ys *Cell) *Cell {
+    if Null(xs) {
+        return ys
+    }
+    return Cons(Car(xs), Append(Cdr(xs), ys))
+}
+</pre>
+<p> List は可変長引数 xs (スライス) から要素を取り出してリストに格納していきます。リストの先頭にデータを追加するのは Cons で簡単にできますが、最後尾に追加していくのはちょっと面倒です。そこで、xs の末尾から要素を取り出して、リスト zs の先頭に Cons で追加します。
+</p>
+
+<p> Nth は for ループでリスト xs をたどり、n 番目の要素を求めるだけです。途中で xs が nil になったならば、for ループを終了して nil と false を返します。Reverse は for ループでリスト xs をたどり、その要素を順番にリスト zs の先頭に追加します。これで xs を反転したリストを作ることができます。Lengh は簡単です。for ループでリストをたどり、変数 c の値を +1 していくだけです。
+</p>
+
+<p> Append は再帰呼び出しを使うと簡単です。xs が nil ならば ys を返します。これは空リスト (nil) と ys を連結すると ys になることを表していて、再帰呼び出しの停止条件になります。そうでなければ、xs を Car と Cdr で分割して、Cdr(xs) と ys を連結したリストの先頭に Cons で Car(xs) を追加します。これで xs と ys を連結したリストを生成することができます。このとき、xs のリストはコピーされることに注意してください。
+</p>
+
+<h4 id="ans45">●解答45</h4>
+<pre class="list">
+リスト : リスト操作関数 (2)
+
+// 先頭から n 個の要素を取り出す
+func Take(xs *Cell, n int) *Cell {
+    if Null(xs) || n &lt;= 0 {
+        return nil
+    }
+    return Cons(Car(xs), Take(Cdr(xs), n - 1))
+}
+
+// 先頭から n 個の要素を取り除く
+func Drop(xs *Cell, n int) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if n &lt;= 0 {
+            break
+        }
+        n--
+    }
+    return xs
+}
+
+// 後ろから n 個の要素を取り出す
+func Last(xs *Cell, n int) *Cell {
+    return Drop(xs, Length(xs) - n)
+}
+
+// 後から n 個の要素を取り除く
+func ButLast(xs *Cell, n int) *Cell {
+    return Take(xs, Length(xs) - n)
+}
+</pre>
+<p> Take は引数 n が 0 以下または引数 xs が空リストの場合は nil を返します。そうでなければ Take を再帰呼び出しして、その返り値にリストの先頭要素 Car(xs) を追加します。Drop は簡単です。引数 n が 0 以下または引数 xs が空リストになるまで Drop を再帰呼び出しするだけです。
+</p>
+
+<p> Last は xs の先頭から (Length(xs) - n) 個の要素を Drop で取り除くだけです。逆に、ButLast は Take で (Length(xs) - n) 個の要素を取り出すだけです。
+</p>
+
+<h4 id="ans46">●解答46</h4>
+<pre class="list">
+リスト : 等値の判定
+
+func Eq(x Any, y Any) bool {
+    return x == y
+}
+
+func Equal(x Any, y Any) bool {
+    if Atom(x) &amp;&amp; Atom(y) {
+        return Eq(x, y)
+    }
+    xs, ox := x.(*Cell)
+    ys, oy := y.(*Cell)
+    if ox &amp;&amp; oy {
+        for !Null(xs) &amp;&amp; !Null(ys) {
+            if !Equal(Car(xs), Car(ys)) {
+                return false
+            }
+            xs = Cdr(xs)
+            ys = Cdr(ys)
+        }
+        return Null(xs) &amp;&amp; Null(ys)
+    }
+    return false
+}
+</pre>
+<p> Equal の引数 x, y がセルでなければ関数 Eq で比較します。Eq は演算子 == で引数 x, y を比較するだけです。そうでなければ、x, y を型アサーションでリスト xs, ys に変換します。どちらかがリストに変換できない場合は false を返します。
+</p>
+<p> x, y がリストの場合、Equal を再帰呼び出しして要素 Car(xs), Car(ys) を比較します。これでリストが入れ子の場合でも比較することができます。Equal の返り値が false であれば return で false を返します。そうでなければ、要素の比較を続けます。for ループが終了したら、xs, ys がともに nil であることを確認します。そうでなければ、リストの長さが異なるので結果は false になります。
+</p>
+
+<h4 id="ans47">●解答47</h4>
+<pre class="list">
+リスト : 高階関数
+
+// マッピング
+func MapCar(f func(x Any) Any, xs *Cell) *Cell {
+    if Null(xs) {
+        return nil
+    }
+    return Cons(f(Car(xs)), MapCar(f, Cdr(xs)))
+}
+
+// フィルター
+func Filter(f func(x Any) bool, xs *Cell) *Cell {
+    if Null(xs) {
+        return nil
+    } else if f(Car(xs)) {
+        return Cons(Car(xs), Filter(f, Cdr(xs)))
+    }
+    return Filter(f, Cdr(xs))
+}
+
+// 畳み込み
+func Foldl(f func(a, x Any) Any, a Any, xs *Cell) Any {
+    for ; !Null(xs); xs = Cdr(xs) {
+        a = f(a, Car(xs))
+    }
+    return a
+}
+
+func Foldr(f func(x, a Any) Any, a Any, xs *Cell) Any {
+    if Null(xs) {
+        return a
+    }
+    return f(Car(xs), Foldr(f, a, Cdr(xs)))
+}
+
+// 巡回
+func ForEach(f func(x Any), xs *Cell) {
+    for ; !Null(xs); xs = Cdr(xs) {
+        f(Car(xs))
+    }
+}
+</pre>
+<p> MapCar は簡単です。引数 xs が空リストであれば nil を返します。これが再帰呼び出しの停止条件になります。そうでなければ、xs を Car と Cdr で分解し、Car(xs) に関数 f を適用した結果と MapCar(f, Cdr(xs)) の結果を Cons で結合します。Filter も簡単です。述語 f が真を返すとき要素 Car(xs) をリストに追加し、偽を返すときはリストに加えません。
+</p>
+<p> Foldl は for ループで簡単にプログラムできます。累積変数 a と Car(xs) を関数 f に渡して評価し、その返り値で変数 a の値を書き換えます。Foldr は再帰呼び出しでプログラムします。引数 xs が空リストであれば a を返します。そうでなければ、Foldr を再帰呼び出しして、その返り値と要素 Car(xs) を関数 f に渡して評価します。
+</p>
+<p> ForEach も簡単です。for ループでリストを先頭から順番にたどり、要素 Car(xs) を関数 f に渡して評価するだけです。
+</p>
+
+<h4 id="ans48">●解答48</h4>
+<pre class="list">
+リスト : リストの探索
+
+func Member(x Any, xs *Cell) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if Eq(x, Car(xs)) { break }
+    }
+    return xs
+}
+
+func MemberIf(f func(x Any) bool, xs *Cell) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if f(Car(xs)) { break }
+    }
+    return xs
+}
+
+func Find(x Any, xs *Cell) bool {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if Eq(x, Car(xs)) {
+            return true
+        }
+    }
+    return false
+}
+
+func FindIf(f func (x Any) bool, xs *Cell) (Any, bool) {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if f(Car(xs)) {
+            return Car(xs), true
+        }
+    }
+    return nil, false
+}
+
+func Position(x Any, xs *Cell) int {
+    n := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        if Eq(x, Car(xs)) {
+            return n
+        }
+        n++
+    }
+    return -1
+}
+
+func PositionIf(f func(x Any) bool, xs *Cell) int {
+    n := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        if f(Car(xs)) {
+            return n
+        }
+        n++
+    }
+    return -1
+}
+
+func Count(x Any, xs *Cell) int {
+    c := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        if Eq(x, Car(xs)) {
+            c++
+        }
+    }
+    return c
+}
+
+func CountIf(f func(x Any) bool, xs *Cell) int {
+    c := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        if f(Car(xs)) { c++ }
+    }
+    return c
+}
+</pre>
+<p> これらの関数は線形探索なので難しいところはないと思います。詳細はプログラムリストをお読みください。
+</p>
+
+<h4 id="ans49">●解答49</h4>
+<pre class="list">
+リスト : リストの修正
+
+func Remove(x Any, xs *Cell) *Cell {
+    return Filter(func(y Any) bool { return !Eq(x, y) }, xs)
+}
+
+func RemoveIf(f func(x Any) bool, xs *Cell) *Cell {
+    return Filter(func(y Any) bool { return !f(y) }, xs)
+}
+
+func SubstituteIf(f func(x Any) bool, y Any, xs *Cell) *Cell {
+    if Null(xs) {
+        return nil
+    } else if f(Car(xs)) {
+        return Cons(y, SubstituteIf(f, y, Cdr(xs)))
+    }
+    return Cons(Car(xs), SubstituteIf(f, y, Cdr(xs)))
+}
+
+func Substitute(x, y Any, xs *Cell) *Cell {
+    return SubstituteIf(func(z Any) bool { return Eq(z, x) }, y, xs)
+}
+</pre>
+<p> Remove と RemoveIf は Filter を呼び出すだけなので説明は割愛します。SubStituteIf は再帰呼び出しを使うと簡単です。引数 xs が空リストならば nil を返します。f(Car(xs)) の返り値が真ならば、SubstituteIf の返り値のリストに y を追加します。そうでなければ Car(xs) を追加します。Subustitute は SubstituteIf を呼び出すだけです。
+</p>
+
+<h4 id="ans50">●解答50</h4>
+<pre class="list">
+リスト : 連想リスト
+
+func Zip(xs, ys *Cell) *Cell {
+    if Null(xs) || Null(ys) {
+        return nil
+    }
+    return Cons(List(Car(xs), Car(ys)), Zip(Cdr(xs), Cdr(ys)))
+}
+
+func UnZip(xs *Cell) (*Cell, *Cell) {
+    if Null(xs) {
+        return nil, nil
+    }
+    ys, zs := UnZip(Cdr(xs))
+    x := Car(xs).(*Cell)
+    return Cons(Car(x), ys), Cons(Car(Cdr(x)), zs)
+}
+
+func Assoc(key Any, xs *Cell) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        ys, ok := Car(xs).(*Cell)
+        if !ok { break }
+        if Eq(key, Car(ys)) {
+            return ys
+        }
+    }
+    return nil
+}
+
+func AssocIf(f func (x Any) bool, xs *Cell) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        ys, ok := Car(xs).(*Cell)
+        if !ok { break }
+        if f(Car(ys)) {
+            return ys
+        }
+    }
+    return nil
+}
+</pre>
+<p> Zip は引数 xs または ys が空リストならば nil を返します。そうでなければ、Zip を再帰呼び出しして、その返り値に List(Car(xs), Car(ys)) を追加します。Unzip は再帰呼び出しでプログラムすると簡単です。xs が空リストの場合、2 つの空リストを多値で返します。そうでなければ、Unzip を再帰呼び出しして、返り値 (多値) を多重代入で受け取ります。そして、受け取ったリストに要素を追加して、それを多値で返すだけです。
+</p>
+<p> Assoc, AsscoIf はリスト xs を線形探索するだけですが、要素がリストなので型アサーションを使っていることに注意してください。*Cell に変換できない場合は、break で for ループを脱出して nil を返します。panic でエラーを送出してもよいでしょう。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// slist.go : Lisp 風の連結リスト
+//
+//            Copyright (C) 2014 Makoto Hiroi
+//
+package slist
+
+import "fmt"
+
+// 型の定義
+type Any interface{}
+
+// セルの定義
+type Cell struct {
+    item Any
+    next *Cell
+}
+
+// 基本操作
+
+// セルの生成
+func Cons(x Any, xs *Cell) *Cell {
+    return &amp;Cell{x, xs}
+}
+// 要素を取り出す
+func Car(xs *Cell) Any {
+    if xs == nil {
+        return nil
+    }
+    return xs.item
+}
+
+// 先頭要素を取り除く
+func Cdr(xs *Cell) *Cell {
+    if xs == nil {
+        return nil
+    }
+    return xs.next
+}
+
+// 述語
+
+// アトムか？
+func Atom(x Any) bool {
+    _, ok := x.(*Cell)
+    return !ok
+}
+
+// セルか？
+func Consp(x Any) bool {
+    xs, ok := x.(*Cell)
+    return ok &amp;&amp; xs != nil
+}
+
+// リストか？
+func Listp(x Any) bool {
+    _, ok := x.(*Cell)
+    return ok
+}
+
+// 空リストか？
+func Null(xs *Cell) bool {
+    return xs == nil
+}
+
+// 等値
+func Eq(x Any, y Any) bool {
+    return x == y
+}
+
+func Equal(x Any, y Any) bool {
+    if Atom(x) &amp;&amp; Atom(y) {
+        return Eq(x, y)
+    }
+    xs, ox := x.(*Cell)
+    ys, oy := y.(*Cell)
+    if ox &amp;&amp; oy {
+        for !Null(xs) &amp;&amp; !Null(ys) {
+            if !Equal(Car(xs), Car(ys)) {
+                return false
+            }
+            xs = Cdr(xs)
+            ys = Cdr(ys)
+        }
+        return Null(xs) &amp;&amp; Null(ys)
+    }
+    return false
+}
+
+// リスト操作
+
+// リストの生成
+func List(xs... Any) *Cell {
+    var zs *Cell
+    for i := len(xs) - 1; i &gt;= 0; i-- {
+        zs = Cons(xs[i], zs)
+    }
+    return zs
+}
+
+// リストの参照
+func Nth(xs *Cell, n int) (Any, bool) {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if n == 0 {
+            return Car(xs), true
+        }
+        n--
+    }
+    return nil, false
+}
+
+// 反転
+func Reverse(xs *Cell) *Cell {
+    var zs *Cell
+    for ; !Null(xs); xs = Cdr(xs) {
+        zs = Cons(Car(xs), zs)
+    }
+    return zs
+}
+
+// 連結
+func Append(xs, ys *Cell) *Cell {
+    if Null(xs) {
+        return ys
+    }
+    return Cons(Car(xs), Append(Cdr(xs), ys))
+}
+
+// 長さ
+func Length(xs *Cell) int {
+    c := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        c++
+    }
+    return c
+}
+
+// 先頭から n 個の要素を取り除く
+func Drop(xs *Cell, n int) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if n &lt;= 0 {
+            break
+        }
+        n--
+    }
+    return xs
+}
+
+// 先頭から n 個の要素を取り出す
+func Take(xs *Cell, n int) *Cell {
+    if Null(xs) || n &lt;= 0 {
+        return nil
+    }
+    return Cons(Car(xs), Take(Cdr(xs), n - 1))
+}
+
+// 後ろから n 個の要素を取り出す
+func Last(xs *Cell, n int) *Cell {
+    return Drop(xs, Length(xs) - n)
+}
+
+// 後から n 個の要素を取り除く
+func ButLast(xs *Cell, n int) *Cell {
+    return Take(xs, Length(xs) - n)
+}
+
+// 高階関数
+func MapCar(f func(x Any) Any, xs *Cell) *Cell {
+    if Null(xs) {
+        return nil
+    }
+    return Cons(f(Car(xs)), MapCar(f, Cdr(xs)))
+}
+
+func Filter(f func(x Any) bool, xs *Cell) *Cell {
+    if Null(xs) {
+        return nil
+    } else if f(Car(xs)) {
+        return Cons(Car(xs), Filter(f, Cdr(xs)))
+    }
+    return Filter(f, Cdr(xs))
+}
+
+func Foldl(f func(a, x Any) Any, a Any, xs *Cell) Any {
+    for ; !Null(xs); xs = Cdr(xs) {
+        a = f(a, Car(xs))
+    }
+    return a
+}
+
+func Foldr(f func(x, a Any) Any, a Any, xs *Cell) Any {
+    if Null(xs) {
+        return a
+    }
+    return f(Car(xs), Foldr(f, a, Cdr(xs)))
+}
+
+func ForEach(f func(x Any), xs *Cell) {
+    for ; !Null(xs); xs = Cdr(xs) {
+        f(Car(xs))
+    }
+}
+
+// 探索
+func Member(x Any, xs *Cell) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if Eq(x, Car(xs)) { break }
+    }
+    return xs
+}
+
+func MemberIf(f func(x Any) bool, xs *Cell) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if f(Car(xs)) { break }
+    }
+    return xs
+}
+
+func Find(x Any, xs *Cell) bool {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if Eq(x, Car(xs)) {
+            return true
+        }
+    }
+    return false
+}
+
+func FindIf(f func (x Any) bool, xs *Cell) (Any, bool) {
+    for ; !Null(xs); xs = Cdr(xs) {
+        if f(Car(xs)) {
+            return Car(xs), true
+        }
+    }
+    return nil, false
+}
+
+func Position(x Any, xs *Cell) int {
+    n := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        if Eq(x, Car(xs)) {
+            return n
+        }
+        n++
+    }
+    return -1
+}
+
+func PositionIf(f func(x Any) bool, xs *Cell) int {
+    n := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        if f(Car(xs)) {
+            return n
+        }
+        n++
+    }
+    return -1
+}
+
+func Count(x Any, xs *Cell) int {
+    c := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        if Eq(x, Car(xs)) {
+            c++
+        }
+    }
+    return c
+}
+
+func CountIf(f func(x Any) bool, xs *Cell) int {
+    c := 0
+    for ; !Null(xs); xs = Cdr(xs) {
+        if f(Car(xs)) { c++ }
+    }
+    return c
+}
+
+// リストの修正
+func Remove(x Any, xs *Cell) *Cell {
+    return Filter(func(y Any) bool { return !Eq(x, y) }, xs)
+}
+
+func RemoveIf(f func(x Any) bool, xs *Cell) *Cell {
+    return Filter(func(y Any) bool { return !f(y) }, xs)
+}
+
+func SubstituteIf(f func(x Any) bool, y Any, xs *Cell) *Cell {
+    if Null(xs) {
+        return nil
+    } else if f(Car(xs)) {
+        return Cons(y, SubstituteIf(f, y, Cdr(xs)))
+    }
+    return Cons(Car(xs), SubstituteIf(f, y, Cdr(xs)))
+}
+
+func Substitute(x, y Any, xs *Cell) *Cell {
+    return SubstituteIf(func(z Any) bool { return Eq(z, x) }, y, xs)
+}
+
+// 連想リスト
+func Zip(xs, ys *Cell) *Cell {
+    if Null(xs) || Null(ys) {
+        return nil
+    }
+    return Cons(List(Car(xs), Car(ys)), Zip(Cdr(xs), Cdr(ys)))
+}
+
+func UnZip(xs *Cell) (*Cell, *Cell) {
+    if Null(xs) {
+        return nil, nil
+    }
+    ys, zs := UnZip(Cdr(xs))
+    x := Car(xs).(*Cell)
+    return Cons(Car(x), ys), Cons(Car(Cdr(x)), zs)
+}
+    
+
+func Assoc(key Any, xs *Cell) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        ys, ok := Car(xs).(*Cell)
+        if !ok { break }
+        if Eq(key, Car(ys)) {
+            return ys
+        }
+    }
+    return nil
+}
+
+func AssocIf(f func (x Any) bool, xs *Cell) *Cell {
+    for ; !Null(xs); xs = Cdr(xs) {
+        ys, ok := Car(xs).(*Cell)
+        if !ok { break }
+        if f(Car(ys)) {
+            return ys
+        }
+    }
+    return nil
+}
+
+// 表示
+func sprintList(xs *Cell) string {
+    s := "("
+    for ; !Null(xs); xs = Cdr(xs) {
+        s += Sprint(Car(xs))
+        if !Null(Cdr(xs)) {
+            s += " "
+        }
+    }
+    s += ")"
+    return s
+}
+
+func Sprint(x Any) string {
+    if Listp(x) {
+        return sprintList(x.(*Cell))
+    } else {
+        return fmt.Sprint(x)
+    }
+}
+
+
+func Print(x Any) {
+	fmt.Print(Sprint(x))
+}
+
+func Println(x Any) {
+	fmt.Println(Sprint(x))
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="yagp04.html">PrevPage</a> | <a href="index.html#yagp">Golang</a> | <a href="yagp06.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

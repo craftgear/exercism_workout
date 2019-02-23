@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Python3 プログラミング超入門 </title>
+  <meta name="description" content="Python,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881761</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lightweight Language</h1>
+<h2>お気楽 Python3 プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="python3.html#python3_abc">Python3</a> ]
+<hr>
+</div>
+<section class="contents">
+<h4 id="abc21">●キュー</h4>
+<ul>
+  <li>キュー (queue) は待ち行列とか先入れ先出し (FIFO : first-in, first-out) と呼ばれるデータ構造</li>
+  <li>キューの説明は拙作のページ <a href="python06.html#chap16">Python 入門第 6 回: キュー</a> を参照</li>
+  <li>Python の場合、リストの末尾にデータを追加 (append()) し、先頭からデータを取り出す (pop(0)) とキューの動作になる</li>
+  <li>append() の動作は高速だが、pop(0) は要素の移動が必要になるため時間がかかる</li>
+  <li>Python の標準ライブラリにはキューに適したデータ構造 deque が用意されている</li>
+  <li>deque は「両端キュー」のことで、「デック」とか「ディーキュー」と呼ばれる</li>
+  <li>先頭および末尾のどちらからでもデータの追加と取り出しが高速に行える</li>
+  <li>deque はクラスで、モジュール collections にある</li>
+  <li>主なメソッド</li>
+  <ul>
+    <li>deque([iterable, [maxlen]]), deque の生成</li>
+    <ul>
+      <li>maxlen は deque の最大長</li>
+      <li>maxlen を省略、または None にすると、大きさの制限はなくなる (可変長)</li>
+      <li>maxlen を超えた場合、データを追加した反対側からデータが取り除かれる</li>
+    </ul>
+    <li>d.append(x), d.appendleft(x), データ x の追加</li>
+    <li>d.pop(), d.popleft(), データの取り出し</li>
+    <li>d.extend(iter), d.extendleft(iter), iter から要素を取り出して deque に追加</li>
+    <li>d.rotate(n = 1), deque を右に n 回転する (負の場合は左回転)</li>
+    <li>d.reverse(), deque を反転する</li>
+    <li>d.clear(), deque を空にする</li>
+    <li>len(d), deque の要素数を返す</li>
+    <li>d[i] のように添え字のアクセスもできるが、先頭と末尾以外のアクセスは時間がかかる</li>
+    <li>詳しい説明はリファレンスマニュアル <a href="https://docs.python.jp/3/library/collections.html#collections.deque">8.3. collections - deque</a> を参照</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; from collections import deque
+&gt;&gt;&gt; for x in range(4): d.append(x)
+...
+&gt;&gt;&gt; d
+deque([0, 1, 2, 3])
+&gt;&gt;&gt; for _ in range(4): print(d.popleft())
+...
+0
+1
+2
+3
+&gt;&gt;&gt; d
+deque([])
+&gt;&gt;&gt; d.extend(range(1, 10))
+&gt;&gt;&gt; d
+deque([1, 2, 3, 4, 5, 6, 7, 8, 9])
+&gt;&gt;&gt; len(d)
+9
+&gt;&gt;&gt; d.reverse()
+&gt;&gt;&gt; d
+deque([9, 8, 7, 6, 5, 4, 3, 2, 1])
+&gt;&gt;&gt; d.rotate(3)
+&gt;&gt;&gt; d
+deque([3, 2, 1, 9, 8, 7, 6, 5, 4])
+</pre>
+<ul>
+  <li>ディーキューは循環配列 (リングバッファ) や連結リストを使って簡単に実装できる</li>
+  <li>双方向リストによる実装は拙作のページ <a href="index.html#python_algo">Algorithms with Python</a> <a href="pyalgo02.html">連結リストとキュー</a> を参照</li>
+  <li>ここではリングバッファを使った簡単な実装例を示す</li>
+</ul>   
+<pre class="list">
+#
+# deque.py : リングバッファによるディーキューの実装
+#
+#            Copyright (C) 2018 Makoto Hiroi
+#
+class Deque:
+    def __init__(self, size):
+        self.buff = [None] * size
+        self.front = 0
+        self.rear = 0
+        self.cnt = 0
+
+    # 先頭からデータを取り出す
+    def pop_front(self):
+        if self.cnt == 0:
+            raise IndexError("Deque is empty")
+        x = self.buff[self.front]
+        self.front += 1
+        self.cnt -= 1
+        if self.front == len(self.buff):
+            self.front = 0
+        return x
+    
+    # 末尾からデータを取り出す
+    def pop_back(self):
+        if self.cnt == 0:
+            raise IndexError("Deque is empty")
+        self.rear -= 1
+        self.cnt -= 1
+        if self.rear &lt; 0:
+            self.rear = len(self.buff) - 1
+        return self.buff[self.rear]
+
+    # 末尾にデータを追加        
+    def push_back(self, x):
+        if self.cnt == len(self.buff):
+            # 先頭からデータを取り出して捨てる
+            self.pop_front()
+        self.buff[self.rear] = x
+        self.rear += 1
+        self.cnt += 1
+        if self.rear == len(self.buff):
+            self.rear = 0
+    
+    # 先頭にデータを追加する
+    def push_front(self, x):
+        if self.cnt == len(self.buff):
+            # 末尾からデータを取り出して捨てる
+            self.pop_back()
+        self.front -= 1
+        self.cnt += 1
+        if self.front &lt; 0:
+            self.front = len(self.buff) - 1
+        self.buff[self.front] = x
+
+    # ジェネレータ
+    def each(self):
+        i = self.front
+        c = self.cnt
+        while c &gt; 0:
+            yield self.buff[i]
+            i += 1
+            c -= 1
+            if i == len(self.buff): i = 0
+
+    # 空か？
+    def is_empty(self): return self.cnt == 0
+
+    # 空にする
+    def clear(self):
+        self.front = 0
+        self.rear = 0
+        self.cnt = 0
+
+    # 要素数を返す
+    def __len__(self): return self.cnt
+
+    # 表示
+    def __repr__(self):
+        s = 'Deque('
+        if self.cnt &gt; 0:
+            for x in self.each():
+                s += '{}, '.format(x)
+            s = s[:-2]
+        s += ')'
+        return s
+
+if __name__ == '__main__':
+    # 簡単なテスト
+    d = Deque(8)
+    print(d)
+    print(d.is_empty())
+    print(len(d))
+    for x in range(4): d.push_back(x)
+    print(d)
+    print(d.is_empty())
+    print(len(d))
+    for x in range(4, 8): d.push_front(x)
+    print(d)
+    print(d.is_empty())
+    print(len(d))
+    for _ in range(4): print(d.pop_front())
+    print(d)
+    print(d.is_empty())
+    print(len(d))
+    for _ in range(4): print(d.pop_back())
+    print(d)
+    print(d.is_empty())
+    print(len(d))
+    for x in range(10): 
+        d.push_back(x)
+        print(d)
+    for x in range(10, 12):
+        d.push_front(x)
+        print(d)
+</pre>
+<pre>
+Deque()
+True
+0
+Deque(0, 1, 2, 3)
+False
+4
+Deque(7, 6, 5, 4, 0, 1, 2, 3)
+False
+8
+7
+6
+5
+4
+Deque(0, 1, 2, 3)
+False
+4
+3
+2
+1
+0
+Deque()
+True
+0
+Deque(0)
+Deque(0, 1)
+Deque(0, 1, 2)
+Deque(0, 1, 2, 3)
+Deque(0, 1, 2, 3, 4)
+Deque(0, 1, 2, 3, 4, 5)
+Deque(0, 1, 2, 3, 4, 5, 6)
+Deque(0, 1, 2, 3, 4, 5, 6, 7)
+Deque(1, 2, 3, 4, 5, 6, 7, 8)
+Deque(2, 3, 4, 5, 6, 7, 8, 9)
+Deque(10, 2, 3, 4, 5, 6, 7, 8)
+Deque(11, 10, 2, 3, 4, 5, 6, 7)
+</pre>
+<h4 id="abc22">●プライオリティキュー</h4>
+<ul>
+  <li>プライオリティキュー (priority queue) は「優先度つき待ち行列」のこと</li>
+  <li>優先度つき待ち行列は、データに優先度をつけておいて、優先度の高いデータから取り出す</li>
+  <li>詳しい説明は拙作のページ <a href="index.html#python_algo">Algorithms with Python</a> <a href="pyalgo03.html">二分木とヒープ</a> を参照</li>
+  <li>リストをプライオリティキューとして扱う関数がモジュール heapq に用意されている</li>
+  <li>デフォルトの動作は最小ヒープ (値が小さいほど優先順位が高い)</li>
+  <li>基本的な操作関数</li>
+  <ul>
+    <li>hepapush(heap, x), heap に x を追加</li>
+    <li>heappop(heap), heap からデータを取り出す</li>
+    <li>heapify(xs), リスト xs をヒープ (プライオリティキュー) に変換する</li>
+  </ul>
+  <li>詳細はライブラリリファレンス <a href="https://docs.python.jp/3/library/heapq.html#module-heapq">8.5. heapq — ヒープキューアルゴリズム</a> を参照</li>
+</ul>
+<pre>
+&gt;&gt;&gt; from heapq import *
+&gt;&gt;&gt; a = []
+&gt;&gt;&gt; for x in [5,6,4,7,3,8,2,9,1]: heappush(a, x)
+...
+&gt;&gt;&gt; a
+[1, 2, 3, 4, 6, 8, 5, 9, 7]
+&gt;&gt;&gt; for _ in range(9): print(heappop(a))
+...
+1
+2
+3
+4
+5
+6
+7
+8
+9
+&gt;&gt;&gt; a
+[]
+&gt;&gt;&gt; a = [9,8,7,6,5,4,3,2,1]
+&gt;&gt;&gt; heapify(a)
+&gt;&gt;&gt; a
+[1, 2, 3, 6, 5, 4, 7, 8, 9]
+&gt;&gt;&gt; for _ in range(9): print(heappop(a))
+...
+1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre>
+<h4 id="abc23">●bytes と bytearray</h4>
+<ul>
+  <li>bytes はバイトシーケンスを表す immutable なデータ型</li>
+  <li>バイトは 0 以上 256 未満の整数</li>
+  <li>bytearray は mutable なバイトシーケンス</li>
+  <li>どちらもシーケンスの操作が可能 (bytearray は mutable な操作も可)</li>
+  <li>bytes のリテラル表記は b'...' のように文字列リテラルの前に b を付ける</li>
+  <li>コンストラクタ bytes(), bytearray() も用意されている</li>
+  <ul>
+    <li>bytes(), 空のバイトシーケンスを生成する</li>
+    <li>bytes(n), 長さ n のバイトシーケンスを生成する (要素は 0)</li>
+    <li>bytes(iterable), iterable をバイトシーケンスに変換する</li>
+    <li>bytes(bytes-like-object), bytes-like-object をバイトシーケンスに変換する</li>
+    <li>bytearray() でも同じことができる</li>
+  </ul>
+<pre>
+&gt;&gt;&gt; a = b'12345678'
+&gt;&gt;&gt; a
+b'12345678'
+&gt;&gt;&gt; a[0]
+49
+&gt;&gt;&gt; a[7]
+56
+&gt;&gt;&gt; a[2:6]
+b'3456'
+&gt;&gt;&gt; bytes(10)
+b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+&gt;&gt;&gt; bytes(range(10))
+b'\x00\x01\x02\x03\x04\x05\x06\x07\x08\t'
+&gt;&gt;&gt; bytearray(10)
+bytearray(b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00')
+&gt;&gt;&gt; b = bytearray(a)
+&gt;&gt;&gt; b
+bytearray(b'12345678')
+&gt;&gt;&gt; b[0] = ord('a')
+&gt;&gt;&gt; b
+bytearray(b'a2345678')
+</pre>
+  <li>メソッド str.encode(encoding='utf-8') は文字列 str を bytes に変換する</li>
+  <li>メソッド bytes.decode(encoding='utf-8') は bytes を str に変換する</li>
+  <li>整数値を bytes に変換するにはメソッド to_bytes() を使う</li>
+  <li>逆に、bytes を整数値に変換するには整数 (int) のクラスメソッド from_bytes() を使う</li>
+<pre class="item">
+num.to_bytes(length, byteorder)
+int.from_bytes(bytes, byteorder)
+</pre>
+  <li>byteorder は 'big' (ビッグエンディアン) または 'little' (リトルエンディアン)</li>
+<pre>
+&gt;&gt;&gt; a = 'あいうえお'
+&gt;&gt;&gt; b = a.encode()
+&gt;&gt;&gt; b
+b'\xe3\x81\x82\xe3\x81\x84\xe3\x81\x86\xe3\x81\x88\xe3\x81\x8a'
+&gt;&gt;&gt; b.decode()
+'あいうえお'
+&gt;&gt;&gt; a = 97
+&gt;&gt;&gt; a.to_bytes(1, 'big')
+b'a'
+&gt;&gt;&gt; int.from_bytes(b'a', 'big')
+97
+</pre>
+  <li>このほかにも、文字列と同様の操作を行うメソッドが多数用意されている</li>
+  <li>詳細はリファレンスマニュアル <a href="https://docs.python.jp/3/library/stdtypes.html#binary-sequence-types-bytes-bytearray-memoryview">4.8. バイナリシーケンス型</a> を参照</li>
+</ul>
+<h4 id="abc24">●array</h4>
+<ul>
+  <li>Python の標準ライブラリには、数値型配列を表すクラス array がモジュール array に用意されている</li>
+  <li>リストと同様の操作が可能だが、同じデータ型の要素しか格納することができない</li>
+  <li>コンストラクタは array(typecode, [initializer])</li>
+  <li>initializer はリスト、bytes-like object、iterable なオブジェクト</li>
+  <li>typecode は次の文字で指定する (大文字は無符号整数)</li>
+  <ul>
+    <li>b, B, 8 bit 整数</li>
+    <li>h, H, 16 bit 整数</li>
+    <li>i, I, 32 bit 整数</li>
+    <li>l, L, 32 bit 整数</li>
+    <li>q, Q, 64 bit 整数</li>
+    <li>f, 単精度浮動小数点数</li>
+    <li>d, 倍精度浮動小数点数</li>
+    <li>実際には処理系によって異なる (上記は M.Hiroi が使用している処理系の場合)</li>
+    <li>要素のサイズはインスタンス変数 itemsize に格納されている</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; import array
+&gt;&gt;&gt; a = array.array('l', range(8))
+&gt;&gt;&gt; a
+array('l', [0, 1, 2, 3, 4, 5, 6, 7])
+&gt;&gt;&gt; a[0]
+0
+&gt;&gt;&gt; a[7]
+7
+&gt;&gt;&gt; a[5] *= 100
+&gt;&gt;&gt; a
+array('l', [0, 1, 2, 3, 4, 500, 6, 7])
+&gt;&gt;&gt; a.append(1000)
+&gt;&gt;&gt; a
+array('l', [0, 1, 2, 3, 4, 500, 6, 7, 1000])
+&gt;&gt;&gt; a.pop()
+1000
+&gt;&gt;&gt; a
+array('l', [0, 1, 2, 3, 4, 500, 6, 7])
+</pre>
+<ul>
+  <li>変換用のメソッド</li>
+  <ul>
+    <li>tolist(), fromlist(xs), array とリストの変換</li>
+    <li>tobytes(), frombytes(s), array と bytes-like object の変換</li>
+    <li>tofile(f), fromfile(f, n), ファイル f への書き込み、データを n 個読み込む</li>
+    <li>byteswap(), エンディアンの変更</li>
+  </ul>
+  <li>詳細はライブラリリファレンス <a href="https://docs.python.jp/3/library/array.html">8.7. array — 効率のよい数値アレイ</a> を参照</li>
+</ul>
+<pre>
+&gt;&gt;&gt; a = array.array('l', [1, 2, 3, 4])
+&gt;&gt;&gt; a
+array('l', [1, 2, 3, 4])
+&gt;&gt;&gt; a.tolist()
+[1, 2, 3, 4]
+&gt;&gt;&gt; b = a.tobytes()
+&gt;&gt;&gt; b
+b'\x01\x00\x00\x00\x02\x00\x00\x00\x03\x00\x00\x00\x04\x00\x00\x00'
+&gt;&gt;&gt; c = array.array('l')
+&gt;&gt;&gt; c.frombytes(b)
+&gt;&gt;&gt; c
+array('l', [1, 2, 3, 4])
+&gt;&gt;&gt; with open('test.dat', 'wb') as f:
+...     a.tofile(f)
+...
+&gt;&gt;&gt; d = array.array('l')
+&gt;&gt;&gt; d
+array('l')
+&gt;&gt;&gt; with open('test.dat', 'rb') as f:
+...     d.fromfile(f, 4)
+...
+&gt;&gt;&gt; d
+array('l', [1, 2, 3, 4])
+</pre>
+<h4 id="abc25">●ソート</h4>
+<ul>
+  <li>Python でデータをソートするには、リストのメソッド sort() か、関数 sorted() を使う</li>
+<pre class="item">
+xs.sort(key = None, reverse = False) =&gt; None
+sorted(iterable, key = None, reverse = False) =&gt; sorted_list
+</pre>
+  <li>sort() はリストをインプレースでソートする (リストは破壊的に修正される)</li>
+  <li>sorted() は iterable からソート済みのリストを生成する</li>
+  <li>キーワード引数 key は関数で、要素を比較する前に呼び出され、その結果を使ってソートする</li>
+  <li>キーワード引数 reverse に True を指定すると、逆順にソートする</li>
+  <li>ソートの使い方は Python のドキュメント <a href="https://docs.python.jp/3/howto/sorting.html#sortinghowto">ソート HOW TO</a> が参考になる</li>
+</ul>
+<pre>
+&gt;&gt;&gt; a = [5, 6, 4, 7, 3, 8, 2, 9, 1, 0]
+&gt;&gt;&gt; a.sort()
+&gt;&gt;&gt; a
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+&gt;&gt;&gt; a.sort(reverse=True)
+&gt;&gt;&gt; a
+[9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+&gt;&gt;&gt; sorted(a)
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+&gt;&gt;&gt; a
+[9, 8, 7, 6, 5, 4, 3, 2, 1, 0]
+&gt;&gt;&gt; b = [('foo', 1), ('bar', 2), ('baz', 3), ('oops', 4)]
+&gt;&gt;&gt; b.sort(key = lambda x: x[0])
+&gt;&gt;&gt; b
+[('bar', 2), ('baz', 3), ('foo', 1), ('oops', 4)]
+&gt;&gt;&gt; b.sort(key = lambda x: x[1])
+&gt;&gt;&gt; b
+[('foo', 1), ('bar', 2), ('baz', 3), ('oops', 4)]
+&gt;&gt;&gt; sorted(b, key = lambda x: x[0])
+[('bar', 2), ('baz', 3), ('foo', 1), ('oops', 4)]
+&gt;&gt;&gt; b
+[('foo', 1), ('bar', 2), ('baz', 3), ('oops', 4)]
+</pre>
+<ul>
+  <li>モジュール operator には便利なアクセサ関数が用意されている</li>
+  <ul>
+    <li>itemgetter(n), n 番目の要素を取り出す関数を生成する</li>
+    <li>attrgetter(name), 属性 name の値を取り出す関数を生成する</li>
+    <li>methodcaller('name' [, args, ...]), メソッド name を呼び出す関数を生成する</li>
+    <li>name を呼び出すとき、引数 args が渡される</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; from operator import itemgetter, attrgetter, methodcaller
+&gt;&gt;&gt; f1 = itemgetter(1)
+&gt;&gt;&gt; f1([1, 2, 3, 4, 5])
+2
+&gt;&gt;&gt; a = [('foo', 1), ('bar', 2), ('baz', 3), ('oops', 4)]
+&gt;&gt;&gt; sorted(a, key = itemgetter(0))
+[('bar', 2), ('baz', 3), ('foo', 1), ('oops', 4)]
+&gt;&gt;&gt; sorted(a, key = itemgetter(1))
+[('foo', 1), ('bar', 2), ('baz', 3), ('oops', 4)]
+&gt;&gt;&gt; class Pair:
+...     def __init__(self, x, y):
+...         self.fst = x
+...         self.snd = y
+...     def get_fst(self): return self.fst
+...     def get_snd(self): return self.snd
+...     def __repr__(self): return 'Pair({},{})'.format(self.fst, self.snd)
+...
+&gt;&gt;&gt; b = list(map(lambda xs: Pair(xs[0], xs[1]), a))
+&gt;&gt;&gt; b
+[Pair(foo,1), Pair(bar,2), Pair(baz,3), Pair(oops,4)]
+&gt;&gt;&gt; sorted(b, key = attrgetter('fst'))
+[Pair(bar,2), Pair(baz,3), Pair(foo,1), Pair(oops,4)]
+&gt;&gt;&gt; sorted(b, key = attrgetter('snd'))
+[Pair(foo,1), Pair(bar,2), Pair(baz,3), Pair(oops,4)]
+&gt;&gt;&gt; sorted(b, key = methodcaller('get_fst'))
+[Pair(bar,2), Pair(baz,3), Pair(foo,1), Pair(oops,4)]
+&gt;&gt;&gt; sorted(b, key = methodcaller('get_snd'))
+[Pair(foo,1), Pair(bar,2), Pair(baz,3), Pair(oops,4)]
+</pre>
+<ul>
+  <li>sort() や sorted() は安定なソート</li>
+  <li>ソートキーが等しい場合、入力された順番が崩れないソートのこと</li>
+<pre class="fig">
+  元のデータ      安定なソート    不安定なソート
+
+  (123, 'abc')    (123, 'abc')    (789, 'abc')
+  (456, 'def')    (789, 'abc')    (123, 'abc')
+  (789, 'abc')    (456, 'def')    (456, 'def')
+
+                図 : ソートの安定性
+</pre>
+  <li>2 番目の要素をキーにソートした場合、1 行目と 3 行目はソートキーが等しい</li>
+  <li>安定なソートであればソート結果が 1, 3, 2 の順番になり、入力時の位置関係が保たれる</li>
+  <li>不安定なソートはソート結果が、たとえば 3, 1, 2 の順番となり、入力時の位置関係が崩れる</li>
+  <li>itemgetter() や attrgetter() で複数の引数を指定すると、値が等しい場合、次の引数で指定した要素を比較する</li>
+</ul>
+<pre>
+&gt;&gt;&gt; a = [('foo', 1), ('bar', 3), ('bar', 2), ('bar', 1), ('baz', 4)]
+&gt;&gt;&gt; sorted(a, key = itemgetter(0))
+[('bar', 3), ('bar', 2), ('bar', 1), ('baz', 4), ('foo', 1)]
+&gt;&gt;&gt; sorted(a, key = itemgetter(0, 1))
+[('bar', 1), ('bar', 2), ('bar', 3), ('baz', 4), ('foo', 1)]
+</pre>
+<h4 id="abc26">●bisect</h4>
+<ul>
+  <li>モジュール bisect には、二分探索を使ってソート済みのリストを操作する関数が用意されている</li>
+  <ul>
+    <li>bisect_left(xs, x, lo=0, hi=len(xs)), リスト xs に x を挿入する位置を返す (同じ値がある場合は左端)</li>
+    <li>bisect_right(xs, x, lo=0, hi=len(xs)), リスト xs に x を挿入する位置を返す (同じ値がある場合は右端)</li>
+    <li>bisect(xs, x, lo=0, hi=len(xs)), bisect_right() と同じ</li>
+    <li>insort_left(xs, x, lo=0, hi=len(xs)), リスト xs に x を挿入 (同じ値がある場合は左端に挿入)</li>
+    <li>insort_right(xs, x, lo=0, hi=len(xs)), リスト xs に x を挿入 (同じ値がある場合は右端に挿入)</li>
+    <li>insort(xs, x, lo=0, hi=len(xs)), insort_right() と同じ</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; from bisect import *
+&gt;&gt;&gt; a = [1, 1, 2, 2, 2, 3, 3, 3, 3, 4]
+&gt;&gt;&gt; bisect_left(a, 2)
+2
+&gt;&gt;&gt; bisect(a, 2)
+5
+&gt;&gt;&gt; insort_left(a, 2)
+&gt;&gt;&gt; a
+[1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4]
+&gt;&gt;&gt; insort(a, 2)
+&gt;&gt;&gt; a
+[1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4]
+</pre>
+<ul>
+  <li>値の有無を二分探索で調べる場合、bisect_left() の位置にある要素が値と等しいかチェックすればよい</li>
+</ul>
+<pre>
+&gt;&gt;&gt; def bsearch(xs, x):
+...     i = bisect_left(xs, x)
+...     return len(xs) != i and xs[i] == x
+...
+&gt;&gt;&gt; a
+[1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 4]
+&gt;&gt;&gt; bsearch(a, 1)
+True
+&gt;&gt;&gt; bsearch(a, 2)
+True
+&gt;&gt;&gt; bsearch(a, 3)
+True
+&gt;&gt;&gt; bsearch(a, 4)
+True
+&gt;&gt;&gt; bsearch(a, 5)
+False
+&gt;&gt;&gt; bsearch(a, 0)
+False
+</pre>
+<h4 id="abc27">●簡単なプログラム (4)</h4>
+<p> 問題やプログラム (アルゴリズム) の説明は下記ページを参照してください。
+</p>
+<ul>
+  <li><a href="../puzzle/index.html">Puzzle DE Programming</a></li>
+  <ul>
+    <li><a href="../puzzle/divisor.html">約数</a></li>
+    <li><a href="../puzzle/repeat_dec.html">循環小数</a></li>
+    <li><a href="../puzzle/partition.html">分割数</a></li>
+  </ul>
+  <li><a href="julia.html">Julia Language Programming</a></li>
+  <ul>
+    <li><a href="http://www.geocities.jp/m_hiroi/light/julia06.html">カッコ列</a></li>
+    <li><a href="http://www.geocities.jp/m_hiroi/light/julia06.html#chap47">カッコ列の総数</a></li>
+    <li><a href="http://www.geocities.jp/m_hiroi/light/julia06.html#chap48">カッコ列と二分木</a></li>
+    <li><a href="http://www.geocities.jp/m_hiroi/light/julia06.html#chap50">平方根 (めのこ平方)</a></li>
+    <li><a href="http://www.geocities.jp/m_hiroi/light/julia05.html#chap43">集合の分割</a></li>
+  </ul>
+</ul>
+<pre class="list">
+#
+# sample04.py : 簡単なプログラム (4)
+#
+#               Copyright (C) 2018 Makoto Hiroi
+#
+import functools, math
+
+# 最大公約数 (モジュール math に gcd() がある)
+
+# 末尾再帰
+def gcd_rec(a, b):
+    if b == 0: return a
+    return gcd_rec(b, a % b)
+
+# 繰り返し
+def gcd(a, b):
+    while b &gt; 0:
+        a, b = b, a % b
+    return a
+
+# 最小公倍数
+def lcm(a, b):
+    return a * b // gcd(a, b)
+
+print("----- gcd -----")
+print(gcd_rec(12345678, 123456789))
+print(gcd_rec(1234321, 12345654321))
+print(gcd(12345678, 123456789))
+print(gcd(1234321, 12345654321))
+print(functools.reduce(gcd, [123, 12345, 12345678]))
+print("----- lcm -----")
+print(lcm(5, 7))
+print(lcm(14, 35))
+print(functools.reduce(lcm, range(2, 21)))
+print(functools.reduce(lcm, range(2, 31)))
+
+# 平方根 (ニュートン法)
+def sqrt(x):
+    def init(x, s = 1.0):
+        while s &lt; x:
+            s *= 2.0
+            x /= 2.0
+        return s
+    if x &lt; 0:
+        raise ValueError('sqrt domain error')
+    p = init(x) if x &gt; 1.0 else 1.0
+    while True:
+        q = (p + x / p) / 2
+        if q &gt;= p: break
+        p = q
+    return p
+
+print('----- sqrt -----')
+print(sqrt(0.5))
+print(sqrt(2))
+print(sqrt(3))
+print(sqrt(4))
+print(sqrt(5))
+print(math.sqrt(0.5))
+print(math.sqrt(2))
+print(math.sqrt(3))
+print(math.sqrt(4))
+print(math.sqrt(5))
+
+# めのこ平方
+def isqrt(n):
+    def isqrt_sub(n, m):
+        while n &gt;= m:
+            n -= m
+            m += 2
+        return m // 2
+    if n &lt; 100:
+        return isqrt_sub(n, 1)
+    else:
+        m = 10 * isqrt(n // 100)
+        return isqrt_sub(n - m * m, 2 * m + 1)
+
+print('----- isqrt -----')
+print(isqrt(6789))
+print(isqrt(123456789))
+print(isqrt(1234567890))
+
+#
+# 素因数分解
+#
+def factorization(n):
+    def factor_sub(n, m):
+        c = 0
+        while n % m == 0:
+            c += 1
+            n //= m
+        return c, n
+    #
+    buff = []
+    c, m = factor_sub(n, 2)
+    if c &gt; 0: buff.append((2, c))
+    c, m = factor_sub(m, 3)
+    if c &gt; 0: buff.append((3, c))
+    x = 5
+    while m &gt;= x * x:
+        c, m = factor_sub(m, x)
+        if c &gt; 0: buff.append((x, c))
+        if x % 6 == 5:
+            x += 2
+        else:
+            x += 4
+    if m &gt; 1: buff.append((m, 1))
+    return buff
+
+#
+# 約数の個数
+#
+def divisor_num(n):
+    a = 1
+    for _, x in factorization(n):
+        a *= x + 1
+    return a
+
+print('----- divisor_num -----')
+print(divisor_num(24))
+print(divisor_num(12345678))
+print(divisor_num(123456789))
+print(divisor_num(1234567890))
+print(divisor_num(1111111111))
+
+#
+# 約数の合計値
+#
+
+# σ(p, n) の計算
+def div_sum_sub(p, n):
+    a = 0
+    while n &gt; 0:
+        a += p ** n
+        n -= 1
+    return a + 1
+
+def divisor_sum(n):
+    a = 1
+    for p, q in factorization(n):
+        a *= div_sum_sub(p, q)
+    return a
+
+print('----- divisor_sum -----')
+print(divisor_sum(24))
+print(divisor_sum(12345678))
+print(divisor_sum(123456789))
+print(divisor_sum(1234567890))
+print(divisor_sum(1111111111))
+
+#
+# 約数
+#
+
+# p ^ q の約数を求める
+def divisor_sub(p, q):
+    a = []
+    for i in range(0, q + 1):
+        a.append(p ** i)
+    return a
+
+def divisor(n):
+    xs = factorization(n)
+    ys = divisor_sub(xs[0][0], xs[0][1])
+    for p, q in xs[1:]:
+        ys = [x * y for x in divisor_sub(p, q) for y in ys]
+    return sorted(ys)
+
+print('----- divisor -----')
+print(divisor(24))
+print(divisor(12345678))
+print(divisor(123456789))
+print(divisor(1234567890))
+print(divisor(1111111111))
+
+#
+# 循環小数
+#
+
+# 探索 (リストのメソッド index() は ValueError が送出される)
+def position(n, xs):
+    for i, x in enumerate(xs):
+        if x == n: return i
+    return -1
+
+# 循環小数 m/n = ([...],[...])
+def repdec(m, n):
+    xs = []
+    ys = []
+    while True:
+        p = m // n
+        q = m % n
+        if q == 0:
+            ys.append(p)
+            return ys, [0]
+        else:
+            x = position(q, xs)
+            if x &gt;= 0:
+                ys.append(p)
+                return ys[:x+1], ys[x+1:]
+            xs.append(q)
+            ys.append(p)
+            m = q * 10
+
+# 循環小数を分数に直す
+def from_repdec(xs, ys):
+    # 有限小数の部分を分数に直す
+    p0 = functools.reduce(lambda a, x: a * 10 + x, xs, 0)
+    q0 = 10 ** (len(xs) - 1)
+    # 循環節を分数に直す
+    p1 = functools.reduce(lambda a, x: a * 10 + x, ys, 0)
+    q1 = (10 ** len(ys) - 1)
+    # 有限小数 + 循環節
+    a = q0 * q1
+    b = q1 * p0 + p1
+    c = gcd(a, b)
+    return b // c, a // c
+
+print('----- repdec, from_repdec -----')
+for x in range(2, 12):
+    xs = repdec(1, x)
+    print(xs)
+    print(from_repdec(*xs))
+xs = repdec(355, 113)
+print(xs)
+print(from_repdec(*xs))
+
+#
+# カッコ列
+#
+def kakko(f, n):
+    def kakko_sub(x, y, a):
+        if x == y == n:
+            f(a)
+        else:
+            if x &lt; n:
+                kakko_sub(x + 1, y, a + '(')
+            if y &lt; x:
+                kakko_sub(x, y + 1, a + ')')
+    kakko_sub(0, 0, '')
+
+print('----- kakko -----')
+kakko(print, 3)
+kakko(print, 4)
+
+#
+# カタラン数
+#
+def catalan_num(n):
+    table = [1] * n
+    for i in range(1, n):
+        for j in range(i, n):
+            table[j] += table[j - 1]
+    return table[-1]
+
+print('----- Catalan number -----')
+for x in range(1, 11):
+    print(catalan_num(x))
+print(catalan_num(50))
+print(catalan_num(100))
+
+#
+# カッコ列と二分木
+#
+
+# 葉
+class Leaf:
+    def __repr__(self): return 'Leaf'
+
+# 節
+class Node:
+    def __init__(self, l, r):
+        self.left = l
+        self.right = r
+    def __repr__(self):
+        return 'Node({}, {})'.format(self.left, self.right)
+
+# 二分木をカッコ列に変換
+def kakko_from_tree(tree):
+    def sub(tree):
+        if isinstance(tree, Leaf):
+            return ')'
+        else:
+            return '(' + sub(tree.left) + sub(tree.right)
+    s = sub(tree)
+    return s[:-1]
+
+# カッコ列を二分木に変換
+def kakko_to_tree(s):
+    def sub(i):
+        if len(s) &lt;= i:
+            return Leaf(), i
+        elif s[i] == ')':
+            return Leaf(), i + 1
+        elif s[i] == '(':
+            l, j = sub(i + 1)
+            r, k = sub(j)
+            return Node(l, r), k
+        else:
+            raise Exception('kakko_to_tree: illegal char')
+    return sub(0)[0]
+
+def test(s):
+    print(s)
+    t = kakko_to_tree(s)
+    print(t)
+    u = kakko_from_tree(t)
+    print(u)
+
+print('----- kakko to tree, kakko from tree -----')
+kakko(test, 3)
+
+#
+# 分割数
+#
+def part_num(n, k):
+    if n == 1 or k == 1:
+        return 1
+    if n &lt; 0 or k &lt; 1:
+        return 0
+    else:
+        return part_num(n - k, k) + part_num(n, k - 1)
+
+def partition_number(n):
+    return part_num(n, n)
+
+# 動的法による高速化
+def partition_number_fast(n):
+    table = [1] * (n + 1)
+    for k in range(2, n + 1):
+        for m in range(k, n + 1):
+            table[m] += table[m - k]
+    return table[n]
+
+# 整数の分割
+def part_int_sub(n, k, a):
+    if n == 0:   print(a)
+    elif n == 1: print(a + [1])
+    elif k == 1: print(a + [1] * n)
+    else:
+        if n &gt;= k:
+            part_int_sub(n - k, k, a + [k])
+        part_int_sub(n, k - 1, a)
+
+def partition_of_int(n): part_int_sub(n, n, [])
+
+print('----- partition number -----')
+for x in range(1, 11): print(partition_number(x))
+print(partition_number_fast(1000))
+print(partition_number_fast(2000))
+print(partition_number_fast(4000))
+partition_of_int(5)
+partition_of_int(6)
+partition_of_int(7)
+
+#
+# 集合の分割
+#
+def part_sub(f, ls, a):
+    if not ls:
+        f(a)
+    else:
+        for i in range(len(a)):
+            a[i].append(ls[0])
+            part_sub(f, ls[1:], a)
+            a[i].pop()
+        a.append([ls[0]])
+        part_sub(f, ls[1:], a)
+        a.pop()
+
+def partition_of_set(f, ls):
+    part_sub(f, ls[1:], [[ls[0]]])
+
+print('----- partition of set -----')
+partition_of_set(print, [1,2,3])
+partition_of_set(print, [1,2,3, 4])
+</pre>
+<pre>
+----- gcd -----
+9
+121
+9
+121
+3
+----- lcm -----
+35
+70
+232792560
+2329089562800
+----- sqrt -----
+0.7071067811865475
+1.414213562373095
+1.7320508075688772
+2.0
+2.23606797749979
+0.7071067811865476
+1.4142135623730951
+1.7320508075688772
+2.0
+2.23606797749979
+----- isqrt -----
+82
+11111
+35136
+----- divisor_num -----
+8
+24
+12
+48
+16
+----- divisor_sum -----
+60
+27319968
+178422816
+3211610688
+1246404096
+----- divisor -----
+[1, 2, 3, 4, 6, 8, 12, 24]
+[1, 2, 3, 6, 9, 18, 47, 94, 141, 282, 423, 846, 14593, 29186, 43779, 87558, 131337, 
+ 262674, 685871, 1371742, 2057613, 4115226, 6172839, 12345678]
+[1, 3, 9, 3607, 3803, 10821, 11409, 32463, 34227, 13717421, 41152263, 123456789]
+[1, 2, 3, 5, 6, 9, 10, 15, 18, 30, 45, 90, 3607, 3803, 7214, 7606, 10821, 11409, 18035,
+ 19015, 21642, 22818, 32463, 34227, 36070, 38030, 54105, 57045, 64926, 68454, 108210, 
+ 114090, 162315, 171135, 324630, 342270, 13717421, 27434842, 41152263, 68587105, 82304526, 
+ 123456789, 137174210, 205761315, 246913578, 411522630, 617283945, 1234567890]
+[1, 11, 41, 271, 451, 2981, 9091, 11111, 100001, 122221, 372731, 2463661, 4100041, 27100271, 
+ 101010101, 1111111111]
+----- repdec, from_repdec -----
+([0, 5], [0])
+(1, 2)
+([0], [3])
+(1, 3)
+([0, 2, 5], [0])
+(1, 4)
+([0, 2], [0])
+(1, 5)
+([0, 1], [6])
+(1, 6)
+([0], [1, 4, 2, 8, 5, 7])
+(1, 7)
+([0, 1, 2, 5], [0])
+(1, 8)
+([0], [1])
+(1, 9)
+([0, 1], [0])
+(1, 10)
+([0], [0, 9])
+(1, 11)
+([3], [1, 4, 1, 5, 9, 2, 9, 2, 0, 3, 5, 3, 9, 8, 2, 3, 0, 0, 8, 8, 4, 9, 5, 5, 7, 5, 
+ 2, 2, 1, 2, 3, 8, 9, 3, 8, 0, 5, 3, 0, 9, 7, 3, 4, 5, 1, 3, 2, 7, 4, 3, 3, 6, 2, 8,
+ 3, 1, 8, 5, 8, 4, 0, 7, 0, 7, 9, 6, 4, 6, 0, 1, 7, 6, 9, 9, 1, 1, 5, 0, 4, 4, 2, 4,
+ 7, 7, 8, 7, 6, 1, 0, 6, 1, 9, 4, 6, 9, 0, 2, 6, 5, 4, 8, 6, 7, 2, 5, 6, 6, 3, 7, 1, 6, 8])
+(355, 113)
+----- kakko -----
+((()))
+(()())
+(())()
+()(())
+()()()
+(((())))
+((()()))
+((())())
+((()))()
+(()(()))
+(()()())
+(()())()
+(())(())
+(())()()
+()((()))
+()(()())
+()(())()
+()()(())
+()()()()
+----- Catalan number -----
+1
+2
+5
+14
+42
+132
+429
+1430
+4862
+16796
+1978261657756160653623774456
+896519947090131496687170070074100632420837521538745909320
+----- kakko to tree, kakko from tree -----
+((()))
+Node(Node(Node(Leaf, Leaf), Leaf), Leaf)
+((()))
+(()())
+Node(Node(Leaf, Node(Leaf, Leaf)), Leaf)
+(()())
+(())()
+Node(Node(Leaf, Leaf), Node(Leaf, Leaf))
+(())()
+()(())
+Node(Leaf, Node(Node(Leaf, Leaf), Leaf))
+()(())
+()()()
+Node(Leaf, Node(Leaf, Node(Leaf, Leaf)))
+()()()
+----- partition number -----
+1
+2
+3
+5
+7
+11
+15
+22
+30
+42
+24061467864032622473692149727991
+4720819175619413888601432406799959512200344166
+1024150064776551375119256307915896842122498030313150910234889093895
+[5]
+[4, 1]
+[3, 2]
+[3, 1, 1]
+[2, 2, 1]
+[2, 1, 1, 1]
+[1, 1, 1, 1, 1]
+[6]
+[5, 1]
+[4, 2]
+[4, 1, 1]
+[3, 3]
+[3, 2, 1]
+[3, 1, 1, 1]
+[2, 2, 2]
+[2, 2, 1, 1]
+[2, 1, 1, 1, 1]
+[1, 1, 1, 1, 1, 1]
+[7]
+[6, 1]
+[5, 2]
+[5, 1, 1]
+[4, 3]
+[4, 2, 1]
+[4, 1, 1, 1]
+[3, 3, 1]
+[3, 2, 2]
+[3, 2, 1, 1]
+[3, 1, 1, 1, 1]
+[2, 2, 2, 1]
+[2, 2, 1, 1, 1]
+[2, 1, 1, 1, 1, 1]
+[1, 1, 1, 1, 1, 1, 1]
+----- partition of set -----
+[[1, 2, 3]]
+[[1, 2], [3]]
+[[1, 3], [2]]
+[[1], [2, 3]]
+[[1], [2], [3]]
+[[1, 2, 3, 4]]
+[[1, 2, 3], [4]]
+[[1, 2, 4], [3]]
+[[1, 2], [3, 4]]
+[[1, 2], [3], [4]]
+[[1, 3, 4], [2]]
+[[1, 3], [2, 4]]
+[[1, 3], [2], [4]]
+[[1, 4], [2, 3]]
+[[1], [2, 3, 4]]
+[[1], [2, 3], [4]]
+[[1, 4], [2], [3]]
+[[1], [2, 4], [3]]
+[[1], [2], [3, 4]]
+[[1], [2], [3], [4]]
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="python3.html#python3_abc">Python3</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

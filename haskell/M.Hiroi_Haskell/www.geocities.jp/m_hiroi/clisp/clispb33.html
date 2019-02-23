@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881769</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb32.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb34.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>●仮想計算機 COMETⅡの簡易シミュレータ (3)</h3>
+<p> <a href="../xyzzy_lisp.html#abclisp">Common Lisp 入門</a> の番外編です。とりあえず、前回で仮想計算機 COMETⅡを動かすプログラムは完成しました。今回は Common Lisp から離れますが、COMETⅡで動作する簡単なサンプルプログラムをいくつか作ってみましょう。
+</p>
+<p> 一般に、アセンブリ言語によるプログラミングは難しいと思われている方が多いのですが、一つ一つの命令は簡単なものがほとんどです。とくに COMETⅡ (CASLⅡ) は命令数が少なく、その動作を理解するのは簡単です。問題は、そのような簡単な命令を組み合わせて目的のプログラムを作るので、高級言語よりも手間暇がかかることなのです。
+</p>
+
+<p> 近年、ハードウェアの急速な進歩により、スクリプト言語がもてはやされるようになりました。もはやアセンブリ語を使う機会はほとんどなくなったようにみえますが、実はそうではありません。組み込み機器や OS といったハードウェアに密着したシステムを開発する場合、アセンブリ語が必要になることがあります。
+</p>
+
+<p> アセンブリ言語は CPU によって異なりますが、基本的な考え方に大きな違いはありません。また、CPU の基本的な動作を理解していると、高級言語の学習でつまづくこと (たとえばＣ言語のポインタなど) が少なくなるかもしれません。COMETⅡ (CASLⅡ) で勉強したことは、けっして無駄にはならないと思います。
+</p>
+
+<p> Common Lisp で動く仮想マシンですから、プログラムを実行するのも修正するのも簡単です。ちょっと寄り道して、お気軽に試してみてください。
+</p>
+
+<h4>●アセンブリ言語の条件分岐と繰り返し</h4>
+<p> アセンブリ言語は高級言語のような if や for, while といった制御構造はありません。これらの制御構造は比較命令とジャンプ命令を使ってプログラムする必要があります。ここで基本的な使い方を説明します。
+</p>
+<p> まずは簡単な例題として、1 から N までの合計値を求めるプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 1 から N までの合計値を求め ans にセットする
+
+test1
+        (xor  gr0 gr0)          ; 0 clear (合計値を格納)
+        (lad  gr1 1)            ; 1 に初期化
+loop1
+        (addl gr0 gr1)          ; gr0 += gr1
+        (cpl  gr1 num)          ; gr1 と num を比較
+        (svc  0)                ; レジスタ表示 (debug)
+        (jze  exit1)            ; gr1 == num ならば exit1 へ
+        (lad  gr1 1 gr1)        ; gr1 += 1
+        (jump loop1)            ; loop1 へ
+exit1
+        (st   gr0 ans)
+        (lad  gr0 ans)
+        (svc  1)                ; メモリダンプ (debug)
+        (halt)
+num     (dc 10)
+ans     (ds 1)
+</pre>
+<p> 数値 N は num に格納されているものとし、合計値は ans に格納します。gr0 に合計値を求めます。最初に、gr0 を 0 で初期化します。同じ数値の排他的論理和 (XOR) を求めると、すべてのビットを 0 にすることができます。このほかに、(lad gr0 0) や (subl gr0 gr0) としてもかまいません。COMETⅡの場合、lad は 2 word 命令なので、効率的なプログラムを心がけるならば、subl や xor を使うとよいでしょう。
+</p>
+
+<p> 繰り返しは無条件ジャンプと条件ジャンプを組み合わせて実現します。次の図を見てください。
+</p>
+<pre class="fig">
+                      ↓ジャンプ先ラベル１
+                      ├←─────┐
+                      ↓            │
+                ┌─────┐      │
+                │  命令Ａ  │      │
+                └─────┘      │
+                      ↓            │
+                ┌─────┐      │
+                │ 比較命令 │      │
+                └─────┘      │
+                      ↓            │
+            true┌─────┐      │
+        ┌───│条件 JUMP │      │
+        │      └─────┘      │
+        │            ↓false       │
+        │      ┌─────┐      │
+        │      │  命令Ｂ  │      │
+        │      └─────┘      │
+        │            ↓            │
+        │            ・            │
+        │            ↓            │
+        │      ┌─────┐      │
+        │      │無条件JUMP│      │
+        ↓      └─────┘      │
+    ジャンプ先        │            │
+     ラベル２         ↓            │
+                      └──────┘
+
+             図 : 繰り返しの構造
+</pre>
+<p> 無条件ジャンプとジャンプ先ラベル１でループを作ります。このループから脱出するため、比較命令と条件ジャンプを使います。比較命令を実行することでフラグレジスタが設定され、その値によって条件ジャンプでラベル２へジャンプするわけです。なお、比較命令を使わなくても、フラグレジスタに影響を与える命令であれば条件ジャンプを使うことができます。
+</p>
+<p> プログラムの説明に戻ります。ラベル loop1 と無条件ジャンプ (jump loo1) でループを作ります。次に、addl で gr0 に gr1 の値を加算して、比較命令 cpl で gr1 と num を比較します。gr1 が小さい場合はサインフラグがセットされますが、ゼロフラグはリセットされます。gr1 と num が等しい場合はゼロフラグがセットされ、サインフラグはリセットされます。したがって、条件ジャンプ jze を使うと、gr0 と num が等しくなったら exit1 へ脱出することができます。
+</p>
+<p> あとは lad 命令で gr1 の値を +1 します。lad ではなく、加算命令 addl を使ってもかまいません。たとえば、ラベル one に (dc 1) を設定して (addl gr1 one) とすることもできます。exit1 へジャンプしたあとは、st で gr0 の値を ans に格納します。svc 命令は値を表示するために使います。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+* (asm-run "test.cas")
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=0001 GR1=0001 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=0003 GR1=0002 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=0006 GR1=0003 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=000A GR1=0004 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=000F GR1=0005 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=0015 GR1=0006 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=001C GR1=0007 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=0024 GR1=0008 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=010
+GR0=002D GR1=0009 GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0008 SP=FFFF FR(OF,SF,ZF)=001
+GR0=0037 GR1=000A GR2=0000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+
+0016: 0037 100F 0032 121F 0001 411F 0031 63FF
+001E: 0029 4001 0032 65FF 0025 1001 0032 1211
+0026: 0001 64FF 001B 110F 0030 120F 0030 F0FF
+002E: 0001 F1FF 0000 0009 0001 FFFE 0003 FFFC
+NIL
+</pre>
+<p> 繰り返すたびに GR1 の値がひとつずつ増え、その値が GR0 に加算されていく様子がわかります。そして、GR1 が 10 (#x0A) になると ZF が 1 になり、jze により exit1 へジャンプします。ans のアドレスは #x16 で、値は #x37 (55) になります。
+</p>
+<p> 次はメモリに格納されているデータの合計値を求めてみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : data2 に格納されている数値の合計値を求める
+
+test2
+        (xor  gr0 gr0)          ; gr0 合計値
+        (lad  gr1 0)            ; gr1 添字
+loop2
+        (cpl  gr1 len2)         ; gr1 と len2 を比較
+        (jze  exit2)            ; 等しい場合は exit2 へ
+        (adda gr0 data2 gr1)    ; gr0 += (data2 + gr1)
+        (lad  gr1 1 gr1)        ; gr1 += 1
+        (jump loop2)            ; loop2 へ
+exit2
+        (st   gr0 ans2)         ; 合計値を格納
+        (lad  gr0 ans2)
+        (svc  1)                ; dump
+        (halt)
+ans2    (ds 1)
+len2    (dc 9)
+data2   (dc 1 -2 3 -4 5 -6 7 -8 9)
+</pre>
+<p> データは data2 に、個数は len2 に格納されているものとします。合計値は ans2 に格納します。プログラムのポイントは gr1 をベクタの添字のように使うところです。adda で gr0 に data2 を加算するとき、アドレスに data2 を、指標レジスタに gr1 を指定することで、data2 + gr2 番地のメモリから値を取り出すことができます。あとは gr1 の値を 0 から len2 の値まで順番に増やし、data2 の値をすべて加算したら処理を終了します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+* (asm-run "test.cas")
+
+0014: 0005 0009 0001 FFFE 0003 FFFC 0005 FFFA
+001C: 0007 FFF8 0009 3600 121F 0001 411F 0034
+0024: F0FF 0000 63FF 002D 2601 1211 0001 64FF
+002C: 0022 110F 0035 120F 0035 F0FF 0001 F1FF
+NIL
+</pre>
+<p> ans2 の番地は #x14 で、合計値は 5 になります。
+</p>
+<p> もうひとつ簡単な例題として、メモリに格納されているデータの中から最大値を探すプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : data3 に格納されている数値の最大値を求める
+
+test3
+        (ld   gr0 data3)        ; 先頭データを仮の最大値とする
+        (lad  gr1 1)
+loop3
+        (cpl  gr1 len3)         ; gr1 と len3 を比較
+        (jze  exit3)            ; 等しい場合は exit3 へ
+        (cpa  gr0 data3 gr1)    ; gr0 と (data3 + gr1) を比較
+        (jpl  label3)           ; gr0 &gt;= (data3 + gr1) の場合は label3 へ
+        (ld   gr0 data3 gr1)    ; 最大値を書き換える
+label3
+        (lad  gr1 1 gr1)        ; gr1 += 1
+        (jump loop3)            ; loop3 へ
+exit3
+        (st   gr0 ans3)         ; 答えを格納する
+        (lad  gr0 ans3)
+        (svc  1)                ; dump
+        (halt)
+ans3    (ds 1)
+len3    (dc 9)
+data3   (dc 1 -2 3 -4 5 -6 7 -8 9)
+</pre>
+<p> 最大値を gr0 に求めます。gr1 は添字として使います。最初に data3 の先頭の要素を gr0 にセットします。これが仮の最大値になります。gr1 は 1 に初期化します。loop3 と (jump loop3) でループを作り、すべてのデータを調べたら exit3 へ脱出します。このループの中で最大値をチェックします。
+</p>
+<p> cpa 命令で gr0 と (data3 + gr1) のデータを比較します。gr0 が大きい場合、すべてのフラグはリセットされます。gr0 と等しい場合、ゼロフラグはセットされますが、サインフラグはリセットされます。したがって、サインフラグが 0 のときにジャンプする jpl 命令を使うと、gr0 &gt;= (data3 + gr1) を判定することができます。
+</p>
+<p> この場合、gr0 の値を書き換える必要はありません。jpl で label3 にジャンプして、gr0 の値を書き換える処理をスキップします。そうでなければ gr0 のほうが小さいので、(data3 + gr1) の値に書き換えます。
+</p>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+* (asm-run "test.cas")
+
+0019: 0009 0009 0001 FFFE 0003 FFFC 0005 FFFA
+0021: 0007 FFF8 0009 3600 121F 0000 411F 0039
+0029: 63FF 0031 2001 003A 1211 0001 64FF 0027
+0031: 110F 0038 120F 0038 F0FF 0001 F1FF 0000
+NIL
+</pre>
+<p> ans3 の番地は #x0019 で最大値は 9 になります。
+</p>
+<h4>●サブルーチンの使い方</h4>
+<p> 次はサブルーチンの使い方を説明します。
+</p>
+<h4>●サブルーチンの必要性</h4>
+<p> プログラミングは、模型を組み立てる作業と似ています。小さな模型は簡単に組み立てることができますが、模型が大きくなると一度に全体を組み立てるのは難しくなります。このような場合、全体をいくつかに分割して、まずその部分ごとに作ります。最後に、それを結合して全体を完成させます。
+</p>
+
+<p> これは、プログラミングにも当てはまります。実現しようとする処理が複雑になると、一度に全体を作り上げることは難しくなります。そこで、全体を小さな処理に分割して、ひとつひとつの処理を作成し、それらを組み合わせて全体のプログラムを完成させます <a href="clispb33.html#note1">[*1]</a>。
+</p>
+
+<p> 分割した処理を作成する場合、それをひとつの部品として扱えると便利です。つまり、小さな部品を作り、それらを使って大きな部品を作り、最後にそれらを組み合わせて全体を完成させます。アセンブリ言語の場合、この基本となる部品が「サブルーチン」になります。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> このような方法を「分割統治法」といいます。
+</div>
+<h4>●引数の渡し方</h4>
+<p> 一般に、サブルーチンを部品として扱う場合、それを分割した一つの機能に対応させます。サブルーチンは必要なデータを受け取り、決められた手順に従って入力されたデータを処理し、その結果を出力します。サブルーチンに渡すデータのことを「引数」といい、サブルーチンが出力する結果 (値) のことを「返り値」といいます。
+</p>
+
+<p> たとえばＣ言語の場合、関数 foo の呼び出しは次のように簡単にプログラムすることができます。
+</p>
+<pre class="item">
+result = foo(10, 20, 30);
+</pre>
+<p> このあとプログラムをアセンブリ言語へコンパイルするわけですが、引数 10, 20, 30 の渡し方と返り値の戻し方はＣ言語の仕様に規定されておらず、それらは処理系 (コンパイラ) に依存します。一般的には、引数はスタックに積み、返り値はレジスタに格納する処理系が多いようです。もちろん、引数をレジスタで渡すコンパイラがあってもかまいません。
+</p>
+
+<p> 引数をスタックに積む場合、スタックポインタを指標レジスタとして用いることができると、引数を簡単に取り出すことができます。たとえば、68000 という CPU (モトローラ社製の場合は MPU という) の場合、汎用レジスタはデータレジスタ (D0 - D7) とアドレスレジスタ (A0 - A7)の二種類があります。アドレスレジスタは指標レジスタのことです。68000 の場合、スタックポインタを A7 レジスタに割り当てていて、汎用レジスタと同じようにスタックポインタを操作することができます。
+</p>
+
+<p> ところが COMETⅡの場合、スタックポインタは汎用レジスタではありません。スタックポインタを操作する命令は PUSH, POP, CALL, RET しかなく、スタックに積まれたデータは POP で取り出すしか方法はありません。また、引数をスタックに積むと、その領域を「局所変数」として扱うことができて大変便利なのですが、COMETⅡにはその領域にアクセスする命令がありません。このように、引数をスタックに積むメリットがあまりないので、今回は引数をレジスタで渡すことにします。
+</p>
+
+<p> 必要となるデータの種類や個数はサブルーチンによって異なるので、サブルーチンごとに仕様をきちんと決めておきます。返り値はレジスタ gr0 を使うことにします。複数の値を返したい場合は、gr0, gr1, gr2, ... と複数のレジスタを使うことにしましょう。これもサブルーチンの仕様にきちんと書いておきます。
+</p>
+
+<h4>●レジスタの保護</h4>
+<p> プログラムを作る場合、サブルーチンを部品のように使います。あるサブルーチンを呼び出す場合、いままで使っていた変数の値が勝手に書き換えられると、呼び出す方が困ってしまいます。部品であるならば、ほかの処理に影響を及ぼさないように、自分自身の中で処理を完結させることが望ましいのです。これを実現するための必須機能が「局所変数」です。 
+</p>
+
+<p> アセンブリ言語の場合、レジスタを変数として使います。サブルーチンを呼び出したら、今まで使っていたレジスタの値が書き換えられると、呼び出す方が困ってしまうわけです。そこで、サブルーチンでレジスタの値を書き換える場合、そのレジスタの値を元に戻せるように、PUSH でスタックに退避させることにします。そして、RET で呼び出し元に戻る前に POP でレジスタの値を元に戻します。ただし、gr0 は返り値として使用するので、gr0 は保護しないことにします。
+</p>
+
+<h4>●サブルーチンの例題</h4>
+<p> それでは簡単な例題として、データを探索してその位置を返すサブルーチン position を作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : データの探索
+
+; 入力 : gr1 データ
+;      ; gr2 バッファ
+;      : gr3 個数
+; 出力 : gr0 位置 (0 以上の数値), -1 失敗
+position
+        (push 0 gr3)
+        (push 0 gr4)
+        (ld   gr4 gr2)          ; 先頭アドレス
+        (addl gr3 gr2)          ; バッファ末尾のアドレス
+position-loop
+        (cpl  gr4 gr3)
+        (jze  position-false)   ; 探索失敗
+        (cpa  gr1 0 gr4)
+        (jze  position-true)    ; 探索成功
+        (lad  gr4 1 gr4)
+        (jump position-loop)
+position-true
+        (ld   gr0 gr4)          ; 位置を求める
+        (subl gr0 gr2)
+position-exit
+        (pop  gr4)
+        (pop  gr3)
+        (ret)
+position-false
+        (lad  gr0 -1)
+        (jump position-exit)
+</pre>
+<p> 探索するデータを gr1 に、バッファのアドレスを gr2 に、データ数を gr3 に渡します。返り値は gr0 に格納します。gr1 と等しいデータが見つかった場合はその位置を返し、見つからない場合は -1 を返します。
+</p>
+<p> 最初にレジスタ gr3 と gr4 を退避します。gr3 はバッファ末尾のアドレス、gr4 は探索位置を表すアドレスとして使います。次に、ラベル postion-loop と (jump postion-loop) でループを作り、gr4 が gr3 と等しくなったら探索を終了します。この場合、gr1 と等しいデータが見つからなかったので、position-false へジャンプして gr0 に -1 をセットします。
+</p>
+<p> 次に、cpa で gr1 と gr4 が指し示すメモリの値を比較します。等しい場合、position-true へジャンプして、その位置を求めて gr0 にセットします。これは gr4 から先頭アドレス gr2 を引き算するだけです。gr1 と等しくない場合は gr4 を +1 して次のデータを調べます。最後に、gr3 と gr4 の値を元に戻し、ret で呼び出し元に戻ります。
+</p>
+<p> それでは実行してみましょう。テストプログラムと実行結果を示します。
+</p>
+<pre class="list">
+リスト : position のテスト
+
+test4
+        (lad  gr1 -8)
+        (lad  gr2 buff)
+        (ld   gr3 len)
+        (call position)
+        (svc  0)
+        (lad  gr1 10)
+        (call position)
+        (svc  0)
+        (lad  gr1 0)
+        (call position)
+        (svc  0)
+        (halt)
+len     (dc 10)
+buff    (dc 5 7 -4 6 3 -8 2 -9 1 10)
+</pre>
+<pre>
+* (asm-run "test.cas")
+PR=000A SP=FFFF FR(OF,SF,ZF)=000
+GR0=0005 GR1=FFF8 GR2=0018 GR3=000A GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0010 SP=FFFF FR(OF,SF,ZF)=000
+GR0=0009 GR1=000A GR2=0018 GR3=000A GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0016 SP=FFFF FR(OF,SF,ZF)=001
+GR0=FFFF GR1=0000 GR2=0018 GR3=000A GR4=0000 GR5=0000 GR6=0000 GR7=0000
+NIL
+</pre>
+<p> 返り値 GR0 に注目してください。-8 は 5 番目に、10 は 9 番目に見つかり、0 は見つからないので -1 (#xffff) になります。
+</p>
+<h4>●乗算</h4>
+<p> 次は COMETⅡの命令には用意されていない乗算と除算を行うサブルーチンを作りましょう。mull は無符号整数の乗算を、divl は無符号整数の除算を行います。どちらも筆算のアルゴリズムを 2 進数に適用したものです。たとえば、#b1101 と #b101 の乗算は次のように計算します。
+</p>
+<pre class="fig">
+       1 1 0 1
+ *       1 0 1
+ --------------
+       1 1 0 1
+     0 0 0 0
+   1 1 0 1
+ -------------
+ 1 0 0 0 0 0 1
+
+図 : 1101 * 101
+</pre>
+<p> このアルゴリズムはビットシフトと加算で実現することができます。結果を 16 bit 無符号整数で返し、桁あふれのチェックは行わないことにすると、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 無符号整数の乗算 (gr1 * gr2)
+
+; 入力 gr1 : 無符号整数
+;      gr2 : 無符号整数
+; 出力 gr0 : gr1 * gr2
+mull
+        (push 0 gr1)
+        (push 0 gr2)
+        (xor  gr0 gr0)          ; 0 clear
+mull-next
+        (srl  gr2 1)
+        (jov  mull-add)         ; LSB が 1 なので gr1 を加算
+        (jze  mull-exit)        ; gr2 が 0 なので終了
+        (jump mull-cont)        ; gr1 を加算しない
+mull-add
+        (addl gr0 gr1)          ; gr0 += gr1
+mull-cont
+        (sll  gr1 1)            ; gr1 *= 2
+        (jump mull-next)
+mull-exit
+        (pop  gr2)
+        (pop  gr1)
+        (ret)
+</pre>
+<p> gr0 に乗算した結果を格納します。gr2 の LSB が 1 の場合は gr1 を値を足し算し、そうでなければ足し算しません。そして、gr2 を 1 bit 右へシフトし、gr1 を 1 bit 左へシフトします。これを gr2 が 0 になるまで繰り返します。
+</p>
+<p> プログラムのポイントは gr2 の LSB のチェックするとき、ビットシフト srl と同時に行うことができるところです。LSB の値は srl でビットシフトするとオーバーフローフラグの値になります。したがって、OF がセットされていれば jov 命令で mull-add にジャンプして、gr0 に gr1 の値を加算します。
+</p>
+<p> そうでない場合、gr2 が 0 であれば ZF がセットされるので、jze 命令で mull-exit にジャンプします。それ以外の場合は、mull-cont にジャンプして gr1 の加算処理をスキップします。このプログラムは gr1 と gr2 を破壊するので、gr1 と gr2 を保護することをお忘れなく。
+</p>
+<p> それでは実際に実行してみましょう。テストプログラムと実行結果を示します。
+</p>
+<pre class="list">
+リスト : 乗算の簡単なテスト
+
+test-mull
+        (lad  gr1 256)
+        (lad  gr2 255)
+        (call mull)
+        (svc  0)
+        (lad  gr1 256)
+        (lad  gr2 256)
+        (call mull)
+        (svc  0)
+        (halt)
+</pre>
+<pre>
+* (asm-run "test.cas")
+PR=0008 SP=FFFF FR(OF,SF,ZF)=001
+GR0=FF00 GR1=0100 GR2=00FF GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=0010 SP=FFFF FR(OF,SF,ZF)=001
+GR0=0000 GR1=0100 GR2=0100 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+NIL
+</pre>
+<p> 256 * 255 は 65280 (#xff00) になり正しく計算されていますが、256 * 256 は桁あふれが生じたため 0 になりました。
+</p>
+<h4>●除算</h4>
+<p> 次は除算を行うサブルーチンを作りましょう。これも筆算のアルゴリズムを 2 進数に適用するだけです。次の図を見てください。
+</p>
+<pre class="fig">
+     1 0 1 0 1
+---------------
+ 1 1 0 1 0 1 1
+ 1 0 1 0 0 0 0
+---------------
+     1 1 0 1 1
+     1 0 1 0 0
+   ------------
+         1 1 1
+         1 0 1
+         ------
+           1 0
+
+図 : 1101011 / 101
+</pre>
+<p> gr1 / gr2 を求める場合、gr2 を左シフトして桁合わせを行います。実際には、gr2 の値を gr3 にセットして、gr3 を左シフトします。gr1 が gr3 よりも大きいときは、gr1 から gr3 を引いて商に 1 を加えます。101 を 4 bit 左シフトすると 1010000 になります。1101011 よりも小さいので、引き算すると gr1 の値は 11011 になります。
+</p>
+
+<p> 次に、gr3 を右 1 bit シフトし、商を左 1 bit シフトします。gr1 が大きい場合は gr3 を引いて商に 1 を加えます。そうでない場合は商に 1 を加えません。
+</p>
+<p> 上図の場合、1010000 を右へ 1 bit シフトすると 101000 になりますが、11011 よりも大きいですね。引き算することができないので、商に 1 は加えません。ここで商の値は 10 になります。さらに 1 bit 右シフトすると 10100 となり、11011 よりも小さくなります。11011 から 10100 を引き算すると gr1 の値は 111 になります。商に 1 を加えて値は 101 になります。
+</p>
+
+<p> これを繰り返して、gr3 が元の値 gr2 よりも小さくなったときが答えになります。このとき、gr1 の値は余りになります。上図の場合、111 から 1010 は引き算できないので、商は 1010 になります。次に、1010 を右シフトすると 101 になり、111 から引き算することができます。gr1 の値は 10 になり、商は 10101 になります。そして、gr3 を右シフトすると gr2 よりも小さくなるので、ここで処理を終了します。余りは 10 になります。
+</p>
+
+<p> このアルゴリズムをそのままプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 無符号整数の除算 (gr1 / gr2)
+
+; 入力 gr1 : 無符号整数
+;      gr2 : 無符号整数
+; 出力 gr0 : 商
+;      gr1 : 余り
+divl
+        (push 0 gr3)
+        (push 0 gr4)
+        (ld   gr3 gr2)
+divl-loop1                      ; 桁合わせ
+        (jmi  divl-l1)          ; 最上位ビットがオン
+        (cpl  gr3 gr1)
+        (jze  divl-l1)          ; gr3 == gr1
+        (jpl  divl-l0)          ; gr3 &gt; gr1
+        (sll  gr3 1)            ; gr3 &lt;&lt;= 1
+        (jump divl-loop1)
+divl-l0
+        (srl  gr3 1)            ; gr3 &gt; gr1 なので gr3 &gt;&gt;= 1
+divl-l1
+        (xor  gr4 gr4)          ; gr4 を 0 クリア (商)
+divl-loop2
+        (cpl  gr3 gr2)
+        (jmi  divl-exit)        ; gr3 &lt; gr2 ならば終了
+        (sll  gr4 1)            ; gr4 &lt;&lt;= 1
+        (cpl  gr1 gr3)
+        (jmi  divl-l2)          ; gr1 のほうが小さい
+        (subl gr1 gr3)          ; gr1 -= gr3
+        (lad  gr4 1 gr4)        ; 1 をセット
+divl-l2
+        (srl  gr3 1)            ; gr3 &gt;&gt;= 1
+        (jump divl-loop2)
+divl-exit
+        (ld   gr0 gr4)
+        (pop  gr4)
+        (pop  gr3)
+        (ret)
+</pre>
+<p> 桁合わせのとき、gr3 の MSB をチェックすることに注意してください。MSB が 1 の場合は、そこで左シフトを終了します。たとえば、#xffff / #x0f00 を処理する場合、#x0f00 を 4 bit 左シフトすると #xf000 になりますが、#xffff より大きくすることはできません。これ以上左シフトすることはできないので、ここで桁合わせを終了します。あとはコメントに詳しく書きましたので、リストをお読みくださいませ。
+</p>
+<p> それでは実際に実行してみましょう。テストプログラムと実行結果を示します。
+</p>
+<pre class="list">
+リスト : 除算の簡単なテスト
+
+test-divl
+        (lad  gr2 #xf000)
+test-divl-loop
+        (ld   gr2 gr2)
+        (jze  test-divl-exit)
+        (lad  gr1 #xffff)
+        (call divl)
+        (svc  0)
+        (srl  gr2 4)
+        (jump test-divl-loop)
+test-divl-exit
+        (halt)
+</pre>
+<pre>
+* (asm-run "test.cas")
+PR=000B SP=FFFF FR(OF,SF,ZF)=000
+GR0=0001 GR1=0FFF GR2=F000 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000B SP=FFFF FR(OF,SF,ZF)=000
+GR0=0011 GR1=00FF GR2=0F00 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000B SP=FFFF FR(OF,SF,ZF)=000
+GR0=0111 GR1=000F GR2=00F0 GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000B SP=FFFF FR(OF,SF,ZF)=000
+GR0=1111 GR1=0000 GR2=000F GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+NIL
+</pre>
+<p> #xffff / #xf000 の商は 1 で余りが #xfff になります。#xffff / #xf00 の商は #x11 で余りが #xff になります。#xffff / #xf0 の商は #x111 で余りが #xf になります。#xffff / #xf の商は #x1111 で余りが 0 になります。正しく計算されていますね。
+</p>
+<h4>●再帰呼び出し</h4>
+<p> サブルーチンは「再帰呼び出し」することもできます。簡単な例として階乗を求めるプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 階乗
+
+; 入力 gr1 : 無符号整数 N
+; 出力 gr0 : N!
+fact
+        (ld   gr1 gr1)
+        (jze  fact-zero)
+        (push 0 gr1)
+        (push 0 gr2)
+        (ld   gr2 gr1)          ; gr2 = N
+        (lad  gr1 -1 gr1)       ; gr1 = N - 1
+        (call fact)             ; (N - 1)! -&gt; gr0
+        (ld   gr1 gr0)
+        (call mull)             ; (N - 1)! * N -&gt; gr0
+        (pop  gr2)
+        (pop  gr1)
+        (ret)
+fact-zero
+        (lad  gr0 1)
+        (ret)
+</pre>
+<p> 最初に引数 gr1 が 0 かチェックします。そうであれば、fact-zero にジャンプして gr0 に 1 をセットします。これが再帰呼び出しの停止条件になります。次に、gr1 の値を gr2 にセットし、gr1 の値を -1 します。引数の値を N とすると、gr2 が N になり、gr1 が N - 1 になります。レジスタの値を書き換えるので、レジスタの保護を忘れないでください。
+</p>
+<p> そして、call で fact を再帰呼び出しします。返り値の gr0 には (N - 1)! がセットされています。また、レジスタの値を保護してあるので、再帰呼び出しから戻ってきたあとでも、gr1 と gr2 の値は元のままです。このように、レジスタの値を適切に保護することで、サブルーチンの再帰呼び出しが可能になります。ただし、ds などで作業用メモリを確保して使う場合、レジスタを保護するだけでは不十分な場合もあります。ご注意ください。
+</p>
+<p> あとは、gr0 の値を gr1 にセットして mull を呼び出せば、gr1 * gr2 = (N - 1)! * N を計算することができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre class="list">
+リスト : 階乗のテスト
+
+test-fact
+        (xor  gr1 gr1)
+        (lad  gr2 10)
+test-fact-loop
+        (cpl  gr1 gr2)
+        (jze  test-fact-exit)
+        (call fact)
+        (svc  0)
+        (lad  gr1 1 gr1)
+        (jump test-fact-loop)
+test-fact-exit
+        (halt)
+</pre>
+<pre>
+* (asm-run "test.cas")
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=0001 GR1=0000 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=0001 GR1=0001 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=0002 GR1=0002 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=0006 GR1=0003 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=0018 GR1=0004 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=0078 GR1=0005 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=02D0 GR1=0006 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=13B0 GR1=0007 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=9D80 GR1=0008 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+PR=000A SP=FFFF FR(OF,SF,ZF)=001
+GR0=8980 GR1=0009 GR2=000A GR3=0000 GR4=0000 GR5=0000 GR6=0000 GR7=0000
+NIL
+</pre>
+<p> 16 bit 無符号整数では 8! までしか求めることができません。9! は桁あふれで正しい値にはなりません。
+</p>
+<p> ご参考までに、再帰呼び出しを繰り返しに変換したプログラムを示します。
+</p>
+<pre class="list">
+リスト : 階乗 (繰り返し)
+
+; 入力 gr1 : 無符号整数 N
+; 出力 gr0 : N!
+facti
+        (push 0 gr1)
+        (push 0 gr2)
+        (lad  gr2 1)            ; gr2 : 累積変数
+facti-loop
+        (ld   gr1 gr1)          ; zero check
+        (jze  facti-exit)
+        (call mull)             ; gr1 * gr2 -&gt; gr0
+        (ld   gr2 gr0)
+        (lad  gr1 -1 gr1)
+        (jump facti-loop)
+facti-exit
+        (ld   gr0 gr2)
+        (pop  gr2)
+        (pop  gr1)
+        (ret)
+</pre>
+<h4>●整数値の表示</h4>
+<p> 次は整数値を表示するプログラムを作りましょう。まず、入出力用のサブルーチンを定義します。
+</p>
+<pre class="list">
+リスト : 入出力用サブルーチン
+
+; 文字の入力
+; 入力 : None
+; 出力 : gr0 文字
+read-char
+        (svc  2)
+        (ret)
+
+; 文字の出力
+; 入力 : gr0 文字
+; 出力 : None
+write-char
+        (svc  3)
+        (ret)
+
+; 改行を出力
+; 入力 : None
+; 出力 : None
+newline
+        (lad  gr0 10)
+        (svc 3)
+        (ret)
+</pre>
+<p> これらのサブルーチンは SVC 命令を呼び出すだけですが、サブルーチンとして定義することでプログラムは読みやすくなります。
+</p>
+<p> 次に、無符号整数を表示するサブルーチン printu を作ります。整数値の表示は再帰呼び出しを使うと簡単です。
+</p>
+<pre class="list">
+リスト : 無符号整数の N 進表示
+
+; 入力 : gr1 無符号整数
+;      : gr2 基数 (16 まで)
+; 出力 : None
+printu
+        (push 0 gr1)
+        (call divl)             ; gr1 / gr2 -&gt; gr0, gr1
+        (ld   gr0 gr0)          ; 0 check
+        (jze  printu-l1)
+        (push 0 gr1)            ; 余りを保存
+        (ld   gr1 gr0)
+        (call printu)           ; 再帰呼び出し
+        (pop  gr1)
+printu-l1
+        (ld   gr0 code-table gr1)
+        (call write-char)
+        (pop  gr1)
+        (ret)
+code-table
+        (dc "0123456789ABCDEF")
+</pre>
+<p> 引数は gr1 に表示する整数、gr2 に基数 N を渡します。アルゴリズムは簡単です。まず gr1 / gr2 を計算します。商 (gr0) が 0 でなければ printu を再帰呼び出しして、商を N 進数で表示します。そして、再帰呼び出しから戻ってきたら、余り gr1 を N 進数で表示すればいいわけです。商が 0 ならば、再帰呼び出しをしないで gr1 を表示します。これで上位の桁から順番に表示することができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre class="list">
+リスト : printu のテスト
+
+test-printu
+	(lad  gr1 0)
+	(lad  gr2 10)
+	(call printu)
+	(call newline)
+	(lad  gr1 12345)
+	(lad  gr2 10)
+	(call printu)
+	(call newline)
+	(lad  gr1 #xffff)
+	(lad  gr2 16)
+	(call printu)
+	(call newline)
+	(halt)
+</pre>
+<pre>
+* (asm-run "test.cas")
+0
+12345
+FFFF
+NIL
+</pre>
+<p> 符号付き整数の表示は printu を呼び出すと簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+; 符号付き整数の 10 進表示
+; 入力 : gr1 整数
+; 出力 : None
+print
+        (push 0 gr2)
+        (lad  gr2 10)           ; 基数をセット
+        (ld   gr1 gr1)          ; sign flag check
+        (jmi  print-l1)
+        (call printu)
+        (pop  gr2)
+        (ret)
+print-l1
+        (push 0 gr1)
+        (lad  gr0 #xffff)
+        (xor  gr1 gr0)          ; bit を反転
+        (lad  gr1 1 gr1)        ; 1 を足す
+        (lad  gr0 45)           ; '-' を出力
+        (call write-char)
+        (call printu)
+        (pop  gr1)
+        (pop  gr2)
+        (ret)
+</pre>
+<p> print は gr1 に渡された符号付き整数を 10 進数で表示します。gr1 が正の場合はそのまま printu で表示します。負の場合は符号を反転して表示します。これは 2 の補数を求めるときの逆の操作、1 を引いてからすべてのビットを反転する、またはすべてのビットを反転してから 1 を加えることで実現できます。そして、最初に符号 '-' を出力してから printu で整数を表示します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre class="list">
+リスト : print のテスト
+
+test-print
+        (lad  gr1 0)
+        (call print)
+        (call newline)
+        (lad  gr1 32767)
+        (call print)
+        (call newline)
+        (lad  gr1 -1)
+        (call print)
+        (call newline)
+        (lad  gr1 -32768)
+        (call print)
+        (call newline)
+        (halt)
+</pre>
+<pre>
+* (asm-run "test.cas")
+0
+32767
+-1
+-32768
+NIL
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●エラトステネスの篩</h4>
+<p> 最後に、素数を求めるプログラムを作りましょう。最初に、2 から N までの整数列を生成します。先頭の 2 は素数なので、この整数列から 2 で割り切れる整数を取り除き除きます。2 で割り切れる整数が取り除かれたので、残った要素の先頭が素数になります。先頭要素は 3 になるので、今度は 3 で割り切れる整数を取り除けばいいのです。このように、素数を見つけたらそれで割り切れる整数を取り除いていくアルゴリズムを「エラトステネスの篩 (ふるい) 」といいます。 
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 100 以下の素数を求める
+
+sieve
+        ; 初期化
+        (lad  gr1 1)            ; 素数は 1 をセット
+        (lad  gr2 table)
+        (ld   gr3 len)
+        (call fill)
+        ; 2 は素数
+        (lad  gr1 2)
+sieve-loop
+        (cpl  gr1 gr3)
+        (jze  sieve-exit)
+        (ld   gr0 table gr1)
+        (jze  sieve-lab1)
+        ; 素数 gr1 を表示
+        (call print)
+        (lad  gr0 32)           ; space を表示
+        (call write-char)
+        ; gr1 の倍数を削除
+        (call delete-multiple)
+sieve-lab1
+        (lad  gr1 1 gr1)
+        (jump sieve-loop)
+sieve-exit
+        (call newline)
+        (halt)
+len     (dc 100)
+table   (ds 100)
+
+; gr1 の倍数を削除する
+; gr2 バッファアドレス
+; gr3 個数
+delete-multiple
+        (push 0 gr2)
+        (push 0 gr3)
+        (addl gr3 gr2)          ; 末尾のアドレス
+        (addl gr2 gr1)          ; gr2 = gr1 のアドレス
+        (addl gr2 gr1)          ; gr2 = gr1 * 2 のアドレス
+        (xor  gr0 gr0)
+delete-multiple-loop
+        (cpl  gr2 gr3)
+        (jpl  delete-multiple-exit)
+        (st   gr0 0 gr2)
+        (addl gr2 gr1)
+        (jump delete-multiple-loop)
+delete-multiple-exit
+        (pop  gr3)
+        (pop  gr2)
+        (ret)
+
+; バッファの初期化
+; 入力 : gr1 初期値
+;      : gr2 バッファアドレス
+;      : gr3 個数
+; 出力 : None
+fill
+        (push 0 gr2)
+        (push 0 gr3)
+        (addl gr3 gr2)          ; 末尾アドレス
+fill-loop
+        (cpl  gr2 gr3)
+        (jze  fill-exit)
+        (st   gr1 0 gr2)
+        (lad  gr2 1 gr2)
+        (jump fill-loop)
+fill-exit
+        (pop  gr3)
+        (pop  gr2)
+        (ret)
+</pre>
+<p> バッファ table で整数列を表します。1 で素数を表し、素数でない場合は 0 をセットします。table を 1 で初期化するためサブルーチン fill を呼び出します。fill は gr2, gr3 で指定されたメモリ領域を gr1 の値で埋めます。最初はすべての数が素数ということになります。次に、ループで table から素数を探します。gr1 = 2 の場合、(table + gr1) は 1 なので gr1 は素数になります。(table + gr1) が 0 の場合は jze で sieve-lab1 へジャンプしてループの更新処理へ移ります。
+</p>
+
+<p> gr1 が素数の場合は、print を呼び出して gr1 を表示します。そして、サブルーチン delete-multiple を呼び出して、table から gr1 の倍数を取り除きます。delete-multiple では gr2 を削除する倍数の先頭アドレス (gr2 += 2 * gr1) に初期化します。そして、ループの更新処理で gr2 に gr1 を加算していけば、gr2 のアドレスは gr1 の倍数になります。あとは gr2 の指し示すメモリの値を 0 に書き換えればいいわけです。
+</p>
+
+<p> なお、このプログラムは改善の余地があります。奇数だけを調べるように工夫すると、バッファの大きさを半分にすることができ、実行時間も速くなるでしょう。興味のある方はプログラムを改造してみてください。 
+</p>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+* (asm-run "test.cas")
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97
+NIL
+</pre>
+<p> 100 以下の素数は全部で 25 個あります。
+</p>
+<p> 今回はここまでです。次回は COMETⅡの機能を拡張して、引数をスタックに積んで渡す方法と、スタック上で局所変数を確保する方法を試してみましょう。
+</p>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2010 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb32.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb34.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

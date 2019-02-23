@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ言語プログラミング超入門</title>
+  <meta name="description" content="Ｃ言語,Ｃ言語入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881810</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ言語プログラミング超入門</h2>
+<div class="small">
+[ <a href="clang22.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang24.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>スライドパズル (2)</h3>
+<p> <a href="clang22.html">前回</a> の続きです。今回は 8 パズルを「反復深化」で解いてみましょう。拙作のページ <a href="clang16.html">経路の探索</a> で説明したように、反復深化は最短手数を求めることができるアルゴリズムです。幅優先探索と違って局面を保存する必要が無いため、必要となるメモリは深さ優先探索と同程度で済みます。また、プログラムも深さ優先探索と同じくらい簡単に作成することができます。
+</p>
+<p> ただし、同じ探索を何度も繰り返すため実行時間が増大する、という欠点があります。ようするに、使用するメモリは少ないが実行時間が長くなるアルゴリズムなのです。実行時間が長くなるといっても、枝刈りを工夫することでパズルを高速に解くことができます。メモリ不足になる場合には、積極的に使ってみたいアルゴリズムといえるでしょう。
+</p>
+
+<h4>●反復深化による解法</h4>
+<p> 幅優先探索では全ての局面を保存しましたが、反復深化ではその必要はありません。盤面は配列で表し、外部変数 board に格納します。駒の移動は board を書き換えて、バックトラックする時は元に戻すことにします。動かした駒は配列 move_piece に格納します。動かした駒がわかれば局面を再現できるので、それで移動手順を表すことにしましょう。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 単純な反復深化による解法
+
+// 盤面
+char board[N];
+
+// 手順
+int move_piece[MAX_MOVE + 1];
+
+// 深さ優先探索
+void dfs(int n, int space, int limit, char *goal)
+{
+  if (n == limit) {
+    if (memcmp(board, goal, N) == 0) {
+      print_answer(n);
+    }
+  } else {
+    for (int i = 0; adjacent[space][i] != -1; i++) {
+      int x = adjacent[space][i];
+      // 同じコマを動かすと元の局面に戻る
+      if (board[x] == move_piece[n]) continue;
+      move_piece[n + 1] = board[x];
+      board[space] = board[x];
+      board[x] = S;
+      dfs(n + 1, x, limit, goal);
+      board[x] = board[space];
+      board[space] = S;
+    }
+  }
+}
+</pre>
+<p> 関数 dfs の引数 limit が上限値、n が手数、space が空き場所の位置を表します。手数が上限値に達したら、パズルが解けたかチェックします。goal は完成形を表す配列です。goal に到達したら、関数 print_answer で手順を表示します。上限値に達していない場合は、駒を移動して新しい局面を作ります。
+</p>
+<p> 8 パズルのように、元の局面に戻すことが可能 (可逆的) なパズルの場合、単純な深さ優先探索では同じ移動手順を何度も繰り返すことがあります。そうなると、とんでもない解を出力するだけではなく、再帰呼び出しが深くなるとスタックがオーバーフローしてプログラムの実行が停止してしまいます。
+</p>
+<p> このような場合、局面の履歴を保存しておいて同じ局面がないかチェックすることで、解を求めることができるようになります。ただし、同一局面をチェックする分だけ時間が余分にかかりますし、最初に見つかる解が最短手数とは限りません。
+</p>
+<p> 反復深化では深さが制限されているため、同一局面のチェックを行わなくてもスタックオーバーフローが発生することはありません。そのかわり、無駄な探索はどうしても避けることができません。8 パズルの場合、1 手前に動かした駒を再度動かすと 2 手前の局面に戻ってしまいます。完全ではありませんが、このチェックを入れるだけでもかなりの無駄を省くことができます。
+</p>
+<p> プログラムでは、配列 move_piece に移動した駒を格納しているので、1 手前と同じ駒は動かさないようにチェックしています。なお、move_piece[0] はダミーデータで 0 をセットしておきます。move_piece[1] 以降のデータが実際に動かした駒になります。
+</p>
+<p> 次は、dfs を呼び出すプログラムを作ります。
+</p>
+<pre class="list">
+リスト : 反復深化の実行
+
+int main(void)
+{
+  char start[N] = {8, 6, 7, 2, 5, 4, 3, 0, 1};
+  char goal[N] =  {1, 2, 3, 4, 5, 6, 7, 8, 0};
+  memcpy(board, start, N);
+  move_piece[0] = 0;
+  clock_t s = clock();
+  for (int i = 1; i &lt;= MAX_MOVE; i++) {
+    dfs(0, 7, i, goal);
+    if (count &gt; 0) break;
+  }
+  printf("%d\n", count);
+  printf("%.3f\n", (double)(clock() - s)/CLOCKS_PER_SEC);
+  return 0;
+}
+</pre>
+
+<p> 変数 i が上限値を表します。i を 1 手ずつ増やして関数 dfs を呼び出します。外部変数 count が 0 より大きくなれば解が見つかったのでループを脱出します。プログラムはこれで完成です。
+</p>
+<ul>
+  <li><a href="clang23.html#list1">プログラムリスト１</a>
+</ul>
+<h4>●実行結果</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./eight3
+5 6 8 2 3 5 1 4 7 8 6 3 5 1 4 7 8 6 3 5 1 4 7 8 6 3 2 1 4 7 8 
+5 6 7 4 6 2 3 5 1 6 2 3 8 7 4 2 3 1 5 8 7 4 1 5 8 7 4 1 2 3 6 
+5 2 3 5 1 4 7 6 8 3 2 8 3 2 5 1 4 7 8 5 1 4 7 8 6 3 2 1 4 7 8 
+
+    ・・・ 省略 ・・・
+
+1 4 5 2 3 1 4 5 7 6 8 3 2 8 3 2 1 4 5 7 8 5 7 8 6 3 2 1 4 7 8 
+1 4 5 2 3 1 4 5 7 6 2 3 8 2 3 8 1 4 8 7 5 8 7 5 6 3 2 1 4 7 8 
+1 4 5 2 3 1 4 5 7 6 2 3 8 2 3 8 1 4 5 7 8 5 7 8 6 3 2 1 4 7 8 
+40
+2.633
+</pre>
+<p> 実際に実行してみると、当然ですが最短手数は 31 手で 40 通りの手順が表示されました。実行時間は 2.633 秒かかりました。やっぱり単純な反復深化では遅いですね。反復深化の場合、枝刈りを工夫しないと高速に解くことはできません。そこで、反復深化の常套手段である「下限値枝刈り法」を使うことにしましょう。
+</p>
+<h4>●下限値枝刈り法</h4>
+<p> 下限値枝刈り法は難しいアルゴリズムではありません。たとえば、5 手進めた局面を考えてみます。探索の上限値が 10 手とすると、あと 5 手だけ動かすことができますね。この時、パズルを解くのに 6 手以上かかることがわかれば、ここで探索を打ち切ることができます。このように、必要となる最低限の手数が明確にわかる場合、この値を「下限値 (Lower Bound) 」と呼びます。この下限値を求めることができれば、「今の移動手数＋下限値」が探索手数を超えた時点で、枝刈りすることが可能になります。これが下限値枝刈り法の基本的な考え方です。
+</p>
+<p> 下限値を求める方法ですが、これにはいろいろな方法が考えられます。今回は、各駒が正しい位置へ移動するまでの手数 (移動距離) <sup><a href="clang23.html#note1">[*1]</a></sup> を下限値として利用することにしましょう。次の図を見てください。
+</p>
+<pre class="fig">
+┌─┬─┬─┐    ┌──┬──┬──┐
+│１│２│３│    │8(3)│6(2)│7(4)│
+├─┼─┼─┤    ├──┼──┼──┤
+│４│５│６│    │2(2)│5(0)│4(2)│
+├─┼─┼─┤    ├──┼──┼──┤
+│７│８│  │    │3(4)│    │1(4)│
+└─┴─┴─┘    └──┴──┴──┘
+                   (n) : n は移動距離
+
+  (1) 完成形     (2) 初期状態：合計 21
+
+          図 : 下限値の求め方
+</pre>
+<p> たとえば、右下にある 1 の駒を左上の正しい位置に移動するには、最低でも 4 手必要です。もちろん、ほかの駒との関連で、それ以上の手数が必要になる場合もあるでしょうが、4 手より少なくなることは絶対にありません。同じように、各駒について最低限必要な手数を求めることができます。そして、その合計値はパズルを解くのに最低限必要な手数となります。これを下限値として利用することができます。ちなみに、上図 (2) の初期状態の下限値は 21 手になります。
+</p>
+<p> 下限値枝刈り法を使う場合、下限値の計算を間違えると正しい解を求めることができなくなります。たとえば、10 手で解ける問題の下限値を 11 手と計算すれば、最短手数を求めることができなくなります。それどころか、10 手の解しかない場合は、答えを求めることすらできなくなります。下限値の計算には十分に注意してください。
+</p>
+<div class="note">
+-- note -----<br>
+<a name="note1">[*1]</a> これを「マンハッタン距離」と呼ぶことがあります。
+</div>
+<h4>●下限値枝刈り法のプログラム</h4>
+<p> それでは、プログラムを作りましょう。下限値の求め方ですが、駒を動かすたびに各駒の移動距離を計算していたのでは時間がかかります。8 パズルの場合、1 回に一つの駒しか移動しないので、初期状態の下限値を求めておいて、動かした駒の差分だけ計算すればいいでしょう。また、駒の移動距離はいちいち計算するのではなく、あらかじめ計算した結果を配列に格納しておきます。この配列を distance とすると、盤面から移動距離を求めるプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 移動距離を求める
+
+// 距離
+int distance[N][N] = {
+  {},
+  {0, 1, 2, 1, 2, 3, 2, 3, 4},
+  {1, 0, 1, 2, 1, 2, 3, 2, 3},
+  {2, 1, 0, 3, 2, 1, 4, 3, 2},
+  {1, 2, 3, 0, 1, 2, 1, 2, 3},
+  {2, 1, 2, 1, 0, 1, 2, 1, 2},
+  {3, 2, 1, 2, 1, 0, 3, 2, 1},
+  {2, 3, 4, 1, 2, 3, 0, 1, 2},
+  {3, 2, 3, 2, 1, 2, 1, 0, 1}
+};
+
+// 移動距離を求める
+int get_distance(void) {
+  int v = 0;
+  for (int i = 0; i &lt; N; i++) {
+    int p = board[i];
+    if (p == 0) continue;
+    v += distance[p][i];
+  }
+  return v;
+}
+</pre>
+<p> distance は 2 次元配列で「駒の種類×駒の位置」を表しています。空き場所は関係ないので、distance[0] はダミーとなります。関数 get_distance は盤面 board にある駒と位置から移動距離を求めます。変数 v を 0 に初期化して、空き場所 (0) 以外の駒の移動距離を distance から求めて v に足し算するだけです。
+</p>
+<p> 次は、下限値枝刈り法による反復深化を行う関数 dfs を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 下限値枝刈り法
+
+void dfs(int n, int space, int limit, int lower, char *goal)
+{
+  if (n == limit) {
+    if (memcmp(board, goal, N) == 0) {
+      print_answer(n);
+    }
+  } else {
+    for (int i = 0; adjacent[space][i] != -1; i++) {
+      int x = adjacent[space][i];
+      int p = board[x];
+      // 同じコマを動かすと元の局面に戻る
+      if (move_piece[n] == p) continue;
+      move_piece[n + 1] = p;
+      board[space] = p;
+      board[x] = S;
+      int new_lower = lower - distance[p][x] + distance[p][space];
+      if (new_lower + n &lt;= limit)
+	dfs(n + 1, x, limit, new_lower, goal);
+      board[x] = p;
+      board[space] = S;
+    }
+  }
+}
+</pre>
+<p> dfs の引数 lower は現在の盤面 board の下限値を表しています。駒を動かしたら差分を計算して、新しい下限値 new_lower を求めます。そして、move + new_lower が上限値 limit を越えたら枝刈りを行います。limit 以下であれば dfs を再帰呼び出しします。追加する処理はこれだけで、あとは反復深化のプログラムと同じです。とても簡単ですね。
+</p>
+<p> 最後に dfs を呼び出す処理を修正します。次のリストを見てください。
+</p>
+<PRE class="list">
+リスト : 下限値枝刈り法の実行
+
+int main(void)
+{
+  char start[N] = {8, 6, 7, 2, 5, 4, 3, 0, 1};
+  char goal[N] =  {1, 2, 3, 4, 5, 6, 7, 8, 0};
+  memcpy(board, start, N);
+  move_piece[0] = 0;
+  int lower = get_distance();
+  clock_t s = clock();
+  for (int i = lower; i &lt;= MAX_MOVE; i++) {
+    dfs(0, 7, i, lower, goal);
+    if (count &gt; 0) break;
+  }
+  printf("%d\n", count);
+  printf("%.3f\n", (double)(clock() - s)/CLOCKS_PER_SEC);
+  return 0;
+}
+</pre>
+<p> 関数 get_distance で初期状態の下限値 lower を求めます。下限値がわかるのですから、上限値 limit は 1 手からではなく下限値 n からスタートします。あとは dfs に下限値 lower を渡して呼び出すだけです。プログラムの主な修正はこれだけです。
+</p>
+<ul>
+  <li><a href="clang23.html#list2">プログラムリスト２</a>
+</ul>
+<p> 実際に実行してみると、実行時間は 0.014 秒でした。約 190 倍という高速化に驚いてしまいました。下限値枝刈り法の効果は極めて高いですね。
+</p>
+<h4>●手数の偶奇性</h4>
+<p> 8 パズルや 15 パズルの場合、スタートの空き場所の位置とゴールの空き場所の位置から、解の手数が偶数になるのか奇数になるのか簡単に判定することができます。この場合、探索の上限値を 1 手ずつではなく 2 手ずつ増やすことができます。これで実行時間を大幅に短縮することができます。
+</p>
+<p> 判定は簡単です。次の図を見てください。
+<pre class="fig">
+  ┌─┬─┬─┐
+  │１│０│１│
+  ├─┼─┼─┤
+  │０│１│０│
+  ├─┼─┼─┤
+  │１│０│１│
+  └─┴─┴─┘
+     パリティ
+
+  ┌─┬─┬─┐        ┌─┬─┬─┐
+  │８│６│７│        │１│２│３│
+  ├─┼─┼─┤        ├─┼─┼─┤
+  │２│５│４│        │４│５│６│
+  ├─┼─┼─┤        ├─┼─┼─┤
+  │３│  │１│        │７│８│  │
+  └─┴─┴─┘        └─┴─┴─┘
+     スタート               ゴール
+
+空場所のパリティ : 0   空場所のパリティ : 1
+
+  パリティが異なる場合 : 手数は奇数回
+  パリティが同じ場合   : 手数は偶数回
+
+          図 : 手数の偶奇性
+</pre>
+<p> 盤面を市松模様に塗り分けます。上図のパリティでは 0 と 1 で表しています。スタートからゴールに到達するまで、空き場所はいろいろな位置に移動しますが、同じパリティの位置に移動する場合は偶数回かかり、異なるパリティの位置に移動する場合は奇数回かかります。
+</p>
+<p> たとえば、スタートで駒 5 を 1 回動かすと、空き場所は上の位置に移動します。この場合、移動回数は奇数でパリティの値は 0 から 1 に変わります。スタートから駒 5 と 6 を動かすと、移動回数は偶数でパリティの値は 0 のままです。このように、同じパリティの位置に移動する場合は偶数回、異なるパリティの位置に移動する場合は奇数回となります。上図のスタートとゴールの場合、空き場所のパリティが異なるので、奇数回かかることがわかります。
+</p>
+<p> この処理を入れると単純な反復深化で 2.633 秒から 1.736 秒に、下限値枝刈り法で 0.014 秒から 0.007 秒になりました。
+</p>
+<h4>●11 パズルの解法</h4>
+<p> 次は 1 から 11 までの数字を並べる 11 パズル (3 行 4 列盤) を反復深化で解いてみましょう。<a href="http://www.ic-net.or.jp/home/takaken/">高橋謙一郎さん</a> の <a href="http://www.ic-net.or.jp/home/takaken/nt/slide/index.html">１１パズルの最適解が最長手数となる面の探索</a> によると、11 パズルの最長手数は 53 手で、局面は全部で 18 通りあるそうです。そのうちの一つを下図に示します。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┬─┐    ┌─┬─┬─┬─┐  
+  │  │３│２│１│    │１│２│３│４│
+  ├─┼─┼─┼─┤    ├─┼─┼─┼─┤
+  │８│７│６│５│    │５│６│７│８│
+  ├─┼─┼─┼─┤    ├─┼─┼─┼─┤
+  │４│11│10│９│    │９│10│11│  │
+  └─┴─┴─┴─┘    └─┴─┴─┴─┘
+                              完成形
+
+        図 : 11 パズル (最長手数局面)
+
+  (出典 : <A href="http://www.ic-net.or.jp/home/takaken/nt/slide/index.html">１１パズルの最適解が最長手数となる面の探索</A>)
+</pre>
+<p> 11 パズルも 8 パズルと同じ方法で解くことができます。詳細は <a href="clang23.html#list3">プログラムリスト３</a> をお読みください。
+</p>
+<p> 実行結果は次のようになりました。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ time ./eleven
+----- 23 -----
+----- 25 -----
+----- 27 -----
+----- 29 -----
+----- 31 -----
+----- 33 -----
+----- 35 -----
+----- 37 -----
+----- 39 -----
+----- 41 -----
+----- 43 -----
+----- 45 -----
+----- 47 -----
+----- 49 -----
+----- 51 -----
+----- 53 -----
+3 2 6 5 1 6 2 7 5 1 9 10 11 4 8 5 1 9 10 11 4 8 5 1 9 10 11 4 8 9
+10 2 7 3 1 5 9 10 2 11 4 8 11 7 6 4 7 6 3 2 6 7 8 
+
+real	0m17.069s
+user	0m17.012s
+sys	0m0.000s
+</pre>
+<p> 当然ですが手数は 53 手、実行時間は約 17 秒でした。これ以上の高速化は下限値の精度を上げないと無理かもしれません。
+</p>
+<p> マンハッタン距離のほかには、<a href="http://www.ic-net.or.jp/home/takaken/">高橋謙一郎さん</a> が考案された ID (Invert Distance) や WD (Walking Distance) という方法があります。それらを使った 15 パズルの解法プログラムは抜群の性能を発揮しているようです。興味のある方は高橋さんのページ <a href="http://www.ic-net.or.jp/home/takaken/nt/slide/solve15.html">１５パズル自動解答プログラムの作り方</a> をご覧くださいませ。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+/*
+ * eight3.c : 8 パズル (反復深化)
+ *
+ *            Copyright (C) 2015 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;time.h&gt;
+
+#define N 9
+#define Q 181440
+#define S 0
+#define MAX_MOVE 31
+
+// 隣接リスト
+int adjacent[N][5] = {
+  {1, 3, -1},       // 0
+  {0, 2, 4, -1},    // 1
+  {1, 5, -1},       // 2
+  {0, 4, 6, -1},    // 3
+  {1, 3, 5, 7, -1}, // 4
+  {2, 4, 8, -1},    // 5
+  {3, 7, -1},       // 6
+  {4, 6, 8, -1},    // 7
+  {5, 7, -1}        // 8
+};
+
+// 盤面
+char board[N];
+
+// 手数
+int move_piece[MAX_MOVE + 1];
+
+// 解の総数
+int count;
+
+// 手順の表示
+void print_answer(int n)
+{
+  count++;
+  for (int i = 1; i &lt;= n; i++)
+    printf("%d ", move_piece[i]);
+  printf("\n");
+}
+
+// 反復深化
+void dfs(int n, int space, int limit, char *goal)
+{
+  if (n == limit) {
+    if (memcmp(board, goal, N) == 0) {
+      print_answer(n);
+    }
+  } else {
+    for (int i = 0; adjacent[space][i] != -1; i++) {
+      int x = adjacent[space][i];
+      // 同じコマを動かすと元の局面に戻る
+      if (board[x] == move_piece[n]) continue;
+      move_piece[n + 1] = board[x];
+      board[space] = board[x];
+      board[x] = S;
+      dfs(n + 1, x, limit, goal);
+      board[x] = board[space];
+      board[space] = S;
+    }
+  }
+}
+
+int main(void)
+{
+  char start[N] = {8, 6, 7, 2, 5, 4, 3, 0, 1};
+  char goal[N] =  {1, 2, 3, 4, 5, 6, 7, 8, 0};
+  memcpy(board, start, N);
+  move_piece[0] = 0;
+  clock_t s = clock();
+  for (int i = 1; i &lt;= MAX_MOVE; i++) {
+    dfs(0, 7, i, goal);
+    if (count &gt; 0) break;
+  }
+  printf("%d\n", count);
+  printf("%.3f\n", (double)(clock() - s)/CLOCKS_PER_SEC);
+  return 0;
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+/*
+ * eight4.c : 8 パズル (反復深化 + 下限値枝刈り法)
+ *
+ *            Copyright (C) 2015 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;time.h&gt;
+
+#define N 9
+#define Q 181440
+#define S 0
+#define MAX_MOVE 31
+
+// 隣接リスト
+int adjacent[N][5] = {
+  {1, 3, -1},       // 0
+  {0, 2, 4, -1},    // 1
+  {1, 5, -1},       // 2
+  {0, 4, 6, -1},    // 3
+  {1, 3, 5, 7, -1}, // 4
+  {2, 4, 8, -1},    // 5
+  {3, 7, -1},       // 6
+  {4, 6, 8, -1},    // 7
+  {5, 7, -1}        // 8
+};
+
+// 盤面
+char board[N];
+
+// 手数
+int move_piece[MAX_MOVE + 1];
+
+// 解の総数
+int count;
+
+// 距離
+int distance[N][N] = {
+  {},
+  {0, 1, 2, 1, 2, 3, 2, 3, 4},
+  {1, 0, 1, 2, 1, 2, 3, 2, 3},
+  {2, 1, 0, 3, 2, 1, 4, 3, 2},
+  {1, 2, 3, 0, 1, 2, 1, 2, 3},
+  {2, 1, 2, 1, 0, 1, 2, 1, 2},
+  {3, 2, 1, 2, 1, 0, 3, 2, 1},
+  {2, 3, 4, 1, 2, 3, 0, 1, 2},
+  {3, 2, 3, 2, 1, 2, 1, 0, 1}
+};
+
+// 移動距離を求める
+int get_distance(void) {
+  int v = 0;
+  for (int i = 0; i &lt; N; i++) {
+    int p = board[i];
+    if (p == 0) continue;
+    v += distance[p][i];
+  }
+  return v;
+}
+
+// 手順の表示
+void print_answer(int n)
+{
+  count++;
+  for (int i = 1; i &lt;= n; i++)
+    printf("%d ", move_piece[i]);
+  printf("\n");
+}
+
+// 反復深化 + 下限値枝刈り法
+void dfs(int n, int space, int limit, int lower, char *goal)
+{
+  if (n == limit) {
+    if (memcmp(board, goal, N) == 0) {
+      print_answer(n);
+    }
+  } else {
+    for (int i = 0; adjacent[space][i] != -1; i++) {
+      int x = adjacent[space][i];
+      int p = board[x];
+      // 同じコマを動かすと元の局面に戻る
+      if (move_piece[n] == p) continue;
+      move_piece[n + 1] = p;
+      board[space] = p;
+      board[x] = S;
+      int new_lower = lower - distance[p][x] + distance[p][space];
+      if (new_lower + n &lt;= limit)
+	dfs(n + 1, x, limit, new_lower, goal);
+      board[x] = p;
+      board[space] = S;
+    }
+  }
+}
+
+int main(void)
+{
+  char start[N] = {8, 6, 7, 2, 5, 4, 3, 0, 1};
+  char goal[N] =  {1, 2, 3, 4, 5, 6, 7, 8, 0};
+  memcpy(board, start, N);
+  move_piece[0] = 0;
+  int lower = get_distance();
+  clock_t s = clock();
+  for (int i = lower; i &lt;= MAX_MOVE; i++) {
+    dfs(0, 7, i, lower, goal);
+    if (count &gt; 0) break;
+  }
+  printf("%d\n", count);
+  printf("%.3f\n", (double)(clock() - s)/CLOCKS_PER_SEC);
+  return 0;
+}
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+/*
+ * eleven.c : 11 パズル (反復深化 + 下限値枝刈り法)
+ *
+ *            Copyright (C) 2015 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdbool.h&gt;
+
+#define N 12
+#define S 0
+#define MAX_MOVE 53
+
+// 隣接リスト
+int adjacent[N][5] = {
+  {1, 4, -1},        // 0
+  {0, 2, 5, -1},     // 1
+  {1, 3, 6, -1},     // 2
+  {2, 7, -1},        // 3
+  {0, 5, 8,- 1},     // 4
+  {1, 4, 6, 9, -1},  // 5
+  {2, 5, 7, 10, -1}, // 6
+  {3, 6, 11, -1},    // 7
+  {4, 9, -1},        // 8
+  {5, 8, 10, -1},    // 9
+  {6, 9, 11, -1},    // 10
+  {7, 10, -1},       // 11
+};
+
+// 距離
+int distance[N][N] = {
+  {},                                    // 0 dummy
+  {0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5},  // 1
+  {1, 0, 1, 2, 2, 1, 2, 3, 3, 2, 3, 4},  // 2
+  {2, 1, 0, 1, 3, 2, 1, 2, 4, 3, 2, 3},  // 3
+  {3, 2, 1, 0, 4, 3, 2, 1, 5, 4, 3, 2},  // 4
+  {1, 2, 3, 4, 0, 1, 2, 3, 1, 2, 3, 4},  // 5
+  {2, 1, 2, 3, 1, 0, 1, 2, 2, 1, 2, 3},  // 6
+  {3, 2, 1, 2, 2, 1, 0, 1, 3, 2, 1, 2},  // 7
+  {4, 3, 2, 1, 3, 2, 1, 0, 4, 3, 2, 1},  // 8
+  {2, 3, 4, 5, 1, 2, 3, 4, 0, 1, 2, 3},  // 9
+  {3, 2, 3, 4, 2, 1, 2, 3, 1, 0, 1, 2},  // 10
+  {4, 3, 2, 3, 3, 2, 1, 2, 2, 1, 0, 1},  // 11
+};
+
+// 盤面
+char board[N];
+
+// 手数
+int move_piece[MAX_MOVE + 1];
+
+// 移動距離を求める
+int get_distance(void) {
+  int v = 0;
+  for (int i = 0; i &lt; N; i++) {
+    int p = board[i];
+    if (p == 0) continue;
+    v += distance[p][i];
+  }
+  return v;
+}
+
+// 手順の表示
+void print_answer(int n)
+{
+  for (int i = 1; i &lt;= n; i++)
+    printf("%d ", move_piece[i]);
+  printf("\n");
+}
+
+// 深さ優先探索
+void dfs(int n, int space, int limit, int lower, char *goal)
+{
+  if (n == limit) {
+    if (memcmp(board, goal, N) == 0) {
+      print_answer(n);
+      exit(0);
+    }
+  } else {
+    for (int i = 0; adjacent[space][i] != -1; i++) {
+      int x = adjacent[space][i];
+      int p = board[x];
+      // 同じコマを動かすと元の局面に戻る
+      if (move_piece[n] == p) continue;
+      move_piece[n + 1] = p;
+      board[space] = p;
+      board[x] = S;
+      int new_lower = lower - distance[p][x] + distance[p][space];
+      if (new_lower + n &lt;= limit)
+	dfs(n + 1, x, limit, new_lower, goal);
+      board[x] = p;
+      board[space] = S;
+    }
+  }
+}
+
+int main(void)
+{
+  char start[N] = {0, 3, 2, 1, 8, 7, 6, 5, 4, 11, 10, 9};
+  char goal[N] =  {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0};
+  int parity[N] = {
+    1, 0, 1, 0,
+    0, 1, 0, 1,
+    1, 0, 1, 0,
+  };
+  memcpy(board, start, N);
+  move_piece[0] = 0;
+  int lower = get_distance();
+  if ((parity[0] == parity[11] &amp;&amp; lower % 2 != 0) ||
+      (parity[0] != parity[11] &amp;&amp; lower % 2 == 0))
+    lower++;
+  for (int i = lower; i &lt;= MAX_MOVE; i += 2) {
+    printf("----- %d -----\n", i);
+    dfs(0, 0, i, lower, goal);
+  }
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="clang22.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang24.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 CLOS プログラミング入門</title>
+  <meta name="description" content="Common Lisp,Common Lisp Object System,CLOS,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881772</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>お気楽 CLOS プログラミング入門</h2>
+<div class="small">
+[ <a href="clisp05.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | <a href="clisp07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>●二分木</h3>
+<p> 今回は簡単な例題として「二分木」を作ってみましょう。拙作の Common Lisp 入門講座 <a href="../xyzzy_lisp/abclisp17.html#chap33">二分探索木</a> では「構造体」を使って二分木を実装しましたが、オブジェクト指向を使っても簡単にプログラムを作ることができます。
+</p>
+
+<h4>●二分木の仕様</h4>
+<p> 今回作成する二分木は節に要素をひとつ格納することとし、重複した要素は含まないものとします。クラス名は tree-set としました。キーを比較する関数は tree-set のインスタンスを生成するときに指定します。キーワード :obj=? には 2 つの引数が等しいときに真を返す述語を、:obj&lt;? には第 1 引数が第 2 引数より小さい場合に真を返す述語を渡します。デフォルトでは :obj=? が #'eql で、:obj&lt;? が #'&lt; とします。
+</p>
+
+<p> これだけでは面白くないので、要素からキーを取り出す関数をキーワード :key で指定できるようにします。たとえば、コンスセル (a . b) を要素とする場合、:key に car を指定すると、コンスセルの CAR 部をキーとして二分木を構成します。cdr を指定すると、CDR 部をキーとして二分木が構成されます。:key を指定することで、ハッシュ表のようなキーと値を組にした辞書的な使い方も可能です。:key のデフォルトは関数 identity  とします。
+</p>
+
+<p> 次は、クラス tree-set で公開するメソッドを表 1 に示します。
+</p>
+<table border=1>
+<caption>表 1 : 二分木の操作メソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>tree-get tree key</td><td>tree から key を持つ要素を求める</td></tr>
+  <tr><td>tree-put tree value</td><td>tree に要素 value を追加する</td></tr>
+  <tr><td>tree-delete tree key</td><td>tree から key を持つ要素を削除する</td></tr>
+  <tr><td>tree-get-min tree</td><td>tree から最小値を求める</td></tr>
+  <tr><td>tree-get-max tree</td><td>tree から最大値を求める</td></tr>
+  <tr><td>tree-delete-min tree</td><td>tree から最小値を削除する</td></tr>
+  <tr><td>tree-delete-max tree</td><td>tree から最大値を削除する</td></tr>
+  <tr><td>tree-fold-left tree func init</td><td>tree の要素に畳み込みを行う</td></tr>
+  <tr><td>tree-fold-right tree func init</td><td>tree の要素に畳み込みを行う</td></tr>
+  <tr><td>tree-for-each tree func</td><td>tree の要素に関数 func を適用する</td></tr>
+  <tr><td>tree-copy tree</td><td>tree をコピーする</td></tr>
+  <tr><td>tree-emptyp tree</td><td>tree が空の場合は #t を返す</td></tr>
+  <tr><td>tree-length tree</td><td>tree の要素数を求める</td></tr>
+</tbody>
+</table>
+<p> :key を指定しない場合、引数 key と引数 value に違いはありませんが、:key を指定する場合、二分木に格納する要素と key は異なるデータになります。たとえば、コンスセル (a . b) を格納する場合、tree-put の引数 value はコンスセルになり、他のメソッドの引数 key は CAR 部のデータになります。また、tree-get の返り値はキーではなくコンスセルになります。
+</p>
+<h4>●クラスの定義</h4>
+<p> それではプログラムを作りましょう。最初に、節 (ノード) と二分木を表すクラスを定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 1 : クラスの定義
+
+;;; 節の定義
+(defclass node ()
+  ((item  :accessor node-item  :initform nil :initarg :item)
+   (left  :accessor node-left  :initform nil :initarg :left)
+   (right :accessor node-right :initform nil :initarg :right)))
+
+;;; 二分木の定義
+(defclass tree-set ()
+  ((root :accessor tree-root :initform nil   :initarg :root)
+   (obj= :accessor tree-obj= :initform #'eql :initarg :obj=)
+   (obj&lt; :accessor tree-obj&lt; :initform #'&lt;   :initarg :obj&lt;)
+   (key  :accessor tree-key  :initform #'identity :initarg :key)))
+</pre>
+<p> 節はクラス node で表します。スロット item にデータを、left に左の子を、right に右の子を格納します。二分木はクラス tree-set で表します。スロット root に二分木のルートを格納します。終端 (空の木) は nil で表します。
+</p>
+
+<p> tree-set のスロット obj= と obj&lt; には要素を比較する述語をセットします。obj= には 2 つの引数が等しいときに真を返す述語を、obj&lt; には第 1 引数が第 2 引数よりも小さい場合に真を返す述語をセットします。デフォルトの値は #'eql と #'&lt; です。スロット key には要素からキーを取り出す関数をセットします。デフォルトは引数をそのまま返す関数 identity です。
+</p>
+
+<h4>●スロットのアクセス</h4>
+<p> ここで、スロットのアクセスで役に立つマクロを紹介しましょう。マクロ with-slots を使うと、指定したスロットをレキシカル変数のようにアクセスすることができます。
+</p>
+<pre class="item">
+(with-slots (スロット名 ...) インスタンス Ｓ式 ...)
+</pre>
+<p> スロット名を指定すると、その名前でスロットにアクセスすることができます。もちろん、setf や setq で値を代入することもできます。また、スロット名のほかに、(変数名 スロット名) と指定することもできます。この場合、指定した変数名でスロットにアクセスすることができます。
+</p>
+
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre>
+&gt; (defclass bar ()
+    ((a :initform 10) (b :initform 20) (c :initform 30)))
+#&lt;STANDARD-CLASS BAR&gt;
+&gt; (defmethod baz ((z bar))
+    (with-slots (a b c) z (+ a b c)))
+#&lt;STANDARD-METHOD (#&lt;STANDARD-CLASS BAR&gt;)&gt;
+
+&gt; (setq x (make-instance 'bar))
+#&lt;BAR #x1A71D7ED&gt;
+&gt; (baz x)
+60
+</pre>
+<p> クラス bar にはスロット a, b, c があります。メソッド baz は 3 つのスロットの合計値を求めます。with-slots でスロット名 a, b, c を指定しているので、変数 a, b, c でスロットにアクセスすることができます。
+</p>
+<p> マクロ with-slots を使うと、スロットをあたかもレキシカル変数のようにアクセスすることができますが、実際のアクセスには slot-value を使っていることに注意してください。つまり、指定された変数名のアクセスは、slot-value でスロットにアクセスするようにマクロ展開されるわけです。
+</p>
+
+<p> もうひとつ便利なマクロを紹介します。マクロ with-accessors は with-slots と同様に、指定した変数名を使ってスロットにアクセスすることができます。
+</p>
+<pre class="item">
+(with-accessors ((変数名 アクセスメソッド) ...) インスタンス Ｓ式 ...)
+</pre>
+<p> アクセスメソッドは :accessor で指定したメソッド名です。with-accessors は指定した変数名でアクセスメソッドに対応するスロットにアクセスすることができます。もちろん、setf や setq で値を代入することもできます。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre>
+&gt; (defclass bar ()
+    ((a :accessor bar-a :initform 10)
+     (b :accessor bar-b :initform 20)
+     (c :accessor bar-c :initform 30)))
+#&lt;STANDARD-CLASS BAR&gt;
+&gt; (defmethod baz ((z bar))
+    (with-accessors ((a bar-a) (b bar-b) (c bar-c)) z
+      (+ a b c)))
+#&lt;STANDARD-METHOD (#&lt;STANDARD-CLASS BAR&gt;)&gt;
+
+&gt; (setq x (make-instance 'bar))
+#&lt;BAR #x1A719295&gt;
+&gt; (baz x)
+60
+</pre>
+<p> クラス bar にはスロット a, b, c があります。メソッド baz は 3 つのスロットの合計値を求めます。with-accessors で変数名 a, b, c と対応するアクセスメソッドを指定します。これで変数名 a, b, c でスロット a, b, c にアクセスすることができます。
+</p>
+
+<p> マクロ with-accessors を使うと、スロットをあたかもレキシカル変数のようにアクセスすることができますが、実際のアクセスには :accessor で指定したメソッドを使っていることに注意してください。指定された変数名のアクセスは :accessor のメソッドでスロットにアクセスするようにマクロ展開されます。
+</p>
+
+<p> ところで、これらのマクロはとても便利ですが、<a href="index.html#cite">参考文献 [1]</a> には with-slots や with-accessors を使ったプログラムの例題が見当たりません。defclass の :accessor で指定したメソッドを使うのが CLOS のオーソドックスなプログラミングスタイルなのかもしれません。
+</p>
+
+<h4>●データの探索</h4>
+<p> 次は、二分木の中から key を探索するメソッド tree-get を作ります。
+</p>
+
+<pre class="list">
+リスト 2 : データの探索
+
+(defun node-get (node key key-of obj= obj&lt;)
+  (loop
+    (with-slots (item left right) node
+      (cond ((null node) (return nil))
+            ((funcall obj= key (funcall key-of item))
+             (return item))
+            ((funcall obj&lt; key (funcall key-of item))
+             (setf node left))
+            (t (setf node right))))))
+
+(defmethod tree-get ((tree tree-set) key)
+  (node-get (tree-root tree)
+            key
+            (tree-key tree)
+            (tree-obj= tree)
+            (tree-obj&lt; tree)))
+</pre>
+<p> メソッド tree-get はスロット key, obj=?, obj&lt;? から関数を取り出して node-get に渡します。node-get はこれらの関数を使って二分木から key と等しいデータを探します。node のスロットは with-slots を使うと簡単にアクセスすることができます。このとき、item に関数 key-of を適用することを忘れないでください。あとは、とくに難しいところないでしょう。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は二分木にデータを挿入するメソッド tree-put を作ります。
+</p>
+
+<pre class="list">
+リスト 3 : データの挿入
+
+(defun node-put (node key value key-of obj= obj&lt;)
+  (labels ((put-sub (node)
+             (with-slots (item left right) node
+               (cond ((null node)
+                      (make-instance 'node :item value))
+                     ((funcall obj= key (funcall key-of item))
+                      (setf item value)
+                      node)
+                     ((funcall obj&lt; key (funcall key-of item))
+                      (setf left (put-sub left))
+                      node)
+                     (t
+                      (setf right (put-sub right))
+                      node)))))
+    (put-sub node)))
+
+(defmethod tree-put ((tree tree-set) value)
+  (setf (tree-root tree)
+        (node-put (tree-root tree)
+                  (funcall (tree-key tree) value)
+                  value
+                  (tree-key tree)
+                  (tree-obj= tree)
+                  (tree-obj&lt; tree))))
+</pre>
+<p> 実際の処理は node-put の局所関数 put-sub で行います。node-put を呼び出すとき、引数 value からキーを取り出して渡すことに注意してください。キーの比較は tree-get と同じです。node が終端であれば、新しい節を make-instance で作成して返します。同じキーが見つかった場合、節の item を value に書き換えます。こうするとキー以外の値を更新することができるので便利です。
+</p>
+
+<h4>●データの削除</h4>
+<p> 次はデータを削除するメソッド tree-delete を作ります。
+</p>
+<pre class="list">
+リスト 4 : データの削除
+
+(defun node-delete (node key key-of obj= obj&lt;)
+  (labels ((delete-sub (node)
+             (with-slots (item left right) node
+               (cond ((null node) (throw 'not-found nil))
+                     ((funcall obj= key (funcall key-of item))
+                      (cond ((null left) right)
+                            ((null right) left)
+                            (t
+                             (setf item (node-search-min right)
+                                   right (node-delete-min right))
+                             node)))
+                     ((funcall obj&lt; key (funcall key-of item))
+                      (setf left (delete-sub left))
+                      node)
+                     (t
+                      (setf right (delete-sub right))
+                      node)))))
+    (delete-sub node)))
+
+(defmethod tree-delete ((tree tree-set) key)
+  (if (tree-root tree)
+      (catch 'not-found
+        (setf (tree-root tree)
+              (node-delete (tree-root tree)
+                           key
+                           (tree-key tree)
+                           (tree-obj= tree)
+                           (tree-obj&lt; tree)))
+        t)))
+</pre>
+<p> tree-delete はデータを削除したときは t を、key が見つからずにデータを削除できなかった場合は nil を返します。実際の処理は node-delete の局所関数 delete-sub で行います。node が nil の場合、key が見つからなかったので throw で大域脱出して nil を返します。
+</p>
+
+<p> キーの比較は tree-get, tree-put と同じです。木の途中にある節を削除する場合は、節の値を右部分木の最小値に置き換えてから、最小値を格納していた節を削除します。最小値を探す関数が node-search-min で、最小値を削除する関数が node-delete-min です。データの削除処理はちょっと複雑です。詳しい説明は拙作のページ <a href="clispb02.html#chap04">二分木：データの削除</a> をお読みください。
+</p>
+
+<h4>●巡回</h4>
+<p> 次は二分木を巡回する高階関数 tree-for-each を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 5 : 二分木の巡回
+
+(defun node-for-each (node func)
+  (with-slots (item left right) node
+    (when node
+      (node-for-each left func)
+      (funcall func item)
+      (node-for-each right func))))
+
+(defmethod tree-for-each ((tree tree-set) func)
+  (node-for-each (tree-root tree) func))
+</pre>
+<p> 実際の処理は関数 node-for-each で行います。処理は簡単で、通りがけ順で二分木を巡回して、要素 item に関数 func を適用するだけです。
+</p>
+
+<h4>●畳み込み</h4>
+<p> 次は畳み込みを行う tree-fold-left と tree-fold-right を作ります。
+</p>
+<pre class="list">
+リスト 6 : 畳み込み
+
+(defun node-fold-left (node func a)
+  (with-slots (item left right) node
+    (if (null node)
+        a
+      (node-fold-left right
+                      func
+                      (funcall func (node-fold-left left func a) item)))))
+
+(defun node-fold-right (node func a)
+  (with-slots (item left right) node
+    (if (null node)
+        a
+      (node-fold-right left
+                       func
+                       (funcall func item (node-fold-right right func a))))))
+
+(defmethod tree-fold-left ((tree tree-set) func init)
+  (node-fold-left (tree-root tree) func init))
+
+(defmethod tree-fold-right ((tree tree-set) func init)
+  (node-fold-right (tree-root tree) func init))
+</pre>
+<p> 実際の処理は関数 node-fold-left と node-fold-right で行います。node-fold-left は通りがけ順で畳み込みを行い、node-fold-right は node-fold-left の逆順 (右の子 -&gt; 節 -&gt; 左の子) で畳み込みを行います。したがって、node-fold-left は小さいデータから順番に、node-fold-right は大きなデータから順番に畳み込みが行われます。関数 func を呼び出すとき、node-fold-left と node-fold-right では引数の順番が逆になることに注意してください。
+</p>
+
+<p> あとのメソッドは簡単なので説明は割愛いたします。詳細は <a href="clisp06.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示しましょう。なお、プログラムはパッケージ TREE_SET にまとめておき、compile-file でコンパイルしてカレントディレクトリにあるものとします。
+</p>
+
+<pre>
+&gt; (require :tree_set "tree_set")   ; 修正 2010/09/19
+;; Loading file ...
+;; Loaded file ...
+T
+&gt; (use-package :tree_set)          ; 修正 2010/09/19
+T
+&gt; (setq xs nil)
+NIL
+&gt; (setq *random-state* (make-random-state t))
+#S(RANDOM-STATE
+   #*1111110000010001000000000000000010000111000001001100111101001111)
+&gt; (dotimes (x 16) (push (random 1000) xs))
+NIL
+&gt; xs
+(708 787 630 458 29 556 723 908 878 367 474 216 793 762 731 440)
+&gt; (setq a (make-instance 'tree-set))
+#&lt;TREE-SET #x1028A4A1&gt;
+&gt; (dolist (x xs) (tree-put a x))
+NIL
+&gt; (tree-for-each a #'(lambda (x) (format t "~D " x)))
+29 216 367 440 458 474 556 630 708 723 731 762 787 793 878 908
+NIL
+&gt; (tree-emptyp a)
+NIL
+&gt; (tree-length a)
+16
+&gt; (dolist (x xs) (tree-delete a x)
+(tree-for-each a #'(lambda (x) (format t "~D " x))) (terpri))
+29 216 367 440 458 474 556 630 723 731 762 787 793 878 908
+29 216 367 440 458 474 556 630 723 731 762 793 878 908
+29 216 367 440 458 474 556 723 731 762 793 878 908
+29 216 367 440 474 556 723 731 762 793 878 908
+216 367 440 474 556 723 731 762 793 878 908
+216 367 440 474 723 731 762 793 878 908
+216 367 440 474 731 762 793 878 908
+216 367 440 474 731 762 793 878
+216 367 440 474 731 762 793
+216 440 474 731 762 793
+216 440 731 762 793
+440 731 762 793
+440 731 762
+440 731
+440
+
+NIL
+&gt; (tree-emptyp a)
+T
+&gt; (tree-length a)
+0
+</pre>
+<p> 正常に動作していますね。次は :key を指定した例を示します。
+</p>
+<pre>
+&gt; (setq b (make-instance 'tree-set :key #'car :obj= #'string= :obj&lt; #'string&lt;))
+#&lt;TREE-SET #x1025CAD9&gt;
+&gt; (dolist (x xs) (tree-put b (cons (princ-to-string x) x)))
+NIL
+&gt; (tree-for-each b #'(lambda (x) (format t "~S " x)))
+("216" . 216) ("29" . 29) ("367" . 367) ("440" . 440) ("458" . 458) ("474" . 474)
+("556" . 556) ("630" . 630) ("708" . 708) ("723" . 723) ("731" . 731) ("762" . 762)
+("787" . 787) ("793" . 793) ("878" . 878) ("908" . 908)
+NIL
+&gt; (dolist (x (mapcar #'princ-to-string xs)) (format t "~S " (tree-get b x)))
+("708" . 708) ("787" . 787) ("630" . 630) ("458" . 458) ("29" . 29) ("556" . 556)
+("723" . 723) ("908" . 908) ("878" . 878) ("367" . 367) ("474" . 474) ("216" . 216)
+("793" . 793) ("762" . 762) ("731" . 731) ("440" . 440)
+NIL
+&gt; (tree-delete b "458")
+T
+&gt; (tree-delete b "458")
+NIL
+&gt; (tree-for-each b #'(lambda (x) (format t "~S " x)))
+("216" . 216) ("29" . 29) ("367" . 367) ("440" . 440) ("474" . 474) ("556" . 556)
+("630" . 630) ("708" . 708) ("723" . 723) ("731" . 731) ("762" . 762) ("787" . 787)
+("793" . 793) ("878" . 878) ("908" . 908)
+NIL
+</pre>
+<p> このように、:key を指定することでハッシュ表と同じような動作を行わせることもできます。ただし、今回のプログラムは単純な二分木なので、バランスが崩れると性能は大きく劣化してしまいます。もしも、実用的に使うのであれば、赤黒木 (2 色木) のような平衡木をプログラムしたほうがよいでしょう。平衡木のアルゴリズムは拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> で詳しく説明しています。興味のある方は下記ページをお読みくださいませ。
+</p>
+<ul>
+  <li><a href="../light/pyalgo12.html">AVL 木 [1]</a>, <a href="../light/pyalgo13.html">[2]</a>
+  <li><a href="../light/pyalgo14.html">2-3 木 [1]</a>, <a href="../light/pyalgo15.html">[2]</a>
+  <li><a href="../light/pyalgo16.html">赤黒木 [1]</a>, <a href="../light/pyalgo17.html">[2]</a>
+  <li><a href="../light/pyalgo53.html">AA 木</a>
+  <li><a href="../light/pyalgo54.html">赤黒木 [3]</a> (Left-Leaning Red Black Tree)
+</ul>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; tree_set.l : 二分探索木
+;
+;              Copyright (C) 2010 Makoto Hiroi
+;
+;
+; 修正 2010/09/19
+;
+;   1. パッケージ名を "TREE_SET" に変更
+;   2. defpackage に (:use "COMMON-LISP") を追加
+;   3. :export の指定を文字列に変更
+;
+(provide "TREE_SET")
+(defpackage "TREE_SET"
+  (:use "COMMON-LISP")
+  (:export "TREE-SET"
+           "TREE-GET" "TREE-PUT" "TREE-DELETE" "TREE-GET-MIN" "TREE-GET-MAX"
+           "TREE-DELETE-MIN" "TREE-DELETE-MAX" "TREE-FOR-EACH" "TREE-EMPTYP"
+           "TREE-FOLD-LEFT" "TREE-FOLD-RIGHT" "TREE-COPY" "TREE-LENGTH"
+   ))
+
+(in-package "TREE_SET")
+
+; メソッドの宣言
+(defgeneric tree-get (tree key))
+(defgeneric tree-put (tree value))
+(defgeneric tree-delete (tree key))
+(defgeneric tree-get-min (tree))
+(defgeneric tree-get-max (tree))
+(defgeneric tree-delete-min (tree))
+(defgeneric tree-delete-max (tree))
+(defgeneric tree-for-each (tree func))
+(defgeneric tree-emptyp (tree))
+(defgeneric tree-fold-left (tree func init))
+(defgeneric tree-fold-right (tree func init))
+(defgeneric tree-copy (tree))
+(defgeneric tree-length (tree))
+
+;;; 節の定義
+(defclass node ()
+  ((item  :accessor node-item  :initform nil :initarg :item)
+   (left  :accessor node-left  :initform nil :initarg :left)
+   (right :accessor node-right :initform nil :initarg :right)))
+
+;;; 二分木の定義
+(defclass tree-set ()
+  ((root :accessor tree-root :initform nil   :initarg :root)
+   (obj= :accessor tree-obj= :initform #'eql :initarg :obj=)
+   (obj&lt; :accessor tree-obj&lt; :initform #'&lt;   :initarg :obj&lt;)
+   (key  :accessor tree-key  :initform #'identity :initarg :key)))
+
+;;; 作業用関数
+
+; 探索
+(defun node-get (node key key-of obj= obj&lt;)
+  (loop
+    (with-slots (item left right) node
+      (cond ((null node) (return nil))
+            ((funcall obj= key (funcall key-of item))
+             (return item))
+            ((funcall obj&lt; key (funcall key-of item))
+             (setf node left))
+            (t (setf node right))))))
+
+; 挿入
+(defun node-put (node key value key-of obj= obj&lt;)
+  (labels ((put-sub (node)
+             (with-slots (item left right) node
+               (cond ((null node)
+                      (make-instance 'node :item value))
+                     ((funcall obj= key (funcall key-of item))
+                      (setf item value)
+                      node)
+                     ((funcall obj&lt; key (funcall key-of item))
+                      (setf left (put-sub left))
+                      node)
+                     (t
+                      (setf right (put-sub right))
+                      node)))))
+    (put-sub node)))
+
+; 最小値を求める
+(defun node-search-min (node)
+  (with-slots (item left) node
+    (if (null left)
+        item
+      (node-search-min left))))
+
+; 最大値を求める
+(defun node-search-max (node)
+  (with-slots (item right) node
+    (if (null right)
+        item
+      (node-search-max right))))
+
+; 最小値を削除する
+(defun node-delete-min (node)
+  (with-slots (left right) node
+    (cond ((null left) right)
+          (t
+           (setf left (node-delete-min left))
+           node))))
+
+; 最大値を削除する
+(defun node-delete-max (node)
+  (with-slots (left right) node
+    (cond ((null right) left)
+          (t
+           (setf right (node-delete-max right))
+           node))))
+
+; 削除
+(defun node-delete (node key key-of obj= obj&lt;)
+  (labels ((delete-sub (node)
+             (with-slots (item left right) node
+               (cond ((null node) (throw 'not-found nil))
+                     ((funcall obj= key (funcall key-of item))
+                      (cond ((null left) right)
+                            ((null right) left)
+                            (t
+                             (setf item (node-search-min right)
+                                   right (node-delete-min right))
+                             node)))
+                     ((funcall obj&lt; key (funcall key-of item))
+                      (setf left (delete-sub left))
+                      node)
+                     (t
+                      (setf right (delete-sub right))
+                      node)))))
+    (delete-sub node)))
+
+; 巡回
+(defun node-for-each (node func)
+  (with-slots (item left right) node
+    (when node
+      (node-for-each left func)
+      (funcall func item)
+      (node-for-each right func))))
+
+; 畳み込み
+(defun node-fold-left (node func a)
+  (with-slots (item left right) node
+    (if (null node)
+        a
+      (node-fold-left right
+                      func
+                      (funcall func (node-fold-left left func a) item)))))
+
+(defun node-fold-right (node func a)
+  (with-slots (item left right) node
+    (if (null node)
+        a
+      (node-fold-right left
+                       func
+                       (funcall func item (node-fold-right right func a))))))
+
+; 木のコピー
+(defun node-copy (node)
+  (with-slots (item left right) node
+    (if (null node)
+        nil
+      (make-instance 'node
+                     :item  item
+                     :left  (node-copy left)
+                     :right (node-copy right)))))
+
+;;; メソッドの定義
+
+; 探索
+(defmethod tree-get ((tree tree-set) key)
+  (node-get (tree-root tree)
+            key
+            (tree-key tree)
+            (tree-obj= tree)
+            (tree-obj&lt; tree)))
+
+; 挿入
+(defmethod tree-put ((tree tree-set) value)
+  (setf (tree-root tree)
+        (node-put (tree-root tree)
+                  (funcall (tree-key tree) value)
+                  value
+                  (tree-key tree)
+                  (tree-obj= tree)
+                  (tree-obj&lt; tree))))
+
+; 削除
+(defmethod tree-delete ((tree tree-set) key)
+  (if (tree-root tree)
+      (catch 'not-found
+        (setf (tree-root tree)
+              (node-delete (tree-root tree)
+                           key
+                           (tree-key tree)
+                           (tree-obj= tree)
+                           (tree-obj&lt; tree)))
+        t)))
+
+; 最小値を求める
+(defmethod tree-get-min ((tree tree-set))
+  (if (tree-root tree)
+      (node-search-min (tree-root tree))))
+
+; 最大値を求める
+(defmethod tree-get-max ((tree tree-set))
+  (if (tree-root tree)
+      (node-search-max (tree-root tree))))
+
+; 最小値を削除
+(defmethod tree-delete-min ((tree tree-set))
+  (with-slots (root) tree
+    (if root
+        (prog1
+            (node-search-min root)
+          (setf root (node-delete-min root))))))
+
+; 最大値を削除
+(defmethod tree-delete-max ((tree tree-set))
+  (with-slots (root) tree
+    (if root
+        (prog1
+            (node-search-max root)
+          (setf root (node-delete-max root))))))
+
+; 巡回
+(defmethod tree-for-each ((tree tree-set) func)
+  (node-for-each (tree-root tree) func))
+
+; 空か
+(defmethod tree-emptyp ((tree tree-set))
+  (null (tree-root tree)))
+
+; 畳み込み
+(defmethod tree-fold-left ((tree tree-set) func init)
+  (node-fold-left (tree-root tree) func init))
+
+(defmethod tree-fold-right ((tree tree-set) func init)
+  (node-fold-right (tree-root tree) func init))
+
+; コピー
+(defmethod tree-copy ((tree tree-set))
+  (make-instance 'tree-set
+                 :root (node-copy (tree-root tree))
+                 :obj= (tree-obj= tree)
+                 :obj&lt; (tree-obj&lt; tree)
+                 :key  (tree-key  tree)))
+
+; 要素数を求める
+(defmethod tree-length ((tree tree-set))
+  (tree-fold-left tree #'(lambda (n x) (declare (ignore x)) (1+ n)) 0))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003-2010 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clisp05.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | <a href="clisp07.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ言語プログラミング超入門</title>
+  <meta name="description" content="Ｃ言語,Ｃ言語入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881808</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ言語プログラミング超入門</h2>
+<div class="small">
+[ <a href="clang08.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang10.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>構造体</h3>
+<p> 近代的なプログラミング言語は、ユーザーが既存のデータ型を組み合わせて、新しいデータ型を定義する機能を備えています。Ｃ言語の場合、typedef を使ってデータ型に別名を付けることができます。既存のデータ型の組み合わせは「構造体 (structure) 」を使って行います。一般的には、一つまたはそれ以上のデータを構造体に格納し、typedef を使ってそれに新しい名前を付ける、という使い方になります。今回は構造体な使い方について説明します。
+</p>
+
+<h4>●構造体の定義</h4>
+<p> 構造体の定義を下図に示します。
+</p>
+<pre class="item">
+struct タグ名 {
+  データ型1 変数名1;
+    ...
+  データ型n 変数名n;
+};
+
+  図 : 構造体の定義
+</pre>
+<p> struct の後ろに構造体の名前を書き、{ ... } の中に変数を定義します。本稿では、構造体の名前を「タグ名」、構造体の中の変数を「メンバ変数」と呼ぶことにします。他のプログラミング言語では、メンバ変数を「フィールド」とか「スロット」と呼ぶ場合もあります。
+</p>
+<p> 構造体のデータ型は struct タグ名 で表します。タグ名だけでデータ型を表すことはできません。このような場合、typedef を使ってデータ型に別名を付けると便利です。typedef の構文を示します。
+</p>
+<pre class="item">
+typedef データ型名 別名;
+</pre>
+<pre class="list">
+リスト ; typedef の使用例
+
+typedef unsigned int uint;
+</pre>
+<p> 上の例では、unsigned int に uint という別名を付けています。これで unsigned int のかわりに uint というデータ型名を使うことができます。
+</p>
+<p> 簡単な例を示しましょう。点の座標を格納する構造体 point を作ります。
+</p>
+<pre class="list">
+リスト : 点の定義
+
+struct point {
+  double x, y;
+};
+
+typedef struct point Point;
+</pre>
+<p> メンバ変数 x, y に x 座標と y 座標を格納します。そして、typedef で struct point に Point という別名を付けています。typedef で別名を付ける場合は、次のように構造体を定義することができます。
+</p>
+<pre class="list">
+リスト : 点の定義 (2)
+
+typedef struct {
+  double x, y;
+} Point;
+</pre>
+<p> この場合はタグ名 point を省略することができます。
+</p>
+<h4>●構造体の使い方</h4>
+<p> 次は構造体の使い方を説明します。構造体を格納する変数は次のように宣言します。
+</p>
+<pre class="item">
+struct タグ名 変数名;
+struct タグ名 変数名 = {値1, 値2, ..., 値n};
+struct タグ名 変数名 = {.メンバ変数名=値1, .メンバ変数名=値2, ..., .メンバ変数名=値n};
+</pre>
+<p> typedef で別名を付けた場合は、struct タグ名 のかわりに別名を使うことができます。メンバ変数の初期値を指定する場合、構造体で定義した順番で値を指定します。初期値が省略された場合、外部変数であれば値は 0 に、局所変数であれば値は不定になります。メンバ変数のアクセスは簡単です。変数名 + ドット ( <b>.</b> ) + メンバ名 で行います。
+</p>
+<p> 最近の規格 (C99) では、メンバ変数名の前にドット ( <b>.</b> ) を付けた「指示初期化子」を使って値を指定することもできます。この場合、順番は関係ありません。構造体で指示初期化子を使うとき、初期値の指定がないメンバ変数は、大域変数の場合でも局所変数の場合でも 0 に初期化されます。
+</p>
+<P> 簡単な例を示しましょう。次のリストを見てください。
+<pre class="list">
+リスト : 構造体の使用例 (sample80.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;math.h&gt;
+
+// Point の定義
+typedef struct {
+  double x, y;
+} Point;
+
+// 距離を求める
+double distance(Point p, Point q)
+{
+  double dx = p.x - q.x;
+  double dy = p.y - q.y;
+  return sqrt(dx * dx + dy * dy);
+}
+
+int main(void)
+{
+  Point p0;
+  Point p1 = {0, 0};
+  Point p2 = {10, 10};
+  Point p3 = p1;
+  printf("%f, %f\n", p0.x, p0.y);
+  printf("%f, %f\n", p1.x, p1.y);
+  printf("%f, %f\n", p2.x, p2.y);
+  printf("%f\n", distance(p1, p2));
+  printf("%f\n", distance(p3, (Point){100, 100})); // C99  
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample80
+-0.000000, -0.000000
+0.000000, 0.000000
+10.000000, 10.000000
+14.142136
+141.421356
+</pre>
+<p> 点を表す構造体 Point を定義します。Point の先頭を英大文字にしましたが point にしてもかまいません。関数内で Point p0; と宣言すると、p0 は局所変数になるので、メンバ変数 x, y の値は不定です。点を (x, y) で表すと、変数 p1 と p2 は (0, 0), (10, 10) に初期化されます。
+</p>
+<p> 構造体は代入演算子で値をコピーすることができます。Point p3 = p1; とすると、p3 用のメモリ領域が確保され、そのメンバ変数 p3.x に p1.x の値が代入され、p3.y には p1.y の値が代入されます。
+</p>
+<p> 関数 distance は p と q の距離を求めます。関数の引数に構造体を渡すとき、配列とは違って構造体がコピーされることに注意してください。コピーしたくない場合やメンバ変数の値を書き換えたい場合はポインタを渡してください。
+</p>
+<p> 最近の規格 (C99) では、次の形式で構造体を生成することができます。
+</p>
+<pre class="item">
+(構造体の型){初期値1, ...};
+(構造体の型){.メンバ変数名=値1, .メンバ変数名=値2, ...};
+</pre>
+<p> distance(p3, (Point){100, 100}) の第 2 引数はこの方法で構造体を生成しています。具体的には、スタック領域に構造体のメモリ領域 (実体) が確保され、そのメンバ変数 x, y が 100 に初期化されます。そして、その構造体が distance の引数にコピーされます。
+</p>
+<p> 関数の返り値に構造体を指定することもできます。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 構造体を返す関数 (sample81.c)
+
+#include &lt;stdio.h&gt;
+
+typedef struct {
+  double x, y;
+} Point;
+
+Point make_point(double x, double y)
+{
+  return (Point){x, y};
+}
+
+int main(void)
+{
+  Point p1 = make_point(10, 20);
+  printf("%f, %f\n", p1.x, p1.y);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample81
+10.000000, 20.000000
+</pre>
+<p> 関数 make_point は構造体を生成して返しますが、変数 p1 に代入するとき、構造体のコピーが行われることに注意してください。なお、構造体のサイズが大きくなると、コピーするのに時間が少々かかるようになります。少しの時間とはいえ、塵も積もれば山となるので、構造体はポインタを使って受け渡しを行うのが一般的です。
+</p>
+
+<h4>●構造体とポインタ</h4>
+<p> 構造体にアドレス演算子 &amp; を適用すると、構造体へのポインタを生成することができます。
+</p>
+<p> 簡単な例を示しましょう。次のリストを見てください。
+</p>
+<PRE class="list">
+リスト : 構造体とポインタ (sample82.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;math.h&gt;
+
+// Point の定義
+typedef struct {
+  double x, y;
+} Point;
+
+// Point の生成
+Point *make_point(double x, double y)
+{
+  Point *p = malloc(sizeof(Point));
+  if (p != NULL) {
+    p-&gt;x = x;
+    p-&gt;y = y;
+  }
+  return p;
+}
+
+// 距離を求める
+double distance(Point *p1, Point *p2)
+{
+  double dx = p1-&gt;x - p2-&gt;x;
+  double dy = p1-&gt;y - p2-&gt;y;
+  return sqrt(dx * dx + dy * dy);
+}
+
+int main(void)
+{
+  Point *p0 = make_point(0, 0);;
+  Point *p1 = make_point(10, 10);
+  Point *p2= &amp;(Point){100, 100};
+  if (p0 == NULL || p1 == NULL) return 1;   // 異常終了
+  printf("%f\n", distance(p0, p1));
+  printf("%f\n", distance(p2, &amp;(Point){0, 0}));
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample82
+14.142136
+141.421356
+</pre>
+<p> 構造体へのポインタを宣言するときは変数名の前に * を付けます。メンバ変数のアクセスは、ドット ( <b>.</b> ) ではなく、変数名 + 矢印 ( -&gt; ) + メンバ変数名 のように矢印を使います。たとえば、Point *p のメンバ変数 x にアクセスする場合は p-&gt;x とします。(*p).x としてもアクセスすることはできますが、ポインタの場合は矢印を使うのが普通です。
+</p>
+<p> 構造体の実体は malloc を使って動的に確保することもできます。この場合、make_point のような生成関数 (コンストラクタ) を定義しておくと便利です。構造体の大きさは sizeof 演算子で求めることができます。make_point は malloc で Point の実体を確保し、引数 x, y の値でメンバ変数の値を初期化し、取得した Point のアドレスを返します。返り値の型は Point * になります。
+</p>
+<p> 関数 distance の引数はポインタ型 Point * に変更しています。これで Point をコピーしないで distance に渡すことができます。main では、make_point で Point を生成して、変数 p1, p2 にセットします。&amp;(Point){100, 100} はスタック領域に確保された Point のアドレスになります。これを変数 p3 にセットします。また、&amp;(Point){0, 0} をそのまま distance に渡すこともできます。
+</p>
+<p> なお、(Point){...} で生成した Point と make_point で生成した Point はメモリ領域が異なっています。関数 free でメモリを解放するとき、スタック領域に確保したアドレスを間違って渡すとプログラムは暴走するかもしれません。ご注意くださいませ。
+</p>
+<h4>●構造体と配列</h4>
+<p> 構造体は配列に格納することもできます。宣言は次のようになります。
+</p>
+<pre class="item">
+データ型 配列名[大きさ];
+データ型 配列名[大きさ] = { {値a, ...}, ..., {値z, ,,,,} };
+データ型 配列名[] = { {値a, ...}, ..., {値z, ,,,,} };
+</pre>
+<p> もちろん、指示初期化子を使って配列や構造体を初期化することができます。また、構造体のポインタを格納する配列も定義することができます。この場合、配列名の前に <b>*</b> を付けます。
+</p>
+<p> 簡単な例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 構造体と配列 (sample83.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;math.h&gt;
+
+// Point の定義
+typedef struct {
+  double x, y;
+} Point;
+
+// Point の生成
+Point *make_point(double x, double y)
+{
+  Point *p = malloc(sizeof(Point));
+  if (p == NULL) exit(1);  // エラー終了
+  p-&gt;x = x;
+  p-&gt;y = y;
+  return p;
+}
+
+// 距離を求める
+double distance(Point *p1, Point *p2)
+{
+  double dx = p1-&gt;x - p2-&gt;x;
+  double dy = p1-&gt;y - p2-&gt;y;
+  return sqrt(dx * dx + dy * dy);
+}
+
+int main(void)
+{
+  Point p0[] = {{0, 0}, {10, 10}, {100, 100}};
+  Point *p1[] = {
+    make_point(0,0),
+    make_point(10, 10),
+    &amp;(Point){100, 100}
+  };
+  printf("%f\n", distance(&amp;p0[0], &amp;p0[1]));
+  printf("%f\n", distance(&amp;p0[1], &amp;p0[2]));
+  printf("%f\n", distance(p1[0], p1[1]));
+  printf("%f\n", distance(p1[1], p1[2]));
+  printf("%f, %f\n", p0[1].x, p0[1].y);                                   
+  printf("%f, %f\n", p1[2]-&gt;x, p1[2]-&gt;y);  
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample83
+14.142136
+127.279221
+14.142136
+127.279221
+10.000000, 10.000000
+100.000000, 100.000000
+</pre>
+<P> 配列 p0 は 3 個の Point を格納しています。配列 p1 は 3 個の Point へのポインタを格納します。p1 は make_point と &amp;(Point){...} を使って初期化しています。distance を呼び出すとき、p0 の場合は &amp;p0[1] のように配列の要素 (構造体) の先頭アドレスを渡します。p1 の場合、要素の値は構造体の先頭アドレスなので、p1[1] のようにそのまま値を渡します。メンバ変数にアクセスする場合も簡単で、p0 の場合は p0[n].x で、p1 の場合は p1[n]-&gt;x で行うことができます。
+</p>
+<h4>●構造体と関数</h4>
+<p> 次は、三次元の座標を表す構造体 Point3d を追加しましょう。構造体 Point3d は簡単に定義できますが、二点間の距離を求める関数は distance と名前を付けることはできません。それは Point の距離を求める関数として定義されているからです。データ型と距離を求める関数は一対一に対応しているので、距離を求めるときは関数を自動的に選択してくれる機能があると便利です。
+</p>
+<p> 実をいうと、このような処理は特別な機能がなくても、構造体に関数を含めることで実現できます。今回の場合は、距離を求める関数を構造体のメンバ変数 distance に格納しておきます。距離を求めるときは、構造体から distance に格納されている関数を取り出して呼び出せばいいわけです。Ｃ言語の場合、関数呼び出しが少々不恰好になりますが、そこはちょっと目をつぶってくださいね。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 構造体に関数を格納する (sample84.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;math.h&gt;
+
+// 二次元の点
+typedef struct point {
+  double x, y;
+  double (*distance)(struct point *, struct point *);
+} Point;
+
+// 三次元の点
+typedef struct point3d {
+  double x, y, z;
+  double (*distance)(struct point3d *, struct point3d *);
+} Point3D;
+
+// Point 間の距離
+double distance2d(Point *p1, Point *p2)
+{
+  double dx = p1-&gt;x - p2-&gt;x;
+  double dy = p1-&gt;y - p2-&gt;y;
+  return sqrt(dx * dx + dy * dy);
+}
+
+// Point3D 間の距離
+double distance3d(Point3D *p1, Point3D *p2)
+{
+  double dx = p1-&gt;x - p2-&gt;x;
+  double dy = p1-&gt;y - p2-&gt;y;
+  double dz = p1-&gt;z - p2-&gt;z;
+  return sqrt(dx * dx + dy * dy + dz * dz);
+} 
+
+// Point の生成
+Point *make_point(double x, double y)
+{
+  Point *p = malloc(sizeof(Point));
+  if (p != NULL) {
+    p-&gt;x = x;
+    p-&gt;y = y;
+    p-&gt;distance = distance2d;
+  }
+  return p;
+}
+
+// Point3D の生成
+Point3D *make_point3d(double x, double y, double z)
+{
+  Point3D *p = malloc(sizeof(Point3D));
+  if (p != NULL) {
+    p-&gt;x = x;
+    p-&gt;y = y;
+    p-&gt;z = z;
+    p-&gt;distance = distance3d;
+  }
+  return p;
+}
+
+int main(void)
+{
+  Point *p1 = make_point(0, 0);
+  Point *p2 = make_point(10, 10);
+  Point3D *p3 = make_point3d(0, 0, 0);
+  Point3D *p4 = make_point3d(10, 10, 10);
+  printf("%f\n", p1-&gt;distance(p1, p2));
+  printf("%f\n", p3-&gt;distance(p3, p4));
+  return 0;
+}
+</PRE>
+<PRE>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample84
+14.142136
+17.320508
+</PRE>
+<p> Point にメンバ変数 distance を追加します。distance のデータ型は double (*distance)(struct point2d *, struct point2d *) になります。この段階ではまだ Point が定義されていないので、構造体にタグ名を指定して、それを使ってデータ型を定義します。Point3d は座標を表すメンバ変数 x, y, z と、関数を格納するメンバ変数 distance を用意します。distance のデータ型は double (*distance)(struct point3d *, struct point3d *) になります。
+</p>
+<p> そして、make_point と make_point3d で座標と関数 (distance2d または distance3d) をメンバ変数にセットします。呼び出し方法も簡単です。点 p1 のメンバ変数 distance は関数へのポインタなので、p1-&gt;distance(p1, p2) とすれば、p1 と p2 の距離を求めることができます。同様に、p3-&gt;distance(p3, p4) とすれば、三次元の点 p3 と p4 の距離を求めることができます。
+</p>
+<p> 構造体に格納されている関数を呼び出すとき、関数が自分自身の構造体のメンバ変数にアクセスできるといいのですが、残念ながらＣ言語ではできません。このため、distance を呼び出すときには、引数に自分自身の構造体を渡す必要があります。
+</p>
+<p> ちなみに、データとそれを操作する関数を結びつけるアイデアは「オブジェクト指向」と同じです。どのプログラミング言語でもオブジェクト指向的な考え方でプログラムを作ることは可能ですが、オブジェクト指向機能を持たない言語では限界があります。本格的にオブジェクト指向でプログラミングするならば、Ｃ++, Java, Python, Ruby などオブジェクト指向言語を使ったほうがよいでしょう。
+</p>
+
+<h4>●共用体</h4>
+<p> Ｃ言語の配列は同じデータ型の要素しか格納することができません。たとえば、int a[10] と宣言すれば、この配列に格納できるのは整数 (int) だけで、浮動小数点数 (double) は格納できません。たいていの場合、これで問題はないのですが、時と場合によっては、一つの配列に異なるデータ型を混在させたいこともあります。このような場合、Ｃ言語では「共用体 (union) 」を使います。
+</p>
+<p> 共用体は複数のデータを同一の領域に割り当てる方法です。定義方法は構造体とよく似ています。共用体の定義を下図に示します。
+</p>
+<pre class="item">
+union タグ名 {
+  データ型1 変数名1;
+    ...
+  データ型n 変数名n;
+};
+
+  図 : 共用体の定義
+</pre>
+<p> struct を union に変えただけです。変数の宣言方法も構造体と同じです。ただし、共用体は構造体と違って、メンバ変数は同一の領域（アドレス）に割り当てられます。簡単な例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : 共用体の使用例 (sample85.c)
+
+#include &lt;stdio.h&gt;
+
+union data {
+  int fixnum;
+  double fltnum;
+};
+
+int main(void)
+{
+  union data n = {1};
+  printf("%d\n", n.fixnum);
+  n.fltnum = 1.2345;
+  printf("%f\n", n.fltnum);
+  printf("%d\n", n.fixnum);
+  return 0;
+}
+</pre>
+<p> int と double の共用体を考えてみましょう。構造体であれば、fixnum に 4 バイト、そのあと fltnum に 8 バイトの領域が割り当てられて、全体で 12 バイトの大きさになります。これに対し、共用体では fixnum と fltnum は同一アドレスから領域が確保されます。確保される領域は変数のなかで最大サイズの大きさ、この場合は fltnum の 8 バイトが割り当てられます。
+<p> つまり、2 つの変数領域が重なっているわけです。したがって、構造体のように変数に別々の値を代入することはできません。なお、共用体のアクセスは、構造体の場合と同じです。共用体を初期化する場合、初期値は共用体の先頭で定義したデータ型でなければいけません。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample85
+1
+1.234500
+309237645
+</pre>
+<p> fltnum に代入した時点で fixnum の領域は上書きされるので、fixnum は破壊されていることがわかります。
+</p>
+<p> このまま共用体を配列に格納すると、どのデータ型を格納しているか判別できなくなります。このため、データの種類を識別する方法が必要になります。よく使用される方法が、データに識別子 (タグ : tag) を付加することです。次の図を見てください。
+</p>
+<pre class="fig">
+ ┌──┬──────┐
+ │タグ│  データ部  │
+ └──┴──────┘
+
+ 図 : タグ付きデータ
+</pre>
+<p> 一般には上図のように、データ部の先頭にタグを付加します。この方法はタグの分だけ余分なメモリを必要とすること、タグの判別に時間がかかることなどの欠点がありますが、現在では高速 CPU と大容量メモリを搭載しているマシンがほとんどなので、あまり問題にならないでしょう。
+</p>
+<p> タグを付け加えると、プログラムは次のようになります。
+
+<pre class="list">
+リスト : タグ付きデータ (sample86.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+#define FIX 1
+#define FLT 2
+
+union data {
+  int fixnum;
+  double fltnum;
+};
+
+// データの定義
+typedef struct {
+  int tag;
+  union data value;
+} Data;
+
+// 整数の生成
+Data *make_fixnum(int x)
+{
+  Data *d = malloc(sizeof(Data));
+  if (d != NULL) {
+    d-&gt;tag = FIX;
+    d-&gt;value.fixnum = x;
+  }
+  return d;
+}
+
+// 浮動小数点数の生成
+Data *make_fltnum(double x)
+{
+  Data *d = malloc(sizeof(Data));
+  if (d != NULL) {
+    d-&gt;tag = FLT;
+    d-&gt;value.fltnum = x;
+  }
+  return d;
+}
+
+// データの表示
+void print_data(Data *d)
+{
+  if (d-&gt;tag == FIX)
+    printf("%d\n", d-&gt;value.fixnum);
+  else
+    printf("%f\n", d-&gt;value.fltnum);
+}
+
+int main(void)
+{
+  Data *a[] = {
+    make_fixnum(1),
+    make_fltnum(1.234),
+    make_fixnum(2),
+    make_fltnum(5.678),
+  };
+  for (int i = 0; i &lt; 4; i++)
+    print_data(a[i]);
+  return 0;
+}
+
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample86
+1
+1.234000
+2
+5.678000
+</pre>
+<p> 構造体 Data を定義します。この中のメンバ変数 tag がタグを、value が値を表します。value のデータ型は union data なので、値は整数か浮動小数点数になります。関数 make_fixnum は整数を格納する Data を、関数 make_fltnum は浮動小数点数を格納する Data を生成して返します。タグはマクロ記号 FIX と FLT で表します。まだ説明していませんが、マクロよりも列挙宣言 enum で列挙定数を定義したほうがよいでしょう。
+</p>
+<p> 関数 print_data は Data の値を表示します。タグ tag をチェックして、FIX ならば printf の %d 変換指示子で、そうでなければ %f 変換指示子で表示します。main では Data へのポインタを格納する配列 a を定義して、要素を make_fixnum と make_fltnum で生成してセットします。あとは、for ループで配列の要素を取り出して、print_data で値を表示します。このように、共用体を使って一つの配列に異なるデータ型を混在させることができます。
+</p>
+
+
+<h4>●無名の構造体/共用体</h4>
+<p> 今まで構造体や共用体を定義するとき、typedef で別名を付けなければ「タグ名」が必要になりました。最新の規格 (C11) では、タグ名を省略しても構造体や共用体を定義することが可能になりました。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 無名の共用体
+
+// (1) 今までの方法
+typedef struct {
+  int tag;
+  union data {
+    int fixnum;
+    double fltnum;
+  } value;
+} Data1;
+
+// (2) タグ名を省略する
+typedef struct {
+  int tag;
+  union {
+    int fixnum;
+    double fltnum;
+  } value;
+} Data2;
+
+// (3) 変数名も省略できる
+typedef struct {
+  int tag;
+  union {
+    int fixnum;
+    double fltnum;
+  };
+} Data3;
+</pre>
+<p> (1) は今までの方法で Data を定義しなおしたものです。struct の中で union を定義しています。(2) は無名の共用体を使っています。タグ名を省略していることに注意してください。無名の共用体はもう一つ便利な機能があって、(3) のようにメンバ変数名も省略することができます。たとえば、Data3 d と宣言した場合、d.fixnum, d.fltnum で共用体のメンバ変数にアクセスすることができます。
+</p>
+
+<h4>●可変長ベクタ</h4>
+<p> 最後に簡単な例題として、「可変長ベクタ」というデータ構造を作ってみましょう。他のプログラミング言語、たとえば Lisp や Scheme では、一次元配列を「ベクタ (vector) 」と呼ぶことがあります。可変長ベクタは大きさを変更できる一次元配列ということになります。ここではプログラムを簡単にするため、格納するデータ型は int とし、ベクタ末尾にデータを追加するとき、容量が足りなければベクタを拡張することにします。
+</p>
+<p> 最初にベクタを操作する関数を下表に示します。
+</p>
+<table border=1>
+<caption>表 : ベクタ操作関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>Vector *make_vector(void)</td><td>空の可変長ベクタを生成する</td></tr>
+  <tr><td>void delete_vector(Vector *vec)</td><td>ベクタ vec を廃棄する</td></tr>
+  <tr><td>int vector_ref(Vector *vec, int n, bool *err);</td><td>n 番目の要素を取り出す</td></tr>
+  <tr><td>bool vector_set(Vector *vec, int n, int val);</td><td>n 番目の要素を val に書き換える</td></tr>
+  <tr><td>bool vector_push(Vector *vec, int val);</td><td>ベクタの末尾に val を追加する</td></tr>
+  <tr><td>int vector_pop(Vector *vec, bool *err);</td><td>ベクタの末尾からデータを取り出す</td></tr>
+  <tr><td>int vector_len(Vector *vec);</td><td>ベクタに格納されているよう素数を返す</td></tr>
+  <tr><td>bool vector_empty(Vector *vec);</td><td>空のベクタならば真を返す</td></tr>
+  <tr><td>void vector_print(Vector *vec);</td><td>ベクタを画面に表示する</td></tr>
+</tbody>
+</table>
+<p> vector_ref と vector_pop の返り値は要素 (int) で、添字が範囲外または取り出すデータがない場合は、*err に false をセットして 0 を返すことにします。データを返す場合は *err に true をセットします。これで返り値が 0 のときに、正常なデータなのかエラーなのかを判別することができます。
+</p>
+<p> 一般に、Ｃ言語は複数の値 (多値) を返すことができません。構造体にまとめて返すこともできますが、普通はポインタを使って複数の返り値を受け取るようにします。あとはとくに難しいところはないでしょう。
+</p>
+
+<h4>●データ型の定義</h4>
+<p> それではプログラムを作りましょう。最初にデータ型を定義します。次のリストを見てください。
+<pre class="list">
+リスト : Vector の定義
+
+typedef struct {
+  int size;
+  int sp;
+  int *buff;
+} Vector;
+</pre>
+<p> データ型の名前は Vector としました。メンバ変数 size はベクタの大きさ、sp は格納している要素の個数で、データを末尾に追加するときにスタックポインタとして使います。buff がベクタの本体で、メモリは malloc で取得します。
+</p>
+<h4>●ベクタの生成と廃棄</h4>
+<p> 次はコンストラクタを作ります。
+</p>
+<pre class="list">
+リスト : コンストラクタ
+
+#define INIT_SIZE 8
+
+Vector *make_vector(void)
+{
+  Vector *vec = malloc(sizeof(Vector));
+  if (vec != NULL) {
+    vec-&gt;size = INIT_SIZE;
+    vec-&gt;sp = 0;
+    vec-&gt;buff = malloc(sizeof(int) * INIT_SIZE);
+    if (vec-&gt;buff == NULL) {
+      free(vec);
+      return NULL;
+    }
+  }
+  return vec;
+}
+</pre>
+<p> 最初に malloc で Vector の実体を取得します。返り値が NULL ならば NULL をそのまま返します。次に、メンバ変数を初期化します。size は INIT_SIZE (8) に、sp は 0 に初期化します。次に、buff の実体を malloc で取得します。返り値が NULL ならば、Vector の実体を free で解放してから NULL を返します。
+</p>
+<p> 次は Vector を廃棄する関数 delete_vector を作ります。
+</p>
+<pre class="list">
+リスト ; ベクタの廃棄
+
+void delete_vector(Vector *vec)
+{
+  free(vec-&gt;buff);
+  free(vec);
+}
+</pre>
+<p> delete_vector は簡単で、最初にベクタ本体のメモリ buff を free で解放し、それから本体 vec を free で解放するだけです。
+</p>
+
+<h4>●要素の参照</h4>
+<p> 次はベクタから要素を取り出す関数を作ります。n 番目の要素を取り出す関数 vector_ref は次のようになります。
+</p>
+<pre class="list">
+リスト : 要素の参照
+
+int vector_ref(Vector *vec, int n, bool *err)
+{
+  if (n &gt;= vec-&gt;sp) {
+    *err = false;
+    return 0;
+  }
+  *err = true;
+  return vec-&gt;buff[n];
+}
+</pre>
+<p> 添字 n の範囲チェックを行い、n が sp 以上であれば範囲外なので *err に false をセットして 0 を返します。そうでなければ、*err に true をセットして vec-&gt;buff[n] を返すだけです。
+</p>
+<p> 次はベクタ末尾からデータを取り出す関数 vector_pop を作ります。
+</p>
+<pre class="list">
+リスト : 末尾からデータを取り出す
+
+int vector_pop(Vector *vec, bool *err)
+{
+  if (vec-&gt;sp == 0) {
+    *err = false;
+    return 0;
+  }
+  *err = true;
+  return vec-&gt;buff[--vec-&gt;sp];
+}
+</pre>
+<p> sp が 0 ならばベクタは空なので *err に false をセットして 0 を返します。そうでなければ、*err に true をセットして、sp を -1 してから buff[sp] の値を返すだけです。
+</p>
+<h4>●要素の更新</h4>
+<p> 次はベクタの要素を書き換える関数 vector_set を作ります。
+</p>
+<pre class="list">
+リスト : 要素の書き換え
+
+bool vector_set(Vector *vec, int n, int val)
+{
+  if (n &gt;= vec-&gt;sp) return false;
+  vec-&gt;buff[n] = val;
+  return true;
+}
+</pre>
+<p> 添え字 n が sp 以上であれば、範囲外なので false を返します。そうでなければ、buff[n] の値を val を書き換えて true を返すだけです。
+</p>
+<p> 次はベクタの末尾にデータを追加する関数 vector_push を作ります。
+</p>
+<pre class="list">
+リスト : ベクタの末尾にデータを追加
+
+bool vector_push(Vector *vec, int val)
+{
+  if (vec-&gt;sp == vec-&gt;size) {
+    int *temp = realloc(vec-&gt;buff, sizeof(int) * vec-&gt;size * 2);
+    if (temp == NULL) return false;
+    vec-&gt;size *= 2;
+    vec-&gt;buff = temp;
+  }
+  vec-&gt;buff[vec-&gt;sp++] = val;
+  return true;
+}
+</pre>
+<p> sp が size 以上の場合、ベクタは満杯なのでバッファの大きさを拡張します。今回は単純に大きさを二倍することにします。realloc で二倍のメモリ領域を取得し、ポインタ temp にセットします。temp が NULL の場合は大きさを増やすことができなかったので false を返します。このとき、元のバッファはそのままです。バッファを大きくしたら、メンバ変数 size と buff の値を更新します。それから buff[sp] に val をセットして、sp の値を +1 します。最後に true を返します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="clang09.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単なテストを実行してみましょう。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+int main(void)
+{
+  Vector *vec = make_vector();
+  bool err;
+  for (int i = 0; i &lt; 16; i++) {
+    vector_push(vec, i * 2);
+    vector_print(vec);
+  }
+  for (int i = 0; i &lt; 16; i++) {
+    int n = vector_ref(vec, i, &amp;err);
+    vector_set(vec, i, n * n);
+  }
+  vector_print(vec);
+  while (!vector_empty(vec)) {
+    printf("%d ", vector_pop(vec, &amp;err));
+  }
+  vector_print(vec);
+  delete_vector(vec);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./vector 
+[ 0 ]
+[ 0 2 ]
+[ 0 2 4 ]
+[ 0 2 4 6 ]
+[ 0 2 4 6 8 ]
+[ 0 2 4 6 8 10 ]
+[ 0 2 4 6 8 10 12 ]
+[ 0 2 4 6 8 10 12 14 ]
+[ 0 2 4 6 8 10 12 14 16 ]
+[ 0 2 4 6 8 10 12 14 16 18 ]
+[ 0 2 4 6 8 10 12 14 16 18 20 ]
+[ 0 2 4 6 8 10 12 14 16 18 20 22 ]
+[ 0 2 4 6 8 10 12 14 16 18 20 22 24 ]
+[ 0 2 4 6 8 10 12 14 16 18 20 22 24 26 ]
+[ 0 2 4 6 8 10 12 14 16 18 20 22 24 26 28 ]
+[ 0 2 4 6 8 10 12 14 16 18 20 22 24 26 28 30 ]
+[ 0 4 16 36 64 100 144 196 256 324 400 484 576 676 784 900 ]
+900 784 676 576 484 400 324 256 196 144 100 64 36 16 4 0 [ ]
+</pre>
+<p> 正常に動作していますね。今回は大きさを拡張するだけですが、vector_pop でデータを取り出すとき、要素数が少なくなったらバッファを縮小させることもできます。たとえば、要素数が 1 / 4 以下になったらバッファを 1 / 2 にするなど。興味のある方はプログラムを改良してみてください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+/*
+ * vector.c : 可変長ベクタ
+ *
+ *            Copyright (C) 2015 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdbool.h&gt;
+
+#define INIT_SIZE 8
+
+// ベクタの定義
+typedef struct {
+  int size;
+  int sp;
+  int *buff;
+} Vector;
+
+// コンストラクタ
+Vector *make_vector(void)
+{
+  Vector *vec = malloc(sizeof(Vector));
+  if (vec != NULL) {
+    vec-&gt;size = INIT_SIZE;
+    vec-&gt;sp = 0;
+    vec-&gt;buff = malloc(sizeof(int) * INIT_SIZE);
+    if (vec-&gt;buff == NULL) {
+      free(vec);
+      return NULL;
+    }
+  }
+  return vec;
+}
+
+// ベクタの解放
+void delete_vector(Vector *vec)
+{
+  free(vec-&gt;buff);
+  free(vec);
+}
+
+// 参照
+int vector_ref(Vector *vec, int n, bool *err)
+{
+  if (n &gt;= vec-&gt;sp) {
+    *err = false;
+    return 0;
+  }
+  *err = true;
+  return vec-&gt;buff[n];
+}
+
+// 更新
+bool vector_set(Vector *vec, int n, int val)
+{
+  if (n &gt;= vec-&gt;sp) return false;
+  vec-&gt;buff[n] = val;
+  return true;
+}
+
+// 追加
+bool vector_push(Vector *vec, int val)
+{
+  if (vec-&gt;sp == vec-&gt;size) {
+    int *temp = realloc(vec-&gt;buff, sizeof(int) * vec-&gt;size * 2);
+    if (temp == NULL) return false;
+    vec-&gt;size *= 2;
+    vec-&gt;buff = temp;
+  }
+  vec-&gt;buff[vec-&gt;sp++] = val;
+  return true;
+}
+
+// 取り出し
+int vector_pop(Vector *vec, bool *err)
+{
+  if (vec-&gt;sp == 0) {
+    *err = false;
+    return 0;
+  }
+  *err = true;
+  return vec-&gt;buff[--vec-&gt;sp];
+}
+
+// 要素数
+int vector_len(Vector *vec)
+{
+  return vec-&gt;sp;
+}
+
+// 空か
+bool vector_empty(Vector *vec)
+{
+  return vec-&gt;sp == 0;
+}
+
+// 表示
+void vector_print(Vector *vec)
+{
+  printf("[ ");
+  for (int i = 0; i &lt; vec-&gt;sp; i++)
+    printf("%d ", vec-&gt;buff[i]);
+  printf("]\n");
+}
+
+// 簡単なテスト
+int main(void)
+{
+  Vector *vec = make_vector();
+  bool err;
+  for (int i = 0; i &lt; 16; i++) {
+    vector_push(vec, i * 2);
+    vector_print(vec);
+  }
+  for (int i = 0; i &lt; 16; i++) {
+    int n = vector_ref(vec, i, &amp;err);
+    vector_set(vec, i, n * n);
+  }
+  vector_print(vec);
+  while (!vector_empty(vec)) {
+    printf("%d ", vector_pop(vec, &amp;err));
+  }
+  vector_print(vec);
+  delete_vector(vec);
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="clang08.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang10.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

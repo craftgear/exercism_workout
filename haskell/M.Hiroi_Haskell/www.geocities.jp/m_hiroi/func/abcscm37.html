@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881785</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm27.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm38.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>パズルに挑戦 (3)</h3>
+<p> 今回も簡単なパズルを 5 問出題します。Scheme で解法プログラムを作成してください。M.Hiroi は R5RS + SRFI-1 の範囲でプログラムを作ろうと思っています。ほかのライブラリを使うと、もっと簡単にプログラムを作ることができるかもしれません。みなさんも Scheme らしいプログラムを考えてみてください。
+</p>
+
+<h4>●問題１ Four Four's</h4>
+<p> Four Four's は数字を使ったパズルです。いろいろなルールがあるのですが、今回は簡易ルールで行きましょう。それでは問題です。
+</p>
+<div class="question">
+<b>[問題１]</b> Four Four's
+<p> 数字 4 を 4 つと＋, －, ×, ÷, （, ） を使って、答えが 1 から 10 になる式を作ってください。数字は 4 だけではなく、44 や 444 のように合体させてもかまいません。また、－を符号として使うことは禁止します。
+</p>
+</div>
+<p> 数字の 4 を 4 つ使うので Four Four's という名前なのだと思います。ところで、このルールでは 11 になる式を作ることができません。ほかのルール、たとえば小数点を付け加えると、次のように作ることができます。
+</p>
+<pre class="item">
+4 ÷ .4 ＋ 4 ÷ 4 = 11
+</pre>
+<p> 今回は簡易ルールということで、小数点を使わないで 1 から 10 までの式を作ってください。拙作のページ <a href="../xyzzy_lisp/abclisp18.html">Common Lisp 入門 : パズル「Four Four's」と記法の変換</a> のプログラムは eval を使っていますが、今回は eval を使わないでプログラムを作ってみてください。
+</p>
+<p> <a href="abcscm37.html#answer1">解答</a>
+</p>
+<hr>
+<h4>●問題２ 騎士の交換</h4>
+<p> 騎士（ナイト）はチェスの駒のひとつで、下図に示すように将棋の桂馬の動きを前後左右にとることができます。今回は黒騎士 ● と白騎士 ○ の位置を交換するパズルです。それでは問題です。
+</p>
+<div class="question">
+<b>[問題２]</b> 騎士の交換
+<p>下図の START から GOAL までの最短手順を求めてください。
+</p>
+<pre class="fig">
+    ┌─┬─┬─┬─┬─┐
+    │  │◎│  │◎│  │
+    ├─┼─┼─┼─┼─┤    ┌─┬─┬─┐    ┌─┬─┬─┐ 
+    │◎│  │  │  │◎│    │●│  │●│    │○│  │○│ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤    ├─┼─┼─┤ 
+    │  │  │Ｋ│  │  │    │  │  │  │    │  │  │  │ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤ =&gt; ├─┼─┼─┤ 
+    │◎│  │  │  │◎│    │  │  │  │    │  │  │  │ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤    ├─┼─┼─┤ 
+    │  │◎│  │◎│  │    │○│  │○│    │●│  │●│ 
+    └─┴─┴─┴─┴─┘    └─┴─┴─┘    └─┴─┴─┘ 
+
+◎ : ナイト (K) が動ける位置    ＳＴＡＲＴ         ＧＯＡＬ
+
+                          図 : 騎士の交換
+</pre>
+</div>
+<p> <a href="abcscm37.html#answer2">解答</a>
+</p>
+<hr>
+<h4>●問題３ ペグ・ソリテア</h4>
+<p> ペグ・ソリテアは、盤上に配置されたペグ（駒）を、最後にはひとつ残るように取り除いていく、古典的なパズルです。ペグは次のルールに従って移動し、除去することができます。
+</p>
+<ul>
+  <li> ペグは隣にあるペグをひとつだけ跳び越して、空いている場所へ着地します。
+  <li> 跳び越されたペグは盤上から取り除かれます。
+  <li> 移動方向は、ふつう縦横のみの 4 方向ですが、ルールによっては斜め方向の移動を許す場合もあります。
+  <li> 同じペグの連続跳び越しは 1 手と数えます。
+</ul>
+<p> 盤は今までに多数考案されていますが、33 穴英国盤、37 穴フランス盤、41 穴盤が有名です。<a href="abcscm37.html#cite3">参考文献 [1]</a> によると、最初の空き位置と最後に残ったペグの位置が同じになることを「補償型の解」といい、最初の空き位置が盤の中央で、なおかつ、補償型の解がある場合を「中央補償型の解」というそうです。
+</p>
+<p> ペグ・ソリテアの場合、昔から補償型や中央補償型の解の最小手数を求めることが行われてきました。数が多いと解くのが大変なので、サイズを小さくした簡単なペグ・ソリテアをコンピュータで解いてみましょう。
+</p>
+<div class="question">
+<b>[問題３]</b> ペグ・ソリティア
+<pre class="fig">
+      ●─●─●
+      │×│×│
+  ●─●─●─●─●  
+  │×│×│×│×│
+  ●─●─○─●─●  
+  │×│×│×│×│
+  ●─●─●─●─●  
+      │×│×│
+      ●─●─●
+
+     図 : 21 穴盤
+</pre>
+<p> 上図に示したように、最初に中央のペグを取り除きます。この状態から始めて、最後のペグが中央の位置に残る跳び方の最短手順を求めてください。なお、跳び方は縦横だけではなく斜め方向も許すことにします。
+</p>
+</div>
+<div class="note">
+-- <a name="cite3">参考文献</a> -----<br>
+[1] 橋本哲, 『特集コンピュータパズルへの招待 ペグ・ソリテア編』, C MAGAZINE 1996 年 2 月号, ソフトバンク
+</div>
+<p><a href="abcscm38.html#answer3">解答</a>
+</p>
+<hr>
+<h4>●問題４ ８めくり</h4>
+<p> 「８めくり」は <a href="../puzzle/lightout.html">ライツアウト</a> に類似のパズルです。ルールは簡単で、あるボタンを押すと周囲のボタンの状態が反転します。つまり、光っているボタンは消灯し、消えていたボタンは点灯します。次の図を見てください。
+</p>
+<pre class="fig">
+０１２
+３４５  ボタンの番号
+６７８
+
+□□□      ■■■    □□□      □■□    □□□      ■□■
+□□□ ←→ ■□■    □□□ ←→ ■■□    □□□ ←→ ■■■
+□□□      ■■■    □□□      □□□    □□□      □□□
+
+    ４を押す               ０を押す              １を押す
+
+                       図 : 反転パターン
+</pre>
+<p> 中央のボタン 4 を押すと、その周囲のボタン 8 個の状態が反転します。押したボタンの状態は反転しません。もう一度同じボタンを押すと、再度ボタンの状態が反転するので、元の状態に戻ります。隅のボタン 0 を押すと 3 個のボタンの状態が反転し、辺にあるボタン 1 を押すと 5 個のボタンの状態が反転します。
+</p>
+<p> それでは問題です。
+</p>
+<DIV class="question">
+<B>[問題４]</B> ８めくり
+<pre class="fig">
+  □□□□
+  □□□□
+  □□□□
+  □□□□
+
+図 : 4 * 4 盤
+</pre>
+<p> 上図に示す 4 行 4 列盤で、全てのボタンを消灯する最小手順を求めてください。
+</p>
+</div>
+
+<p><a href="abcscm38.html#answer4">解答</a>
+</p>
+<hr>
+<h4>●問題５ スライドパズル</h4>
+<p> 最後はちょっと変わったスライドパズルです。3 行 3 列の盤面において、縦横斜めの８方向に駒をスライドさせます。次の図を見てください。
+</p>
+<pre class="fig">
+5 2 3       1 5 3        1 2 5
+4 9 6       4 8 6        4 7 6
+7 8 1       7 2 9        3 8 9
+      ＼      │       ／
+        ┌─┬─┬─┐
+        │１│２│３│
+1 2 3   ├─┼─┼─┤   1 2 3
+5 6 4 ─│４│５│６│─ 6 4 5
+7 8 9   ├─┼─┼─┤   7 8 9
+        │７│８│９│
+        └─┴─┴─┘
+      ／      │      ＼
+1 2 7       1 8 3        9 2 3
+4 3 6       4 2 6        4 1 6
+5 8 9       7 5 9        7 8 5
+
+  図 : スライドパズルの動作
+</pre>
+<p> 上下方向にスライドできるのは (2 5 8) の列で、上にスライドすると 2 が下に移動して (5 8 2) になります。逆に下にスライドすると 8 が上に移動して (8 2 5) になります。同様に、左右にスライドできるのが (4 5 6) の行で、斜め方向に移動できるのが対角線の (1 5 9) と (3 5 7) です。
+</p>
+<p> それでは問題です。
+</p>
+<div class="question">
+<b>[問題５]</b> スライドパズル
+<pre class="fig">
+┌─┬─┬─┐    ┌─┬─┬─┐
+│９│８│７│    │１│２│３│
+├─┼─┼─┤    ├─┼─┼─┤
+│６│５│４│ =&gt; │４│５│６│
+├─┼─┼─┤    ├─┼─┼─┤
+│３│２│１│    │７│８│９│
+└─┴─┴─┘    └─┴─┴─┘
+  ＳＴＡＲＴ         ＧＯＡＬ
+</pre>
+<p> START から GOAL までの最短手順を求めてください。
+</p>
+</div>
+<p><a href="abcscm38.html#answer5">解答</a>
+</p>
+</section>
+<hr>
+<section class="contents">
+<h4 id="answer1">●問題１「Four Four's」の解答</h4>
+<p> それではプログラムを作りましょう。Four Four's の場合、4 つの数値に 3 つの演算子だけなので、数式のパターンは次の 5 種類しかありません。
+</p>
+<pre class="item">
+(1) (4 Y 4) X (4 Z 4)
+(2) 4 X (4 Y (4 Z 4))
+(3) ((4 Z 4) Y 4) X 4
+(4) 4 X ((4 Z 4) Y 4)
+(5) (4 Y (4 Z 4)) X 4
+</pre>
+<p> 私達がふつうに式を書く場合、1 + 2 のように演算子を真ん中に置きます。この書き方を「中置記法」といいます。Lisp の場合、演算子を前に置く「前置記法」で数式を表しています。これらの数式を前置記法で表すと、次のようになります。
+</p>
+<pre class="item">
+(1) (4 Y 4) X (4 Z 4) =&gt; (X (Y 4 4) (Z 4 4))
+(2) 4 X (4 Y (4 Z 4)) =&gt; (X 4 (Y 4 (Z 4 4)))
+(3) ((4 Z 4) Y 4) X 4 =&gt; (X (Y (Z 4 4) 4) 4)
+(4) 4 X ((4 Z 4) Y 4) =&gt; (X 4 (Y (Z 4 4) 4))
+(5) (4 Y (4 Z 4)) X 4 =&gt; (X (Y 4 (Z 4 4)) 4)
+</pre>
+<p> あとは、X, Y, Z に演算子 +, -, *, / を入れて数式を計算すればいいわけです。Four Four's は数字を合体できるので、数字が 3 つで演算子が 2 つ、数字が 2 つで演算子がひとつ、というパターンもあります。演算子がひとつの場合は簡単ですね。演算子が 2 つの場合は、次の式になります。
+</p>
+<pre class="item">
+(A) (a Y b) X c =&gt; (X (Y a b) c)
+(B) a X (b Y c) =&gt; (X a (Y b c))
+</pre>
+<p> a, b, c が数字で X, Y が演算子を表しています。数字は 4 か 44 になります。この場合、a, b, c の組み合わせを生成する必要があります。組み合わせを (a, b, c) で表すと、(4, 4, 44), (4, 44, 4), (44, 4, 4) の 3 通りとなります。これと演算子の組み合わせにより数式を生成して、答えを求めてチェックします。
+</p>
+
+<p> これらの数式を Scheme でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 数式
+
+; 3 つの演算子
+(define (expr-1 x y z) (x (y 4 4) (z 4 4)))
+(define (expr-2 x y z) (x 4 (y 4 (z 4 4))))
+(define (expr-3 x y z) (x (y (z 4 4) 4) 4))
+(define (expr-4 x y z) (x 4 (y (z 4 4) 4)))
+(define (expr-5 x y z) (x (y 4 (z 4 4)) 4))
+
+; 2 つの演算子
+(define (expr-a a b c x y) (x (y a b) c))
+(define (expr-b a b c x y) (x a (y b c)))
+</pre>
+
+<p> 引数 x, y, z が演算子を表します。これらの引数はシンボルではなく関数 (+, -, *, /) を渡します。引数 a, b, c は数値を表します。x, y, z に関数を渡すことで、数式を簡単に計算することができます。
+</p>
+
+<p> 解法プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : Four Foru's の解法
+
+(define (solve-4)
+  (for-each
+    (lambda (ops)
+      (for-each
+        (lambda (expr)
+          (let ((n (apply expr ops)))
+            (if (and (integer? n) (&lt;= 1 n 10))
+                (apply print-expr expr n (map op-&gt;sym ops)))))
+      (list expr-1 expr-2 expr-3 expr-4 expr-5)))
+    (repeat-perm 3 (list + - * /))))
+</pre>
+<p> 関数 solve-4 は演算子が 3 つの数式を計算して、結果が 1 以上 10 以下の整数値であれば、その式と値を表示します。演算子の組み合わせは関数 repeat-perm で生成します。この関数は拙作のページ <a href="yasp02.html">Yet Another Scheme Problems</a> で出題 (問題 30) したものと同じです。引数のリストから重複を許して n 個の要素を選ぶ順列を求め、それらをリストに格納して返します。
+</p>
+<p> 次に、2 番目の for-each で 5 種類の数式を順番に評価します。演算子はリスト ops にセットされているので、数式は (apply expr ops) で計算することができます。Gauche (ver 0.1.84) の場合、0 で除算してもエラーにはなりません。無限大を表す +inf.0 または -inf.0 という整数値が返されます。処理系によってはエラーを送出するかもしれません。その場合、エラーを捕捉する処理が必要になります。ご注意ください。
+</p>
+
+<p> あとは n の値をチェックして、条件を満たしていたら関数 print-expr を呼び出して数式と n を表示するだけです。それから、演算子が 2 つの数式を計算する solve-3 と演算子が 1 つの数式を計算する solve-2 を作成します。これらのプログラムは簡単なので説明は割愛いたします。詳細は <a href="abcscm37.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+<p> 実際に実行すると 100 通りの数式が出力されますが、値が 10 となる数式は次に示す 1 通りしかありません。
+</p>
+<pre class="item">
+(44 - 4) / 4 = 10
+</pre>
+<p> 興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; four.scm : パズル Four Four's
+;
+;            Copyright (C) 2010 Makoto Hiroi
+;
+
+; リストの平坦化
+(define (flatmap func ls)
+  (apply append (map func ls)))
+
+; 重複順列の生成
+(define (repeat-perm n ls)
+  (if (zero? n)
+      (list '())
+      (flatmap
+        (lambda (x)
+          (map (lambda (y) (cons x y))
+               (repeat-perm (- n 1) ls)))
+        ls)))
+
+; 数式
+(define (expr-1 x y z) (x (y 4 4) (z 4 4)))
+(define (expr-2 x y z) (x 4 (y 4 (z 4 4))))
+(define (expr-3 x y z) (x (y (z 4 4) 4) 4))
+(define (expr-4 x y z) (x 4 (y (z 4 4) 4)))
+(define (expr-5 x y z) (x (y 4 (z 4 4)) 4))
+(define (expr-a a b c x y) (x (y a b) c))
+(define (expr-b a b c x y) (x a (y b c)))
+
+; 演算子をシンボルに変換
+(define (op-&gt;sym op)
+  (cond ((eq? op +) '+)
+        ((eq? op -) '-)
+        ((eq? op *) '*)
+        ((eq? op /) '/)
+        (else 'Unknown)))
+
+; 数式の表示
+(define (print-expr expr n op1 op2 op3)
+  (cond ((eq? expr expr-1)
+         (format #t "(4 ~S 4) ~S (4 ~S 4) = ~D~%" op2 op1 op3 n))
+        ((eq? expr expr-2)
+         (format #t "4 ~S (4 ~S (4 ~S 4)) = ~D~%" op1 op2 op3 n))
+        ((eq? expr expr-3)
+         (format #t "((4 ~S 4) ~S 4) ~S 4 = ~D~%" op3 op2 op1 n))
+        ((eq? expr expr-4)
+         (format #t "4 ~S ((4 ~S 4) ~S 4) = ~D~%" op1 op3 op2 n))
+        ((eq? expr expr-5)
+         (format #t "(4 ~S (4 ~S 4)) ~S 4 = ~D~%" op2 op3 op1 n))))
+
+;
+(define (print-expr2 expr n a b c op1 op2)
+  (cond ((eq? expr expr-a)
+         (format #t "(~D ~S ~D) ~S ~D = ~D~%" a op2 b op1 c n))
+        ((eq? expr expr-b)
+         (format #t "~D ~S (~D ~S ~D) = ~D~%" op1 a op2 b c n))))
+
+; 解法
+(define (solve-4)
+  (for-each
+    (lambda (ops)
+      (for-each
+        (lambda (expr)
+          (let ((n (apply expr ops)))
+            (if (and (integer? n) (&lt;= 1 n 10))
+                (apply print-expr expr n (map op-&gt;sym ops)))))
+      (list expr-1 expr-2 expr-3 expr-4 expr-5)))
+    (repeat-perm 3 (list + - * /))))
+
+(define (solve-3 a b c)
+  (for-each
+    (lambda (ops)
+      (for-each
+        (lambda (expr)
+          (let ((n (apply expr a b c ops)))
+            (if (and (integer? n) (&lt;= 1 n 10))
+                (apply print-expr2 expr n a b c (map op-&gt;sym ops)))))
+      (list expr-a expr-b)))
+    (repeat-perm 2 (list + - * /))))
+
+(define (solve-2 a b)
+  (for-each
+    (lambda (op)
+      (let ((n (op a b)))
+        (if (and (integer? n) (&lt;= 1 n 10))
+            (format #t "(~S ~D ~D) = ~D~%" (op-&gt;sym op) a b n))))
+    (list + - * /)))
+
+; 実行
+(solve-4)
+(solve-3 4 4 44)
+(solve-3 4 44 4)
+(solve-3 44 4 4)
+(solve-2 4 444)
+(solve-2 44 44)
+(solve-2 444 4)
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h4 id="answer2">●問題２「騎士の交換」の解答</h4>
+<p> それではプログラムを作りましょう。次の図を見てください。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐
+  │０│１│２│     ０──７──２     ●──７──●  
+  ├─┼─┼─┤     │          │     │          │  
+  │３│４│５│     ５──10──３     ５──10──３  
+  ├─┼─┼─┤     │          │     │          │  
+  │６│７│８│     ６──１──８     ６──１──８  
+  ├─┼─┼─┤     │          │     │          │  
+  │９│10│11│     11──４──９     ○──４──○  
+  └─┴─┴─┘
+
+   （Ａ）盤面      （Ｂ）騎士の移動    （Ｃ）ＳＴＡＲＴ
+
+                    図 : 騎士の移動
+</pre>
+<p> 図 (A) のように、盤面の各マスに番号を付けて表します。すると、騎士の移動は図 (B) のようなグラフで表すことができます。START の局面は図 (C) のようになるので、黒騎士と白騎士を交換できることは簡単にわかりますが、最短手数となる移動手順を求めるのが今回の問題です。
+</p>
+
+<p> このパズルは 12 マスに 2 個の黒騎士を置き、残りの 10 マスに白騎士を置くわけですから、局面の総数は次のようになります。
+</p>
+<pre class="item">
+<SUB>12</SUB>Ｃ<SUB>2</SUB> * <SUB>10</SUB>Ｃ<SUB>2</SUB> = 66 * 45 = 2970 通り
+</pre>
+<p> 局面の総数は 2970 通りしかないので、幅優先探索を使えば簡単に解くことができるでしょう。それでは面白くないので、今回はあえて「反復深化」でプログラムを作ることにします。ただし、単純な反復深化では時間がかかるので「下限値枝狩り法」を使います。
+</p>
+<p> 下限値の求め方ですが、騎士をゴール地点 (黒騎士は 9, 11, 白騎士は 0, 2) へ動かすのに必要な最小手数を利用することにします。たとえば、位置 5 にある黒騎士を 9 へ動かすには 4 手必要ですが、11 へ動かすと 2 手しかかかりません。この場合、位置 5 にある黒騎士の移動手数は 2 とします。このように、各位置ごとに最小の移動手数を求めると、下図のようになります。
+</p>
+
+<pre class="fig">
+ ┌─┬─┬─┐  ┌─┬─┬─┐ 
+ │３│２│３│  │０│３│０│ 
+ ├─┼─┼─┤  ├─┼─┼─┤ 
+ │２│１│２│  │１│４│１│ 
+ ├─┼─┼─┤  ├─┼─┼─┤ 
+ │１│４│１│  │２│１│２│ 
+ ├─┼─┼─┤  ├─┼─┼─┤ 
+ │０│３│０│  │３│２│３│ 
+ └─┴─┴─┘  └─┴─┴─┘ 
+
+  (1) 黒騎士      (2) 白騎士 
+
+     図 : 騎士の移動手数表
+</pre>
+
+<p> この表から黒騎士と白騎士の移動手数の合計値を求め、それを「下限値」とします。START の局面では、黒騎士と白騎士の移動手数はそれぞれ 6 なので、下限値は 12 となります。
+</p>
+
+<p> それではプログラムを作りましょう。最初にグローバル変数を定義します。
+</p>
+
+<pre class="list">
+リスト : グローバル変数の定義
+
+; 跳び先表
+(define *jump-table*
+        #((5 7)    ; 0
+          (6 8)    ; 1
+          (3 7)    ; 2
+          (2 8 10) ; 3
+          (9 11)   ; 4
+          (0 6 10) ; 5
+          (1 5 11) ; 6
+          (0 2)    ; 7
+          (1 3 9)  ; 8
+          (4 8)    ; 9
+          (3 5)    ; 10
+          (4 6)))  ; 11
+
+; 移動手数表
+(define *white-table* #(0 3 0 1 4 1 2 1 2 3 2 3))
+(define *black-table* #(3 2 3 2 1 2 1 4 1 0 3 0))
+
+; start と goal の局面
+(define *start* #(b s b s s s s s s w s w))
+(define *goal*  #(w s w s s s s s s b s b))
+</pre>
+<p> 跳び先表は *jump-table* で定義します。移動手数表は、黒騎士が *black-table* で白騎士が *white-table* としました。盤面はベクタで表します。黒騎士が b、白騎士が w、空き場所が s となります。
+</p>
+
+<p> 次はベクタ用の高階関数を定義します。
+</p>
+<pre class="list">
+リスト : ベクタ用高階関数
+
+(define (vector-for-each-with-index proc vec)
+  (let loop ((i 0))
+    (cond ((&lt; i (vector-length vec))
+           (proc i (vector-ref vec i))
+           (loop (+ i 1))))))
+</pre>
+<p> vector-for-each-with-index はベクタ用の for-each で、ベクタの要素だけではなく添字も引数の関数 proc に渡します。簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; (vector-for-each-with-index (lambda (n x) (format #t "~S, ~S~%" n x)) #(a b c d e))
+0, a
+1, b
+2, c
+3, d
+4, e
+#&lt;undef&gt;
+</pre>
+<p> なお、Gauche のオブジェクト指向システムには、ベクタだけではなくリストや文字列など sequence 型のデータに対して同じ動作を行うメソッド for-each-with-index が用意されています。ライブラリ gauche.sequence をロードすると利用することができます。
+</p>
+<pre>
+gosh&gt; (use gauche.sequence)
+#&lt;undef&gt;
+gosh&gt; (for-each-with-index (lambda (n x) (format #t "~S, ~S~%" n x)) #(a b c d e
+))
+0, a
+1, b
+2, c
+3, d
+4, e
+#t
+gosh&gt; (for-each-with-index (lambda (n x) (format #t "~S, ~S~%" n x)) '(a b c d e
+))
+0, a
+1, b
+2, c
+3, d
+4, e
+#t
+</pre>
+<p> 次は、下限値枝刈り法による反復深化を行う関数 id-search を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 騎士の交換（反復深化＋下限値枝刈り法）
+
+(define (id-search n limit move found lower)
+  (let ((board (car move)))
+    (if (= n limit)
+        (if (equal? board *goal*)
+            (begin (print (reverse move))
+                   (found #t)))
+      (let ((board (car move)))
+        (vector-for-each-with-index
+          (lambda (from piece)
+            (if (not (eq? piece 's))
+                (for-each
+                  (lambda (to)
+                    (if (eq? (vector-ref board to) 's)
+                        (let* ((new-board (move-knight board from to))
+                               (new-lower (get-lower-value new-board lower from to)))
+                          (if (and (or (null? (cdr move))
+                                       (not (equal? new-board (cadr move))))
+                                   (&lt; (+ n new-lower) limit))
+                              (id-search (+ n 1)
+                                         limit
+                                         (cons new-board move)
+                                         found
+                                         new-lower)))))
+                  (vector-ref *jump-table* from))))
+          board)))))
+</pre>
+<p> 引数 n が手数、limit が上限値、move が移動手順を表すリスト、found が脱出用の継続、lower が下限値を表します。移動手順は局面をリストに格納することで表します。move の先頭には現在の局面が格納されています。今回は移動手順をひとつ見つけたら探索を終了します。
+</p>
+
+<p> 現在の局面を move から取り出して board にセットします。手数 n が limit と等しい場合はゴール *goal* に到達したかチェックします。ベクタの等値は述語 equal? で調べることができます。ゴールに到達したならば、print で手順を表示します。そして、継続 found を評価して探索を終了します。
+</p>
+
+<p> 探索を行う場合、vector-for-each-with-index で board から要素を順番に取り出します。変数 from が添字で piece が要素になります。piece が空き場所 (s) でなければ piece を移動します。for-each で跳び先の位置を順番に取り出し、跳び先 to が空き場所ならば piece を関数 move-knight で動かします。そして、新しい下限値を関数 get-lower-value で求めます。
+</p>
+
+<p> ここで、同じ駒を続けて動かすと 1 手前の局面に戻る場合があることに注意してください。新しい局面 new-board が 1 手前の局面 (cadr move) と異なることを確認します。そして、現在の手数 n と下限値 new-lower の和が limit よりも小さい場合は id-search を再帰呼び出しします。
+</p>
+
+<p> あとのプログラムは簡単なので、説明は割愛いたします。詳細は <a href="abcscm37.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+
+<p> 最短手数は 16 手で手順は次のようになります。
+</p>
+<pre class="fig">
+ b s b
+ s s s
+ s s s
+ w s w
+[START]
+
+ s s b   s s s   s s s   s s s   s b s   s b s   s b s   s s s
+ s s b   b s b   s s b   s s s   s s s   s s s   s s w   s s w
+ s s s   s s s   s s b   b s b   s s b   w s b   s s b   b s b
+ w s w   w s w   w s w   w s w   w s w   w s s   w s s   w s s
+  [1]     [2]     [3]     [4]     [5]     [6]     [7]     [8]
+
+ w s s   w s s   w b s   w b s   w b s   w s s   w s w   w s w
+ s s s   s s s   s s s   s s s   w s s   w s s   s s s   s s s
+ b s b   s s b   s s s   s s w   s s s   s s b   s s b   s s s
+ w s s   w s b   w s b   s s b   s s b   s s b   s s b   b s b
+  [9]    [10]    [11]    [12]    [13]    [14]    [15]    [16:GOAL]
+
+                      図 : 最短手順の一例
+</pre>
+<p> ちなみに、最長手数の局面を幅優先探索 (関数 solve-max) で求めたところ、手数は 18 手で次に示す 4 通りの局面が見つかりました。
+</p>
+<pre class="fig">
+ s s b   s s b   b s s   b s s
+ s w s   s w s   s w s   s w s
+ s b s   s b s   s b s   s b s
+ w s s   s s w   s s w   w s s
+
+      図 : 最長手数の局面
+</pre>
+<p> ちなみに、生成した全局面は 2970 個になりました。しがたって、このパズルでは騎士をランダムに配置しても、必ず START の局面に到達できることがわかります。
+</p>
+
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+;
+; knight.scm : 騎士の交換
+;
+;              Copyright (C) 2010 Makoto Hiroi
+;
+
+; 跳び先表
+(define *jump-table*
+        #((5 7)    ; 0
+          (6 8)    ; 1
+          (3 7)    ; 2
+          (2 8 10) ; 3
+          (9 11)   ; 4
+          (0 6 10) ; 5
+          (1 5 11) ; 6
+          (0 2)    ; 7
+          (1 3 9)  ; 8
+          (4 8)    ; 9
+          (3 5)    ; 10
+          (4 6)))  ; 11
+
+; 移動手数表
+(define *white-table* #(0 3 0 1 4 1 2 1 2 3 2 3))
+(define *black-table* #(3 2 3 2 1 2 1 4 1 0 3 0))
+
+; start と goal の局面
+(define *start* #(b s b s s s s s s w s w))
+(define *goal*  #(w s w s s s s s s b s b))
+
+; ベクタ用高階関数
+(define (vector-for-each-with-index proc vec)
+  (let loop ((i 0))
+    (cond ((&lt; i (vector-length vec))
+           (proc i (vector-ref vec i))
+           (loop (+ i 1))))))
+
+; 騎士の移動
+(define (move-knight board from to)
+  (let ((new-board (vector-copy board)))
+    (vector-set! new-board to (vector-ref new-board from))
+    (vector-set! new-board from 's)
+    new-board))
+
+; 下限値を求める
+(define (get-lower-value board lower from to)
+  (let ((table (if (eq? (vector-ref board to) 'b) *black-table* *white-table*)))
+    (+ (- lower (vector-ref table from))
+       (vector-ref table to))))
+
+; 反復深化
+(define (id-search n limit move found lower)
+  (let ((board (car move)))
+    (if (= n limit)
+        (if (equal? board *goal*)
+            (begin (print (reverse move))
+                   (found #t)))
+      (let ((board (car move)))
+        (vector-for-each-with-index
+          (lambda (from piece)
+            (if (not (eq? piece 's))
+                (for-each
+                  (lambda (to)
+                    (if (eq? (vector-ref board to) 's)
+                        (let* ((new-board (move-knight board from to))
+                               (new-lower (get-lower-value new-board lower from to)))
+                          (if (and (or (null? (cdr move))
+                                       (not (equal? new-board (cadr move))))
+                                   (&lt; (+ n new-lower) limit))
+                              (id-search (+ n 1)
+                                         limit
+                                         (cons new-board move)
+                                         found
+                                         new-lower)))))
+                  (vector-ref *jump-table* from))))
+          board)))))
+
+(define (solve)
+  (call/cc
+    (lambda (found)
+      (let loop ((i 12))
+        (format #t "----- ~D -----~%" i)
+        (id-search 0 i (list *start*) found 12)
+        (loop (+ i 1))))))
+
+;;;
+;;; 最長手数の局面を探索する
+;;;
+
+; キューの定義
+(define buff (make-vector 2970))
+(define wp 0)
+(define rp 0)
+
+(define (enqueue x)
+  (vector-set! buff wp x)
+  (inc! wp))
+
+(define (dequeue)
+  (begin0 (vector-ref buff rp)
+          (inc! rp)))
+
+; 単純な線形探索
+; ハッシュ表を使ったほうが高速になる
+(define (find x)
+  (let loop ((i (- wp 1)))
+    (cond ((negative? i) #f)
+          ((equal? x (car (vector-ref buff i))) #t)
+          (else (loop (- i 1))))))
+
+(define (print-max-state)
+  (let ((m (cdr (vector-ref buff (- rp 1)))))
+    (let loop ((i (- rp 1)))
+      (cond ((= (cdr (vector-ref buff i)) m)
+             (print (vector-ref buff i))
+             (loop (- i 1)))))))
+
+; 幅優先探索
+(define (solve-max)
+  (enqueue (cons *goal* 0))
+  (let loop ()
+    (if (&lt; rp wp)
+        (let ((state (dequeue)))
+          (vector-for-each-with-index
+            (lambda (from piece)
+              (if (not (eq? piece 's))
+                  (for-each
+                    (lambda (to)
+                      (if (eq? (vector-ref (car state) to) 's)
+                          (let ((new-board (move-knight (car state) from to)))
+                            (if (not (find new-board))
+                                (enqueue (cons new-board (+ (cdr state) 1)))))))
+                    (vector-ref *jump-table* from))))
+            (car state))
+          (loop))))
+  ;
+  (print-max-state))
+
+; 実行
+(solve)
+(solve-max)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2010 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm27.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm38.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Julia プログラミング超入門</title>
+  <meta name="description" content="Julia 入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881803</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="ce">
+<h1>Julia Language Programming</h1>
+<h2>お気楽 Julia プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>Julia の基礎知識</h3>
+<h4 id="abc18">●do block</h4>
+<ul>
+  <li>julia の高階関数は第 1 引数が関数であれば Ruby 風の do block (以下ブロックと記述) で関数を渡すことができる
+</ul>
+<pre>
+julia&gt; xs = [1, 2, 3, 4, 5]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia&gt; map(x -&gt; x * x, xs)
+5-element Array{Int64,1}:
+  1
+  4
+  9
+ 16
+ 25
+
+julia&gt; map(xs) do x
+       x * x
+       end
+5-element Array{Int64,1}:
+  1
+  4
+  9
+ 16
+ 25
+</pre>
+<ul>
+  <li>ブロックに渡す引数が複数ある場合はカンマ ( , ) で区切る
+</ul>
+<pre>
+julia&gt; foldr((x, y) -&gt; x + y, xs, init=0)
+15
+
+julia&gt; foldr(xs, init=0) do x, y
+       x + y
+       end
+15
+</pre>
+<ul>
+  <li>ユーザが定義した高階関数でもブロックを使用できる
+</ul>
+<pre>
+julia&gt; function map2(f, xs, ys)
+       zs = []
+       for (x, y) = zip(xs, ys)
+       push!(zs, f(x, y))
+       end
+       zs
+       end
+map2 (generic function with 1 method)
+
+julia&gt; map2([1, 2, 3], [4, 5, 6]) do x, y
+       (x, y)
+       end
+3-element Array{Any,1}:
+ (1, 4)
+ (2, 5)
+ (3, 6)
+</pre>
+<h4 id="abc19">●getindex() と setindex!()</h4>
+<ul>
+  <li>コンテナ X の i 番目の要素に角カッコでアクセスしたいときは関数 getindex(X, i), setindex!(X, v, i) を多重定義する
+  <li>Python のメソッド __getitem__(), __setitem__() とほぼ同じ
+  <li>end で末尾要素をアクセスするには関数 lastindex(X) を多重定義する
+</ul>
+<pre>
+julia&gt; mutable struct Foo
+       a
+       b
+       c
+       end
+
+julia&gt; function Base.getindex(x::Foo, i::Int)
+       if i == 1
+       x.a
+       elseif i == 2
+       x.b
+       elseif i == 3
+       x.c
+       else
+       throw(BoundsError(x, i))
+       end
+       end
+
+julia&gt; x = Foo(1, 2, 3)
+Foo(1, 2, 3)
+
+julia&gt; x[1]
+1
+
+julia&gt; x[2]
+2
+
+julia&gt; x[3]
+3
+
+julia&gt; x[4]
+ERROR: BoundsError: attempt to access Foo(1, 2, 3)
+  at index [4]
+
+julia&gt; function Base.setindex!(x::Foo, v, i::Int)
+       if i == 1
+       x.a = v
+       elseif i == 2
+       x.b = v
+       elseif i == 3
+       x.c = v
+       else
+       throw(BoundsError(x, i))
+       end
+       end
+setindex! (generic function with 58 methods)
+
+julia&gt; x
+Foo(1, 2, 3)
+
+julia&gt; x[1] = 10
+10
+
+julia&gt; x
+Foo(10, 2, 3)
+
+julia&gt; x[3] = 30
+30
+
+julia&gt; x[end]
+30
+
+julia&gt; x
+Foo(10, 2, 30)
+
+julia&gt; Base.lastindex(x::Foo) = 3
+
+julia&gt; x[end]
+30
+
+julia&gt; x[end - 1]
+2
+</pre>
+
+<h4 id="abc20">●タスク (Channel 編)</h4>
+<ul>
+  <li>概要
+  <ul>
+    <li>Julia のタスク (Task) はコルーチン (co-routine) のこと
+    <li>関数 (サブルーチン, sub-routine) は call してから return するまで途中で処理を中断することはできない
+    <li>ところが、コルーチンは途中で処理を中断し、そこから実行を再開することができる
+    <li>コルーチンに親子関係があるものを「セミコルーチン (semi-coroutine)」という
+    <li>コルーチン A からコルーチン B を呼び出した場合、A が親で B が子になる
+    <li>ここではセミコルーチンの範囲で説明する
+    <li>Julia はセミコルーチンだけではなく、他にも便利な機能が用意されている
+    <li>詳細はマニュアル <a href="https://docs.julialang.org/en/v1/manual/control-flow/#man-tasks-1">Tasks (aka Coroutines)</a> や <a href="https://docs.julialang.org/en/v1/base/parallel/">Tasks</a> を参照
+  </ul>
+  <li>コルーチンの生成は Channel(function) を使うと簡単
+  <ul>
+    <li>Channel() の引数 function は Channel 型データを一つ受け取る関数
+    <li>Channel (チャネル) はデータの受け渡しを行うためのキュー
+    <li>返り値は function に渡したチャネル
+  </ul>
+  <li>チャネルのアクセスには関数 put!() と take!() を使う
+  <li>put!(ch, x) はチャネル ch にデータ x を書き込む
+  <li>take!(ch) はチャネル ch からデータを読み込む
+  <li>チャネルにデータを書き込めない、またはデータを読み込むことができない場合、コルーチンの実行を中断して他のコルーチンに切り替える
+  <li>セミコルーチンの場合、子コルーチンの実行が中断されると、親コルーチンの実行が再開される
+  <li>親コルーチンの実行が中断されたら、子コルーチンの実行が再開される
+</ul>
+<pre>
+julia&gt; function foo(c::Channel)
+       put!(c, "foo start")
+       for x = 1 : 4
+       put!(c, x)
+       end
+       put!(c, "foo stop")
+       end
+foo (generic function with 1 method)
+
+julia&gt; c = Channel(foo)
+Channel{Any}(sz_max:0,sz_curr:1)
+
+julia&gt; isopen(c)
+true
+
+julia&gt; take!(c)
+"foo start"
+
+julia&gt; take!(c)
+1
+
+julia&gt; take!(c)
+2
+
+julia&gt; take!(c)
+3
+
+julia&gt; take!(c)
+4
+
+julia&gt; take!(c)
+"foo stop"
+
+julia&gt; isopen(c)
+false
+
+julia&gt; take!(c)
+ERROR: InvalidStateException("Channel is closed.", :closed)
+
+julia&gt; for x = Channel(foo)
+       println(x)
+       end
+foo start
+1
+2
+3
+4
+foo stop
+</pre>
+<ul>
+  <li>コルーチンが終了するとチャネルは自動的にクローズされる
+  <li>isopen() はストリームやチャネルがオープンならば true を返し、クローズならば false を返す
+  <li>クローズしたチャネルにアクセスするとエラー
+  <li>for ループはチャネルにも使用できる
+</ul>
+<ul>
+  <li>高階関数 foreach() とコルーチンを組み合わせると、コレクションから要素を一つずつ取り出すことができる
+  <li>配列と <a href="juliaa03.html#chap23">連結リスト</a> の例を示す
+</ul>
+<pre>
+julia&gt; c = Channel(ch -> foreach(x -> put!(ch, x), a))
+Channel{Any}(sz_max:0,sz_curr:1)
+
+julia&gt; take!(c)
+0.01631184049219403
+
+julia&gt; take!(c)
+0.4432056924351109
+
+julia&gt; take!(c)
+0.5796321842936099
+
+julia&gt; take!(c)
+0.5507113949003841
+
+julia&gt; take!(c)
+0.1498027555167014
+
+julia&gt; take!(c)
+0.9374962640507654
+
+julia&gt; take!(c)
+0.7152832818026436
+
+julia&gt; take!(c)
+0.07023746571563438
+
+julia&gt; d = LinkedList()
+()
+
+julia&gt; for x = a
+       insert!(d, 0, x)
+       end
+
+julia&gt; e = Channel(ch -> foreach(x -> put!(ch, x), d))
+Channel{Any}(sz_max:0,sz_curr:1)
+
+julia&gt; take!(e)
+0.07023746571563438
+
+julia&gt; take!(e)
+0.7152832818026436
+
+julia&gt; take!(e)
+0.9374962640507654
+
+julia&gt; take!(e)
+0.1498027555167014
+
+julia&gt; take!(e)
+0.5507113949003841
+
+julia&gt; take!(e)
+0.5796321842936099
+
+julia&gt; take!(e)
+0.4432056924351109
+
+julia&gt; take!(e)
+0.01631184049219403
+</pre>
+<ul>
+  <li>複数のコルーチンを使った簡単な例題
+</ul>
+<pre class="list">
+リスト : コルーチンの簡単な使用例 (co1.jl)
+
+function printcode(ch::Channel, code)
+    while true
+        print(code)
+        put!(ch, true)
+    end
+end
+
+function test_a(n)
+    cs = map(x -&gt; Channel(c -&gt; printcode(c, x)), ["h", "e", "y", "!", " "])
+    for _ = 1 : n, c = cs
+        take!(c)
+    end
+end
+
+# n から始まる整数列
+function integers(c, n)
+    while true
+        put!(c, n)
+        n += 1
+    end
+end
+
+# フィルター
+function sieve_filter(f, src)
+    Channel(c -&gt;
+        while true
+            n = take!(src)
+            if f(n) put!(c, n) end
+        end)
+end
+
+# エラトステネスの篩
+function sieve(x)
+    nums = Channel(c -&gt; integers(c, 2))
+    for _ = 1 : x
+        n = take!(nums)
+        print("$n ")
+        nums = sieve_filter(x -&gt; x % n != 0, nums)
+    end
+end
+</pre>
+<ul>
+  <li>関数 printcode() は引数 code を表示して、put!() でチャネルに true を書き込む
+  <li>ここでタスクは親コルーチンに戻る
+  <li>関数 test_a() では、h, e, y, !, 空白を表示するコルーチンを生成する
+  <li>コルーチンを順番に呼び出すと、指定した回数だけ "hey! " を表示する
+  <li>関数 integers() は n から始まる整数列を生成する
+  <li>関数 sieve_filter() は引数 f で渡された関数が false を返す要素を src から取り除く
+  <li>take!(src) で src から要素を取り出し、f(n) が真であれば put!(c, n) で親コルーチンに n を返す
+  <li>関数 sieve の引数 x は求める素数の個数
+  <li>2 から始まる整数列を Channel() で生成して変数 nums に セットする
+  <li>nums の先頭要素が素数になることに注意
+  <li>take!(nums) で nums から素数を取り出して n にセットする
+  <li>n を表示してから n で割り切れる整数を取り除くフィルターを生成して nums にセットする
+  <li>つまり、x 個の素数を求めるために、x 個のフィルターを重ねていくことになる
+  <li>実行時間は遅い
+</ul>
+<pre>
+julia&gt; test_a(5)
+hey! hey! hey! hey! hey! hey!
+julia&gt; test_a(10)
+hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey!
+julia&gt; sieve(25)
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97
+julia&gt; sieve(100)
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103 107 109 113 127 131 137 139 149 151 
+157 163 167 173 179 181 191 193 197 199 211 223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 
+317 331 337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449 457 461 463 467 479 487 491 
+499 503 509 521 523 541
+</pre>
+<h4 id="abc21">●タスク (Task 編)</h4>
+<ul>
+  <li>タスク (コルーチン) は Task(function) や @task function でも生成できる
+  <li>Task の引数 function には引数のない関数を渡す
+  <li>たとえば、func(a, b) を Task に渡すときは () -&gt; func(a, b) とする
+  <li>@task の @ は「マクロ (macro) 呼び出し」を表す (マクロはあとで説明する)
+  <li>@task を使うと @task func(a, b) と記述できる
+  <li>Task() や @task はタスクを生成するだけで、そのタスクはまだ実行されていない
+  <li>タスクの実行は、スケジューラーに登録するか、直接タスクを指定して切り替える必要がある
+  <li>スケジューラーの登録は関数 schedule() を使う
+  <li>schedule() はタスクをスケジューラーのキューに登録する
+  <li>タスクの中で関数 yield() を呼び出すと、そのタスクの実行を中断する
+  <li>スケジューラーはキューから実行可能なタスクを選択し、それに切り替える
+  <li>直接タスクを切り替えるには関数 yieldto() を使う
+  <li>yieldto() は低レベルの関数 (コアとなる機能) なので、チャネルやスケジューラーよりも使い方は難しい
+</ul>
+<pre>
+julia&gt; function test(name, w)
+       for _ = 1 : 10
+       sleep(w)
+       println(name)
+       yield()
+       end
+       end
+test (generic function with 1 method)
+
+julia&gt; a = @task test("foo", 0.3)
+Task (runnable) @0x000000001051a850
+
+julia&gt; b = @task test("bar", 0.5)
+Task (runnable) @0x000000001051ab30
+
+julia&gt; c = @task test("oops", 0.7)
+Task (runnable) @0x000000001051b0f0
+
+julia&gt; istaskstarted(a)
+false
+
+julia&gt; istaskstarted(b)
+false
+
+julia&gt; istaskstarted(c)
+false
+
+julia&gt; schedule(a); schedule(b); schedule(c)
+Task (runnable) @0x000000001051b0f0
+
+julia&gt; foo
+bar
+foo
+oops
+foo
+bar
+foo
+oops
+foo
+bar
+foo
+bar
+oops
+foo
+foo
+bar
+foo
+oops
+bar
+foo
+oops
+bar
+bar
+oops
+bar
+oops
+bar
+oops
+oops
+oops
+julia&gt; istaskdone(a)
+true
+
+julia&gt; istaskdone(b)
+true
+
+julia&gt; istaskdone(c)
+true
+
+julia&gt; @async test("foo", 0.5)
+Task (runnable) @0x000000001103e570
+
+julia&gt; foo
+foo
+foo
+foo
+foo
+foo
+foo
+foo
+foo
+foo
+</pre>
+<ul>
+  <li>sleep(n) は n 秒間タスクを休止する (n = 1.0 で 1 秒)
+  <li>istaskstarted(a) はタスク a がスタートしていたら true を返す
+  <li>istaskdone(a) はタスク a が終了していたら true を返す
+  <li>タスクの生成とスケジューラーの登録はマクロ @async を使うと簡単
+</ul>
+<ul>
+  <li>Channel(sz) は引数 sz に 0 以上の整数値を与えると大きさ sz のチャネルを生成する
+  <li>チャネルを使ってタスク間でデータの受け渡しを行うことができる
+  <li>この場合、タスクが終了してもチャネルはクローズされない
+  <li>タスクが終了したときにチャネルをクローズしたい場合は bind() を使う
+</ul>
+<pre>
+julia&gt; ch = Channel(0)
+Channel{Any}(sz_max:0,sz_curr:0)
+
+julia&gt; a = @async foreach(x -&gt; put!(ch, x), 1 : 5)
+Task (runnable) @0x0000000010aa2e10
+
+julia&gt; while !istaskdone(a)
+       println(take!(ch))
+       end
+1
+2
+3
+4
+5
+
+julia&gt; isopen(ch)
+true
+
+julia&gt; close(ch)
+
+julia&gt; ch = Channel(0)
+Channel{Any}(sz_max:0,sz_curr:0)
+
+julia&gt; a = @async foreach(x -&gt; put!(ch, x), 1 : 5)
+Task (runnable) @0x0000000011081fb0
+
+julia&gt; bind(ch, a)
+Channel{Any}(sz_max:0,sz_curr:1)
+
+julia&gt; for x = ch
+       println(x)
+       end
+1
+2
+3
+4
+5
+
+julia&gt; istaskdone(a)
+true
+
+julia&gt; isopen(ch)
+false
+</pre>
+<ul>
+  <li>yieldto(task, [val]) はカレントタスクを中断して引数の task に切り替える
+  <li>引数 val を指定すると、切り替えた task に val を渡すことができる
+  <li>具体的には task の yieldto() の返り値が val になる
+  <li>task がまだスタートしていない場合、val は捨てられる
+  <li>終了したタスクに切り替えると Julia がフリーズするようだ
+</ul>
+<pre>
+julia&gt; c = current_task()
+Task (runnable) @0x000000000eac5150
+
+julia&gt; a = Task(() -&gt; foreach(x -&gt; println(yieldto(c, x)), 1 : 5))
+Task (runnable) @0x000000000eac45d0
+
+julia&gt; yieldto(a, 10)
+1
+
+julia&gt; yieldto(a, 11)
+11
+2
+
+julia&gt; yieldto(a, 12)
+12
+3
+
+julia&gt; yieldto(a, 13)
+13
+4
+
+julia&gt; yieldto(a, 14)
+14
+5
+
+julia&gt; yieldto(a, 15)
+15
+フリーズする
+</pre>
+<ul>
+  <li>関数 current_task() はカレントタスクを求める
+  <li>複数のタスクを切り替える簡単な例題
+</ul>
+<pre class="list">
+リスト : yieldto() の簡単な使用例 (co1.jl に追加)
+
+function printcode1(next::Task, code)
+    while true
+        print(code)
+        yieldto(next)
+    end
+end
+
+function test_b(n)
+    ch = current_task()
+    a = @task printcode1(ch, " ")
+    b = @task printcode1(a, "!")
+    c = @task printcode1(b, "y")
+    d = @task printcode1(c, "e")
+    e = @task printcode1(d, "h")
+    for _ = 1 : n
+        yieldto(e)
+    end
+end
+</pre>
+<ul>
+  <li>関数 printcode1() は code のほかに次に実行するタスク next を受け取る
+  <li>print() で code を表示したあと yieldto() で next に切り替える
+  <li>test_b() でタスクを 5 つ生成して、最後に生成したタスク e に切り替える
+  <li>これで指定した回数だけ "hey! " が表示される
+</ul>
+<pre>
+julia&gt; test_b(5)
+hey! hey! hey! hey! hey!
+julia&gt; test_b(20)
+hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey! hey!
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap">簡単なプログラム</h4>
+<h4 id="chap25">●二分木 (mutable)</h4>
+<ul>
+  <li>二分木の説明は拙作のページ Algorithms with Python <a href="pyalgo03.html">二分木とヒープ</a> を参照
+  <li>操作関数
+  <ul>
+    <li>Tree2(), 空の二分木を生成
+    <li>search(xs, x), 二分木 xs から x を検索する
+    <li>search_max(xs), xs の最大値を求める
+    <li>search_min(xs), xs の最小値を求める
+    <li>insert!(xs, x), xs に x を挿入する
+    <li>delete!(xs, x), xs から x を削除する
+    <li>delete_max!(xs), xs の最大値を削除する
+    <li>delete_min!(xs), xs の最小値を削除する
+    <li>isempty(xs), xs が空ならば true を返す
+    <li>foreach(func, xs), xs の要素に関数 func を適用する
+    <li>イテレータも実装する
+  </ul>
+</ul>
+<pre class="list">
+#
+# tree.jl : 二分探索木 (mutable)
+#
+#           Copyright (C) 2016-2018 Makoto Hiroi
+#
+
+# 空の木 は Nothing (nothing) で表す
+
+# 節
+mutable struct Node
+    item
+    left::Union{Node, Nothing}
+    right::Union{Node, Nothing}
+end
+
+# 型に別名を付ける
+Tree = Union{Node, Nothing}
+
+# 二分木
+mutable struct Tree2
+    root::Tree
+    Tree2() = new(nothing)
+end
+
+#
+# 作業用
+#
+
+# 挿入
+function insert_node(node::Tree, x)
+    if node === nothing
+        return Node(x, nothing, nothing)
+    elseif x &lt; node.item
+        node.left = insert_node(node.left, x)
+    else
+        node.right = insert_node(node.right, x)
+    end
+    node
+end
+
+# 探索
+function search_node(node::Tree, x)
+    while node !== nothing
+        if node.item == x
+            return true
+        elseif x &lt; node.item
+            node = node.left
+        else
+            node = node.right
+        end
+    end
+    false
+end
+
+# 最小値と最大値
+function search_min_node(node::Tree)
+    while node.left !== nothing
+        node = node.left
+    end
+    node.item
+end
+
+function search_max_node(node::Tree)
+    while node.right !== nothing
+        node = node.right
+    end
+    node.item
+end
+
+# 最大値と最小値の削除
+function delete_min_node(node::Tree)
+    if node.left === nothing
+        node.right
+    else
+        node.left = delete_min_node(node.left)
+        node
+    end
+end
+
+function delete_max_node(node::Tree)
+    if node.right === nothing
+        node.left
+    else
+        node.right = delete_max_node(node.right)
+        node
+    end
+end
+
+# 削除
+function delete_node(node::Tree, x)
+    if node === nothing
+        return node
+    end
+    if node.item == x
+        if node.left === nothing
+            return node.right
+        elseif node.right === nothing
+            return node.left
+        else
+            node.item = search_min_node(node.right)
+            node.right = delete_min_node(node.right)
+        end
+    elseif x &lt; node.item
+        node.left = delete_node(node.left, x)
+    else
+        node.right = delete_node(node.right, x)
+    end
+    node
+end
+
+# 巡回
+function foreach_node(func::Function, node::Nothing)
+end
+function foreach_node(func::Function, node::Node)
+    foreach_node(func, node.left)
+    func(node.item)
+    foreach_node(func, node.right)
+end
+
+# イテレータ用
+function next_node(node::Node, buff::Vector{Node})
+    while node !== nothing
+        push!(buff, node)
+        node = node.left
+    end
+end
+
+#
+# 公開用
+#
+
+# 挿入
+function Base.insert!(tree::Tree2, x)
+    tree.root = insert_node(tree.root, x)
+end
+
+# 探索
+function search(tree::Tree2, x)
+    search_node(tree.root, x)
+end
+
+# 最大値と最小値
+function search_max(tree::Tree2)
+    if tree.root === nothing
+        error("search_max: empty tree")
+    else
+        search_max_node(tree.root)
+    end
+end
+
+function search_min(tree::Tree2)
+    if tree.root === nothing
+        error("search_min: empty tree")
+    else
+        search_min_node(tree.root)
+    end
+end
+
+# 削除
+function Base.delete!(tree::Tree2, x)
+    tree.root = delete_node(tree.root, x)
+end
+
+function delete_max!(tree::Tree2)
+    if tree.root !== nothing
+        tree.root = delete_max_node(tree.root)
+    end
+end
+
+function delete_min!(tree::Tree2)
+    if tree.root !== nothing
+        tree.root = delete_min_node(tree.root)
+    end
+end
+
+# 巡回
+function Base.foreach(func::Function, tree::Tree2)
+    foreach_node(func, tree.root)
+end
+
+# 空の木か？
+Base.isempty(tree::Tree2)  = tree.root === nothing
+
+# イテレータ
+function Base.iterate(tree::Tree2)
+    buff = Node[]
+    if tree.root === nothing
+        nothing
+    else
+        next_node(tree.root, buff)
+        (buff[end].item, buff)
+    end
+end
+function Base.iterate(tree::Tree2, state)
+    if isempty(state)
+        nothing
+    else
+        node = pop!(state)
+        if node.right !== nothing
+            next_node(node.right, state)
+        end
+        if isempty(state)
+            nothing
+        else
+            (state[end].item, state)
+        end
+    end
+end
+
+# 表示
+function Base.show(io::IO, xs::Tree2)
+    print(io, "Tree2: ")
+    for x = xs
+        print("$x ")
+    end
+end
+
+# 簡単なテスト
+a = Tree2()
+println(a)
+println(isempty(a))
+
+# 挿入
+for x = [5, 3, 7, 1, 4, 2, 9, 6, 8]
+    print("insert $x -&gt; ")
+    insert!(a, x)
+    println(a)
+end
+
+# 巡回
+foreach(println, a)
+
+# 検索
+for x = 0 : 10
+    print("search $x -&gt; ")
+    println(search(a, x))
+end
+println("min: ", search_min(a))
+println("max: ", search_max(a))
+
+# 削除
+print("delete max -&gt; ")
+delete_max!(a)
+println(a)
+print("delete min -&gt; ")
+delete_min!(a)
+println(a)
+for x = 1 : 9
+    print("delete $x -&gt; ")
+    delete!(a, x)
+    println(a)
+end
+println(a)
+println(isempty(a))
+</pre>
+<pre>
+C&gt;julia tree.jl
+Tree2:
+true
+insert 5 -&gt; Tree2: 5
+insert 3 -&gt; Tree2: 3 5
+insert 7 -&gt; Tree2: 3 5 7
+insert 1 -&gt; Tree2: 1 3 5 7
+insert 4 -&gt; Tree2: 1 3 4 5 7
+insert 2 -&gt; Tree2: 1 2 3 4 5 7
+insert 9 -&gt; Tree2: 1 2 3 4 5 7 9
+insert 6 -&gt; Tree2: 1 2 3 4 5 6 7 9
+insert 8 -&gt; Tree2: 1 2 3 4 5 6 7 8 9
+1
+2
+3
+4
+5
+6
+7
+8
+9
+search 0 -&gt; false
+search 1 -&gt; true
+search 2 -&gt; true
+search 3 -&gt; true
+search 4 -&gt; true
+search 5 -&gt; true
+search 6 -&gt; true
+search 7 -&gt; true
+search 8 -&gt; true
+search 9 -&gt; true
+search 10 -&gt; false
+min: 1
+max: 9
+delete max -&gt; Tree2: 1 2 3 4 5 6 7 8
+delete min -&gt; Tree2: 2 3 4 5 6 7 8
+delete 1 -&gt; Tree2: 2 3 4 5 6 7 8
+delete 2 -&gt; Tree2: 3 4 5 6 7 8
+delete 3 -&gt; Tree2: 4 5 6 7 8
+delete 4 -&gt; Tree2: 5 6 7 8
+delete 5 -&gt; Tree2: 6 7 8
+delete 6 -&gt; Tree2: 7 8
+delete 7 -&gt; Tree2: 8
+delete 8 -&gt; Tree2:
+delete 9 -&gt; Tree2:
+Tree2:
+true
+</pre>
+<h4 id="chap26">●二分木 (immutable)</h4>
+<ul>
+  <li>immutable な二分木は節を書き換えることができない
+  <li>データの挿入や削除で二分木をたどるときは、新しい節を生成していることに注意
+  <li>操作関数
+  <ul>
+    <li>Tree(), 空の二分木を生成
+    <li>search_tree(xs, x), 二分木 xs から x を検索する
+    <li>search_max(xs), xs の最大値を求める
+    <li>search_min(xs), xs の最小値を求める
+    <li>insert_tree(xs, x), 二分木 xs に x を挿入する
+    <li>delete_tree(xs, x), xs から x を削除する
+    <li>delete_max(xs), xs の最大値を削除する
+    <li>delete_min(xs), xs の最小値を削除する
+    <li>isempty(xs), xs が空ならば true を返す
+    <li>foreach(func, xs), xs の要素に関数 func を適用する
+    <li>イテレータも実装する
+  </ul>
+</ul>
+<pre class="list">
+#
+# imtree.jl : immutable な二分木
+#
+#             Copyright (C) 2016-2018 Makoto Hiroi
+#
+abstract type Tree end
+
+# 空の木
+struct Nil &lt;: Tree
+end
+
+# 節
+struct Node &lt;: Tree
+    item
+    left::Tree
+    right::Tree
+end
+
+const nil = Nil()
+
+# 空の木か？
+Base.isempty(node::Tree) = node === nil
+
+# 探索
+function search_tree(node::Tree, x)
+    while !isempty(node)
+        if node.item == x
+            return true
+        elseif x &lt; node.item
+            node = node.left
+        else
+            node = node.right
+        end
+    end
+    return false
+end
+
+# 最小値の探索
+function search_min(node::Node)
+    while !isempty(node.left)
+        node = node.left
+    end
+    node.item
+end
+
+# 最大値の探索
+function search_max(node::Node)
+    while !isempty(node.right)
+        node = node.right
+    end
+    node.item
+end
+
+# 挿入
+function insert_tree(node::Tree, x)
+    if isempty(node)
+        Node(x, nil, nil)
+    elseif x == node.item
+        node
+    elseif x &lt; node.item 
+        Node(node.item, insert_tree(node.left, x), node.right)
+    else
+        Node(node.item, node.left, insert_tree(node.right, x))
+    end
+end
+
+# 最小値の削除
+function delete_min(node::Node)
+    if isempty(node.left)
+        node.right
+    else
+        Node(node.item, delete_min(node.left), node.right)
+    end
+end
+
+# 最大値の削除
+function delete_max(node::Node)
+    if isempty(node.right)
+        node.left
+    else
+        Node(node.item, node.left, delete_max(node.right))
+    end
+end
+
+# 削除
+function delete_tree(node::Tree, x)
+    if isempty(node)
+        nil
+    elseif node.item == x
+        if node.left == nil; return node.right; end
+        if node.right == nil; return node.left; end
+        Node(search_min(node.right), node.left, delete_min(node.right))
+    elseif x &lt; node.item
+        Node(node.item, delete_tree(node.left, x), node.right)
+    else
+        Node(node.item, node.left, delete_tree(node.right, x))
+    end
+end
+
+# 木の巡回
+function Base.foreach(f, node::Tree)
+    if !isempty(node)
+        foreach(f, node.left)
+        f(node.item)
+        foreach(f, node.right)
+    end
+end
+
+# イテレータ
+function next_node(node::Tree, buff::Vector{Tree})
+    while !isempty(node)
+        push!(buff, node)
+        node = node.left
+    end
+end
+
+function Base.iterate(node::Tree)
+    buff = Tree[]
+    if node == nil
+        nothing
+    else
+        next_node(node, buff)
+        (buff[end].item, buff)
+    end
+end
+function Base.iterate(tree::Tree, state)
+    if isempty(state)
+        nothing
+    else
+        node = pop!(state)
+        if !isempty(node.right)
+            next_node(node.right, state)
+        end
+        if isempty(state)
+            nothing
+        else
+            (state[end].item, state)
+        end
+    end
+end
+
+# 表示
+function Base.show(io::IO, xs::Tree)
+    print(io, "Tree: ")
+    for x = xs
+        print("$x ")
+    end
+end
+
+#
+# 簡単なテスト
+#
+a = nil
+println(a)
+println(isempty(a))
+
+# 挿入
+for x = [5, 3, 7, 1, 4, 2, 9, 6, 8]
+    print("insert $x -&gt; ")
+    global a = insert_tree(a, x)
+    println(a)
+end
+
+# 巡回
+foreach(println, a)
+
+# 検索
+for x = 0 : 10
+    print("search $x -&gt; ")
+    println(search_tree(a, x))
+end
+println("min: ", search_min(a))
+println("max: ", search_max(a))
+
+# 削除
+print("delete max -&gt; ")
+a = delete_max(a)
+println(a)
+print("delete min -&gt; ")
+a = delete_min(a)
+println(a)
+for x = 1 : 9
+    print("delete $x -&gt; ")
+    global a = delete_tree(a, x)
+    println(a)
+end
+println(a)
+println(isempty(a))
+</pre>
+<pre>
+C&gt;julia imtree.jl
+Tree:
+true
+insert 5 -&gt; Tree: 5
+insert 3 -&gt; Tree: 3 5
+insert 7 -&gt; Tree: 3 5 7
+insert 1 -&gt; Tree: 1 3 5 7
+insert 4 -&gt; Tree: 1 3 4 5 7
+insert 2 -&gt; Tree: 1 2 3 4 5 7
+insert 9 -&gt; Tree: 1 2 3 4 5 7 9
+insert 6 -&gt; Tree: 1 2 3 4 5 6 7 9
+insert 8 -&gt; Tree: 1 2 3 4 5 6 7 8 9
+1
+2
+3
+4
+5
+6
+7
+8
+9
+search 0 -&gt; false
+search 1 -&gt; true
+search 2 -&gt; true
+search 3 -&gt; true
+search 4 -&gt; true
+search 5 -&gt; true
+search 6 -&gt; true
+search 7 -&gt; true
+search 8 -&gt; true
+search 9 -&gt; true
+search 10 -&gt; false
+min: 1
+max: 9
+delete max -&gt; Tree: 1 2 3 4 5 6 7 8
+delete min -&gt; Tree: 2 3 4 5 6 7 8
+delete 1 -&gt; Tree: 2 3 4 5 6 7 8
+delete 2 -&gt; Tree: 3 4 5 6 7 8
+delete 3 -&gt; Tree: 4 5 6 7 8
+delete 4 -&gt; Tree: 5 6 7 8
+delete 5 -&gt; Tree: 6 7 8
+delete 6 -&gt; Tree: 7 8
+delete 7 -&gt; Tree: 8
+delete 8 -&gt; Tree:
+delete 9 -&gt; Tree:
+Tree:
+true
+</pre>
+
+<h4 id="chap27">●カッコ列</h4>
+
+<p> カッコ列は ( と ) からなる列のことで、バランスが取れているカッコ列は、右カッコで閉じることができる、つまり右カッコに対応する左カッコがある状態のことをいいます。たとえば n = 1 の場合、( ) はバランスの取れたカッコ列ですが、) ( はバランスが取れていません。今回はカッコ列を生成する高階関数 kakko() を作ります。
+</p>
+<pre class="list">
+リスト : カッコ列
+
+function kakko(f, n)
+    function iter(x, y, a)
+        if x == y == n
+            f(a)
+        else
+            if x &lt; n
+                iter(x + 1, y, a * "(")
+            end
+            if y &lt; x
+                iter(x, y + 1, a * ")")
+            end
+        end
+    end
+    iter(0, 0, "")
+end
+
+kakko(println, 3)
+kakko(println, 4)
+</pre>
+<p> カッコ列の生成は簡単です。局所関数 iter() の引数 x が左カッコの個数、引数 y が右カッコの個数を表します。引数 a は累積変数でカッコ列を表す文字列です。
+</p>
+<p> バランスの取れたカッコ列の場合、x, y, n には y &lt;= x &lt;= n の関係が成り立ちます。x == y == n の場合、カッコ列がひとつ完成しました。引数の関数 f を呼び出します。そうでなければ、iter() を再帰呼び出しします。x &lt; n であれば左カッコを追加し、y &lt; x であれば右カッコを追加します。これでカッコ列を生成することができます。
+</p>
+<pre>
+((()))
+(()())
+(())()
+()(())
+()()()
+(((())))
+((()()))
+((())())
+((()))()
+(()(()))
+(()()())
+(()())()
+(())(())
+(())()()
+()((()))
+()(()())
+()(())()
+()()(())
+()()()()
+</pre>
+<h4 id="chap28">●カッコ列の総数</h4>
+<p> <a href="http://ja.wikipedia.org/wiki/%E3%82%AB%E3%82%BF%E3%83%A9%E3%83%B3%E6%95%B0">カタラン数 - Wikipedia</a> によると、カッコ列の総数は「カタラン数 (Catalan number)」になるとのことです。カタラン数は次に示す公式で求めることができます。
+</p>
+
+<pre class="item">
+         (2n)!
+Ｃ<sub>n</sub> = ----------
+       (n+1)!n!
+</pre>
+<p> これをそのままプログラムしてもいいのですが、それではちょっと面白くないので別な方法でプログラムを作ってみましょう。カタラン数は次に示す経路図において、A から B までの最短距離の道順を求めるとき、対角線を超えないものの総数に一致します。
+</p>
+<pre class="fig">
+                    Ｂ                      Ｂ  
+  ┌─┬─┬─┬─┐      ┌─┬─┬─０─14    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ├─┼─０─５─14    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ├─０─２─５─９    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ０─１─２─３─４    
+  │  │  │  │  │      │  │  │  │  │    
+  └─┴─┴─┴─┘      １─１─１─１─１    
+Ａ                      Ａ                      
+
+            図 : 道順の総数の求め方
+</pre>
+<p> A からある地点にいたる最短距離の道順の総数は、左隣と真下の地点の値を足したものになります。一番下の地点は 1 で、対角線を越えた地点は 0 になります。あとは下から順番に足し算していけば、A から B までの道順の総数を求めることができます。上図の場合はカラタン数 Ｃ<sub>4</sub> に相当し、その値は 14 となります。
+</p>
+
+<p> プログラムは配列を使うと簡単です。次の図を見てください。
+</p>
+<pre class="fig">
+0 : [1, 1, 1, 1, 1]
+
+1 : [1, 1, 1, 1, 1,]
+
+2 : [1, 1, 1+1=2, 2+1=3, 3+1=4]
+ =&gt; [1, 1, 2, 3, 4]
+
+3 : [1, 1, 2, 3+2=5, 5+4=9]
+ =&gt; [1, 1, 2, 5, 9]
+
+4 : [1, 1, 2, 5, 5+9=14]
+ =&gt; [1, 1, 2, 5, 14]
+</pre>
+<p> 上図は Ｃ<sub>n</sub> (n = 4) を求める場合です。大きさが n + 1, 要素の値が 1 のベクタを用意します。n = 0, 1 の場合は n 番目の要素をそのまま返します。n が 2 よりも大きい場合、変数 i を 2 に初期化して、i - 1 番目以降の要素の累積和を求めます。<p> たとえば i = 2 の場合、2 番目の要素は 1 番目の要素と自分自身を加算した値 2 になります。3 番目の要素は 2 番目の要素と自分自身を足した値 3 になり、4 番目の要素は 3 + 1 = 4 になります。次に i を +1 して同じことを繰り返します。3 番目の要素は 2 + 3 = 5 になり、4 番目の要素は 5 + 4 = 9 になります。i = 4 のとき、4 番目の要素は 5 + 9 = 14 となり、Ｃ<sub>4</sub> の値を求めることができました。
+</p>
+<pre class="list">
+リスト : カッコ列の総数
+
+function kakko_num(n)
+    table = fill(big(1), n)
+    for i =  2 : n, j = i : n
+        table[j] += table[j - 1]
+    end
+    table[n]
+end
+
+for i = 1 : 10
+    println(kakko_num(i))
+end
+println(kakko_num(50))
+println(kakko_num(100))
+</pre>
+<pre>
+1
+2
+5
+14
+42
+132
+429
+1430
+4862
+16796
+1978261657756160653623774456
+896519947090131496687170070074100632420837521538745909320
+</pre>
+<h4 id="chap29">●カッコ列と二分木</h4>
+<p> バランスの取れたカッコ列と二分木は 1 対 1 に対応します。二分木を行きがけ順で巡回するとき、途中の節では左カッコ ( を出力して左右の枝をたどり、葉に到達したら右カッコ ) を出力すると、カッコ列を生成することができます。
+</p>
+<pre class="list">
+リスト : カッコ列と二分木
+
+# 二分木
+abstract type Tree end
+
+# 節
+struct Node &lt;: Tree
+    left::Tree
+    right::Tree
+end
+
+# 葉
+struct Leaf &lt;: Tree
+end
+
+# 二分木をカッコ列に変換
+function tree_to_kakko(tree::Tree)
+    function iter(tree::Tree)
+        if typeof(tree) == Leaf
+            ")"
+        else
+            "(" * iter(tree.left) * iter(tree.right)
+        end
+    end
+    s = iter(tree)
+    s[1 : end - 1]
+end
+
+# カッコ列を二分木に変換
+function kakko_to_tree(s)
+    function iter(i)
+        if length(s) &lt; i
+            (Leaf(), i)
+        elseif s[i] == ')'
+            (Leaf(), i + 1)
+        elseif s[i] == '('
+            l, j = iter(i + 1)
+            r, k = iter(j)
+            (Node(l, r), k)
+        else
+            error("illegal char")
+        end
+    end
+    iter(1)[1]
+end
+
+function test(s)
+    println(s)
+    t = kakko_to_tree(s)
+    println(t)
+    u = tree_to_kakko(t)
+    println(u)
+end
+
+kakko(test, 3)
+</pre>
+<p> 関数 tree_to_kakko() の実際の処理は局所関数 iter() で行います。引数が葉 (Leaf) の場合は右カッコを返します。引数が節 (Node) の場合は、iter() を再帰呼び出しして左部分木 left をたどり、それから右部分木 right をたどります。その結果と左カッコを演算子 * で連結すればいいわけです。ただし、最後に余分な右カッコが付いてくるので、最後の要素を削除します。
+</p>
+<p> 二分木の場合、葉 (Leaf) の個数を n とすると、節 (Node) の個数は n - 1 になります。カッコ列と違って Leaf の個数が一つ多くなることに注意してください。
+</p>
+<p> 関数 kakko_to_tree() も局所関数 iter() で変換処理を行います。文字列 s の i 番目の要素が右カッコの場合は (Leaf(), i + 1) を返します。左カッコの場合は、iter() を再帰呼び出しして左部分木 l を生成し、それから右部分木 r を生成します。あとは (Node(l, r), k) を返すだけです。ただし、葉に対応する右カッコがひとつ少ないので、引数 i が文字列の終端に到達した場合は Leaf() を返すようにします。
+</p>
+<pre>
+((()))
+Node(Node(Node(Leaf(),Leaf()),Leaf()),Leaf())
+((()))
+(()())
+Node(Node(Leaf(),Node(Leaf(),Leaf())),Leaf())
+(()())
+(())()
+Node(Node(Leaf(),Leaf()),Node(Leaf(),Leaf()))
+(())()
+()(())
+Node(Leaf(),Node(Node(Leaf(),Leaf()),Leaf()))
+()(())
+()()()
+Node(Leaf(),Node(Leaf(),Node(Leaf(),Leaf())))
+()()()
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016-2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881816</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>遅延評価</h3>
+<p> 一般的なプログラミング言語の場合、関数を呼び出す前に引数が評価され、その結果が関数に渡されます。これを「正格 (strict) な評価」といいます。これに対し、引数や変数の値が必要になるまで評価を行わない方法もあります。具体的には、引数や変数を参照するときに評価が行われます。これを「遅延評価 (delayed evaluation または lazy evaluation)」といいます。
+</p>
+<p> プログラミング言語では関数型言語の Haskell が遅延評価です。また、Scheme でも delay と force を使って遅延評価を行うことができます。そして、その評価結果は保存されることに注意してください。再度変数や引数を参照すると、保存されている値が返されます。
+</p>
+<p> なお、値の保存 (キャッシング) をしないでよければ、クロージャ (ラムダ) を使って遅延評価を行うこともできます。Rust はクロージャをサポートしているので、拙作のページ <a href="rust03.html#chap51">たらいまわし</a> で説明したように、遅延評価そのものは簡単に行うことができます。ただし、Scheme の delay, force のように値をキャッシングするとなると、借用やライフタイムが絡んでくるため、遅延評価の実装は他の言語よりも難しくなります。今回は Rust で遅延評価を行う Delay&lt;T&gt; を作ってみましょう。
+</p>
+<h4>●遅延評価の実装</h4>
+<p> 基本的には、構造体 Delay にクロージャと計算結果 (値)を格納すればよいのですが、クロージャを格納するとき、クロージャをそのまま格納する方法と、トレイトオブジェクトにして格納する方法の 2 通りがあります。前者の場合、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 遅延評価 (1)
+
+struct Delay&lt;T, F&gt; {
+    value: Option&lt;T&gt;,
+    func: F
+}
+
+impl&lt;T, F&gt; Delay&lt;T, F&gt; where F: Fn() -&gt; T {
+    fn new(f: F) -&gt; Delay&lt;T, F&gt; {
+        Delay { value: None, func: f }
+    }
+    fn force(&amp;mut self) -&gt; &amp;T {
+        if self.value.is_none() {
+            self.value = Some((self.func)());
+        }
+        self.value.as_ref().unwrap()
+    }
+}
+</pre>
+<p> Delay のフィールド変数 value に計算結果を、func にクロージャを格納します。value を Option 型にすれば、計算済みか否かすぐに判別することができます。なお、func のデータ型に Fn() -&gt; T を直接記述にすると、メソッドの定義でコンパイルエラーが発生します。ここでは func のデータ型を型パラメータ F で表し、実際の定義はメソッドで行います。
+</p>
+<p> メソッド new() はクロージャ f を受け取って、それを格納した Delay を返します。メソッド force() は self.value が None か is_none() でチェックします。そうであれば、self.func のクロージャを評価して、その結果を Some に包んで self.value にセットします。そして、as_ref() で Option&lt;T&gt; を Option&lt;&amp;T&gt; に変換して、unwrap() で参照 &amp;T を取り出して返します。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre class="list">
+リスト : 簡単な実行例
+
+fn main() {
+    let mut a = Delay::new(|| { println!("oops!"); 1 + 2 });
+    println!("{}", a.force());
+    println!("{}", a.force());
+}
+</pre>
+<pre>
+oops!
+3
+3
+</pre>
+<p> 最初に a.force() を実行するとクロージャが評価されるので、画面に oops! が表示されます。次に、a.force() を実行すると、クロージャを評価せずに保存した値を返すので oops! は表示されません。このように正常に動作していますが、実をいうとこの方法には問題があるのです。
+</p>
+<h4>●たらいまわし関数 (コンパイルエラー)</h4>
+<p> たとえば、たらいまわし関数に Delay を適用すると、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : たらいまわし関数 (1)
+
+fn tarai&lt;F&gt;(x: i32, y: i32, z: &amp;mut Delay&lt;i32, F&gt;) -&gt; i32 where F: Fn() -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai(tarai(x - 1, y, z),
+              tarai(y - 1, zz, &amp;mut Delay::new(|| x)),
+              &amp;mut Delay::new(|| tarai(zz - 1, x, &amp;mut Delay::new(|| y))))
+    }
+}
+
+fn main() {
+    println!("{}", tarai(14, 7, &amp;mut Delay::new(|| 0)));
+}
+</pre>
+<p> これをコンパイルすると、拙作のページ <a href="rust03.html#chap51">たらいまわし</a> のときと同じコンパイルエラー 'reached the recursion limit while instantiating ...' が発生します。再帰呼び出しに対応するには、トレイトオブジェクトを使うしかないようです。
+</p>
+<h4>●トレイトオブジェクトによる実装</h4>
+<p> トレイトオブジェクトを使う場合、クロージャを Box に包む方法と、クロージャの参照を使う方法があります。どちらの方法でも、ライフパラメータの指定が必要になるので、プログラムはちょっと複雑になります。まずは前者の方法でプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延評価 (2)
+
+struct Delay1&lt;'a, T: 'a&gt; {
+    value: Option&lt;T&gt;,
+    func: Box&lt;Fn() -> T + 'a&gt;
+}
+
+impl&lt;'a, T&gt; Delay1&lt;'a, T&gt; {
+    fn new&lt;F: 'a&gt;(f: F) -&gt; Delay1&lt;'a, T&gt; where F: Fn() -&gt; T {
+        Delay1 { value: None, func: Box::new(f) }
+    }
+    fn force(&amp;mut self) -&gt; &amp;T {
+        if self.value.is_none() {
+            self.value = Some((self.func)());
+        }
+        self.value.as_ref().unwrap()
+    }
+}
+</pre>
+<p> 構造体名は Delay1 としました。Delay1 の定義だけだと、ライフパラメータの指定が無くてもコンパイルできるのですが、メソッド new() の定義でコンパイルエラー 'the parameter type `F` may not live long enough' が発生します。そこで、ライフパラメータ 'a を定義して、必要なところに 'a を指定します。
+</p>
+<p> たらいまわし関数は次のようになります。
+</p>
+<pre class="list">
+リスト : たらいまわし関数 (2)
+
+fn tarai(x: i32, y: i32, z: &amp;mut Delay1&lt;i32&gt;) -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai(tarai(x - 1, y, z),
+              tarai(y - 1, zz, &amp;mut Delay1::new(|| x)),
+              &amp;mut Delay1::new(move || tarai(zz - 1, x, &amp;mut Delay1::new(|| y))))
+    }
+}
+</pre>
+<p> クロージャの中で変数 zz を参照する場合、move closure にしないとコンパイルエラー `zz` does not live long enough が発生します。ご注意くださいませ。
+</p>
+<p> それでは実際に試してみましょう。</p>
+<pre class="list">
+リスト : 簡単な実行例
+
+fn main() {
+    let mut b = Delay1::new(|| { println!("oops!"); 1 + 2 });
+    println!("{}", b.force());
+    println!("{}", b.force());
+    println!("{}", tarai(14, 7, &amp;mut Delay1::new(|| 0)));
+    println!("{}", tarai(140, 70, &amp;mut Delay1::new(|| 0)));
+}
+</pre>
+<pre>
+oops!
+3
+3
+14
+140
+</pre>
+<p> 正常に動作していますね。</p>
+<h4>●RefCell による改良</h4>
+<p> ところで、Delay のフィールド変数 value は最初に force() を呼び出すときに書き換えられ、あとは immutable なデータとして扱うことができます。この場合、value を RefCell で包むと、mut や &amp;mut を指定しなくても Delay を使うことができるようになります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延評価 (3)
+
+use std::cell::RefCell;
+
+struct Delay2&lt;'a, T: 'a&gt; {
+    value: RefCell&lt;Option&lt;T&gt;&gt;,
+    func: Box&lt;Fn() -> T + 'a&gt;
+}
+
+impl&lt;'a, T: 'a&gt; Delay2&lt;'a, T&gt; {
+    fn new&lt;F: 'a&gt;(f: F) -&gt; Delay2&lt;'a, T&gt; where F: Fn() -&gt; T {
+        Delay2 { value: RefCell::new(None), func: Box::new(f) }
+    }
+    fn force(&amp;self) -> &amp;T {
+        let mut val = self.value.borrow_mut();
+        if val.is_none() {
+            *val = Some((self.func)());
+        }
+        match unsafe { self.value.as_ptr().as_ref().unwrap() } {
+            &amp;Some(ref x) =&gt; x,
+            _ =&gt; unreachable!()
+        }
+    }
+}
+</pre>
+<p> メソッド force() の引数を &amp;self に変更します。そして、borrow_mut() で mutable な参照を取得して変数 val にセットします。val が None であればクロージャを評価し、その結果を Some に包んで val にセットします。
+</p>
+<p> そのあとの処理がちょっと難しくなります。最初は次のようにプログラムしたのですが、コンパイルエラー 'borrowed value does not live long enough' が発生します。
+</p>
+<pre class="list">
+リスト : コンパイルエラーになる force()
+
+    fn force(&amp;self) -> &amp;T {
+        {
+            let mut val = self.value.borrow_mut();
+            if val.is_none() {
+                *val = Some((self.func)());
+            }
+        }
+        self.value.borrow().as_ref().unwrap()
+    }
+</pre>
+<p> borrow() で immutable な借用を取得しているのですが、その有効範囲はメソッドの中だけです。それを使って値の参照 (&amp;T) をメソッドの外側に持ち出すことはできないようです。ここでまたまた M.Hiroi は途方に暮れたのですが、Linda_pp さんの <a href="https://speakerdeck.com/rhysd/rust-dechi-yan-ping-jia-wo-shi-zhuang-sitemiru">Rust で遅延評価を実装してみる</a> を読んで解決することができました。Linda_pp さんに感謝いたします。
+</p>
+<p> この場合、borrow() ではなく生ポインタを使うことで、ライフタイムの制約を緩和することができます。RefCell のメソッド as_ptr() は、格納しているデータへの mutable な生ポインタを返します。
+</p>
+<pre class="item">
+fn as_ptr(&amp;self) -&gt; *mut T
+</pre>
+<p> 生ポインタのメソッド as_ref() は生ポインタを immutable な参照に変換します。
+</p>
+<pre class="item">
+unsafe fn as_ref&lt;'a&gt;(self) -> Option&lt;&amp;'a T&gt;
+</pre>
+<p> つまり、unsafe { self.value.as_ptr().as_ref().unwrap() } で RefCell の中の Option 型への immutable な参照を取得することができるわけです。あとはパターンマッチング Some(ref x) でデータの immutable な参照を取得して、それをそのまま返すだけです。unreachable!() はマクロで、ここには到達しない (実行されることがない) ことを表します。実際に実行されるとパニックします。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre class="list">
+リスト : たらいまわし関数 (3)
+
+fn tarai1(x: i32, y: i32, z: Delay2&lt;i32&gt;) -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai1(tarai1(x - 1, y, z),
+               tarai1(y - 1, zz, Delay2::new(|| x)),
+               Delay2::new(move || tarai1(zz - 1, x, Delay2::new(|| y))))
+    }
+}
+</pre>
+<pre class="list">
+リスト : 簡単な実行例
+
+fn main() {
+    let c = Delay2::new(|| { println!("oops"); 1 + 2 });
+    println!("{}", c.force());
+    println!("{}", c.force());
+    println!("{}", tarai1(14, 7, Delay2::new(|| 0)));
+    println!("{}", tarai1(140, 70, Delay2::new(|| 0)));
+}
+</pre>
+<pre>
+oops!
+3
+3
+14
+140
+</pre>
+<p> mut や &amp;mut を指定しなくてもコンパイルできるので、プログラムはすっきりすると思います。
+</p>
+<h4>●クロージャの参照を格納する方法</h4>
+<p> 最後にクロージャの参照を構造体に格納する方法でプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延評価 (4)
+
+struct Delay3&lt;'a, T: 'a&gt; {
+    value: RefCell&lt;Option&lt;T&gt;&gt;,
+    func: &amp;'a Fn() -&gt; T
+}
+
+impl&lt;'a, T: 'a&gt; Delay3&lt;'a, T&gt; {
+    fn new(f: &amp;'a Fn() -&gt; T) -&gt; Delay3&lt;'a, T&gt; {
+        Delay3 { value: RefCell::new(None), func: f }
+    }
+    fn force(&amp;self) -&gt; &amp;T {
+        let mut val = self.value.borrow_mut();
+        if val.is_none() {
+            *val = Some((self.func)());
+        }
+        match unsafe { self.value.as_ptr().as_ref().unwrap() } {
+            &amp;Some(ref x) =&gt; x,
+            _ =&gt; unreachable!()
+        }
+    }
+}
+</pre>
+<p> 構造体名は Delay3 としました。フィールド変数 func にクロージャの参照 &amp;'a Fn() -&gt; T を格納します。そして、メソッド new() では引数の型をクロージャの参照 (トレイトオブジェクト) に変更します。メソッドforce() は変更ありません。
+</p>
+<p> たらいまわし関数は次のようになります。</p>
+<pre class="list">
+リスト : たらいまわし関数 (4)
+
+fn tarai2(x: i32, y: i32, z: Delay3&lt;i32&gt;) -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai2(tarai2(x - 1, y, z),
+               tarai2(y - 1, zz, Delay3::new(&amp;|| x)),
+               Delay3::new(&amp;|| tarai2(zz - 1, x, Delay3::new(&amp;|| y))))
+    }
+}
+</pre>
+<p> Delay3::new() にはトレイトオブジェクトを渡します。move closure を使わなくてもコンパイルは通ります。M.Hiroi (Rust 初心者) はこのへんの理屈をよく理解できずにいます。まだまだ勉強が足りないようです。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre class="list">
+リスト : 簡単な実行例
+
+fn main() {
+    let f = &amp;|| { println!("oops!"); 1 + 2};
+    let d = Delay3::new(f);
+    println!("{}", d.force());
+    println!("{}", d.force());
+    let z = &amp;|| 0;
+    println!("{}", tarai2(14, 7, Delay3::new(z)));
+    println!("{}", tarai2(140, 70, Delay3::new(z)));
+}
+</pre>
+<pre>
+oops!
+3
+3
+14
+140
+</pre>
+<p> 正常に動作していますね。なお、Delay3 に渡すトレイトオブジェクトは、let で変数に束縛しないとコンパイルエラーになります。ご注意ください。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+//
+// delay.rs : 遅延評価
+//
+//            Copyright (C) 2017 Makoto Hiroi
+//
+use std::cell::RefCell;
+
+// 単純な定義
+struct Delay&lt;T, F&gt; {
+    value: Option&lt;T&gt;,
+    func: F
+}
+
+impl&lt;T, F&gt; Delay&lt;T, F&gt; where F: Fn() -&gt; T {
+    fn new(f: F) -&gt; Delay&lt;T, F&gt; {
+        Delay { value: None, func: f }
+    }
+    fn force(&amp;mut self) -&gt; &amp;T {
+        if self.value.is_none() {
+            self.value = Some((self.func)());
+        }
+        self.value.as_ref().unwrap()
+    }
+}
+
+/* コンパイルエラー
+fn tarai&lt;F&gt;(x: i32, y: i32, z: &amp;mut Delay&lt;i32, F&gt;) -&gt; i32 where F: Fn() -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai(tarai(x - 1, y, z),
+              tarai(y - 1, zz, &amp;mut Delay::new(|| x)),
+              &amp;mut Delay::new( || tarai(zz - 1, x, &amp;mut Delay::new( || y))))
+    }
+}
+*/
+
+// Box に包んで格納する
+struct Delay1&lt;'a, T: 'a&gt; {
+    value: Option&lt;T&gt;,
+    func: Box&lt;Fn() -&gt; T + 'a&gt;
+}
+
+impl&lt;'a, T&gt; Delay1&lt;'a, T&gt; {
+    fn new&lt;F: 'a&gt;(f: F) -&gt; Delay1&lt;'a, T&gt; where F: Fn() -&gt; T {
+        Delay1 { value: None, func: Box::new(f) }
+    }
+    fn force(&amp;mut self) -&gt; &amp;T {
+        if self.value.is_none() {
+            self.value = Some((self.func)());
+        }
+        self.value.as_ref().unwrap()
+    }
+}
+
+// たらいまわし関数
+fn tarai(x: i32, y: i32, z: &amp;mut Delay1&lt;i32&gt;) -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai(tarai(x - 1, y, z),
+              tarai(y - 1, zz, &amp;mut Delay1::new(|| x)),
+              &amp;mut Delay1::new(move || tarai(zz - 1, x, &amp;mut Delay1::new(|| y))))
+    }
+}
+
+// RefCell による改良
+struct Delay2&lt;'a, T: 'a&gt; {
+    value: RefCell&lt;Option&lt;T&gt;&gt;,
+    func: Box&lt;Fn() -&gt; T + 'a&gt;
+}
+
+impl&lt;'a, T: 'a&gt; Delay2&lt;'a, T&gt; {
+    fn new&lt;F: 'a&gt;(f: F) -&gt; Delay2&lt;'a, T&gt; where F: Fn() -&gt; T {
+        Delay2 { value: RefCell::new(None), func: Box::new(f) }
+    }
+    fn force(&amp;self) -&gt; &amp;T {
+        let mut val = self.value.borrow_mut();
+        if val.is_none() {
+            *val = Some((self.func)());
+        }
+        match unsafe { self.value.as_ptr().as_ref().unwrap() } {
+            &amp;Some(ref x) =&gt; x,
+            _ =&gt; unreachable!()
+        }
+    }
+}
+
+// たらいまわし関数
+fn tarai1(x: i32, y: i32, z: Delay2&lt;i32&gt;) -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai1(tarai1(x - 1, y, z),
+               tarai1(y - 1, zz, Delay2::new(|| x)),
+               Delay2::new(move || tarai1(zz - 1, x, Delay2::new(|| y))))
+    }
+}
+
+// クロージャの参照を格納する
+struct Delay3&lt;'a, T: 'a&gt; {
+    value: RefCell&lt;Option&lt;T&gt;&gt;,
+    func: &amp;'a Fn() -&gt; T
+}
+
+impl&lt;'a, T: 'a&gt; Delay3&lt;'a, T&gt; {
+    fn new(f: &amp;'a Fn() -&gt; T) -&gt; Delay3&lt;'a, T&gt; {
+        Delay3 { value: RefCell::new(None), func: f }
+    }
+    fn force(&amp;self) -&gt; &amp;T {
+        let mut val = self.value.borrow_mut();
+        if val.is_none() {
+            *val = Some((self.func)());
+        }
+        match unsafe { self.value.as_ptr().as_ref().unwrap() } {
+            &amp;Some(ref x) =&gt; x,
+            _ =&gt; unreachable!()
+        }
+    }
+}
+
+// たらいまわし関数
+fn tarai2(x: i32, y: i32, z: Delay3&lt;i32&gt;) -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai2(tarai2(x - 1, y, z),
+               tarai2(y - 1, zz, Delay3::new(&amp;|| x)),
+               Delay3::new(&amp;|| tarai2(zz - 1, x, Delay3::new(&amp;|| y))))
+    }
+}
+
+
+// 簡単な実行例
+fn main() {
+    let mut a = Delay::new(|| { println!("oops!"); 1 + 2 });
+    println!("{}", a.force());
+    println!("{}", a.force());
+    //println!("{}", tarai(14, 7, &amp;mut Delay::new(|| 0)));
+
+    let mut b = Delay1::new(|| { println!("oops!"); 1 + 2 });
+    println!("{}", b.force());
+    println!("{}", b.force());
+    println!("{}", tarai(14, 7, &amp;mut Delay1::new(|| 0)));
+    println!("{}", tarai(140, 70, &amp;mut Delay1::new(|| 0)));
+
+    let c = Delay2::new(|| { println!("oops!"); 1 + 2 });
+    println!("{}", c.force());
+    println!("{}", c.force());
+    println!("{}", tarai1(14, 7, Delay2::new(move || 0)));
+    println!("{}", tarai1(140, 70, Delay2::new(move || 0)));
+
+    let f = &amp;|| { println!("oops!"); 1 + 2};
+    let d = Delay3::new(f);
+    println!("{}", d.force());
+    println!("{}", d.force());
+    let z = &amp;|| 0;
+    println!("{}", tarai2(14, 7, Delay3::new(z)));
+    println!("{}", tarai2(140, 70, Delay3::new(z)));
+}
+</pre>
+<hr>
+<h4 id="chap010a">●マクロ delay! の定義 (2017/10/08)</h4>
+<p> ところで、今のままでは Delay を生成するときの記述が少々面倒です。このような場合、Delay を生成するマクロ delay! を定義すると簡単になります。マクロの説明は拙作のページ <a href="rustabc04.html#chap48">マクロの基本</a> をお読みください。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : マクロ delay! の定義
+
+use std::cell::RefCell;
+
+// 遅延評価
+struct Delay&lt;a, T: 'a&gt; {
+    value: RefCell&lt;Option&lt;T&gt;&gt;,
+    func: Box&lt;Fn() -&gt; T + 'a&gt;
+}
+
+impl&lt;'a, T: 'a&gt; Delay&lt;'a, T&gt; {
+    fn new&lt;F: 'a&gt;(f: F) -&gt; Delay&lt;'a, T&gt; where F: Fn() -&gt; T {
+        Delay { func: Box::new(f), value: RefCell::new(None) }
+    }
+    fn force(&amp;self) -&gt; &amp;T {
+        let mut val = self.value.borrow_mut();
+        if val.is_none() {
+            *val = Some((self.func)());
+        }
+        match unsafe { self.value.as_ptr().as_ref().unwrap() } {
+            &amp;Some(ref x) =&gt; x,
+            _ =&amp; unreachable!()
+        }
+    }
+}
+
+// Delay を生成するマクロ
+macro_rules! delay {
+    ($e:expr) => (Delay::new(move || $e));
+}
+
+// たらいまわし関数
+fn tarai(x: i32, y: i32, z: Delay&lt;i32&gt;) -&gt; i32 {
+    if x &lt;= y {
+        y
+    } else {
+        let zz = *z.force();
+        tarai(tarai(x - 1, y, z),
+              tarai(y - 1, zz, delay!(x)),
+              delay!(tarai(zz - 1, x, delay!(y))))
+    }
+}
+
+fn main() {
+    let a = delay!({println!("oops"); 1 + 2});  // ブロックも式
+    println!("{}", a.force()); 
+    println!("{}", a.force());
+    println!("{}", tarai(14, 7, delay!(0)));
+    println!("{}", tarai(140, 70, delay!(0)));
+}
+</pre>
+<pre>
+oops
+3
+3
+14
+140
+</pre>
+
+<h4 id="chap010b">●force() で Ref&lt;T&gt; を返す (2017/12/17)</h4>
+<p> RefCell を使うのであれば、force() で <a href="rustabc04.html#abc55">Ref&lt;T&gt;</a> を返すこともできます。次のリストを見てください。 
+</p>
+<pre class="list">
+リスト : force() で Ref&lt;T&gt; を返す
+
+impl&lt;'a, T: 'a&gt; Delay&lt;'a, T&gt; {
+    fn new&lt;F: 'a&gt;(f: F) -&gt; Delay&lt;'a, T&gt; where F: Fn() -&gt; T {
+        Delay { func: Box::new(f), value: RefCell::new(None) }
+    }
+
+    fn force(&amp;self) -&gt; Ref&lt;T&gt; {
+        {
+            let mut val = self.value.borrow_mut();
+            if val.is_none() {
+                *val = Some((self.func)());
+            }
+        }
+        Ref::map(self.value.borrow(), |opt_val| opt_val.as_ref().unwrap())
+    }
+}
+</pre>
+<p> メソッド Ref::map() で第 1 引数に self.value.borrow() を渡すと、ラムダ式の引数 opt_val には Option&lt;T&gt; の参照が渡されます。あとは opt_val を as_ref() で Option&lt;&amp;T&gt; に変換し、unwarp() で &amp;T を取り出します。これで Ref&lt;T&gt; を返すことができます。RefCell を使う場合は、&amp;T よりも Ref&lt;T&gt; を返したほうが簡単かもしれません。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">哲学者の食事</h3>
+<p> 今回は「哲学者の食事」という並行プログラミングでは有名な問題を解いてみましょう。
+</p>
+<div class="question">
+<b>[哲学者の食事]</b>
+<p> 5 人の哲学者が丸いテーブルに座っています．テーブルの中央にはスパゲッティが盛られた大皿があり、哲学者の間には 5 本のフォークが置かれています。哲学者は思索することとスパゲッティを食べることを繰り返します。食事のときには 2 本のフォークを持たなければなりません。食事が終わると 2 本のフォークを元の位置に戻します。
+</p>
+</div>
+<p> 詳しい説明は <a href="http://ja.wikipedia.org/wiki/%E9%A3%9F%E4%BA%8B%E3%81%99%E3%82%8B%E5%93%B2%E5%AD%A6%E8%80%85%E3%81%AE%E5%95%8F%E9%A1%8C">食事する哲学者の問題 -- Wikipedia</a> をお読みください。
+</p>
+<h4>●スレッドの生成</h4>
+<p> それではプログラムを作りましょう。最初にメインプログラムを示します。
+</p>
+<pre class="list">
+リスト : 哲学者の食事
+
+use std::{thread, time};
+use std::sync::{Arc, Mutex};
+
+fn main() {
+    let forks = Arc::new(vec![
+        Mutex::new(true), Mutex::new(true), Mutex::new(true), 
+        Mutex::new(true), Mutex::new(true)]);
+    let mut pys: Vec&lt;_&gt; = vec![];
+    for m in 0 .. 5 {
+        let forks = forks.clone();
+        pys.push(thread::spawn(move || philosopher(m, &amp;forks)));
+    }
+    for py in pys {
+        py.join().unwrap();
+    }    
+}
+</pre>
+<p> フォークの有無は真偽値で表して、それを Mutex に包んでベクタ forks に格納します。哲学者は整数値で区別します。たとえば、n 番目の哲学者の場合、右側のフォークが forks の n 番目の要素、左側のフォークが n + 1 番目の要素になります。for ループでスレッドを生成し、それをベクタ pys に格納します。哲学者の動作は関数 philosopher() で行います。
+</p>
+<h4>●フォークの操作</h4>
+<p> 次はフォークを操作する関数 get_fork() と ret_fork() を作りましょう。
+</p>
+<pre class="list">
+リスト : フォークの操作
+
+// フォークの取得
+fn get_fork(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    loop {
+        {
+            let mut fork = forks[n].lock().unwrap();
+            thread::sleep(time::Duration::from_millis(100));
+            if *fork {
+                *fork = false;
+                break;
+            }
+        }
+        thread::sleep(time::Duration::from_millis(100));
+    }
+}
+
+// フォークの返却
+fn ret_fork(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    let mut fork = forks[n].lock().unwrap();
+    thread::sleep(time::Duration::from_millis(100));
+    *fork = true;
+}
+
+</pre>
+<p> get_fork() はフォークを取る関数です。最初に、forks[n].lock().unwrap() で n 番目のフォークのロックを取得します。その後、フォークを取得するための時間として 100 msec だけ休止します。そして、*fork が真ならば偽に書き換えて処理を終了します。*fork が偽の場合、フォークは使用中なのでロックを解除して、100 msec まってから処理を繰り返します。ret_fork() はフォークを元に戻す関数です。ロックを取得した後、100 msec まってから *fork を true に書き換えます。
+</p>
+<h4>●哲学者の動作</h4>
+<p> 最後に関数 philosopher() を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 哲学者の動作
+
+fn philosopher(m: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    for _ in 0 .. 2 {
+        println!("Philosopher{} is thinking", m);
+        thread::sleep(time::Duration::from_millis(1000));
+        // 右のフォークを得る
+        get_fork(m, forks);
+        println!("Philosopher{} get right fork", m);
+        // 左のフォークを得る
+        get_fork((m + 1) % 5, forks);
+        println!("Philosopher{} get left fork", m);
+        // 食事
+        println!("Philosopher{} is eating", m);
+        thread::sleep(time::Duration::from_millis(500));
+        // 右のフォークを返す
+        ret_fork(m, forks);
+        println!("Philosopher{} return right fork", m);
+        // 左のフォークを返す
+        ret_fork((m + 1) % 5, forks);
+        println!("Philosopher{} return left fork", m);
+    }
+    println!("Philosopher{} is sleeping", m)
+}
+</pre>
+<p> 引数 m は哲学者の番号を表します。2 回食事をしたら処理を終了します。食事をする場合、最初に get_fork() で右側のフォークを取り、次に左側のフォークを取ります。食事を終えたら put_fork() で右側のフォークを置き、次に左側のフォークを置きます。thinking と eating のあと、関数 sleep() でプログラムの実行を休止します。
+</p>
+<h4>●実行結果 (1)</h4>
+<p> このように、マルチプロセスを使うと簡単にプログラムできますが、実は並行プログラミング特有の大きな問題点があるのです。これはプログラムを実行してみるとわかります。
+</p>
+<pre>
+Philosopher1 is thinking
+Philosopher4 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher0 is thinking
+Philosopher1 get right fork
+Philosopher0 get right fork
+Philosopher2 get right fork
+Philosopher3 get right fork
+Philosopher4 get right fork
+^C
+</pre>
+<p> このように、すべてのプロセスが待ち状態となり進むことができなくなります。これを「デッドロック (deadlock)」といいます。この場合、1 番目の哲学者の右側のフォークは、5 番目の哲学者の左側のフォークになります。各哲学者が右側のフォークを取り、左側のフォークが置かれるのを待つときにデッドロックとなるわけです。
+</p>
+<h4>●デッドロックの防止</h4>
+<p> デッドロックを防止する簡単な方法は、右側のフォークを取っても左側のフォークを取れないときは、右側のフォークを元に戻すことです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : デッドロックの防止 (1)
+
+// 右側のフォークを取得
+fn get_fork_right(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    loop {
+        {
+            let mut fork = forks[n].lock().unwrap();
+            thread::sleep(time::Duration::from_millis(100));
+            if *fork {
+                *fork = false;
+                break;
+            }
+        }
+        thread::sleep(time::Duration::from_millis(100));
+    }
+}
+
+// 左側のフォークを取得
+fn get_fork_left(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) -&gt; bool {
+    let mut fork = forks[n].lock().unwrap();
+    thread::sleep(time::Duration::from_millis(100));
+    if *fork {
+        *fork = false;
+        true
+    } else {
+        false
+    }
+}
+
+// 哲学者の動作
+fn philosopher(m: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    let mut n = 2;
+    while n &gt; 0 {
+        println!("Philosopher{} is thinking", m);
+        thread::sleep(time::Duration::from_millis(1000));
+        // 右のフォークを得る
+        get_fork_right(m, forks);
+        println!("Philosopher{} get right fork", m);
+        // 左のフォークを得る
+        if get_fork_left((m + 1) % 5, forks) {
+            println!("Philosopher{} get left fork", m);
+            // 食事
+            println!("Philosopher{} is eating", m);
+            thread::sleep(time::Duration::from_millis(500));
+            // 右のフォークを返す
+            ret_fork(m, forks);
+            println!("Philosopher{} return right fork", m);
+            // 左のフォークを返す
+            ret_fork((m + 1) % 5, forks);
+            println!("Philosopher{} return left fork", m);
+            n -= 1;
+        } else {
+            ret_fork(m, forks);
+            println!("Oops!, Philosopher{} return right fork", m);
+        }
+    }
+    println!("Philosopher{} is sleeping", m)
+}
+</pre>
+<p> 関数 get_fork() を get_right_fork() と get_left_fork() の 2 つに分けます。get_right_fork() は今までと同じですが、get_left_fork() はフォークを取得できたときは true を、できない場合は false を返すように変更します。関数 philosopher() で、左側のフォークを取得できた場合は今までと同じです。そうでなければ、ret_fork() で右側のフォークを元に戻します。
+</p>
+<h4>●実行結果 (2)</h4>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+Philosopher1 is thinking
+Philosopher0 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher1 get right fork
+Philosopher2 get right fork
+Philosopher0 get right fork
+Philosopher4 get right fork
+Philosopher3 get right fork
+Oops!, Philosopher1 return right fork
+Philosopher1 is thinking
+Oops!, Philosopher4 return right fork
+Oops!, Philosopher0 return right fork
+Philosopher4 is thinking
+Oops!, Philosopher2 return right fork
+Philosopher2 is thinking
+Philosopher0 is thinking
+Oops!, Philosopher3 return right fork
+Philosopher3 is thinking
+Philosopher1 get right fork
+Philosopher4 get right fork
+Philosopher2 get right fork
+Philosopher0 get right fork
+Philosopher3 get right fork
+Oops!, Philosopher0 return right fork
+Oops!, Philosopher1 return right fork
+Oops!, Philosopher4 return right fork
+Philosopher1 is thinking
+Philosopher4 is thinking
+Philosopher0 is thinking
+Oops!, Philosopher3 return right fork
+Philosopher3 is thinking
+Oops!, Philosopher2 return right fork
+Philosopher2 is thinking
+Philosopher1 get right fork
+Philosopher0 get right fork
+Philosopher4 get right fork
+Philosopher3 get right fork
+Philosopher2 get right fork
+^C
+</pre>
+<p> 哲学者全員が右側のフォークを受け取っては返却することを繰り返すため、次の状態へ進むことができません。デッドロックではありませんが、無限ループに陥っているわけです。このような状態を「ライブロック (livelock)」といいます。
+</p>
+<h4>●デッドロックの防止 (2)</h4>
+<p> ライブロックを防ぐ方法はいろいろあると思いますが、ここではデッドロック (とライブロック) を防止する簡単な方法を紹介しましょう。奇数番目の哲学者は、まず左側のフォークを取り上げてから右側のフォークを取り、偶数番目の哲学者は、今までのように右側のフォークを取り上げてから左側のフォークを取ります。こんな簡単な方法で動作するのは不思議なように思います。たとえば、哲学者が 2 人の場合を考えてみてください。
+</p>
+<p> 哲学者 0 の右側のフォークを A、左側のフォークを B とします。哲学者 1 からみると、B が右側のフォークで、A が左側のフォークになります。デッドロックは、哲学者 0 が A を取り、哲学者 1 が B を取ったときに発生します。ここで、哲学者 1 が左側のフォーク A から取るようにします。先に哲学者 0 が A を取った場合、哲学者 1 は A があくまで待つことになるので、哲学者 0 はフォーク B を取って食事をすることができます。哲学者 1 が先にフォーク A を取った場合も同じです。これでデッドロックを防止することができます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : デッドロックの防止 (2)
+
+fn philosopher(m: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    for _ in 0 .. 2 {
+        println!("Philosopher{} is thinking", m);
+        thread::sleep(time::Duration::from_millis(1000));
+        if m % 2 == 0 {
+            // 右のフォークを得る
+            get_fork(m, forks);
+            println!("Philosopher{} get right fork", m);
+            // 左のフォークを得る
+            get_fork((m + 1) % 5, forks);
+            println!("Philosopher{} get left fork", m);
+        } else {
+            // 左のフォークを得る
+            get_fork((m + 1) % 5, forks);
+            println!("Philosopher{} get left fork", m);
+            // 右のフォークを得る
+            get_fork(m, forks);
+            println!("Philosopher{} get right fork", m);
+        }
+        // 食事
+        println!("Philosopher{} is eating", m);
+        thread::sleep(time::Duration::from_millis(500));
+        // 右のフォークを返す
+        ret_fork(m, forks);
+        println!("Philosopher{} return right fork", m);
+        // 左のフォークを返す
+        ret_fork((m + 1) % 5, forks);
+        println!("Philosopher{} return left fork", m);
+    }
+    println!("Philosopher{} is sleeping", m)
+}
+</pre>
+<p> if 文で n が偶数の場合は右側から、奇数の場合は左側のフォークから取るように処理を分けるだけです。
+</p>
+<h4>●実行結果 (3)</h4>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+Philosopher2 is thinking
+Philosopher4 is thinking
+Philosopher3 is thinking
+Philosopher0 is thinking
+Philosopher1 is thinking
+Philosopher2 get right fork
+Philosopher0 get right fork
+Philosopher3 get left fork
+Philosopher2 get left fork
+Philosopher2 is eating
+Philosopher0 get left fork
+Philosopher0 is eating
+Philosopher2 return right fork
+Philosopher0 return right fork
+Philosopher1 get left fork
+Philosopher0 return left fork
+Philosopher0 is thinking
+Philosopher2 return left fork
+Philosopher2 is thinking
+Philosopher1 get right fork
+Philosopher1 is eating
+Philosopher3 get right fork
+Philosopher3 is eating
+Philosopher1 return right fork
+Philosopher3 return right fork
+Philosopher1 return left fork
+Philosopher1 is thinking
+Philosopher3 return left fork
+Philosopher3 is thinking
+Philosopher4 get right fork
+Philosopher0 get right fork
+Philosopher2 get right fork
+Philosopher0 get left fork
+Philosopher0 is eating
+Philosopher2 get left fork
+Philosopher2 is eating
+Philosopher0 return right fork
+Philosopher2 return right fork
+Philosopher4 get left fork
+Philosopher4 is eating
+Philosopher0 return left fork
+Philosopher0 is sleeping
+Philosopher1 get left fork
+Philosopher2 return left fork
+Philosopher2 is sleeping
+Philosopher1 get right fork
+Philosopher1 is eating
+Philosopher4 return right fork
+Philosopher3 get left fork
+Philosopher4 return left fork
+Philosopher4 is thinking
+Philosopher1 return right fork
+Philosopher3 get right fork
+Philosopher3 is eating
+Philosopher1 return left fork
+Philosopher1 is sleeping
+Philosopher3 return right fork
+Philosopher3 return left fork
+Philosopher3 is sleeping
+Philosopher4 get right fork
+Philosopher4 get left fork
+Philosopher4 is eating
+Philosopher4 return right fork
+Philosopher4 return left fork
+Philosopher4 is sleeping
+</pre>
+<p> 正常に動作していますね。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+//
+// ph0.rs : 哲学者の食事 (デッドロックが発生する)
+//
+//          Copyright (C) 2017 Makoto Hiroi
+//
+use std::{thread, time};
+use std::sync::{Arc, Mutex};
+
+// フォークの取得
+fn get_fork(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    loop {
+        {
+            let mut fork = forks[n].lock().unwrap();
+            thread::sleep(time::Duration::from_millis(100));
+            if *fork {
+                *fork = false;
+                break;
+            }
+        }
+        thread::sleep(time::Duration::from_millis(100));
+    }
+}
+
+// フォークの返却
+fn ret_fork(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    let mut fork = forks[n].lock().unwrap();
+    thread::sleep(time::Duration::from_millis(100));
+    *fork = true;
+}
+
+// 哲学者の動作
+fn philosopher(m: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    for _ in 0 .. 2 {
+        println!("Philosopher{} is thinking", m);
+        thread::sleep(time::Duration::from_millis(1000));
+        // 右のフォークを得る
+        get_fork(m, forks);
+        println!("Philosopher{} get right fork", m);
+        // 左のフォークを得る
+        get_fork((m + 1) % 5, forks);
+        println!("Philosopher{} get left fork", m);
+        // 食事
+        println!("Philosopher{} is eating", m);
+        thread::sleep(time::Duration::from_millis(500));
+        // 右のフォークを返す
+        ret_fork(m, forks);
+        println!("Philosopher{} return right fork", m);
+        // 左のフォークを返す
+        ret_fork((m + 1) % 5, forks);
+        println!("Philosopher{} return left fork", m);
+    }
+    println!("Philosopher{} is sleeping", m)
+}
+
+fn main() {
+    let forks = Arc::new(vec![
+        Mutex::new(true), Mutex::new(true), Mutex::new(true), 
+        Mutex::new(true), Mutex::new(true)]);
+    let mut pys: Vec&lt;_&gt; = vec![];
+    for m in 0 .. 5 {
+        let forks = forks.clone();
+        pys.push(thread::spawn(move || philosopher(m, &amp;forks)));
+    }
+    for py in pys {
+        py.join().unwrap();
+    }    
+}
+</pre>
+<pre class="list">
+//
+// ph1.rs : 哲学者の食事 (ライブロックが発生する)
+//
+//          Copyright (C) 2017 Makoto Hiroi
+//
+use std::{thread, time};
+use std::sync::{Arc, Mutex};
+
+// 右側のフォークを取得する
+fn get_fork_right(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    loop {
+        {
+            let mut fork = forks[n].lock().unwrap();
+            thread::sleep(time::Duration::from_millis(100));
+            if *fork {
+                *fork = false;
+                break;
+            }
+        }
+        thread::sleep(time::Duration::from_millis(100));
+    }
+}
+
+// 左側のフォークを取得する
+fn get_fork_left(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) -&gt; bool {
+    let mut fork = forks[n].lock().unwrap();
+    thread::sleep(time::Duration::from_millis(100));
+    if *fork {
+        *fork = false;
+        true
+    } else {
+        false
+    }
+}
+
+// フォークの返却
+fn ret_fork(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    let mut fork = forks[n].lock().unwrap();
+    thread::sleep(time::Duration::from_millis(100));
+    *fork = true;
+}
+
+// 哲学者の動作
+fn philosopher(m: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    let mut n = 2;
+    while n &gt; 0 {
+        println!("Philosopher{} is thinking", m);
+        thread::sleep(time::Duration::from_millis(1000));
+        // 右のフォークを得る
+        get_fork_right(m, forks);
+        println!("Philosopher{} get right fork", m);
+        // 左のフォークを得る
+        if get_fork_left((m + 1) % 5, forks) {
+            println!("Philosopher{} get left fork", m);
+            // 食事
+            println!("Philosopher{} is eating", m);
+            thread::sleep(time::Duration::from_millis(500));
+            // 右のフォークを返す
+            ret_fork(m, forks);
+            println!("Philosopher{} return right fork", m);
+            // 左のフォークを返す
+            ret_fork((m + 1) % 5, forks);
+            println!("Philosopher{} return left fork", m);
+            n -= 1;
+        } else {
+            ret_fork(m, forks);
+            println!("Oops!, Philosopher{} return right fork", m);
+        }
+    }
+    println!("Philosopher{} is sleeping", m)
+}
+
+fn main() {
+    let forks = Arc::new(vec![
+        Mutex::new(true), Mutex::new(true), Mutex::new(true), 
+        Mutex::new(true), Mutex::new(true)]);
+    let mut pys: Vec&lt;_&gt; = vec![];
+    for m in 0 .. 5 {
+        let forks = forks.clone();
+        pys.push(thread::spawn(move || philosopher(m, &amp;forks)));
+    }
+    for py in pys {
+        py.join().unwrap();
+    }    
+}
+</pre>
+<pre class="list">
+//
+// ph2.rs : 哲学者の食事 (デッドロックを防止する)
+//
+//          Copyright (C) 2017 Makoto Hiroi
+//
+use std::{thread, time};
+use std::sync::{Arc, Mutex};
+
+// フォークの取得
+fn get_fork(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    loop {
+        {
+            let mut fork = forks[n].lock().unwrap();
+            thread::sleep(time::Duration::from_millis(100));
+            if *fork {
+                *fork = false;
+                break;
+            }
+        }
+        thread::sleep(time::Duration::from_millis(100));
+    }
+}
+
+// フォークの返却
+fn ret_fork(n: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    let mut fork = forks[n].lock().unwrap();
+    thread::sleep(time::Duration::from_millis(100));
+    *fork = true;
+}
+
+// 哲学者の動作
+fn philosopher(m: usize, forks: &amp;Vec&lt;Mutex&lt;bool&gt;&gt;) {
+    for _ in 0 .. 2 {
+        println!("Philosopher{} is thinking", m);
+        thread::sleep(time::Duration::from_millis(1000));
+        if m % 2 == 0 {
+            // 右のフォークを得る
+            get_fork(m, forks);
+            println!("Philosopher{} get right fork", m);
+            // 左のフォークを得る
+            get_fork((m + 1) % 5, forks);
+            println!("Philosopher{} get left fork", m);
+        } else {
+            // 左のフォークを得る
+            get_fork((m + 1) % 5, forks);
+            println!("Philosopher{} get left fork", m);
+            // 右のフォークを得る
+            get_fork(m, forks);
+            println!("Philosopher{} get right fork", m);
+        }
+        // 食事
+        println!("Philosopher{} is eating", m);
+        thread::sleep(time::Duration::from_millis(500));
+        // 右のフォークを返す
+        ret_fork(m, forks);
+        println!("Philosopher{} return right fork", m);
+        // 左のフォークを返す
+        ret_fork((m + 1) % 5, forks);
+        println!("Philosopher{} return left fork", m);
+    }
+    println!("Philosopher{} is sleeping", m)
+}
+
+fn main() {
+    let forks = Arc::new(vec![
+        Mutex::new(true), Mutex::new(true), Mutex::new(true), 
+        Mutex::new(true), Mutex::new(true)]);
+    let mut pys: Vec&lt;_&gt; = vec![];
+    for m in 0 .. 5 {
+        let forks = forks.clone();
+        pys.push(thread::spawn(move || philosopher(m, &amp;forks)));
+    }
+    for py in pys {
+        py.join().unwrap();
+    }    
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html><!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

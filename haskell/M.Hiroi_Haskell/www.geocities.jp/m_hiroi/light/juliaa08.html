@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Julia プログラミング超入門</title>
+  <meta name="description" content="Julia 入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881803</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="ce">
+<h1>Julia Language Programming</h1>
+<h2>お気楽 Julia プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>たらいまわしと遅延評価</h3>
+<h4 id="chap30">●たらいまわし関数とは？</h4>
+<pre class="list">
+リスト : たらいまわし関数
+
+function tarai(x, y, z)
+  if x &lt;= y
+    y
+  else
+    tarai(tarai(x - 1, y, z), tarai(y - 1, z, x), tarai(z - 1, x, y))
+  end
+end
+
+function tak(x, y, z)
+  if x &lt;= y
+    z
+  else
+    tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y))
+  end
+end
+
+@time print(tarai(14, 7, 0))
+@time print(tak(22, 11, 0))
+</pre>
+<p> 関数 tarai() や tak() は「たらいまわし関数」といい、再帰的に定義されています。これらの関数は、引数の与え方によっては実行に時間がかかるため、Lisp などのベンチマークに利用されることがあります。tarai() は通称「竹内関数」と呼ばれていて、日本の代表的な Lisper である竹内郁雄氏によって考案されたそうです。そして、tak() は tarai() のバリエーションで、John Macarthy 氏によって作成されたそうです。
+</p>
+<p> それでは、さっそく実行してみましょう。
+</p>
+<pre>
+14  1.854706 seconds (11.81 k allocations: 630.448 KiB)
+11  2.001141 seconds (2.88 k allocations: 150.733 KiB)
+
+実行環境 : Windows 10, Intel Core i5-6200U 2.30GHz
+</pre>
+<p> このように、たらいまわし関数は引数の値が小さくても実行に時間がかかります。
+</p>
+
+<h4>●遅延評価 (クロージャ) による高速化</h4>
+<p> tarai() は「遅延評価」を行う処理系、たとえば関数型言語の Haskell では高速に実行することができます。また、Scheme でも delay と force を使って遅延評価を行うことができます。tarai() のプログラムを見てください。x &lt;= y のときに y を返しますが、このとき引数 z の値は必要ありませんね。引数 z の値は x &gt; y のときに計算するようにすれば、無駄な計算を省略することができます。なお、tak() は x &lt;= y のときに z を返しているため、遅延評価で高速化することはできません。ご注意ください。
+</p>
+<p> 完全ではありませんが、Julia でもクロージャを使って遅延評価を行うことができます。
+</p>
+<pre class="list">
+リスト : 遅延評価
+
+function tarai_lazy(x, y, z)
+  if x &lt;= y
+    y
+  else
+    zz = z()
+    tarai_lazy(tarai_lazy(x - 1, y, () -&gt; zz),
+               tarai_lazy(y - 1, zz, () -&gt; x),
+               () -&gt; tarai_lazy(zz - 1, x, () -&gt; y))
+  end
+end
+
+@time print(tarai(14, 7, 0))
+@time print(tarai_lazy(14, 7, () -&gt; 0))
+@time print(tarai_lazy(14, 7, () -&gt; 0))
+@time print(tarai_lazy(14, 7, () -&gt; 0))
+</pre>
+<p> 遅延評価したい処理をクロージャに包んで引数 z に渡します。そして、x &gt; y のときに引数 z を評価 (関数呼び出し) します。すると、クロージャ内の処理が実行されて z の値を求めることができます。たとえば、() -&gt; 0 を z に渡す場合、z() とすると返り値は 0 になります。() -&gt; x を渡せば、x に格納されている値が返されます。() -&gt; tarai( ... ) を渡せば、tarai() が実行されてその値が返されるわけです。
+</p>
+<p> 実行結果は次のようになりました。
+<pre>
+14  1.869341 seconds (11.81 k allocations: 630.448 KiB)
+14  0.045644 seconds (93.72 k allocations: 4.655 MiB)
+14  0.005574 seconds (4.31 k allocations: 224.876 KiB)
+14  0.006470 seconds (4.31 k allocations: 224.720 KiB)
+</pre>
+<p> tarai_lazy() は初回と 2 回目以降だと実行時間が大きく変わりました。JIT の影響かもしれません。
+</p>
+<h4>●メモ化による高速化</h4>
+<p> たらいまわし関数が遅いのは、同じ値を何度も計算しているためです。この場合、表 (table) を使って処理を高速化することができます。同じ値を何度も計算することがないように、計算した値は表に格納しておいて、2 回目以降は表から計算結果を求めるようにします。このような手法を「表計算法」とか「メモ化」といいます。
+</p>
+<p> Julia の場合、辞書を使うと簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : メモ化
+
+tak_table = Dict()
+
+function tak_memo(x, y, z)
+    key = (x, y, z)
+    if !haskey(tak_table, key)
+        if x &lt;= y
+            tak_table[key] = z
+        else
+            tak_table[key] = tak_memo(tak_memo(x - 1, y, z),
+                                      tak_memo(y - 1, z, x),
+                                      tak_memo(z - 1, x, y))
+        end
+    end
+    tak_table[key]
+end
+
+@time print(tak(22, 11, 0))
+@time print(tak_memo(22, 11, 0))
+</pre>
+<p> tak_memo() の値を格納する辞書を大域変数 tak_table に用意します。tak_memo() では、引数 x, y, z を要素とするタプルを作り、それをキーとして辞書 tak_table を検索します。tak_table に key があれば、その値を返します。そうでなければ、値を計算して tak_table にセットして、その値を返します。
+</p>
+<p> 実行結果は次のようになりました。
+</p>
+<pre>
+11  2.053890 seconds (11.81 k allocations: 630.370 KiB)
+11  0.101760 seconds (156.66 k allocations: 7.932 MiB)
+</pre>
+<p> メモ化により実行速度は速くなりましたが、遅延評価のような劇的な効果はありませんでした。Julia の場合、辞書のアクセスに時間がかかるのかもしれません。興味のある方はいろいろ試してみてください。
+</p>
+<h4>●メモ化関数</h4>
+<p> ところで、プログラミング言語によっては、関数をメモ化する「メモ化関数 (memoize)」を定義することができます。たとえば Python の場合、メモ化関数を memoize() とすると、次のように使います。
+</p>
+<pre class="item">
+tak = memoize(tak)
+</pre>
+<p> Python の場合、tak の値を書き換えないと、tak() の中で再帰呼び出しするとき、メモ化した関数を呼び出すことはできません。Julia の場合、メモ化関数は簡単に定義することができますが、funciton などで定義した関数名は定数として扱われるため、値を書き換えることができません。次の例を見てください。
+</p>
+<pre>
+julia&gt; foo(a, b) = a + b
+foo (generic function with 1 method)
+
+julia&gt; foo = (a, b) -&gt; a * b
+ERROR: invalid redefinition of constant foo
+
+julia&gt; foo = 10
+ERROR: invalid redefinition of constant foo
+</pre>
+<p> これでは memoize() で再帰関数のメモ化を行うことができません。そこで、今回はちょっと裏技みたいな方法を使ってみましょう。julia の場合、再帰関数は無名関数でも定義することが可能です。次の例を見てください。
+</p>
+<pre>
+julia&gt; fact = n -&gt; if n == 0
+       1
+       else
+       n * fact(n - 1)
+       end
+#5 (generic function with 1 method)
+
+julia&gt; fact(10)
+3628800
+
+julia&gt; fact = 10
+10
+</pre>
+<p> この場合、fact の値を書き換えることができるので、memoize() でメモ化することができます。memoize() とたらいまわし関数は次のようになります。
+</p>
+<pre class="list">
+リスト : たらいまわし関数
+
+# メモ化関数
+function memoize(f)
+    table = Dict()
+    function func(args...)
+        if !haskey(table, args)
+            table[args] = f(args...)
+        end
+        table[args]
+    end
+    func
+end
+
+# たらいまわし関数
+tak1 = (x, y, z) -&gt;
+    if x &lt;= y
+        z
+    else
+        tak1(tak1(x - 1, y, z), tak1(y - 1, z, x), tak1(z - 1, x, y))
+    end
+
+# メモ化
+tak1 = memoize(tak1)
+
+@time print(tak(22, 11, 0))
+@time print(tak1(22, 11, 0))
+</pre>
+<pre>
+11  2.057188 seconds (11.81 k allocations: 630.229 KiB)
+11  0.121112 seconds (265.45 k allocations: 13.479 MiB)
+</pre>
+<p> このように、無名関数を使うと再帰関数でも簡単にメモ化することができますが、実はこの方法には重大な欠点があります。tak1 をメモ化しないで実行すると、極端に遅くなるのです。実際に試してみると tak1(22, 11, 0) で約 22 秒もかかってしまいました。Julia では、このような無名関数の使い方は邪道なのかもしれません。
+</p>
+<p> なお、Julia でメモ化関数を実現する場合、マクロを使う方法があるようです。実際に、GitHub で <a href="https://github.com/simonster/Memoize.jl">Memoize.jl</a> が公開されています。興味のある方は試してみてください。
+</p>
+<h4>●delay() と force() の作成</h4>
+<p> Scheme の遅延評価は delay と force を使いますが、Julia でもマクロを使って簡単に実装することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延評価 (lazy.jl)
+
+# プロミス
+mutable struct Promise
+    func
+    flag::Bool
+    value
+end
+
+macro delay(expr)
+    :(Promise(() -&gt; $(esc(expr)), false, nothing))
+end
+
+function force(p::Promise)
+    if !p.flag
+        p.value = p.func()
+        p.flag = true
+    end
+    p.value
+end
+</pre>
+<p> delay() はマクロで、引数 expr を評価しないでプロミス (Promise) というデータを返します。expr はこのプロミスに保存されていて、force(p) を実行すると、expr を評価してその値を返します。このとき、値がプロミスに保存されることに注意してください。再度 force(p) を実行すると、保存された値が返されます。
+</p>
+<p> プログラムは簡単です。Promis のメンバ変数 func には、評価する式 expr を包んだ無名関数をセットします。格納した式を評価したら、flag を true にセットします。value は式の評価結果を格納します。
+</p>
+<p> delay() は簡単で、引数 expr を無名関数に包んで Promise() に渡します。これで、引数 expr は評価されずにプロミスに格納されます。force() も簡単で、p.flag が false ならば、p.func() を評価して値を求め、その結果を p.value にセットします。あとは、p.value を返すだけです。
+</p>
+
+<p> 簡単な実行例を示します。上記プログラムを格納したファイル (lazy.jl) を include してください。
+</p>
+<pre>
+julia&gt; a = @delay (println("oops!"); 10 + 20)
+Promise(getfield(Main, Symbol("##3#4"))(), false, nothing)
+
+julia&gt; force(a)
+oops!
+30
+
+julia&gt; force(a)
+30
+</pre>
+<p> delay() の返り値を変数 a にセットします。このとき、式 (println("oops!"); 10 + 20) は評価されていません。force(a) を評価すると、式を評価して値 30 を返します。このとき、println() で oops! と表示されます。また、force(a) を再度実行すると、同じ式を再評価することなく値を求めることができます。この場合は oops! と表示されません。
+</p>
+<p> 次は、たらいまわし関数で試してみましょう。
+</p>
+<pre class="list">
+リスト : たらいまわし (遅延評価)
+
+function tarai(x, y, z)
+  if x &lt;= y
+    y
+  else
+    zz = force(z)
+    tarai(tarai(x - 1, y, @delay zz),
+          tarai(y - 1, zz, @delay x),
+          @delay tarai(zz - 1, x, @delay y))
+  end
+end
+</pre>
+<p> 遅延評価したい処理をプロミスにして引数 z に渡します。そして、x &gt; y のときに引数 z のプロミスを force で評価します。すると、プロミス内の処理が評価されて z の値を求めることができます。たとえば、@delay 0 を z に渡す場合、force(z) とすると返り値は 0 になります。@delay x を渡せば、x に格納されている値が返されます。@delay tarai( ... ) を渡せば tarai() が実行されて、その値を求めることができます。
+</p>
+<p> 実行結果は次のようになりました。
+</p>
+<pre>
+  0.027620 seconds (33.62 k allocations: 1.889 MiB)
+  0.000202 seconds (685 allocations: 34.422 KiB)
+  0.000204 seconds (685 allocations: 34.422 KiB)
+
+実行環境 : Windows 10, Intel Core i5-6200U 2.30GHz
+</pre>
+<p> クロージャを使った遅延評価よりも速くなりました。評価結果をキャッシュしているのが効いているのかもしれません。興味のある方はいろいろ試してみてください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="abc">Julia の基礎知識</h3>
+<h4 id="abc27">●高階関数の使い方</h4>
+<ul>
+  <li>Julia はコレクションだけではなくイテレータ用の高階関数も用意されている
+  <li>ここでは Julia に用意されている主な高階関数を簡単に説明する
+  <li>マッピング
+  <ul>
+    <li>map(f, c...) =&gt; collection
+    <ul>
+      <li>引数の要素に関数 f() を適用し、それをコレクションに格納して返す
+      <li>基本的には引数と同じデータ型のコレクションを返す
+      <li>範囲オブジェクトの場合は 1 次元配列が返される
+      <li>Set や Dict の場合はエラー
+    </ul>
+    <li>map!(f, dest, c...), 関数 f() の評価結果を dest に格納する
+    <li>マッピングと畳み込みを行う関数 mapreduce(), mapfoldl(), mapfoldr() もある
+  </ul>
+  <li>フィルター
+  <ul>
+    <li>filter(pred, collecton) =&gt; collection
+    <ul>
+      <li>関数 pred() が真を返す要素を格納したコレクションを返す
+      <li>Set や Dict でも OK
+      <li>Dict の場合、pred() の引数には Pair が渡される
+    </ul>
+    <li>filter!(pred, collection)
+    <ul>
+      <li>filter!() は引数を破壊的に修正する
+      <li>つまり、pred() が偽を返す要素を取り除く
+    </ul>
+  </ul>
+  <li>畳み込み
+  <ul>
+    <li>reduce(f, iter; [init]) =&gt; value
+    <li>foldl(f, iter; [init]) =&gt; value
+    <li>foldr(f, iter; [init]) =&gt; value
+    <ul>
+      <li>reduce() と foldl() はイテレータ iter の先頭から畳み込みを行う
+      <li>foldr() は iter の末尾から畳み込みを行う
+      <li>引数 f の関数には 2 つの引数が渡される
+      <li>reduce() と foldl() の場合、第 1 引数が累積変数、第 2 引数が iter の要素
+      <li>foldr() は逆になるので注意すること
+      <li>init は累積変数の初期値を指定する
+      <li>省略された場合、reduce() と foldl() は iter の先頭要素が初期値になる
+      <li>foldr() は iter の末尾要素が初期値になる
+    </ul>
+    <li>reduce() には多次元配列を渡すことができる
+    <li>このとき、キーワード引数 dims で畳み込みを行う軸を指定することができる
+    <li>dims を指定しないと平坦化して畳み込みを行う
+  </ul>
+</ul>
+<pre>
+julia&gt; map(x -&gt; x * x, 1 : 10)
+10-element Array{Int64,1}:
+   1
+   4
+   9
+  16
+  25
+  36
+  49
+  64
+  81
+ 100
+
+julia&gt; a = zeros(Int, 10)
+10-element Array{Int64,1}:
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+ 0
+
+julia&gt; map!(x -&gt; x * x, a, 1 : 10)
+10-element Array{Int64,1}:
+   1
+   4
+   9
+  16
+  25
+  36
+  49
+  64
+  81
+ 100
+
+julia&gt; a
+10-element Array{Int64,1}:
+   1
+   4
+   9
+  16
+  25
+  36
+  49
+  64
+  81
+ 100
+
+julia&gt; filter(iseven, a)
+5-element Array{Int64,1}:
+   4
+  16
+  36
+  64
+ 100
+
+julia&gt; filter!(iseven, a)
+5-element Array{Int64,1}:
+   4
+  16
+  36
+  64
+ 100
+
+julia&gt; a
+5-element Array{Int64,1}:
+   4
+  16
+  36
+  64
+ 100
+
+julia&gt; d = Dict("foo" =&gt; 1, "bar" =&gt; 2, "baz" =&gt; 3, "oops" =&gt; 4)
+Dict{String,Int64} with 4 entries:
+  "bar"  =&gt; 2
+  "baz"  =&gt; 3
+  "oops" =&gt; 4
+  "foo"  =&gt; 1
+
+julia&gt; filter(p -&gt; iseven(p.second), d)
+Dict{String,Int64} with 2 entries:
+  "bar"  =&gt; 2
+  "oops" =&gt; 4
+
+julia&gt; filter!(p -&gt; iseven(p.second), d)
+Dict{String,Int64} with 2 entries:
+  "bar"  =&gt; 2
+  "oops" =&gt; 4
+
+julia&gt; d
+Dict{String,Int64} with 2 entries:
+  "bar"  =&gt; 2
+  "oops" =&gt; 4
+
+julia&gt; reduce((a, x) -&gt; (x, a), 1 : 10)
+(10, (9, (8, (7, (6, (5, (4, (3, (2, 1)))))))))
+
+julia&gt; reduce((a, x) -&gt; (x, a), 1 : 10, init=0)
+(10, (9, (8, (7, (6, (5, (4, (3, (2, (1, 0))))))))))
+
+julia&gt; foldl((a, x) -&gt; (x, a), 1 : 10)
+(10, (9, (8, (7, (6, (5, (4, (3, (2, 1)))))))))
+
+julia&gt; foldl((a, x) -&gt; (x, a), 1 : 10, init=0)
+(10, (9, (8, (7, (6, (5, (4, (3, (2, (1, 0))))))))))
+
+julia&gt; foldr((x, a) -&gt; (x, a), 1 : 10)
+(1, (2, (3, (4, (5, (6, (7, (8, (9, 10)))))))))
+
+julia&gt; foldr((x, a) -&gt; (x, a), 1 : 10, init=11)
+(1, (2, (3, (4, (5, (6, (7, (8, (9, (10, 11))))))))))
+
+julia&gt; m = reshape(collect(1 : 16), 4, 4)
+4×4 Array{Int64,2}:
+ 1  5   9  13
+ 2  6  10  14
+ 3  7  11  15
+ 4  8  12  16
+
+julia&gt; reduce(+, m, dims=1)
+1×4 Array{Int64,2}:
+ 10  26  42  58
+
+julia&gt; reduce(+, m, dims=2)
+4×1 Array{Int64,2}:
+ 28
+ 32
+ 36
+ 40
+</pre>
+<ul>
+  <li>all(pred, iter) =&gt; Bool
+  <li>any(pred, iter) =&gt; Bool
+  <ul>
+    <li>all() と any() はイテレータ iter の要素に関数 pred() を適用する
+    <li>all() は評価結果がすべて真のときに true を返す
+    <li>一つでも偽があれば false を返す
+    <li>any() は評価結果がすべて偽のときに false を返す
+    <li>一つでも真があれば true を返す
+    <li>all(iter), any(iter) は iter の要素の値で真偽を判定する
+  </ul>
+  <li>count(pred, iter) =&gt; Int
+  <ul>
+    <li>イテレータ iter の要素に関数 pred() を適用する
+    <li>真を返す要素の個数を数える
+    <li>count(iter) は iter の要素の値で真偽を判定する
+  </ul>
+  <li>findfirst(pred, A) =&gt; index
+  <li>findnext(pred, A, idx) =&gt; index
+  <ul>
+    <li>配列 A の先頭から関数 pred() が真を返す要素を探す
+    <li>見つからない場合は nothing を返す
+    <li>findnext() は idx 番目から後方を探す
+    <li>pred を省略すると、配列の要素の値で真偽を判定する
+  </ul>
+  <li>findlast(pred, A) =&gt; index
+  <li>findprev(pred, A, idx) =&gt; index
+  <ul>
+    <li>配列 A の末尾から関数 pred() が真を返す要素を探す
+    <li>見つからない場合は nothing を返す
+    <li>findprev() は idx 番目から前方を探す
+    <li>pred を省略すると、配列の要素の値で真偽を判定する
+  </ul>
+  <li>findall(pred, a) =&gt; indexs
+  <ul>
+    <li>関数 pred() が真を返す要素の位置をすべて求める
+    <li>pred を省略すると、配列の要素の値で真偽を判定する
+  </ul>
+  <li>foreach(f, iter) =&gt; nothing
+  <ul>
+    <li>イテレータ iter の要素に関数 f() を適用する
+  </ul>
+</ul>
+<pre>
+julia&gt; all(iseven, [2,4,6,8,10])
+true
+
+julia&gt; all(iseven, [2,4,6,8,11])
+false
+
+julia&gt; any(isodd, [2,4,6,8,11])
+true
+
+julia&gt; any(isodd, [2,4,6,8,10])
+false
+
+julia&gt; all([true, true, true])
+true
+
+julia&gt; all([true, true, false])
+false
+
+julia&gt; any([true, true, false])
+true
+
+julia&gt; any([false, false, false])
+false
+
+julia&gt; count(iseven, 1 : 10)
+5
+
+julia&gt; count(iseven, 1 : 2 : 10)
+0
+
+julia&gt; count(map(iseven, 1 : 10))
+5
+
+julia&gt; a = [1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5]
+14-element Array{Int64,1}:
+ 1
+ 2
+ 1
+ 2
+ 3
+ 1
+ 2
+ 3
+ 4
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia&gt; findfirst(isequal(4), a)
+9
+
+julia&gt; findnext(isequal(4), a, 10)
+13
+
+julia&gt; findnext(isequal(4), a, 14)
+
+julia&gt; findlast(isequal(4), a)
+13
+
+julia&gt; findprev(isequal(4), a, 12)
+9
+
+julia&gt; findprev(isequal(4), a, 8)
+
+julia&gt; findall(isequal(4), a)
+2-element Array{Int64,1}:
+  9
+ 13
+
+julia&gt; findall(isequal(10), a)
+0-element Array{Int64,1}
+
+julia&gt; foreach(x -&gt; print("$x "), a)
+1 2 1 2 3 1 2 3 4 1 2 3 4 5
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap">簡単なプログラム</h3>
+<h4 id="chap41">●約数の個数</h4>
+<p> 自然数 n の約数の個数を求めるプログラムを作りましょう。n の素因数分解ができると、約数の個数を求めるのは簡単です。n = p<sup>a</sup> * q<sup>b</sup> * r<sup>c</sup> とすると、約数の個数は (a + 1) * (b + 1) * (c + 1) になります。たとえば、12 は 2<sup>2</sup> * 3<sup>1</sup> になるので、約数の個数は 3 * 2 = 6 になります。実際、12 の約数は 1, 2, 3, 4, 6, 12 の 6 個です。
+</p>
+<p> 拙作のページ <a href="juliaa01.html#chap06">素因数分解</a> で作成した関数 factorization() を使うと、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 約数の個数
+
+divisor_num(n) = foldl((a, p) -&gt; a * (p.second + 1), factorization(n), init=1)
+</pre>
+<p> 関数 divisor_num() は高階関数 foldl() で配列の要素 (Pair) を順番に取り出し、x + 1 を a に掛け算していくだけです。Pair の最初の要素は first で、二番目の要素は second でアクセスすることができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+julia&gt; divisor_num(24)
+8
+
+julia&gt; divisor_num(12345678)
+24
+
+julia&gt; divisor_num(123456789)
+12
+
+julia&gt; divisor_num(1234567890)
+48
+
+julia&gt; divisor_num(1111111111)
+16
+</pre>
+<hr>
+<h4 id="chap42">●約数の和</h4>
+<p> 自然数 n の約数の和を求めるプログラムを作りましょう。n の素因数分解ができると、約数の合計値を求めるのは簡単です。n の素因数分解が p<sup>a</sup> だった場合、その約数の合計値は次の式で求めることができます。
+</p>
+<pre class="item">
+σ(p, a) = p<sup>a</sup> + p<sup>a-1</sup> + ... + p<sup>2</sup> + p + 1
+</pre>
+<p> たとえば、8 の素因数分解は 2<sup>3</sup> になり、素数の合計値は 8 + 4 + 2 + 1 = 15 になります。
+</p>
+<p> p<sup>a</sup> の約数の合計値を σ(p, a) で表すことにします。n = p<sup>a</sup> * q<sup>b</sup> * r<sup>c</sup> の場合、n の約数の合計値は σ(p, a) * σ(q, b) * σ(r, c) になります。たとえば、12 は 2<sup>2</sup> * 3 に素因数分解できますが、その合計値は (4 + 2 + 1) * (3 + 1) = 28 となります。12 の約数は 1, 2, 3, 4, 6, 12 なので、その合計値は確かに 28 になります。
+</p>
+<p> 拙作のページ <a href="juliaa01.html#chap06">素因数分解</a> で作成した関数 factorization() を使うと、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 約数の合計値
+
+function divisor_sum(n)
+    sigma(p, n) = foldl((a, x) -&gt; a + p ^ x, 1 : n, init = 0) + 1    # σ(p, n) の計算
+    foldl((a, p) -&gt; a * sigma(p...), factorization(n), init = 1)
+end
+</pre>
+<p> 局所関数 sigma() は σ(p, n) を計算します。あとは foldl() で sigma() の返り値を累積変数 a に掛け算していくだけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+julia&gt; divisor_sum(24)
+60
+
+julia&gt; divisor_sum(12345678)
+27319968
+
+julia&gt; divisor_sum(123456789)
+178422816
+
+julia&gt; divisor_sum(1234567890)
+3211610688
+
+julia&gt; divisor_sum(1111111111)
+1246404096
+</pre>
+<hr>
+<h4 id="chap43">●約数</h4>
+<p> 自然数 n の約数をすべて求めるプログラムを作りましょう。p が素数の場合、p<sup>a</sup> の約数は次のように簡単に求めることができます。
+</p>
+<pre class="item">
+p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1
+</pre>
+<p> n の素因数分解が p<sup>a</sup> * q<sup>b</sup> だったとすると、その約数は次のようになります。
+</p>
+<pre class="item">
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * q<sup>b</sup>,
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * q<sup>b-1</sup>,
+        .....
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * q<sup>2</sup>,
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * q,
+(p<sup>a</sup>, p<sup>a-1</sup>, ... p<sup>2</sup>, p, 1) * 1
+</pre>
+<p> たとえば、12 の約数は 2<sup>4</sup> = (1, 2, 4) と 3 = (1, 3) から、(1, 2, 4) * 1 と (1, 2, 4) * 3 のすべての要素 (1, 2, 4, 3, 6, 12) になります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 約数をすべて求める
+
+function divisor(n)
+    # p<sup>q</sup> の約数を求める
+    divisor_sub(p, q) = [p ^ i for i = 0 : q]
+
+    xs = factorization(n)
+    ys = divisor_sub(xs[1]...)
+    for p = xs[2 : end]
+        ys = [x * y for x = divisor_sub(p...) for y = ys]
+    end
+    sort(ys)
+end
+</pre>
+<p> 局所関数 divisor_sub() は p<sup>q</sup> の約数を配列に格納して返します。引数 n を factorization() で素因数分解して変数 xs にセットします。xs の先頭要素を divisor_sub() に渡して配列に変換し、それを変数 ys にセットします。あとは for ループで xs の 1 番目から要素を順番に取り出し、p<sup>q</sup> を divisor_sub() でリストに変換して、それを内包表記で累積変数 ys のリストの要素と掛け合わせていくだけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+julia&gt; foreach(x -&gt; print("$x "), divisor(24))
+1 2 3 4 6 8 12 24
+julia&gt; foreach(x -&gt; print("$x "), divisor(123456789))
+1 3 9 3607 3803 10821 11409 32463 34227 13717421 41152263 123456789
+julia&gt; foreach(x -&gt; print("$x "), divisor(1234567890))
+1 2 3 5 6 9 10 15 18 30 45 90 3607 3803 7214 7606 10821 11409 18035 19015 21642 22818 32463 34227 36070 38030 54105 
+57045 64926 68454 108210 114090 162315 171135 324630 342270 13717421 27434842 41152263 68587105 82304526 123456789 
+137174210 205761315 246913578 411522630 617283945 1234567890
+julia&gt; foreach(x -&gt; print("$x "), divisor(1111111111))
+1 11 41 271 451 2981 9091 11111 100001 122221 372731 2463661 4100041 27100271 101010101 1111111111
+</pre>
+<hr>
+<h4 id="chap44">●完全数</h4>
+<p> <a href="juliaa08.html#cite">参考 URL 1</a> によると、<cite>『完全数（かんぜんすう，perfect number）とは、その数自身を除く約数の和が、その数自身と等しい自然数のことである。』</cite> とのことです。完全数を求めるプログラムを作りましょう。
+</p>
+<pre class="list">
+リスト : 完全数
+
+function perfect_number(n)
+    [x for x = 2 : n if divisor_sum(x) - x == x]
+end
+</pre>
+<p> 完全数を求める perfect_number() は簡単です。x の約数の合計値を divisor_sum() で求め、その値から x を引いた値が x と等しければ完全数です。内包表記で完全数を格納した配列を生成して返します。
+</p>
+<p> 実行結果を示します。
+</p>
+<pre>
+julia&gt; perfect_number(10000)
+4-element Array{Int64,1}:
+    6
+   28
+  496
+ 8128
+</pre>
+<p> ところで、<a href="juliaa08.html#cite">参考 URL 1</a> によると、メルセンヌ素数を M<sub>n</sub> とすると、偶数の完全数は 2<sup>n-1</sup> * M<sub>n</sub> で表すことができるそうです。この式を使うと偶数の完全数は次のようになります。
+</p>
+<pre class="item">
+ n : メルセンヌ素数 : 完全数
+---+----------------+----------------------
+ 2 : 3              : 6
+ 3 : 7              : 28
+ 5 : 31             : 496
+ 7 : 127            : 8128
+13 : 8191           : 33550336
+17 : 131071         : 8589869056
+19 : 524287         : 137438691328
+31 : 2147483647     : 2305843008139952128
+</pre>
+<p> なお、奇数の完全数はまだ発見されておらず、偶数の完全数 (つまりメルセンヌ素数) が無数に存在するか否かも未解決な問題だそうです。
+</p>
+<hr>
+<h4 id="chap45">●友愛数</h4>
+<p> <a href="juliaa08.html#cite">参考 URL 2</a> によると、<cite>『友愛数（ゆうあいすう）とは、異なる2つの自然数の組で、自分自身を除いた約数の和が、互いに他方と等しくなるような数をいう。』</cite> とのことです。友愛数を求めるプログラムを作りましょう。
+</p>
+<pre class="list">
+リスト : 友愛数
+
+function yuuai_number(n)
+    check(x, m) = m &lt; x && x == divisor_sum(m) - m
+    [p for p = [(x, divisor_sum(x) - x) for x = 2 : n] if check(p...)]
+end
+</pre>
+<p> 友愛数を求める関数 yuuai_number() も簡単です。局所関数 check(x, m) は x と m が友愛数かチェックします。m の約数の合計値から m を引いた値が x と等しければ、x と m は友愛数です。同じ組を表示しないようにするため、m &lt; x を条件に入れています。あとは内包表記でタプル (x, m) を格納した配列を生成し、その要素が友愛数か check() でチェックするだけです。この処理も内包表記を使えば簡単です。
+</p>
+<p> 実行結果を示します。
+</p>
+<pre>
+julia&gt; yuuai_number(100000)
+13-element Array{Tuple{Int64,Int64},1}:
+ (284, 220)
+ (1210, 1184)
+ (2924, 2620)
+ (5564, 5020)
+ (6368, 6232)
+ (10856, 10744)
+ (14595, 12285)
+ (18416, 17296)
+ (66992, 66928)
+ (71145, 67095)
+ (76084, 63020)
+ (87633, 69615)
+ (88730, 79750)
+</pre>
+<p> なお、友愛数が無数に存在するか否かは、未解決な問題だそうです。
+</p>
+<hr>
+<h4>●別解</h4>
+<p> perfect_number() と yuuai_number() は、divisor_sum() を呼び出して約数の和を求めていますが、あらかじめ約数の和を計算して配列に格納しておく方法もあります。この場合、約数の和の計算にちょっと時間がかかりますが、完全数と友愛数を求める処理は高速になります。
+</p>
+<p> 基本的な考え方は簡単です。約数の和を格納する配列 table を用意します。table の要素は 1 に初期化します。2 から順番に素数 p で割り算して 1 + p<sup>1</sup> + ... + p<sup>q</sup> を求め、それを table の値に掛け算します。素数は「エラトステネスの篩」と同じ方法で求めることができます。素数の倍数であれば、table の値は 1 よりも大きくなっているはずです。つまり table が 1 であれば、その整数は素数であることがわかります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : n 以下の整数の約数の和を配列に格納して返す
+
+function make_divisor_sum(n)
+    function factor_sub(n, p)
+        a = 1
+        q = 1
+        while n % p == 0
+            a += p ^ q
+            q += 1
+            n = div(n, p)
+        end
+        a
+    end
+    #
+    table = fill(1, n)
+    for i = 2 : n
+        if table[i] != 1 continue end
+        for j = i : i : n
+            table[j] *= factor_sub(j, i)
+        end
+    end
+    table
+end
+</pre>
+<p> 局所関数 factor_sub() は n を 素数 p で割り算して、1 + p<sup>1</sup> + ... + p<sup>q</sup> を求めます。make_divisor_sum() は table を 1 で初期化してから、for ループで素数を探します。table[i] が 1 でない場合、i は素数ではありません。contiune で次の数をチェックします。素数の場合は、その倍数に対応する table の値を更新します。i の倍数を 変数 j にセットし、table[j] に factor_sub(j, i) の値を乗算するだけです。最後に table を返します。
+</p>
+<p> make_divisor_sum() を使うと yuuai_number() は次のようになります。
+</p>
+<pre class="list">
+リスト : 友愛数
+
+function yuuai_number1(n)
+    table = make_divisor_sum(n)
+    check(x, m) = m &lt; x && x == table[m] - m
+    [p for p = [(x, table[x] - x) for x = 2 : n] if check(p...)]
+end
+</pre>
+<p> それでは実際に 1,000,000 以下の友愛数を求めてみましょう。
+</p>
+<pre>
+julia&gt; @time yuuai_number(1000000)
+  2.512285 seconds (26.57 M allocations: 1.153 GiB, 7.71% gc time)
+40-element Array{Tuple{Int64,Int64},1}:
+ (284, 220)
+ (1210, 1184)
+ (2924, 2620)
+ (5564, 5020)
+ (6368, 6232)
+ (10856, 10744)
+ (14595, 12285)
+ (18416, 17296)
+ (66992, 66928)
+ (71145, 67095)
+ (76084, 63020)
+ (87633, 69615)
+ (88730, 79750)
+ ⋮
+ (514736, 503056)
+ (525915, 522405)
+ (652664, 643336)
+ (669688, 600392)
+ (686072, 609928)
+ (691256, 624184)
+ (712216, 635624)
+ (783556, 667964)
+ (796696, 726104)
+ (863835, 802725)
+ (901424, 879712)
+ (980984, 898216)
+
+julia&gt; @time yuuai_number1(1000000)
+  0.234946 seconds (183.54 k allocations: 31.719 MiB, 2.62% gc time)
+40-element Array{Tuple{Int64,Int64},1}:
+
+・・・省略・・・
+
+</pre>
+<p> 40 個の友愛数を出力するのに最初のプログラムでは 2.5 秒 (実行環境 : Julia ver 1.0, Windows 10, Intel Core i5-6200U 2.30GHz) かかりましたが、make_divisor_sum() を使ったプログラムは約数の和を求める処理を含めて 0.23 秒ですみました。約 10 倍高速化することができました。
+</p>
+<hr>
+<h4 id="chap46">●過剰数と不足数</h4>
+<p> <a href="juliaa08.html#cite">参考 ULR 3, 4<a> によると、『その数自身を除く約数の総和が元の数より大きい数』を「過剰数 (abundant number)」といい、『その数自身を除く約数の総和が元の数より小さい数』を「不足数 (deficient number)」というそうです。過剰数と不足数の個数を求めるプログラムも簡単に作ることができます。
+</p>
+<pre class="list">
+リスト : 過剰数と不足数
+
+# 過剰数
+abundant_number(n) = count(x -&gt; divisor_sum(x) - x &gt; x, 1 : n)
+
+# 不足数
+deficient_number(n) = count(x -&gt; divisor_sum(x) - x &lt; x, 1 : n)
+</pre>
+<pre>
+julia&gt; abundant_number(1000000)
+247545
+
+julia&gt; deficient_number(1000000)
+752451
+</pre>
+<p> 1000000 以下の過剰数は 247545 個、不足数は 752451 個、完全数は 4 個なので、合計で 1000000 になります。<a href="juliaa08.html#cite">参考 URL 3</a> によると、<cite>『自然数のうち過剰数が占める割合は0.2474から0.2480の間であると証明されている。』</cite> とのことで、1000000 以下の過剰数の個数は確かにこの範囲内に入っています。
+</p>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li> <a href="http://ja.wikipedia.org/wiki/%E5%AE%8C%E5%85%A8%E6%95%B0">完全数 - Wikipedia</a>
+  <li> <a href="http://ja.wikipedia.org/wiki/%E5%8F%8B%E6%84%9B%E6%95%B0">友愛数 - Wikipedia</a>
+  <li> <a href="https://ja.wikipedia.org/wiki/%E9%81%8E%E5%89%B0%E6%95%B0">過剰数 - Wikipedia</a>
+  <li> <a href="https://ja.wikipedia.org/wiki/%E4%B8%8D%E8%B6%B3%E6%95%B0">不足数 - Wikipedia</a>
+  <li><a href="http://d.hatena.ne.jp/inamori/20091113/p1">完全数・友愛数・社交数 - 桃の天然水</a>, (inamori さん)
+</ol>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016-2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

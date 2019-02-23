@@ -1,0 +1,176 @@
+html <!DOCTYPE>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>M.Hiroi's Home Page / Memorandum</title>
+  <meta name="description" content="M.Hiroi's Home Page,memorandum">
+  <link rel="stylesheet" type="text/css" href="home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881754</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Memorandum</h1>
+プログラミングに関する覚え書や四方山話です。
+</div>
+<div class="small">
+[ <a href="index.html">Home</a> ]
+<hr>
+</div>
+<div class="small">
+2014年 <a href="memo14.html#1401">1月</a> <a href="memo14.html#1411">11月</a> <a href="memo14.html#1412">12月</a>
+</div>
+<hr>
+<a name="1412">2014 年 12 月</a>
+<hr>
+<section class="contents">
+<h3 id="141228">12月28日</h3>
+<h4 id="141228_1">●文字コードの変換</h4>
+<p> Windows (MS-DOS) の文字コードはデフォルトでシフト JIS ですが、最近は UTF-8 を採用している OS やアプリケーションが多くなってきました。たとえば、Cygwin や Linux は UTF-8 ですし、Go 言語や Scala などのプログラミング言語も UTF-8 を採用しています。シフト JIS で書かれた Windows 用のプログラムを Cygwin や Linux に移植する場合、文字コードの変換が必要になります。
+</p>
+
+<p> Linux には標準で iconv という文字コードを変換するコマンドが用意されていますが、改行コードの変換は行ってくれません。Windows の場合、改行コードは CR+LF ですが UNIX 系の OS では LF だけです。この場合、コマンド tr で CR を削除すれば Windows の改行文字を UNIX に直すことができます。
+</p>
+<p> あとは、iconv と tr をパイプでつないで、tr の結果をファイルにリダイレクトするだけです。
+</p>
+<pre class="item">
+$ iconv -f SJIS -t UTF-8 file1.txt | tr -d \\r &gt; file2.txt
+</pre>
+<p> ただし、この方法はちょっと困ることがあります。アスキーコードのバックスラッシュ (0x5c) はシフト JIS では円記号になりますが、上記の方法では 0x5c を UTF-8 の円記号 (0xa5) に変換します。プログラムの場合、0x5c をエスケープシーケンスなど特別な記号に割り当てていることがほとんどなので、0xa5 に変換されるとプログラムは正常に動作しなくなります。
+</p>
+
+<p> M.Hiroi は Tcl/Tk ミニゲーム集を Linux に移植するとき、これが原因でプログラムが動作せず、しばらくの間悩んでしまいました。まあ、そのほかにも手直しするところがあったので、けっきょく Emacs で置換 (replace-string) しましたが、もっと簡単な方法がありました。それはコマンド nkf を使うことです。nkf は次のコマンドでインストールすることができます。
+</p>
+<pre class="item">
+sudo apt-get install nkf
+</pre>
+<p> nkf の基本的な使用方法を示します。
+</p>
+<pre class="item">
+ntf [option] input_file
+
+-j : JIS に変換
+-e : EUC に変換
+-s : シフト JIS に変換
+-w : UTF-8 に変換
+
+-Lu : 改行コードを LF に変換
+-Lm : 改行コードを CR に変換
+-Lw : 改行コードを CR+LF に変換
+</pre>
+<p> nkf は入力ファイルの文字コードを自動的に判別するので、文字コードの指定は必要ありません。また、-L オプションで改行コードの変換も指定することができます。nkf は古くからある漢字変換プログラムのようですが、今もメンテナンスされていて、とても便利に使うことができます。メンテナンスされている関係者の皆様に感謝いたします。
+</p>
+</section>
+<hr>
+<a name="1411">2014 年 11 月</a>
+<hr>
+<section class="contents">
+<h3 id="141102">11月2日</h3>
+<h4 id="141102_1">●VirtualBox と Vagrant</h4>
+<p> 以前から仮想マシンで Linux など他の OS を動かすことに興味があったのですが、インストールや設定が面倒なような気がして、なかなか実行に移すことができませんでした。ところが、<a href="http://dotinstall.com/">ドットインストール</a> の <a href="http://dotinstall.com/lessons/basic_local_development_v2">ローカル開発環境の構築</a> によると、<a href="https://www.virtualbox.org/">VirtualBox</a> と <a href="https://www.vagrantup.com/">Vagrant</a> を使うと、簡単に仮想マシンで Linux などの OS を動かすことができるようです。
+</p>
+
+<p> VirtualBox は GNU General Public License で利用できる仮想マシンで、Vagant は仮想マシンに OS のインストールや SSH 接続などの設定を行ってくれるツール (MIT License) です。Vagrant の基本的な使い方はドットインストールの <a href="http://dotinstall.com/lessons/basic_vagrant">Vagrant 入門</a> が参考になると思います。
+</p>
+
+<p> Vagrant は VirtualBox のコマンド (VBoxMange など) を呼び出すので、インストールした VirtulaBox にパスを通すことを忘れないでください。それから、Vagrant は基本的に SSH 接続で仮想マシン上の OS にアクセスするので、SSH クライアントが必要になります。DOS プロンプトで vagrant ssh と入力しても、SSH クライアントがなければ動作しません。M.Hiroi は Cygwin の openssh を使いました。これで DOS プロンプト上で仮想マシンにアクセスすることができます。
+</p>
+
+<p> 実際に試してみたところ、驚くほど簡単に仮想マシン上で Linux の環境を構築することができました。M.Hiroi のパソコンは Windows7 (32 bit) でメモリが 2 GByte しかないので、32 bit OS しか試していませんが、きちんと動作しています。軽量の Linux であれば M.Hiroi の環境でも動作するようなので、今度は Vagrant を使わないで仮想マシンに Linux をインストールして、Linux の環境でプログラミングに挑戦してみようかな、と思っています。
+</p>
+
+</section>
+<hr>
+<a name="1401">2014 年 1月</a>
+<hr>
+<section class="contents">
+<h3 id="140111">1月11日</h3>
+<h4 id="140111_1">●PyPy</h4>
+<p> Python のお話です。Python は Guido van Rossum がＣ言語で作成した処理系 (CPython) が標準ですが、これ以外にもいくつか処理系があります。その中で JIT コンパイル機能を持つ PyPy は CPython の数倍速いといわれています。PyPy は <a href="http://pypy.org/">PyPy - Welcome to PyPy</a> からダウンロードすることができます。どのくらい速くなるのか、たらいまわし関数を使って調べてみました。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：たらいまわし関数 (Python)
+
+import time
+
+def tak(x, y, z):
+    if x &lt;= y: return z
+    return tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y))
+
+s = time.clock()
+print tak(20, 10, 0)
+e = time.clock()
+print e - s
+</pre>
+
+<p> それでは実行結果を示します。tak(20, 10, 0) を計算しました。使用した PyPy のバージョンは ver 2.2.1 です。比較のため、Ruby, CPython, CLISP (Common Lisp), Gauche (Scheme) の実行結果を示します。 これらの処理系はプログラムをバイトコードにコンパイルするものです。
+</p>
+
+<TABLE border=1>
+<caption>表 : tak(20, 10, 0) の結果</caption>
+<thead>
+  <tr><th>処理系</th><th>秒</th></tr>
+</thead>
+<tbody>
+  <tr><td>CPython (ver 2.7.3)</td><td>14.51</td></tr>
+  <tr><td>Ruby (ver 1.9.3)</td><td>11.35</td></tr>
+  <tr><td>CLISP (ver 2.48)</td><td>5.71</td></tr>
+  <tr><td>Gauche (ver 0.9.2)</td><td>4.65</td></tr>
+  <tr><td>PyPy (ver 2.2.1)</td><td>4.59</td></tr>
+</tbody>
+</table>
+<ul>
+  <li>実行環境 : Windows 7, Core i7-2670QM 2.20GHz
+</ul>
+
+<p> PyPy は CPython の約 3 倍、Gauche と同等の速度になりました。プログラムによってはもっと速くなる場合もあるでしょうし、逆に遅くなる場合もあるかもしれません。たとえば、フィボナッチ関数の実行速度は次のようになりました。
+</p>
+<pre class="list">
+リスト : フィボナッチ関数 (Python)
+
+import time
+
+def fibo(n):
+    if n &lt; 1:
+        return 1
+    else:
+        return fibo(n - 1) + fibo(n - 2)
+
+s = time.clock()
+print fibo(36)
+e = time.clock()
+print e - s
+</pre>
+<pre>
+C&gt;python fibo.py
+39088169
+10.6575862453
+
+C&gt;pypy fibo.py
+39088169
+1.03214184584
+</pre>
+<p> 興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h3 id="140101">1月1日</h3>
+<div class="ce">
+<big><b>あけましておめでとうございます</b></big><br><br>
+旧年中は大変お世話になりました<br>
+本年も M.Hiroi's Home Page をよろしくお願い申し上げます<br>
+</div>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="index.html">Home</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

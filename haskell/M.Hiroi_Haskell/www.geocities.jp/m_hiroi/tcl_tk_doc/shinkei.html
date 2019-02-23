@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Tcl/Tk お気楽 GUI プログラミング応用編</title>
+  <meta name="description" content="Tcl/Tk,GUI,プログラミング,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881861</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Tcl/Tk GUI Programming</h1>
+<h2>Tcl/Tk お気楽 GUI プログラミング応用編</h2>
+<h3>神経衰弱:ソースファイル</h3>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="tcltk_doc.html">Tcl/Tk GUI Programming</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<pre class="list">
+#
+# shinkei.tcl : 対戦版神経衰弱ゲーム
+#
+#               Tcl/Tk 講座のサンプルプログラム
+#
+#               Copyright (C) 2001 by Makoto Hiroi
+#
+# 大域変数
+#   board        : 色を格納するテーブル（１次元配列）
+#   number       : 押したボタンの番号（無ければ -1）
+#   memory       : 色と番号を覚える（リスト）
+#   level        : レベル（記憶容量）
+#   action       : 先手・後手
+#   count(com)   : コンピュータ側が取った枚数
+#   count(human) : 人間側が取った枚数
+#   turn         : 0: 人間側の手番, 1: コンピュータ側の手番
+#
+
+# 色のリスト
+set color_list {white green orange red cyan yellow blue purple black pink}
+
+# メッセージの表示
+proc print_message {mes} {
+    global buffer0 buffer1 count
+    set buffer0 [format "COM : %2d  HUMAN : %2d" $count(com) $count(human)]
+    set buffer1 $mes
+    update
+    after 500
+}
+
+# 初期化
+proc start_game {} {
+    global color_list board memory action count turn number
+    set i 0
+    foreach c $color_list {
+        for {set j 0} {$j &lt; 4} {incr j} {
+            set board($i) $c
+            incr i
+        }
+    }
+    # シャッフル
+    for {set i 0} {$i &lt; 40} {incr i} {
+        set j [expr int( rand() * 40 )]
+        set c $board($j)
+        set board($j) $board($i)
+        set board($i) $c
+    }
+    # グローバル変数を初期化する
+    set memory ""
+    set number -1
+    set count(com)   0
+    set count(human) 0
+    # ボタンを見せる
+    lower .f1
+    if {$action == 0} {
+        set turn 0
+        print_message "あなたの手番です"
+    } else {
+        set turn 1
+        print_message "わたしの手番です"
+        select_button_com
+    }
+}
+
+# ボタンを取る
+proc get_button {n1 n2} {
+    global board
+    lower .b$n1
+    lower .b$n2
+    set board($n1) none
+    set board($n2) none
+    delete_memory $n1
+    delete_memory $n2
+}
+
+
+# ボタンを押した
+# 0 : 失敗, 1 : 最初の選択, 2 : 成功
+proc push_button {i} {
+    global board number
+    # 表示する
+    .b$i configure -bg $board($i)
+    update
+    after 500
+    set result 0
+    if {$number &gt;= 0} {
+        if {$board($number) == $board($i)} {
+            # ボタンを取る
+            get_button $i $number
+            set result 2
+        } else {
+            # 記憶する
+            write_memory $i
+            write_memory $number
+        }
+        # 表示をクリアする
+        .b$i configure -bg darkgray
+        .b$number configure -bg darkgray
+        set number -1
+    } else {
+        set number $i
+        set result 1
+    }
+    return $result
+}
+
+# 場所を記憶する
+proc write_memory {n} {
+    global memory level
+    if {[llength $memory] &lt; $level &amp;&amp;
+        [lsearch -exact $memory $n] == -1} {
+        set memory [concat $memory $n]
+    }
+}
+
+# 削除する
+proc delete_memory {n} {
+    global memory
+    # 覚えていたら削除する
+    set i [lsearch -exact $memory $n]
+    if {$i &gt;= 0} {
+        set memory [lreplace $memory $i $i]
+    }
+}
+
+# 同じ色のボタンを探す
+proc find_same_button {c} {
+    global memory board
+    foreach n $memory {
+        if {$board($n) == $c} {
+            return $n
+        }
+    }
+    return -1
+}
+
+# 同種のボタンを一組選ぶ
+proc select_same_button {} {
+    global memory board color_list
+    foreach c $color_list {
+        set position($c) -1
+    }
+    foreach n $memory {
+        set c $board($n)
+        if {$position($c) == -1} {
+            set position($c) $n
+        } else {
+            return [concat $position($c) $n]
+        }
+    }
+    return
+}
+
+# 乱数でボタンを決めるよ
+proc select_random {n} {
+    global board memory
+    set buff ""
+    # 取られていないボタンを集める
+    for {set i 0; set c 0} {$i &lt; 40} {incr i} {
+        if {$i != $n &amp;&amp; $board($i) != "none" &amp;&amp;
+            [lsearch -exact $memory $i] == -1} {
+            set buff [concat $buff $i]
+            incr c
+        }
+    }
+    # 乱数で選択
+    return [lindex $buff [expr int( rand() * $c )]]
+}
+
+# 終了メッセージ
+proc game_over {} {
+    global count
+    if {$count(com) &gt; $count(human)} {
+        set mes "わたしの勝ちです"
+    } elseif {$count(com) &lt; $count(human)} {
+        set mes "あなたの勝ちです"
+    } else {
+        set mes "引き分けです"
+    }
+    tk_messageBox -icon info -type ok -message $mes
+    print_message "ゲーム終了"
+}
+
+# ランダムでボタンを選択する
+proc select_button_random {} {
+    global board
+    # 乱数で一つ選ぶ
+    set n1 [select_random -1]
+    push_button $n1
+    # 記憶の中に同じボタンがあるか
+    set n2 [find_same_button $board($n1)]
+    if {$n2 == -1} {
+        # 乱数で選ぶ
+        set n2 [select_random $n1]
+    }
+    return [push_button $n2]
+}
+
+# COM の手番
+# level によって記憶するカードの枚数を制限する
+proc select_button_com {} {
+    global board count turn number
+    while 1 {
+        # 記憶の中でボタンを取れるか
+        set result [select_same_button]
+        if {[llength $result] &gt; 0} {
+            push_button [lindex $result 0]
+            push_button [lindex $result 1]
+        } elseif {[select_button_random] == 0} {
+            set turn 0
+            print_message "あなたの手番です"
+            return
+        }
+        incr count(com) 2
+        if {[expr $count(com) + $count(human)] == 40} {
+            game_over
+            return
+        }
+        print_message "もう一回ですね"
+    }
+}
+
+# 人間側
+proc select_button_human {i} {
+    global turn count number
+    if {$turn == 1 || $number == $i} return
+    set result [push_button $i]
+    if {$result == 0} {
+        set turn 1
+        print_message "わたしの手番です"
+        after 500
+        select_button_com
+    } elseif {$result == 2} {
+        incr count(human) 2
+        if {[expr $count(com) + $count(human)] == 40} {
+            game_over
+            return
+        }
+        set turn 0
+        print_message "あなたの手番です"
+    }
+}
+
+
+# ********** メニューの設定 **********
+menu .m -type menubar
+. configure -menu .m
+.m add cascade -label "Games" -under 0 -menu .m.m1
+.m add cascade -label "Level" -under 0 -menu .m.m2
+
+menu .m.m1 -tearoff no
+.m.m1 add command -label "Start" -under 0 -command "start_game"
+.m.m1 add separator
+.m.m1 add radiobutton -label "先手" -variable action -value 0
+.m.m1 add radiobutton -label "後手" -variable action -value 1
+.m.m1 add separator
+.m.m1 add command -label "Exit" -under 0 -command "exit"
+menu .m.m2 -tearoff no
+.m.m2 add radiobutton -label "Level 1" -variable level -value 4
+.m.m2 add radiobutton -label "Level 2" -variable level -value 6
+.m.m2 add radiobutton -label "Level 3" -variable level -value 8
+
+# ********** 画面の作成 **********
+option add *font "{ＭＳ 明朝} 12"
+
+# ラベルの作成
+frame .f0
+label .f0.l0 -textvariable buffer0
+label .f0.l1 -textvariable buffer1
+pack .f0.l0 .f0.l1
+
+# ボタンの作成
+frame .f1
+set i 0
+for {set y 0} {$y &lt; 5} {incr y} {
+    for {set x 0} {$x &lt; 8} {incr x} {
+        button .b$i -text "   " -command "select_button_human $i" -bg darkgray
+        grid .b$i -in .f1 -column $x -row $y
+        incr i
+    }
+}
+
+pack .f0 .f1
+
+# 大域変数の初期化
+set action 0
+set turn 0
+set level 4
+start_game
+</pre>
+<p> <A href="tcltk205.html#shinkei_list">戻る</a>
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2001-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <A href="../index.html">Home</A> | <A href="tcltk_doc.html">Tcl/Tk GUI Programming</A> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ++プログラミング超入門</title>
+  <meta name="description" content="Ｃ++,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881812</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ++プログラミング超入門</h2>
+<div class="small">
+[ <a href="cpp26.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp28.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>連結リスト (テンプレート編)</h3>
+<p> 今回は簡単な例題として、以前作成した <a href="cpp15.html">連結リスト</a> をテンプレートを使って書き直してみましょう。名前は List とします。なお、Ｃ++の標準ライブラリには &lt;list&gt; や &lt;forward_list&gt; が用意されているので、私たちが List クラスを作成する必要はまったくありませんが、テンプレートのお勉強ということで、実際にプログラムを作ってみましょう。
+</p>
+<h4>●セル Cell と連結リスト List の定義</h4>
+<p> 最初に、セル Cell と連結リスト List のクラステンプレートを定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : セルのクラステンプレート
+
+template&lt;class T&gt; class List;
+template&lt;class T&gt; ostream&amp; operator&lt;&lt;(ostream&amp;, const List&lt;T&gt;&amp;);
+
+// セル
+template&lt;class T&gt; class Cell {
+  T item;
+  Cell* next;
+public:
+  explicit Cell(Cell* cp) : item(T()), next(cp) {}
+  Cell(const T&amp; x, Cell* cp) : item(x), next(cp) {}
+  Cell(T&amp;&amp; x, Cell* cp) : item(move(x)), next(cp) {}
+  T&amp; car() { return item; }
+  Cell* cdr() { return next; }
+  void set_car(const T&amp; x) { item = x; }
+  void set_car(T&amp;&amp; x) { item = move(x); }
+  void set_cdr(Cell* cp) { next = cp; }
+};
+</pre>
+<p> Vector クラスと同様に、List と operator&lt;&lt; がテンプレートであることを宣言します。セル Cell はデータ型 T のデータをメンバ変数 item に格納します。1 引数のコンストラクタはヘッダセルを生成するために使います。2 引数のコンストラクタは、引数 x の型を T に変更して、右辺値参照を受け取るコンストラクタを追加します。car() の返り値は T の参照 (T&amp;) とし、set_car() の引数 x の型も T に変更します。また、右辺値参照を受け取る set_car() も追加します。
+</p>
+<pre class="list">
+リスト : 連結リストのクラステンプレート
+
+template&lt;class T&gt; class List {
+  Cell&lt;T&gt;* top;  // メンバ変数
+  static Cell&lt;T&gt;* nth_cell(Cell&lt;T&gt;*, int);  // n 番目のセルを求める
+  static Cell&lt;T&gt;* copy_cell(Cell&lt;T&gt;*);      // リストのコピー
+public:
+  List() : top(new Cell&lt;T&gt;(0)) { }
+  ~List() {
+    clear();
+    delete top;
+  }
+  List(const List&amp;);            // コピーコンストラクタ
+  List&amp; operator=(const List&amp;); // 代入演算子
+  List(List&amp;&amp;);                 // ムーブコンストラクタ
+  List&amp; operator=(List&amp;&amp;);      // ムーブ代入演算子
+  // メンバ関数
+  T&amp; nth(int);
+  void set(int, const T&amp;);
+  void set(int, T&amp;&amp;);
+  void insert(int, const T&amp;);
+  void insert(int, T&amp;&amp;);
+  void remove(int);
+  int  length();
+  void clear();
+  bool empty();
+  // 演算子の多重定義
+  friend ostream&amp; operator&lt;&lt; &lt;T&gt; (ostream&amp;, const List&amp;);
+  //
+  // イテレータは省略
+  //
+};
+</pre>
+<p> List のテンプレート仮引数は T なので、セルのデータ型は Cell&lt;T&gt; になります。メンバ変数 top のデータ型は Cell&lt;T&gt;* になります。それから、ムーブコンストラクタとムーブ代入演算子を定義して、引数に右辺値参照を受け取る set() と insert() を追加します。あとはデータ型を int から T に変更するだけです。
+</p>
+<h4>●メンバ関数の定義</h4>
+<p> 次はメンバ関数を定義します。静的なメンバ関数は次のようになります。
+</p>
+<pre class="list">
+リスト : 静的メンバ関数の定義
+
+// n 番目のセルを求める
+template&lt;class T&gt;
+Cell&lt;T&gt;* List&lt;T&gt;::nth_cell(Cell&lt;T&gt;* cp, int n)
+{
+  int i = -1;
+  while (cp) {
+    if (n == i) break;
+    cp = cp-&gt;cdr();
+    i++;
+  }
+  return cp;
+}
+
+// リストのコピー
+template&lt;class T&gt;
+Cell&lt;T&gt;* List&lt;T&gt;::copy_cell(Cell&lt;T&gt;* cp)
+{
+  return !cp ? cp : new Cell&lt;T&gt;(cp-&gt;car(), copy_cell(cp-&gt;cdr()));
+}
+</pre>
+<p> 関数定義の先頭に template&lt;class T&gt; を付けます。クラス名は List&lt;T&gt; になります。そして、Cell を Cell&lt;T&gt; に、格納するデータの型を int から T に変更するだけです。コンストラクタ Cell を呼び出すときは、Cell の後ろに &lt;T&gt; を付けてください。
+</p>
+<p> 右辺値参照を受け取る set() と insert() は次のようになります。
+</p>
+<pre class="list">
+リスト : 右辺値参照を受け取る set() と insert()
+
+template&lt;class T&gt;
+void List&lt;T&gt;::insert(int n, T&amp;&amp; x)
+{
+  Cell&lt;T&gt;* cp = nth_cell(top, n - 1);
+  if (!cp) throw out_of_range("List::insert out of range");
+  cp-&gt;set_cdr(new Cell&lt;T&gt;(forward&lt;T&gt;(x), cp-&gt;cdr()));
+}
+
+template&lt;class T&gt;
+void List&lt;T&gt;::set(int n, T&amp;&amp; x)
+{
+  Cell&lt;T&gt;* cp = nth_cell(top, n);
+  if (!cp) throw out_of_range("List::set out of range");
+  cp-&gt;set_car(forward&lt;T&gt;(x));
+}
+</pre>
+<p> テンプレート関数で引数の右辺値参照を他のテンプレート関数に渡す場合、引数をそのまま渡すと、右辺値参照型の関数ではなく、参照型の関数が呼び出されます。具体的には、コンストラクタは Cell(T&amp;&amp;, Cell*) ではなく、Cell(const T&amp;, Cell*) が呼び出され、set_car() は set_car(const T&amp;) が呼び出されます。
+</p>
+<p> テンプレート関数の引数 x を右辺値参照型として他の関数に渡すには、テンプレート関数 forward() を使います。forward&lt;T&gt;(x) とすると、Cell(T&amp;&amp;, Cell*) や set_car(T&amp;&amp;) が呼び出されます。<a href="cpp27.html#cite">参考 URL</a> によると、この機能を「Perfect Forwarding」と呼ぶそうです。詳しい説明は参考 URL をお読みください。
+</p>
+
+<p> あとのメンバ関数の変更は簡単なので説明は割愛します。詳細は <a href="cpp27.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●イテレータの定義</h4>
+<p> 次はイテレータを定義します。
+</p>
+<pre class="list">
+リスト : イテレータ
+
+  class Iterator : public iterator&lt;forward_iterator_tag, T&gt; {
+    Cell&lt;T&gt;* idx;
+  public:
+    Iterator(Cell&lt;T&gt;* cp) : idx(cp) {}
+    // 間接参照
+    T&amp; operator*() { return idx-&gt;car(); }
+    T* operator-&gt;() { return &amp;(idx-&gt;car()); }
+    // ++ 演算子, -- 演算子は無し
+    Iterator&amp; operator++() {
+      if (idx) idx = idx-&gt;cdr();
+      return *this;
+    }
+    Iterator operator++(int n) {
+      Iterator iter(idx);
+      if (idx) idx = idx-&gt;cdr();
+      return iter;
+    }
+    // 比較演算子
+    bool operator==(const Iterator&amp; iter) const {
+      return idx == iter.idx;
+    }
+    bool operator!=(const Iterator&amp; iter) const {
+      return idx != iter.idx;
+    }
+  };
+  Iterator begin() { return Iterator(top-&gt;cdr()); }
+  Iterator end() { return Iterator(0); }
+</pre>
+<p> 今回は単方向連結リストなので、イテレータの種類は前方向イテレータになります。Iterator は iterator&lt;forward_iterator_tag, T&gt; を継承します。多重定義する演算子は *, -&gt;, ++, ==, != になります。-- 演算子やイテレータを移動する +=, -=. +, - 演算子は定義しません。プログラムは簡単なので説明は割愛します。詳細はプログラムリストをお読みください。
+</p>
+<h4>●簡単なテスト</h4>
+<p> それでは簡単なテストを行ってみましょう。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+int main()
+{
+  List&lt;int&gt; a;
+  for (int i = 0; i &lt; 8; i++)
+    a.insert(i, i);
+  cout &lt;&lt; a &lt;&lt; endl;
+  List&lt;int&gt; b;
+  for (int i = 0; i &lt; 8; i++)
+    b.insert(0, i);
+  cout &lt;&lt; b &lt;&lt; endl;
+  {
+    List&lt;int&gt; c = a;
+    a = b;
+    b = c;
+    cout &lt;&lt; a &lt;&lt; endl;
+    cout &lt;&lt; b &lt;&lt; endl;
+  }
+  {
+    List&lt;int&gt; c = move(a);
+    a = move(b);
+    b = move(c);
+    cout &lt;&lt; a &lt;&lt; endl;
+    cout &lt;&lt; b &lt;&lt; endl;
+  }
+  for (auto iter = a.begin(); iter != a.end(); ++iter)
+    cout &lt;&lt; *iter &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  auto iter = b.begin();
+  while (iter != b.end())
+    cout &lt;&lt; *iter++ &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (auto x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for_each(b.begin(), b.end(), [](int x){ cout &lt;&lt; x &lt;&lt; " "; });
+  cout &lt;&lt; endl;
+  List&lt;pair&lt;string,int&gt;&gt; c;
+  c.insert(0, pair&lt;string,int&gt;{"foo", 1});
+  c.insert(0, pair&lt;string,int&gt;{"bar", 2});
+  c.insert(0, pair&lt;string,int&gt;{"baz", 3});
+  c.insert(0, pair&lt;string,int&gt;{"oops", 4});
+  for (auto iter = c.begin(); iter != c.end(); ++iter)
+    cout &lt;&lt; iter-&gt;first &lt;&lt; "," &lt;&lt; iter-&gt;second &lt;&lt; endl;
+  pair&lt;string,int&gt; p = {"OOPS", 40}; 
+  c.set(0, p);
+  c.set(1, pair&lt;string,int&gt;{"BAZ",30});
+  for (auto iter = c.begin(); iter != c.end(); ++iter)
+    cout &lt;&lt; iter-&gt;first &lt;&lt; "," &lt;&lt; iter-&gt;second &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp/linklist$ ./a.out 
+(0 1 2 3 4 5 6 7)
+(7 6 5 4 3 2 1 0)
+(7 6 5 4 3 2 1 0)
+(0 1 2 3 4 5 6 7)
+(0 1 2 3 4 5 6 7)
+(7 6 5 4 3 2 1 0)
+0 1 2 3 4 5 6 7 
+7 6 5 4 3 2 1 0 
+0 1 2 3 4 5 6 7 
+7 6 5 4 3 2 1 0 
+oops,4
+baz,3
+bar,2
+foo,1
+OOPS,40
+BAZ,30
+bar,2
+foo,1
+</pre>
+<p> コピーコンストラクタ、代入演算子、ムーブコンストラクタ、ムーブ代入演算子は正常に動作しています。STL の仕様に合わせてイテレータを実装すると、範囲 for 文や、for_each() など algorithm の関数も利用することができます。また、List に pair&lt;string, int&gt; を格納することもできます。演算子 -&gt; で pair のメンバ変数 first, second を選択することができます。興味のある方はいろいろ試してみてください。
+</p>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="http://cpplover.blogspot.jp/2009/11/rvalue-reference_23.html">本の虫: rvalue reference 完全解説</a>, (江添亮さん)
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// list.cpp : 連結リスト (テンプレート版)
+//
+//            Copyright (C) 2015 Makoto Hiroi
+//
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+#include &lt;iterator&gt;
+#include &lt;algorithm&gt;
+using namespace std;
+
+// 宣言
+template&lt;class T&gt; class List;
+template&lt;class T&gt; ostream&amp; operator&lt;&lt;( ostream&amp;, const List&lt;T&gt;&amp;);
+
+// セル
+template&lt;class T&gt; class Cell {
+  T item;
+  Cell* next;
+public:
+  explicit Cell(Cell* cp) : item(T()), next(cp) {}
+  Cell(const T&amp; x, Cell* cp) : item(x), next(cp) {}
+  Cell(T&amp;&amp; x, Cell* cp) : item(move(x)), next(cp) {}
+  T&amp; car() { return item; }
+  Cell* cdr() { return next; }
+  void set_car(const T&amp; x) { item = x; }
+  void set_car(T&amp;&amp; x) { item = move(x); }
+  void set_cdr(Cell* cp) { next = cp; }
+};
+
+template&lt;class T&gt; class List {
+  Cell&lt;T&gt;* top;  // メンバ変数
+  static Cell&lt;T&gt;* nth_cell(Cell&lt;T&gt;*, int);  // n 番目のセルを求める
+  static Cell&lt;T&gt;* copy_cell(Cell&lt;T&gt;*);      // リストのコピー
+public:
+  List() : top(new Cell&lt;T&gt;(0)) { }
+  ~List() {
+    clear();
+    delete top;
+  }
+  List(const List&amp;);            // コピーコンストラクタ
+  List&amp; operator=(const List&amp;); // 代入演算子
+  List(List&amp;&amp;);                 // ムーブコンストラクタ
+  List&amp; operator=(List&amp;&amp;);      // ムーブ代入演算子
+  // メンバ関数
+  T&amp; nth(int);
+  void set(int, const T&amp;);
+  void insert(int, const T&amp;);
+  void insert(int, T&amp;&amp;);
+  void remove(int);
+  int  length();
+  void clear();
+  bool empty();
+  // 演算子の多重定義
+  friend ostream&amp; operator&lt;&lt; &lt;T&gt; (ostream&amp;, const List&amp;);
+
+  // イテレータ
+  class Iterator : public iterator&lt;forward_iterator_tag, T&gt; {
+    Cell&lt;T&gt;* idx;
+  public:
+    Iterator(Cell&lt;T&gt;* cp) : idx(cp) {}
+    // 間接参照
+    T&amp; operator*() { return idx-&gt;car(); }
+    T* operator-&gt;() { return &amp;(idx-&gt;car()); }
+    // ++ 演算子, -- 演算子は無し
+    Iterator&amp; operator++() {
+      if (idx) idx = idx-&gt;cdr();
+      return *this;
+    }
+    Iterator operator++(int n) {
+      Iterator iter(idx);
+      if (idx) idx = idx-&gt;cdr();
+      return iter;
+    }
+    // 比較演算子
+    bool operator==(const Iterator&amp; iter) const {
+      return idx == iter.idx;
+    }
+    bool operator!=(const Iterator&amp; iter) const {
+      return idx != iter.idx;
+    }
+  };
+  Iterator begin() { return Iterator(top-&gt;cdr()); }
+  Iterator end() { return Iterator(0); }
+};
+
+// 作業用の静的メンバ関数
+template&lt;class T&gt;
+Cell&lt;T&gt;* List&lt;T&gt;::nth_cell(Cell&lt;T&gt;* cp, int n)
+{
+  int i = -1;
+  while (cp) {
+    if (n == i) break;
+    cp = cp-&gt;cdr();
+    i++;
+  }
+  return cp;
+}
+
+// リストのコピー
+template&lt;class T&gt;
+Cell&lt;T&gt;* List&lt;T&gt;::copy_cell(Cell&lt;T&gt;* cp)
+{
+  return !cp ? cp : new Cell&lt;T&gt;(cp-&gt;car(), copy_cell(cp-&gt;cdr()));
+}
+
+// コピーコンストラクタ
+template&lt;class T&gt;
+List&lt;T&gt;::List(const List&lt;T&gt;&amp; ls) : top(new Cell&lt;T&gt;(T(), 0))
+{
+  top-&gt;set_cdr(copy_cell(ls.top-&gt;cdr()));
+}
+
+// 代入演算子
+template&lt;class T&gt;
+List&lt;T&gt;&amp; List&lt;T&gt;::operator=(const List&lt;T&gt;&amp; ls)
+{
+  if (this != &amp;ls) {
+    clear();
+    top-&gt;set_cdr(copy_cell(ls.top-&gt;cdr()));
+  }
+  return *this;
+}
+
+// ムーブコンストラクタ
+template&lt;class T&gt;
+List&lt;T&gt;::List(List&lt;T&gt;&amp;&amp; ls) : top(ls.top)
+{
+  ls.top = 0;
+}
+
+// ムーブ代入演算子
+template&lt;class T&gt;
+List&lt;T&gt;&amp; List&lt;T&gt;::operator=(List&lt;T&gt;&amp;&amp; ls)
+{
+  if (this != &amp;ls) {
+    clear();
+    delete top;
+    top = ls.top;
+    ls.top = 0;
+  }
+  return *this;
+}
+  
+// メンバ関数
+template&lt;class T&gt;
+T&amp; List&lt;T&gt;::nth(int n)
+{
+  Cell&lt;T&gt;* cp = nth_cell(top, n);
+  if (cp) return cp-&gt;car();
+  throw out_of_range("List::nth out of range");
+}
+
+template&lt;class T&gt;
+void List&lt;T&gt;::insert(int n, const T&amp; x)
+{
+  Cell&lt;T&gt;* cp = nth_cell(top, n - 1);
+  if (!cp) throw out_of_range("List::insert out of range");
+  cp-&gt;set_cdr(new Cell&lt;T&gt;(x, cp-&gt;cdr()));
+}
+
+template&lt;class T&gt;
+void List&lt;T&gt;::insert(int n, T&amp;&amp; x)
+{
+  Cell&lt;T&gt;* cp = nth_cell(top, n - 1);
+  if (!cp) throw out_of_range("List::insert out of range");
+  cp-&gt;set_cdr(new Cell&lt;T&gt;(forward&lt;T&gt;(x), cp-&gt;cdr()));
+}
+
+template&lt;class T&gt;
+void List&lt;T&gt;::set(int n, const T&amp; x)
+{
+  Cell&lt;T&gt;* cp = nth_cell(top, n);
+  if (!cp) throw out_of_range("List::set out of range");
+  cp-&gt;set_car(x);
+}
+
+template&lt;class T&gt;
+void List&lt;T&gt;::set(int n, T&amp;&amp; x)
+{
+  Cell&lt;T&gt;* cp = nth_cell(top, n);
+  if (!cp) throw out_of_range("List::set out of range");
+  cp-&gt;set_car(forward&lt;T&gt;(x));
+}
+
+template&lt;class T&gt;
+void List&lt;T&gt;::remove(int n)
+{
+  Cell&lt;T&gt;* cp = nth_cell(top, n - 1);
+  if (!cp || !cp-&gt;cdr())
+    throw out_of_range("List::remove out of range");
+  Cell&lt;T&gt;* cp1 = cp-&gt;cdr();
+  cp-&gt;set_cdr(cp1-&gt;cdr());
+  delete cp1;
+}
+
+template&lt;class T&gt;
+int List&lt;T&gt;::length()
+{
+  int n = 0;
+  Cell&lt;T&gt;* cp = top-&gt;cdr();
+  while (cp) {
+    n++;
+    cp = cp-&gt;cdr();
+  }
+  return n;
+}
+
+template&lt;class T&gt;
+void List&lt;T&gt;::clear()
+{
+  if (top) {
+    Cell&lt;T&gt;* cp = top-&gt;cdr();
+    while (cp) {
+      Cell&lt;T&gt; *tmp = cp-&gt;cdr();
+      delete cp;
+      cp = tmp;
+    }
+    top-&gt;set_cdr(0);
+  }
+}
+
+template&lt;class T&gt;
+bool List&lt;T&gt;::empty()
+{
+  return !top-&gt;cdr();
+}
+
+template&lt;class T&gt;
+ostream&amp; operator&lt;&lt;(ostream&amp; output, const List&lt;T&gt;&amp; xs)
+{
+  Cell&lt;T&gt;* cp = xs.top-&gt;cdr();
+  output &lt;&lt; "(";
+  while (cp) {
+    output &lt;&lt; cp-&gt;car();
+    if (cp-&gt;cdr()) output &lt;&lt; " ";
+    cp = cp-&gt;cdr();
+  }
+  output &lt;&lt; ")";
+  return output;
+}
+
+// 簡単なテスト
+int main()
+{
+  List&lt;int&gt; a;
+  for (int i = 0; i &lt; 8; i++)
+    a.insert(i, i);
+  cout &lt;&lt; a &lt;&lt; endl;
+  List&lt;int&gt; b;
+  for (int i = 0; i &lt; 8; i++)
+    b.insert(0, i);
+  cout &lt;&lt; b &lt;&lt; endl;
+  {
+    List&lt;int&gt; c = a;
+    a = b;
+    b = c;
+    cout &lt;&lt; a &lt;&lt; endl;
+    cout &lt;&lt; b &lt;&lt; endl;
+  }
+  {
+    List&lt;int&gt; c = move(a);
+    a = move(b);
+    b = move(c);
+    cout &lt;&lt; a &lt;&lt; endl;
+    cout &lt;&lt; b &lt;&lt; endl;
+  }
+  for (auto iter = a.begin(); iter != a.end(); ++iter)
+    cout &lt;&lt; *iter &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  auto iter = b.begin();
+  while (iter != b.end())
+    cout &lt;&lt; *iter++ &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (auto x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for_each(b.begin(), b.end(), [](int x){ cout &lt;&lt; x &lt;&lt; " "; });
+  cout &lt;&lt; endl;
+  List&lt;pair&lt;string,int&gt;&gt; c;
+  c.insert(0, pair&lt;string,int&gt;{"foo", 1});
+  c.insert(0, pair&lt;string,int&gt;{"bar", 2});
+  c.insert(0, pair&lt;string,int&gt;{"baz", 3});
+  c.insert(0, pair&lt;string,int&gt;{"oops", 4});
+  for (auto iter = c.begin(); iter != c.end(); ++iter)
+    cout &lt;&lt; iter-&gt;first &lt;&lt; "," &lt;&lt; iter-&gt;second &lt;&lt; endl;
+}
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">二分探索木 (テンプレート編)</h3>
+<p> 今回は簡単な例題として、以前作成した <a href="cpp16.html">二分探索木</a> をテンプレートを使って書き直してみましょう。クラス名は Tree とします。なお、Ｃ++の標準ライブラリには &lt;map&gt; や &lt;set&gt; などの平衡二分木が用意されているので、私たちが単純な二分木を作る必要はまったくありませんが、テンプレートのお勉強ということで、実際にプログラムを作ってみましょう。
+</p>
+<h4>●節 Node と二分木 Tree の定義</h4>
+<p> 最初は、節 Node と 二分木 Tree のクラステンプレートを定義します。
+</p>
+<pre class="list">
+リスト : 節の定義
+
+template&lt;class T&gt; class Node {
+  T item;
+  Node* left;
+  Node* right;
+public:
+  explicit Node(const T&amp; x)
+    : item(x), left(0), right(0) { }
+  explicit Node(T&amp;&amp; x)
+    : item(move(x)), left(0), right(0) { }
+  T&amp; get_item() { return item; }
+  Node* get_left() const { return left; }
+  Node* get_right() const { return right; }
+  void put_item(const T&amp; x) { item = x; }
+  void put_item(T&amp;&amp; x) { item = move(x); }
+  void put_left(Node* l) { left = l; }
+  void put_right(Node* r) { right = r; }
+};
+</pre>
+<p> コンストラクタは引数に const T&amp; を受け取るものと右辺値参照 (T&amp;&amp;) を受け取るものの 2 つを用意します。二分探索木の場合、要素 item の値を書き換えると、二分探索木の条件を満たさなくなる危険性がありますが、move() を使いたい場合があるので、返り値は T&amp; とします。あとはデータ型を int から T に変更するだけです。
+</p>
+<pre class="list">
+リスト : 二分探索木の定義
+
+template&lt;class T&gt; class Tree {
+  Node&lt;T&gt;* root;
+public:
+  Tree() : root(0) { }
+  ~Tree() { destroy_node(root); }
+  // コピーコンストラクタ
+  Tree(const Tree&amp; tree) {
+    root = copy_node(tree.root);
+  }
+  // 代入演算子
+  Tree&amp; operator=(const Tree&amp; tree) {
+    if (this != &amp;tree) {
+      destroy_node(root);
+      root = copy_node(tree.root);
+    }
+    return *this;
+  }
+  // ムーブコンストラクタ
+  Tree(Tree&amp;&amp; tree) : root(tree.root) {
+    tree.root = 0;
+  }
+  // ムーブ代入演算子
+  Tree&amp; operator=(Tree&amp;&amp; tree) {
+    if (this != &amp;tree) {
+      destroy_node(root);
+      root = tree.root;
+      tree.root = 0;
+    }
+    return *this;
+  }
+  // メンバ関数
+  bool empty() const { return !root; }
+  bool search(const T&amp; x) const { return search_node(x, root); }
+  const T&amp; min() const {
+    if (!root) throw std::runtime_error("Tree::min empty tree");
+    return search_min(root);
+  }
+  const T&amp; max() const {
+    if (!root) throw  std::runtime_error("Tree::max empty tree");
+    return search_max(root);
+  }
+  void insert(const T&amp; x) { root = insert_node(x, root); }
+  void insert(T&amp;&amp; x) { root = insert_node(forward&lt;T&gt;(x), root); }
+  void remove(const T&amp; x) { root = delete_node(x, root); }
+  void remove_min() {
+    if (root) root = delete_min(root);
+  }
+  void remove_max() {
+    if (root) root = delete_max(root);
+  }
+  //
+  // イテレータ (省略)
+  //
+};
+</pre>
+<p> Tree のテンプレート仮引数は T なので、節のデータ型は Node&lt;T&gt; になります。メンバ変数 root のデータ型は Node&lt;T&gt;* になります。あとは、ムーブコンストラクタとムーブ代入演算子を定義して、データ型を int から T に変更します。このとき、要素の値 (item) を返すメンバ関数 max() と min() は、返り値の型を const T&amp; とすることに注意してください。
+</p>
+<p> それから、引数に右辺値参照を受け取るメンバ関数 insert() を追加します。これに対応するため、作業用関数 insert_node() に右辺値参照を受け取る関数を追加します。insert_node() を呼び出すとき、引数 x に forward() を適用することをお忘れなく。
+</p>
+<h4>●作業用関数の修正</h4>
+<p> 次は insert_node() に右辺値参照を受け取る関数を追加します。
+</p>
+<pre class="list">
+リスト : データの挿入 (右辺値参照)
+
+template&lt;class T&gt;
+Node&lt;T&gt;* insert_node(T&amp;&amp; x, Node&lt;T&gt;* node)
+{
+  if (!node) return new Node&lt;T&gt;(forward&lt;T&gt;(x));
+  if (x &lt; node-&gt;get_item())
+    node-&gt;put_left(insert_node(forward&lt;T&gt;(x), node-&gt;get_left()));
+  else if (x &gt; node-&gt;get_item())
+    node-&gt;put_right(insert_node(forward&lt;T&gt;(x), node-&gt;get_right()));
+  return node;
+}
+</pre>
+<p> 引数 x は右辺値参照なので、Node のコンストラクタを呼び出すときと、insert_node() を再帰呼び出しするときは、引数 x に forward() を適用してください。これで、引数 x の所有権を新しい節に移動することができます。
+</p>
+<p> もう一つ、データを削除する作業用関数 delete_node() を修正します。
+</p>
+<pre class="list">
+リスト : データの削除
+
+template&lt;class T&gt;
+Node&lt;T&gt;* delete_node(const T&amp; x, Node&lt;T&gt;* node)
+{
+  if (!node) return node;
+  if (x == node-&gt;get_item()) {
+    if (!node-&gt;get_left()) {
+      Node&lt;T&gt;* x = node-&gt;get_right();
+      delete node;
+      return x;
+    }
+    if (!node-&gt;get_right()) {
+      Node&lt;T&gt;* x = node-&gt;get_left();
+      delete node;
+      return x;
+    }
+    node-&gt;put_item(move(search_min(node-&gt;get_right())));
+    node-&gt;put_right(delete_min(node-&gt;get_right()));
+  } else if (x &lt; node-&gt;get_item())
+    node-&gt;put_left(delete_node(x, node-&gt;get_left()));
+  else
+    node-&gt;put_right(delete_node(x, node-&gt;get_right()));
+  return node;
+}
+</pre>
+<p> 右部分木から最小値を探して、それを item にセットするとき、search_min() の返り値に move() を適用して、ムーブ操作が定義されていれば、それを行うようにします。作業用関数 search_min() と search_max() の返り値の型は const T&amp; ではなく、T&amp; とすることに注意してください。
+</p>
+<h4>●イテレータの定義</h4>
+<p> 次はイテレータを作ります。
+</p>
+<pre class="list">
+リスト : イテレータ
+
+  class Iterator : public iterator&lt;forward_iterator_tag, T&gt; {
+    vector&lt;Node&lt;T&gt;*&gt; stack;
+    // 次の node へ進める
+    void next_node(Node&lt;T&gt;* node) {
+      while (node) {
+        stack.push_back(node);
+        node = node-&gt;get_left();
+      }
+    }
+  public:
+    Iterator(Tree* tree, bool end) {
+      if (!end) next_node(tree-&gt;root);
+    }
+    // 間接参照
+    const T&amp; operator*() const {
+      return stack.back()-&gt;get_item();
+    }
+    const T* operator-&gt;() const {
+      return &amp;(stack.back()-&gt;get_item());
+    }
+    // 前置の ++ 演算子
+    Iterator&amp; operator++() {
+      Node&lt;T&gt;* node = stack.back();
+      stack.pop_back();
+      next_node(node-&gt;get_right());
+      return *this;
+    }
+    // 後置の ++ 演算子
+    Iterator operator++(int n) {
+      Iterator iter(*this);
+      Node&lt;T&gt;* node = stack.back();
+      stack.pop_back();
+      next_node(node-&gt;get_right());
+      return iter;
+    }
+    // 比較演算子
+    bool operator==(const Iterator&amp; iter) {
+      return stack == iter.stack;
+    }
+    bool operator!=(const Iterator&amp; iter) {
+      return stack != iter.stack;
+    }
+  };
+  Iterator begin() { return Iterator(this, false); }
+  Iterator end() { return Iterator(this, true); }    
+</pre>
+<p> イテレータの基本的な操作は以前作成した IntVec と同じです。ただし、たどってきた節は vector&lt;Node&lt;T&gt;*&gt; stack に格納します。この場合、単純な配列よりも vector を使ったほうが簡単です。
+</p>
+<p> ところで、ムーブコンストラクタとムーブ代入演算子は、宣言されていないとコンパイラが自動的に生成してくれます。ただし、デストラクタ、コピーコンストラクタ、代入演算子のどれか一つでも宣言されていると、自動生成されないことに注意してください。デフォルトの動作は非静的メンバ変数をムーブすることなので、Iterator のメンバ変数 stack を vector で定義すると、ムーブ操作にも対応できるのでとても便利です。
+</p>
+<p> それから、間接参照の演算子 * と -&gt; の返り値を const で修飾します。これで節の値 (item) を書き換えることができなくなります。あとのプログラムは簡単なので説明は割愛します。詳細は <a href="cpp27.html#list2">プログラムリスト</a> をお読みください。
+</p>
+<h4>●簡単なテスト</h4>
+<p> それでは簡単なテストを行ってみましょう。
+</p>
+<pre class="list">
+リスト : 二分探索木のテスト
+
+int main()
+{
+  vector&lt;int&gt; a = {5, 7, 3, 4, 2, 1, 8, 6, 9};
+  vector&lt;int&gt; b = {15, 17, 13, 14, 12, 11, 18, 16, 19};
+  Tree&lt;int&gt; tree_a;
+  Tree&lt;int&gt; tree_b;
+  for (int x : a) tree_a.insert(x);
+  for (int x : tree_a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (int x : b) tree_b.insert(x);  
+  for (int x : tree_b) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  {
+    Tree&lt;int&gt; tree_c = tree_a;
+    tree_a = tree_b;
+    tree_b = tree_c;
+    for (int x : tree_a) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+    for (int x : tree_b) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  }
+  {
+    Tree&lt;int&gt; tree_c = move(tree_a);
+    tree_a = move(tree_b);
+    tree_b = move(tree_c);
+    for (int x : tree_a) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+    for (int x : tree_b) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  }
+  for (int x = 0; x &lt;= 10; x++)
+    cout &lt;&lt; tree_a.search(x) &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (auto iter = tree_a.begin(); iter != tree_a.end(); ++iter)
+    cout &lt;&lt; *iter &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  auto iter = tree_b.begin();
+  while (iter != tree_b.end())
+    cout &lt;&lt; *iter++ &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for_each(tree_a.begin(), tree_a.end(), [](int x){ cout &lt;&lt; x &lt;&lt; " "; });
+  cout &lt;&lt; endl;
+  for (int i = 0; i &lt; 9; i++) {
+    tree_a.remove(a[i]);
+    for_each(tree_a.begin(), tree_a.end(), [](int x){ cout &lt;&lt; x &lt;&lt; " "; });
+    cout &lt;&lt; endl;
+  }
+  while (!tree_b.empty()) {
+    cout &lt;&lt; tree_b.min() &lt;&lt; endl;
+    cout &lt;&lt; tree_b.max() &lt;&lt; endl;
+    tree_b.remove_min();
+    tree_b.remove_max();
+    for (int x : tree_b) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  }
+  Tree&lt;string&gt; tree_c;
+  tree_c.insert("foo");
+  tree_c.insert("bar");
+  tree_c.insert("baz");
+  tree_c.insert("oops");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  tree_c.remove("foo");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  tree_c.remove("bar");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  tree_c.remove("oops");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  tree_c.remove("baz");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp/tree$ ./a.out 
+1 2 3 4 5 6 7 8 9 
+11 12 13 14 15 16 17 18 19 
+11 12 13 14 15 16 17 18 19 
+1 2 3 4 5 6 7 8 9 
+1 2 3 4 5 6 7 8 9 
+11 12 13 14 15 16 17 18 19 
+0 1 1 1 1 1 1 1 1 1 0 
+1 2 3 4 5 6 7 8 9 
+11 12 13 14 15 16 17 18 19 
+1 2 3 4 5 6 7 8 9 
+1 2 3 4 6 7 8 9 
+1 2 3 4 6 8 9 
+1 2 4 6 8 9 
+1 2 6 8 9 
+1 6 8 9 
+6 8 9 
+6 9 
+9 
+
+11
+19
+12 13 14 15 16 17 18 
+12
+18
+13 14 15 16 17 
+13
+17
+14 15 16 
+14
+16
+15 
+15
+15
+
+bar baz foo oops 
+bar baz oops 
+baz oops 
+baz 
+
+</pre>
+<p> コピーコンストラクタ、代入演算子、ムーブコンストラクタ、ムーブ代入演算子は正常に動作しています。イテレータを実装すると、範囲 for 文や、for_each() など algorithm の関数も利用することができます。また、int 以外にも string を指定すると、文字列を格納することができます。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="list2">●プログラムリスト</h4>
+<pre class="list">
+//
+// tree.cpp : 二分探索木 (テンプレート版)
+//
+//            Copyright (C) 2015 Makoto Hiroi
+//
+#include &lt;iostream&gt;
+#include &lt;stdexcept&gt;
+#include &lt;iterator&gt;
+#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+using namespace std;
+
+// 節
+template&lt;class T&gt; class Node {
+  T item;
+  Node* left;
+  Node* right;
+public:
+  explicit Node(const T&amp; x)
+    : item(x), left(0), right(0) { }
+  explicit Node(T&amp;&amp; x)
+    : item(move(x)), left(0), right(0) { }
+  T&amp; get_item() { return item; }
+  Node* get_left() const { return left; }
+  Node* get_right() const { return right; }
+  void put_item(const T&amp; x) { item = x; }
+  void put_item(T&amp;&amp; x) { item = move(x); }
+  void put_left(Node* l) { left = l; }
+  void put_right(Node* r) { right = r; }
+};
+
+// 探索
+template&lt;class T&gt;
+bool search_node(const T&amp; x, Node&lt;T&gt;* node)
+{
+  while (node) {
+    if (x == node-&gt;get_item()) return true;
+    else if (x &lt; node-&gt;get_item())
+      node = node-&gt;get_left();
+    else
+      node = node-&gt;get_right();
+  }
+  return false;
+}
+
+// 挿入
+template&lt;class T&gt;
+Node&lt;T&gt;* insert_node(const T&amp; x, Node&lt;T&gt;* node)
+{
+  if (!node) return new Node&lt;T&gt;(x);
+  if (x &lt; node-&gt;get_item())
+    node-&gt;put_left(insert_node(x, node-&gt;get_left()));
+  else if (x &gt; node-&gt;get_item())
+    node-&gt;put_right(insert_node(x, node-&gt;get_right()));
+  return node;
+}
+
+template&lt;class T&gt;
+Node&lt;T&gt;* insert_node(T&amp;&amp; x, Node&lt;T&gt;* node)
+{
+  if (!node) return new Node&lt;T&gt;(forward&lt;T&gt;(x));
+  if (x &lt; node-&gt;get_item())
+    node-&gt;put_left(insert_node(forward&lt;T&gt;(x), node-&gt;get_left()));
+  else if (x &gt; node-&gt;get_item())
+    node-&gt;put_right(insert_node(forward&lt;T&gt;(x), node-&gt;get_right()));
+  return node;
+}
+
+// 最小値を探す
+template&lt;class T&gt;
+T&amp; search_min(Node&lt;T&gt;* node)
+{
+  while (node-&gt;get_left()) node = node-&gt;get_left();
+  return node-&gt;get_item();
+}
+
+// 最小値の節を削除
+template&lt;class T&gt;
+Node&lt;T&gt;* delete_min(Node&lt;T&gt;* node)
+{
+  if (!node-&gt;get_left()) {
+    Node&lt;T&gt;* x = node-&gt;get_right();
+    delete node;
+    return x;
+  }
+  node-&gt;put_left(delete_min(node-&gt;get_left()));
+  return node;
+}
+
+// 最大値を探す
+template&lt;class T&gt;
+T&amp; search_max(Node&lt;T&gt;* node)
+{
+  while (node-&gt;get_right()) node = node-&gt;get_right();
+  return node-&gt;get_item();
+}
+
+// 最大値の節を削除
+template&lt;class T&gt;
+Node&lt;T&gt;* delete_max(Node&lt;T&gt;* node)
+{
+  if (!node-&gt;get_right()) {
+    Node&lt;T&gt;* x = node-&gt;get_left();
+    delete node;
+    return x;
+  }
+  node-&gt;put_right(delete_max(node-&gt;get_right()));
+  return node;
+}
+
+// 削除
+template&lt;class T&gt;
+Node&lt;T&gt;* delete_node(const T&amp; x, Node&lt;T&gt;* node)
+{
+  if (!node) return node;
+  if (x == node-&gt;get_item()) {
+    if (!node-&gt;get_left()) {
+      Node&lt;T&gt;* x = node-&gt;get_right();
+      delete node;
+      return x;
+    }
+    if (!node-&gt;get_right()) {
+      Node&lt;T&gt;* x = node-&gt;get_left();
+      delete node;
+      return x;
+    }
+    node-&gt;put_item(move(search_min(node-&gt;get_right())));
+    node-&gt;put_right(delete_min(node-&gt;get_right()));
+  } else if (x &lt; node-&gt;get_item())
+    node-&gt;put_left(delete_node(x, node-&gt;get_left()));
+  else
+    node-&gt;put_right(delete_node(x, node-&gt;get_right()));
+  return node;
+}
+
+// コピー
+template&lt;class T&gt;
+Node&lt;T&gt;* copy_node(Node&lt;T&gt;* node)
+{
+  if (!node) return 0;
+  Node&lt;T&gt;* new_node = new Node&lt;T&gt;(node-&gt;get_item());
+  new_node-&gt;put_left(copy_node(node-&gt;get_left()));
+  new_node-&gt;put_right(copy_node(node-&gt;get_right()));
+  return new_node;
+}
+
+// 廃棄
+template&lt;class T&gt;
+void destroy_node(Node&lt;T&gt;* node)
+{
+  if (node) {
+    destroy_node(node-&gt;get_left());
+    destroy_node(node-&gt;get_right());
+    delete node;
+  }
+}
+
+// 二分探索木
+template&lt;class T&gt; class Tree {
+  Node&lt;T&gt;* root;
+public:
+  Tree() : root(0) { }
+  ~Tree() { destroy_node(root); }
+  // コピーコンストラクタ
+  Tree(const Tree&amp; tree) {
+    root = copy_node(tree.root);
+  }
+  // 代入演算子
+  Tree&amp; operator=(const Tree&amp; tree) {
+    if (this != &amp;tree) {
+      destroy_node(root);
+      root = copy_node(tree.root);
+    }
+    return *this;
+  }
+  // ムーブコンストラクタ
+  Tree(Tree&amp;&amp; tree) : root(tree.root) {
+    tree.root = 0;
+  }
+  // ムーブ代入演算子
+  Tree&amp; operator=(Tree&amp;&amp; tree) {
+    if (this != &amp;tree) {
+      destroy_node(root);
+      root = tree.root;
+      tree.root = 0;
+    }
+    return *this;
+  }
+  // メンバ関数
+  bool empty() const { return !root; }
+  bool search(const T&amp; x) const { return search_node(x, root); }
+  const T&amp; min() const {
+    if (!root) throw std::runtime_error("Tree::min empty tree");
+    return search_min(root);
+  }
+  const T&amp; max() const {
+    if (!root) throw  std::runtime_error("Tree::max empty tree");
+    return search_max(root);
+  }
+  void insert(const T&amp; x) { root = insert_node(x, root); }
+  void insert(T&amp;&amp; x) { root = insert_node(forward&lt;T&gt;(x), root); }
+  void remove(const T&amp; x) { root = delete_node(x, root); }
+  void remove_min() {
+    if (root) root = delete_min(root);
+  }
+  void remove_max() {
+    if (root) root = delete_max(root);
+  }
+
+  // イテレータ
+  class Iterator : public iterator&lt;forward_iterator_tag, T&gt; {
+    vector&lt;Node&lt;T&gt;*&gt; stack;
+    // 次の node へ進める
+    void next_node(Node&lt;T&gt;* node) {
+      while (node) {
+        stack.push_back(node);
+        node = node-&gt;get_left();
+      }
+    }
+  public:
+    Iterator(Tree* tree, bool end) {
+      if (!end) next_node(tree-&gt;root);
+    }
+    // 間接参照
+    const T&amp; operator*() const {
+      return stack.back()-&gt;get_item();
+    }
+    const T* operator-&gt;() const {
+      return &amp;(stack.back()-&gt;get_item());
+    }
+    // 前置の ++ 演算子
+    Iterator&amp; operator++() {
+      Node&lt;T&gt;* node = stack.back();
+      stack.pop_back();
+      next_node(node-&gt;get_right());
+      return *this;
+    }
+    // 後置の ++ 演算子
+    Iterator operator++(int n) {
+      Iterator iter(*this);
+      Node&lt;T&gt;* node = stack.back();
+      stack.pop_back();
+      next_node(node-&gt;get_right());
+      return iter;
+    }
+    // 比較演算子
+    bool operator==(const Iterator&amp; iter) {
+      return stack == iter.stack;
+    }
+    bool operator!=(const Iterator&amp; iter) {
+      return stack != iter.stack;
+    }
+  };
+  Iterator begin() { return Iterator(this, false); }
+  Iterator end() { return Iterator(this, true); }    
+};
+
+int main()
+{
+  vector&lt;int&gt; a = {5, 7, 3, 4, 2, 1, 8, 6, 9};
+  vector&lt;int&gt; b = {15, 17, 13, 14, 12, 11, 18, 16, 19};
+  Tree&lt;int&gt; tree_a;
+  Tree&lt;int&gt; tree_b;
+  for (int x : a) tree_a.insert(x);
+  for (int x : tree_a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (int x : b) tree_b.insert(x);  
+  for (int x : tree_b) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  {
+    Tree&lt;int&gt; tree_c = tree_a;
+    tree_a = tree_b;
+    tree_b = tree_c;
+    for (int x : tree_a) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+    for (int x : tree_b) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  }
+  {
+    Tree&lt;int&gt; tree_c = move(tree_a);
+    tree_a = move(tree_b);
+    tree_b = move(tree_c);
+    for (int x : tree_a) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+    for (int x : tree_b) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  }
+  for (int x = 0; x &lt;= 10; x++)
+    cout &lt;&lt; tree_a.search(x) &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (auto iter = tree_a.begin(); iter != tree_a.end(); ++iter)
+    cout &lt;&lt; *iter &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  auto iter = tree_b.begin();
+  while (iter != tree_b.end())
+    cout &lt;&lt; *iter++ &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for_each(tree_a.begin(), tree_a.end(), [](int x){ cout &lt;&lt; x &lt;&lt; " "; });
+  cout &lt;&lt; endl;
+  for (int i = 0; i &lt; 9; i++) {
+    tree_a.remove(a[i]);
+    for_each(tree_a.begin(), tree_a.end(), [](int x){ cout &lt;&lt; x &lt;&lt; " "; });
+    cout &lt;&lt; endl;
+  }
+  while (!tree_b.empty()) {
+    cout &lt;&lt; tree_b.min() &lt;&lt; endl;
+    cout &lt;&lt; tree_b.max() &lt;&lt; endl;
+    tree_b.remove_min();
+    tree_b.remove_max();
+    for (int x : tree_b) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  }
+  Tree&lt;string&gt; tree_c;
+  tree_c.insert("foo");
+  tree_c.insert("bar");
+  tree_c.insert("baz");
+  tree_c.insert("oops");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  tree_c.remove("foo");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  tree_c.remove("bar");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  tree_c.remove("oops");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  tree_c.remove("baz");
+  for (auto&amp; x : tree_c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="cpp26.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp28.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,942 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / LZ78 符号 (LZW 符号)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881795</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>LZ78 符号 (LZW 符号)</h2>
+<div class="small">
+[ <a href="pyalgo33.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo35.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> LZ 符号の続きです。前回は LZSS 符号のバリエーションの一つである LZB 符号と、LZSS 符号とハフマン符号を組み合わせた LZH 符号を説明しました。今回は J.Zip と A.Lempel が開発したもう一つのデータ圧縮アルゴリズムである「LZ78 符号」を取り上げます。
+</p>
+
+<h4>●LZ78 符号（LZW 符号）</h4>
+<p> LZ77 符号と同様に LZ78 符号にも多数のバリエーションが存在します。その中で、最も基本的で広く用いられている符号が、1984 年 T. Welch によって開発された「LZW 符号」です。今回は「LZW 符号」を使って説明します。
+</p>
+<p> LZSS 符号はスライド窓を辞書として使っていました。スライド窓の大きさは一定なので、記号を読み込むたびに古い記号から捨てていかなくてはいけません。つまり、LZ77 符号は局所的な辞書を構成していると考えることができます。したがって、同じ記号列がファイル内に分散している状態では、それを効果的に圧縮することはできません。
+</p>
+
+<p> この欠点は、スライド窓を大きく設定することで改良できます。ところが、辞書の位置情報や一致長を表す符号長が長くなるので、単純にスライド窓を大きくするだけでは、圧縮率を高くすることはできません。また、最長一致系列の探索処理が遅くなるため、符号化になおさら時間がかかることになります。このため、スライド窓を大きくすることは現実的ではないとされています。
+</p>
+<p> なお、前回説明したように、スライド窓を大きくする場合は、LZB 符号を用いることで高い圧縮率を実現することができます。ただし、最長一致系列の探索はどうしても時間がかかります。
+</p>
+
+<p> これらの問題点を回避するため、LZW 符号ではスライド窓の使用をやめて、これまでに出現した記号列を辞書に登録することで大域的な辞書を作成します。この辞書の作り方によっては、メモリサイズが大きくなったり探索に時間がかかってしまいますが、LZW 符号では「トライ (trie) 」という木構造を用いることで、効率的な探索処理を実現しています。
+</p>
+
+<h4>●トライと辞書の対応</h4>
+<p> トライについては拙作のページ <a href="pyalgo09.html">トライとパトリシア</a> で詳しく説明していますが、ここで簡単に復習しておきましょう。
+</p>
+<pre class="fig">
+                      Ｔ
+                    ／  ＼
+                  ／      ＼
+                ／          ＼
+              ／              ＼
+            Ａ                  Ｈ
+          ／│＼              ／│＼
+        ／  │  ＼          ／  │  ＼
+      ／    │    ＼      ／    │    ＼
+    Ｉ      Ｋ      Ｌ  Ａ      Ｅ      Ｉ
+    │      │    ／│  │    ／│      │
+    Ｌ      Ｅ  Ｋ  Ｌ  Ｔ  $6  Ｎ      Ｓ
+    │      │  │  │  │      │      │
+    $1      $2  $3  $4  $5      $7      $8
+
+{ TAIL, TAKE, TALK, TALL, THAT, THE, THEN, THIS }
+
+
+    図 : 文字列の集合をトライで表現した場合
+</pre>
+<p> 上図では葉を $ で表しています。たとえば、葉 $6 までたどると、それは "THEN" という文字列を表しています。また、文字列 "THE" をトライから探す場合は、節を順番にたどっていって、葉 $6 に達した時点で "THE" を見つけることができます。もし、節 E の子に葉 $6 がなければ、トライに THE は存在しないことになります。
+</p>
+
+<p> LZW 符号でトライを辞書として利用する場合、途中の節までたどった文字列も探索対象となります。たとえば、TAIL だけではなくその途中の T, TA, TAI も辞書に登録されていると考えます。LZW 符号は、この辞書から最長一致系列を探索し、その辞書番号を符号語として出力します。辞書番号は節に通し番号を付ければいいでしょう。また、節を配列に格納しておけば、添字が辞書番号に対応することになります。
+</p>
+
+<p> たとえば、TAILS を符号化する場合、最長一致系列は TAIL になるので、最後の文字 L を格納している節の番号が符号語になります。辞書の大きさを N とすると、符号長は log<sub>2</sub> N になるので、N = 8192 とすると 13 ビットで表すことができます。したがって、文字列 TAIL は 13 / 32 に圧縮されるわけです。
+</p>
+
+<p> そのあと、文字 L を格納している節に不一致文字 S を追加すれば、TAILS という文字列を辞書に追加することができます。再び TAILS が記号列中に現れれば、辞書に登録されているので 13 / 40 に圧縮することができます。
+</p>
+
+<p> LZW 符号の場合、記号を読み込むにしたがい辞書に登録される記号列が増えるので、いつかは辞書が満杯になります。このときの対処方法で、いくつかのバリエーションが存在します。最初は、満杯になったら辞書を固定して、そのままの辞書を使ってファイルを圧縮するプログラムを作成しましょう。
+</p>
+
+<h4>●LZW 符号の符号化</h4>
+<p> それでは、記号列 aababcabcd を LZW 符号で符号化・復号する様子を具体的に説明します。LZW 符号では、最初に 256 種類の記号すべてを辞書に登録しておきます。たとえば、記号 a は 97 番目で b は 98 番目になります。この状態から記号列を読み込んで符号化を行います。
+</p>
+<pre class="fig">
+    ａａｂａｂｃａｂｃｄ  ・・・・
+    ↑
+
+No. 0       97  98  99  100        255
+    [ ・・・ａ  ｂ  ｃ  ｄ  ・・・ ]
+
+    ａａｂａｂｃａｂｃｄ  ・・・・    ａ  =&gt; 97
+    ○×
+
+    [ ・・・ａ  ｂ  ｃ  ｄ  ・・・ ]
+            │
+            ａ(256)
+</pre>
+<p> まず、辞書の中から最長一致系列を探すため、記号を読み込んでトライを探索します。最初の記号 a は辞書の 97 番目に登録されています。次の記号 a を読み込みますが、"aa" は辞書に登録されていないので、最長一致系列は "a" となります。そこで、辞書番号 97 を符号語として出力します。それから、不一致になった記号 a を辞書 97 の後ろに追加します。このときの辞書番号は 256 になります。
+</p>
+
+<p> 次に、不一致となった記号 a から最長一致系列を探索します。
+</p>
+<pre class="fig">
+    ａａｂａｂｃａｂｃｄ  ・・・・    ａ  =&gt; 97
+      ○×
+
+    [ ・・・ａ  ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼
+        ａ      ｂ(257)
+</pre>
+<p> 次の記号 b を読み込んでトライを探索しますが、"ab" は登録されていないので、"a" が最長一致系列になります。辞書番号 97 を符号語として出力し、記号 b を辞書 97 の後ろに追加します。このときの辞書番号は 257 になります。
+</p>
+<pre class="fig">
+    ａａｂａｂｃａｂｃｄ  ・・・・    ｂ  =&gt; 98
+        ○×
+
+    [ ・・・ａ      ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼    │
+        ａ      ｂ  ａ(258)
+</pre>
+<p> 同様に、記号 b からの最長一致系列を探索すると "b" が得られます。符号語を出力して、辞書に登録します。
+</p>
+<pre class="fig">
+    ａａｂａｂｃａｂｃｄ  ・・・・    ａｂ  =&gt; 257
+          ○○×
+
+    [ ・・・ａ      ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼    │
+        ａ      ｂ  ａ
+                │
+                ｃ(259)
+</pre>
+<p> 次の最長一致系列は、97 - 257 とたどり "ab" となります。そこで、辞書番号 257 を出力し、不一致記号 c を 257 の後ろに追加します。
+</p>
+<pre class="fig">
+    ａｂａｂｃａｂｃｄ  ・・・・   ｃ  =&gt; 99
+            ○×
+
+    [ ・・・ａ      ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼    │  │
+        ａ      ｂ  ａ  ａ(260)
+                │
+                ｃ
+</pre>
+<p> 次は記号 c から始まりますが、最長一致系列は "c" となるので、符号語 99 を出力して辞書 260 を追加します。
+</p>
+<pre class="fig">
+    ａｂａｂｃａｂｃｄ  ・・・・    ａｂｃ =&gt; 259
+              ○○○×
+
+    [ ・・・ａ      ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼    │  │
+        ａ      ｂ  ａ  ａ
+                │
+                ｃ
+                │
+                ｄ(261)
+</pre>
+<p> 次の最長一致系列は、97 - 257 - 259 とたどって "abc" となります。辞書番号 259 を符号語として出力して、辞書 261 を追加します。
+</p>
+<p> このように、LZW 符号は記号を読み込むにしたがい、辞書に登録される記号列が増えるので、効率的に圧縮することが可能です。
+</p>
+<h4>●LZW 符号の復号</h4>
+<p> 次に、復号の様子を説明します。
+</p>
+<pre class="fig">
+No. 0       97  98  99  100        255
+    [ ・・・ａ  ｂ  ｃ  ｄ  ・・・ ]
+
+    97  97 98 257  99 259 ...
+    ↓  ↓
+    ａ  ａ
+
+    [ ・・・ａ  ｂ  ｃ  ｄ  ・・・ ]
+            │
+            ａ(256)
+</pre>
+<p> 最初は、符号化と同様に 256 種類の記号を辞書へ登録します。まず、符号語 97 を読み込み a と復号します。復号した辞書番号を記憶しておいて、次の符号語を復号します。符号語は 97 なので "a" と復号できます。このとき、復号した記号列の先頭文字を、直前に復号した辞書番号の後ろへ追加します。この場合は、辞書 97 の後ろへ記号 a を追加します。このときの辞書番号は 256 になります。
+</p>
+<pre class="fig">
+    97  97  98 257  99 259 ...
+            ↓
+    ａ  ａ  ｂ
+
+    [ ・・・ａ  ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼
+        ａ      ｂ(257)
+</pre>
+<p> 次の符号語は 98 なので "b" と復号でき、辞書 97 の後ろに記号 b を追加します。このときの辞書番号は 257 になります。
+</p>
+<pre class="fig">
+    97  97  98  257  99 259 ...
+                ↓
+    ａ  ａ  ｂ  ａｂ
+
+    [ ・・・ａ      ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼    │
+        ａ      ｂ  ａ(258)
+</pre>
+<p> 次の符号語は 257 なので、節を逆順に 257 - 97 とたどり記号列 "ab" と復号できます。そして、辞書 98 の後ろに記号 a を追加します。
+</p>
+<pre class="fig">
+    97  97  98  257   99 259 ...
+                      ↓
+    ａ  ａ  ｂ  ａｂ  ｃ
+
+    [ ・・・ａ      ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼    │
+        ａ      ｂ  ａ
+                │
+                ｃ(259)
+</pre>
+<p> 次の符号語は 99 なので、記号 "c" と復号できます。そして、辞書 257 の後ろに記号 c を追加します。このときの辞書番号は 259 になります。
+</p>
+<pre class="fig">
+    97  97  98  257   99  259 ...
+                          ↓
+    ａ  ａ  ｂ  ａｂ  ｃ  ａｂｃ
+
+    [ ・・・ａ      ｂ  ｃ  ｄ  ・・・ ]
+          ／  ＼    │  │
+        ａ      ｂ  ａ  ａ(260)
+                │
+                ｃ
+</pre>
+<p> 次の符号語は 259 なので、節を逆順に 259 - 257 - 97 とたどり記号列 "abc" と復号できます。そして、辞書 99 の後ろに記号 a を追加します。
+</p>
+
+<h4>●復号の注意点</h4>
+<p> このように、LZW 符号では符号語を復号していく過程で、辞書が復元されていきます。この例ではうまくいきますが、注意しなければならない点が一つあるのです。記号列 ababab ... を例に考えてみましょう。
+</p>
+<pre class="fig">
+    ａｂａｂａｂａｂ  ・・・・
+        ○○×
+
+No. 0       97  98        255
+    [ ・・・ａ  ｂ・・・ ]   97(a) 98(b) 256(ab)
+          ／      ＼
+        ｂ(256)     ａ(257)
+      ／
+    ａ(258)
+</pre>
+<p> 今、97 (a), 98 (b), 256 (ab) と符号化し、辞書に記号 a を追加したところです。このときの辞書番号は 258 となります。
+</p>
+<pre class="fig">
+    ａｂａｂａｂａｂ  ・・・・
+            ○○○×
+
+No. 0       97  98        255
+    [ ・・・ａ  ｂ・・・ ]   97(a) 98(b) 256(ab) 258(aba)
+          ／      ＼
+        ｂ(256)     ａ(257)
+      ／
+    ａ(258)
+</pre>
+<p> さらに符号化を進めると、97 - 256 - 258 をたどり "aba" という最長一致系列が見つかります。このとき、符号語は辞書番号 258 になりますが、これは直前に追加した辞書番号です。これが復号の時に問題となるのです。
+</p>
+<pre class="fig">
+    97  98  256   258 ...
+            ↓
+    ａ  ｂ  ａｂ
+
+    No. 0       97  98        255
+        [ ・・・ａ  ｂ  ・・・ ]
+              ／      ＼
+            ｂ(256)     ａ(257)
+
+
+    97  98  256   258 ...
+                  ↓
+    ａ  ｂ  ａｂ  ？（辞書にないよ！）
+
+    No. 0       97  98        255
+        [ ・・・ａ  ｂ  ・・・ ]
+              ／      ＼
+            ｂ(256)     ａ(257)
+</pre>
+<p> 符号語 97 98 256 は "abab" と復号できます。次の符号語は 258 ですが、この時点では 258 はまだ辞書に存在していません。この場合は、辞書にデータを追加してから復号することになります。追加する記号は、直前に復号した記号列から求めることができます。
+</p>
+<pre class="fig">
+    97  98  256   258 ...
+                  ↓
+    ａ  ｂ  ａｂ  ａｂａ  辞書に追加してから復号する
+            ┬
+┌─────┘
+│  No. 0       97  98        255
+│      [ ・・・ａ  ｂ  ・・・ ]
+│            ／      ＼
+│          ｂ(256)     ａ(257)
+│        ／
+└──→ａ(258)
+</pre>
+<p> 直前に復号した記号列は "ab" で、符号語は 256 でした。辞書 256 の後ろに記号列の先頭 a を追加すれば辞書を復元することができます。
+</p>
+
+<p> 符号化の動作を考えてみると、これで正しく復号できるのです。新しく追加する辞書番号は、直前に符号化した辞書番号の後ろに追加されます。この場合は、辞書番号 256 の後ろに 258 が追加されることになります。そして、それが符号語としてすぐに出力されるには、再度 97 - 256 - 258 とたどらなくてはなりません。
+</p>
+
+<p> したがって、符号語 256 で "ab" が復号されたのであれば、次の 258 は "ab" + 258 と復号されるはずです。そして、辞書 258 に追加される記号は、直前に復号した記号列 "ab" のの先頭記号になるはずなので、その記号は a と確定できるのです。
+</p>
+
+<p> つまり、まだ辞書に登録されていない辞書番号は、直前に復号した記号列の先頭記号を、復号した辞書番号の後ろに追加することで、辞書を復元することができるわけです。
+</p>
+
+<h4>●辞書の操作関数</h4>
+<p> それでは具体的にプログラムを作りましょう。最初に、トライの節を表すクラスを定義します。
+</p>
+
+<pre class="list">
+リスト : 節の定義
+
+# 定数
+DIC_BITS = 13
+DIC_SIZE = 1 &lt;&lt; DIC_BITS
+
+# 節
+class Node:
+    def __init__(self, x, num, bros = None, child = None):
+        self.sym = x
+        self.code = num
+        self.bros = bros
+        self.child = child
+</pre>
+<p> 辞書のサイズは DIC_SIZE (8192) で、DIC_BITS (13) が符号語長を表します。クラス Node はトライの節を表します。インスタンス変数 sym に記号を格納し、code に辞書番号を格納します。これが LZW 符号の符号語になります。bros が兄弟の節で、child が子の節を格納します。
+</p>
+<p> データ構造のイメージは次のようになります。
+</p>
+<pre class="fig">
+┌────┐
+│[sym]   │
+│[code]  │
+│[bros]  ┼→・・
+│[child] ┼─┐
+└────┘  │
+┌──────┘
+↓
+┌────┐    ┌→┌────┐    ┌→┌────┐
+│[sym]   │    │  │[sym]   │    │  │[sym]   │
+│[code]  │    │  │[code]  │    │  │[code]  │
+│[bros]  ┼──┘  │[bros]  ┼──┘  │[bros]  ┼→ None
+│[child] ┼→・・  │[child] ┼→・・  │[child] ┼→・・
+└────┘        └────┘        └────┘
+
+
+            図 : トライのデータ構造
+</pre>
+
+<p> 次は、トライへ記号を追加する関数 insert_child を作ります。
+</p>
+<pre class="fig">
+  親ｐ                        子ｎ
+┌────┐            ┌→┌────┐
+│[sym]   │            │  │[sym]   │
+│[code]  │            │  │[code]  │
+│[bros]  ┼→・・      │  │[bros]  ┼→ None
+│[child] ┼→ None ──┘  │[child] ┼→ None
+└────┘  ｎをセット    └────┘
+
+
+        図 : トライへデータを追加する（その１）
+</pre>
+<p> 節 p に子 n を追加する場合を考えてみましょう。p に子がない場合は簡単です。上図に示すように、p の child に n をセットして、子 n の bros には None をセットするだけです。次に、この状態から子 m を追加します。
+</p>
+<pre class="fig">
+  親ｐ                  子ｎ
+┌────┐      ┌→┌────┐
+│[sym]   │      │  │[sym]   │
+│[code]  │      │  │[code]  │
+│[bros]  ┼→・・│  │[bros]  ┼→ None
+│[child] ┼→┐×┤  │[child] ┼→ None
+└────┘  │  │  └────┘
+  ｍに書き換え│  └──────────┐
+              └──→┌────┐      │
+                  子ｍ│[sym]   │      │
+                      │[code]  │      │
+                      │[bros]  ┼→──┘ｎをセット
+                      │[child] ┼→ None
+                      └────┘
+
+
+      図 : トライへデータを追加する（その２）
+</pre>
+<p> 子 m を追加する場合、兄弟のリンケージ bros は連結リストと同じなので、後ろに追加するよりも先頭に追加した方が簡単です。子 m の bros に子 n をセットし、親 p の child を子 m に書き換えます。これで、親 p の子は m と n になります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 親節 node に記号 c を追加する
+
+def insert_child(node, c, num):
+    node.child = Node(c, num, node.child)
+</pre>
+<p> 関数 insert_child はとても簡単です。新しい節を Node() で作成し、それを node.child にセットするだけです。このとき、新しい節の bros には node.child の値がセットされます。節 node に子がない場合、node.child は None に初期化されているので、新しい節の bros には None がセットされ正常に動作します。
+</p>
+
+<p> 次は、記号 c を持つ子を探す search_child を作ります。
+</p>
+
+<pre class="list">
+リスト : 記号 c を持つ子を探す
+
+def search_child(node, c):
+    node = node.child
+    while node is not None:
+        if node.sym == c: return node
+        node = node.bros
+    return None
+</pre>
+<p> 最初に、node.child から先頭の子を取り出します。あとは while ループで兄弟のリンケージを順番にたどっていき、記号 c と等しい sym を持つ子を線形探索します。node が None になればリンケージは終了となり、見つからなかったことを表す None を返します。途中で見つかれば、return で node を返します。
+</p>
+<h4>●符号化のプログラム</h4>
+<p> トライを操作するのに必要な関数はこれだけです。次に、符号化を行う関数 encode を作成します。
+</p>
+
+<pre class="list">
+リスト : LZW 符号の符号化
+
+def encode(fin, fout):
+    buff = [Node(x, x) for x in xrange(256)]
+    num = 256
+    p = buff[getc(fin)]
+    while True:
+        c = getc(fin)
+        if c is None:
+            fout.putbits(DIC_BITS, p.code)
+            break
+        q = search_child(p, c)
+        if q is None:
+            fout.putbits(DIC_BITS, p.code)
+            if num &lt; DIC_SIZE:
+                insert_child(p, c, num)
+                num += 1
+            p = buff[c]
+        else:
+            p = q
+</pre>
+<p> 関数 encode の引数 fin は入力ファイル、fout は出力ファイル (BitIO のオブジェクト) です。最初に、配列 buff に 256 個の節をセットします。これがトライのルートになります。変数 num は辞書番号を表していて 256 に初期化します。変数 p には現在探索中の節を保持します。まず、getc で 1 文字読み込み、buff から対応する節を取り出して変数 p にセットします。
+</p>
+<p> 次の while ループで符号化を行います。getc でファイルから記号を一つ読み込み、変数 c にセットします。もしも None ならば、そこまでたどった節が最長一致系列を表すので、その番号 p.code を putbits で出力してからループを脱出します。
+</p>
+<p> そうでなければ、search_child で節 p に記号 c を持つ子があるか探索します。見つからなければ p までが最長一致系列となります。符号語として p.code を putbits で出力します。そして、節 p に記号 c を持つ子を insert_child で追加し、記号 c に対応する節を buff から取り出して p にセットします。次は、この節から最長一致系列を探索します。search_child の返り値が None でなければ、p の値を q に更新して、トライの探索を継続します。
+</p>
+
+<p> 符号化の処理はこれで終了です。LZSS 符号に比べてずいぶん簡単に実装できたので、拍子抜けされたかもしれません。このように、プログラムで簡単に実装できるのが LZW 符号の長所です。
+</p>
+<h4>●復号のプログラム</h4>
+<p> 次は復号処理を行う関数 decode を作ります。
+</p>
+
+<pre class="list">
+リスト : LZW 符号の復号
+
+def decode(fin, fout, size):
+    buff = [None] * DIC_SIZE
+    for x in xrange(256): buff[x] = (x, None)
+    num = 256
+    p = fin.getbits(DIC_BITS)
+    c, i = output(buff, p, fout)
+    size -= i
+    while size &gt; 0:
+        q = fin.getbits(DIC_BITS)
+        if q &lt; num:
+            c, i = output(buff, q, fout)
+            if num &lt; DIC_SIZE:
+                buff[num] = (c, p)
+                num += 1
+        else:
+            buff[num] = (c, p)
+            num += 1
+            c, i = output(buff, q, fout)
+        p = q
+        size -= i
+</pre>
+
+<p> 復号の場合、トライを作成する必要はありません。大きさが DIC_SIZE の配列 buff を用意します。この場合、配列の添字が辞書番号に対応します。そして、復号した記号と親節の辞書番号を buff にセットします。親節の辞書番号をたどることで、記号列を復号することができます。buff の 0 - 255 には (記号, None) で初期化しておきます。
+</p>
+
+<p> 変数 p には、一つ前に復号した辞書番号を記憶しておきます。最初に復号された記号は 0 - 255 になるので、これを p にセットし、記号列を関数 output で fout に出力します。output の返り値は、復号した記号列の先頭の記号と、記号列の長さです。
+</p>
+
+<p> 次の while ループで復号処理を行います。最初に、getbits で 1 符号語読み込み、変数 q にセットします。この値が辞書番号 num 未満であれば辞書に登録されているので、output で記号列に復号します。num が DIC_SIZE 未満であれば、復号した文字列の先頭記号 c と親節 p を buff[num] にセットします。
+</p>
+
+<p> q が num 以上であれば、その値はまだ辞書に登録されていません。この場合は、前回復号した記号列の先頭記号 c と親節 p を buff[num] に追加してから、output で記号列を復号して出力します。そのあとで、復号した節 q を p に保存して、size を更新します。
+</p>
+
+<p> 最後に、記号列を出力する関数 output を作ります。
+</p>
+
+<pre class="list">
+リスト : 記号列の出力
+
+def output(buff, n, fout):
+    if buff[n][1] == None:
+        putc(fout, n)
+        return n, 1
+    else:
+        m, i = output(buff, buff[n][1], fout)
+        putc(fout, buff[n][0])
+        return m, i + 1
+</pre>
+<p> output はルートの方向へ節をたどっていき、記号を putc で出力します。buff[n][1] が None に達した時点で、最初にセットした 256 種類の記号にたどり着きます。ここが再帰呼び出しの停止条件です。putc で記号列の先頭記号 n を出力して、return で n と長さ 1 を返します。buff[n][1] が None でない場合は、output を再帰呼び出ししてから buff[n][0] を出力します。最後に return で m と i + 1 を返します。
+</p>
+
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。実行結果は次のようになりました。
+</p>
+<pre>
+        表 : LZW 符号の評価結果 (1)
+
+  ファイル名      サイズ     LZW    符号化  復号
+  ------------------------------------------------
+  alice29.txt    152,089    68,448   2.16   1.74
+  asyoulik.txt   125,179    59,085   1.89   1.50
+  cp.html         24,603    12,150   0.42   0.32
+  fields.c        11,150     5,760   0.20   0.15
+  grammar.lsp      3,721     2,294   0.08   0.06
+  kennedy.xls  1,029,744   339,542  10.91   9.34
+  lcet10.txt     426,754   194,996   6.06   4.93
+  plrabn12.txt   481,861   220,850   7.02   5.58
+  ptt5           513,216    66,101   3.95   2.79
+  sum             38,240    30,163   0.86   0.68
+  xargs.1          4,227     2,916   0.08   0.07
+  ------------------------------------------------
+  合計         2,810,784 1,002,305  33.63  27.16
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> テキストファイルの場合、ファイル全体を通して同じ単語が繰り返し使われているので、LZSS 符号と同様に高い圧縮率になりました。逆に、kennedy.xls の圧縮率はよくありません。LZW 符号の場合、バイナリファイルは苦手なようです。
+</p>
+<p> 処理時間ですが、符号化と復号ともにハフマン符号よりも少し速くなりました。LZSS 符号と比べると、符号化は LZW 符号のほうが断然高速で、復号は LZSS 符号よりも遅くなりました。符号化の処理時間が速いのは LZW 符号の長所だと思います。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4>●LZW 符号の弱点</h4>
+<p> ところで LZW 符号の場合、辞書を表す符号語（辞書番号）は固定長なので、辞書を大きくすれば圧縮率が向上するとは限りません。これは LZSS 符号と同じ欠点です。そこで、辞書の大きさを 8192, 32768, 65536 と変えて試してみました。結果は次のようになりました。
+</p>
+<pre>
+        表 : LZW 符号の評価結果 (2)
+
+  ファイル名      サイズ     8192    32768    65536
+  ---------------------------------------------------
+  alice29.txt    152,089    68,448   65,841   70,152
+  asyoulik.txt   125,179    59,085   58,831   62,752
+  cp.html         24,603    12,150   14,018   14,952
+  fields.c        11,150     5,760    6,646    7,088
+  grammar.lsp      3,721     2,294    2,646    2,822
+  kennedy.xls  1,029,744   339,542  342,728  351,610
+  lcet10.txt     426,754   194,996  173,209  171,612
+  plrabn12.txt   481,861   220,850  205,236  204,868
+  ptt5           513,216    66,101   65,856   70,120
+  sum             38,240    30,163   23,493   25,058
+  xargs.1          4,227     2,916    3,364    3,588
+  ---------------------------------------------------
+  合計         2,810,784 1,002,305  961,868  984,622
+</pre>
+<p> 辞書を大きくすると、大きなテキストファイルの圧縮率は高くなります。逆に、kennedy.xls や ptt5 などのバイナリファイルや小さなファイルは圧縮率が低下してしまいます。このような場合、辞書番号を可変長符号で表すと圧縮率を改善することができます。
+</p>
+
+<h4>●CBT 符号による LZW 符号の改良</h4>
+<p> 基本的な考え方は LZB 符号と同じです。辞書番号が 511 以下であれば 9 bit で、1023 以下であれば 10 bit で符号化することができます。符号語を出力するたびに辞書番号は一つずつ増えていくので、その値によって符号語長を変化させればいいわけです。ここで CBT 符号を用いると、圧縮率をさらに向上させることができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 辞書番号の符号化
+
+# 符号語長
+dic_bits = 9
+code_count = 256
+
+def encode1(fout, n):
+    global dic_bits, code_count
+    if dic_bits &lt; DIC_BITS:
+        fout.cbt_encode(n, code_count, dic_bits)
+        code_count += 1
+        if code_count &gt; (1 &lt;&lt; dic_bits) - 1: dic_bits += 1
+    else:
+        fout.putbits(DIC_BITS, n)
+</pre>
+
+<p> 符号化の場合、putbits で符号語を出力するたびに辞書番号が一つずつ増えていきます。これを変数 code_count でカウントします。LZW 符号の場合、最初に記号 0 から 255 までを辞書に登録するので、code_count は 256 に初期化します。符号語長は変数 dic_bits で表し、9 に初期化します。
+</p>
+<p> code_count が増加して dic_bits の範囲で表せなくなったならば、dic_bits の値を +1 します。DIC_BITS は dic_bits の最大値を表します。あとは、dic_bits が DIC_BITS よりも小さい場合は CBT 符号のメソッド cbt_encode で n を符号化し、そうでなければ putbits で n をそのまま出力します。
+</p>
+
+<pre class="list">
+リスト : 辞書番号の復号
+
+def decode1(fin):
+    global dic_bits, code_count
+    if dic_bits &lt; DIC_BITS:
+        n = fin.cbt_decode(code_count, dic_bits)
+        code_count += 1
+        if code_count &gt; (1 &lt;&lt; dic_bits) - 1: dic_bits += 1
+    else:
+        n = fin.getbits(DIC_BITS)
+    return n
+</pre>
+
+<p> 復号の場合、getbits で符号語を一つ復号するたびに辞書番号を一つ増やします。これを変数 code_count でカウントします。あとは、符号化の処理と同じです。これで辞書番号を CBT 符号で符号化・復号することができます。
+</p>
+<h4>●評価結果</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+        表 : LZW 符号の評価結果 (3)
+
+  ファイル名      サイズ     8192    32768    65536
+  ---------------------------------------------------
+  alice29.txt    152,089    67,415   61,123   60,513
+  asyoulik.txt   125,179    58,056   54,117   53,206
+  cp.html         24,603    11,111   10,877   10,877
+  fields.c        11,150     4,810    4,810    4,810
+  grammar.lsp      3,721     1,747    1,747    1,747
+  kennedy.xls  1,029,744   338,558  338,206  341,659
+  lcet10.txt     426,754   193,968  168,556  162,070
+  plrabn12.txt   481,861   219,812  200,493  195,131
+  ptt5           513,216    65,084   61,101   60,333
+  sum             38,240    29,123   19,473   19,473
+  xargs.1          4,227     2,249    2,249    2,249
+  ---------------------------------------------------
+  合計         2,810,784   991,933  922,752  912,068
+</pre>
+<p> 辞書番号を CBT 符号で符号化したことにより、小さなファイルの圧縮率は高くなりました。ほかのファイルでも圧縮率は改善されているので、CBT 符号を用いた効果は十分に出ていると思います。
+</p>
+<p> 今回のプログラムは、辞書が満杯になったら辞書を固定してそのまま使い続けるため、辞書のサイズが小さい場合やファイルサイズが大きい場合は、高い圧縮率を達成することはできません。実用的なツールに LZW 符号を用いる場合は、その対応が必要になります。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>植松友彦, 『文書データ圧縮アルゴリズム入門』, ＣＱ出版社, 1994
+  <li>広井誠, 『LZ78 符号によるファイルの圧縮と改良（前編）』, Interface 2006 年 11 月号, ＣＱ出版社
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# lzw.py : LZW coding
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+from bitio import *
+
+# 定数
+DIC_BITS = 13
+DIC_SIZE = 1 &lt;&lt; DIC_BITS
+
+# 節
+class Node:
+    def __init__(self, x, num, bros = None, child = None):
+        self.sym = x
+        self.code = num
+        self.bros = bros
+        self.child = child
+
+# 子を探す
+def search_child(node, c):
+    node = node.child
+    while node is not None:
+        if node.sym == c: return node
+        node = node.bros
+    return None
+
+# 子を挿入する
+def insert_child(node, c, num):
+    node.child = Node(c, num, node.child)
+
+
+# LZW 符号の符号化
+def encode(fin, fout):
+    buff = [Node(x, x) for x in xrange(256)]
+    num = 256
+    p = buff[getc(fin)]
+    while True:
+        c = getc(fin)
+        if c is None:
+            fout.putbits(DIC_BITS, p.code)
+            break
+        q = search_child(p, c)
+        if q is None:
+            fout.putbits(DIC_BITS, p.code)
+            if num &lt; DIC_SIZE:
+                insert_child(p, c, num)
+                num += 1
+            p = buff[c]
+        else:
+            p = q
+
+# 記号列の出力
+def output(buff, n, fout):
+    if buff[n][1] == None:
+        putc(fout, n)
+        return n, 1
+    else:
+        m, i = output(buff, buff[n][1], fout)
+        putc(fout, buff[n][0])
+        return m, i + 1
+
+# LZW 符号の復号
+def decode(fin, fout, size):
+    buff = [None] * DIC_SIZE
+    for x in xrange(256): buff[x] = (x, None)
+    num = 256
+    p = fin.getbits(DIC_BITS)
+    c, i = output(buff, p, fout)
+    size -= i
+    while size &gt; 0:
+        q = fin.getbits(DIC_BITS)
+        if q &lt; num:
+            c, i = output(buff, q, fout)
+            if num &lt; DIC_SIZE:
+                buff[num] = (c, p)
+                num += 1
+        else:
+            buff[num] = (c, p)
+            num += 1
+            c, i = output(buff, q, fout)
+        p = q
+        size -= i
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = BitIO(name2, WOPEN)
+    outfile.putbits(32, size)
+    if size &gt; 0: encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = BitIO(name1, ROPEN)
+    outfile = open(name2, "wb")
+    size = infile.getbits(32)
+    if size &gt; 0: decode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# lzw.py : LZW coding + CBT coding
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+from bitio import *
+
+# 定数
+DIC_BITS = 16
+DIC_SIZE = 1 &lt;&lt; DIC_BITS
+
+# 節
+class Node:
+    def __init__(self, x, num, bros = None, child = None):
+        self.sym = x
+        self.code = num
+        self.bros = bros
+        self.child = child
+
+# 子を探す
+def search_child(node, c):
+    node = node.child
+    while node is not None:
+        if node.sym == c: return node
+        node = node.bros
+    return None
+
+# 子を挿入する
+def insert_child(node, c, num):
+    node.child = Node(c, num, node.child)
+
+# 符号語長
+dic_bits = 9
+code_count = 256
+
+# 辞書番号の符号化
+def encode1(fout, n):
+    global dic_bits, code_count
+    if dic_bits &lt; DIC_BITS:
+        fout.cbt_encode(n, code_count, dic_bits)
+        code_count += 1
+        if code_count &gt; (1 &lt;&lt; dic_bits) - 1: dic_bits += 1
+    else:
+        fout.putbits(DIC_BITS, n)
+
+# 辞書番号の復号
+def decode1(fin):
+    global dic_bits, code_count
+    if dic_bits &lt; DIC_BITS:
+        n = fin.cbt_decode(code_count, dic_bits)
+        code_count += 1
+        if code_count &gt; (1 &lt;&lt; dic_bits) - 1: dic_bits += 1
+    else:
+        n = fin.getbits(DIC_BITS)
+    return n
+
+# LZW 符号の符号化
+def encode(fin, fout):
+    buff = [Node(x, x) for x in xrange(256)]
+    num = 256
+    p = buff[getc(fin)]
+    while True:
+        c = getc(fin)
+        if c is None:
+            encode1(fout, p.code)
+            break
+        q = search_child(p, c)
+        if q is None:
+            encode1(fout, p.code)
+            if num &lt; DIC_SIZE:
+                insert_child(p, c, num)
+                num += 1
+            p = buff[c]
+        else:
+            p = q
+
+
+# 出力
+def output(buff, n, fout):
+    if buff[n][1] == None:
+        putc(fout, n)
+        return n, 1
+    else:
+        m, i = output(buff, buff[n][1], fout)
+        putc(fout, buff[n][0])
+        return m, i + 1
+
+# LZW 符号の復号
+def decode(fin, fout, size):
+    buff = [None] * DIC_SIZE
+    for x in xrange(256): buff[x] = (x, None)
+    num = 256
+    p = decode1(fin)
+    c, i = output(buff, p, fout)
+    size -= i
+    while size &gt; 0:
+        q = decode1(fin)
+        if q &lt; num:
+            c, i = output(buff, q, fout)
+            if num &lt; DIC_SIZE:
+                buff[num] = (c, p)
+                num += 1
+        else:
+            if num &lt; DIC_SIZE:
+                buff[num] = (c, p)
+                num += 1
+            c, i = output(buff, q, fout)
+        p = q
+        size -= i
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = BitIO(name2, WOPEN)
+    outfile.putbits(32, size)
+    if size &gt; 0: encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = BitIO(name1, ROPEN)
+    outfile = open(name2, "wb")
+    size = infile.getbits(32)
+    if size &gt; 0: decode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo33.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo35.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

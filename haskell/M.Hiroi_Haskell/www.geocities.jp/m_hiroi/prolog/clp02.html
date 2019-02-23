@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>制約論理プログラミング超入門</title>
+  <meta name="description" content="Prolog入門,制約論理プログラミング入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881780</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>制約論理プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Prolog</a> | <a href="clp.html">C L P</a> ]
+</div>
+<hr>
+<section class="contents">
+<h4 id="chap09">●地図の配色問題</h4>
+<p> SWI-Prolog で制約プログラミングを行うとき、述語 maplist を使うとプログラムが簡単になる場合があります。たとえば、SWI-Prolog には maplist/2 という述語があります。
+</p>
+<pre class="item">
+maplist(Pred, List)
+</pre>
+<p> maplist/2 は List の要素に述語 Pred を適用し、すべての要素が成功すれば maplist/2 も成功します。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+?- maplist(=:=(2), [2,2,2,2,2]).
+true.
+
+?- maplist(=:=(2), [2,2,2,2,1]).
+false.
+
+?- maplist(=\=(2), [1,3,5,7,9]).
+true.
+
+?- maplist(=\=(2), [1,2,3,5,7,9]).
+false.
+</pre>
+<p> maplist/2 を使うと制約を簡単に記述することができます。簡単な例題として、<a href="prolog08.html">地図の配色問題</a> を clpfd で解いてみましょう。
+</p>
+<pre class="fig">
+┌─────────┐
+│        ａ        │
+├──┬───┬──┤
+│ ｂ │  ｃ  │ ｄ │
+├──┴─┬─┴──┤
+│   ｅ   │   ｆ   │
+└────┴────┘
+
+    図：簡単な地図
+
+出典 : Leon Sterling, Ehud Shapiro, 『Prolog の技芸』, 共立出版, 1988
+</pre>
+<p> 今回は、図に示す簡単な地図を 4 色で塗り分けます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 地図の配色問題
+
+:- use_module(library(clpfd)).
+
+solver([A, B, C, D, E, F]) :-
+     [A, B, C, D, E, F] ins 1 .. 4,
+     maplist(#\=(A), [B, C, D]),
+     maplist(#\=(B), [A, C, E]),
+     maplist(#\=(C), [A, B, D, E, F]),
+     maplist(#\=(D), [A, C, F]),
+     maplist(#\=(E), [B, C, F]),
+     maplist(#\=(F), [C, D, E]).
+</pre>
+<p> 領域を変数 A, B, C, D, E, F に、色を数字 1, 2, 3, 4 に対応させます。あとは、隣の領域の色が自分と異なることを maplist で記述するだけです。つまり、隣接リストを定義するだけで問題を解くことができるわけです。実行結果は次のようになります。
+</p>
+<pre>
+?- solver(Xs), label(Xs).
+Xs = [1, 2, 3, 2, 1, 4] ;
+Xs = [1, 2, 3, 2, 4, 1] ;
+Xs = [1, 2, 3, 4, 1, 2] ;
+Xs = [1, 2, 3, 4, 4, 1] ;
+Xs = [1, 2, 3, 4, 4, 2] .
+</pre>
+<pre class="fig">
+┌─────────┐  
+│        <font color="red">■</font>        │  
+├──┬───┬──┤  
+│ <font color="blue">■</font> │  <font color="yellow">■</font>  │ <font color="blue">■</font> │  
+├──┴─┬─┴──┤  
+│   <font color="red">■</font>   │   <font color="green">■</font>   │  
+└────┴────┘  
+
+    図：解答の一例
+</pre>
+<p> なお、一番最後の制約は記述しなくても解くことができます。ちょっと冗長な記述でも、矛盾していなければ clpfd で解を求めることができます。
+</p>
+<p> 次は、もう少し大きな地図で試してみましょう。
+</p>
+<pre class="fig">
+┌──────┬──────┐ 
+│     Ａ     │     Ｂ     │ 
+│  ┌──┬─┴─┬──┐  │ 
+│  │    │  Ｄ  │    │  │ 
+│  │ Ｃ ├─┬─┤ Ｅ │  │ 
+│  │    │  │  │    │  │ 
+│  ├──┤Ｇ│Ｈ├──┤  │ 
+│  │    │  │  │    │  │ 
+│  │ Ｆ ├─┴─┤ Ｉ │  │ 
+│  │    │  Ｊ  │    │  │ 
+│  ├──┴─┬─┴──┤  │ 
+│  │   Ｋ   │   Ｌ   │  │ 
+│  └────┴────┴─┤ 
+│                          │ 
+└─────────────┘ 
+
+     図：簡単な地図 (2)
+</pre>
+<p> 上の地図を 4 色で塗り分けます。プログラムと実行結果を示します。
+<pre class="list">
+リスト : 地図の配色問題 (2)
+
+solver1(Xs) :-
+    Xs = [A,B,C,D,E,F,G,H,I,J,K,L],
+    Xs ins 1..4,
+    maplist(#\=(A), [B,C,D,F,K,L]),
+    maplist(#\=(B), [A,D,E,I,L]),
+    maplist(#\=(C), [A,D,F,G]),
+    maplist(#\=(D), [A,B,C,E,G,H]),
+    maplist(#\=(E), [B,D,H,I]),
+    maplist(#\=(F), [A,C,G,J,K]),
+    maplist(#\=(G), [C,D,F,H,J]),
+    maplist(#\=(H), [D,E,G,I,J]),
+    maplist(#\=(I), [B,E,H,J,L]),
+    maplist(#\=(J), [F,G,H,I,K,L]),
+    maplist(#\=(K), [A,F,J,L]),
+    maplist(#\=(L), [A,B,I,J,K]).
+</pre>
+<pre>
+?- solver1(Xs), label(Xs), writeln(Xs).
+[1,2,2,3,1,3,4,2,3,1,2,4]
+Xs = [1, 2, 2, 3, 1, 3, 4, 2, 3|...] ;
+[1,2,2,3,1,3,4,2,4,1,2,3]
+Xs = [1, 2, 2, 3, 1, 3, 4, 2, 4|...] ;
+[1,2,2,3,1,3,4,2,4,1,4,3]
+Xs = [1, 2, 2, 3, 1, 3, 4, 2, 4|...] .
+
+?- findall(Xs, (solver1(Xs), label(Xs)), Ys), length(Ys, N).
+Ys = [[1, 2, 2, 3, 1, 3, 4, 2|...], [1, 2, 2, 3, 1, 3, 4|...], [1, 2, 2, 3, 1, 3|...],
+ [1, 2, 2, 3, 1|...], [1, 2, 2, 3|...], [1, 2, 2|...], [1, 2|...], [1|...],
+ [...|...]|...],
+N = 216.
+</pre>
+<p> 解は全部で 216 通りあります。このプログラムでは重複解のチェックを行っていないので、多数の解が出力されます。地域Ａの色を 1 に限定すると 54 通りの解となります。最初に表示される解を下図に示します。
+</p>
+<pre class="fig">
+ ┌──────┬──────┐ 
+ │     <font color="red">●</font>     │     <font color="green">●</font>     │ 
+ │  ┌──┬─┴─┬──┐  │ 
+ │  │    │  <font color="cyan">●</font>  │    │  │ 
+ │  │ <font color="green">●</font> ├─┬─┤ <font color="red">●</font> │  │ 
+ │  │    │  │  │    │  │ 
+ │  ├──┤<font color="blue">●</font>│<font color="green">●</font>├──┤  │ 
+ │  │    │  │  │    │  │ 
+ │  │ <font color="cyan">●</font> ├─┴─┤ <font color="cyan">●</font> │  │ 
+ │  │    │  <font color="red">●</font>  │    │  │ 
+ │  ├──┴─┬─┴──┤  │ 
+ │  │   <font color="green">●</font>   │   <font color="blue">●</font>   │  │ 
+ │  └────┴────┴─┤ 
+ │                          │ 
+ └─────────────┘ 
+
+       図：解答の一例
+</pre>
+<hr>
+<h4 id="chap10">●部分和問題</h4>
+<p> 部分和問題は、要素が数値の集合 S において、要素の総和が M となる部分集合があるか判定する問題です。たとえば、集合 {2, 3, 5, 8} の場合、総和が 10 となる部分集合は {2, 3, 5} と {2, 8} がありますが、14 となる部分集合はありません。部分集合の総数は、要素数を n とすると 2<sup>n</sup> 個になるので、n が大きくなるとナイーブな方法では時間がかかってしまいます。実際には、分岐限定法や動的計画法を使って、現実的な時間で部分和問題を解くことができるといわれています。clpfd でも高速に解くことができるか試してみましょう。
+</p>
+
+<h4>●ナイーブな方法</h4>
+<p> 最初にナイーブな方法で部分和問題を解いてみましょう。今回は要素を正整数に限定します。部分和問題は「べき集合」を生成する述語 power_set を作ると簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : べき集合
+
+power_set([], []).
+power_set([_ | Xs], Ys) :- power_set(Xs, Ys).
+power_set([X | Xs], [X | Ys]) :- power_set(Xs, Ys).
+</pre>
+<p> べき集合を求める述語 power_set は簡単です。最初の規則は空集合のべき集合は空集合であることを表しています。これが再帰呼び出しの停止条件になります。2 番目の規則は先頭要素を取り除いたリスト Xs のべき集合を求めます。3 番目の規則は、先頭要素を取り除いたリスト Xs のべき集合 Ys を求め、Ys の先頭に X を追加します。これでべき集合を生成することができます。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+?- power_set([2,3,5,8], Xs).
+Xs = [] ;
+Xs = [8] ;
+Xs = [5] ;
+Xs = [5, 8] ;
+Xs = [3] ;
+Xs = [3, 8] ;
+Xs = [3, 5] ;
+Xs = [3, 5, 8] ;
+Xs = [2] ;
+Xs = [2, 8] ;
+Xs = [2, 5] ;
+Xs = [2, 5, 8] ;
+Xs = [2, 3] ;
+Xs = [2, 3, 8] ;
+Xs = [2, 3, 5] ;
+Xs = [2, 3, 5, 8].
+</pre>
+<p> [2, 3, 5, 8] の部分集合は空集合 [ ] を含めて 16 通りあります。この power_set を使うと部分和問題のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 部分和問題
+
+subset_sum(Xs, N, As) :-
+    power_set(Xs, As),
+    sum_list(As, N).
+</pre>
+<p> 部分集合 As の総和を述語 sum_list で求め、それが N と等しいかチェックするだけです。sum_list/2 はリストの総和を求める述語です。簡単な使用例を示します。
+</p>
+<pre>
+?- sum_list([1,2,3,4,5], A).
+A = 15.
+
+?- sum_list([1,2,3,4,5], 15).
+true.
+
+?- sum_list([1,2,3,4,5], 16).
+false.
+</pre>
+<p> それでは実行してみましょう。
+<pre>
+?- subset_sum([2,3,5,8], 10, A).
+A = [2, 8] ;
+A = [2, 3, 5] ;
+false.
+
+?- subset_sum([2,3,5,8], 14, A).
+false.
+</pre>
+<p> とても簡単ですね。ただし、集合の要素数が多くなると、実行時間がかかるようになります。次のテストプログラムを見てください。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+% フィボナッチ数の生成
+make_fibo(1, [1]).
+make_fibo(2, [2, 1]).
+make_fibo(N, Xs) :-
+    N &gt; 2,
+    M is N - 2,
+    make_fibo_sub(M, [2, 1], Xs).
+
+make_fibo_sub(0, Xs, Ys) :- !, reverse(Xs, Ys).
+make_fibo_sub(N, [B, A | Xs], Ys) :-
+    N1 is N - 1,
+    C is A + B,
+    make_fibo_sub(N1, [C, B, A | Xs], Ys).
+
+% 簡単なテスト
+test(N, A) :-
+    make_fibo(N, Xs),
+    sum_list(Xs, M),
+    M1 is M - 1,
+    subset_sum(Xs, M1, A).
+</pre>
+<p> 述語 make_fibo は N 個のフィボナッチ数列を生成します。簡単な実行例を示します。
+</p>
+<pre>
+?- make_fibo(10, A), writeln(A).
+[1,2,3,5,8,13,21,34,55,89]
+A = [1, 2, 3, 5, 8, 13, 21, 34, 55|...].
+</pre>
+
+<p> 要素の総和を M とすると、1 から M までの整数は、要素を組み合わせて必ず作ることができます。これはフィボナッチ数列の面白い特徴です。test は 総和 - 1 となる組み合わせを subset_sum で求め、その実行時間を計測します。結果は次のようになりました。
+</p>
+<pre>
+?- time((test(16, A), writeln(A), fail)).
+[2,3,5,8,13,21,34,55,89,144,233,377,610,987,1597]
+% 1,310,806 inferences, 0.172 CPU in 0.188 seconds (91% CPU, 7641852 Lips)
+false.
+
+?- time((test(17, A), writeln(A), fail)).
+[2,3,5,8,13,21,34,55,89,144,233,377,610,987,1597,2584]
+% 2,752,603 inferences, 0.316 CPU in 0.330 seconds (96% CPU, 8723113 Lips)
+false.
+
+?- time((test(18, A), writeln(A), fail)).
+[2,3,5,8,13,21,34,55,89,144,233,377,610,987,1597,2584,4181]
+% 5,767,264 inferences, 0.633 CPU in 0.646 seconds (98% CPU, 9105723 Lips)
+false.
+
+?- time((test(19, A), writeln(A), fail)).
+[2,3,5,8,13,21,34,55,89,144,233,377,610,987,1597,2584,4181,6765]
+% 12,058,725 inferences, 1.295 CPU in 1.309 seconds (99% CPU, 9314791 Lips)
+false.
+
+?- time((test(20, A), writeln(A), fail)).
+[2,3,5,8,13,21,34,55,89,144,233,377,610,987,1597,2584,4181,6765,10946]
+% 25,165,930 inferences, 2.672 CPU in 2.695 seconds (99% CPU, 9419480 Lips)
+false.
+
+実行環境 : Lubuntu 16.10 on VirtualBox, Core i7-2670QM 2.20GHz, SWI-Prolog Version 7.2.3
+</pre>
+<p> 要素がひとつ増えると実行時間は約 2 倍になっていることがわかります。要素数を n とすると、subset_sum の実行時間は 2<sup>n</sup> に比例する遅いプログラムなのです。
+</p>
+<h4>●0-1 整数計画問題</h4>
+<p> 次は clpfd でプログラムを作ってみましょう。部分和問題は集合 X の要素を x<sub>i</sub> とし、その係数を a<sub>i</sub>すると、次の等式を満たすか判定する問題になります。
+<pre class="item">
+ n
+Σa<sub>i</sub> * x<sub>i</sub> = M  (a<sub>i</sub> = 0 or 1)
+i=1
+</pre>
+<p> 係数 a<sub>i</sub> の値が 0 か 1 かを決める問題になります。このような問題を「0-1 整数計画問題」といいます。clpfd にはこのような問題を解くのにぴったりの述語 scalar_product/4 が用意されています。
+</p>
+<pre class="item">
+scalar_product(Xs, As, Pred, N).
+</pre>
+<p> scala product は「内積」のことです。たとえば、3 次元のベクトル (x1, y1, z1), (x2, y2, z2) の内積は x1 * x2 + y1 * y2 + z1 * z2 で求めることができます。
+</p>
+<p> scala_product はリスト Xs, As の要素を掛け算して、その総和を求めます。その値と引数 N の関係が述語 Pred を満たすとき、scalar_product は成功します。実をいうと、この述語だけで部分和問題は解けてしまいます。簡単な実行例を示しましょう。
+</p>
+<pre>
+?- length(Xs, 5), scalar_product([1,2,3,4,5], Xs, #=, 15), Xs ins 0..1.
+Xs = [1, 1, 1, 1, 1].
+
+?- length(Xs, 5), scalar_product([1,2,3,4,5], Xs, #=, 10), Xs ins 0..1, label(Xs).
+Xs = [0, 1, 1, 0, 1] ;
+Xs = [1, 0, 0, 1, 1] ;
+Xs = [1, 1, 1, 1, 0].
+</pre>
+<p> これをそのままプログラムすると、部分和問題の解法プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 部分和問題 (clpfd 版)
+
+subset_sum_clp(Xs, N, As) :-
+    length(Xs, M),
+    length(As, M),
+    As ins 0..1,
+    scalar_product(Xs, As, #=, N).
+
+% 表示
+print_ans([],[]) :- nl.
+print_ans([X | Xs], [1 | Ys]) :- format('~d ', [X]), print_ans(Xs, Ys).
+print_ans([_ | Xs], [0 | Ys]) :- print_ans(Xs, Ys).
+
+% 簡単なテスト
+test_clp(Xs, N) :-
+    subset_sum_clp(Xs, N, Ans),
+    label(Ans),
+    print_ans(Xs, Ans),
+    fail.
+</pre>
+<p> プログラムは簡単なので説明は割愛します。それでは実行してみましょう。
+<pre>
+?- time((make_fibo(20, Xs), sum_list(Xs, M), M1 is M - 1, test_clp(Xs, M1))).
+2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 
+% 4,199 inferences, 0.003 CPU in 0.004 seconds (83% CPU, 1250164 Lips)
+false.
+
+?- time((make_fibo(30, Xs), sum_list(Xs, M), M1 is M - 1, test_clp(Xs, M1))).
+2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 28657
+46368 75025 121393 196418 317811 514229 832040 1346269 
+% 6,189 inferences, 0.005 CPU in 0.005 seconds (93% CPU, 1253035 Lips)
+false.
+
+?- time((make_fibo(40, Xs), sum_list(Xs, M), M1 is M - 1, test_clp(Xs, M1))).
+2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 28657 
+46368 75025 121393 196418 317811 514229 832040 1346269 2178309 3524578 5702887 
+9227465 14930352 24157817 39088169 63245986 102334155 165580141 
+% 8,179 inferences, 0.006 CPU in 0.006 seconds (89% CPU, 1427531 Lips)
+false.
+
+実行環境 : Lubuntu 16.10 on VirtualBox, Core i7-2670QM 2.20GHz, SWI-Prolog Version 7.2.3
+</pre>
+<p> 次は最大値 (末尾の要素) - 1 を求めてみましょう。
+</p>
+<pre>
+?- time((make_fibo(20, Xs), last(Xs, M), M1 is M - 1, test_clp(Xs, M1))).
+1 3 8 21 55 144 377 987 2584 6765 
+% 17,769 inferences, 0.011 CPU in 0.012 seconds (92% CPU, 1651673 Lips)
+false.
+
+?- time((make_fibo(30, Xs), last(Xs, M), M1 is M - 1, test_clp(Xs, M1))).
+1 3 8 21 55 144 377 987 2584 6765 17711 46368 121393 317811 832040 
+% 35,914 inferences, 0.017 CPU in 0.021 seconds (79% CPU, 2141909 Lips)
+false.
+
+?- time((make_fibo(40, Xs), last(Xs, M), M1 is M - 1, test_clp(Xs, M1))).
+1 3 8 21 55 144 377 987 2584 6765 17711 46368 121393 317811 832040 2178309 
+5702887 14930352 39088169 102334155 
+% 60,259 inferences, 0.027 CPU in 0.037 seconds (75% CPU, 2199459 Lips)
+false.
+
+実行環境 : Lubuntu 16.10 on VirtualBox, Core i7-2670QM 2.20GHz, SWI-Prolog Version 7.2.3
+</pre>
+<p> 最後に総和 + 1 の値、つまり失敗する場合をためしてみましょう。
+</p>
+<pre>
+?- time((make_fibo(20, Xs), sum_list(Xs, M), M1 is M + 1, test_clp(Xs, M1))).
+% 2,883 inferences, 0.002 CPU in 0.002 seconds (100% CPU, 1382300 Lips)
+false.
+
+?- time((make_fibo(30, Xs), sum_list(Xs, M), M1 is M + 1, test_clp(Xs, M1))).
+% 4,253 inferences, 0.003 CPU in 0.003 seconds (92% CPU, 1432006 Lips)
+false.
+
+?- time((make_fibo(40, Xs), sum_list(Xs, M), M1 is M + 1, test_clp(Xs, M1))).
+% 5,623 inferences, 0.003 CPU in 0.004 seconds (96% CPU, 1638286 Lips)
+false.
+
+実行環境 : Lubuntu 16.10 on VirtualBox, Core i7-2670QM 2.20GHz, SWI-Prolog Version 7.2.3
+</pre>
+<p> このように、clpfd を使うと個数を増やしても高速に解くことができます。clpfd の制約ソルバーはとても優秀ですね。M.Hiroi も大変驚きました。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+リスト : 部分和問題
+
+:- use_module(library(clpfd)).
+
+% べき集合
+power_set([], []).
+power_set([_ | Xs], Ys) :- power_set(Xs, Ys).
+power_set([X | Xs], [X | Ys]) :- power_set(Xs, Ys).
+
+% ナイーブな方法
+subset_sum(Xs, N, As) :-
+    power_set(Xs, As),
+    sum_list(As, N).
+
+% フィボナッチ数の生成
+make_fibo(1, [1]).
+make_fibo(2, [2, 1]).
+make_fibo(N, Xs) :-
+    N &gt; 2,
+    M is N - 2,
+    make_fibo_sub(M, [2, 1], Xs).
+
+make_fibo_sub(0, Xs, Ys) :- !, reverse(Xs, Ys).
+make_fibo_sub(N, [B, A | Xs], Ys) :-
+    N1 is N - 1,
+    C is A + B,
+    make_fibo_sub(N1, [C, B, A | Xs], Ys).
+
+% 簡単なテスト
+test(N, A) :-
+    make_fibo(N, Xs),
+    sum_list(Xs, M),
+    M1 is M - 1,
+    subset_sum(Xs, M1, A).
+
+% clpfd 版
+subset_sum_clp(Xs, N, As) :-
+    length(Xs, M),
+    length(As, M),
+    As ins 0..1,
+    scalar_product(Xs, As, #=, N).
+
+% 表示
+print_ans([],[]) :- nl.
+print_ans([X | Xs], [1 | Ys]) :- format('~d ', [X]), print_ans(Xs, Ys).
+print_ans([_ | Xs], [0 | Ys]) :- print_ans(Xs, Ys).
+
+% 簡単なテスト
+test_clp(Xs, N) :-
+    subset_sum_clp(Xs, N, Ans),
+    label(Ans),
+    print_ans(Xs, Ans),
+    fail.
+</pre>
+<hr>
+<h4 id="chap11">●ナップザック問題</h4>
+<p> 次は「ナップザック問題」を取り上げます。ナップザック (knapsack) とは辞書を引いてみると、ランドセルのような背中にせおう四角形の袋や箱のことを意味します。ここでは物を入れる袋と簡単に考えてください。
+</p>
+<p> ここで、ナップザックの中に品物を詰め込むことを考えてみます。一つのナップザックと複数の品物が与えられたとき、袋に詰めた品物の合計金額が最大になるような選び方を求めることが「ナップザック問題」です。ナップザック問題にはバリエーションがあって、同じ品物をいくつも入れて良い場合と、一つしか入れてはいけない場合があります。後者の場合を「0-1 ナップザック問題」といいます。
+</p>
+<p> ナップザック問題は、部分和問題と同様に NP 問題になります。これは厳密に解を求めようとすると、全ての場合について総当たりで調べるしか方法がなく、データ数が多くなると時間がかかるため、現実的な時間では解答を出すことができないというものです。品物の詰め方が難問の一つ、といわれてもピンとこないと思いますが、ナップザック問題は品物の種類が増えるにしたがって、その組み合わせ方が爆発的に増えるのです。
+</p>
+<p> ところが、幸いなことにナップザック問題は実用的には解決済みの問題と考えられています。とくに有名なのが「動的計画法」を用いた解法です。ナップザックと品物の大きさを整数値に限定すれば、動的計画法を用いることで厳密解を求めることが可能です。興味のある方は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo23.html#dp">動的計画法</a> をお読みください。
+</p>
+<p> 今回は clpfd を使ってナップザック問題を解いてみましょう。
+</p>
+<h4>●0-1 ナップザック問題</h4>
+<p> まず最初に、0-1 ナップザック問題を解いてみましょう。0-1 ナップザック問題を数式で表すと次のようになります。
+</p>
+<pre class="item">
+ n
+Σ a<sub>i</sub> * w<sub>i</sub> &lt;= W (ナップザックの大きさ)
+i=1
+
+ n
+Σ a<sub>i</sub> * p<sub>i</sub> = V (V の最大値を求める)
+i=1
+
+w<sub>i</sub> : 重さ
+p<sub>i</sub> : 金額
+a<sub>i</sub> : 0 or 1
+n : 品物の個数
+</pre>
+<p> 基本的には、部分和問題と同じようなプログラムになりますが、ナップザックに入る範囲で、最大の金額になるような入れ方を求める必要があります。
+</p>
+<h4>●labeling/2</h4>
+<p> このような場合、制約ソルバーに最大値を探すためのオプションを指定する必要があります。オプションの指定には述語 labeling/2 を使います。
+</p>
+<pre class="item">
+labeling(Opts, Vars)
+</pre>
+<p> 第 1 引数のリストにオプションを、第 2 引数に変数を指定します。第 1 引数が空リストの場合、label/1 と同じ動作 (デフォルトの動作) になります。
+</p>
+<p> 最大値または最小値を求める場合は、オプション max(Expr) と min(Expr) を使います。引数の Expr には変数だけではなく式を指定してもかまいません。簡単な例を示しましょう。
+</p>
+<pre>
+?- X in 1..3, Y in 1..3, labeling([max(X + Y)], [X, Y]).
+X = Y, Y = 3 ;
+X = 2,
+Y = 3 ;
+X = 3,
+Y = 2 ;
+X = 1,
+Y = 3 ;
+X = Y, Y = 2 ;
+X = 3,
+Y = 1 ;
+X = 1,
+Y = 2 ;
+X = 2,
+Y = 1 ;
+X = Y, Y = 1 ;
+false.
+
+?- X in 1..3, Y in 1..3, labeling([min(X + Y)], [X, Y]).
+X = Y, Y = 1 ;
+X = 1,
+Y = 2 ;
+X = 2,
+Y = 1 ;
+X = 1,
+Y = 3 ;
+X = Y, Y = 2 ;
+X = 3,
+Y = 1 ;
+X = 2,
+Y = 3 ;
+X = 3,
+Y = 2 ;
+X = Y, Y = 3 ;
+false.
+</pre>
+<p> max(X + Y) を指定すると、X + Y の大きいほうから順番に、逆に min(X + Y) を指定すると小さいほうから順番に値を求めることができます。
+</p>
+<p> それから、labeling/2 と label/1 は自由変数に値を割り当てるとき、リストの左側 (先頭) の変数から行います。たとえば、label([X, Y, Z]) であれば、X, Y, Z の順番で値を決め、バックトラックするときは、逆の順番で行われます。つまり、Z の領域をすべて試したあと、バックトラックして Y の領域を試し、最後に X の領域を試します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+?- X in 1..2, Y in 3..4, Z in 5..6, labeling([], [X, Y, Z]).
+X = 1,
+Y = 3,
+Z = 5 ;
+X = 1,
+Y = 3,
+Z = 6 ;
+X = 1,
+Y = 4,
+Z = 5 ;
+X = 1,
+Y = 4,
+Z = 6 ;
+X = 2,
+Y = 3,
+Z = 5 ;
+X = 2,
+Y = 3,
+Z = 6 ;
+X = 2,
+Y = 4,
+Z = 5 ;
+X = 2,
+Y = 4,
+Z = 6.
+</pre>
+<p> オプションに ff を指定すると、領域の小さな変数から値を割り当てます。次の例を見てください。
+</p>
+<pre>
+?- X in 1..3, Y in 4..5, labeling([ff], [X, Y]).
+X = 1,
+Y = 4 ;
+X = 2,
+Y = 4 ;
+X = 3,
+Y = 4 ;
+X = 1,
+Y = 5 ;
+X = 2,
+Y = 5 ;
+X = 3,
+Y = 5.
+</pre>
+<p> 変数 Y の領域は X の領域よりも小さいので、最初に Y の値を決め、X の領域をすべて試したあと、バックトラックして Y の領域を試します。
+</p>
+<h4>●0-1 ナップザック問題の解法</h4>
+<p> それでは実際に簡単な問題を解いてみましょう。
+</p>
+<div class="question">
+<b>[問題]</b><br>
+<p> 下表に示す品物をサイズ 15 のナップザックに入れるとき、金額が最大となる入れ方を求めてください。
+</p>
+<table border=1>
+<thead>
+  <tr><th>品物</th><th>金額</th><th>サイズ</th></tr>
+</thead>
+<tbody>
+  <tr><td>A</td><td>4</td><td>3</td></tr>
+  <tr><td>B</td><td>5</td><td>4</td></tr>
+  <tr><td>C</td><td>6</td><td>5</td></tr>
+  <tr><td>D</td><td>8</td><td>7</td></tr>
+  <tr><td>E</td><td>10</td><td>9</td></tr>
+</tbody>
+</table>
+<p> 出典 : <a href="http://bach.istc.kobe-u.ac.jp/copris/docs/intro-ja.html">Coprisによる制約プログラミング入門</a>, (田村直之さん)
+</p>
+</div>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 0-1 ナップザック問題
+
+:- use_module(library(clpfd)).
+
+solver :-
+    Ws = [3, 4, 5, 7, 9],
+    Ps = [4, 5, 6, 8, 10],
+    Bs = [A, B, C, D, E],
+    Bs ins 0..1,
+    scalar_product(Ws, Bs, #=&lt;, 15),
+    scalar_product(Ps, Bs, #=, V),
+    labeling([max(V)], [A, B, C, D, E, V]), 
+    writeln(V),
+    writeln(Bs).
+</pre>
+<p> Ws にサイズ、Ps に金額、Bs に品物の選択結果を表す変数 (0 or 1) をセットします。次に、scalar_product でサイズの合計が 15 以下であること、金額の合計を変数 V で表すことを定義します。あとは、labeling でオプションに max(V) を指定するだけです。
+</p>
+<p> それでは実行してみましょう。
+<pre>
+?- solver.
+18
+[1,0,1,1,0]
+true ;
+17
+[1,1,0,1,0]
+true ;
+16
+[0,0,1,0,1]
+true .
+
+?- once(solver).
+18
+[1,0,1,1,0]
+true.
+</pre>
+<p> 金額の最大値は 18 で、選択した品物は A, C, D の 3 つです。バックトラックせずに 1 回だけ実行したい場合は述語 once(Goal) を使うと便利です。once は引数の Goal を実行し、成功してもバックトラックはしません。
+</p>
+<h4>●ナップザック問題の解法</h4>
+<p> 次は同じ品物をいくつ選んでもよい問題を解いてみましょう。
+</p>
+<div class="question">
+<b>[問題]</b><br>
+<p> 下表に示す品物をサイズ 10 のナップザックに入れるとき、金額が最大となる入れ方を求めてください。なお、同じ品物を何個入れてもかまいません。
+</p>
+<table border=1>
+<thead>
+  <tr><th>品物</th><th>金額</th><th>サイズ</th></tr>
+</thead>
+<tbody>
+  <tr><td>A</td><td>6</td><td>4</td></tr>
+  <tr><td>B</td><td>4</td><td>3</td></tr>
+  <tr><td>C</td><td>1</td><td>1</td></tr>
+</tbody>
+</table>
+</div>
+<pre class="list">
+リスト : ナップザック問題
+
+solver1 :-
+    Ws = [4, 3, 1],
+    Ps = [6, 4, 1],
+    Bs = [A, B, C],
+    maplist(#=&lt;(0), Bs),
+    scalar_product(Ws, Bs, #=&lt;, 10),
+    scalar_product(Ps, Bs, #=, V),
+    labeling([max(V)], [A, B, C, V]), 
+    writeln(V),
+    writeln(Bs).
+</pre>
+<p> プログラムは簡単で、変数 (係数) A, B, C の範囲が 0 or 1 ではなく、0 からナップザックに入るまでの個数 (上限値) になるだけです。上限値はナップザックの大きさから決定できるので、変数の範囲は 0 以上であることを maplist で指定するだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+?- solver1.
+14
+[1,2,0]
+true ;
+14
+[2,0,2]
+true .
+13
+[0,3,1]
+true .
+</pre>
+<p> このように、clpfd で簡単に求めることができますが、実をいうと、ナップザックの大きさが増えると、このプログラムでは時間がかかるようになります。0-1 ナップザック問題でも、品物の種類が増えると、さきほどのプログラムでは時間がかかるかもしれません。
+</p>
+
+<h4>●ナップザック問題の改良</h4>
+<p> それでは、今までのプログラムでは時間がかかる例を示しましょう。
+</p>
+<div class="question">
+<b>[問題]</b><br>
+<p> 下表に示す品物をサイズ W のナップザックに入れるとき、金額が最大となる入れ方を求めてください。なお、同じ品物を何個入れてもかまいません。
+</p>
+<table border=1>
+<thead>
+  <tr><th>品物</th><th>金額</th><th>サイズ</th></tr>
+</thead>
+<tbody>
+  <tr><td>A</td><td>91</td><td>3</td></tr>
+  <tr><td>B</td><td>120</td><td>4</td></tr>
+  <tr><td>C</td><td>610</td><td>20</td></tr>
+  <tr><td>D</td><td>930</td><td>30</td></tr>
+</tbody>
+</table>
+</div>
+<p> この問題を今までと同じようにプログラムすると、W が大きくなるにしたがい時間がかかるようになります。
+</p>
+<pre class="list">
+リスト : ナップザック問題の解法 (Bad)
+
+solver_bad(W) :-
+    Price = [91, 120, 610, 930],
+    Size = [3, 4, 20, 30],
+    Vars = [A, B, C, D],
+    maplist(#=&lt;(0), Vars),
+    scalar_product(Size, Vars, #=&lt;, W),
+    scalar_product(Price, Vars, #=, Value),
+    labeling([max(Value)], [A, B, C, D, Value]),
+    writeln(Value),
+    writeln(Vars).
+</pre>
+<pre>
+?- time(once(solver_bad(300))).
+9300
+[0,0,0,10]
+% 4,359,182 inferences, 0.881 CPU in 0.895 seconds (98% CPU, 4947739 Lips)
+true.
+
+?- time(once(solver_bad(400))).
+12392
+[2,1,0,13]
+% 9,866,609 inferences, 2.289 CPU in 2.303 seconds (99% CPU, 4310031 Lips)
+true.
+
+?- time(once(solver_bad(500))).
+15490
+[0,0,1,16]
+% 16,386,440 inferences, 3.562 CPU in 3.584 seconds (99% CPU, 4599900 Lips)
+true.
+
+実行環境 : Lubuntu 16.10 on VirtualBox, Core i7-2670QM 2.20GHz, SWI-Prolog Version 7.2.3
+</pre>
+<p> 時間がかかる理由は値 V の下限値が 0 から始まることです。最初、変数 A, B, C, D の値はすべて 0 なので、V の値も 0 になります。このあと、変数の値を一つずつ増やしながら試していくので、V の下限値がなかなか大きくならず、探索範囲を狭まることができないのです。
+</p>
+<p> この場合、最初に最適値に近い V の値を求めることができれば、それが制約となって、探索範囲を狭めることができます。今回は「欲張り法」で値を求めることにしましょう。欲張り法の説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo22.html">欲張り法</a> をお読みください。
+</p>
+<p> 欲張り法でナップザック問題を解く場合、金額 / サイズ を単価と考えて、単価の高い品物からナップザックに入れられるだけ入れていく、という方法がよく使われます。これを実現するには、labeling/2 のオプションに down を指定します。すると、変数の値は領域の大きな値から順番にセットされていきます。簡単な実行例を示します。
+</p>
+<pre>
+?- X in 1 .. 3, Y in 4 .. 5, labeling([down], [X, Y]).
+X = 3,
+Y = 5 ;
+X = 3,
+Y = 4 ;
+X = 2,
+Y = 5 ;
+X = 2,
+Y = 4 ;
+X = 1,
+Y = 5 ;
+X = 1,
+Y = 4.
+
+?- 
+</pre>
+
+<p> あとは labeling/2 で変数を指定するとき、単価の高い順に並べれば OK です。これで最初に求められる V の値は欲張り法と同じになります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ナップザック問題の解法 (Good)
+
+solver(W) :-
+    % 単価
+    % A: 30.3, B: 30.0, C: 30.5, D: 31.0
+    Price = [91, 120, 610, 930],
+    Size = [3, 4, 20, 30],
+    Vars = [A, B, C, D],
+    maplist(#=&lt;(0), Vars),
+    scalar_product(Size, Vars, #=&lt;, W),
+    scalar_product(Price, Vars, #=, Value),
+    labeling([down, max(Value)], [D, C, A, B, Value]),
+    writeln(Value),
+    writeln(Vars).
+</pre>
+<p> labeling の指定で、オプションに down を指定して、変数を単価の高い順に D, C, A, B と並べるだけです。実行結果は次のようになりました。
+</p>
+<pre>
+?- time(once(solver(300))).
+9300
+[0,0,0,10]
+% 299,373 inferences, 0.094 CPU in 0.102 seconds (92% CPU, 3193134 Lips)
+true.
+
+?- time(once(solver(400))).
+12392
+[2,1,0,13]
+% 556,504 inferences, 0.154 CPU in 0.164 seconds (94% CPU, 3608183 Lips)
+true.
+
+?- time(once(solver(500))).
+15490
+[0,0,1,16]
+% 902,227 inferences, 0.233 CPU in 0.246 seconds (95% CPU, 3873204 Lips)
+true.
+
+実行環境 : Lubuntu 16.10 on VirtualBox, Core i7-2670QM 2.20GHz, SWI-Prolog Version 7.2.3
+</pre>
+
+<p> 最初のプログラムよりもずいぶんと高速に解くことができました。なお、問題のサイズが大きくなると clpfd で解くのは困難になるでしょうが、それほど大きなサイズでなければ、clpfd でも解くことができるのではないかと思いました。興味のある方はいろいろ試してみてください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<hr>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Prolog</a> | <a href="clp.html">C L P</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / バイナリレンジコーダ</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881795</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>バイナリレンジコーダ (binary range coder) [2]</h2>
+<div class="small">
+[ <a href="pyalgo40.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo42.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> バイナリレンジコーダの続きです。今回はαモデルとγモデルの例題として、バイナリレンジコーダと LZ 符号を組み合わせてファイルを圧縮してみましょう。
+</p>
+
+<h4>●バイナリレンジコーダによる LZSS 符号の改良</h4>
+<p> それでは簡単な例題として、バイナリレンジコーダと <a href="pyalgo32.html">LZSS 符号</a> を組み合わせてみましょう。本ページでは LZRC 符号と呼ぶことにします。<a href="pyalgo33.html">LZH 符号</a> は LZSS 符号とハフマン符号を組み合わせることで高い圧縮率を実現しています。LZRC 符号はバイナリレンジコーダを用いることで、さらに圧縮率を改善することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 出現頻度表の初期化
+
+def init_freq():
+    global freq_flag, freq_code, freq_pos, freq_len
+    freq_flag = AlphaFreq(2)
+    freq_code = Freq2(256)
+    freq_len = GammaFreq(MAX_LEN - MIN_LEN)
+    freq_pos = GammaFreq(1 &lt;&lt; POS_BITS)
+</pre>
+
+<p> 関数 init_freq は各モデルの出現頻度表を生成してグローバル変数にセットします。符号語を区別するフラグはαモデルで符号化します。AlphaFreq のオブジェクトを生成して freq_flag にセットします。フラグで使用する記号は {0, 1} の 2 つだけなので、AlphaFreq の引数には 2 を渡します。記号はバイナリモデルで符号化します。Freq2 のオブジェクトを生成して freq_code にセットします。記号は 256 種類 (0 - 255) あるので、Freq2 の引数は 256 になります。
+</p>
+
+<p> 長さはγモデルで符号化します。GammaFreq のオブジェクトを生成して freq_len にセットします。LZSS 符号の場合、長さが MIN_LEN 以上の記号列を符号化するので、GammaFreq に渡す記号の種類は MAX_LEN - MIN_LEN になります。距離（位置）の符号化もγモデルを使います。GammaFreq にスライド窓の大きさ (1 &lt;&lt; POS_BITS) を渡してオブジェクトを生成して freq_pos にセットします。
+</p>
+
+<p> なお、γモデルは小さな整数ほど出現確率が高くなる場合に適したモデルです。一般的なテキストファイルの場合、短い距離が多く出現するとは考えにくいので、γモデルをそのまま使うよりも、違うモデルを作成した方がよいでしょう。たとえば、γモデルのα符号部をバイナリモデルに変更すると、テキストファイルの圧縮率は少し良くなるようです。興味のある方は試してみてください。
+</p>
+
+<p> あとは、符号化と復号を行う関数を修正するだけです。符号化を行う関数 encode は次のようになります。
+</p>
+
+<pre class="list">
+リスト : LZRC 符号の符号化
+
+def encode(fin, fout):
+    init_freq()
+    rc = RangeCoder(fout, ENCODE)
+    s = Slide(fin)
+    rp = 0
+    while rp &lt; s.data_size:
+        s.search(rp)
+        if s.match_len &lt; MIN_LEN:
+            num = 1
+            freq_flag.encode(rc, 0)
+            freq_code.encode(rc, s.buff[rp])
+        else:
+            num = s.match_len
+            freq_flag.encode(rc, 1)
+            freq_len.encode(rc, num - MIN_LEN)
+            freq_pos.encode(rc, rp - s.match_pos - 1)
+        for _ in xrange(num):
+            s.insert(rp)
+            rp += 1
+            if rp &gt;= s.limit: rp = s.update(rp)
+    rc.finish()
+</pre>
+<p> 最初に RangeCoder() で符号化用レンジコーダを生成し、各モデルの出現頻度表を init_freq で初期化します。MIN_LEN 以上の記号列が見つからない場合は、freq_flag.encode で 0 を符号化し、freq_code.encode で記号 s.buff[rp] を符号化します。
+</p>
+
+<p> MIN_LEN 以上の記号列が見つかった場合は、freq_flag.encode で 1 を符号化します。次に、freq_len.encode で長さ num - MIN_LEN を符号化し、freq_pos.encode で距離 rp - match_pos - 1 を符号化します。最後に rc.finish を呼び出して符号化を終了します。
+</p>
+
+<p> 次は復号を行う関数 decode を修正します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : LZRC 符号の復号
+
+def decode(fin, fout, size):
+    init_freq()
+    rc = RangeCoder(fin, DECODE)
+    rp = 0
+    buff = [0] * (1 &lt;&lt; POS_BITS)
+    while size &gt; 0:
+        if freq_flag.decode(rc):
+            num = freq_len.decode(rc) + MIN_LEN
+            pos = freq_pos.decode(rc) + 1
+            pos = rp - pos
+            if pos &lt; 0: pos += len(buff)
+            for _ in xrange(num):
+                c = buff[pos]
+                putc(fout, c)
+                buff[rp] = c
+                pos += 1
+                rp += 1
+                if pos &gt;= len(buff): pos = 0
+                if rp &gt;= len(buff): rp = 0
+        else:
+            num = 1
+            c = freq_code.decode(rc)
+            putc(fout, c)
+            buff[rp] = c
+            rp += 1
+            if rp &gt;= len(buff): rp = 0
+        size -= num
+</pre>
+<p> 最初に RangeCoder で復号用レンジコーダを生成し、各モデルの出現頻度表を init_freq で初期化します。復号処理は、まず freq_flag.decode でフラグを復号します。フラグが 1 の場合、 freq_len.decode で長さを復号します。次に freq_pos.decode で距離を復号し、距離と長さから記号列を復号します。記号を復号する場合は freq_code.decode で記号を一つ復号するだけです。
+</p>
+<ul>
+  <li><a href="pyalgo41.html#list1">プログラムリスト１</a>
+</ul>
+
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+    表 : LZRC 符号 (order-0) の結果 (スライド窓 8 k) [1]
+
+  ファイル名      サイズ    LZRC   符号化  復号  LHA(lh5)
+  -------------------------------------------------------
+  alice29.txt    152,089   59,433   7.71   5.88   59,117
+  asyoulik.txt   125,179   52,516   6.67   5.17   52,341
+  cp.html         24,603    8,349   1.08   0.81    8,384
+  fields.c        11,150    3,116   0.41   0.30    3,170
+  grammar.lsp      3,721    1,220   0.15   0.12    1,271
+  kennedy.xls  1,029,744   95,233  36.93  27.18  198,342
+  lcet10.txt     426,754  160,299  20.92  15.87  159,558
+  plrabn12.txt   481,861  210,775  27.16  21.11  210,045
+  ptt5           513,216   49,973  15.10   6.15   52,305
+  sum             38,240   13,630   1.80   1.30   13,993
+  xargs.1          4,227    1,732   0.21   0.17    1,778
+  -------------------------------------------------------
+  合計         2,810,784  656,276 118.14  84.06  760,304
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<pre>
+                表 : LZRC 符号 (order-0) の結果 [2]
+
+                                                           LHA
+  ファイル名      サイズ    8 k      32 k     64 k   lh5(8k)  lh6(32k)
+  ---------------------------------------------------------------------
+  alice29.txt    152,089   59,433   54,482   52,788   59,117   54,266
+  asyoulik.txt   125,179   52,516   49,046   48,001   52,341   48,915
+  cp.html         24,603    8,349    7,957    7,957    8,384    8,046
+  fields.c        11,150    3,116    3,115    3,115    3,170    3,172
+  grammar.lsp      3,721    1,220    1,220    1,220    1,271    1,272
+  kennedy.xls  1,029,744   95,233   89,768   87,731  198,342  205,745
+  lcet10.txt     426,754  160,299  145,727  139,867  159,558  144,419
+  plrabn12.txt   481,861  210,775  196,357  190,263  210,045  194,957
+  ptt5           513,216   49,973   51.013   51,530   52,305   53,196
+  sum             38,240   13,630   12,586   12,593   13,993   12,951
+  xargs.1          4,227    1,732    1,732    1,732    1,778    1,778
+  --------------------------------------------------------------------
+  合計         2,810,784  656,276  613,003  596,797  760,304  728,717
+</pre>
+
+<p> スライド窓が 8 k, 32 k の場合と LHA (lh5, lh6) を比較した場合、テキストファイルの圧縮率は LHA よりも少しだけ劣りますが、kennedy.xls の圧縮率はとても高くなりました。処理時間は、バイナリレンジコーダを用いている分だけ、符号化・復号ともに LZSS 符号よりも遅くなりました。ただし、バイナリモデルだけで符号化・復号するよりも、処理時間は高速です。
+</p>
+<p> バイナリファイルの中には、同じデータが一定の間隔で繰り返し現れるものがあります。kennedy.xls もその一つで、このようなファイルでは長さと距離の符号化に structured model を用いることで圧縮率を大幅に向上させることができます。合計では LHA を大幅に上回る圧縮率になりました。
+</p>
+
+<p> スライド窓を 64 k に増やすと、ほとんどのファイルで圧縮率は向上しますが、なかには ptt5 のように圧縮率が悪くなるファイルもあります。大きなテキストファイルの場合、スライド窓を大きくした方が高い圧縮率になりました。小さなファイルでも圧縮率は低下しないので、バイナリレンジコーダの効果は十分に出ていると思います。
+</p>
+
+<p> このように、スライド窓を大きくしてバイナリレンジコーダを適用することで、LHA を上回る圧縮率を達成することができます。ここで記号の符号化に「有限文脈モデル」を適用すると、さらに圧縮率を向上させることができます。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<h4>●order-1 のプログラム</h4>
+<p> 適応型レンジコーダの場合、有限文脈モデルに対応するのは簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 出現頻度表の初期化
+
+def init_freq():
+    global freq_flag, freq_code, freq_pos, freq_len
+    freq_flag = [AlphaFreq(2), AlphaFreq(2)]
+    freq_code = [Freq2(256) for _ in xrange(256)]
+    freq_len = GammaFreq(MAX_LEN - MIN_LEN + 1)
+    freq_pos = GammaFreq(1 &lt;&lt; POS_BITS)
+</pre>
+
+<p> 記号の出現頻度表は配列 freq_code に格納します。それから、有限文脈モデルを適用するのは記号だけではありません。フラグにも有限文脈モデル (order-1) を適用すると圧縮率が向上する場合があります。直前に出力したフラグを変数に記憶しておき、その値によって出現頻度表を選択します。フラグの出現頻度表は配列 freq_flag にセットします。
+</p>
+<p> order-1 で符号化する関数 encode をリストに示します。
+</p>
+<pre class="list">
+リスト : order-1 の符号化
+
+def encode(fin, fout):
+    init_freq()
+    rc = RangeCoder(fout, ENCODE)
+    s = Slide(fin)
+    rp = 0
+    c0 = 0
+    f0 = 0
+    while rp &lt; s.data_size:
+        s.search(rp)
+        if s.match_len &lt; MIN_LEN:
+            num = 1
+            freq_flag[f0].encode(rc, 0)
+            freq_code[c0].encode(rc, s.buff[rp])
+            f0 = 0
+        else:
+            num = s.match_len
+            freq_flag[f0].encode(rc, 1)
+            freq_len.encode(rc, num - MIN_LEN)
+            freq_pos.encode(rc, rp - s.match_pos - 1)
+            f0 = 1
+        for _ in xrange(num):
+            c0 = s.buff[rp]
+            s.insert(rp)
+            rp += 1
+            if rp &gt;= s.limit: rp = s.update(rp)
+    rc.finish()
+</pre>
+<p> 変数 c0 に直前の記号を、変数 f0 に直前に出力したフラグを記憶します。c0 と f0 は 0 に初期化しておきます。フラグを符号化するときは、freq_flag[f0] で出現頻度表を選択し、符号化したフラグを f0 にセットします。記号を符号化するときは freq_code[c0] で出現頻度表を求めます。あとは、出力した文字をハッシュ表へ登録するときに、直前の記号 c0 を更新するだけです。復号を行う関数 decode の修正も同じです。
+</p>
+
+<ul>
+  <li><a href="pyalgo41.html#list2">プログラムリスト２</a>
+</ul>
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+    表 : LZRC 符号 (order-1) の結果 (スライド窓 8 k) [1]
+
+  ファイル名      サイズ    LZRC1  符号化  復号  LHA(lh5)
+  -------------------------------------------------------
+  alice29.txt    152,089   54,913   9.68   6.75   59,117
+  asyoulik.txt   125,179   47,920   8.63   6.02   52,341
+  cp.html         24,603    8,060   1.47   1.09    8,384
+  fields.c        11,150    3,112   0.68   0.54    3,170
+  grammar.lsp      3,721    1,246   0.39   0.34    1,271
+  kennedy.xls  1,029,744   86,266  38.70  25.90  198,342
+  lcet10.txt     426,754  146,592  25.96  17.71  159,558
+  plrabn12.txt   481,861  192,256  34.79  24.08  210,045
+  ptt5           513,216   47,381  16.78   6.75   52,305
+  sum             38,240   13,359   2.30   1.59   13,993
+  xargs.1          4,227    1,739   0.47   0.40    1,778
+  -------------------------------------------------------
+  合計         2,810,784  602,844 139.85  91.17  760,304
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<pre>
+                表 : LZRC 符号 (order-1) の結果 [2]
+
+                                                           LHA
+  ファイル名      サイズ    8 k      32 k     64 k   lh5(8k)  lh6(32k)
+  ---------------------------------------------------------------------
+  alice29.txt    152,089   54,913   51,781   50,597   59,117   54,266
+  asyoulik.txt   125,179   47,920   46,099   45,423   52,341   48,915
+  cp.html         24,603    8,060    7,717    7,717    8,384    8,046
+  fields.c        11,150    3,112    3,116    3,116    3,170    3,172
+  grammar.lsp      3,721    1,246    1,246    1,246    1,271    1,272
+  kennedy.xls  1,029,744   86,266   73,889   70,144  198,342  205,745
+  lcet10.txt     426,754  146,592  136,757  132,589  159,558  144,419
+  plrabn12.txt   481,861  192,256  183,713  179,706  210,045  194,957
+  ptt5           513,216   47,381   48.148   48,368   52,305   53,196
+  sum             38,240   13,359   12,442   12,445   13,993   12,951
+  xargs.1          4,227    1,739    1,739    1,739    1,778    1,778
+  --------------------------------------------------------------------
+  合計         2,810,784  602,844  566,647  553,090  760,304  728,717
+</pre>
+
+<p> lzrc (order-0) では MIN_LEN の値を 4 に設定しましたが、lzrc1 (order-1) では 6 に設定します。記号を符号化するバイナリモデルの圧縮性能は order-0 よりも order-1 の方が高いので、MIN_LEN を 6 にした方が LZRC 符号の圧縮率は良くなります。
+</p>
+
+<p> order-1 の効果はとても大きく、スライド窓が 8 k の場合は lh5 形式を、32 k の場合は lh6 形式を上回る圧縮率になりました。スライド窓を 64 k に増やすと、order-0 と同様にほとんどのファイルで圧縮率は向上しますが、ptt5 のように圧縮率が悪くなるファイルもあります。
+</p>
+<p> 大きなテキストファイルの場合、order-1 の効果により圧縮率は order-0 よりも高くなりました。一般に、有限文脈モデルはテキストファイルとの相性が良いので、英文テキストファイルは order-1 よりも order-2 の方が高い圧縮率になります。興味のある方はプログラムを改造してみてください。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4>●バイナリレンジコーダによる LZT 符号の改良</h4>
+<p> LZSS 符号 はハフマン符号やレンジコーダと組み合わせることで圧縮率を向上させることができました。それでは、LZW 符号 (LZT 符号) の場合はどうでしょうか。LZW 符号の場合、辞書を大きくすると辞書番号も大きくなります。たとえば、辞書の大きさを 8192 とすると、0 から 8191 までの数値を符号化する必要があります。記号の種類が多くなると、ハフマン符号やレンジコーダを適用しても、効率的に圧縮することは難しくなります。
+</p>
+<p> ところが、大きな数値でも効率的に圧縮できる方法があります。それがバイナリレンジコーダの「γモデル」です。実際に試してみたところ、LZT 符号の圧縮率を向上させることができました。そこで、次はγモデルを用いて LZT 符号の圧縮率を改善してみましょう。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：LZT 符号（γモデル）の符号化
+
+def encode(fin, fout):
+    rc = RangeCoder(fout, ENCODE)
+    freq = GammaFreq(DIC_SIZE)
+    dic = Dic()
+    que = Queue()
+    p = getc(fin)
+    while True:
+        c = getc(fin)
+        if c is None:
+            freq.encode(rc, p)
+            break
+        q = dic.search(p, c)
+        if q is None:
+            freq.encode(rc, p)
+            dic.insert(que, p, c)
+            p = c
+        else:
+            que.delete(q)
+            que.insert(q)
+            p = q
+    rc.finish()
+
+</pre>
+
+<p> 符号化の場合、RangeCoder() で符号化用のレンジコーダを作成し、GammaFreq() でγモデルの出現頻度表を作成します。記号の種類は辞書番号の最大値 DIC_SIZE を指定します。これで 0 から DIC_SIZE - 1 までの数値を符号化することができます。あとは辞書番号をメソッド freq.encode で符号化するだけです。
+</p>
+
+<p> 次は復号を行う関数 decode です。
+</p>
+
+<pre class="list">
+リスト：LZW 符号（γモデル）の復号
+
+def decode(fin, fout, size):
+    rc = RangeCoder(fin, DECODE)
+    freq = GammaFreq(DIC_SIZE)
+    que = Queue()
+    dic = Dic()
+    p = freq.decode(rc)
+    c, i = dic.output(que, p, fout)
+    size -= i
+    while size &gt; 0:
+        q = freq.decode(rc)
+        if dic.check_code(que, q):
+            c, i = dic.output(que, q, fout)
+            dic.insert(que, p, c)
+        else:
+            dic.insert(que, p, c)
+            c, i = dic.output(que, q, fout)
+        p = q
+        size -= i
+</pre>
+<p> 復号の場合は RangeCoder() で復号用のレンジコーダを作成します。γモデルの出現頻度表 GammaFreq は符号化と同じ記号数で作成します。あとはメソッド freq.decode で辞書番号を復号して、辞書から記号列を復号するだけです。とても簡単ですね。
+</p>
+<ul>
+  <li><a href="pyalgo41.html#list3">プログラムリスト３</a>
+</ul>
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+    表 : LZT 符号 + BinaryRangeCoder の結果 [1]
+         (辞書サイズ 8 k)
+
+  ファイル名      サイズ   LZTRC   符号化  復号  LHA(lh5)
+  -------------------------------------------------------
+  alice29.txt    152,089   63,411   7.51   7.86   59,117
+  asyoulik.txt   125,179   56,323   6.60   6.88   52,341
+  cp.html         24,603   10,840   1.24   1.29    8,384
+  fields.c        11,150    4,730   0.56   0.59    3,170
+  grammar.lsp      3,721    1,707   0.20   0.21    1,271
+  kennedy.xls  1,029,744  206,102  35.08  36.79  198,342
+  lcet10.txt     426,754  178,912  21.28  22.32  159,558
+  plrabn12.txt   481,861  213,732  25.28  26.40  210,045
+  ptt5           513,216   59,648   9.60   9.80   52,305
+  sum             38,240   17,806   2.05   2.14   13,993
+  xargs.1          4,227    2,226   0.26   0.27    1,778
+  -------------------------------------------------------
+  合計         2,810,784  815,437 109.66 114.55  760,304
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<pre>
+        表 : LZT 符号 + BianryRangeCoder の結果 [2]
+
+                                                      LHA
+  ファイル名      サイズ    8 k      32 k     64 k   lh5(8k)
+  -----------------------------------------------------------
+  alice29.txt    152,089   63,411   60,496   60,508   59,117
+  asyoulik.txt   125,179   56,323   53,542   53,542   52,341
+  cp.html         24,603   10,840   10,840   10,840    8,384
+  fields.c        11,150    4,730    4,730    4,730    3,170
+  grammar.lsp      3,721    1,707    1,707    1,707    1,271
+  kennedy.xls  1,029,744  206,102  195,891  195,651  198,342
+  lcet10.txt     426,754  178,912  162,098  158,546  159,558
+  plrabn12.txt   481,861  213,732  197,703  193,544  210,045
+  ptt5           513,216   59,648   58.918   58,916   52,305
+  sum             38,240   17,806   17,794   17,794   13,993
+  xargs.1          4,227    2,226    2,226    2,226    1,778
+  -----------------------------------------------------------
+  合計         2,810,784  815,437  765,945  758,004  760,304
+</pre>
+<p> LZT 符号にγモデルを適用することで圧縮率は確かに向上しましたが、その効果は LZRC 符号 (LZSS 符号 + バイナリレンジコーダ) ほど大きくありません。辞書サイズを 64 k に増やしても、LHA (lh5 形式) より圧縮率が高くなるのは kennedy.xls, lcet10.txt, plrabn12.txt の 3 つだけでした。LZT 符号とγモデルを単純に組み合わせだだけでは、LZ77 符号系の圧縮率を越えるのは難しいようです。興味のある方はいろいろ試してみてください。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>植松友彦, 『文書データ圧縮アルゴリズム入門』, ＣＱ出版社, 1994
+  <li>広井誠, 『LZ77 符号によるファイルの圧縮とその改良（後編）』, Interface 2006 年 7 月号, ＣＱ出版社
+</ol>
+<h4>●<a name="update">改訂</h4>
+<ul>
+  <li>2007/06/25
+    <ul>
+      <li> バイナリレンジコーダの修正にともない、評価結果を修正
+    </ul>
+</ul>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# lzrc0.py : LZSS 符号 + バイナリレンジコーダ (order-0)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+from rangecoder2 import *
+
+# 定数
+MIN_LEN = 4
+MAX_LEN = 256
+POS_BITS = 16
+
+# スライド窓
+class Slide:
+    def __init__(self, file):
+        self.file = file
+        self.size = 1 &lt;&lt; POS_BITS
+        self.limit = self.size * 2
+        self.next = [None] * self.size
+        self.ht = {}
+        self.too_many_flag = {}
+        self.buff = [0] * (self.limit + MAX_LEN)
+        self.data_size = self.fread(0, self.limit + MAX_LEN)
+        self.match_len = 0
+        self.match_pos = 0
+
+    # データ入力
+    def fread(self, start, size):
+        for i in xrange(size):
+            c = getc(self.file)
+            if c is None: return i
+            self.buff[start + i] = c
+        return size
+
+    # データ移動
+    def move_data(self, to, from_, size):
+        for n in xrange(size):
+            self.buff[to + n] = self.buff[from_ + n]
+
+    # スライド窓の更新
+    def update(self, rp):
+        if self.data_size &lt; self.limit + MAX_LEN: return rp
+        # buffer update
+        self.move_data(0, self.size, self.size + MAX_LEN)
+        n = self.fread(self.size + MAX_LEN, self.size)
+        self.data_size = self.size + MAX_LEN + n
+        # hash update
+        for k, v in self.ht.items():
+            if v &lt; self.size:
+                del self.ht[k]
+            else:
+                self.ht[k] = v - self.size
+        #
+        for x in xrange(self.size):
+            v = self.next[x]
+            if v == None or v &lt; self.size:
+                self.next[x] = None
+            else:
+                self.next[x] = v - self.size
+        self.too_many_flag.clear()
+        return rp - self.size
+
+    # ハッシュ関数
+    def hash_value(self, rp):
+        value = 0
+        for x in xrange(MIN_LEN):
+            value = (value &lt;&lt; 8) + self.buff[rp + x]
+        return value
+
+    # データの挿入
+    def insert(self, rp):
+        value = self.hash_value(rp)
+        if value in self.ht:
+            self.next[rp &amp; (self.size - 1)] = self.ht[value]
+        else:
+            self.next[rp &amp; (self.size - 1)] = None
+        self.ht[value] = rp
+
+    # データの探索
+    def search(self, rp):
+        b = self.buff
+        value = self.hash_value(rp)
+        limit = rp - self.size
+        self.match_len = 0
+        self.match_pos = 0
+        offset = 0
+        while value in self.too_many_flag:
+            if offset &gt;= MAX_LEN - MIN_LEN or len(b) - (rp + offset) &lt; MIN_LEN:
+                offset = 0
+                value = self.hash_value(rp)
+                break
+            offset += 1
+            value = self.hash_value(rp + offset)
+        #
+        while True:
+            count = 0
+            if value in self.ht:
+                n = self.ht[value]
+            else:
+                n = None
+            while n is not None and n - offset &gt;= limit:
+                count += 1
+                if b[rp + self.match_len] == b[n + self.match_len - offset]:
+                    x = 0
+                    while x &lt; MAX_LEN:
+                        if b[rp + x] != b[n + x - offset]: break
+                        x += 1
+                    if self.match_len &lt; x:
+                        self.match_len = x
+                        self.match_pos = n - offset
+                        if x == MAX_LEN: break
+                n = self.next[n &amp; (self.size - 1)]
+            if count &gt; 256: self.too_many_flag[value] = True
+            if self.match_len &gt;= offset + MIN_LEN or offset == 0: break
+            # 再検索
+            offset = 0
+            value = self.hash_value(rp)
+        # データの終端をチェック
+        if self.match_len &gt;= self.data_size - rp:
+            self.match_len = self.data_size - rp
+
+# 出現頻度表の初期化
+def init_freq():
+    global freq_flag, freq_code, freq_pos, freq_len
+    freq_flag = AlphaFreq(2)
+    freq_code = Freq2(256)
+    freq_len = GammaFreq(MAX_LEN - MIN_LEN + 1)
+    freq_pos = GammaFreq(1 &lt;&lt; POS_BITS)
+
+
+# LZRC 符号の符号化
+def encode(fin, fout):
+    init_freq()
+    rc = RangeCoder(fout, ENCODE)
+    s = Slide(fin)
+    rp = 0
+    while rp &lt; s.data_size:
+        s.search(rp)
+        if s.match_len &lt; MIN_LEN:
+            num = 1
+            freq_flag.encode(rc, 0)
+            freq_code.encode(rc, s.buff[rp])
+        else:
+            num = s.match_len
+            freq_flag.encode(rc, 1)
+            freq_len.encode(rc, num - MIN_LEN)
+            freq_pos.encode(rc, rp - s.match_pos - 1)
+        for _ in xrange(num):
+            s.insert(rp)
+            rp += 1
+            if rp &gt;= s.limit: rp = s.update(rp)
+    rc.finish()
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    putc(outfile, (size &gt;&gt; 24) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 16) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 8) &amp; 0xff)
+    putc(outfile, size &amp; 0xff)
+    if size &gt; 0: encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# LZRC 符号の復号
+def decode(fin, fout, size):
+    init_freq()
+    rc = RangeCoder(fin, DECODE)
+    rp = 0
+    buff = [0] * (1 &lt;&lt; POS_BITS)
+    while size &gt; 0:
+        if freq_flag.decode(rc):
+            num = freq_len.decode(rc) + MIN_LEN
+            pos = freq_pos.decode(rc) + 1
+            pos = rp - pos
+            if pos &lt; 0: pos += len(buff)
+            for _ in xrange(num):
+                c = buff[pos]
+                putc(fout, c)
+                buff[rp] = c
+                pos += 1
+                rp += 1
+                if pos &gt;= len(buff): pos = 0
+                if rp &gt;= len(buff): rp = 0
+        else:
+            num = 1
+            c = freq_code.decode(rc)
+            putc(fout, c)
+            buff[rp] = c
+            rp += 1
+            if rp &gt;= len(buff): rp = 0
+        size -= num
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    size = 0
+    for _ in xrange(4):
+        size = (size &lt;&lt; 8) + getc(infile)
+    if size &gt; 0: decode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+<HR>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# lzrc1.py : LZSS 符号 + バイナリレンジコーダ (order-1)
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+from rangecoder2 import *
+
+# 定数
+MIN_LEN = 6
+MAX_LEN = 256
+POS_BITS = 16
+
+# スライド窓
+class Slide:
+    def __init__(self, file):
+        self.file = file
+        self.size = 1 &lt;&lt; POS_BITS
+        self.limit = self.size * 2
+        self.next = [None] * self.size
+        self.ht = {}
+        self.too_many_flag = {}
+        self.buff = [0] * (self.limit + MAX_LEN)
+        self.data_size = self.fread(0, self.limit + MAX_LEN)
+        self.match_len = 0
+        self.match_pos = 0
+
+    # データ入力
+    def fread(self, start, size):
+        for i in xrange(size):
+            c = getc(self.file)
+            if c is None: return i
+            self.buff[start + i] = c
+        return size
+
+    # データ移動
+    def move_data(self, to, from_, size):
+        for n in xrange(size):
+            self.buff[to + n] = self.buff[from_ + n]
+
+    # スライド窓の更新
+    def update(self, rp):
+        if self.data_size &lt; self.limit + MAX_LEN: return rp
+        # buffer update
+        self.move_data(0, self.size, self.size + MAX_LEN)
+        n = self.fread(self.size + MAX_LEN, self.size)
+        self.data_size = self.size + MAX_LEN + n
+        # hash update
+        for k, v in self.ht.items():
+            if v &lt; self.size:
+                del self.ht[k]
+            else:
+                self.ht[k] = v - self.size
+        #
+        for x in xrange(self.size):
+            v = self.next[x]
+            if v == None or v &lt; self.size:
+                self.next[x] = None
+            else:
+                self.next[x] = v - self.size
+        self.too_many_flag.clear()
+        return rp - self.size
+
+    # ハッシュ関数
+    def hash_value(self, rp):
+        value = 0
+        for x in xrange(MIN_LEN):
+            value = (value &lt;&lt; 8) + self.buff[rp + x]
+        return value
+
+    # データの挿入
+    def insert(self, rp):
+        value = self.hash_value(rp)
+        if value in self.ht:
+            self.next[rp &amp; (self.size - 1)] = self.ht[value]
+        else:
+            self.next[rp &amp; (self.size - 1)] = None
+        self.ht[value] = rp
+
+    # データの探索
+    def search(self, rp):
+        b = self.buff
+        value = self.hash_value(rp)
+        limit = rp - self.size
+        self.match_len = 0
+        self.match_pos = 0
+        offset = 0
+        while value in self.too_many_flag:
+            if offset &gt;= MAX_LEN - MIN_LEN or len(b) - (rp + offset) &lt; MIN_LEN:
+                offset = 0
+                value = self.hash_value(rp)
+                break
+            offset += 1
+            value = self.hash_value(rp + offset)
+        #
+        while True:
+            count = 0
+            if value in self.ht:
+                n = self.ht[value]
+            else:
+                n = None
+            while n is not None and n - offset &gt;= limit:
+                count += 1
+                if b[rp + self.match_len] == b[n + self.match_len - offset]:
+                    x = 0
+                    while x &lt; MAX_LEN:
+                        if b[rp + x] != b[n + x - offset]: break
+                        x += 1
+                    if self.match_len &lt; x:
+                        self.match_len = x
+                        self.match_pos = n - offset
+                        if x == MAX_LEN: break
+                n = self.next[n &amp; (self.size - 1)]
+            if count &gt; 256: self.too_many_flag[value] = True
+            if self.match_len &gt;= offset + MIN_LEN or offset == 0: break
+            # 再検索
+            offset = 0
+            value = self.hash_value(rp)
+        # データの終端をチェック
+        if self.match_len &gt;= self.data_size - rp:
+            self.match_len = self.data_size - rp
+
+# 出現頻度表の初期化
+def init_freq():
+    global freq_flag, freq_code, freq_pos, freq_len
+    freq_flag = [AlphaFreq(2), AlphaFreq(2)]
+    freq_code = [Freq2(256) for _ in xrange(256)]
+    freq_len = GammaFreq(MAX_LEN - MIN_LEN + 1)
+    freq_pos = GammaFreq(1 &lt;&lt; POS_BITS)
+
+
+# LZRC 符号の符号化 (order-1)
+def encode(fin, fout):
+    init_freq()
+    rc = RangeCoder(fout, ENCODE)
+    s = Slide(fin)
+    rp = 0
+    c0 = 0
+    f0 = 0
+    while rp &lt; s.data_size:
+        s.search(rp)
+        if s.match_len &lt; MIN_LEN:
+            num = 1
+            freq_flag[f0].encode(rc, 0)
+            freq_code[c0].encode(rc, s.buff[rp])
+            f0 = 0
+        else:
+            num = s.match_len
+            freq_flag[f0].encode(rc, 1)
+            freq_len.encode(rc, num - MIN_LEN)
+            freq_pos.encode(rc, rp - s.match_pos - 1)
+            f0 = 1
+        for _ in xrange(num):
+            c0 = s.buff[rp]
+            s.insert(rp)
+            rp += 1
+            if rp &gt;= s.limit: rp = s.update(rp)
+    rc.finish()
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    putc(outfile, (size &gt;&gt; 24) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 16) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 8) &amp; 0xff)
+    putc(outfile, size &amp; 0xff)
+    if size &gt; 0: encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# LZRC 符号の復号 (order-1)
+def decode(fin, fout, size):
+    init_freq()
+    rc = RangeCoder(fin, DECODE)
+    rp = 0
+    c0 = 0
+    f0 = 0
+    buff = [0] * (1 &lt;&lt; POS_BITS)
+    while size &gt; 0:
+        if freq_flag[f0].decode(rc):
+            num = freq_len.decode(rc) + MIN_LEN
+            pos = freq_pos.decode(rc) + 1
+            pos = rp - pos
+            if pos &lt; 0: pos += len(buff)
+            for _ in xrange(num):
+                c = buff[pos]
+                putc(fout, c)
+                c0 = c
+                buff[rp] = c
+                pos += 1
+                rp += 1
+                if pos &gt;= len(buff): pos = 0
+                if rp &gt;= len(buff): rp = 0
+            f0 = 1
+        else:
+            num = 1
+            c = freq_code[c0].decode(rc)
+            putc(fout, c)
+            c0 = c
+            buff[rp] = c
+            rp += 1
+            if rp &gt;= len(buff): rp = 0
+            f0 = 0
+        size -= num
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    size = 0
+    for _ in xrange(4):
+        size = (size &lt;&lt; 8) + getc(infile)
+    if size &gt; 0: decode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+# coding: utf-8
+#
+# lztrc.py : LZT coding + Binary Range Coder
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+from rangecoder2 import *
+
+# 定数
+DIC_BITS = 13
+DIC_SIZE = 1 &lt;&lt; DIC_BITS
+HEAD = 0
+
+##### LZT 符号 #####
+
+# 双方向リストによるキュー
+# 0 がヘッダ, 1 - 255 はダミー
+class Queue:
+    def __init__(self):
+        self.prev = [None] * DIC_SIZE
+        self.next = [None] * DIC_SIZE
+        self.prev[HEAD] = HEAD
+        self.next[HEAD] = HEAD
+
+    # 最後尾に追加
+    def insert(self, x):
+        last = self.prev[HEAD]
+        self.prev[x] = last
+        self.next[x] = HEAD
+        self.next[last] = x
+        self.prev[HEAD] = x
+
+    # 削除
+    def delete(self, x):
+        p = self.prev[x]
+        q = self.next[x]
+        self.next[p] = q
+        self.prev[q] = p
+
+    # 巡回
+    def traverse(self):
+        n = self.next[HEAD]
+        while n != HEAD:
+            yield n
+            n = self.next[n]
+
+# 辞書
+class Dic:
+    def __init__(self):
+        self.sym = [None] * DIC_SIZE
+        self.parent = [None] * DIC_SIZE
+        self.child = [0] * DIC_SIZE
+        self.ht = {}
+        for x in xrange(256): self.sym[x] = x
+        self.num = 256
+
+    # 探索
+    def search(self, n, c):
+        key = (n, c)
+        if key in self.ht: return self.ht[key]
+        return None
+
+    # 葉を探す
+    def search_leaf(self, q):
+        for x in q.traverse():
+            if self.child[x] == 0: return x
+        return None
+
+    # 削除
+    def delete(self, n):
+        p = self.parent[n]
+        c = self.sym[n]
+        del self.ht[(p, c)]
+        self.child[p] -= 1
+
+    # 挿入
+    def insert(self, q, p, c):
+        if self.num == DIC_SIZE:
+            n = self.search_leaf(q)
+            q.delete(n)
+            self.delete(n)
+        else:
+            n = self.num
+            self.num += 1
+        self.sym[n] = c
+        self.parent[n] = p
+        self.child[n] = 0
+        self.child[p] += 1
+        self.ht[(p, c)] = n
+        q.insert(n)
+
+    # 辞書番号のチェック
+    def check_code(self, q, n):
+        if self.num == DIC_SIZE:
+            return self.search_leaf(q) != n
+        return n &lt; self.num
+    
+    # 出力
+    def output(self, q, n, fout):
+        if self.parent[n] is None:
+            putc(fout, n)
+            return n, 1
+        else:
+            m, i = self.output(q, self.parent[n], fout)
+            putc(fout, self.sym[n])
+            q.delete(n)
+            q.insert(n)
+            return m, i + 1
+
+# LZT 符号の符号化
+def encode(fin, fout):
+    rc = RangeCoder(fout, ENCODE)
+    freq = GammaFreq(DIC_SIZE)
+    dic = Dic()
+    que = Queue()
+    p = getc(fin)
+    while True:
+        c = getc(fin)
+        if c is None:
+            freq.encode(rc, p)
+            break
+        q = dic.search(p, c)
+        if q is None:
+            freq.encode(rc, p)
+            dic.insert(que, p, c)
+            p = c
+        else:
+            que.delete(q)
+            que.insert(q)
+            p = q
+    rc.finish()
+
+# LZT 符号の復号
+def decode(fin, fout, size):
+    rc = RangeCoder(fin, DECODE)
+    freq = GammaFreq(DIC_SIZE)
+    que = Queue()
+    dic = Dic()
+    p = freq.decode(rc)
+    c, i = dic.output(que, p, fout)
+    size -= i
+    while size &gt; 0:
+        q = freq.decode(rc)
+        if dic.check_code(que, q):
+            c, i = dic.output(que, q, fout)
+            dic.insert(que, p, c)
+        else:
+            dic.insert(que, p, c)
+            c, i = dic.output(que, q, fout)
+        p = q
+        size -= i
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    putc(outfile, (size &gt;&gt; 24) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 16) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 8) &amp; 0xff)
+    putc(outfile, size &amp; 0xff)
+    if size &gt; 0: encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    size = 0
+    for _ in xrange(4):
+        size = (size &lt;&lt; 8) + getc(infile)
+    if size &gt; 0: decode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+<div align="right">
+初出 2007 年 6 月 23 日<br>
+改訂 2007 年 6 月 25 日
+</div>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo40.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo42.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ言語プログラミング超入門</title>
+  <meta name="description" content="Ｃ言語,Ｃ言語入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881810</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ言語プログラミング超入門</h2>
+<div class="small">
+[ <a href="clang25.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang27.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>Ｃ言語のいろいろな機能</h3>
+<p> 今回はまだ説明していないＣ言語の機能を簡単に紹介します。
+</p>
+
+<h4>●引数つきマクロ</h4>
+<p> Ｃ言語のプリプロセッサは、関数のように引数のあるマクロを定義することができます。たとえば、最大値を求めるマクロ max は次のように定義することができます。
+</p>
+<pre class="list">
+リスト : 引数つきマクロ
+
+#define max(a, b) ((a > b) ? a : b)
+</pre>
+<pre class="item">
+max(10, 20) =&gt; ((10 > 20) ? 10 : 20)
+max(n + i, m * j) =&gt; ((n + i > m * j) ? n + i : m * j)
+</pre>
+<p> #define で定義するとき、マクロ記号の後ろにカッコを付けて、その中に変数名を記述します。これがマクロの引数で、関数の仮引数に相当します。 上リストでいうと、max(a, b) の a, b がマクロの引数になります。そのあとに、処理内容を記述します。
+</p>
+<p> 引数つきマクロは仮引数を実引数に置き換える働きをします。たとえば、max(10, 20) とすると、a を 10 に、b を 20 に置き換えます。max(n + i, m * j) は a を n + i に、b を m * j に置き換えます。マクロは文字列を置換するだけなので、データ型は関係ありません。したがって、マクロ max は整数でも浮動小数点数でも使用することができます。また、マクロはその場で展開されるので、関数呼び出しのオーバーヘッドがないという利点があります。
+</p>
+<p> もっとも、いいことばかりでありません。引数つきマクロには注意しなければならない点があります。マクロ展開したあと、引数に与えた式を複数回評価する場合があるので、演算子 ++, -- などを使うと予想外の動作をする場合があります。たとえば、max(n, m) で n が大きい場合、n と m の比較で 1 回、n の値を返すときにもう 1 回評価されています。ここで、max(n++, m) とすると、関数呼び出しであれば、n の値は +1 されるだけですが、マクロだと n の値は +2 されることになります。
+</p>
+<p> また、演算子の優先順位にも気をつける必要があります。たとえば、数を 2 乗するマクロ square を次のように定義したとしましょう。
+</p>
+<pre class="list">
+リスト ; 引数つきマクロ (2)
+
+#define square(x) (x * x)
+</pre>
+<p> ここで、引数に a - 1 を渡すとマクロ展開した結果は (a - 1 * a - 1) となり、(a - 1) の 2 乗にはなりません。このような場合、引数 x をカッコで囲んでマクロ定義する、つまり ((x) * (x)) とするとうまくいきます。
+</p>
+<p> 最近の規格 (C99) では、キーワード inline を指定することで関数をインライン展開できるようになりました。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 関数のインライン展開
+
+inline int max(int a, int b)
+{
+  return (a > b) ? a : b;
+}
+</pre>
+<p> 関数 max の呼び出しはコードをその場で展開するので、引数つきマクロと同様に関数呼び出しのオーバーヘッドを削除することができます。なお、最近のコンパイラはとても優秀なので、関数のインライン展開はプログラマが指定するよりも、コンパイラの最適化に任せたほうがよいかもしれません。
+</p>
+<h4>●可変個引数</h4>
+<p> 標準ライブラリ関数の printf などは引数の個数が固定されておらず、書式文字列以外の引数をいくつでも渡すことができます。これを「可変個引数」とか「可変長引数」といいます。
+</p>
+<p> 可変個引数は ... で表します。たとえば、printf のプロトタイプは次のように宣言されています。
+<pre class="item">
+int printf(const char *fromat, ...);
+</pre>
+<p> 可変個引数にはデータ型を指定することはできません。どんなデータ型でも渡すことができますが、printf や scanf などのライブラリ関数では、コンパイラが変換指定子の種類と引数のデータ型、その個数をチェックするので、指定子と引数のデータ型や個数が合わないとワーニングが表示されます。ただし、コンパイル自体は通るので注意してください。
+</p>
+<p> 可変個引数を受け取る関数は私たちユーザーでも定義することができます。そのためには、ヘッダ stdarg.h に定義されているデータ型や引数つきマクロを使います。
+</p>
+<pre class="item">
+va_list 変数名                         : 可変個引数を制御するデータ型
+va_start(変数名, 最後の固定個仮引数)   : va_list で宣言した変数を初期化
+va_arg(変数名, 可変個引数のデータ型)   : 可変個引数からデータを取得
+va_end(変数名)                         : 可変個引数の操作を終了
+</pre>
+<p> va_list は可変個引数を操作するためのデータ型を表します。変数を宣言したらマクロ va_start で初期化します。このとき、第 2 引数には可変個引数の直前の仮引数名 (最後の固定個仮引数) を指定します。値を取り出すにはマクロ va_arg を使います。このとき、取り出すデータ型を指定します。va_arg を呼び出すたびに、可変個引数に格納されたデータを順番に取り出すことができます。最後に va_end で処理を終了します。
+</p>
+<p> 簡単な例を示しましょう。次のリストを見て下さい。
+</p>
+<pre class="list">
+リスト ; 可変個引数 (sample2600.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdarg.h&gt;
+
+int sum(int n, ...)
+{
+  int sum = 0;
+  va_list xs;
+  va_start(xs, n);
+  for (int i = 0; i &lt; n; i++)
+    sum += va_arg(xs, int);
+  va_end(ap);
+  return sum;
+}
+
+int main(void)
+{
+  printf("%d\n", sum(0));
+  printf("%d\n", sum(3, 1, 2, 3));
+  printf("%d\n", sum(6, 4, 5, 6, 7, 8, 9));
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2600
+0
+6
+39
+</pre>
+<p> 関数 sum は可変個引数の合計値を求めます。先頭の引数 n が可変個引数の個数を表します。va_list xs で変数 xs を宣言し、va_start(xs, n) で初期化します。あとは、for ループでマクロ va_arg を使ってデータを取り出して sum に加算します。最後に va_end で可変個引数の処理を終了します。
+</p>
+<p> 可変個引数の処理は難しいように見えますが、簡単な仕組みで実装されています。まず、可変個部分の実引数を評価して、その結果をコールスタックに積みます。va_list は void * (または char *) の別名で、その変数は va_start によって可変個引数の先頭アドレスに初期化されます。va_arg はポインタが指しているスタック領域からデータを取り出して、次のデータを指し示すようにポインタを更新していくだけです。
+
+<p> なお、実引数のデータ型と va_arg で指定するデータ型が異なっても、データ型のチェックができないので、ワーニングを表示することなくコンパイルは通ってしまいます。この場合、プログラムは正常に動作しないでしょう。ご注意くださいませ。
+</p>
+
+<h4>●goto 文</h4>
+<p> Ｃ言語は goto 文で無条件ジャンプすることができます。
+</p>
+<pre class="item">
+goto 識別子;
+</pre>
+<p> 識別子は goto 文と同じ関数内の文に付けることができます。
+</p>
+<pre class="item">
+識別子: 文
+</pre>
+<p> 識別子は変数名と同じで、後ろにコロン ( : ) を付けます。そして、その後ろに文を書きます。コロンの後ろで改行してもかまいません。
+</p>
+<p> 簡単な例題として、あえて goto 文を使って階乗を計算する関数 fact を作ってみます。
+</p>
+<pre class="list">
+リスト : goto 文の使用例 (sample2601.c)
+
+#include &lt;stdio.h&gt;
+
+long long fact(int n)
+{
+  long long v = 1;
+ loop:
+  if (n == 0) return v;
+  v *= n--;
+  goto loop;
+}
+
+int main(void)
+{
+  for (int i = 5; i &lt;= 20; i += 5)
+    printf("%d, %lld\n", i, fact(i));
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2601
+5, 120
+10, 3628800
+15, 1307674368000
+20, 2432902008176640000
+</pre>
+<p> 繰り返しを実現するために goto 文を使っています。goto loop が実行されると loop にジャンプし、次の文から実行を続けます。これで無限ループを構成しています。階乗を計算したら return で値 v を返します。ところで、繰り返しは for 文や while 文などを使って簡単に実現できるので、このようなプログラムで goto 文を使ってはいけません。
+</p>
+
+<p> 通常のプログラミングで goto 文を使用する必要はほとんどありませんが、多重ループから一気に脱出するときなど、goto 文を使ったほうが便利な場合もあります。次の例を見てください。
+</p>
+<pre class="list">
+リスト ; goto 文の使用例 (2)
+
+int decide_group_sub(int x, int y)
+{
+  int c = 0;
+  for (int m = gflag[get_group(x, y)]; m &gt; 0; m &amp;= m - 1) {
+    int n = m &amp; (-m), c1 = 0, x1, y1;
+    for (int i = 0; i &lt; 3; i++) {
+      for (int j = 0; j &lt; 3; j++) {
+        if (board[x + i][y + j] == 0 &amp;&amp; get_numbers(x + i, y + j) &amp; n) {
+          if (++c1 &gt; 1) goto end;
+          x1 = x + i;
+          y1 = y + j;
+        }
+      }
+    }
+  end:
+    if (c1 == 1) {
+      set_number(n, x1, y1);
+      c++;
+    }
+  }
+  return c;
+}
+</pre>
+<p> 実は、<a href="clang24.html">数独の解法</a> のプログラムで goto 文を使っています。break 文は直前のループから脱出するだけで、二重のループから一度に脱出することはできません。このような場合、goto end; で二重の for ループから脱出して、識別子 end 以下の処理へ制御を移すことができます。
+</p>
+
+<h4>●static 変数</h4>
+<p> <a href="clang12.html">連結リスト</a> で簡単に説明したように、関数名の前に static を付けると、関数がこのファイル内だけ有効であることを示します。static は関数だけではなく変数にも宣言することができます。外部変数の場合、変数名の前に static を付けると、その変数は同じファイル内だけ有効であることを示します。他のファイルにある関数から参照することはできません。
+</p>
+
+<p> 局所変数にも static を宣言することができます。関数内部で static 宣言された変数は、局所変数ではなく外部変数と同じ扱いになります。ただし、変数の有効範囲は、定義された関数内に限定されます。つまり、スタック上にメモリが確保されるのではなく、静的なデータ領域に確保されるのですが、ほかの関数からはアクセスすることができなくなるのです。
+</p>
+<p> そして、関数の実行が終了しても、その値は保持されています。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 関数内の static 変数 (sample2602.c)
+
+#include &lt;stdio.h&gt;
+
+int foo(void)
+{
+  static int x;
+  return x += 2;
+}
+
+int main(void)
+{
+  for (int i = 0; i < 5; i++)
+    printf("%d\n", foo());
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2602
+2
+4
+6
+8
+10
+</pre>
+<p> 関数 foo の局所変数 x は static 宣言されているので、外部変数と同様に x は 0 に初期化されます。x += 2 で x の値を +2 して、その結果が return で返されます。x の値は保存されているので、呼び出すたびに x の値は +2 されていきます。したがって、foo を 5 回呼び出すと、返り値は 2, 4, 6, 8, 10 となります。
+</p>
+<h4>●extern 宣言</h4>
+<p> ソースファイルを複数のファイルに分割するとき、他のファイルで定義されている外部変数 (大域変数) を参照したい場合があります。このような場合は変数を extern 宣言します。
+</p>
+<pre class="item">
+extern データ型 変数名;
+</pre>
+<p> extern 宣言で変数の初期値を指定してはいけません。関数のプロトタイプ宣言と同様に、extern は外部変数の仕様を宣言しているだけで、外部変数の実体を定義しているわけではないことに注意してください。また、プロトタイプ宣言と同じく extern 宣言はヘッダファイルに記述するのが一般的です。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : data.c
+
+#include "data.h"
+
+int foo = 12345;
+double bar = 1.2345;
+char *mes = "hello, world\n";
+</pre>
+<pre class="list">
+リスト ; data.h
+
+#ifndef _DATA_H_
+#define _DATA_H_
+
+extern int foo;
+extern double bar;
+extern char *mes;
+
+#endif
+</pre>
+<pre class="list">
+リスト : sample2603.c
+
+#include &lt;stdio.h&gt;
+#include "data.h"
+
+int main(void)
+{
+  printf("%d\n", foo);
+  printf("%f\n", bar);
+  printf("%s\n", mes);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ clang -o sample2603 sample2603.c data.c
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2603
+12345
+1.234500
+hello, world
+</pre>
+<p> ファイル data.c には int 型の変数 foo、double 型の変数 bar、文字列 mes が定義されています。これらの大域変数を他のファイルから参照するには、ヘッダファイル data.h で変数を extern 宣言して、それをインクルードします。変数の定義ではないので、data.c で data.h をインクルードしても問題ありません。sample2603.c では data.h をインクルードして大域変数 foo, bar, mes を参照することができます。
+</p>
+
+<h4>●大域脱出</h4>
+<p> Ｃ言語の goto 文は同じ関数内でしかジャンプできませんが、setjmp と longjmp を使うと、実行中の関数からほかの関数へ制御を移すことができます。これを「大域脱出 (global exit) 」といいます。
+</p>
+<pre class="item">
+&lt;setjmp.h&gt;
+int setjmp(jmp_buf env);
+void longjmp(jmp_buf env, int val);
+</pre>
+<p> 最初に setjmp を実行すると、現在の環境 (主にレジスタの値など) を変数 env に退避して 0 を返します。そのあと longjmp を実行すると env に退避していた環境にジャンプして、setjmp から実行を再開します。このとき、setjmp の返り値は longjmp の引数で指定した値 val になります。つまり、setjmp でジャンプする場所を記憶しておいて、longjmp を実行するとそこにジャンプするわけです。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : 大域脱出 (sample2604.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;setjmp.h&gt;
+
+// 環境
+jmp_buf env;
+
+void bar1(void)
+{
+  printf("call bar1\n");
+}
+
+void bar2(void)
+{
+  printf("call bar2\n");
+  longjmp(env, 10);
+}
+
+void bar3(void)
+{
+  printf("call bar3\n");
+}
+
+void foo(void)
+{
+  bar1(); bar2(); bar3();
+}
+
+int main(void)
+{
+  int r = setjmp(env);
+  if (!r) {
+    printf("exec foo\n");
+    foo();
+  }
+  printf("%d\n", r);
+  return 0;
+}
+</pre>
+<p> main で setjmp を実行して、実行環境を変数 env に退避します。このとき、返り値は 0 なので、関数 foo を実行します。関数 foo は関数 bar1, bar2, bar3 を呼び出すだけです。関数 bar2 は longjmp を実行するので、制御は main の setjmp を移るはずです。main ではその返り値を printf で表示します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2604
+exec foo
+call bar1
+call bar2
+10
+</pre>
+<p> bar1, bar2 は実行されましたが、bar2 で longjmp するため bar3 は実行されません。この様子を図に示すと、次のようになります。
+</p>
+<pre class="fig">
+ ┌──────┐
+ │main: setjmp│←──┐
+ └──────┘      │
+        ↓             │
+ ┌──────┐      │
+ │    foo     │──┐│
+ └──────┘    ││
+       ↓↑          ↓│
+ ┌──────┐  ┌ bar2 ─────┐ 
+ │    bar1    │  │longjmp(env, 10)│
+ └──────┘  └────────┘
+
+        図 : 大域脱出
+</pre>
+<p> 通常の関数呼び出しでは、呼び出し元の関数に制御が戻ります。ところが bar2 で longjmp を実行すると、呼び出し元の関数 foo を飛び越えて、制御が main に移るのです。このように、大域脱出により関数を飛び越えて制御を移すことができます。
+</p>
+<p> setjmp と longjmp はとても強力な機能ですが、多用すると処理の流れがわからなくなる、いわゆる「スパゲッティプログラム」になってしまいます。使用には十分ご注意下さい。
+</p>
+<h4>●シグナル</h4>
+<p> Ctrl-C や Ctrl-Z のような外部からの割り込み信号を「シグナル (signal) 」といいます。Unix 系 OS はプロセスにシグナルを送って、その状態を変化させることができます。主なシグナルを下表に示します。</p>
+<table border=1>
+<caption>表 : 主なシグナルの種類</caption>
+<thead>
+  <tr><th>名前</th><th>番号</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>SIGHUP</td><td>1</td><td>端末終了時に発生 (ハングアップ)</td></tr>
+  <tr><td>SIGINT</td><td>2</td><td>キーボードからの割り込み (Ctrl-C)</td></tr>
+  <tr><td>SIGQUIT</td><td>3</td><td>キーボードからのプロセスの中止</td></tr>
+  <tr><td>SIGKILL</td><td>9</td><td>強制終了</td></tr>
+  <tr><td>SIGTERM</td><td>15</td><td>通常終了</td></tr>
+  <tr><td>SIGCONT</td><td>18</td><td>一時停止中のプロセスを再開</td></tr>
+  <tr><td>SIGSTOP</td><td>19</td><td>プロセスの一時停止</td></tr>
+</tbody>
+</table>
+<p> Ｃ言語にはシグナルを送出する関数 raise とシグナルを受け取ったときに実行する処理を設定する関数 signal が用意されています。今回は CTRL-C に的を絞り、signal 関数の使い方を取り上げてみます。まずは書式を見てください。
+</p>
+<table border=1>
+<caption>表 : 関数 signal の仕様</caption>
+<tbody>
+  <tr><td>ヘッダ</td><td>signal.h</td></tr>
+  <tr><td>書式</td><td>void (*signal(int sig, void (*func) (int)))(int);</td></tr>
+  <tr><td>引数</td><td>sig : シグナル番号<br>func : シグナル番号に対応するハンドラ</td></tr>
+  <tr><td>機能</td><td>sig で指定したシグナルに対しシグナルハンドラ func を設定する</td></tr>
+  <tr><td>返り値</td><td>成功 : 以前に登録されていたハンドラへのポインタ<br>失敗 : SIG_ERR</td></tr>
+</tbody>
+</table>
+<p> 書式を見て驚いた人もいるでしょう。これは、signal が「関数へのポインタ」として定義されているため、このように複雑な書式になるのですが、使い方はそれほど難しくはありません。まずは CTRL-C を無効にする方法からです。
+</p>
+<pre class="list">
+リスト : signal の使用例
+
+#include &lt;stdio.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(void)
+{
+  signal(SIGINT, SIG_IGN);
+  for (int i = 0; i &lt; 10; i++) {
+    printf("%d : loop ...\n", i);
+    sleep(1);
+  }
+  return 0;
+}
+</pre>
+<p> CTRL-C のシグナル番号は SIGINT です。シグナルハンドラに SIG_IGN を設定すると、そのシグナルは無効化されます。10 回表示される間に CTRL-C を押しても中断されません。sleep は指定した秒数だけプログラムの実行を休止する関数です。
+</p>
+<pre class="item">
+&lt;unistd.h&gt;
+unsigned int sleep(unsigned int seconds);
+</pre>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2605
+0 : loop ...
+1 : loop ...
+2 : loop ...
+3 : loop ...
+4 : loop ...
+5 : loop ...
+^C6 : loop ...
+7 : loop ...
+^C8 : loop ...
+9 : loop ...
+</pre>
+<p> このように、CTRL-C を押してもプログラムは中断されません。
+</p>
+<p> シグナルの処理をシステムの規定値に戻したい場合は SIG_DFL を使います。たとえば、sample2605.c で 10 回ループさせたあと SIG_DFL を設定してもう 10 回ループさせることを考えましょう。最初の 10 回は SIG_IGN によって無効にされていますので、CTRL-C を入力してもプログラムは中断されませんが、次の 10 回に移ると SIG_DFL によってシステムの規定値に戻り、CTRL-C を入力するとプログラムは中断されます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : signal の使用例 (2)
+
+#include &lt;stdio.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;unistd.h&gt;
+
+int main(void)
+{
+  signal(SIGINT, SIG_IGN);
+  for (int i = 0; i &lt; 10; i++) {
+    printf("%d : loop ...\n", i);
+    sleep(1);
+  }
+  signal(SIGINT, SIG_DFL);
+  for (int i = 0; i &lt; 10; i++) {
+    printf("%d : loop ...\n", i);
+    sleep(1);
+  }
+  return 0;
+}
+</pre>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2606
+0 : loop ...
+1 : loop ...
+2 : loop ...
+3 : loop ...
+^C4 : loop ...
+5 : loop ...
+^C6 : loop ...
+7 : loop ...
+8 : loop ...
+9 : loop ...
+0 : loop ...
+1 : loop ...
+2 : loop ...
+^C
+</pre>
+<p> 後半のループでは CTRL-C でプログラムを中断することができます。
+</p>
+<p> 次はシグナルハンドラを設定する例を見てみましょう。
+</p>
+<pre class="list">
+リスト ; signal の使用例 (sample2607.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;signal.h&gt;
+#include &lt;unistd.h&gt;
+
+sig_atomic_t inter_f = 0;
+
+void control_c(int sig)
+{
+  inter_f = 1;
+}
+
+int main(void)
+{
+  signal(SIGINT, control_c);
+  while (inter_f == 0) {
+    printf("loop ...\n");
+    sleep(1);
+  }
+  printf("end\n");
+  return 0;
+}
+</PRE>
+<p> 最初に signal で SIGINT が発生したときに実行される関数を設定します。この例では control_c がそうです。この関数は inter_f を 1 にセットするだけです。inter_f のデータ型は次のように宣言にします。
+<pre class="item">
+sig_atomic_t (signal.h で volatile int と定義)
+</pre>
+<p> これはコンパイラに、ループしている間に inter_f の値が変化することを教えるためです。この例では、inter_f をフラグにして SIGINT が発生したら inter_f を 1 にセットしループを抜けるという内容です。
+</p>
+<p> このプログラムを実行すると次のようになります。
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2607
+loop ...
+loop ...
+loop ...
+loop ...
+loop ...
+^Cend
+</pre>
+<p> CTRL-C の入力により、関数 control_c が実行されて inter_f の値が 1 になり、while ループが終了して end が表示されます。
+</p>
+<h4>●文字列を数値に変換</h4>
+<p> 文字列を数値に変換するには関数 sscanf を使えばできますが、このほかにも標準ライブラリ (ヘッダ stdlib.h) に変換関数が用意されています。
+</p>
+<pre class="item">
+&lt;stdlib.h&gt;
+int atoi(const char *s);    // 文字列を整数値 (int) に変換
+int atol(const char *s);    // 文字列を整数値 (long int) に変換
+double atof(const char *s); // 文字列を浮動小数点数 (double) に変換
+</pre>
+<p> atoi, atol, atof は文字列を int, long int, double に変換します。簡単な使用例を示します。
+</pre>
+<pre class="list">
+リスト : atoi, atol, atof の使用例 (sample2608.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main(void)
+{
+  printf("%d\n", atoi("123456789"));
+  printf("%d\n", atoi("-123456789"));
+  printf("%d\n", atoi(""));
+  printf("%f\n", atof("1.2345"));
+  printf("%g\n", atof("1.2345e300"));
+  printf("%g\n", atof("1.2345e-300"));
+  printf("%f\n", atof(""));
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2608
+123456789
+-123456789
+0
+1.234500
+1.2345e+300
+1.2345e-300
+0.000000
+</pre>
+<p> 整数 (long int) に変換するとき、基数を指定したい場合は関数 strtol, strtoul を使います。最近の規格 (C99) では、long long int に変換する関数 strtoll, strtoull も用意されました。
+</p>
+<pre class="item">
+&lt;stdlib.h&gt;
+long int strtol(const char *s, char **ptr, int radix);
+long int strtoll(const char *s, char **ptr, int radix);
+unsigned long int strtoul(const char *s, char **ptr, int radix);
+unsigned long long int strtoull(const char *s, char **ptr, int radix);
+</pre>
+<p> 引数 radix に基数を指定します。0 を指定した場合、接頭辞が 0 ならば 8 進数、0x ならば 16 進数、それ以外は 10 進数とみなします。それ以外の数値 (2 - 36) を指定した場合は、その値を基数として数値を求めます。基数を 36 とすると、数字に変換できる文字は 0-9a-z (または 0-9A-Z) になります。ptr を指定すると、変換不能な文字へのポインタを格納します。NULL の場合は格納しません。
+</p>
+<p> 浮動小数点数 (double) に変換する関数 strtod もあります。
+</p>
+<pre class="item">
+&lt;stdlib.h&gt;
+double strtod(const char *s, char **ptr);
+</pre>
+<p> 引数 ptr が指定されると、変換不能文字へのポインタが格納されます。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : strtol, strtod の使用例 (sample2609.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+int main(void)
+{
+  char *ptr;
+  printf("%ld\n", strtol("123456789", NULL, 0));
+  printf("%lo\n", strtol("123456789", &amp;ptr, 8));
+  printf("%s\n", ptr);
+  printf("%lx\n", strtol("ABCDEFGHI", &amp;ptr, 16));
+  printf("%s\n", ptr);
+  printf("%f\n", strtod("1.23456", NULL));
+  printf("%f\n", strtod("1.234AB", &amp;ptr));
+  printf("%s\n", ptr);
+  printf("%g\n", strtod("1.234e12ABC", &amp;ptr));
+  printf("%s\n", ptr);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2609
+123456789
+1234567
+89
+abcdef
+GHI
+1.234560
+1.234000
+AB
+1.234e+12
+ABC
+</pre>
+<h4>●atexit</h4>
+<p> 通常、Ｃ言語のプログラムは関数 main の return で処理を終了しますが、ライブラリ関数 exit でも途中で処理を終了することができます。出口が一箇所とは限らないので、プログラムの終了時に何かしらの処理を行いたい場合はちょっと面倒です。このような場合、標準ライブラリ (stdlib.h) に用意されている関数 atexit を使うと便利です。
+</p>
+<table border=1>
+<caption>表 : 関数 atexit の仕様</caption>
+<tbody>
+  <tr><td>ヘッダ</td><td>stdlib.h</td></tr>
+  <tr><td>書式</td><td>int atexit(void (*func)(void));</td></tr>
+  <tr><td>引数</td><td>func : 終了時に実行する関数</td></tr>
+  <tr><td>機能</td><td>終了時に実行する関数を登録する。atexit を複数回実行すれば、<br>複数の関数を登録できる。実行する関数は引数無しで呼び出され、<br>登録された順番とは逆の順番で実行される。
+</td></tr>
+</tbody>
+</table>
+<p> exit が実行されるか、もしくは main から return された場合、プログラムを終了する前に atexit で登録した関数を実行してくれます。atexit に与える引数は関数へのポインタで、この関数は引数無しで呼び出され、返り値もありません。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : atexit の使用例 (sample2610.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+void foo(void)
+{
+  printf("call foo\n");
+}
+
+void bar(void)
+{
+  printf("call bar\n");
+}
+
+void baz(void)
+{
+  printf("call baz\n");
+}
+
+void test(void)
+{
+  printf("call test\n");
+  exit(1);
+}
+
+int main(void)
+{
+  atexit(foo);
+  atexit(bar);
+  atexit(baz);
+  test();
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2610
+call test
+call baz
+call bar
+call foo
+</pre>
+<p> atexit で関数 foo, bar, baz を登録します。次に、test を呼び出して exit で終了すると、登録した順番とは逆に baz, bar, foo が実行されていることがわかります。
+</p>
+
+<p> Ｃ言語のライブラリは関数のごった煮といわれるくらい、たくさんの関数が用意されています。面倒だとは思わずに、リファレンスマニュアルをめくって、ぴったりの関数がないか探してみるのも勉強になると思います。
+</p>
+
+<h4>●可変長配列</h4>
+<p> 最近の規格 (C99) では、配列の大きさを実行時に決めることができるようになりました。これを「可変長配列」といいます。ただし、スクリプト言語のように配列の大きさを自由に伸縮できるのではなく、配列を初期化するときに変数を使って大きさを決めることができるだけです。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : 可変長配列の使用例 (sample2611.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+int main(int argc, char *argv[])
+{
+  int n = 0;
+  for (int i = 1; i &lt; argc; i++)
+    n += strlen(argv[i]);
+  char buffer[n + 1];
+  buffer[0] = '\0';
+  for (int i = 1; i &lt; argc; i++)
+    strcat(buffer, argv[i]);
+  printf("%s\n", buffer);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2611 hello  world foo bar baz
+helloworldfoobarbaz
+</pre>
+<p> 引数を連結して配列に格納することを考えます。最初に、個々の引数の長さを strlen で求め、変数 n に加算していきます。次に配列を確保しますが、char buffer[n + 1]; と定義するだけで済みます。あとは、buffer[0] にヌル文字をセットして、strcat で文字列を連結していくだけです。
+</p>
+<p> なお、可変長配列が使えるのは局所変数だけです。また、配列はスタック領域に確保されるので、スタックサイズを超える配列を定義することはできません。ご注意くださいませ。
+</p>
+<p> 関数の引数も局所変数なので、可変長配列を使うことができます。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 可変長配列 (2)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdbool.h&gt;
+
+bool search(int n, int x, int y, int buff[x][y])
+{
+  for (int i = 0; i &lt; x; i++) {
+    for (int j = 0; j &lt; y; j++) {
+      if (buff[i][j] == n) return true;
+    }
+  }
+  return false;
+}
+
+void print(int x, int y, int buff[x][y])
+{
+  for (int i = 0; i &lt; x; i++) {
+    for (int j = 0; j &lt; y; j++) {
+      printf("%d ", buff[i][j]);
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
+
+int main(void)
+{
+  int x = 3, y = 4;
+  int buff[x][y];
+  int n = 0;
+  for (int i = 0; i &lt; x; i++) {
+    for (int j = 0; j &lt; y; j++) {
+      buff[i][j] = n++;
+    }
+  }
+  print(x, y, buff);
+  printf("%d\n", search(5, x, y, buff));
+  printf("%d\n", search(20, x, y, buff));
+
+  int buff1[2][2] = {
+    {0, 1}, {2, 3}
+  };
+  print(2, 2, buff1);
+  return 0;
+}
+</pre>
+<p> 関数 search は x 行 y 列の二次元配列 buff[x][y] から数値 n を探します。buff[x][y] の x, y は前もって宣言しておく必要があります。今回は x, y を引数として buff の前で宣言しています。関数 print も同様です。
+</p>
+<p> 関数 main で可変長配列 buff を定義しますが、従来の配列のような初期化はできません。二重の for ループで初期化しています。また、固定長の配列を search や print に渡すこともできます。
+<p> 実行結果を示します。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample2612
+0 1 2 3 
+4 5 6 7 
+8 9 10 11 
+
+1
+0
+0 1 
+2 3 
+</pre>
+<p> このほかにも、便利な機能がまだまだありますが、使うときに説明することにしましょう。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="clang25.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang27.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

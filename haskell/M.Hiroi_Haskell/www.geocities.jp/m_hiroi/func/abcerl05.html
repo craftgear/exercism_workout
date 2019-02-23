@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Erlang プログラミング入門</title>
+  <meta name="description" content="Erlang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881787</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Erlang プログラミング入門</h2>
+<div class="small">
+[ <a href="abcerl04.html">PrevPage</a> | <a href="erlang.html">Erlang</a> | <a href="abcerl06.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">モジュール</h3>
+<p> モジュール (module) はデータ構造とそれを操作する関数を一つにまとめるための仕組みです。最近はモジュールに相当する機能を持つプログラミング言語が多くなりました。Erlang にもモジュールはありますが、その機能はもっと単純なもので、基本的には複数の関数をまとめるための容器になります。機能単位で関数をモジュールにまとめておけば、ユーザーにとって使いやすいライブラリを構築することができます。実際、Erlang には実用的なモジュールが標準で多数用意されています。
+</p>
+
+<h4>●モジュールの宣言</h4>
+<p> <a href="abcerl01.html#chap02">Erlang の基礎知識</a> で簡単に説明しましたが、Erlang の関数はモジュールの中で定義します。-module はモジュールを宣言する文です。
+</p>
+<pre class="item">
+-module(test).
+</pre>
+<p> 上の例では、モジュール名を test と宣言しています。このとき、ファイル名はモジュールと同じ名前 (test.erl) でなければなりません。-export は公開する関数名をリストで宣言します。関数名のあとに「引数の個数 (arity)」を指定します。Erlang の場合、引数の個数が異なれば同名の関数をいくつでも定義することができます。
+</p>
+
+<p> -import はモジュールから関数を取り込みます。
+</p>
+<pre class="item">
+-import(モジュール名, [関数名/ariyt, ...]).
+</pre>
+<p> -import で宣言された関数は、モジュール名を省略して呼び出すことができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : export と import
+
+-module(test).
+-export([distance/2]).
+-import(math, [sqrt/1]).
+
+distance({X1, Y1}, {X2, Y2}) -&gt;
+    Dx = X1 - X2,
+    Dy = Y1 - Y2,
+    sqrt(Dx * Dx + Dy * Dy).
+</pre>
+<p> sqrt はモジュール math に定義されていますが、-import で関数名を取り込むことにより、math: を付けなくても呼び出すことができます。
+</p>
+<pre>
+> c(test).
+{ok,test}
+> test:distance({0, 0}, {10, 10}).
+14.142135623730951
+</pre>
+<p> -compile はコンパイルオプションを指定します。export_all を指定すると、モジュール内で定義された関数をすべて公開することができます。その他のオプションは Erlang のリファレンスマニュアル <a href="http://www.erlang.org/doc/man/compile.html">Compile</a> をお読みください。
+</p>
+<p> このほかに -record でレコードの定義を、-vsn でモジュールのバージョンを宣言することができます。レコードについては次章で詳しく説明します。
+</p>
+
+<h4>●スタックとは？</h4>
+<p> 簡単な例として「スタック (stack)」というデータ構造を考えてみましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+    |-----|     |[ A ]|     |[ B ]|     |[ A ]|     |-----|
+    |  |  |     |-----|     |[ A ]|     |-----|     |  |  |
+    |  |  |     |  |  |     |-----|     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    +-----+     +-----+     +-----+     +-----+     +-----+
+ (1) 空の状態 (2) PUSH A  (3) PUSH B  (4) POP B   (5) POP A  
+
+                    図 : スタックの動作例
+</pre>
+
+<p> 上図は、バネがついた容器を表していて、上から品物を出し入れすることができます。初めは空の状態です。ここに品物を乗せると、重さによってバネを圧縮し、品物が容器に格納されます。さらにもう一つ品物を上に乗せると、さらにバネを圧縮し、その品物も容器に格納することができます。バネが限界まで圧縮されると、もう品物は追加できなくなります。取り出す場合は、上にある品物から行います。一つ取り出すと、その分バネが伸びて下にある品物が上に押し出されます。
+</p>
+
+<p> この容器の動作が、スタックの動作なのです。スタックにデータを追加する操作をプッシュ (PUSH) といい、スタックからデータを取り出す操作をポップ (POP) といいます。品物をデータに見立てれば、データ A をスタックにプッシュし (2)、次にデータ B をプッシュします (3)。データを取り出す場合、あとから入れたデータ B が先にポップされ (4)、その次にデータ A がポップされてスタックが空になります (5)。このように、スタックはあとから入れたデータが先に取り出されるので、後入れ先出し (LIFO : Last-In, First-Out) と呼ばれます。
+</p>
+
+<h4>●スタックの実装</h4>
+<p> Erlang の場合、スタックはリストを使って簡単に実現することができます。データを追加するときはリストの先頭に追加し、データを取り出すときはリストの先頭から行うように操作を限定すると、それはスタックの動作と同じになります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : スタック
+
+-module(stack).
+-export([new/0, push/2, top/1, pop/1, is_empty/1]).
+
+% スタックの生成
+new() -&gt; {stack, []}.
+
+% データの追加
+push({stack, Xs}, X) -&gt; {stack, [X | Xs]}.
+
+% データの取得
+top({stack, [X | _]}) -&gt; X.
+
+% データの削除
+pop({stack, [_ | Xs]}) -&gt; {stack, Xs}.
+
+% スタックは空か
+is_empty({stack, []}) -&gt; true;
+is_empty({stack, _}) -&gt; false.
+</pre>
+<p> スタックはタプル {stack, Xs} で表します。第 1 要素の stack はスタックを表すデータ型として使います。第 2 要素のリスト Xs がスタック本体になるリストです。スタックの操作関数は簡単です。push/2 はデータをリストの先頭に追加します。pop/1 はリストの先頭要素を取り除きます。データの取得は関数 top/1 で行います。関数 is_empty/1 はスタックが空かチェックする述語です。
+</p>
+
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+&gt; S0 = stack:new().
+{stack,[]}
+&gt; S1 = stack:push(S0, 10).
+{stack,"\n"}
+&gt; stack:top(S1).
+10
+&gt; S2 = stack:push(S1, 20).
+{stack,[20,10]}
+&gt; S3 = stack:push(S2, 30).
+{stack,[30,20,10]}
+&gt; stack:top(S3).
+30
+&gt; S4 = stack:pop(S3).
+{stack,[20,10]}
+&gt; stack:top(S4).
+20
+&gt; stack:is_empty(S0).
+true
+&gt; stack:is_empty(S4).
+false
+</pre>
+<p> 正常に動作していますね。関数型言語の場合、変数の値を書き換えることができないので、push や pop の返り値 (スタック) を別の変数に格納する必要があります。ご注意くださいませ。
+</p>
+
+<h4>●キューとは？</h4>
+<p> もうひとつ簡単な例を示しましょう。キューは「待ち行列」といわれるデータ構造です。たとえばチケットを買う場合、窓口に長い列ができますが、それと同じだと考えてください。チケットを買うときは、列の途中に割り込むことはできませんね。いちばん後ろに並んで順番を待たなければいけません。列の先頭まで進むと、チケットを購入することができます。
+</p>
+<p> このように、要素を取り出す場合は列の先頭から行い、要素を追加する場合は列の後ろに行うデータ構造がキューなのです。キューは「先入れ先出し (FIFO : first-in, first-out)」とも呼ばれます。
+</p>
+
+<pre class="fig">
+                  先頭                      最後尾
+                    ---------------------------
+                 &lt;=  1  2  3  4  5  .  .  .  n  &lt;= 
+                    ---------------------------
+
+            先頭                                          最後尾
+ 変数      ┌─┬─┐    ┌─┬─┐    ┌─┬─┐        ┌─┬─┐
+ queue ─→│・│・┼─→│・│・┼─→│・│・┼・・・→│・│／│  
+           └┼┴─┘    └┼┴─┘    └┼┴─┘        └┼┴─┘
+             ↓            ↓            ↓                ↓
+             １            ２            ３                ｎ
+
+                        図 : キューの構造
+</pre>
+
+<p> キューにデータを入れることを enqueue といい、キューからデータを取り出すことを dequeue といいます。リストを使ってキューを実装する場合、上図のようにキューの先頭とリストの先頭を対応させます。すると、キューからデータを取り出すには、リストの先頭からデータを取り出すだけですみます。これはとても簡単ですね。
+</p>
+<p> ただし、キューにデータを入れるには、リストの最後尾にデータを追加することになるため、ちょっとした工夫が必要になります。たとえば、データの追加に演算子 ++ を使うと、データを追加するたびにリスト（キュー）がコピーされてしまいます。このため、キューに格納されているデータが多くなると時間がかかるようになります。
+</p>
+<p> これを回避する方法はいろいろ考えられるのですが、今回は関数型言語で用いられる簡単な方法を紹介します。次の図を見てください。
+</p>
+
+<pre class="fig">
+            先頭                        
+ 変数      ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ front ─→│０│・┼─→│１│・┼─→│２│／│  
+           └─┴─┘    └─┴─┘    └─┴─┘
+           最後尾                  
+           ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ rear  ─→│５│・┼─→│４│・┼─→│３│／│  
+           └─┴─┘    └─┴─┘    └─┴─┘
+
+        図 : キューの構造（改良版）
+</pre>
+
+<p> 上図は 2 つのリストでキューを表しています。データを取り出すときは front のリストを、データを追加するときは rear のリストを使います。front と rear で一つのキューを構成し、rear のリストはデータを逆順で格納することになります。ようするに、front が先頭で rear が最後尾になるわけです。上図のキューを一つのリストで表すと [0, 1, 2, 3, 4, 5] になります。
+</p>
+<p> したがって、front が空リストでも rear にデータがあれば、キューは空ではありません。rear のリストを逆順にして front にセットし、rear を空リストにします。これで front からデータを取り出すことができます。キューが空の状態は front と rear が両方とも空リストの場合です。
+</p>
+
+<h4>●キューの実装</h4>
+<p> それではプログラムを作りましょう。次のリストを見てください。Erlang にはモジュール queue が標準で用意されているので、モジュール名は myque としました。
+</p>
+
+<pre class="list">
+リスト : キューの実装
+
+-module(myque).
+-export([new/0, enqueue/2, dequeue/1, front/1, is_empty/1]).
+
+% キューの生成
+new()-&gt; {queue, [], []}.
+
+% データの追加
+enqueue({queue, Front, Rear}, X) -&gt; {queue, Front, [X | Rear]}.
+
+% データの削除
+dequeue({queue, [_ | Xs], Rear}) -&gt; {queue, Xs, Rear};
+dequeue({queue, [], []}) -&gt; false;
+dequeue({queue, [], Rear}) -&gt; dequeue({queue, lists:reverse(Rear), []}).
+
+% 先頭データの取得
+front({queue, [X | _], _}) -&gt; X;
+front({queue, [], []}) -&gt; false;
+front({queue, [], Rear}) -&gt; front({queue, lists:reverse(Rear), []}).
+
+% キューは空か
+is_empty({queue, [], []}) -&gt; true;
+is_empty({queue, [_ | _], _}) -&gt; false;
+is_empty({queue, _, [_ | _]}) -&gt; false.
+</pre>
+<p> キューはタプル {queue, Front, Rear} で表します。関数 new/0 は空のキュー {queue, [], []} を返します。関数 enqueue/2 はキューにデータ X を追加します。これは X を Rear の先頭に追加するだけです。関数 dequeue/1 はキューからデータを取り除きます。キューが空の場合は false を返します。まだ説明していませんが、ここはエラーを送出したほうがよいでしょう。
+</p>
+<p> front が空リストの場合は、キュー {queue, reverse(Rear), []} を作って dequeue を再帰呼び出しします。front にデータがある場合は先頭要素を取り除くだけです。関数 front/1 はキューの先頭要素を返します。処理は dequeue とほとんど同じで、違いは front の先頭データ X を返すだけです。関数 is_empty/1 は、キューが空であれば true を、そうでなければ false を返します。
+</p>
+
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+&gt; Q0 = myque:new().
+{queue,[],[]}
+&gt; Q1 = myque:enqueue(Q0, 10).
+{queue,[],"\n"}
+&gt; Q2 = myque:enqueue(Q1, 20).
+{queue,[],[20,10]}
+&gt; Q3 = myque:enqueue(Q2, 30).
+{queue,[],[30,20,10]}
+&gt; myque:front(Q3).
+10
+&gt; Q4 = myque:dequeue(Q3).
+{queue,[20,30],[]}
+&gt; myque:front(Q4).
+20
+&gt; Q5 = myque:dequeue(Q4).
+{queue,[30],[]}
+&gt; myque:front(Q5).
+30
+&gt; myque:is_empty(Q0).
+true
+&gt; myque:is_empty(Q5).
+false
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<div align="right">
+初出 2011 年 10 月 15 日<br>
+改訂 2018 年 12 月 23 日
+</div>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">レコード</h3>
+<p> 今回はレコード (record) について説明します。Erlang のレコードはタプルの特別な形式で、タプルの要素に名前を付けたデータ構造です。レコードは名前を使って要素にアクセスすることができるので、要素の順番を覚えておく必要はありません。
+</p>
+
+<h4>●レコードの定義</h4>
+<p> レコードを利用する場合、最初にレコードを定義する必要があります。Erlang の場合、ファイル内 (モジュール) で -record(...) 文を使って宣言するのが一般的です。
+</p>
+<pre class="item">
+-record(レコード名, {名前1, ..., 名前N}).
+</pre>
+<p> Eshell 上では関数 rd を使ってレコードを定義することができます。引数は -record と同じです。
+</p>
+<p> このほかに、レコードの定義をひとつのファイルにまとめて、それを読み込む方法もあります。この場合、ファイルの拡張子は .hrl とし、関数 rr() で読み込むことができます。
+</p>
+
+<h4>●レコードの生成</h4>
+<p> レコードの生成は次のように行います。
+</p>
+<pre class="item">
+#レコード名{名前1 = 式1, ..., 名前N = 式N}.
+</pre>
+<p> 名前は「フィールド」と呼ばれることがあります。式の評価結果がフィールドの値になります。次の例を見てください。
+</p>
+<pre>
+&gt; rd(foo, {bar, baz}).
+foo
+&gt; R1 = #foo{bar = 10, baz = 20}.
+#foo{bar = 10,baz = 20}
+&gt; R1.
+#foo{bar = 10,baz = 20}
+&gt; R2 = #foo{bar = 100}.
+#foo{bar = 100,baz = undefined}
+&gt; R2.
+#foo{bar = 100,baz = undefined}
+&gt; #foo{}.
+#foo{bar = undefined,baz = undefined}
+</pre>
+<p> 値を指定しないとフィールドには undefined というデフォルト値がセットされます。
+</p>
+
+<h4>●フィールドのアクセス</h4>
+<p> フィールドの値は次の式で求めることができます。
+</p>
+<pre class="item">
+式#レコード名.フィールド名
+</pre>
+<p> 式の評価結果はレコードでなければなりません。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; R1#foo.bar.
+10
+&gt; R1#foo.baz.
+20
+&gt; R2#foo.bar.
+100
+&gt; R2#foo.baz.
+undefined
+</pre>
+<p> レコードに "#レコード名.フィールド名" を適用すると、フィールドに格納されている値を参照することができます。
+</p>
+<p> Erlang のレコードは変数と同様に値を書き換えることはできませんが、値を置き換えた新しいレコードを返すことは簡単にできます。
+</p>
+<pre>
+&gt; R3 = R2#foo{baz = 200}.
+#foo{bar = 100,baz = 200}
+&gt; R2.
+#foo{bar = 100,baz = undefined}
+&gt; R3.
+#foo{bar = 100,baz = 200}
+</pre>
+<p> R2#foo{baz = 200} は R2 の baz の値を 200 に置き換えた新しいレコードを生成して変数 R3 にセットします。R2 の値は変わっていませんが、R3 の baz は 200 になります。
+</p>
+
+<h4>●レコードのパターン</h4>
+<p> もちろん、レコードでもパターンを使うことができます。次の例を見てください。
+</p>
+<pre>
+&gt; R4 = #foo{bar = 0, baz = 1}.
+#foo{bar = 0,baz = 1}
+&gt; #foo{bar = Bar, baz = Baz} = R4.
+#foo{bar = 0,baz = 1}
+&gt; Bar.
+0
+&gt; Baz.
+1
+&gt;#foo{bar = Bar1} = R4.
+#foo{bar = 0,baz = 1}
+&gt; Bar1.
+0
+</pre>
+<p> "フィールド名 = パターン" とすると指定したフィールドの値とパターンがマッチングします。{bar = Bar, baz = Baz} は変数 Bar とフィールド bar の値、変数 Baz とフィールド baz の値がマッチングして、Bar = 0, Baz = 1 になります。また、パターンマッチングのときに、すべてのフィールドを指定する必要はありません。bar = Bar1 だけを指定すると、Bar1 とフィールド bar の値がマッチングします。
+</p>
+
+<h4>●レコードの入れ子</h4>
+<p> レコードは入れ子にすることもできます。次の例を見てください。
+</p>
+<pre>
+&gt; rd(foo1, {a, b}).
+foo1
+&gt; rd(bar1, {c, d = #foo1{}}).
+bar1
+&gt; #foo1{}.
+#foo1{a = undefined,b = undefined}
+&gt; #bar1{}.
+#bar1{c = undefined,d = #foo1{a = undefined,b = undefined}}
+&gt; RR = #bar1{c = 10, d = #foo1{a = 20, b = 30}}.
+#bar1{c = 10,d = #foo1{a = 20,b = 30}}
+&gt; RR.
+#bar1{c = 10,d = #foo1{a = 20,b = 30}}
+&gt; RR#bar1.c.
+10
+&gt; RR#bar1.d.
+#foo1{a = 20,b = 30}
+&gt; RR#bar1.d#foo1.a.
+20
+&gt; RR#bar1.d#foo1.b.
+30
+&gt; RR1 = RR#bar1{d = RR#bar1.d#foo1{a = 100}}.
+#bar1{c = 10,d = #foo1{a = 100,b = 30}}
+</pre>
+<p> 最初にレコード foo1 を定義します。次にレコード bar1 を定義しますが、その中で d = #foo1{} とすると、レコード foo1 を入れ子することができます。#bar1{} でレコードを生成すると、d の値には foo1 のレコードがセットされます。値を指定する場合は、b = #foo1{a = 10, b = 20} とすることで、foo1 のフィールド a, b の値を 10, 20 にセットすることができます。
+</p>
+<p> 入れ子のレコードのアクセスも簡単です。レコード foo1 は RR#bar1.d に格納されているので、RR#bar1.d#foo1.a とすればフィールド a に、RR#bar1.d#foo1.b とすればフィールド b にアクセスすることができます。ただし、入れ子のレコードの場合、フィールドの値を置き換えるのはちょっと面倒です。foo1 だけでではなく bar1 のレコードも新しく生成する必要があります。RR#bar1.d#foo1{a = 100} とすると、a の値を 100 に置き換えた foo1 のレコードが新たに生成されるだけです。ご注意くださいませ。
+</p>
+
+<h4>●二分探索木</h4>
+<p> それでは簡単な例題として「二分探索木」という基本的なデータ構造を作ってみましょう。まず最初に二分探索木から説明します。二分木を理解されている方は読み飛ばしてもらってかまいません。
+</p>
+
+<p> <a href="abcerl05.html#next">次へ</a>
+</p>
+
+<p> あるデータの中から特定のデータを探す場合、データ数が少なければ力任せに探索してもなんとかなりますが、データ数が多くなると探索に時間がかかるようになります。このような場合、あらかじめデータを整理整頓しておくことで、特定のデータを高速に見つけることができるようになります。この代表的なアルゴリズムが「ハッシュ法」と「二分探索木」です。二分探索木はその名が示すように「木構造」の一種です。まずは木構造から説明しましょう。
+</p>
+
+<h4>●木構造</h4>
+<p> 「木構造 (tree structer)」は「木 (tree)」とも呼ばれるデータ構造で、「節 (ノード)」と呼ばれる要素に対して、階層的な関係を表したものです。身近な例では、ディレクトリの階層構造が木にあたります。ディレクトリに「ルートディレクトリ」があるように、木にも「根 (ルート)」と呼ばれる節が存在します。
+</p>
+
+<pre class="fig">
+          (root)
+            Ａ    ────────  レベル０  
+          ／｜＼                ↑
+        ／  ｜  ＼
+      Ｂ    Ｃ    Ｄ            木  レベル１
+    ／｜＼        ｜＼          の
+  ／  ｜  ＼      ｜  ＼        高
+Ｅ    Ｆ    Ｇ    Ｈ    Ｉ      さ  レベル２
+          ／  ＼
+        ／      ＼              ↓
+      Ｊ          Ｋ    ─────  レベル３
+
+        図 1 : 一般的な木構造の一例
+</pre>
+<p> 木を図示する場合、階層関係がはっきりわかるように、根を上にして、同じ階層にある節を並べて書きます。根からレベル 0、レベル 1 と階層を数えていき、最下層の節までの階層数を「木の高さ」といいます。木は、ある節から下の部分を切り出したものも、木としての性質を持っています。これを「部分木」といいます。
+</p>
+
+<p> 木は、ある節からほかの節に至る「経路」を考えることができます。たとえば、A から J には、A - B - G - J という経路がありますね。これは、ディレクトリやファイルを指定するときのパスと同じです。
+</p>
+
+<p> ある節から根の方向にさかのぼるとき、途中で通っていく節を「先祖」といい、直接繋がっている節を「親」といます。これは、逆から見ると「子孫」と「子」という関係になります。子を持たない節をとくに「葉」と呼ぶことがあります。上図でいうと、G は J と K の親で、J は G の子になります。J は子を持っていないので葉となります。
+</p>
+
+<p> 子は、「左 &lt; 右」の順番で節に格納するのが一般的です。これを「順序木」といいます。また、順番がない木を「無順序木」と呼びます。節が持っている子の数を「次数」といいます。上図の場合、A は 3 つの子 B, C, D を持っているので、A の次数は 3 となります。すべての節の次数を n に揃えた順序木を「 n 分木」と呼びます。
+</p>
+<h4>●二分木</h4>
+<p> とくに、次数が 2 の二分木は、プログラムでよく使われるデータ構造です。
+</p>
+
+<pre class="fig">
+                    (root)
+                      18
+                    ／  ＼
+                  ／      ＼
+                ／          ＼
+              ／              ＼
+            ／                  ＼
+          14                      22
+        ／  ＼                  ／  ＼
+      ／      ＼              ／      ＼
+    12          16          20          24
+  ／  ＼      ／  ＼      ／  ＼      ／  ＼
+11      13  15      17  19      21  23      25
+
+            図 2 : 二分木の一例
+</pre>
+<p> 上図に二分木の例を示します。二分木では、節にひとつのデータを格納します。そして、その節の左側の子には小さいデータを、右側の子には大きいデータが配置されるように木を構成します。
+</p>
+
+<p> この二分木をデータの探索に使うアルゴリズムが「二分探索木」です。二分探索木はデータの探索・挿入を高速に行うことができます。たとえば、上図の木から 19 を探してみましょう。まず root の 18 と比較します。18 &lt; 19 ですから、右側の子をたどり 22 と比較します。今度は 19 &lt; 22 なので左側の子をたどります。次は 20 と比較し 19 &lt; 20 なので左側の子をたどり、ここで 19 を見つけることができます。
+</p>
+
+<p> 二分探索木の探索は「二分探索 (binary search)」と同じ原理です。左右どちらかの子をたどるたびに、探索するデータ数は半分になります。上図の場合でも、探索するデータ数が 15, 7, 3, 1 となり、最後に見つけることができました。
+</p>
+
+<p> データ数を N とすると、単純な線形探索では平均で N / 2 回の比較が必要になりますが、二分探索木を使うと log <sub>2</sub> N 程度の回数で収まります。たとえば、データが 100個ある場合、線形探索では 50 回データを比較しなければいけないのに、二分探索木では 7 回程度の比較で済むわけです。ただし、これは左右の部分木のバランスがとれている理想的な状態での話です。バランスが崩れると二分探索木の性能は劣化し、最悪の場合は線形探索と同じになってしまいます。
+</p>
+
+<p> そこで、左右のバランスを一定の範囲に収める「平衡木」が考案されています。有名なところでは AVL 木、2-3 木、B 木、B* 木などがあります。また、Ｃ++の標準ライブラリである STL (Standard Template Library) では、「2 色木 (赤黒木)」というアルゴリズムが使われているそうです。今回は Erlang の勉強ということで、単純な二分探索木をプログラムすることにします。なお、本稿では二分探索木のことを単に「二分木」と書くことにします。
+</p>
+
+<h4 id="next">●二分木の実装</h4>
+<p> それでは、Erlang で二分木を作ってみましょう。最初に -record で二分木の節を定義します。
+</p>
+
+<pre class="list">
+リスト : 二分木の定義
+
+-module(bintree).
+-export([search_tree/2, insert_tree/2, delete_tree/2, foreach_tree/2]).
+
+% 二分木の節
+% 空の木は null とする
+-record(node, {data, left, right}).
+</pre>
+
+<p> レコードで節 (node) を表します。レコード名は node としました。空の木をアトム null で表します。フィールド data が二分木に格納するデータ、left が左部分木、right が右部分木を表します。簡単な例を示します。
+</p>
+<pre class="fig">
+    12      
+  ／  ＼    ==&gt; {node, 12, {node, 11, null, null}, {node, 13, null, null}}
+11      13  
+</pre>
+<p> これを図で表すと次のようになります。
+</p>
+<pre class="fig">
+          ┌─┬─┬─┐
+          │12│・│・│
+          └─┴┼┴┼┘
+                │  │
+  ┌──────┘  └─┐
+  ↓                    ↓
+┌─┬─┬─┐        ┌─┬─┬─┐
+│11│／│／│        │13│／│／│
+└─┴─┴─┘        └─┴─┴─┘
+
+     ┌─┬─┬─┐
+ 節：│Ｄ│Ｌ│Ｒ│
+     └─┴─┴─┘
+ Ｄ：data, Ｌ：left, Ｒ：right, ／：null
+
+        図 : 二分木の構造
+</pre>
+<h4>●データの探索</h4>
+<p> それでは、データを探索する関数から作ってみましょう。この処理はデータを比較して左右の部分木をたどっていくだけです。
+</p>
+
+<pre class="list">
+リスト : データの探索
+
+search_tree(_, null) -&gt; false;
+search_tree(X, #node{data = X}) -&gt; true;
+search_tree(X, #node{data = D, left = L}) when X < D -&gt; search_tree(X, L);
+search_tree(X, #node{right = R}) -&gt; search_tree(X, R).
+</pre>
+
+<p> 関数 search_tree の第 1 引数 X が探索するデータ、第 2 引数が二分木です。二分木が null であれば、これ以上探索することはできません。データは見つからなかったので false を返します。そうでなければ、引数 X と node のデータを比較します。2 番目の節は X と node 内の data が等しい場合です。データが見つかったので true を返します。
+</p>
+<p> 3 番目の節は、X が node のデータ D よりも小さい場合です。search_tree を再帰呼び出しして左部分木をたどります。最後の節は X が D よりも大きい場合です。search_tree を再帰呼び出しして右部分木をたどります。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データを挿入する関数を作りましょう。探索と同様に、データを比較して木をたどっていき、木がなくなった所に新しいデータを挿入します。
+</p>
+
+<pre class="list">
+リスト : データの挿入
+
+insert_tree(X, null) -&gt;
+    #node{data = X, left = null, right = null};
+insert_tree(X, Node) when X < Node#node.data -&gt; 
+    Node#node{left = insert_tree(X, Node#node.left)};
+insert_tree(X, Node) when X > Node#node.data -&gt;
+    Node#node{right = insert_tree(X, Node#node.right)};
+insert_tree(_, Node) -&gt; Node.
+</pre>
+
+<p> 関数 insert_tree の第 1 引数 X が挿入するデータ、第 2 引数が二分木です。二分木が null であれば、新しい節を作って返します。この返り値を node の部分木にセットします。
+</p>
+<p> X &lt; Node#node.data であれば、insert_tree を再帰呼び出しして左部分木 left をたどります。そして、left を insert_tree の返り値に置き換えた節を生成して返します。もしも、left が null であれば、ここに新しい節が挿入され、新しい部分木が返されます。X &gt; Node#node.data であれば右部分木をたどり、データを挿入した新しい右部分木を返します。最後の節は X と Node#node.data が等しい場合です。Node をそのまま返します。
+</p>
+
+<h4>●データの削除</h4>
+<p> 次はデータを削除する処理を作りましょう。これは今までと違って少々面倒です。削除するデータが「葉」の場合は、それを削除するだけなので簡単ですが、木の途中のデータを削除する場合は、二分木の構成を崩さないように注意しないといけません。最初に、葉を削除する場合を説明します。下図を見てください。
+</p>
+<pre class="fig">
+          14                            14
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          16
+  ／  ＼      ／  ＼            ／  ＼      ／  ＼
+11      13  15      17        11      13  null    17
+                                          ↑
+    15 を削除する                        削除
+
+             図 : データの削除（葉の場合）
+</pre>
+<p> 15 を削除する場合を考えてみましょう。15 は「葉」にあたるので、それを削除するだけで大丈夫です。
+</p>
+<p> 次に、子が一つある場合を考えてみましょう。
+</p>
+<pre class="fig">
+          14                            14
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          15
+  ／  ＼      ／                ／  ＼
+11      13  15                11      13
+
+    16 を削除する
+
+          図 : データの削除（子が一つの場合）
+</pre>
+<p> 16 を削除する場合、その子である 15 と置き換えれば二分木の構成は保たれます。これも簡単ですね。問題は、子が二つある節を削除する場合です。
+</p>
+<pre class="fig">
+          14                            15  &lt;- 最小値と置き換え
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          16
+  ／  ＼      ／  ＼            ／  ＼      ／  ＼
+11      13  15      17        11      13  null    17
+                                          ↑
+    14 を削除する                        削除
+
+          図 : データの削除（子が二つの場合）
+</pre>
+<p> この場合、削除するデータの右部分木の中から最小値のデータ <sup><a href="abcerl05.html#note1">[*1]</a></sup> を探し、それと削除するデータと置き換えれば「右部分木 &lt; 節 &lt; 左部分木」の構成を崩さなくてすみます。たとえば、上図で 14 を削除することを考えてみましょう。右部分木の中で 15 が最小値なので、それと 14 を置き換えます。そして、15 を格納していた節は削除します。節が最小値を格納している場合、その節の左側の子は存在しないので、その節を削除することは簡単です。
+</p>
+
+<p> まずは木の中から最小値を探す関数と、最小値の節を削除する関数を作成しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 最小値の探索と削除
+
+% 最小値を探す
+search_min(#node{data = D, left = null}) -&gt; D;
+search_min(#node{left = L}) -&gt; search_min(L).
+
+% 最小値を削除する
+delete_min(#node{left = null, right = R}) -&gt; R;
+delete_min(Node) -&gt; Node#node{left = delete_min(Node#node.left)}.
+</pre>
+<p> 二分木の場合、最小値は簡単に求めることができます。左側の子を順番にたどっていき、左側の子がない節に行き着いたとき、その節のデータが最小値になります。関数 search_min の最初の節で、左側の子が null かチェックします。そうであれば左側の子がないので、その節のデータが最小値です。格納されているデータ D を返します。そうでなければ次の節で search_min を再帰呼び出しして左側の子をたどります。
+</p>
+
+<p> 関数 delete_min は最小値を格納している節を削除します。左側の子が null の節を探すのは search_min と同じです。見つけたら、もう一つの子 right を返します。そうでなければ、delete_min を再帰呼び出しして、その左部分木の中から最小値を探し出して削除します。そして、その返り値を格納した新しい節を返します。これで、最小値を持つ節が削除されます。葉の場合であれば right は null なので、単純に削除されることになります。
+</p>
+
+<p> それでは、データを削除する関数 delete を作ります。まず削除するデータを探索して、見つけたら子の有無に合わせた削除処理を行います。
+</p>
+
+<pre class="list">
+リスト : データの削除
+
+delete_tree(_, null) -&gt; null;
+delete_tree(X, Node) when X < Node#node.data -&gt;
+  Node#node{left = delete_tree(X, Node#node.left)};
+delete_tree(X, Node) when X > Node#node.data -&gt;
+  Node#node{right = delete_tree(X, Node#node.right)};
+delete_tree(_, #node{left = null, right = R}) -&gt; R;
+delete_tree(_, #node{left = L, right = null}) -&gt; L;
+delete_tree(_, #node{left = L, right = R}) -&gt;
+  Min = search_min(R),
+  #node{data = Min, left = L, right = delete_min(R)}.
+</pre>
+<p> まず、節が null ならばデータが見つからなかったので null をそのまま返します。エラーを送出してもよいでしょう。X と node のデータが等しくない場合は、左右の部分木をたどって削除するデータを探索します。この処理は今までと同じで、delete_tree の返り値を格納した新しい節を返します。
+</p>
+
+<p> 削除するデータ X と node のデータが等しい場合はその節を削除します。4, 5 番目の節で、left が null の場合は right を返し、right が null の場合は left を返します。子が 2 つある場合は、右部分木の最小値を関数 search_min で求め、その値を格納した新しい節を作ります。このとき、関数 delete_min で最小値を格納していた節を削除します。これで、削除するデータを最小値で置き換えることができます。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 逆に、左部分木の中から最大値を探し、それと削除するデータを置き換えてもかまいません。
+</div>
+<h4>●二分木の巡回</h4>
+<p> 最後に、二分木の全データにアクセスする関数を作りましょう。二分木はデータの大小関係を使って構成されているので、ある順番で節をすべて出力すると、それはソートした結果と同じになります。「木」のすべての節を規則的な順序で回ることを「巡回 (traverse)」といいいます。このなかで、次の 3 つの方法が重要です。
+</p>
+<ol>
+  <li><b>行きがけ順</b><br>
+    まず節のデータを出力、その後左の子、右の子の順番で出力する。
+  <li><b>帰りがけ順</b><br>
+    左の子、右の子と出力してから、節のデータを出力する。
+  <li><b>通りがけ順</b><br>
+    左の子を出力、次に節のデータを出力、最後に右の子を出力する。
+</ol>
+<p> 名前の由来は、節のデータを出力するタイミングからきています。節に最初に到達したときに出力する方法が「行きがけ」、子を出力してその節に戻ってきたときに出力する方法が「帰りがけ」、子を出力する途中でその節に戻ってきたときに出力する方法が「通りがけ」です。
+</p>
+
+<p> 二分木は「左の子 &lt; 節のデータ &lt; 右の子」という関係が成り立つので、通りがけ順に出力すれば、ソートされた出力結果を得ることができます。この処理は、再帰定義を使えば簡単に実現できます。
+</p>
+
+<pre class="list">
+リスト : 二分木の巡回
+
+foreach_tree(_, null) -&gt; ok;
+foreach_tree(F, #node{data = D, left = L, right = R}) -&gt;
+    foreach_tree(F, L), F(D), foreach_tree(F, R).
+</pre>
+
+<p> 関数 foreach_tree は二分木を通りがけ順に巡回し、格納されているデータに関数 F を適用します。まず、二分木が null ならば何もしないで ok を返します。これが再帰呼び出しの停止条件となります。あとは通りがけ順の定義そのままにプログラムをするだけです。左部分木をたどるため、left に対して foreach_tree を再帰呼び出しします。次に、node のデータ D に関数 F を適用します。最後に右部分木をたどるため、right に対して foreach_tree を再帰呼び出しします。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; RT = lists:foldl(fun(X, A) -> bintree:insert_tree(X, A) end, null, [50, 30, 20, 40, 70, 80, 60]).
+{node,50,
+      {node,30,{node,20,null,null},{node,40,null,null}},
+      {node,70,{node,60,null,null},{node,80,null,null}}}
+&gt; bintree:foreach_tree(fun(X) -> io:write(X), io:nl() end, RT).
+20
+30
+40
+50
+60
+70
+80
+ok
+&gt; bintree:search_tree(20, RT).
+true
+&gt; bintree:search_tree(80, RT).
+true
+&gt; bintree:search_tree(0, RT).
+false
+&gt; bintree:search_tree(100, RT).
+false
+&gt; bintree:search_tree(55, RT).
+false
+&gt; RT1 = bintree:delete_tree(20, RT).
+{node,50,
+      {node,30,null,{node,40,null,null}},
+      {node,70,{node,60,null,null},{node,80,null,null}}}
+&gt; RT2 = bintree:delete_tree(80, RT).
+{node,50,
+      {node,30,{node,20,null,null},{node,40,null,null}},
+      {node,70,{node,60,null,null},null}}
+&gt; RT3 = bintree:delete_tree(30, RT).
+{node,50,
+      {node,40,{node,20,null,null},null},
+      {node,70,{node,60,null,null},{node,80,null,null}}}
+&gt; RT4 = bintree:delete_tree(70, RT).
+{node,50,
+      {node,30,{node,20,null,null},{node,40,null,null}},
+      {node,80,{node,60,null,null},null}}
+&gt; RT5 = bintree:delete_tree(50, RT).
+{node,60,
+      {node,30,{node,20,null,null},{node,40,null,null}},
+      {node,70,null,{node,80,null,null}}}
+&gt; lists:foldl(fun(X, A) -> bintree:delete_tree(X, A) end, RT, [50, 30, 20, 40, 70, 80, 60]).
+null
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+リスト : 二分木
+
+-module(bintree).
+-export([search_tree/2, insert_tree/2, delete_tree/2, foreach_tree/2]).
+
+% 二分木の節
+% 空の木は null とする
+-record(node, {data, left, right}).
+
+% データの探索
+search_tree(_, null) -&gt; false;
+search_tree(X, #node{data = X}) -&gt; true;
+search_tree(X, #node{data = D, left = L}) when X &lt; D -&gt; search_tree(X, L);
+search_tree(X, #node{right = R}) -&gt; search_tree(X, R).
+
+% データの挿入
+insert_tree(X, null) -&gt;
+    #node{data = X, left = null, right = null};
+insert_tree(X, Node) when X &lt; Node#node.data -&gt; 
+    Node#node{left = insert_tree(X, Node#node.left)};
+insert_tree(X, Node) when X &gt; Node#node.data -&gt;
+    Node#node{right = insert_tree(X, Node#node.right)};
+insert_tree(_, Node) -&gt; Node.
+
+% 最小値を探す
+search_min(#node{data = D, left = null}) -&gt; D;
+search_min(#node{left = L}) -&gt; search_min(L).
+
+% 最小値を削除する
+delete_min(#node{left = null, right = R}) -&gt; R;
+delete_min(Node) -&gt; Node#node{left = delete_min(Node#node.left)}.
+
+% データの削除
+delete_tree(_, null) -&gt; null;
+delete_tree(X, Node) when X &lt; Node#node.data -&gt;
+  Node#node{left = delete_tree(X, Node#node.left)};
+delete_tree(X, Node) when X &gt; Node#node.data -&gt;
+  Node#node{right = delete_tree(X, Node#node.right)};
+delete_tree(_, #node{left = null, right = R}) -&gt; R;
+delete_tree(_, #node{left = L, right = null}) -&gt; L;
+delete_tree(_, #node{left = L, right = R}) -&gt;
+  Min = search_min(R),
+  #node{data = Min, left = L, right = delete_min(R)}.
+
+% 二分木の巡回
+foreach_tree(_, null) -&gt; ok;
+foreach_tree(F, #node{data = D, left = L, right = R}) -&gt;
+    foreach_tree(F, L), F(D), foreach_tree(F, R).
+</pre>
+<hr>
+<div align="right">
+初出 2011 年 10 月 15 日<br>
+改訂 2018 年 12 月 23 日
+</div>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011-2018 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcerl04.html">PrevPage</a> | <a href="erlang.html">Erlang</a> | <a href="abcerl06.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

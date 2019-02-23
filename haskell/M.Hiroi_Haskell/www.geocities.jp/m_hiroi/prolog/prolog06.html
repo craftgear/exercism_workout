@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Prolog プログラミング入門</title>
+  <meta name="description" content="Prolog,Prolog入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881780</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>お気楽 Prolog プログラミング入門</h2>
+<div class="small">
+[ <a href="prolog05.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap24">経路の探索(1)</h3>
+<p> 今回は、地図上の a 地点から b 地点までの道順を求める、といった「経路の探索」と呼ばれる問題を取り上げます。探索アルゴリズムにはいろいろな種類がありますが、よく用いられる最も基本的な方法が「バックトラック」です。もちろん、経路の探索もバックトラックで解くことができます。
+</p>
+<p> このほかに、もうひとつ基本的な方法として「幅優先探索」があります。バックトラックの場合、失敗したら後戻りして別の道を選び直しますが、幅優先探索の場合は、すべての経路について並行に探索を進めていきます。今回はバックトラック、次回は幅優先探索を使って、この問題を解いてみましょう。
+</p>
+<h4>●グラフの表現方法</h4>
+<p> 簡単な例題として、次に示す経路図を考えてみます。
+</p>
+<pre class="fig">
+Ｈ───Ｉ───Ｊ───Ｋ
+│      │    ／│
+│      │  ／  │
+│      │／    │
+Ｅ───Ｆ───Ｇ
+│    ／│      │
+│  ／  │      │
+│／    │      │
+Ａ───Ｂ───Ｃ───Ｄ  
+
+    図：簡単な経路図
+</pre>
+<p> 点とそれを接続する線から構成されている図形を「グラフ (graph) 」といいます。点のことを「頂点 (vertex) 」または「節点 (node) 」と呼び、線のことを「辺 (edge) 」または「弧 (arc) 」と呼びます。上図では、アルファベットが節点に対応します。グラフを表す場合、ほかのプログラミング言語では「隣接行列」や「隣接リスト」といった方法を使いますが、Prolog では隣同士の関係を「事実」として定義すればいいでしょう。次のプログラムを見てください。
+</p>
+<pre class="list">
+リスト：隣接の定義
+
+neighbor(a, b).  neighbor(a, f).  neighbor(a, e).
+neighbor(b, f).  neighbor(b, c).  neighbor(c, d).
+neighbor(c, g).  neighbor(e, f).  neighbor(e, h).
+neighbor(f, g).  neighbor(f, i).  neighbor(f, j).
+neighbor(g, j).  neighbor(h, i).  neighbor(i, j).
+neighbor(j, k).
+</pre>
+<p> Prolog の場合、英大文字で始まる名前は変数になるので、各地点を英小文字で表しています。neighbor(a, b) は a 地点の隣は b 地点であることを表していますが、同時に b 地点の隣は a 地点であることも表しています。この関係を使って、X 地点の隣の地点 Y を求めるプログラムを作ります。
+</p>
+<pre class="list">
+リスト：X の隣を求める
+
+next(X, Y) :- neighbor(X, Y).
+next(X, Y) :- neighbor(Y, X).
+</pre>
+<p> 最初の規則だけでは不完全であることに注意してください。たとえば、b 地点の隣を求める場合、最初の規則では f と c しか求めることができません。neighbor(a, b) の関係から a 地点を求めるため、二番目の規則が必要になるのです。それでは実行してみましょう。
+</p>
+<pre>
+?- next(b, Y).
+
+Y = f ;
+
+Y = c ;
+
+Y = a ;
+
+No
+</pre>
+<h4>●経路の表現方法</h4>
+<p> 次に経路の表し方ですが、これは名前を並べたリストで表せばいいでしょう。たとえば、a 地点から k 地点までの経路は、次のようになります。
+</p>
+<pre class="fig">
+a - f - j - k          ─→  [a, f, j, k]       ==&gt; [k, j, f, a]
+
+a - e - h - i - j - k  ─→  [a, e, h, i, j, k] ==&gt; [k, j, i, h, e, a]  
+
+                                           逆順で管理する
+
+                図：経路の表し方
+</pre>
+<p> ただし、このままでは探索中の処理が少々面倒になってしまいます。というのは、経路 a - f を j へ延ばすときに、リスト [a, f] の最後に j を追加しなければいけないからです。リストの先頭にデータを追加することは簡単ですが、最後に追加するのはけっこう面倒です。そこで、経路を逆順に管理することにします。
+</p>
+<h4>●バックトラックによる探索</h4>
+<p> それでは、a 地点から k 地点に至る経路をバックトラックで求めてみましょう。まず、出発地点 a の隣接地点をひとつ選んで経路を延ばします。そして、その節点の隣接地点から次の節点を選び、経路を延ばしていきます。もしも、行き止まりになったらひとつ前の節点に戻って、別の節点を選び直します。これをゴール地点 k に着くまで繰り返します。
+</p>
+<pre class="fig">
+  Ｈ───Ｉ───Ｊ───Ｋ      Ｈ───Ｉ───Ｊ───Ｋ  
+  │      │    ／│              │      │    ／│
+  │      │  ／  │              │      │  ／  │
+  │      │／    │              │      │／    │
+  Ｅ───Ｆ───Ｇ              Ｅ───Ｆ───Ｇ
+  │    ／│      │              │    ／│      │
+  │  ／  │      │              │  ／  │      │
+  │／    │      │              │／    │      │
+  Ａ<FONT color="blue">━━━</FONT>Ｂ<FONT color="blue">━━━</FONT>Ｃ───Ｄ      Ａ<FONT color="blue">━━━</FONT>Ｂ<FONT color="blue">━━━</FONT>Ｃ<FONT color="blue">━━━</FONT>Ｄ
+
+    a - b - c                       a - b - c - d （行き止まり）
+
+                図：バックトラック（その１）
+</pre>
+
+<p> たとえば、a - b - c と進んできて、c につながっている節点 b, d, g の中から次の節点を選びます。このとき、b は経路の中に含まれているので、候補から除外することに注意してください。こうしないと、同じ道をぐるぐると回る巡回経路が発生し、ゴールである K 地点にたどり着くことができなくなります。
+</p>
+<p> そこで、次の頂点 d を選択し、経路は a - b - c - d となります。ところが、d につながっている頂点は c しかなく、これは既に経路の中に含まれているので、選択することはできません。つまり、行き止まりになったわけですね。この場合はひとつ前の頂点 c に戻り、ほかの頂点を選択します。
+</p>
+<pre class="fig">
+  Ｈ───Ｉ───Ｊ───Ｋ      Ｈ<FONT color="blue">━━━</FONT>Ｉ<FONT color="blue">━━━</FONT>Ｊ<FONT color="blue">━━━</FONT>Ｋ
+  │      │    ／│              <FONT color="blue">┃</FONT>      │    ／│
+  │      │  ／  │              <FONT color="blue">┃</FONT>      │  ／  │
+  │      │／    │              <FONT color="blue">┃</FONT>      │／    │
+  Ｅ───Ｆ───Ｇ              Ｅ<FONT color="blue">━━━</FONT>Ｆ<FONT color="blue">━━━</FONT>Ｇ
+  │    ／│      <FONT color="blue">┃</FONT>              │    ／│      <FONT color="blue">┃</FONT>
+  │  ／  │      <FONT color="blue">┃</FONT>              │  ／  │      <FONT color="blue">┃</FONT>
+  │／    │      <FONT color="blue">┃</FONT>              │／    │      <FONT color="blue">┃</FONT>
+  Ａ<FONT color="blue">━━━</FONT>Ｂ<FONT color="blue">━━━</FONT>Ｃ───Ｄ      Ａ<FONT color="blue">━━━</FONT>Ｂ<FONT color="blue">━━━</FONT>Ｃ───Ｄ
+
+    a - b - c - g            a - b - c - g - f - e - h - i - j - k  
+                                     （経路が完成）
+
+                図：バックトラック（その２）
+</pre>
+
+<p> 頂点 c で、まだ選択していない頂点は g だけです。そこで、a - b - c - g と経路を延ばします。これを繰り返してゴールまでの経路が完成します。ゴールを求めたあとでもバックトラックすることにより、a から k までのすべての経路を求めることができます。
+</p>
+<h4>●プログラム</h4>
+<p> このように、バックトラックによる探索は、ひとつの経路を先へ先へ延ばすように行われます。このことから「深さ優先探索」とか「縦形探索」と呼ばれています。Prolog の場合、バックトラックはとても簡単にプログラムできます。今回は経路をすべて出力するプログラムを作りましょう。
+</p>
+<pre class="list">
+リスト：深さ優先探索
+
+depth_search(End, End, Path) :- 
+    reverse([End | Path], Path1), write(Path1), nl, !, fail.
+
+depth_search(Node, End, Path) :-
+    not(member(Node, Path)),
+    next(Node, Next),
+    depth_search(Next, End, [Node | Path]).
+</pre>
+
+<p> depth_search の引数ですが、 Node が現在地点、End がゴール地点、Path が経路を表します。最初の規則がゴールに到達した場合です。write で経路を表示してから、fail で強制的にバックトラックします。ゴールに到達したので、これ以上経路を延ばす必要はありません。次の規則を実行しないように、カット ( ! ) を使っています。
+</p>
+<p> 2 番目の規則で経路を延ばします。現在地点 Node が 経路 Path に含まれていないか、member を使ってチェックします。次に、next で隣の地点 Next を求めて、depth_search を再帰呼び出しします。このとき、Path の先頭に Node を追加して、現在地点を Next に移動します。これで、経路を延ばすことができます。
+</p>
+<p> プログラムはこれだけです。とても簡単ですね。それでは実行してみましょう。
+</p>
+<pre>
+?- depth_search(a, k, []).
+
+[a, b, f, g, j, k]
+[a, b, f, i, j, k]
+[a, b, f, j, k]
+[a, b, f, e, h, i, j, k]
+[a, b, c, g, j, k]
+[a, b, c, g, f, i, j, k]
+[a, b, c, g, f, j, k]
+[a, b, c, g, f, e, h, i, j, k]
+[a, f, g, j, k]
+[a, f, i, j, k]
+[a, f, j, k]
+[a, f, b, c, g, j, k]
+[a, f, e, h, i, j, k]
+[a, e, f, g, j, k]
+[a, e, f, i, j, k]
+[a, e, f, j, k]
+[a, e, f, b, c, g, j, k]
+[a, e, h, i, j, k]
+[a, e, h, i, f, g, j, k]
+[a, e, h, i, f, j, k]
+[a, e, h, i, f, b, c, g, j, k]
+
+No
+</pre>
+
+<p> 全部で 21 通りの経路が表示されました。結果を見ればおわかりのように、最初に見つかる経路が最短経路 [a, f, j, k] であるとは限りません。最短経路を求める場合は、次回で説明する「幅優先探索」の方が適しています。
+</p>
+<h4>●補足</h4>
+<p> depth_search は fail で強制的にバックトラックすることで、すべての経路を write で出力しています。そうではなく、ひとつずつ経路を求めたい場合は次のようにプログラムを修正してください。
+</p>
+<pre class="list">
+リスト：深さ優先探索（修正版）
+
+depth_search(End, End, Path, Ans) :- 
+    reverse([End | Path], Ans).
+
+depth_search(Node, End, Path, Ans) :-
+    not(member(Node, Path)),
+    next(Node, Next),
+    depth_search(Next, End, [Node | Path], Ans).
+</pre>
+<p> 変数 Ans に求めた経路がセットされます。実行例を示しましょう。
+</p>
+<pre>
+?- depth_search(a, k, [], Path).
+
+Path = [a, b, f, g, j, k] ;
+
+Path = [a, b, f, i, j, k] ;
+
+Path = [a, b, f, j, k] 
+
+Yes
+?- 
+</pre>
+<p> このプログラムで経路をすべて表示する場合は、失敗駆動ループを使うと簡単です。
+</p>
+<pre>
+?- depth_search(a, k, [], Path), write(Path), nl, fail.
+</pre>
+<p> これですべての経路が表示されます。すべての経路をリストにまとめたい場合は、集合述語 findall を使うと簡単です。
+</p>
+<pre>
+?- findall(Path, depth_search(a, k, [], Path), L).
+</pre>
+<p> これでリスト L にすべての経路がセットされます。findall の説明は拙作のページ <a href="prolog04.html#chap17">集合述語</a> をお読みください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap25">経路の探索(2)</h3>
+<p> 今回は、もうひとつの基本戦略である「幅優先探索」について説明します。経路図は前回と同じものを使います。
+</p>
+<pre class="fig">
+Ｈ───Ｉ───Ｊ───Ｋ
+│      │    ／│
+│      │  ／  │
+│      │／    │
+Ｅ───Ｆ───Ｇ
+│    ／│      │
+│  ／  │      │
+│／    │      │
+Ａ───Ｂ───Ｃ───Ｄ  
+
+    図：簡単な経路図
+</pre>
+<h4>●幅優先探索</h4>
+<p> バックトラックによる探索は、ひとつの経路をできるだけ先へ延ばしていきますが、すべての経路について並行に探索を進めていく方法が幅優先探索です。次の図を見てください。
+</p>
+<pre class="fig">
+  [a] ─┬─ [a, b] ─┬─ [a, b, c] ─┬─ [a, b, c, d] ─ 行き止まり  
+        │            └─ [a, b, f]   └─ [a, b, c, g]
+        │
+        ├─ [a, f] ─┬─ [a, f, b]    ・・・・・
+        │            ├─ [a, f, g]
+        │            ├─ [a, f, i]
+        │            ├─ [a, f, j] ─┬─ [a, f, j, g]
+        │            └─ [a, f, g]   ├─ [a, f, j, i]
+        │                             └─ [a, f, j, k] ─ GOAL
+        └─ [a, e] ─┬─ [a, e, f]
+                      └─ [a, e, h]
+
+(出発点)    (2 節点)       (3 節点)           (4 節点)
+
+                        図：幅優先探索
+</pre>
+
+<p> まず、出発点 a からひとつ進んだ経路 (2 節点) をすべて求めます。この場合、[a, b], [a, f], [a, e] の 3 つあり、これをすべて記憶しておきます。次に、これらの経路からひとつ延ばした経路 (3 節点) をすべて求めます。経路 [a, b] は [a, b, c] と [a, b, f] へ延ばすことができますね。ほかの経路 [a, f] と [a, e] も同様に延ばして、すべての経路を記憶します。あとは、この作業をゴールに達するまで繰り返します。
+</p>
+<p> 上図では、4 節点の経路 [a, f, j, k] でゴールに達していることがわかります。このように、幅優先探索では最初に見つかった経路が最短距離 (または最小手数) となるのです。この性質は、すべての経路を並列に延ばしていく探索順序から考えれば、当然のことといえるでしょう。このことから、バックトラックの縦形探索に対して、幅優先探索は「横形探索」と呼ばれます。このあとも、探索を繰り返せばすべての経路を求めることができます。
+</p>
+<p> パズルなどの問題では、最小手数が解答の条件になることが多いです。このような場合、幅優先探索を使ってみるといいでしょう。ただし、探索を進めるにしたがって、記憶しておかなければならない経路の総数が爆発的に増加する、つまりメモリを大量消費することに注意してください。
+</p>
+<p> 上図の場合、メモリを大量消費することはありません。ところが問題によっては、マシンに搭載されているメモリが不足するため、幅優先探索を実行できない場合もあるでしょう。したがって、幅優先探索を使う場合は、メモリ消費量が少なくなるように工夫することが重要になります。
+</p>
+<h4>●経路の定義</h4>
+<p> それではプログラムを作りましょう。各地点の隣接関係は前回と同じプログラムを使います。プログラムリストを再度掲載します。
+</p>
+<pre class="list">
+リスト：隣接の定義
+
+neighbor(a, b).  neighbor(a, f).  neighbor(a, e).
+neighbor(b, f).  neighbor(b, c).  neighbor(c, d).
+neighbor(c, g).  neighbor(e, f).  neighbor(e, h).
+neighbor(f, g).  neighbor(f, i).  neighbor(f, j).
+neighbor(g, j).  neighbor(h, i).  neighbor(i, j).
+neighbor(j, k).
+
+/* X の隣を求める */
+next(X, Y) :- neighbor(X, Y).
+next(X, Y) :- neighbor(Y, X).
+</pre>
+
+<p> 前回と同様に経路はリストで表します。そして、各経路を path(N, [ ... ]) の形式で記憶することにします。N が経路の長さを表します。ここがプログラムのポイントです。
+</p>
+<p> たとえば、出発点が a とすると、最初に paht(1, [a]) を定義しておきます。すると、長さ 1 の経路は path(1, Path) とマッチングさせれば求めることができますね。そして、求めた経路を延ばして New_path を作り、path(2, New_path) の形で記憶させればいいわけです。つまり、長さ N の経路を取り出して、長さ N + 1 の経路を作って記憶する、ということを繰り返すわけです。これで幅優先探索を実現することができます。
+</p>
+<h4>●プログラム</h4>
+<p> 長さ N の経路をすべて求める処理は、失敗駆動ループを使えば簡単です。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：長さ N の経路をひとつ延ばす
+
+extend_path(N, Goal) :-
+    path(N, Path),
+    N1 is N + 1,
+    extend_one_path(N1, Goal, Path).
+</pre>
+
+<p> path(N, Path) で長さ N の経路 Path を求めます。そして、extend_one_path でその経路をひとつ延ばして記憶します。失敗駆動ループにするため、extend_one_path は必ず失敗するように作ります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：経路をひとつ延ばす
+
+extend_one_path(N, Goal, [Goal | Node]) :-
+    reverse([Goal | Node], Path), write(Path), nl, !, fail.
+
+extend_one_path(N, Goal, [Node | Rest]) :-
+    next(Node, Next),
+    not(member(Next, Rest)),
+    assert(path(N, [Next, Node | Rest])),
+    fail.
+</pre>
+
+<p> 最初の規則がゴールに到達した場合です。経路を表示して fail で強制的に失敗します。ゴールに到達したので経路を延長する必要はありません。カット (!) を使って、次の規則の実行しないようにしています。
+</p>
+<p> 次の規則で、経路をひとつ延ばします。この規則も失敗駆動ループを使って、隣の地点をすべて求めていることに注意してください。next で Node の隣の地点 Next を求めて、それが経路に含まれていないかチェックします。これはバックトラックの場合と同じですね。あとは、経路 [Node | Rest] に Next を追加して新しい経路を作り、assert でそれを記憶します。最後に fail で強制的に失敗させます。
+</p>
+<p> 最後に、幅優先探索の本体 breadth_search を作ります。
+</p>
+<pre class="list">
+リスト：幅優先探索
+
+breadth_search(N, Goal) :-
+    not(extend_path(N, Goal)),
+    N1 is N + 1,
+    path(N1, Path),
+    !,
+    breadth_search(N1, Goal).
+
+keiro(Start, Goal) :-
+    assert(path(1, [Start])),
+    breadth_search(1, Goal).
+</pre>
+<p> extend_path で長さ N の経路を N + 1 へ延ばします。次に、経路を延長できたか調べるために、path(N1, Path) とマッチングさせます。延長できた経路がひとつでもあれば path は成功するので、その経路を延長する処理を行います。これは再帰定義を使えばいいですね。この場合、バックトラックする必要はないので、カットを使って path(N1, Path) を再試行しないようにしています。
+</p>
+<p> breadth_search を呼び出すときは、path に初期値を設定しておく必要があります。この処理を keiro で行います。keiro(Start, End) は、path(1, [Start]) を記憶してから breadth_search を呼び出します。
+</p>
+<h4>●実行結果</h4>
+<p> プログラムはこれで完成です。それでは実行してみましょう。
+</p>
+<pre>
+?- keiro(a, k).
+
+[a, f, j, k]
+[a, b, f, j, k]
+[a, f, g, j, k]
+[a, f, i, j, k]
+[a, e, f, j, k]
+[a, b, f, g, j, k]
+[a, b, f, i, j, k]
+[a, b, c, g, j, k]
+[a, e, f, g, j, k]
+[a, e, f, i, j, k]
+[a, e, h, i, j, k]
+[a, b, c, g, f, j, k]
+[a, f, b, c, g, j, k]
+[a, f, e, h, i, j, k]
+[a, e, h, i, f, j, k]
+[a, b, f, e, h, i, j, k]
+[a, b, c, g, f, i, j, k]
+[a, e, f, b, c, g, j, k]
+[a, e, h, i, f, g, j, k]
+[a, b, c, g, f, e, h, i, j, k]
+[a, e, h, i, f, b, c, g, j, k]
+
+No
+</pre>
+<p> 結果を見ればおわかりのように、最初に見つかる経路が最短で、最後に見つかる経路が最長となります。当然ですが、経路の総数は 21 通りとなります。
+</p>
+<p> 今回は、すべての経路を記憶することで幅優先探索を実現しましたが、「キュー (queue) 」というデータ構造を使うと、経路の管理が簡単になります。もちろん、Prolog でもキューを使うことができます。ほかのプログラミング言語と違って、差分リストを使うと簡単に実装できるところが Prolog の面白いところだと思います。次回はキューについて説明しましょう。
+</p>
+<h4>●補足</h4>
+<p> breadth_search は見つけた経路を write で出力したあと、fail で強制的にバックトラックすることですべての経路を求めています。そうではなく、ひとつずつ経路を求めたい場合は次のようにプログラムを修正してください。
+</p>
+<pre class="list">
+リスト：幅優先探索（修正版）
+
+/* 経路をひとつ延ばす */
+extend_one_path(N, Goal, [Goal | Node], Ans) :- reverse([Goal | Node], Ans).
+
+extend_one_path(N, Goal, [Node | Rest], Ans) :-
+    next(Node, Next),
+    not(member(Next, Rest)),
+    assert(path(N, [Next, Node | Rest])),
+    fail.
+
+/* 長さ N の経路をひとつ延ばす */
+extend_path(N, Goal, Ans) :-
+    path(N, Path), N1 is N + 1, extend_one_path(N1, Goal, Path, Ans).
+
+/* 幅優先探索 */
+breadth_search(N, Goal, Ans) :- extend_path(N, Goal, Ans).
+
+breadth_search(N, Goal, Ans) :-
+    N1 is N + 1, path(N1, Path), !, breadth_search(N1, Goal, Ans).
+
+/* 経路の探索 */
+keiro(Start, End, Ans) :-
+    abolish(path, 2),            /* path をすべて削除する */
+    assert(path(1, [Start])),
+    breadth_search(1, End, Ans).
+</pre>
+<p> 変数 Ans に求めた経路がセットされます。今回は述語 keiro で幅優先探索を実行する前に、述語 abolish で節 path に記憶した経路をすべて削除します。これで述語 keiro を何回実行しても正常に動作します。abolish は拙作のページ <a href="prolog05.html">プログラムの操作</a> で簡単に説明しています。よろしければ参考にしてください。
+</p>
+<p> それでは実行例を示しましょう。
+</p>
+<pre>
+?- keiro(a, k, Path).
+
+Path = [a, f, j, k] ;
+
+Path = [a, b, f, j, k] ;
+
+Path = [a, f, g, j, k] 
+
+Yes
+?- 
+</pre>
+<p> このプログラムで経路をすべて表示する場合は、失敗駆動ループを使うと簡単です。
+</p>
+<pre>
+?- keiro(a, k, Path), write(Path), nl, fail.
+</pre>
+<p> これですべての経路が表示されます。すべての経路をリストにまとめたい場合は、集合述語 findall を使うと簡単です。
+</p>
+<pre>
+?- findall(Path, keiro(a, k, Path), L).
+</pre>
+<p> これでリスト L にすべての経路がセットされます。findall の説明は拙作のページ <a href="prolog04.html#chap17">集合述語</a> をお読みください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="prolog05.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog07.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

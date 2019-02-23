@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門</title>
+  <meta name="description" content="xyzzy,xyzzy Lisp,Common Lisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881765</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>xyzzy Lisp Programming</h1>
+<h2>Common Lisp 入門</h2>
+<div class="small">
+[ <a href="abclisp06.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp08.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap13">ファイル入出力</h3>
+<h4>●read と print</h4>
+<p> 簡単な入出力は read と print を使って行うことができます。xyzzy Lisp の *scratch* で次のプログラムを実行してください。
+</p>
+<pre>
+(read)          &lt;= CRTL-J を入力
+foo             &lt;= Return を入力
+foo             &lt;= read の返り値 シンボルとして読み込む
+(read)
+1234
+1234            &lt;= 数値として読み込む
+(read)
+(a b c d)
+(a b c d)       &lt;= リストとして読み込む
+(read)
+#(1 2 3 4)
+#(1 2 3 4)      &lt;= ベクタとして読み込む
+</pre>
+
+<p> read はデータを読み込んで S 式に変換して返します。read はデータを読み込むだけで、S 式の評価は行わないことに注意してください。S 式を評価するには関数 <b>eval</b> を使います。次の例を見てください。
+</p>
+<pre>
+(read)          &lt;= CRTL-J を入力
+(* 4 4)
+(* 4 4)         &lt;= read の返り値
+
+(eval (read))   &lt;= CRTL-J を入力
+(* 4 4)
+16              &lt;= eval の返り値
+</pre>
+
+<p> まず、eval の引数 (read) が評価され、S 式 (* 4 4) が読み込まれます。次に、読み込んだ S 式が eval で評価されるので、(* 4 4) の評価値 16 が eval の返り値になります。
+</p>
+<p> 次は print を説明します。print が出力するデータは、エスケープコードを使って印字されます。たとえば、文字列は " で括られます。つまり、read で読み込める形で印字されます。print は改行してからデータを出力し、最後に空白文字をひとつ付けます。print の返り値は出力したデータです。
+</p>
+<p> このほかに、関数 prin1 と princ があります。prin1 は print と同じ形式で出力しますが、改行と空白文字は付加しません。princ はエスケープコードを使わないで出力します。たとえば、文字列の場合は " で括られずにそのまま出力されます。簡単な例を示しましょう。
+</p>
+<pre>
+(progn (print "hello, world") (format t "]"))
+
+"hello, world" ]     ; 改行してから出力して空白が最後に付く
+nil
+
+(progn (prin1 "hello, world") (format t "]"))
+"hello, world"]      ; 改行しないし最後に空白も付かない
+nil
+
+(progn (princ "hello, world") (format t "]"))
+hello, world]        ; " で括られていない
+nil
+</pre>
+
+<h4>●ストリーム</h4>
+<p> ファイルからデータを入力、逆にデータをファイルへ出力する場合、Common Lisp では<b>ストリーム (stream)</b> を使います。ストリームは「流れ」や「小川」という意味ですが、プログラミング言語の場合は「ファイルとプログラムの間でやりとりされるデータの流れ」という意味で使われています。
+</p>
+<p> Common Lisp では、<b>ストリーム型データ</b> を介してファイルにアクセスします。ストリームはファイルと一対一に対応していて、ファイルからデータを入力する場合は、ストリームを経由してデータが渡されます。逆に、ファイルへデータを出力するときも、ストリームを経由して行われます。
+</p>
+<p> ファイルにアクセスする場合、次の 3 つの操作が基本になります。
+</p>
+<ol>
+  <li>アクセスするファイルをオープンする
+  <li>入出力関数を使ってファイルを読み書きする。
+  <li>ファイルをクローズする。
+</ol>
+<p> 「ファイルをオープンする」とは、アクセスするファイルを指定して、それと一対一に対応するストリームを生成することです。入出力関数は、そのストリームを経由してファイルにアクセスします。Common Lisp の場合、ファイルをオープンするには関数 <b>open</b> を使います。オープンしたファイルは必ずクローズしてください。この操作を行う関数が <b>close</b> です。
+</p>
+<p> そして Common Lisp には、この 2 つの動作を行ってくれる便利なマクロ <b>with-open-file</b> が用意されています。基本的な使い方を示します。
+</p>
+<pre class="fig">
+ (with-open-file (変数
+                  ファイル名
+                  :direction [:input or :output])
+    ・・・)
+</pre>
+<p> with-open-file は、与えられたファイルをキーワード :direction で指定した方向でオープンし、生成したストリームを変数にセットします。変数は局所変数として扱われ、with-open-file が実行されている間だけ有効です。あとは、引数として与えられた S 式を順番に評価します。with-open-file の実行が終了すると、ファイルは<b>自動的にクローズ</b>されます。次の図を見てください。
+</p>
+
+<pre class="fig">
+ ┌────┐                    ┌────┐
+ │  Lisp  │──────────│        │ ファイル名
+ │変数 out│→→→→→→→→→→│ファイル│"C:/xyzzy/test.dat" 
+ │        │──────────│        │
+ │        │                    └────┘
+ └────┘  [出力ストリーム]
+
+      (with-open-file (out "test.dat" :direction :output) ... )
+      out =&gt; #&lt;file-output stream: C:/xyzzy/test.dat&gt;
+
+ ┌────┐                    ┌────┐
+ │  Lisp  │──────────│        │ ファイル名
+ │変数 in │←←←←←←←←←←│ファイル│"C:/xyzzy/test.dat" 
+ │        │──────────│        │
+ │        │                    └────┘
+ └────┘  [入力ストリーム]
+
+      (with-open-file (in "test.dat" :direction :input) ... )
+      in  =&gt; #&lt;file-input stream: C:/xyzzy/test.dat&gt;
+
+                図 1 : ファイルのオープン
+</pre>
+
+<p> 図 1 は xyzzy Lisp の *scratch* でファイル test.dat をオープンした場合です。ファイル名は文字列で指定し、ファイル名のパス区切り記号にはスラッシュ / を使います。\ は文字列のエスケープコードに割り当てられているため、パス区切り記号には使えないことに注意してください。
+</p>
+<p> test.dat へデータを出力する場合は、キーワード :direction に :output <sup><a href="abclisp07.html#note">[*1]</a></sup> を指定します。変数 out には出力ストリームがセットされ、これを経由してデータを test.dat に書き込むことができます。逆に、test.dat からデータを読み込む場合は、:direction に :input <sup><a href="abclisp07.html#note">[*2]</a></sup> を指定します。今度は 変数 in に入力ストリームがセットされ、これを経由して test.dat からデータを読み込むことができます。
+</p>
+<p> ストリームのアクセス方法は、print や read などの入出力関数でアクセスするストリームを指定します。指定を省略した場合は、標準入出力が使われるようになっています。ストリームの指定方法は次のようになります。
+</p>
+<pre class="item">
+print data 出力ストリーム
+read 入力ストリーム eof-err eof-value
+     eof-err   : ファイルの終了を検出した場合の処理指定
+     eof-value : ファイルの終了を検出した場合の返り値
+</pre>
+
+<p> print の場合は出力するデータの後ろにストリームを指定します。入力ストリームを指定するとエラーになります。read の場合、入力ストリームを指定したあとで、オプションパラメータ eof-err と eof-value を設定することができます。
+</p>
+<p> 入力ストリームの場合、ファイルに格納されているデータには限りがあるので、ストリームからデータを取り出していくと、いつかはデータがなくなります。この状態を<b>ファイルの終了 (end of file : EOF)</b> といいます。
+</p>
+<p> eof-err と eof-value はファイルが終了したときの動作を設定します。eof-err を省略したり nil 以外の値を指定すると、ファイルが終了したときにエラーが発生します。eof-err に nil を指定した場合、ファイルが終了すると eof-value に設定した値を返します。eof-value が省略された場合は nil を返します。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+
+<pre>
+(with-open-file (out "test.dat" :direction :output)
+  (dotimes (x 10) (print x out)))
+
+=&gt; nil
+
+(with-open-file (in "test.dat" :direction :input)
+  (let (num)
+    (while (setq num (read in nil)) (print num))))
+
+0 
+1 
+2 
+3 
+4 
+5 
+6 
+7 
+8 
+9 
+=&gt; nil
+</pre>
+<p> test.dat に 0 から 9 までの数値を書き込みます。それから、test.dat のデータを読み込みます。データの書き込みは print を、データの読み込みは read を使えば簡単です。print は余分な空白を付けますが、read は空白や改行などの空白文字は読み飛ばすので、数値データを読み込むことができます。
+</p>
+<p> while <sup><a href="abclisp07.html#note">[*3]</a></sup> の条件部に注目してください。read の返り値を num に代入していますね。read の eof-err には nil を指定しているので、ファイルの終了を検出すると read は nil を返します。したがって、num には nil がセットされ、setq の返り値は nil になるので、while の条件部が不成立となって繰り返しが終了します。
+</p>
+<p> このように、ファイルを操作する処理では、繰り返し関数と入出力関数を組み合わせてプログラムを作成することが多いのです。とくに、ファイル終了時に nil を返すことで繰り返しを終了させる方法は、よく使うテクニックなので覚えておいてください。
+</p>
+<div class="note">
+<a name="note">-- note (2005/02/19) --------</a><br>
+[*1] 既に同じ名前のファイルが存在している場合は、そのファイルの長さを 0 に切り詰めてからデータを書き込みます。既存のファイルは内容が破壊されることに注意してください。ファイルが存在している場合の動作はキーワード :if-exists で細かく指定することができます。詳細は <a href="abclisp07.html#update1">補足</a> をお読みください。
+<br><br>
+[*2] ファイルが存在しない場合はエラーになります。この動作はキーワード :if-does-node-exist で指定することができます。詳細は <a href="abclisp07.html#update1">補足</a> をお読みください。
+<br><br>
+[*3] xyzzy Lisp の場合、while はマクロとして定義されていますが、Common Lisp では定義されていません。ほかの Common Lisp 処理系、たとえば CLISP で while を使いたい場合は、ループ機能の while を使うか、自分で while をマクロ定義してください。
+</div>
+<h4>●read-line と read-char</h4>
+<p> 関数 <b>read-line</b> はストリームから文字を読み込み、改行文字までのデータを文字列として返します。改行文字は文字列に含まれません。関数 <b>read-char</b> はストリームより 1 文字読み込み、それを文字型データとして返します。read-line と read-char は、read と同じようにストリームとファイル終了時の動作を指定することができます。
+</p>
+<p> 簡単な例を示しましょう。3 行のテキストが書いてあるファイル test.dat を、read-line と read-char で読み込んで表示します。
+</p>
+<pre class="fig">
+test.dat の内容
+---------------
+abcd
+efgh
+ijkl
+</pre>
+<pre>
+(with-open-file (in "test.dat" :direction :input)
+  (let (buff)
+    (while (setq buff (read-line in nil)) (print buff))))
+
+"abcd" 
+"efgh" 
+"ijkl" 
+nil
+
+(with-open-file (in "test.dat" :direction :input)
+  (let (c)
+    (while (setq c (read-char in nil)) (print c))))
+
+#\a 
+#\b 
+#\c 
+#\d 
+#\LFD 
+#\e 
+#\f 
+#\g 
+#\h 
+#\LFD 
+#\i 
+#\j 
+#\k 
+#\l 
+nil
+</pre>
+<p> xyzzy Lisp の場合、#\LFD は改行を表す文字で、整数値で表すと 10 (#x0a) になります。ちなみに、関数 <b>char-code</b> で文字を整数値に変換することができます。逆に、整数値を文字に変換するには関数 <b>code-char</b> を使います。次の例を見てください。
+</p>
+<pre>
+(char-code #\LFD) =&gt; 10
+(code-char #x0a)  =&gt; #\LFD
+</pre>
+<h4 id="update">●format (改訂 2004/07/25)</h4>
+<p> format は S 式を表示する関数です。print のように単純に S 式を出力するのではなく、表示に関していろいろな指定を行うことができますが、その分使い方が少しだけ複雑になります。
+</p>
+<pre class="item">
+format 出力ストリーム 書式文字列 Ｓ式 ...
+</pre>
+<p> format の第 1 引数は出力ストリームを指定します。ストリームに t が指定された場合は標準出力へ出力されます。nil が指定された場合は、ストリームに出力せずに変換結果を文字列にして返します。
+</p>
+<p> 第 2 引数は書式文字列で、出力に関する様々な指定を行います。これには文字列型データを使います。format は文字列をそのまま出力するのですが、文字列の途中にチルダ  ~ が表れると、その後ろの文字を変換指示子として理解し、引数の S 式をその指示に従って表示します。簡単な例を示しましょう。
+</p>
+<pre>
+(format t "１０進数表示 ~D" 256)
+１０進数表示 256
+nil
+
+(format t "１６進数表示 ~X" 256)
+１６進数表示 100
+nil
+
+(format t "８進数表示 ~O" 400)
+８進数表示 620
+nil
+</pre>
+<p> nil は format の返り値です。チルダの前までは、そのまま文字を表示します。チルダ ~ の次の文字 D, X, O が変換指示子です。これらの指示子は整数値を表示する働きをします。例が示すように、D は 10 進数、X は 16 進数、O は 8 進数で表示します。
+</p>
+<p> 書式文字列の中には、変換指示子をいくつ書いてもかまいません。
+</p>
+<pre>
+(format t "~D ~X ~O" 256 256 256)
+256 100 400
+nil
+</pre>
+<p> 変換指示子の個数と引数として与える S 式の数が合わないとエラーになるので注意してください。また、~% は改行を表し、チルダを出力したい場合は ~~ と続けて書きます。
+</p>
+<p> それから、チルダ ~ と変換指示子の間に前置パラメータやコロン ( : ) 修飾子、アットマーク ( @ ) 修飾子を指定することができます。簡単な例を示しましょう。
+</p>
+<pre>
+(format t "[~D]" 10)
+[10]
+nil
+
+(format t "[~4D]" 10)
+[  10]
+nil
+
+(format t "[~4D]" 10000)
+[10000]
+nil
+</pre>
+<p> 整数値を表示する変換指示子は、前置パラメータでデータを表示するフィールド幅を指定することができます。最初の例がフィールド幅を指定しない場合で、次の例がフィールド幅を 4 に指定した場合です。10 ではフィールド幅に満たないので、右詰めに出力されていますね。もし、フィールド幅に収まらない場合は、最後の例のように指定を無視して数値を出力します。
+</p>
+
+<p> 前置パラメータを複数指定する場合はカンマ ( , ) で区切ります。前置パラメータの意味は、変換指示子によって異なるので注意してください。簡単な例を示しましょう。
+</p>
+<pre>
+(format t "[~4,'0D]" 10)
+[0010]
+nil
+
+(format t "[~4,'aD]" 10)
+[aa10]
+nil
+</pre>
+<p> 整数値を表示する変換指示子の場合、第 1 番目の前置パラメータでフィールド幅を指定します。第 2 番目の前置パラメータに 'a を指定すると、左側の空いたフィールドに文字 a を詰め込みます。クオート ( ' ) は前置パラメータを文字として指定するときに用いられます。最初の例では文字 0 を詰め込み、次の例では文字 a を詰め込みます。
+</p>
+
+<p> 前置パラメータに文字 V を指定すると、引数の値が前置パラメータとして用いられます。簡単な例を示します。
+</p>
+<pre>
+(dotimes (x 4)
+  (format t "~V,'0D~%" (+ 4 x) 10))
+0010
+00010
+000010
+0000010
+nil
+
+(dotimes (x 4)
+  (format t "~V,VD~%" (+ 4 x) (elt "abcd" x) 10))
+aa10
+bbb10
+cccc10
+ddddd10
+nil
+</pre>
+<p> 最初の例では、フィールド幅の指定に引数の値 (+ x 4) が用いられます。そして、D 変換指示子により引数 10 が表示されます。次の例では、詰め込む文字の指定に引数の値 (elt "abcd" x) が用いられます。この場合、クオートを指定する必要はありません。ここで 'V と指定すると、詰め込む文字が V になってしまいます。
+</p>
+<p> 整数値を表示する変換指示子の場合、@ 修飾子を指定すると符号 (+/-) が必ず表示されます。: 修飾子を指定すると、3 桁ごとにカンマ ( , ) が表示されます。簡単な例を示します。
+</p>
+<pre>
+(format t "~@D" 10)
++10
+nil
+
+(format t "~:D" 100000000)
+100,000,000
+nil
+
+(format t "~,,' :D" 100000000)
+100 000 000
+nil
+
+(format t "~,,,4:D" 100000000)
+1,0000,0000
+nil
+</pre>
+<p> : 修飾子を使う場合、第 3 番目の前置パラメータで表示する区切り文字を指定することができます。また、区切る桁数は第 4 番目の前置パラメータで指定することができます。@ 修飾子と : 修飾子は、変換指示子によって意味が異なります。ご注意くださいませ。
+</p>
+<p> このほかに、2 進数を表示する B 変換指示子、前置パラメータで指定された基数で表示する R 変換指示子があります。
+</p>
+<pre>
+(format t "~B" #x10000)
+10000000000000000
+nil
+
+(format t "~8R" #x10000)
+200000
+nil
+</pre>
+<p> S 式を表示する場合は A または S 変換指示子を使います。次の例を見てください。
+</p>
+<pre>
+(format t "~A" "hello, world")
+hello, world
+nil
+
+(format t "~S" "hello, world")
+"hello, world"
+nil
+</pre>
+
+<p> A と S 変換指示子は、任意の S 式を出力できます。A は princ と同じ形式で、S は prin1 と同じ形式で出力します。
+</p>
+<p> A, S 変換指示子の場合でも、第 1 番目の前置パラメータでフィールド幅を指定することができます。
+</p>
+<pre>
+(format t "[~20A]" "hello, world")
+[        hello, world]
+nil
+
+(format t "[~20@A]" "hello, world")
+[hello, world        ]
+nil
+
+(format t "[~20,,,'*A]" "hello, world")
+[********hello, world]
+nil
+
+(format t "~S" nil)
+nil
+nil
+
+(format t "~:S" nil)
+()
+nil
+</pre>
+<p> A, S 変換指示子の場合、@ 修飾子を指定するとデータは左詰めに出力されます。詰め込む文字は第 4 番目の前置パラメータで指定します。: 修飾子を指定すると、nil の代わりに () と表示されます。
+</p>
+<p> このほかにも、浮動小数点数を表示する指示子など、format にはたくさんの機能があります。詳細は <A href="../xyzzy_lisp.html#cite">参考文献 [3]</A> や xyzzy のリファレンスマニュアルをご覧ください。
+</p>
+<p> また、Common Lisp の format には、大文字小文字変換、条件付き実行、繰り返しなど高度な機能があります。興味のある方は <A href="abclisp07.html#yori09">format の便利な機能</A> をお読みください。
+</p>
+<h4 id="update1">●補足 :if-exists と :if-does-not-exist (2005/02/19)</h4>
+<p> ファイルをオープンするとき、既に同じ名前のファイルが存在している場合があります。この場合、キーワード :if-exists を使って動作を細かく指定することができます。:if-exists は :direction が :output または :io (input/output, 入出力両用) の場合に有効です。
+</p>
+
+<p> Common Lisp では、次のキーワードが用意されています。
+</p>
+<pre class="item">
+:error
+:new-version
+:rename
+:rename-and-delete
+:overwrite
+:append
+:supersede
+nil
+</pre>
+<p> xyzzy Lisp の場合、:new-version, :overwrite, :supersede は同じ動作になります。:if-exists を省略するか、これらのキーワードを指定した場合、既に同じ名前のファイルが存在していれば、そのファイルを長さ 0 に切り詰めてからデータを書き込みます。ただし、:overwrite を指定した場合、ファイルが存在していないとエラーになります。
+</p>
+<p> :if-exists に :error を指定した場合、既に同じ名前のファイルが存在していればエラーになります。:append を指定した場合、既存のファイルの最後尾にデータが追加されます。:append もファイルが存在していないとエラーになります。nil を指定した場合はファイルをオープンしません。この場合、関数 open は nil を返します。
+</p>
+<p> :rename を指定した場合、xyzzy Lisp では別の名前で新しいファイルを生成してデータを書き込みます。:rename-and-delete を指定した場合、:rename と同様にデータは新しいファイル（テンポラリファイル）に書き込まれます。そして、ファイルをクローズするときに既存のファイルの内容が更新され、テンポラリファイルが削除 <sup><a href="abclisp07.html#note1">[*4]</a></sup> されます。
+</p>
+
+<p> Common Lisp の場合、:if-exists を省略したときの既定値は :error か :new-version になります。CLtL2 (<a href="../xyzzy_lisp.html#cite">参考文献 [3]</a>) 574 ページから引用します。
+</p>
+<blockquote>
+<ul>
+  <li>:error<br>
+  エラーを発する。これは filename のバージョン要素が :newest でない場合の既定値である。
+  <li>:new-version<br>
+  同一のファイル名を持ち、より大きいバージョン番号を持つ、新しいファイルを生成する。これは filename のバージョン要素が :newest の場合の既定値である。
+</ul>
+</blockquote>
+<p> Common Lisp の仕様は、ファイルのバージョンを管理するシステムも考慮に入れているようです。古いバージョンのファイルを保護するため、このような仕様になっているのだと思います。
+</p>
+<p> Windows の場合、ファイルのバージョン管理は行っていません。このような場合、既存のファイルを更新することが一般的な動作だと思います。CLISP (Widows 版) でも、デフォルトの動作は :error ではなく、既存のファイルを更新する動作になります。
+</p>
+
+<p> :if-does-not-exist はファイルが存在していないときの動作を指定します。Common Lisp では、次のキーワードが用意されています。
+</p>
+<pre class="item">
+:error
+:create
+nil
+</pre>
+<p> :if-does-not-exist に :error を指定すると、ファイルが存在していない場合はエラーになります。:direction に :input を指定する場合や、:if-exists に :overwrite や :append を指定する場合の既定値になります。
+</p>
+<p> :create を指定すると、新しいファイルを生成します。:direction が :output または :io で、:if-exists が :overwrite でも :append でもない場合の既定値になります。nil を指定すると、ファイルをオープンしません。この場合、関数 open は nil を返します。
+</p>
+
+<p> 簡単な使用例を示しましょう。ファイル test.dat にデータを書き込みます。test.dat がなければ新しくファイルを作成し、既に test.dat がある場合は最後尾にデータを追加します。プログラムは次のようになります。
+</p>
+<pre class="list">
+(with-open-file (out "test.dat" :direction :output
+                                :if-exists :append :if-does-not-exist :create)
+  (dotimes (x 10) (print x out)))
+</pre>
+<p> :if-exists に :append を指定した場合、デフォルトでは test.dat が存在しないとエラーになります。そこで、:if-does-not-exists に :create を指定して、test.dat が存在しないときは新しいファイルを生成するようにします。
+</p>
+<div class="note">
+<a name="note1">-- note --------</a><br>
+[*4] 実際は、既存のファイルを削除してからテンポラリファイルの名前を変更 (rename) する、という動作かもしれません。
+</div>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori08">ちょっと寄り道</h3>
+<h4 id="tail">■末尾再帰</h4>
+<p> 再帰定義のなかで、最後に再帰呼び出しを行う場合を<b>末尾再帰 (tail recursion)</b> といいます。英語では tail recursion ですが、日本語では末尾再帰のほかに末端再帰とか終端再帰と訳すことがあります。末尾再帰は簡単な処理で繰り返しに変換することができます。これを<b>末尾再帰最適化</b>といいます。
+</p>
+<p> Lisp などの関数型言語や論理型言語の Prolog では、プログラムをコンパイルするときに、この最適化を行う処理系があります。なかには Scheme のように、言語仕様に末尾再帰最適化を行うことを明記しているプログラミング言語もあります。Common Lisp の場合、末尾再帰最適化は仕様に含まれてないので、最適化の実装は処理系に依存します。
+</p>
+<p> たとえば、階乗を計算するプログラムを思い出してください。
+</p>
+
+<pre class="list">
+List 1 : 再帰の例（階乗の計算）
+
+(defun fact (x)
+    (if (zerop x)
+        1
+        (* x (fact (1- x)))))
+</pre>
+
+<p> fact は最後に x と fact の返り値を乗算しているので、このプログラムは末尾再帰ではありません。これを末尾再帰に変換すると、次のようになります。
+</p>
+
+<pre class="list">
+List 2 : 階乗の計算（末尾再帰）
+
+(defun fact (n &amp;optional (a 1))
+  (if (zerop n)
+      a
+      (fact (1- n) (* n a))))
+</pre>
+
+<p> 最後の再帰呼び出しで、fact の返り値をそのまま返しているので、このプログラムは末尾再帰になっています。これで階乗を計算できるなんて、ちょっと不思議な感じがしますね。まあ、そこが再帰呼び出しの面白いところです。このプログラムでは変数 a の使い方がポイントです。
+</p>
+<p> たとえば (fact 4) を実行すると、このプログラムでは 4 * 3 * 2 * 1 を計算しています。このとき、計算の途中経過を変数 a に記憶しているのです。fact の呼び出しを図に示すと、次のようになります。
+</p>
+<pre class="fig">
+(fact 4 1)
+  (fact 3 4)
+    (fact 2 12)
+      (fact 1 24)
+        (fact 0 24)
+        =&gt; a の値 24 を返す
+      =&gt; 24
+    =&gt; 24
+  =&gt; 24
+=&gt; 24
+</pre>
+<p> 変数 a には計算途中の値が格納されていることがわかりますね。このような変数を、<b>累算変数</b>とか<b>累算器</b>といいます。また、<a href="abclisp06.html#chap12">ラムダリストキーワード</a> の例題で my-reverse (List 5) を作りましたが、このプログラムも末尾再帰になっていて、オプションパラメータ z が累算変数になります。
+</p>
+<p> Lisp 以外の関数型言語では、while や loop などの繰り返しが用意されていないプログラミング言語があります。また、論理型言語の Prolog にも単純な繰り返しはありません。これらのプログラミング言語では、繰り返しのかわりに末尾再帰を使ってプログラミングを行い、末尾再帰最適化によりプログラムを高速に実行することができます。ちなみに、M.Hiroi's Home Page で利用している SWI-Prolog は末尾再帰最適化を行います。
+</p>
+
+<h4 id="tail2">■末尾再帰（その２）</h4>
+<p> 今度は累算変数を使って、二重再帰を末尾再帰へ変換してみましょう。例題としてフィボナッチ数列を取り上げます。フィボナッチ数列は <a href="abclisp05.html#chap10">配列</a> で説明しました。フィボナッチ関数の定義とプログラムを再掲します。
+</p>
+
+<pre class="fig">
+          ┌ 1                n = 0
+ f(n) = ─┤ 1                n = 1
+          └ f(n-1) + f(n-2)  n &gt; 1
+
+ 1, 1, 2, 3, 5, 8, 13 .... という直前の 2 項を足していく数列 
+
+        図 2 : フィボナッチ関数の定義
+</pre>
+
+<pre class="list">
+List 3 : フィボナッチ関数（再帰版）
+
+(defun fibo (x)
+  (if (or (= 0 x) (= 1 x))
+      1
+      (+ (fibo (- x 1)) (fibo (- x 2)))))
+</pre>
+
+<p> このプログラムは二重再帰になっているので、とても時間がかかります。<A href="abclisp05.html#chap10">配列</A> では、ベクタを使った高速化 (表計算法) を説明しましたが、二重再帰を末尾再帰に変換する方法でもプログラムを高速に実行することができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+List 4 : フィボナッチ関数(末尾再帰)
+
+(defun fibo (n &amp;optional (a1 1) (a2 0))
+  (if (&lt; n 1)
+      a1
+      (fibo (1- n) (+ a1 a2) a1)))
+</pre>
+
+<p> 累算変数 a1 と a2 の使い方がポイントです。現在のフィボナッチ数を変数 a1 に、ひとつ前の値を変数 a2 に格納しておきます。あとは a1 と a2 を足し算して、新しいフィボナッチ数を計算すればいいわけです。fibo の呼び出しを図に示すと、次のようになります。
+</p>
+<pre class="fig">
+(fibo 5)
+  (fibo 4 1 1)
+    (fibo 3 2 1)
+      (fibo 2 3 2)
+        (fibo 1 5 3)
+          (fibo 0 8 5)
+          =&gt; a1 の値 8 を返す
+        =&gt; 8
+      =&gt; 8
+    =&gt; 8
+  =&gt; 8
+=&gt; 8
+</pre>
+
+<p> 二重再帰では、同じ値を何回も求めていたため効率がとても悪かったのですが、このプログラムでは無駄な計算を行っていないので、値を高速に求めることができます。もちろん、末尾再帰になっているので、末尾再帰最適化を行う処理系では、プログラムをより高速に実行できるでしょう。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori09">ちょっと寄り道</h3>
+<h4 id="format">■format の便利な機能</h4>
+<p> format はＣ言語の標準関数 fprintf や sprintf に相当する関数です。いわゆる書式文字列を与えて、それに従ってデータを整形して出力します。ところで Common Lisp の format は、大文字小文字変換、条件付き実行、繰り返しなど、Ｃ言語の fprintf 以上の機能を持っています。これらの機能は M.Hiroi も使ったことがないので、皆さんといっしょに勉強しましょう。参考文献は「Common LISP 第 2 版」（通称 CLtL2）です。
+</p>
+
+<h4>■ ~(str~)</h4>
+<p> 英大文字小文字変換を行います。間に挟まれた書式文字列が処理され、その結果の文字列が変換されます。
+</p>
+<ul>
+  <li>~(<br>  英大文字を小文字に変換する。
+  <li>~:@(<br> 英小文字を大文字に変換する。
+  <li>~:(<br> すべての単語の先頭文字を大文字にする(capitalize)。
+  <li>~@(<br> 先頭の単語だけ capitalize し、残りを小文字にする。
+</ul>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre>
+(format t "~(~A~)" "FOO BAR")
+foo bar
+
+(format t "~:@(~A~)" "foo bar")
+FOO BAR
+
+(format t "~:(~A~)" "foo bar")
+Foo Bar
+
+(format t "~@(~A~)" "foo BAR")
+Foo bar
+</pre>
+<h4>■ ~[str0~;str1~; ... ~;strn~:;defautl~]</h4>
+<p> ~[ と ~] の間に定義された書式文字列をひとつ選択して実行します。書式文字列は ~; で区切られています。とくに、最後の ~; が ~:; の場合、その書式文字列はどれも選択されなかった場合に選ばれます。つまり <b>else 節</b> に相当します。書式文字列の選択は、最初の引数で決定されます。引数の値が 0 であれば str0 が選択され、整数値 n であれば n 番目の strn が選択されます。範囲外であれば default が選択されます。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre>
+(format t "~[foo~A~;bar~A~:;baz~A~]" 0 100)
+foo100
+
+(format t "~[foo~A~;bar~A~:;baz~A~]" 1 100)
+bar100
+
+(format t "~[foo~A~;bar~A~:;baz~A~]" 10 100)
+baz100
+</pre>
+<p> 最初の引数が 0 であれば foo~A が選択され、その結果は foo100 となります。最初の引数は選択のために処理されるので、foo~A には次の引数 100 が与えられることに注意してください。最初の引数が 1 であれば bar100 になり、0, 1 以外の値であれば baz100 となります。
+</p>
+<p> <b>~:[false~;true]</b> は、引数が nil であれば false を選択し、そうでなければ true を選択します。<b>~@[true]</b> は、引数が nil でなければ true を選択します。このとき、引数はテストされるだけで実際には処理されません。したがって、この引数を書式文字列の中で使うことができます。ただし、nil の場合は処理されてしまいます。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre>
+(format t "~:[foo~A~;bar~A~]" t 100)
+bar100
+
+(format t "~:[foo~A~;bar~A~]" nil 100)
+foo100
+
+(format nil "~@[foo~A~] ~A" 100 200)
+"foo100 200"
+
+(format nil "~@[foo~A~] ~A" nil 200)
+" 200"
+</pre>
+<p> 最後の例では、引数が nil なので書式文字列 foo~A は選択されませんが、その引数は処理されてしまいます。したがって、最後の ~A には引数 200 が与えられるため、" 200" という結果になります。
+</p>
+
+<h4>■ ~[ と # の組み合わせ</h4>
+<p> ~ と [ の間に整数値が指定されると、その値に対応する書式文字列が選択されます。
+</p>
+<pre>
+(format t "~1[foo~A~;bar~A~:;baz~A~]" 100)
+bar100
+</pre>
+<p> この場合、最初の引数は処理されないので、bar~A の変換指示子へ与えられることに注意してください。また、format の書式文字列では、~ と変換指示子の間に <b>#</b> を用いることができます。この場合、# はまだ処理されていない引数の個数を表します。# と ~[ を組み合わせることで、引数の個数により出力を変更することができます。次の例を見てください。
+</p>
+<pre>
+(format t "~#[none~;bar~A~;bar~A_~A~:;bar_many~]" 10)
+bar10
+
+(format t "~#[none~;bar~A~;bar~A_~A~:;bar_many~]" 10 100)
+bar10_100
+
+(format t "~#[none~;bar~A~;bar~A_~A~:;bar_many~]" 10 100 1000)
+bar_many
+</pre>
+<p> 引数がひとつの場合は bar~A が選択されるので bar10 が出力されます。引数が 2 つの場合は bar~A_~A が選択され、出力は bar10_100 となります。とても便利な機能ですね。
+</p>
+
+<h4>■ ~{str~}</h4>
+<p> 書式文字列 str を繰り返し適用します。引数はリストでなければいけません。簡単な使用例を示しましょう。
+</p>
+<pre>
+(format nil "~{ ~A,~}" '(a b c d))
+" a, b, c, d,"
+
+(format nil "~{ &lt;~A, ~A&gt; ~}" '(a 1 b 2 c 3))
+" &lt;a, 1&gt;  &lt;b, 2&gt;  &lt;c, 3&gt "
+
+(format nil "~2{ &lt;~A, ~A&gt; ~}" '(a 1 b 2 c 3))
+" &lt;a, 1&gt;  &lt;b, 2&gt; "
+</pre>
+<p> 最後の例のように、~ と { の間に繰り返しの回数を指定することができます。&lt;~A, ~A&gt; のように、複数の引数が必要な場合は <b>~:{</b> を使うと便利です。
+</p>
+<pre>
+(format nil "~:{ &lt;~A, ~A&gt; ~}" '((a 1) (b 2) (c 3)))
+" &lt;a, 1&gt;  &lt;b, 2&gt;  &lt;c, 3&gt; "
+</pre>
+<p> <b>~@{</b> は引数にリストを用いるのではなく、残りの引数をすべて繰り返しに適用します。
+</p>
+<pre>
+(format nil "~@{ ~A,~}" 1 2 3 4 5)
+" 1, 2, 3, 4, 5,"
+
+(format nil "~4@{ ~A,~} ~4D" 1 2 3 4 5)
+" 1, 2, 3, 4,    5"
+</pre>
+<p> 最後の例のように、途中で繰り返しが終了して引数が残っている場合は、その後ろの変換指示子に残りの引数が与えられます。
+</p>
+<p> <b>~:@{str~}</b> は、~@{str~} のように残りの引数が用いられますが、その引数は ~:{str~} のようにリストでなければいけません。簡単な使用例を示します。
+</p>
+<pre>
+<del>(format nil "~:{ &lt;~A, ~A&gt; ~}" '(a 1) '(b 2) '(c 3))</del> 修正 (2011/08/21)
+(format nil "~:@{ &lt;~A, ~A&gt; ~}" '(a 1) '(b 2) '(c 3))
+" &lt;a, 1&gt;  &lt;b, 2&gt;  &lt;c, 3&gt; "
+</pre>
+
+<h4>■ ~*</h4>
+<p> <b>~*</b> は次の引数を無視します。<b>~n*</b> のように整数値 n が指定された場合は、n 個の引数を無視します。<b>~:*</b> は処理した引数を元に戻します。つまり、直前に処理した引数が再び処理されます。<b>~n:*</b> は n 個の引数が元に戻されます。次の例を見てください。
+</p>
+<pre>
+(format t "~A ~A ~:* ~A" 1 2 3)
+1 2  2
+
+(format t "~A ~A ~2:* ~A" 1 2 3)
+1 2  1
+</pre>
+<p> 2 つの変換指示子で引数 1, 2 は処理されますが、~:* によりひとつ戻されます。したがって、次の ~A には 2 が与えられます。~2:* では 2 つ戻されるので、~A に与えられる引数は 1 となります。
+</p>
+<p> このほかにも format には便利な機能がありますが、今回はここまでとしましょう。xyzzy Lisp の format は、Justification (幅揃え指示) のように実装されていない機能があるとはいえ、ここまで format の機能を実現していることは本当に凄いことです。素晴らしい Lisp 処理系を作成された亀井さんに大感謝ですね。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2005 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abclisp06.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp08.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

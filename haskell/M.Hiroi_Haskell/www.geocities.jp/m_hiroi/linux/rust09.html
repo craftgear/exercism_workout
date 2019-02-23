@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881817</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>双方向リスト (循環リスト)</h3>
+<h4>●双方向リストの構造</h4>
+<p> 連結リストのセルは、データを格納する data と、直後のセルへの参照を格納する next から構成されています。双方向リストは名前が示すように、直後のセルだけでなく、直前のセルへの参照を持たせたデータ構造です。双方向リストは「重連結リスト (doubly linked list)」と呼ばれることもあります。
+</p>
+<pre class="fig">
+     prev    next      prev    next      prev    next
+    ┌─┬─┬─┐    ┌─┬─┬─┐    ┌─┬─┬─┐
+←─┼・│  │・│←─┼・│  │・│←─┼・│  │・│←─
+─→│・│  │・┼─→│・│  │・┼─→│・│  │・┼─→
+    └─┴─┴─┘    └─┴─┴─┘    └─┴─┴─┘
+         data              data              data
+
+                  図 : 双方向リスト
+</pre>
+<p> 連結リストは後ろ方向にしかセルをたどることができませんが、双方向リストでは前後どちらの方向へもセルをたどることができます。セルを削除する場合も、前後のセルがわかるので簡単に削除することができるのです。双方向リストはメモリ管理などによく使われるデータ構造です。
+</p>
+<h4>●両端キュー (deque)</h4>
+<p> それでは簡単な例題として deque (double ended queue) というデータ構造を Rust で実装してみましょう。deque は「両端キュー」のことで、「デック」とか「ディーキュー」と呼ばれることもあります。キューの場合、データの追加は最後尾に、データの取り出しは先頭に対してのみ行えます。これに対し両端キューは、先頭および最後尾のどちらでもデータの追加と取り出しが行えるデータ構造です。
+</p>
+<p> 両端キューは双方向リストを使うと簡単に実現できます。次の図を見てください。
+</p>
+
+<pre class="fig">
+ head ──┐
+          ↓
+          ヘッダセル
+        ┌─┬─┬─┐
+  ┌←─┼  │  │  │←───────────────────┐  
+  │┌→│  │  │  ┼─→─────────────────┐│
+  ││  └─┴─┴─┘                                      ││
+  ││   next    prev                                       ││
+  ││                                                      ││
+  ││   Cell A            Cell B            Cell C         ││
+  ││  ┌─┬─┬─┐    ┌─┬─┬─┐    ┌─┬─┬─┐  ││
+  │└←┼  │Ａ│  │←─┼  │Ｂ│  │←─┼  │Ｃ│  │←┘│
+  └─→│  │  │  ┼─→│  │  │  ┼─→│  │  │  ┼─→┘
+        └─┴─┴─┘    └─┴─┴─┘    └─┴─┴─┘
+         prev    next      prev    next      prev    next
+
+                     図：両端キュー (1)
+</pre>
+<p> 双方向リストを使う場合、ヘッダセルを用意してリストを環状に構成する方法が一般的です。ヘッダセルにはデータを格納しません。ヘッダセルの next が参照するセルが先頭で、prev が参照するセルが最後尾になります。ヘッダセルが先頭と最後尾のセルを参照しているので、両端でのデータ操作が簡単にできるのです。
+</p>
+
+<p> データがない空リストの場合は、次の図に示すようにセルを参照する変数 next と prev の値はヘッダセル自身になります。
+</p>
+
+<pre class="fig">
+    ┌───────────┐
+    │    ┌─┬─┬─┐    │
+    └←─┼  │  │  │←─┘
+    ┌─→│  │  │  ┼─→┐
+    │    └─┴─┴─┘    │
+    └───────────┘
+
+データがない場合はヘッダセル自身を格納
+
+    図：両端キュー (2)
+</pre>
+
+<p> このようにすると、空リストへデータを挿入する場合や、データを削除して空リストになる場合で、プログラムが簡単になるという利点があります。これは、実際にプログラムを作ってみるとわかります。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは、プログラムを作りましょう。最初に作成するメソッドを表に示します。
+</p>
+<table border=1>
+<caption>表 : Deque&lt;T&gt; メソッド</caption>
+<thead>
+  <tr><th>メソッド名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>fn new(n: usize) -&gt; Deque&lt;T&gt;</td><td>指定した大きさの両端キューを作る (コンストラクタ)</td></tr>
+  <tr><td>fn push_front(&amp;mut self, x: T) -&gt; bool</td><td>先頭にデータを追加する</td></tr>
+  <tr><td>fn push_back(&amp;mut self, x: T) -&gt; bool</td><td>末尾にデータを追加する</td></tr>
+  <tr><td>fn pop_front(&amp;mut self) -&gt; Option&lt;T&gt;</td><td>先頭からデータを取り出す</td></tr>
+  <tr><td>fn pop_back(&amp;mut self) -&gt; Option&lt;T&gt;</td><td>末尾からデータを取り出す</td></tr>
+  <tr><td>fn front(&amp;self) -&gt; Option&lt;&amp;T&gt;</td><td>先頭データへの参照を返す</td></tr>
+  <tr><td>fn back(&amp;self) -&gt; Option&lt;&amp;T&gt;</td><td>末尾データへの参照を返す</td></tr>
+  <tr><td>fn len(&amp;self) -&gt; usize</td><td>両端キューの要素数を返す</td></tr>
+  <tr><td>fn is_empty(&amp;self) -&gt; bool</td><td>両端キューが空ならば true を返す</td></tr>
+  <tr><td>fn is_full(&amp;self) -&gt; bool</td><td>両端キューが満杯ならば true を返す</td></tr>
+  <tr><td>fn clear(&amp;mut self) </td><td>両端キューを空にする</td></tr>
+</tbody>
+</table>
+<h4>●データ構造の定義</h4>
+<p> 次はデータ構造を定義します。
+</p>
+<pre class="list">
+リスト : 双方向リスト () による両端キューの実装
+
+use std::rc::Rc;
+use std::cell::UnsafeCell;
+
+// 双方向リスト
+struct Node&lt;T&gt; {
+    data: T,
+    prev: Link&lt;T&gt;,
+    next: Link&lt;T&gt;
+}
+
+type Link&lt;T&gt; = Option&lt;Rc&lt;UnsafeCell&lt;Node&lt;T&gt;&gt;&gt;&gt;;
+
+// 両端キュー
+struct Deque&lt;T: Default&gt; {
+    head: Link&lt;T&gt;,
+    size: usize
+}
+
+// メソッドの定義
+impl&lt;T: Default&gt; Deque&lt;T&gt; {
+    fn new() -&gt; Deque&lt;T&gt; {
+        // ヘッダセル (ダミー)
+        let header = Rc::new(UnsafeCell::new(Node { 
+            data: Default::default(), prev: None, next: None
+        }));
+        unsafe {
+            (*header.get()).prev = Some(header.clone());
+            (*header.get()).next = Some(header.clone());
+        };
+        Deque { head: Some(header), size: 0 }
+    }
+
+    // メソッドの定義 (省略)
+}
+</pre>
+
+<p> セルを表す構造体を Node&lt;T&gt; とし、両端キューを表す構造体を Deque&lt;T&gt; としました。今回はヘッダセルを使用するので、そこに格納するためのダミーデータを用意する必要があります。そこで、型パラメータ T の境界にトレイト Default を指定して、型 T のデフォルト値を使用することにします。
+</p>
+<p> Deque のメソッド new() では、Node { ... } でセルを生成して変数 header に格納します。T のデフォルト値は Default::default() で取得することができます。次に、header の next と prev を header に書き換えて循環リストにします。これで、空の双方向リストになります。最後に、Deque のフィールド変数 size を 0 に、head を header に初期化します。
+</p>
+<h4>●データの追加</h4>
+<p> それでは、両端キューの先頭にデータを追加するメソッド push_front() から作りましょう。次の図を見てください。
+</p>
+<pre class="fig">
+       H            Q
+  &lt;--&gt; [ | |Q] &lt;--&gt; [H| | ] &lt;--&gt;
+
+      H の next に P を挿入
+
+       H            P            Q
+  &lt;--&gt; [ | |P] &lt;--&gt; [H| |Q] &lt;--&gt; [P| | ] &lt;--&gt;
+
+ 【注意】[prev | data | next] はセルを表す。
+
+          図：データの追加 (1)
+</pre>
+
+<p> この場合はヘッダ H の next と Q の prev を挿入するセル P に書き換え、P の prev と next には H と Q をセットします。これをプログラムすると、次のようになります。
+</p>
+
+<pre class="list">
+リスト：データの追加 (1)
+
+    fn push_front(&amp;mut self, x: T) {
+        let new_node = Rc::new(UnsafeCell::new(Node {
+            data: x, prev: None, next: None
+        }));
+        let p = new_node.get();
+        self.head.as_mut().map(|header| unsafe {
+            let q = header.get();
+            (*q).next.take().map(|top| {
+                (*top.get()).prev = Some(new_node.clone());
+                (*q).next = Some(new_node);
+                (*p).next = Some(top);
+                (*p).prev = Some(header.clone());
+            });
+        });
+        self.size += 1;
+    }
+</pre>
+<p> データ x を格納した新しいセル new_node を生成し、その生ポインタを変数 p にセットします。self.head.as_mut().map() でヘッダセル (header) を求め、その生ポインタを変数 q にセットします。次に (*q).next.take().map() で先頭セル (top) を取り出します。そして、top の prev と header の next を new_node に書き換えます。そして、new_node の next を top に、prev を header に書き換えれば、データを追加することができます。
+</p>
+<p> また、このままの処理で空リストにデータを挿入することもできます。次の図を見てください。
+</p>
+
+<pre class="fig">
+  H(header)  P
+  [H| |H]    [?| |?]
+
+  H            P
+  [P| |P] &lt;--&gt; [H| |H]  
+
+図：空リストへデータを挿入
+</pre>
+<p> 上図に示すように、ヘッダセルの prev と next は自分自身を格納しているので、h.next は H 自身となります。したがって、P の prev と next には H がセットされ、H の prev と next には P がセットされるのです。これで、空リストにデータを挿入することができます。
+</p>
+<p> 末尾にデータを追加するメソッド push_back() も同様にプログラムすることができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：データの追加 (2)
+
+    fn push_back(&amp;mut self, x: T) {
+        let new_node = Rc::new(UnsafeCell::new(Node {
+            data: x, prev: None, next: None
+        }));
+        let p = new_node.get();
+        self.head.as_mut().map(|header| unsafe {
+            let q = header.get();
+            (*q).prev.take().map(|tail| {
+                (*tail.get()).next = Some(new_node.clone());
+                (*q).prev = Some(new_node);
+                (*p).prev = Some(tail);
+                (*p).next = Some(header.clone());
+            });
+        });
+        self.size += 1;
+    }
+</pre>
+
+<p> 今度は新しいセル new_node をヘッダセル (header) の prev に、末尾セル (tail) の next に挿入します。あとは new_node の prev を tail に、next を header に書き換えれば、両端キューの末尾にデータを追加することができます。
+</p>
+
+<h4>●データの取得</h4>
+<p> 次は、先頭のデータを取り出すメソッド pop_front() を作りましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+       H            Q            P
+  &lt;--&gt; [ | |Q] &lt;--&gt; [H| |P] &lt;--&gt; [P| | ] &lt;--&gt;
+
+      H の next のセル Q を削除
+
+       H            Q           P
+  &lt;--&gt; [ | |P]      [H| |P]     [H| | ] &lt;--&gt;
+            ↑                  ↑
+            └─────────┘
+
+               図：セルの削除
+</pre>
+<p> セルの削除はとても簡単です。H の next と P の prev を書き換えればいいのです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：データの取得 (1)
+
+    fn pop_front(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.size == 0 { return None; }
+        self.size -= 1;
+        self.head.as_mut().map(|header| unsafe {
+            let p = header.get();
+            (*p).next.take().map(|node| {
+                let q = node.get();
+                (*q).next.take().map(|node1| {
+                    (*node1.get()).prev = Some(header.clone());
+                    (*p).next = Some(node1)
+                });
+                match Rc::try_unwrap(node) {
+                    Ok(node) =&gt; node.into_inner().data,
+                    Err(_) =&gt; panic!("pop_front error")
+                }
+            })
+        }).unwrap()
+    }
+</pre>
+
+<p> self.size が 0 の場合は None を返します。そうでなければ、ヘッダセル (header) と先頭セル (node) を求め、node の next から 2 番目のセル (node1) を取り出します。そして、node1 の prev を header に、ヘッダの next を node1 に書き換えます。これで node を循環リストから外して、その参照カウンタを 1 にすることができます。あとは try_unwrap() で Rc からセルを取り出し、そこに格納されている data を返すだけです。
+</p>
+
+<p> ところで、最後のデータを削除する場合もこのままの処理で大丈夫です。次の図を見てください。
+</p>
+
+<pre class="fig">
+  H(header)    Q             H
+  [Q| |Q] &lt;--&gt; [H| |H]  ===&gt; [H| |H]  
+
+        図：最後のデータを削除
+</pre>
+
+<p> セル Q の next と prev はヘッダセル H を格納しています。Q の次のセルを P とすると、それはヘッダセル H になります。したがって、P の prev を H に書き換える処理は、ヘッダの prev をヘッダ自身に、H の next を P に書き換える処理はヘッダの next をヘッダ自身に書き換える処理になります。これで双方向リストは空リストになります。
+</p>
+<p> 末尾のデータを削除するメソッド pop_back() も簡単にプログラムすることができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：データの取得 (2)
+
+    fn pop_back(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.size == 0 { return None; }
+        self.size -= 1;
+        self.head.as_mut().map(|header| unsafe {
+            let p = header.get();
+            (*p).prev.take().map(|node| {
+                let q = node.get();
+                (*q).prev.take().map(|node1| {
+                    (*node1.get()).next = Some(header.clone());
+                    (*p).prev = Some(node1)
+                });
+                match Rc::try_unwrap(node) {
+                    Ok(node) =&gt; node.into_inner().data,
+                    Err(_) =&gt; panic!("pop_back error")
+                }
+            })
+        }).unwrap()
+    }
+</pre>
+
+<p> 今度はヘッダセル (header) の prev のセル (node) を削除します。node から一つ手前のセル (node1) を求め、node1 の next を header に、header の prev を node1 に書き換えます。これで node を循環リストから外して、参照カウンタを 1 にすることができます。あとの処理は pop_front() と同じです。
+</p>
+
+<p> 残りのメソッドは簡単なので説明は省略します。詳細は <a href="rust09.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは実際に実行してみましょう。次に示す簡単なテストを行ってみました。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+fn main() {
+    let mut deq = Deque::new();
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    for i in 0 .. 4 {
+        deq.push_back(i);
+        deq.push_front(i + 10);
+    }
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    println!("{:?}", deq.back());
+    println!("{:?}", deq.front());
+    for _ in 0 .. 3 {
+        println!("{:?}", deq.pop_back());
+        println!("{:?}", deq.pop_front());
+    }
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    deq.clear();
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+}
+</pre>
+<p> 実行結果を示します。
+</p>
+<pre>
+0
+true
+false
+8
+false
+false
+Some(3)
+Some(13)
+Some(3)
+Some(13)
+Some(2)
+Some(12)
+Some(1)
+Some(11)
+2
+false
+false
+0
+true
+false
+</pre>
+<p> 正常に動作しているようです。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// dlist.rc : 双方向リスト (循環リスト)
+//
+//            Copyright (C) 2017 Makoto Hiroi 
+//
+use std::rc::Rc;
+use std::cell::UnsafeCell;
+
+// 双方向リスト
+struct Node&lt;T&gt; {
+    data: T,
+    prev: Link&lt;T&gt;,
+    next: Link&lt;T&gt;
+}
+
+type Link&lt;T&gt; = Option&lt;Rc&lt;UnsafeCell&lt;Node&lt;T&gt;&gt;&gt;&gt;;
+
+// 両端キュー
+struct Deque&lt;T: Default&gt; {
+    head: Link&lt;T&gt;,
+    size: usize
+}
+
+// メソッド
+impl&lt;T: Default&gt; Deque&lt;T&gt; {
+    fn new() -&gt; Deque&lt;T&gt; {
+        // ヘッダーセル (ダミー)
+        let header = Rc::new(UnsafeCell::new(Node { 
+            data: Default::default(), prev: None, next: None
+        }));
+        unsafe {
+            (*header.get()).prev = Some(header.clone());
+            (*header.get()).next = Some(header.clone());
+        };
+        Deque { head: Some(header), size: 0 }
+    }
+
+    // 末尾にデータを追加する
+    fn push_back(&amp;mut self, x: T) {
+        let new_node = Rc::new(UnsafeCell::new(Node {
+            data: x, prev: None, next: None
+        }));
+        let p = new_node.get();
+        self.head.as_mut().map(|header| unsafe {
+            let q = header.get();
+            (*q).prev.take().map(|tail| {
+                (*tail.get()).next = Some(new_node.clone());
+                (*q).prev = Some(new_node);
+                (*p).prev = Some(tail);
+                (*p).next = Some(header.clone());
+            });
+        });
+        self.size += 1;
+    }
+
+    // 先頭データを取り出す
+    fn pop_front(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.size == 0 { return None; }
+        self.size -= 1;
+        self.head.as_mut().map(|header| unsafe {
+            let p = header.get();
+            (*p).next.take().map(|node| {
+                let q = node.get();
+                (*q).next.take().map(|node1| {
+                    (*node1.get()).prev = Some(header.clone());
+                    (*p).next = Some(node1)
+                });
+                match Rc::try_unwrap(node) {
+                    Ok(node) =&gt; node.into_inner().data,
+                    Err(_) =&gt; panic!("pop_front error")
+                }
+            })
+        }).unwrap()
+    }
+
+    // 先頭にデータを追加する
+    fn push_front(&amp;mut self, x: T) {
+        let new_node = Rc::new(UnsafeCell::new(Node {
+            data: x, prev: None, next: None
+        }));
+        let p = new_node.get();
+        self.head.as_mut().map(|header| unsafe {
+            let q = header.get();
+            (*q).next.take().map(|top| {
+                (*top.get()).prev = Some(new_node.clone());
+                (*q).next = Some(new_node);
+                (*p).next = Some(top);
+                (*p).prev = Some(header.clone());
+            });
+        });
+        self.size += 1;
+    }
+
+    // 末尾データを取り出す
+    fn pop_back(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.size == 0 { return None; }
+        self.size -= 1;
+        self.head.as_mut().map(|header| unsafe {
+            let p = header.get();
+            (*p).prev.take().map(|node| {
+                let q = node.get();
+                (*q).prev.take().map(|node1| {
+                    (*node1.get()).next = Some(header.clone());
+                    (*p).prev = Some(node1)
+                });
+                match Rc::try_unwrap(node) {
+                    Ok(node) =&gt; node.into_inner().data,
+                    Err(_) =&gt; panic!("pop_back error")
+                }
+            })
+        }).unwrap()
+    }
+
+    // 先頭データの参照を返す
+    fn front(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.size == 0 { 
+            None
+        } else {
+            self.head.as_ref().map(|header| unsafe {
+                (*header.get()).next.as_ref().map(|top| {
+                    &amp;((*top.get()).data)
+                })
+            }).unwrap()
+        }
+    }
+
+    // 末尾データの参照を返す
+    fn back(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.size == 0 { 
+            None
+        } else {
+            self.head.as_ref().map(|header| unsafe {
+                (*header.get()).prev.as_ref().map(|tail| {
+                    &amp;((*tail.get()).data)
+                })
+            }).unwrap()
+        }
+    }
+
+    // 要素数を返す
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // キューは空か？ 
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // キューは満杯か？ (常に false を返す)
+    fn is_full(&amp;self) -&gt; bool { false }
+
+    // キューを空にする
+    fn clear(&amp;mut self) {
+        while !self.is_empty() { self.pop_front(); }
+    }
+}
+
+// Deque が drop されたときは双方向リストも drop する
+impl&lt;T: Default&gt; Drop for Deque&lt;T&gt; {
+    fn drop(&amp;mut self) {
+        self.clear();
+        self.head.take().map(|node| unsafe {
+            let p = node.get();
+            (*p).prev = None;
+            (*p).next = None;
+        });
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut deq = Deque::new();
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    for i in 0 .. 4 {
+        deq.push_back(i);
+        deq.push_front(i + 10);
+    }
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    println!("{:?}", deq.back());
+    println!("{:?}", deq.front());
+    for _ in 0 .. 3 {
+        println!("{:?}", deq.pop_back());
+        println!("{:?}", deq.pop_front());
+    }
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    deq.clear();
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+}
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">整数の符号化</h3>
+<p> 拙作のページで作成した <a href="rust03.html#chap40">ランレングス符号化と復号</a> は、記号とその連長で符号化する方式です。連長は 8 ビット (0 - 255) の固定長で符号化しましたが、長い連長が少なくて短い連長が多くなる場合、固定長の符号語では無駄が多くなるので効率的に圧縮することはできません。そこで、任意の正整数またはある範囲の正整数をできるだけ短い符号語で符号化する方法が考案されています。これを「整数の符号化」といいます。
+</p>
+<p> 有名なところでは P. Elias が開発した「ガンマ符号」と「デルタ符号」があります。これらの符号はランレングスの連長だけではなく、他のデータ圧縮アルゴリズムにも応用することができます。整数の符号化については拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo30.html">整数の符号化</a> で取り上げています。詳しい説明はそちらをお読みいただくとして、今回は Rust でプログラムを作ってみましょう。
+</p>
+<h4>●ビット入出力処理の作成</h4>
+<p> 最初に、符号化・復号処理に必要となるビット単位の入出力処理を作成します。構造体の名前は BitReader, BitWriter とし、以下に示すメソッドを作成します。
+</p>
+<table border=1>
+<caption>表 : BitReader のメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>fn open(filename: &amp;str) -&gt; std::io::Result&lt;BitIO&gt;</td><td>ビットストリームをリードオープンします</td></tr>
+  <tr><td>fn getbit(&amp;mut self) -&gt; std::io::Result&lt;u64&gt;</td><td>ビットストリームより 1 ビット読み込みます</td></tr>
+  <tr><td>fn getbits(&amp;mut self, n: u64) -&gt; std::io::Result&lt;u64&gt;</td><td>ビットストリームより n ビット読み込みます</td></tr>
+  <tr><td>fn alpha_decode(&amp;mut self) -&gt; std::io::Result&lt;u64&gt;</td><td>アルファ符号を読み込みます</td></tr>
+  <tr><td>fn gamma_decode(&amp;mut self) -&gt; std::io::Result&lt;u64&gt;</td><td>ガンマ符号を書き込みます</td></tr>
+  <tr><td>fn delta_decode(&amp;mut self) -&gt; std::io::Result&lt;u64&gt;</td><td>デルタ符号を読み込みます</td></tr>
+  <tr><td>fn cbt_decode(&amp;mut self, m: u64, k: u64) -&gt; std::io::Result&lt;u64&gt;</td><td>CBT 符号を読み込みます</td></tr>
+  <tr><td>fn rice_decode(&amp;mut self, k: u64) -&gt; std::io::Result&lt;u64&gt;</td><td>ライス符号を読み込みます</td></tr>
+</tbody>
+</table>
+<br>
+<table border=1>
+<caption>表 : BitWriter のメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>fn create(filename: &amp;str) -&gt; std::io::Result&lt;BitIO&gt;</td><td>ビットストリームをライトオープンします</td></tr>
+  <tr><td>fn putbit(&amp;mut self, bit: u64) -&gt; std::io::Result&lt;()&gt;</td><td>ビットストリームへ 1 ビット出力します</td></tr>
+  <tr><td>fn putbits(&amp;mut self, n: u64, x: u64) -&gt; Result&lt;()&gt;</td><td>ビットストリームへ x の下位 n ビットを出力します</td></tr>
+  <tr><td>fn alpha_encode(&amp;mut, n: u64) -&gt; std::io::Result&lt;()&gt;</td><td>アルファ符号を書き込みます</td></tr>
+  <tr><td>fn gamma_encode(&amp;mut, n: u64) -&gt; std::io::Result&lt;()&gt;</td><td>ガンマ符号を書き込みます</td></tr>
+  <tr><td>fn delta_encode(&amp;mut, n: u64) -&gt; std::io::Result&lt;()&gt;</td><td>デルタ符号を書き込みます</td></tr>
+  <tr><td>fn cbt_encode(&amp;mut, n: u64, m: u64, k: u64) -&gt; std::io::Result&lt;()&gt;</td><td>CBT 符号を書き込みます</td></tr>
+  <tr><td>fn rice_encode(&amp;mut, n: u64, k: u64) -&gt; std::io::Result&lt;()&gt;</td><td>ライス符号を書き込みます</td></tr>
+</tbody>
+</table>
+
+<h4>●データ構造の定義</h4>
+<p> それでは、プログラムを作りましょう。最初に構造体 BitReader と BitWriter を定義します。
+</p>
+
+<pre class="list">
+リスト : 構造体 BitReader, BitWriter の定義
+
+use std::fs::File;
+use std::io::{Result, BufReader, Read, BufWriter, Write};
+
+pub struct BitReader {
+    reader: BufReader&lt;File&gt;,
+    buff: [u8; 1],
+    cnt: i8
+}
+
+pub struct BitWriter {
+    writer: BufWriter&lt;File&gt;,
+    buff: [u8; 1],
+    cnt: i8
+}
+
+impl Drop for BitWriter {
+    fn drop(&amp;mut self) {
+        if self.cnt &lt; 8 {
+            self.writer.write(&amp;mut self.buff).unwrap();
+        }
+    }
+}
+</pre>
+
+<p> フィールド変数 reader, writer に BufReader, BufWriter をセットします。フィールド変数 buff がバッファで、データ型が u8 で大きさ 1 の配列になります。ビットデータは buff[0] の MSB が先頭になります。したがって、データは MSB (7 ビット目) から LSB (0 ビット目) の方向へ読み書きしていきます。フィールド変数 cnt はカウンタで、BitReader の場合は 0 に、BitWriter の場合は 8 に初期化します。どちらの場合も cnt を -1 してから、その位置にあるビットを読み書きします。
+</p>
+<p> BitWriter の場合、ファイルをクローズするときバッファをフラッシュする作業が必要になります。これを Drop のメソッド drop() で行います。カウンタ cnt が 8 より小さいのであれば、バッファにデータが残っています。このデータをメソッド write() で出力します。
+</p>
+<h4>●ファイルのオープン</h4>
+<p> 次はファイルをオープンするメソッド BitReader::open() と BitWriter::create() を作ります。
+</p>
+<pre class="list">
+リスト : ファイルのオープン
+
+impl BitReader {
+    // リードオープン
+    pub fn open(filename: &amp;str) -&gt; Result&lt;BitReader&gt; {
+        let fs = File::open(filename)?;
+        Ok(BitReader { reader: BufReader::new(fs), buff: [0], cnt: 0 })
+    }
+
+    // 他のメソッドの定義 (省略)
+}
+
+impl BitWriter {
+    // ライトオープン
+    pub fn create(filename: &amp;str) -&gt; Result&lt;BitWriter&gt; {
+        let fs = File::create(filename)?;
+        Ok(BitWriter { writer: BufWriter::new(fs), buff: [0], cnt: 8 })
+    }
+
+    // 他のメソッドの定義 (省略)
+}
+</pre>
+<p> open() はファイル filename を File::open() でリードオープンし、それを BufReader::new() に渡して返り値を reader にセットします。buff は [0] に、cnt も 0 に初期化します。create() はファイル filename を File::create() でライトオープンし、それを BufWriter::new() に渡して返り値を writer にセットします。buff は [0] に、cnt は 8 に初期化します。
+</p>
+
+<h4>●入力処理</h4>
+<p> 次は 1 ビット読み込むメソッド getbit() を作ります。
+</p>
+
+<pre class="list">
+リスト : 1 ビット読み込み
+
+pub fn getbit(&amp;mut self) -&gt; Result&lt;u64&gt; {
+    self.cnt -= 1;
+    if self.cnt &lt; 0 {
+        self.reader.read(&amp;mut self.buff)?;
+        self.cnt = 7
+    }
+    Ok(((self.buff[0] &gt;&gt; self.cnt) &amp; 0x01) as u64)
+}
+</pre>
+<p> getbit() は簡単です。cnt を一つ減らして、その位置にあるビットをチェックするだけです。cnt を一つ減らしたら、cnt が負の値になっていないかチェックします。そうであれば、バッファにデータがなくなったので、メソッド read() でファイルからデータを読み込み、cnt を 7 に再設定します。最後に、buff[0] を右へ cnt ビットシフトして、そのビットの値を u64 に変換して返します。
+</p>
+
+<p> 次は n ビット読み込むメソッド getbits() を作ります。
+</p>
+<pre class="list">
+リスト : n ビット読み込み
+
+pub fn getbits(&amp;mut self, n: u64) -&gt; Result&lt;u64&gt; {
+    let mut v = 0;
+    let mut p = 1 &lt;&lt; (n - 1);
+    while p &gt; 0 {
+        let b = self.getbit()?;
+        if b == 1 { v |= p; }
+        p &gt;&gt;= 1;
+    }
+    Ok(v)
+}
+</pre>
+<p> getbits() は getbit() を n 回呼び出して n ビット読み込みます。変数 v に読み込んだビットをセットします。p は v にビットをセットする位置を表します。while ループで getbit() を呼び出して、返り値が 1 ならば v |= p でビットを 1 にセットします。そして、p を右へ 1 ビットシフトします。これで、ビットストリームから n ビット読み込むことができます。最後に v を Ok() に包んで返します。
+</p>
+<h4>●出力処理</h4>
+<p> 次は 1 ビット書き込むメソッド putbit() を作ります。
+</p>
+<pre class="list">
+リスト : 1 ビット書き込み
+
+pub fn putbit(&amp;mut self, bit: u64) -&gt; Result&lt;()&gt; {
+    self.cnt -= 1;
+    if bit &gt; 0 {
+        self.buff[0] |= 1 &lt;&lt; self.cnt;
+    }
+    if self.cnt == 0 {
+        self.writer.write(&amp;mut self.buff)?;
+        self.buff[0] = 0;
+        self.cnt = 8;
+    }
+    Ok(())
+}
+</pre>
+<p> 最初に、カウンタ cnt を一つ減らします。bit が 0 よりも大きい場合は、buff の cnt の位置にビット 1 をセットします。そして、cnt が 0 であればバッファが満杯になったので write() で出力します。それから、buff[0] を 0 に、cnt を 8 にセットします。
+</p>
+
+<p> 次は n ビット書き込むメソッド putbits() を作ります。
+</p>
+<pre class="list">
+リスト : n ビット書き込み
+
+pub fn putbits(&amp;mut self, n: u64, x: u64) -&gt; Result&lt;()&gt; {
+    let mut p = 1 &lt;&lt; (n - 1);
+    while p &gt; 0 {
+        self.putbit(x &amp; p)?;
+        p &gt;&gt;= 1;
+    }
+    Ok(())
+}
+</pre>
+<p> putbits() も putbit() を n 回呼び出して実現しています。p が出力するビットの位置を表しています。putbit() は 0 よりも大きい値であれば 1 を出力するので、x &amp; p の値を渡すだけで正常に動作します。
+</p>
+
+<p> なお、getbits(), putbits() はループを使って実装しましたが、<a href="rust09.html#cite">参考文献 [1]</a> にはシフト演算子を使った方法が紹介されています。興味のある方はプログラムを書き換えてみてください。
+</p>
+<h4>●アルファ符号</h4>
+<p> それでは、整数の符号化を行うプログラムを作ります。0 を符号化できると便利なので、今回のプログラムは 0 以上の整数を符号化することにします。最初はアルファ符号です。
+</p>
+<pre class="list">
+リスト : アルファ符号
+
+pub fn alpha_encode(&amp;mut self, n: u64) -&gt; Result&lt;()&gt; {
+    for _ in 0 .. n {
+        self.putbit(0)?;
+    }
+    self.putbit(1)?;
+    Ok(())
+}
+
+pub fn alpha_decode(&amp;mut self) -&gt; Result&lt;u64&gt; {
+    let mut n = 0;
+    loop {
+        let b = self.getbit()?;
+        if b != 0 { return Ok(n); }
+        n += 1;
+    }
+}
+</pre>
+<p> 符号化はメソッド alpha_encode() で行います。0 を n 個出力したあと、最後に 1 を出力します。数値 0 は 1 だけの出力になります。復号はメソッド alpha_decode() で行います。これは getbit で 1 ビット読み込み、0 をカウントしてその値を返すだけです。
+</p>
+<h4>●ガンマ符号</h4>
+<p> 次はガンマ符号のプログラムを作ります。符号化する数値に 0 を含める場合、数値 n を次のように変換します。 
+</p>
+<pre class="fig">
+     n (n+1) bit数  bit列      N      (n+1) bit数  bit列
+   ----------------------   --------------------------------------
+     0    1   0     none      11      1100   3     1 0 0
+     1   10   1     0         12      1101   3     1 0 1
+     2   11   1     1         13      1110   3     1 1 0
+     3  100   2     0 0       14      1111   3     1 1 1
+     4  101   2     0 1       15     10000   4     0 0 0 0
+     5  110   2     1 0       16     10001   4     0 0 0 1
+     6  111   2     1 1        :     :       :
+     7 1000   3     0 0 0    127  10000000   7     0 0 0 0 0 0 0
+     8 1001   3     0 0 1      :     :       :
+     9 1010   3     0 1 0    255 100000000   8     0 0 0 0 0 0 0 0
+    10 1011   3     0 1 1    256 100000001   8     0 0 0 0 0 0 0 1
+</pre>
+<p> ガンマ符号は bit 数をアルファ符号で符号化して、bit 列をそのまま出力します。数値 0 は bit 数 (0) だけで表します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : ガンマ符号
+
+pub fn gamma_encode(&amp;mut self, n: u64) -&gt; Result&lt;()&gt; {
+    let mut n1 = 0;
+    let mut n2 = (n + 1) &gt;&gt; 1;
+    while n2 &gt; 0 {
+        n1 += 1;
+        n2 &gt;&gt;= 1;
+    }
+    self.alpha_encode(n1)?;
+    if n1 &gt; 0 { self.putbits(n1, n + 1)?; }
+    Ok(())
+}
+
+pub fn gamma_decode(&amp;mut self) -&gt; Result&lt;u64&gt; {
+    let mut n1 = self.alpha_decode()?;
+    if n1 &gt; 0 {
+        let n2 = self.getbits(n1)?;
+        n1 = (1 &lt;&lt; n1) + n2 - 1;
+    }
+    Ok(n1)
+}
+</pre>
+
+<p> 符号化はメソッド gamma_encode() で行います。bit 数を n1 に求めて alpha_encode() で符号化します。そして、n1 が 0 よりも大きければ、n + 1 の下位 n1 ビットを putbits() でそのまま出力します。復号を行うメソッド gamma_decode() も簡単です。alpha_decode() で bit 数を復号して n1 にセットします。n1 が 0 よりも大きければ、getbits() で n1 ビット読み込んで n2 を復号します。そして元の数値を計算します。
+</p>
+<h4>●デルタ符号</h4>
+<p> 次はデルタ符号です。
+</p>
+<pre class="list">
+リスト : デルタ符号
+
+pub fn delta_encode(&amp;mut self, n: u64) -&gt; Result&lt;()&gt; {
+    let mut n1 = 0;
+    let mut n2 = (n + 1) &gt;&gt; 1;
+    while n2 &gt; 0 {
+        n1 += 1;
+        n2 &gt;&gt;= 1;
+    }
+    self.gamma_encode(n1)?;
+    if n1 &gt; 0 { 
+        self.putbits(n1, n + 1)?;
+    }
+    Ok(())
+}
+
+pub fn delta_decode(&amp;mut self) -&gt; Result&lt;u64&gt; {
+    let mut n1 = self.gamma_decode()?;
+    if n1 &gt; 0 {
+        let n2 = self.getbits(n1)?;
+        n1 = (1 &lt;&lt; n1) + n2 - 1;
+    }
+    Ok(n1)
+}
+</pre>
+
+<p> 符号化を行うメソッドが delta_encode() で、復号を行うメソッドが delta_decode() です。ガンマ符号は bit 数をアルファ符号で符号化しましたが、デルタ符号はそれをガンマ符号で符号化するだけです。プログラムは alpha_encode() と alpha_decode() を gamma_encode() と gamma_decode() に変更するだけです。
+</p>
+<h4>●CBT 符号</h4>
+<p> 次は CBT 符号を作ります。
+</p>
+<pre class="list">
+リスト : CBT 符号
+
+pub fn cbt_encode(&amp;mut self, n: u64, m: u64, k: u64) -&gt; Result&lt;()&gt; {
+    let limit = (1 &lt;&lt; k) - m;
+    if n &lt; limit {
+        self.putbits(k - 1, n)?;
+    } else {
+        self.putbits(k, n + limit)?;
+    }
+    Ok(())
+}
+
+pub fn cbt_decode(&amp;mut self, m: u64, k: u64) -&gt; Result&lt;u64&gt; {
+    let limit = (1 &lt;&lt; k) - m;
+    let mut n = self.getbits(k - 1)?;
+    if n &gt;= limit {
+        n = (n &lt;&lt; 1) + self.getbit()? - limit;
+    }
+    Ok(n)
+}
+</pre>
+<p> 符号化を行うメソッド cbt_encode() の引数 n が数値、m が数値の最大値、k がビット数です。CBT 符号で符号化する場合、最初に 2<sup>k</sup> - m を求めて変数 limit にセットします。次に、n が limit より小さい場合は n を k - 1 ビットで符号化します。そうでなければ、n + limit を k ビットで符号化します。
+</p>
+<p> 復号を行うメソッド cbt_decode() も簡単です。最初に 2<sup>k</sup> - m を求めて変数 limit にセットします。次に、getbits() で k - 1 ビットを読み込んで復号して変数 n にセットします。n が limit 以上であれば、もう 1 ビット読み込んで k ビットの値を求め、その値から limit を引き算するだけです。
+</p>
+<h4>●ライス符号</h4>
+<p> 最後にライス符号を作ります。
+</p>
+<pre class="list">
+リスト : ライス符号
+
+pub fn rice_encode(&amp;mut self, n: u64, k: u64) -&gt; Result&lt;()&gt; {
+    self.alpha_encode(n &gt;&gt; k)?;
+    self.putbits(k, n)?;
+    Ok(())
+}
+
+pub fn rice_decode(&amp;mut self, k: u64) -&gt; Result&lt;u64&gt; {
+    let n = self.alpha_decode()?;
+    Ok((n &lt;&lt; k) + self.getbits(k)?)
+}
+</pre>
+<p> 符号化を行うメソッド rice_encode() の引数 n が数値、k がパラメータを表していて、値は b = 2<sup>k</sup> になります。ライス符号の場合、商の計算はビットシフトで実現できます。n を k ビット右シフトして、その値を alpha_encode() で符号化します。そして、n の下位 k ビットが剰余になるので、そのまま putbits() で出力します。復号を行うメソッド rice_decode() は alpha_decode() で商を復号し、getbits で剰余を求めます。
+</p>
+<ul>
+  <li><a href="rust09.html#list2">プログラムリスト</a>
+</ul>
+<h4>●簡単なテスト</h4>
+<p> それでは実際に動かしてみましょう。
+</p>
+<pre class="list">
+リスト : 簡単なテスト (bitiotest.rs)
+
+extern crate bitio;
+
+use bitio::*;
+
+fn test_encode(filename: &amp;str) -&gt; std::io::Result&lt;()&gt; {
+    let mut fs = BitWriter::create(filename)?;
+    for x in 0u64 .. 12 {
+        fs.putbit(x &amp; 1)?;
+        fs.putbits(x, x)?;
+        fs.alpha_encode(x)?;
+        fs.gamma_encode(x)?;
+        fs.delta_encode(x)?;
+        fs.cbt_encode(x, 4, 12)?;
+        fs.rice_encode(x, 3)?;
+    }
+    Ok(())
+}
+
+fn test_decode(filename: &amp;str) -&gt; std::io::Result&lt;()&gt; {
+    let mut fs = BitReader::open(filename)?;
+    for x in 0u64 .. 12 {
+        print!("{} ", fs.getbit()?);
+        print!("{} ", fs.getbits(x)?);
+        print!("{} ", fs.alpha_decode()?);
+        print!("{} ", fs.gamma_decode()?);
+        print!("{} ", fs.delta_decode()?);
+        print!("{} ", fs.cbt_decode(4, 12)?);
+        println!("{}", fs.rice_decode(3)?);
+    }
+    Ok(())
+}
+
+fn main() {
+    let filename = "testbitio.dat";
+    test_encode(filename).unwrap();
+    test_decode(filename).unwrap();
+}
+</pre>
+<p> rustc -O --crate-type=lib bitio.rs とコンパイルすると、カレントディレクトリにライブラリ libbitio.rlib が作成されます。あとは rustc -L . bitiotest.rs とコンパイルするだけです。</p>
+<pre>
+0 0 0 0 0 0 0
+1 1 1 1 1 1 1
+0 2 2 2 2 2 2
+1 3 3 3 3 3 3
+0 4 4 4 4 4 4
+1 5 5 5 5 5 5
+0 6 6 6 6 6 6
+1 7 7 7 7 7 7
+0 8 8 8 8 8 8
+1 9 9 9 9 9 9
+0 10 10 10 10 10 10
+1 11 11 11 11 11 11
+</pre>
+<p> 正常に動作しているようです。興味のある方はいろいろ試してみてください。
+</p>
+<h4>●ランレングスへの応用</h4>
+<p> 最後に簡単な応用例として、ランレングス符号化に整数の符号化を適用してみましょう。拙作のページ <a href="rust03.html#chap40">ランレングス符号化と復号</a> で作成したプログラムを改造します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ランレングス符号化 (rleb.rs)
+
+extern crate bitio;
+
+use std::fs::{self, File};
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::error::Error;
+use bitio::BitWriter;
+
+fn rle_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let rd = BufReader::new(File::open(src)?);
+    let mut wr = BitWriter::create(dst)?;
+    let mut n = 0;
+    let mut c = 0;
+    let metadata = fs::metadata(src)?;
+    wr.putbits(64, metadata.len())?;
+    for r in rd.bytes() {
+        let x = r?;
+        if n == 0 {
+            c = x;
+            n = 1;
+        } else if c == x {
+            n += 1;
+        } else {
+            wr.putbits(8, c as u64)?;
+            wr.gamma_encode(n - 1)?;
+            c = x;
+            n = 1;
+        }
+    }
+    if n &gt; 0 {
+        wr.putbits(8, c as u64)?;
+        wr.gamma_encode(n - 1)?;        
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: rle input_file output_file");
+    } else {
+        match rle_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<p> BitReader と BitWriterを使う場合、ファイルの最後の 1 バイトの中で、どこまでが符号語として有効なビットか区別することができません。ゴミの部分を誤って復号することもありえるので、元のファイルサイズをファイルの先頭にセットすることにします。
+</p>
+<p> Rustの場合、構造体 std::fs::Metadata にファイルの情報を取得するメソッドが用意されています。fs::metadata(ファイル名) で Metadata を生成し、そのメソッド len() でファイルサイズを取得します。そして、その値を putbits() でファイルに書き込みます。
+</p>
+<p> 記号 c を出力するときは putbits(8, c) で行い、連長を出力するときは整数の符号化を行います。これは符号化を行うメソッドを呼び出すだけです。同じ記号をカウントするとき、その上限値をチェックする必要ありません。256 以上の大きな値でも符号化することができます。今回はガンマ符号を使いましたが、他の符号を使ってもかまいません。
+</p>
+
+<p> 次は復号を行う プログラムを修正します。
+</p>
+<pre class="list">
+リスト : ランレングス復号 (rldb.rs)
+
+extern crate bitio;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+use std::error::Error;
+use bitio::BitReader;
+
+fn rld_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut rd = BitReader::open(src)?;
+    let mut wr = BufWriter::new(File::create(dst)?);
+    let mut n = rd.getbits(64)?;   // ファイルサイズの取得
+    while n &gt; 0 {
+        let c = rd.getbits(8)?;
+        let m = rd.gamma_decode()? + 1;
+        if m &gt; n {
+            panic!("Oops!, broken file");
+        }
+        for _ in 0 .. m { wr.write(&amp;[c as u8])?; }
+        n -= m;
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: rld input_file output_file");
+    } else {
+        match rld_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<p> 最初に getbits() でファイルサイズを取得します。あとは、記号の復号は getbits(8) で、連長の復号は gamma_decode() を呼び出すだけです。
+</p>
+<p> それでは実行結果を示します。<a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> の中の ptt5 を圧縮します。
+</p>
+<pre>
+元のファイル : 513,216
+ランレングス : 152,564
+ガンマ符号　 :  96,514
+</pre>
+<p> 連長を符号化する効果は十分に出ていますね。ところで、ptt5 のエントロピーを計算すると 1.210176 になるので、下限値は 77,636 byte になります。算術符号やレンジコーダ (range coder) を使うと、下限値に近いところまで圧縮することが可能です。興味のある方は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo36.html">レンジコーダ</a> をお読みくださいませ。
+</p>
+<h4>●<a name="cite">参考文献</h4>
+<ol>
+  <li>奥村晴彦,『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991</li>
+  <li>植松友彦, 『文書データ圧縮アルゴリズム入門』, ＣＱ出版社, 1994</li>
+  <li>奥村晴彦, 『データ圧縮の基礎から応用まで』, C MAGAZINE 2002 年 7 月号, ソフトバンク</li>
+</ol>
+<hr>
+<h4 id="list2">●プログラムリスト</h4>
+<pre class="list">
+//
+// bitio.rs : ビット入出力と整数の符号化
+//
+//            Copyright (C) 2017 Makoto Hiroi
+//
+use std::fs::File;
+use std::io::{Result, BufReader, Read, BufWriter, Write};
+
+pub struct BitReader {
+    reader: BufReader&lt;File&gt;,
+    buff: [u8; 1],
+    cnt: i8
+}
+
+pub struct BitWriter {
+    writer: BufWriter&lt;File&gt;,
+    buff: [u8; 1],
+    cnt: i8
+}
+
+impl Drop for BitWriter {
+    fn drop(&amp;mut self) {
+        if self.cnt &lt; 8 {
+            self.writer.write(&amp;mut self.buff).unwrap();
+        }
+    }
+}
+
+impl BitReader {
+    // リードオープン
+    pub fn open(filename: &amp;str) -&gt; Result&lt;BitReader&gt; {
+        let fs = File::open(filename)?;
+        Ok(BitReader { reader: BufReader::new(fs), buff: [0], cnt: 0 })
+    }
+
+    // 1 bit 読み込み
+    pub fn getbit(&amp;mut self) -&gt; Result&lt;u64&gt; {
+        self.cnt -= 1;
+        if self.cnt &lt; 0 {
+            self.reader.read(&amp;mut self.buff)?;
+            self.cnt = 7
+        }
+        Ok(((self.buff[0] &gt;&gt; self.cnt) &amp; 0x01) as u64)
+    }
+
+    // n bit 読み込み
+    pub fn getbits(&amp;mut self, n: u64) -&gt; Result&lt;u64&gt; {
+        let mut v = 0;
+        let mut p = 1 &lt;&lt; (n - 1);
+        while p &gt; 0 {
+            let b = self.getbit()?;
+            if b == 1 { v |= p; }
+            p &gt;&gt;= 1;
+        }
+        Ok(v)
+    }
+
+    // アルファ符号
+    pub fn alpha_decode(&amp;mut self) -&gt; Result&lt;u64&gt; {
+        let mut n = 0;
+        loop {
+            let b = self.getbit()?;
+            if b != 0 { return Ok(n); }
+            n += 1;
+        }
+    }
+
+    // ガンマ符号
+    pub fn gamma_decode(&amp;mut self) -&gt; Result&lt;u64&gt; {
+        let mut n1 = self.alpha_decode()?;
+        if n1 &gt; 0 {
+            let n2 = self.getbits(n1)?;
+            n1 = (1 &lt;&lt; n1) + n2 - 1;
+        }
+        Ok(n1)
+    }
+
+    // デルタ符号
+    pub fn delta_decode(&amp;mut self) -&gt; Result&lt;u64&gt; {
+        let mut n1 = self.gamma_decode()?;
+        if n1 &gt; 0 {
+            let n2 = self.getbits(n1)?;
+            n1 = (1 &lt;&lt; n1) + n2 - 1;
+        }
+        Ok(n1)
+    }
+
+    // CBT 符号
+    pub fn cbt_decode(&amp;mut self, m: u64, k: u64) -&gt; Result&lt;u64&gt; {
+        let limit = (1 &lt;&lt; k) - m;
+        let mut n = self.getbits(k - 1)?;
+        if n &gt;= limit {
+            n = (n &lt;&lt; 1) + self.getbit()? - limit;
+        }
+        Ok(n)
+    }
+
+    // ライス符号
+    pub fn rice_decode(&amp;mut self, k: u64) -&gt; Result&lt;u64&gt; {
+        let n = self.alpha_decode()?;
+        Ok((n &lt;&lt; k) + self.getbits(k)?)
+    }
+}
+
+impl BitWriter {
+    // ライトオープン
+    pub fn create(filename: &amp;str) -&gt; Result&lt;BitWriter&gt; {
+        let fs = File::create(filename)?;
+        Ok(BitWriter { writer: BufWriter::new(fs), buff: [0], cnt: 8 })
+    }
+
+    // 1 bit 書き込み
+    pub fn putbit(&amp;mut self, bit: u64) -&gt; Result&lt;()&gt; {
+        self.cnt -= 1;
+        if bit &gt; 0 {
+            self.buff[0] |= 1 &lt;&lt; self.cnt;
+        }
+        if self.cnt == 0 {
+            self.writer.write(&amp;mut self.buff)?;
+            self.buff[0] = 0;
+            self.cnt = 8;
+        }
+        Ok(())
+    }
+
+    // n bit 書き込み
+    pub fn putbits(&amp;mut self, n: u64, x: u64) -&gt; Result&lt;()&gt; {
+        let mut p = 1 &lt;&lt; (n - 1);
+        while p &gt; 0 {
+            self.putbit(p &amp; x)?;
+            p &gt;&gt;= 1;
+        }
+        Ok(())
+    }
+
+    // アルファ符号
+    pub fn alpha_encode(&amp;mut self, n: u64) -&gt; Result&lt;()&gt; {
+        for _ in 0 .. n {
+            self.putbit(0)?;
+        }
+        self.putbit(1)?;
+        Ok(())
+    }
+
+    // ガンマ符号
+    pub fn gamma_encode(&amp;mut self, n: u64) -&gt; Result&lt;()&gt; {
+        let mut n1 = 0;
+        let mut n2 = (n + 1) &gt;&gt; 1;
+        while n2 &gt; 0 {
+            n1 += 1;
+            n2 &gt;&gt;= 1;
+        }
+        self.alpha_encode(n1)?;
+        if n1 &gt; 0 { self.putbits(n1, n + 1)?; }
+        Ok(())
+    }
+
+    // デルタ符号
+    pub fn delta_encode(&amp;mut self, n: u64) -&gt; Result&lt;()&gt; {
+        let mut n1 = 0;
+        let mut n2 = (n + 1) &gt;&gt; 1;
+        while n2 &gt; 0 {
+            n1 += 1;
+            n2 &gt;&gt;= 1;
+        }
+        self.gamma_encode(n1)?;
+        if n1 &gt; 0 { 
+            self.putbits(n1, n + 1)?;
+        }
+        Ok(())
+    }
+
+    // CBT 符号
+    pub fn cbt_encode(&amp;mut self, n: u64, m: u64, k: u64) -&gt; Result&lt;()&gt; {
+        let limit = (1 &lt;&lt; k) - m;
+        if n &lt; limit {
+            self.putbits(k - 1, n)?;
+        } else {
+            self.putbits(k, n + limit)?;
+        }
+        Ok(())
+    }
+
+    // ライス符号
+    pub fn rice_encode(&amp;mut self, n: u64, k: u64) -&gt; Result&lt;()&gt; {
+        self.alpha_encode(n &gt;&gt; k)?;
+        self.putbits(k, n)?;
+        Ok(())
+    }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 接尾辞配列 (suffix array)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881797</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>接尾辞配列 (suffix array) [4]</h2>
+<div class="small">
+[ <a href="pyalgo45.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo47.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 接尾辞配列 (suffix array) の続きです。今回は ratio-2 による三分割法の改良方法について説明します。
+</p>
+
+<h4>●ratio-2 による三分割法の改良</h4>
+<p> 三分割法に ratio-2 を適用する場合、2 つの方法が考えられます。ひとつは、最初の三分割を ratio-2 で行う方法です。もうひとつは最初の三分割を ratio-1 で行い、そのあとで ratio-2 を適用する方法です。ここでは三分割法のプログラムを改造することで簡単に対応できる、後者の方法を採用することにします。
+</p>
+
+<p> また、この方法でも ratio-2 に三分割法 (Si &gt; Si+2, Si = Si+2, Si &lt; Si+2) を適用できると考えられますが、Si = Si+2 の部分に他の Type と依存関係があるため、サフィックスの順序を決定できない場合があります。この部分を場合分けしてソートすることもできますが、プログラムがかなり複雑になると思われます。そこで、今回の ratio-2 は二分割にとどめます。ratio-2 の三分割は今後の課題にしたいと思います。
+</p>
+
+<p> ratio-1 で三分割したあと ratio-2 を適用する場合、ソートするタイプで場合分けが異なります。次の図を見てください。
+</p>
+
+<pre class="fig">
+┌─┬─┬─┬─┬─┬─┐        
+│  │ａ│ｂ│ｃ│ｄ│ｅ│Si+1    
+├─┼─┼─┼─┼─┼─┤     1. Type C をソートする場合
+│ａ│Ｂ│Ｃ│Ｃ│Ｃ│Ｃ│        Type C を ratio-2 で二分割する
+├─┼─┼─┼─┼─┼─┤        
+│ｂ│Ａ│Ｂ│Ｃ│Ｃ│Ｃ│        Type D : Si &gt; Si+2
+├─┼─┼─┼─┼─┼─┤        Type E : Si &lt;= Si+2 (ソートする)
+│ｃ│Ａ│Ａ│Ｂ│Ｃ│Ｃ│
+├─┼─┼─┼─┼─┼─┤     2. Type A をソートする場合
+│ｄ│Ａ│Ａ│Ａ│Ｂ│Ｃ│        Type A を ratio-2 で二分割する
+├─┼─┼─┼─┼─┼─┤        
+│ｅ│Ａ│Ａ│Ａ│Ａ│Ｂ│        Type D : Si &gt;= Si+2 (ソートする)  
+└─┴─┴─┴─┴─┴─┘        Type E : Si &lt; Si+2
+  Si                              
+
+
+        図 : 三分割法に ratio-2 を適用 (1)
+</pre>
+
+<p> Type C をソートする場合、Type C を ratio-2 で二分割します。この場合、文字 a から順番にソートしていくので、Si &gt; Si+2 (Type D) と Si &lt;= Si+2 (Type E) に分けて、Type E をソートします。Type D は今までと同様にソート結果を使ってサフィックスの順序を決定できます。
+</p>
+
+<p> Type A をソートする場合、Type A を ratio-2 で二分割します。この場合、文字 e からソートしていくので、Si &gt;= Si+2 (Type D) と Si &lt; Si+2 (Type E) に分けて、Type D をソートします。Type E はコピーによりサフィックスの順序を決定できます。
+</p>
+
+<p> この処理は下図のように表すことができます。文字 b, c, d の部分だけを示します。
+</p>
+
+<pre class="fig">
+(1) Type C を分割        (2) Type A を分割
+┌─┬─┬─┬─┐       ┌─┬─┬─┬─┐
+│  │ｂ│ｃ│ｄ│Si+1   │  │ｂ│ｃ│ｄ│Si+1  
+├─┼─┼─┼─┤       ├─┼─┼─┼─┤
+│  │  │Ｄ│Ｄ│       │ｂ│Ｂ│Ｃ│Ｃ│
+│ｂ│Ｂ├─┼─┤       ├─┼─┼─┼─┤
+│  │  │Ｅ│Ｅ│       │  │Ｄ│  │  │
+├─┼─┼─┼─┤       │ｃ├─┤Ｂ│Ｃ│
+│  │  │  │Ｄ│       │  │Ｅ│  │  │
+│ｃ│Ａ│Ｂ├─┤       ├─┼─┼─┼─┤
+│  │  │  │Ｅ│       │  │Ｄ│Ｄ│  │
+├─┼─┼─┼─┤       │ｄ├─┼─┤Ｂ│
+│ｄ│Ａ│Ａ│Ｂ│       │  │Ｅ│Ｅ│  │
+└─┴─┴─┴─┘       └─┴─┴─┴─┘
+  Si                       Si
+  Type E をソート          Type D をソート
+  Type D はセット          Type E はセット
+
+
+    図 : 三分割法に ratio-2 を適用 (2)
+</pre>
+<p> Type C に ratio-2 を適用すると、区間の前半が Type D で後半が Type E に分けらます。ソートするのは Type E だけで、Type D のサフィックスの順序はソート結果から決定できます。
+</p>
+
+<p> たとえば、区間 bc, bd の Type D は bca... や bda... というサフィックスになるので、文字 a がソートされていればサフィックスの位置を決定できます。文字 a の Type C は Type E しかないので、この区間はすべてソートされます。同様に、区間 cd の Type D は cda... や cdb... というサフィックスになるので、文字 a と b がソートされていればサフィックスの順序を決定できます。次の図を見てください。
+</p>
+
+<pre class="fig">
+       Set       Set
+   │─ ａ →│─ ｂ →│───── Sort ─────→│
+   ┌────┬────┬────┬────┬────┐
+cd │   Ｄ   │   Ｄ   │   Ｅ   │   Ｅ   │   Ｅ   │   
+   └────┴────┴────┴────┴────┘
+   │- cda  -│- cdb  -│- cdc  -│- cdd  -│- cde  -│
+
+
+                図 : Type D の位置決定
+</pre>
+<p> 区間 cd の Type D で、区間 cda のインデックスは区間 a からセットされ、区間 cdb のインデックスは区間 b からセットされます。前から順番にセットしていくので、Type D の区間も前から順番にセットされていくことに注意してください。
+</p>
+
+<p> Type A に ratio-2 を適用する場合も同じです。今度は区間の前半である Type D をソートして、区間の後半である Type E はソート結果によりサフィックスの順序が決定されます。
+</p>
+
+<p> たとえば、区間 db, dc の Type E は dbe... や dce... というサフィックスになるので、記号 e がソートされていればサフィックスの順序を決定できます。記号 e の Type A は Type D しかないので、この区間はすべてソートされます。同様に、区間 cb の Type E は cbd... や cbe... というサフィックスになるので、記号 e と d がソートされていればサフィックスの順序を決定できます。次の図を見てください。
+</p>
+
+<pre class="fig">
+                                     Set       Set
+   │───── Sort ─────→│← ｄ ─│← ｅ ─│
+   ┌────┬────┬────┬────┬────┐
+cb │   Ｄ   │   Ｄ   │   Ｄ   │   Ｅ   │   Ｅ   │   
+   └────┴────┴────┴────┴────┘
+   │- cba  -│- cbb  -│- cbc  -│- cbd  -│- cbe  -│
+
+
+              図 : Type E の位置決定
+</pre>
+<p> 区間 cb の Type E で、区間 cbe のインデックスは区間 e からセットされ、区間 cbd の部分は区間 d からセットされます。後ろの文字からソートしていくので、Type E の区間も後ろからセットされていくことに注意してください。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは、ratio-2 を適用した三分割法のプログラムを作りましょう。関数 suffix_sort は三分割法 ratio-1 と同じです。Type C をソートする関数 sort_type_c は次のようになります。
+</p>
+<pre class="list">
+リスト : 三分割法(ratio-2) Type C をソート
+
+def sort_type_c():
+    global start2
+    start2 = [0] * (SIZE + 1)
+    for x in xrange(256):
+        for y in xrange(x + 1, 256):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1]
+            start2[(x &lt;&lt; 8) + y] = low
+            m = low
+            for n in xrange(low, high):
+                i = idx[n]
+                if buff[i] &gt; buff[i + 2]:
+                    idx[n] = idx[m]
+                    idx[m] = i
+                    m += 1
+            if high - m &gt; 1:
+                mqsort(m, high - 1, 2)
+    # Type A, B をセット
+    set_type_ab()
+</pre>
+<p> Type C をソートする場合、Type C の区間を Type D と Type E に分割してから Type E の区間をソートします。Type D は前から後ろへインデックスをセットしていくので、Type D の先頭の位置を配列 start2 に格納しておきます。あとは文字 buff[i] と buff[i + 2] を比較して、データを Type D と Type E に分割します。そして、Type E のデータをマルチキークイックソート (mqsort) でソートします。
+</p>
+
+<p> Type A をソートする関数 sort_type_a では、記号の比較を buff[i] &lt;= buff[i + 2] とし、Type E に Si = Si+2 のデータを含めます。そして、Type D をソートして Type E をコピーするので、start2 にはType E の最後尾の位置をセットして、インデックスを後ろから前へセットしていきます。
+</p>
+
+<p> セット処理も難しくありません。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 三分割法(ratio-2) Type A, B をセット
+
+def set_type_ab():
+    start = [0] * 256
+    end = [0] * 256
+    # 最後尾のデータをセット
+    z1 = -1
+    i = data_size
+    if buff[i - 1] &gt;= buff[i]:
+        c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+        idx[count_sum[c]] = data_size - 1
+        z1 = c
+    z2 = -1
+    if buff[i - 2] &gt; buff[i] and buff[i - 2] &lt; buff[i - 1]:
+        c = (buff[i - 2] &lt;&lt; 8) + buff[i - 1]
+        idx[count_sum[c]] = i - 2
+        z2 = c
+    #
+    for i in xrange(0, 256):
+        for j in xrange(i, 256):
+            start[j] = count_sum[(j &lt;&lt; 8) + i]
+            if (j &lt;&lt; 8) + i == z1: start[j] += 1
+            if (j &lt;&lt; 8) + i == z2: start[j] += 1
+            end[j] = count_sum[(j &lt;&lt; 8) + i + 1] - 1
+        # 前から後ろへ
+        j = count_sum[i &lt;&lt; 8]
+        while j &lt; start[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &gt;= buff[x]:
+                c = buff[x - 1]
+                idx[start[c]] = x - 1
+                start[c] += 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &gt; buff[x] and buff[x - 2] &lt; buff[x - 1]:
+                c = (buff[x - 2] &lt;&lt; 8) + buff[x - 1]
+                idx[start2[c]] = x - 2
+                start2[c] += 1
+            j += 1
+        # 後ろから前へ
+        j = count_sum[(i + 1) &lt;&lt; 8] - 1
+        work = []
+        while j &gt; end[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &gt;= buff[x]:
+                c = buff[x - 1]
+                idx[end[c]] = x - 1
+                end[c] -= 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &gt; buff[x] and buff[x - 2] &lt; buff[x - 1]:
+                work.append(x - 2)
+            j -= 1
+        # work からコピーする
+        while len(work) &gt; 0:
+            x = work.pop()
+            c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+            idx[start2[c]] = x
+            start2[c] += 1
+</pre>
+
+<p> リストは少々長いですが、今までのセット処理に ratio-2 用の処理が追加されているだけです。最初に最後尾のデータをセットします。変数 z1 には ratio-1 でインデックスをセットした区間を、変数 z2 では ratio-2 でインデックスをセットした区間をセットします。そして、start にデータをセットするとき、z1, z2 と同じ区間であれば start の値を +1 するようにします。
+</p>
+
+<p> Type E をソートして Type A, B, D のインデックスをセットする場合、前から後ろへセットするときは簡単です。buff[x - 2] &gt; buff[x] and buff[x - 2] &lt; buff[x - 1] を満たせば ratio-2 のデータです。start2 の位置へインデックスをセットします。後ろから前へセットする場合は、ratio-2 のデータを配列 work にセットします。work はスタックとして使用します。そのあとで、work からデータを取り出して、start2 の位置へインデックスをセットします。
+</p>
+
+<p> Type D をソートして Type B, C, E へコピーする関数 set_type_bc の場合は、インデックスを前から後ろへセットするときに work を使います。そして、ratio-2 のデータの判定が buff[x - 2] &lt; buff[x] and buff[x - 2] &gt; buff[x - 1] になることに注意してください。
+</p>
+
+<p> あとはとくに難しいところはないと思います。説明は割愛いたしますので、詳細は <a href="pyalgo46.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> で suffix array を作成してみましょう。結果は suffix_sort の時間で、ファイルの入出力処理は含んでいません。結果は次にようになりました。
+</p>
+<pre>
+  表 : suffix array の作成 (suffix_sort の時間)
+
+ファイル名      サイズ     TS1        TS2        ABC'       ABC2
+-------------------------------------------------------------------
+alice29.txt    152,089     2.95       2.69       2.67       2.52
+                         (74,618)   (53.507)   (67,459)   (48,384)
+asyoulik.txt   125,179     2.29       2.04       2.19       2.02
+                         (62,477)   (42,567)   (58,834)   (40,898)
+cp.html         24,603     0.61       0.55       0.59       0.58
+                         (12,901)    (8.981)   (11,181)    (7,814)
+fields.c        11,150     0.34       0.33       0.30       0.32
+                          (6,251)    (4,230)    (4,699)    (3,156)
+grammar.lsp      3,721     0.16       0.18       0.16       0.22
+                          (2,231)    (1,679)    (1,357)    (1,078)
+kennedy.xls  1,029,744    26.82      22.85      16.54      13.06
+                        (623,975)  (467,929)  (404,858)  (201,689)
+lcet10.txt     426,754    10.59       9.17       8.41       7.46
+                        (219,172)  (157,115)  (194,732)  (137,506)
+plrabn12.txt   481,861     9.28       8.05       8.86       7.92
+                        (234,061)  (162,222)  (224,466)  (158,938)
+ptt5           513,216     ----       ----       4.66       5.17
+                                               (34,601)   (29,788)
+sum             38,240     2.84       2.17       1.83       1.46
+                         (23,496)   (18,559)   (13,175)   (10,187)
+xargs.1          4,227     0.14       0.17       0.17       0.22
+                          (2,053)    (1,351)    (1,981)    (1,333)
+-------------------------------------------------------------------
+合計         2,810,784     ----       ----      46.38      40.95
+
+
+ファイル名   サイズ    LS    ABC'         ABC2
+-----------------------------------------------------
+repeat1.txt   2,600   0.14   0.44 (99)    0.50 (99)
+repeat2.txt   5,200   0.25   1.32 (199)   1.38 (199)
+repeat4.txt  10,400   0.47   4.74 (399)   4.79 (399)
+repeat8.txt  20,800   0.95  18.25 (799)  18.33 (799)
+
+# 時間の単位 : 秒, () : ソートしたデータ数
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+
+<p> 三分割法 ratio-2 (ABC2) は、二段階ソート法 (TS1, TS2) や三分割法 ratio-1 (ABC') よりもソートした個数が少なくなり、その分だけ実行速度が速くなるファイルが多くなりました。とくに、kennedy.xls は ratio-2 の効果がとても大きく、ここまで速くなるとは M.Hiroi も予想していませんでした。三分割法に ratio-2 を適用した効果は十分に出ていると思います。ただし、ratio-2 のプログラムは少し複雑になるので、小さなファイルでは実行速度が遅くなる場合もあります。
+</p>
+
+<p> ところで、三分割法 ratio-2 にランクソート法を適用することもできます。説明は割愛いたしますので、詳細は <a href="pyalgo46.html#list2">プログラムリスト２</a> をお読みください。結果は次のようになりました。
+</p>
+<pre>
+    表 : suffix array の作成 (suffix_sort の時間)
+
+ファイル名      サイズ    LS    TSR1   TSR2   ABC'R  ABC2R
+-----------------------------------------------------------
+alice29.txt    152,089   4.10   2.96   2.48   2.73   2.56
+asyoulik.txt   125,179   3.25   2.37   1.94   2.28   2.10
+cp.html         24,603   0.56   0.49   0.45   0.48   0.51
+fields.c        11,150   0.28   0.28   0.28   0.27   0.31
+grammar.lsp      3,721   0.12   0.15   0.17   0.16   0.21
+kennedy.xls  1,029,744  31.14  26.50  20.75  18.19  13.64
+lcet10.txt     426,754  12.62   9.33   7.54   8.34   7.45
+plrabn12.txt   481,861  14.52   9.69   7.75   9.43   8.46
+ptt5           513,216  24.33   ----   ----   4.19   4.68
+sum             38,240   0.89   0.93   0.85   0.60   0.67
+xargs.1          4,227   0.13   0.14   0.17   0.17   0.22
+-----------------------------------------------------------
+合計         2,810,784  91.94   ----   ----  46.84  40.81
+
+
+ファイル名   サイズ    LS    ABC'   ABC'R  ABC2R
+-------------------------------------------------
+repeat1.txt   2,600   0.14   0.44   0.17   0.22
+repeat2.txt   5,200   0.25   1.32   0.25   0.30
+repeat4.txt  10,400   0.47   4.74   0.44   0.52
+repeat8.txt  20,800   0.95  18.25   0.99   1.07
+
+
+# 時間の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+
+<p> テキストファイルの場合、三分割法 ratio-2 にランクソート (ABC2R) を適用した効果はほとんどないようです。バイナリファイルの場合、データによってはランクソートが効果的なようで、sum の実行速度は速くなりました。repeat*.txt のように繰り返しの多いデータは、ランクソートの効果により実行速度は速くなりましたが、ratio-2 のプログラムが複雑になる分だけ、ratio-1 よりも少し遅くなるようです。
+</p>
+<p> ランクソート法は、三分割法 ratio-2 でも最悪時の性能を改善する効果があるのは確かなようですが、小さなファイルではその効果は少ないようです。興味のある方は、もっと大きなファイルで試してみてください。
+</p>
+
+<p> なお、これらの結果は M.Hiroi のコーディング、実行したマシン、コンパイラなどの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>儘田真吾, 『suffix array の構築 --- 二段階ソート法とその改良』, http://www.isl.cs.gunma-u.ac.jp/~shingo/algo.html (閉鎖されました)
+  <li>広井誠, 『高性能圧縮ツール bsrc の改良 bsrc2（前編）』, Interface 2004 年 10 月号, ＣＱ出版社
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# mksa43.py : Suffix Array の構築 (two-stage sort, 三分割法 ratio-2)
+#
+#             Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, os.path
+from array import *
+
+# 定数
+SIZE = 256 * 256
+LIMIT = 10
+
+# 記号の取得
+def getcode(x):
+    if x &lt; data_size: return buff[x]
+    return -1
+
+# ソート用比較関数
+def compare(x, y, n):
+    for i in xrange(n, data_size - max(x, y)):
+        r = buff[x + i] - buff[y + i]
+        if r != 0: return r
+    return y - x
+
+# 挿入ソート
+def insert_sort(low, high, n):
+    for i in xrange(low + 1, high + 1):
+        temp = idx[i]
+        j = i - 1
+        while j &gt;= low and compare(temp, idx[j], n) &lt; 0:
+            idx[j + 1] = idx[j]
+            j -= 1
+        idx[j + 1] = temp
+
+# 枢軸の選択
+def select_pivot(low, high, n):
+    m = (high - low) / 4
+    a = getcode(idx[low + m] + n)
+    b = getcode(idx[low + m * 2] + n)
+    c = getcode(idx[low + m * 3] + n)
+    if a &gt; b:
+        tmp = a
+        a = b
+        b = tmp
+    if b &gt; c:
+        b = c
+        if a &gt; b: b = a
+    return b
+
+# マルチキークイックソート
+def mqsort(low, high, n = 0):
+    while True:
+        if high - low &lt;= LIMIT:
+            insert_sort(low, high, n)
+            return
+        # 枢軸
+        p = select_pivot(low, high, n)
+        # 4 分割
+        i = m1 = low
+        j = m2 = high
+        while True:
+            while i &lt;= j:
+                k = getcode(idx[i] + n) - p
+                if k &gt; 0: break
+                if k == 0:
+                    idx[i], idx[m1] = idx[m1], idx[i]
+                    m1 += 1
+                i += 1
+            while i &lt;= j:
+                k = getcode(idx[j] + n) - p
+                if k &lt; 0: break
+                if k == 0:
+                    idx[j], idx[m2] = idx[m2], idx[j]
+                    m2 -= 1
+                j -= 1
+            if i &gt; j: break
+            idx[i], idx[j] = idx[j], idx[i]
+            i += 1
+            j -= 1
+        # 等しいデータを中央に集める
+        for k in xrange(min(m1 - low, i - m1)):
+            idx[low + k], idx[j - k] = idx[j - k], idx[low + k]
+        m1 = low + (i - m1)
+        for k in xrange(min(high - m2, m2 - j)):
+            idx[i + k], idx[high - k] = idx[high - k], idx[i + k]
+        m2 = high - (m2 - j) + 1
+        mqsort(low, m1 - 1, n)
+        mqsort(m2, high, n)
+        if m1 &gt;= m2: break
+        low = m1
+        high = m2 - 1
+        n += 1
+
+# Type A, B をセット
+def set_type_ab():
+    start = [0] * 256
+    end = [0] * 256
+    # 最後尾のデータをセット
+    z1 = -1
+    i = data_size
+    if buff[i - 1] &gt;= buff[i]:
+        c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+        idx[count_sum[c]] = data_size - 1
+        z1 = c
+    z2 = -1
+    if buff[i - 2] &gt; buff[i] and buff[i - 2] &lt; buff[i - 1]:
+        c = (buff[i - 2] &lt;&lt; 8) + buff[i - 1]
+        idx[count_sum[c]] = i - 2
+        z2 = c
+    #
+    for i in xrange(0, 256):
+        for j in xrange(i, 256):
+            start[j] = count_sum[(j &lt;&lt; 8) + i]
+            if (j &lt;&lt; 8) + i == z1: start[j] += 1
+            if (j &lt;&lt; 8) + i == z2: start[j] += 1
+            end[j] = count_sum[(j &lt;&lt; 8) + i + 1] - 1
+        # 前から後ろへ
+        j = count_sum[i &lt;&lt; 8]
+        while j &lt; start[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &gt;= buff[x]:
+                c = buff[x - 1]
+                idx[start[c]] = x - 1
+                start[c] += 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &gt; buff[x] and buff[x - 2] &lt; buff[x - 1]:
+                c = (buff[x - 2] &lt;&lt; 8) + buff[x - 1]
+                idx[start2[c]] = x - 2
+                start2[c] += 1
+            j += 1
+        # 後ろから前へ
+        j = count_sum[(i + 1) &lt;&lt; 8] - 1
+        work = []
+        while j &gt; end[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &gt;= buff[x]:
+                c = buff[x - 1]
+                idx[end[c]] = x - 1
+                end[c] -= 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &gt; buff[x] and buff[x - 2] &lt; buff[x - 1]:
+                work.append(x - 2)
+            j -= 1
+        # work からコピーする
+        while len(work) &gt; 0:
+            x = work.pop()
+            c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+            idx[start2[c]] = x
+            start2[c] += 1
+
+# Type C をソート
+def sort_type_c():
+    global start2
+    start2 = [0] * (SIZE + 1)
+    for x in xrange(256):
+        for y in xrange(x + 1, 256):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1]
+            start2[(x &lt;&lt; 8) + y] = low
+            m = low
+            for n in xrange(low, high):
+                i = idx[n]
+                if buff[i] &gt; buff[i + 2]:
+                    idx[n] = idx[m]
+                    idx[m] = i
+                    m += 1
+            if high - m &gt; 1:
+                mqsort(m, high - 1, 2)
+    # Type A, B をセット
+    set_type_ab()
+
+# Type B, C をセット
+def set_type_bc():
+    start = [0] * 256
+    end = [0] * 256
+    # 最後尾のデータをセット
+    i = data_size
+    z1 = -1
+    if buff[i - 1] &lt;= buff[i]:
+        c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+        idx[count_sum[c]] = i - 1
+        z1 = c
+    z2 = -1
+    if buff[i - 2] &lt; buff[i] and buff[i - 2] &gt; buff[i - 1]:
+        c = (buff[i - 2] &lt;&lt; 8) + buff[i - 1]
+        idx[count_sum[c]] = i - 1
+        z2 = c
+    for i in xrange(255, -1, -1):
+        for j in xrange(0, i + 1):
+            start[j] = count_sum[(j &lt;&lt; 8) + i]
+            if (j &lt;&lt; 8) + i == z1: start[j] += 1
+            if (j &lt;&lt; 8) + i == z2: start[j] += 1
+            end[j] = count_sum[(j &lt;&lt; 8) + i + 1] - 1
+        # 前から後ろへ
+        j = count_sum[i &lt;&lt; 8]
+        work = []
+        while j &lt; start[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &lt;= buff[x]:
+                c = buff[x - 1]
+                idx[start[c]] = x - 1
+                start[c] += 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &lt; buff[x] and buff[x - 2] &gt; buff[x - 1]:
+                work.append(x - 2)
+            j += 1
+        # 後ろから前へ
+        j = count_sum[(i + 1) &lt;&lt; 8] - 1
+        while j &gt; end[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &lt;= buff[x]:
+                c = buff[x - 1]
+                idx[end[c]] = x - 1
+                end[c] -= 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &lt; buff[x] and buff[x - 2] &gt; buff[x - 1]:
+                c = (buff[x - 2] &lt;&lt; 8) + buff[x - 1]
+                idx[start2[c]] = x - 2
+                start2[c] -= 1
+            j -= 1
+        # work からコピー
+        while len(work):
+            x = work.pop()
+            c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+            idx[start2[c]] = x
+            start2[c] -= 1
+
+
+# Type A をソート
+def sort_type_a():
+    global start2
+    start2 = [0] * (SIZE + 1)
+    for x in xrange(255, -1, -1):
+        for y in xrange(0, x):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1]
+            start2[(x &lt;&lt; 8) + y] = high - 1
+            m = low
+            for n in xrange(low, high):
+                i = idx[n]
+                if buff[i] &gt;= buff[i + 2]:
+                    idx[n] = idx[m]
+                    idx[m] = i
+                    m += 1
+            if m - low &gt; 1:
+                mqsort(low, m - 1, 2)
+    # Type B, C をセット
+    set_type_bc()
+
+# 三分割法 (ratio-2)
+def suffix_sort():
+    global count, count_sum
+    # 分布数えソート
+    count = [0] * SIZE
+    count_sum = [0] * (SIZE + 1)
+    for x in xrange(data_size):
+        count[(buff[x] &lt;&lt; 8) + buff[x + 1]] += 1
+    for x in xrange(1, SIZE + 1):
+        count_sum[x] = count[x - 1] + count_sum[x - 1]
+    for x in xrange(1, SIZE):
+        count[x] += count[x - 1]
+    for x in xrange(data_size - 1, -1, -1):
+        c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+        count[c] -= 1
+        idx[count[c]] = x
+    # Type A, C の個数をカウントする
+    type_a = 0
+    type_c = 0
+    for i in xrange(256):
+        type_a += count_sum[(i &lt;&lt; 8) + i] - count_sum[i &lt;&lt; 8]
+        type_c += count_sum[(i + 1) &lt;&lt; 8] - count_sum[(i &lt;&lt; 8) + i + 1]
+    # 少ない方をソート
+    if type_a &gt; type_c:
+        sort_type_c()
+    else:
+        sort_type_a()
+
+# suffix array の構築
+def make_suffix_array(name):
+    global buff, idx, data_size
+    # 入力
+    data_size = os.path.getsize(name)
+    fin = open(name, 'rb')
+    buff = array('B')
+    buff.fromfile(fin, data_size)
+    buff.append(0)
+    buff.append(0)
+    idx = array('L')
+    for _ in xrange(data_size): idx.append(0)
+    # ソート
+    s = time.clock()
+    suffix_sort()
+    e = time.clock()
+    print "%.3f" % (e - s)
+    # 出力
+    name1 = os.path.basename(name) + '.idx'
+    fout = open(name1, 'wb')
+    idx.tofile(fout)
+    fin.close()
+    fout.close()
+
+#
+make_suffix_array(sys.argv[1])
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# mksa44.py : Suffix Array の構築 (two-stage sort, 三分割法, ランクソート)
+#
+#             Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, os.path
+from array import *
+
+# 定数
+SIZE = 256 * 256
+LIMIT = 10
+
+# ランクの取得
+def getrank(x):
+    if x &lt; data_size: return rank[x]
+    return -1
+
+# ソート用比較関数
+def compare(x, y, n):
+    for i in xrange(n, data_size - max(x, y), 2):
+        r = rank[x + i] - rank[y + i]
+        if r != 0: return r
+    return y - x
+
+# 挿入ソート
+def insert_sort(low, high, n):
+    for i in xrange(low + 1, high + 1):
+        temp = idx[i]
+        j = i - 1
+        while j &gt;= low and compare(temp, idx[j], n) &lt; 0:
+            idx[j + 1] = idx[j]
+            j -= 1
+        idx[j + 1] = temp
+    # ランクの設定
+    for i in xrange(low, high + 1):
+        rank[idx[i]] = i
+
+# 枢軸の選択
+def select_pivot(low, high, n):
+    m = (high - low) / 4
+    a = getrank(idx[low + m] + n)
+    b = getrank(idx[low + m * 2] + n)
+    c = getrank(idx[low + m * 3] + n)
+    if a &gt; b:
+        tmp = a
+        a = b
+        b = tmp
+    if b &gt; c:
+        b = c
+        if a &gt; b: b = a
+    return b
+
+# マルチキークイックソート
+def mqsort(low, high, n = 0):
+    stack = []
+    while True:
+        if high - low &lt;= LIMIT:
+            insert_sort(low, high, n)
+            if len(stack) == 0: break
+            low, high, n = stack.pop()
+            continue
+        #
+        p = select_pivot(low, high, n)
+        # 4 分割
+        i = m1 = low
+        j = m2 = high
+        while True:
+            while i &lt;= j:
+                k = getrank(idx[i] + n) - p
+                if k &gt; 0: break
+                if k == 0:
+                    idx[i], idx[m1] = idx[m1], idx[i]
+                    m1 += 1
+                i += 1
+            while i &lt;= j:
+                k = getrank(idx[j] + n) - p
+                if k &lt; 0: break
+                if k == 0:
+                    idx[j], idx[m2] = idx[m2], idx[j]
+                    m2 -= 1
+                j -= 1
+            if i &gt; j: break
+            idx[i], idx[j] = idx[j], idx[i]
+            i += 1
+            j -= 1
+        # 等しいデータを中央に集める
+        for k in xrange(min(m1 - low, i - m1)):
+            idx[low + k], idx[j - k] = idx[j - k], idx[low + k]
+        m1 = low + (i - m1)
+        for k in xrange(min(high - m2, m2 - j)):
+            idx[i + k], idx[high - k] = idx[high - k], idx[i + k]
+        m2 = high - (m2 - j) + 1
+        if m2 &lt;= high: stack.append((m2, high, n))
+        if m1 &lt;= m2 - 1: stack.append((m1, m2 - 1, n + 2))
+        # &lt; の部分から処理する
+        high = m1 - 1
+
+# Type A, B をセット
+def set_type_ab():
+    start = [0] * 256
+    end = [0] * 256
+    # 最後尾のデータをセット
+    z1 = -1
+    i = data_size
+    if buff[i - 1] &gt;= buff[i]:
+        c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+        idx[count_sum[c]] = data_size - 1
+        z1 = c
+    z2 = -1
+    if buff[i - 2] &gt; buff[i] and buff[i - 2] &lt; buff[i - 1]:
+        c = (buff[i - 2] &lt;&lt; 8) + buff[i - 1]
+        idx[count_sum[c]] = i - 2
+        z2 = c
+    #
+    for i in xrange(0, 256):
+        for j in xrange(i, 256):
+            start[j] = count_sum[(j &lt;&lt; 8) + i]
+            if (j &lt;&lt; 8) + i == z1: start[j] += 1
+            if (j &lt;&lt; 8) + i == z2: start[j] += 1
+            end[j] = count_sum[(j &lt;&lt; 8) + i + 1] - 1
+        # 前から後ろへ
+        j = count_sum[i &lt;&lt; 8]
+        while j &lt; start[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &gt;= buff[x]:
+                c = buff[x - 1]
+                idx[start[c]] = x - 1
+                start[c] += 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &gt; buff[x] and buff[x - 2] &lt; buff[x - 1]:
+                c = (buff[x - 2] &lt;&lt; 8) + buff[x - 1]
+                idx[start2[c]] = x - 2
+                start2[c] += 1
+            j += 1
+        # 後ろから前へ
+        j = count_sum[(i + 1) &lt;&lt; 8] - 1
+        work = []
+        while j &gt; end[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &gt;= buff[x]:
+                c = buff[x - 1]
+                idx[end[c]] = x - 1
+                end[c] -= 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &gt; buff[x] and buff[x - 2] &lt; buff[x - 1]:
+                work.append(x - 2)
+            j -= 1
+        # work からコピーする
+        while len(work) &gt; 0:
+            x = work.pop()
+            c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+            idx[start2[c]] = x
+            start2[c] += 1
+
+# Type C をソート
+def sort_type_c():
+    global start2
+    start2 = [0] * (SIZE + 1)
+    for x in xrange(256):
+        for y in xrange(x + 1, 256):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1]
+            start2[(x &lt;&lt; 8) + y] = low
+            m = low
+            for n in xrange(low, high):
+                i = idx[n]
+                if buff[i] &gt; buff[i + 2]:
+                    idx[n] = idx[m]
+                    idx[m] = i
+                    m += 1
+            if high - m &gt; 1:
+                for z in xrange(low, m):
+                    rank[idx[z]] = m - 1
+                mqsort(m, high - 1, 2)
+    # Type A, B をセット
+    set_type_ab()
+
+# Type B, C をセット
+def set_type_bc():
+    start = [0] * 256
+    end = [0] * 256
+    # 最後尾のデータをセット
+    i = data_size
+    z1 = -1
+    if buff[i - 1] &lt;= buff[i]:
+        c = (buff[i - 1] &lt;&lt; 8) + buff[i]
+        idx[count_sum[c]] = i - 1
+        z1 = c
+    z2 = -1
+    if buff[i - 2] &lt; buff[i] and buff[i - 2] &gt; buff[i - 1]:
+        c = (buff[i - 2] &lt;&lt; 8) + buff[i - 1]
+        idx[count_sum[c]] = i - 1
+        z2 = c
+    for i in xrange(255, -1, -1):
+        for j in xrange(0, i + 1):
+            start[j] = count_sum[(j &lt;&lt; 8) + i]
+            if (j &lt;&lt; 8) + i == z1: start[j] += 1
+            if (j &lt;&lt; 8) + i == z2: start[j] += 1
+            end[j] = count_sum[(j &lt;&lt; 8) + i + 1] - 1
+        # 前から後ろへ
+        j = count_sum[i &lt;&lt; 8]
+        work = []
+        while j &lt; start[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &lt;= buff[x]:
+                c = buff[x - 1]
+                idx[start[c]] = x - 1
+                start[c] += 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &lt; buff[x] and buff[x - 2] &gt; buff[x - 1]:
+                work.append(x - 2)
+            j += 1
+        # 後ろから前へ
+        j = count_sum[(i + 1) &lt;&lt; 8] - 1
+        while j &gt; end[i]:
+            # ratio-1
+            x = idx[j]
+            if x &gt; 0 and buff[x - 1] &lt;= buff[x]:
+                c = buff[x - 1]
+                idx[end[c]] = x - 1
+                end[c] -= 1
+            # ratio-2
+            if x &gt; 1 and buff[x - 2] &lt; buff[x] and buff[x - 2] &gt; buff[x - 1]:
+                c = (buff[x - 2] &lt;&lt; 8) + buff[x - 1]
+                idx[start2[c]] = x - 2
+                start2[c] -= 1
+            j -= 1
+        # work からコピー
+        while len(work):
+            x = work.pop()
+            c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+            idx[start2[c]] = x
+            start2[c] -= 1
+
+# Type A をソート
+def sort_type_a():
+    global start2
+    start2 = [0] * (SIZE + 1)
+    for x in xrange(255, -1, -1):
+        for y in xrange(0, x):
+            low = count_sum[(x &lt;&lt; 8) + y]
+            high = count_sum[(x &lt;&lt; 8) + y + 1]
+            start2[(x &lt;&lt; 8) + y] = high - 1
+            m = low
+            for n in xrange(low, high):
+                i = idx[n]
+                if buff[i] &gt;= buff[i + 2]:
+                    idx[n] = idx[m]
+                    idx[m] = i
+                    m += 1
+            if m - low &gt; 1:
+                mqsort(low, m - 1, 2)
+    # Type B, C をセット
+    set_type_bc()
+
+# 三分割法 (ratio-2)
+def suffix_sort():
+    global count, count_sum
+    # 分布数えソート
+    count = [0] * SIZE
+    count_sum = [0] * (SIZE + 1)
+    for x in xrange(data_size):
+        count[(buff[x] &lt;&lt; 8) + buff[x + 1]] += 1
+    for x in xrange(1, SIZE + 1):
+        count_sum[x] = count[x - 1] + count_sum[x - 1]
+    for x in xrange(1, SIZE):
+        count[x] += count[x - 1]
+    for x in xrange(data_size - 1, -1, -1):
+        c = (buff[x] &lt;&lt; 8) + buff[x + 1]
+        count[c] -= 1
+        idx[count[c]] = x
+        rank[x] = count_sum[c + 1] - 1
+    # Type A, C の個数をカウントする
+    type_a = 0
+    type_c = 0
+    for i in xrange(256):
+        type_a += count_sum[(i &lt;&lt; 8) + i] - count_sum[i &lt;&lt; 8]
+        type_c += count_sum[(i + 1) &lt;&lt; 8] - count_sum[(i &lt;&lt; 8) + i + 1]
+    # 少ない方をソート
+    if type_a &gt; type_c:
+        sort_type_c()
+    else:
+        sort_type_a()
+
+# suffix array の構築
+def make_suffix_array(name):
+    global buff, idx, data_size, rank
+    # 入力
+    data_size = os.path.getsize(name)
+    fin = open(name, 'rb')
+    buff = array('B')
+    buff.fromfile(fin, data_size)
+    buff.append(0)
+    buff.append(0)
+    idx = array('L')
+    rank = array('L')
+    for _ in xrange(data_size):
+        idx.append(0)
+        rank.append(0)
+    # ソート
+    s = time.clock()
+    suffix_sort()
+    e = time.clock()
+    print "%.3f" % (e - s)
+    # 出力
+    name1 = os.path.basename(name) + '.idx'
+    fout = open(name1, 'wb')
+    idx.tofile(fout)
+    fin.close()
+    fout.close()
+
+#
+make_suffix_array(sys.argv[1])
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo45.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo47.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

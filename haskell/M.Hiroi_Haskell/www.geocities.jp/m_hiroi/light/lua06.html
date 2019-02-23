@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Lua プログラミング超入門</title>
+  <meta name="description" content="Lua,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881802</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lua Programming</h1>
+<h2>お気楽 Lua プログラミング超入門</h2>
+<div class="small">
+[ <a href="lua05.html">PrevPage</a> | <a href="lua.html">L u a</a> | <a href="lua07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap12">継承</h3>
+<p> 前回は簡単な例題として連結リストという基本的なデータ構造を作成しました。今回は「継承 (inheritance : インヘリタンス) 」について説明します。
+</p>
+
+<h4>●継承とは？</h4>
+<p> クラスベースのオブジェクト指向では、クラスに親子関係を持たせることを「継承」といいます。子クラスは親クラスの性質を受け継ぐことができます。オブジェクト指向言語の場合、引き継ぐ性質は定義されたインスタンス変数やメソッドなどになります。プログラムを作る場合、今まで作ったプログラムと同じような機能が必要になることがありますが、継承を使うことでその機能を受け継ぎ、新規の機能や変更される機能だけプログラムする、いわゆる差分プログラミングが可能になります。 
+</p>
+
+<p> クラスを継承する場合、その元になるクラスを「スーパークラス」とか「ベースクラス」と呼びます。そして、継承したクラスを「サブクラス」と呼びます。この呼び方は言語によってまちまちで統一されていません。Ｃ++の場合は、元になるクラスを基本クラスといい、継承するクラスを派生クラスとか導出クラスといいます。
+</p>
+
+<p> たとえば、クラス Foo1 を継承してクラス Foo2 を定義しましょう。クラス Foo1 にはメソッド bar が定義されています。クラス Foo2 にメソッド bar は定義されていませんが、Foo2 のオブジェクトに対して bar を呼び出すと、スーパークラス Foo1 の bar が実行されるのです。
+</p>
+
+<p> メソッドの選択は次のように行われます。まず、オブジェクトが属するクラス Foo2 にメソッド bar が定義されているか調べます。ところが、Foo2 には bar が定義されていないので、スーパークラス Foo1 に bar が定義されているか調べます。ここでメソッド bar が見つかり、それを実行するのです。このように、メソッドが見つかるまで順番にスーパークラスを調べていきますが、最上位のスーパークラスまで調べてもメソッドが見つからない場合はエラーになります。
+</p>
+
+<p> 継承したクラスのメソッドとは違う働きをさせたい場合、同名のメソッドを定義することで、そのクラスのメソッドを設定することができます。これをオーバーライド (over ride) といいます。メソッドを選択する仕組みから見た場合、オーバーライドは必然の動作です。メソッドはサブクラスからスーパークラスに向かって探索されるので、スーパークラスのメソッドよリサブクラスのメソッドが先に選択されるわけです。 
+</p>
+
+<h4>●継承の実装</h4>
+<p> Lua にクラスはありませんが、あるオブジェクトのインスタンス変数やメソッドを引き継ぐことは簡単に行うことができます。クラスを表すオブジェクトにおいて、メタテーブルのフィールド __index に、スーパークラスを表すオブジェクトを設定するだけです。フィールドの探索はメタテーブルをたどって行われるので、メタテーブルのオブジェクトがスーパークラス的な役割をはたしていると考えることができます。
+</p>
+<p> 簡単な例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 1 : 継承
+
+Foo = {}
+function Foo.new()
+  return setmetatable({a = 10}, {__index = Foo})
+end
+
+function Foo:get_a() return self.a end
+function Foo:set_a(x) self.a = x end
+
+
+Bar = {}
+-- Foo を継承
+setmetatable(Bar, {__index = Foo})
+
+function Bar.new()
+  local obj = Foo.new()
+  obj.b = 20
+  return setmetatable(obj, {__index = Bar})
+end
+
+function Bar:get_b() return self.b end
+function Bar:set_b(x) self.b = x end
+</pre>
+<p> 継承のポイントは Bar のメタテーブルのフィールド __index  に Foo を指定するところです。そして、Bar.new では Foo.new で生成したインスタンスに Bar で使用するフィールドを追加し、メタテーブルには __index = Bar を設定します。
+</p>
+<p> フィールドの探索はインスタンスから行われます。ここでフィールドが見つからない場合、メタテーブルの __index に指定されているテーブルを探索します。この場合、__index には Bar が指定されているので Bar を探索します。ここでもフィールドが見つからない場合、今度は Bar のメタテーブルをチェックします。ここで __index に Foo が指定されていれば Foo を探索するのです。これで Foo のメソッドを継承することができます。
+</p>
+<p> インスタンス変数の継承も簡単です。スーパークラス Foo のインスタンス obj を生成し、そこに自分のインスタンス変数を追加するだけです。そして、setmetatable で obj のメタテーブルを {__index = Bar} に書き換えればいいわけです。
+</p>
+
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+&gt; x = Foo.new()
+&gt; x
+{a=10}
+&gt; x:get_a()
+10
+&gt; y = Bar.new()
+&gt; y
+{a=10,b=20}
+&gt; y:get_b()
+20
+&gt; y:get_a()
+10
+&gt; x:set_a(100)
+&gt; x:get_a()
+100
+&gt; y:set_a(1000)
+&gt; y:get_a()
+1000
+&gt; x
+{a=100}
+&gt; y
+{a=1000,b=20}
+</pre>
+<p> 変数 x, y に Foo と Bar のインスタンスをセットします。インスタンスを生成するとき、Foo のインスタンスにはフィールド a に 10 がセットされ、Bar のインスタンスにはフィールド a, b に 10, 20 がセットされます。
+</p>
+<p> x:get_a() はフィールド a の値を返すので 10 になります。y:get_a() は Foo のメソッド get_a が呼び出され、インスタンス y からフィールド a の値を取り出して 10 を返します。x:set_a(100) はインスタンス x のフィールド a の値を 100 に書き換えます。y:set_a(1000) は Foo のメソッド set_a を呼び出して、インスタンス y のフィールド a の値を 1000 に書き換えます。
+</p>
+
+<h4>●制限付き連結リスト</h4>
+<p> それでは簡単な例題として、連結リストを継承して、格納する要素数を制限する連結リストを作ってみましょう。名前は FixedList としました。プログラムをリスト 2 に示します。
+</p>
+
+<pre class="list">
+リスト 2 : 制限付き連結リスト
+
+-- クラス定義
+FixedList = {}
+
+-- 継承
+setmetatable(FixedList, {__index = List})
+
+-- コンストラクタ
+function FixedList.new(limit)
+  local obj = List.new()
+  obj.limit = limit
+  obj.size = 0
+  setmetatable(obj, {__index = FixedList})
+  return obj
+end
+
+-- オーバーライド
+-- データの挿入
+function FixedList:insert(n, x)
+  if self.size &lt; self.limit then
+    local result = List.insert(self, n, x)
+    if result then
+       self.size = self.size + 1
+       return result
+    end
+  else
+    return nil
+  end
+end
+
+-- データの削除
+function FixedList:remove(n)
+  if self.size &gt; 0 then
+    local result = List.remove(self, n)
+    if result then
+      self.size = self.size - 1
+    end
+    return result
+  else
+    return nil
+  end
+end
+</pre>
+
+<p> 制限付き連結リスト (FixedList) は指定した上限までしか要素を格納できません。連結リスト (List) で要素を追加するメソッドは insert で、削除するメソッドは remove です。この 2 つのメソッドをオーバーライドすることで、FixedList の機能を実現することができます。
+</p>
+
+<p> まずグローバル変数 FixedList に空のハッシュをセットし、setmetatable で FixedList のメタテーブルに {__index = List} を設定します。これで List のメソッドを継承することができます。コンストラクタ FixedList.new では、List.new を呼び出して List のインスタンスを生成して変数 obj にセットします。ここに FixedList で使用するフィールド limit と size を追加します。limit は要素数の上限値を表していて、引数 limit で指定します。size は連結リストに格納されている要素数を表します。
+</p>
+
+<p> それから、メソッド insert と remove をオーバーライドします。フィールドの探索は、FixedList のインスタンス、FixedList を表すハッシュ、List を表すハッシュの順番で行われます。FixedList にメソッドを追加すれば、List のメソッドをオーバーライドすることができます。
+</p>
+
+<p> insert は self.limit と self.size を比較して、self.size が self.limit よりも小さい場合はデータ x を挿入します。スーパークラスのメソッド List.insert を呼び出して、データを挿入できた場合は self.size を +1 します。remove の場合、self.size が 0 よりも大きいときにスーパークラスのメソッド List.remove を呼び出します。データを削除できた場合は self.size を -1 します。これで、連結リストに格納される要素数を管理することができます。
+</p>
+
+<p> それでは、簡単な実行例を示しましょう。
+</p>
+
+<pre>
+&gt; a = FixedList.new(5)
+&gt; a
+{top={},limit=5,size=0}
+&gt; for i = 1, 5 do a:insert(1, i) end
+&gt; a:each(print)
+5
+4
+3
+2
+1
+&gt; a:insert(1, 10)
+&gt; a:each(print)
+5
+4
+3
+2
+1
+&gt; while not a:isEmpty() do print(a:remove(1)) end
+5
+4
+3
+2
+1
+</pre>
+<p> このように List を継承することで、FixedList を簡単にプログラムすることができます。
+</p>
+<HR>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+--
+-- linklist.lua : 連結リスト
+--
+--                Copyright (C) 2011 Makoto Hiroi
+--
+
+-- セルの定義
+Cell = {}
+
+-- コンストラクタ
+function Cell.new(data, link)
+  return {data = data, link = link}
+end
+
+-- リストの定義
+List = {}
+function List.new(...)
+  local obj = {top = Cell.new(nil, nil)}
+  local cp = obj.top
+  setmetatable(obj, {__index = List})
+  for i = 1, select("#", ...) do
+    local x = select(i, ...)
+    cp.link = Cell.new(x, nil)
+    cp = cp.link
+  end
+  return obj
+end
+
+-- メソッドの定義
+
+-- 作業用メソッド : n 番目のセルを返す
+function List:_nth(n)
+  local cp = self.top
+  local i = 0
+  while cp do
+    if n == i then
+      return cp
+    else
+      cp = cp.link
+      i = i + 1
+    end
+  end
+  return nil
+end
+
+-- n 番目の要素を返す
+function List:at(n)
+  local cp = self:_nth(n)
+  if cp then
+    return cp.data
+  else
+    return nil
+  end
+end
+
+-- n 番目にデータを挿入
+function List:insert(n, x)
+  local cp = self:_nth(n - 1)
+  if cp then
+    cp.link = Cell.new(x, cp.link)
+    return x
+  else
+    return nil
+  end
+end
+
+-- n 番目の要素を削除
+function List:remove(n)
+  local cp = self:_nth(n - 1)
+  if cp and cp.link then
+    local data = cp.link.data
+    cp.link = cp.link.link
+    return data
+  else
+    return nil
+  end
+end
+
+-- 巡回
+function List:each(func)
+  local cp = self.top.link
+  while cp do
+    func(cp.data)
+    cp = cp.link
+  end
+end
+
+-- 空リストか
+function List:isEmpty()
+  return self.top.link == nil
+end
+
+-- 配列に変換
+function List:toArray()
+  local ary = {}
+  self:each(function(x) table.insert(ary, x) end)
+  return ary
+end
+
+-- 文字列に変換
+function List:toString()
+  return '(' .. table.concat(self:toArray(), ',') .. ')'
+end
+
+--
+-- 制限付き連結リスト
+--
+FixedList = {}
+
+-- 継承
+setmetatable(FixedList, {__index = List})
+
+-- コンストラクタ
+function FixedList.new(limit)
+  local obj = List.new()
+  obj.limit = limit
+  obj.size = 0
+  setmetatable(obj, {__index = FixedList})
+  return obj
+end
+
+-- オーバーライド
+-- データの挿入
+function FixedList:insert(n, x)
+  if self.size &lt; self.limit then
+    local result = List.insert(self, n, x)
+    if result then
+       self.size = self.size + 1
+       return result
+    end
+  else
+    return nil
+  end
+end
+
+-- データの削除
+function FixedList:remove(n)
+  if self.size &gt; 0 then
+    local result = List.remove(self, n)
+    if result then
+      self.size = self.size - 1
+    end
+    return result
+  else
+    return nil
+  end
+end
+</pre>
+</DIV>
+<HR>
+<DIV class="contents">
+<h3 id="chap13">多重継承と Mix-in</h3>
+<p> 継承には「単一継承」と「多重継承」の 2 種類があります。単一継承は、ただひとつのクラスからしか機能を継承することができません。これに対し多重継承は複数のクラスを継承することができます。Lua の場合、メタテーブルの __index で指定できるテーブルはひとつだけなので、この方法では単一継承になります。
+</p>
+
+<h4>●単一継承と多重継承</h3>
+<p> 単一継承の場合、クラスの階層は図 1 のような木構造 <sup><a href="lua06.html#note1">[*1]</a></sup> で表すことができます。
+</p>
+<pre class="fig">
+            Ａ
+          ／｜＼
+        ／  ｜  ＼
+      Ｂ    Ｃ    Ｄ
+    ／  ＼
+  ／      ＼
+Ｅ          Ｆ
+
+図 1 : 単一継承におけるクラスの階層
+</pre>
+<p> 継承は何段階に渡って行われてもかまいません。たとえばクラス E の場合、スーパークラスが B で、B のスーパークラスが A に設定されています。サブクラスは複数あってもかまいません。たとえば、A のサブクラスは B, C, D と 3 つ、B のサブクラスは E, F と 2 つあります。図 1 では、クラス A のスーパークラスはありませんが、ほかのクラスではただひとつのスーパークラスを持っています。プログラミング言語では、Smalltalk, Java, Ruby が単一継承です。
+</p>
+
+<p> これに対し多重継承は、複数のクラスを継承することができます。このため、クラスの階層は木構造ではなく、図 2 のようなグラフ <sup><a href="lua06.html#note2">[*2]</a></sup> で表すことができます。
+</p>
+<pre class="fig">
+              Ａ
+            ／  ＼
+          ／      ＼
+        Ｂ          Ｃ
+      ／  ＼      ／  ＼
+    ／      ＼  ／      ＼
+  Ｄ          Ｅ          Ｆ
+
+図 2 : 多重継承におけるクラスの階層
+</pre>
+<p> クラス E に注目してください。スーパークラスには B と C の 2 つがあります。多重継承では、単一継承と同じくサブクラスを複数持つことができ、なおかつ、スーパークラスも複数持つことができます。Ｃ++, Common Lisp Object System (CLOS), Python は多重継承をサポートしています。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 木 (tree) は階層的な関係を表すためのデータ構造です。身近な例ではディレクトリ (フォルダ) の階層構造が木にあたります。<br>
+<a name="note2">[*2]</a> グラフは木をより一般化したデータ構造です。数学のグラフ理論では、いくつかの点とそれを結ぶ線でできた図形を「グラフ」といいます。
+</div>
+<h4>●多重継承の問題点</h4>
+<p> 多重継承は異なる性質や機能を持つ複数のクラスを継承することができるので、とても強力な機能です。ところが問題点もあるのです。たとえば、クラス Foo にはメソッド method_a があり、クラス Bar にはメソッド method_b があるとしましょう。この 2 つのメソッドはまったく異なる働きをします。ここで、メソッド method_a はインスタンス変数 x を使っていて、method_b も x を使っていると、多重継承で問題が発生します。
+</p>
+
+<p> クラス Foo と Bar を多重継承してクラス Baz を作成した場合、クラス Baz のインスタンスには x がひとつしかありません。メソッド method_a と method_b はひとつしかない x を使うことになります。この場合、どちらかのメソッドは正常に動作しないでしょう。これでは多重継承する意味がありません。また、Foo と Bar に同じ名前のメソッドが存在することもあります。このように、多重継承では名前の衝突が発生する場合があるのです。
+</p>
+
+<p> それから、多重継承にはもうひとつ問題点があります。それはクラスの階層構造が複雑になることです。単一継承の場合、クラスの階層は木構造になりますが、多重継承ではグラフになります。木構造の場合、クラスの優先順位は簡単にわかりますが、グラフになると優先順位を理解するのは難しくなります。多重継承は強力な機能ですが、使うときには十分な注意が必要です。
+</p>
+
+<h4>●Mix-in</h4>
+<p> これらの問題を回避するため、インスタンス変数 (属性) を継承するスーパークラスはひとつだけに限定して、あとのスーパークラスはメソッド (実装) だけを継承するという方法があります。この方法を Mix-in といいます。具体的には、インスタンス変数を定義せずにメソッドだけを記述したクラスを用意します。属性の継承は単一継承になりますが、実装のみを記述したクラスはいくつ継承してかまいません。ひとつのクラスに複数の実装を混ぜることから Mix-in と呼ばれています。
+</p>
+
+<p> なお、Mix-in は特別な機能ではなく、多重継承を使いこなすための方法論にすぎません。多重継承を扱うことができるプログラミング言語であれば Mix-in を行うことが可能です。ちなみに、この Mix-in という方法を言語仕様に取り込んだのが Ruby です。
+</p>
+
+<p> Mix-in を図に示すと次のようになります。
+</p>
+
+<pre class="fig">
+                Ａ
+              ／
+            Ｂ
+ Mixin A  ／  ＼    Mixin B
+    ＼  ／      ＼  ／
+      Ｃ          Ｄ
+
+      図 3 : Mix-in
+</pre>
+
+<p> クラス C はクラス B を継承していて、そこにクラス Mixin A が Mix-in されています。クラス D もクラス B を継承していますが、Mix-in されているクラスは Mixin B となります。
+</p>
+
+<p> 多重継承の問題点は Mix-in ですべて解決できるわけではありませんが、クラスの階層構造がすっきりとしてわかりやすくなることは間違いありません。Mix-in は多重継承を使いこなす優れた方法だと思います。
+</p>
+
+<h4>●Enumerable</h4>
+<p> Mix-in はクラスのないプロトタイプベースのオブジェクト指向でも簡単に実現することができます。Mix-in は簡単にいえばクラスにメソッドを追加することです。Lua の場合、クラスを表すオブジェクト (テーブル) にメソッドを追加することで Mix-in を実現することができます。
+</p>
+
+<p> それでは Mix-in の例題として、Mix-in 用のオブジェクト Enumerable を作ってみましょう。Enumerable は配列や連結リストなどのような複数のデータを格納するオブジェクトに高階関数 (メソッド) を Mix-in します。これは Ruby のモジュール (Mix-in 用のクラス) Enumerable を参考にしました。追加するメソッドを表 1 に示します。
+</p>
+
+<table border=1>
+<caption>表 1 : Enumerable のメソッド</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>obj:member(func)</td><td>func が真となる要素を返す</td></tr>
+  <tr><td>obj:position(func)</td><td>func が真となる要素の位置を返す</td></tr>
+  <tr><td>obj:count(func)</td><td>func が真となる要素の個数を返す</td></tr>
+  <tr><td>obj:map(func)</td><td>要素に func を適用した結果をリストに格納して返す</td></tr>
+  <tr><td>obj:filter(func)</td><td>func が真となる要素をリストに格納して返す</td></tr>
+  <tr><td>obj:fold_left(func, init)</td><td>すべての要素を func を用いて結合した結果を返す</td></tr>
+</tbody>
+</table>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト 3 : Enumerable 
+
+-- each メソッドをジェネレータに変換
+function make_generator(obj)
+  return coroutine.create(
+    function() obj:each(function(x) coroutine.yield(x) end) end
+  )
+end
+
+-- クラス定義
+Enumerable = {}
+
+-- 探索
+function Enumerable:member(func)
+  local gen = make_generator(self)
+  while true do
+    local r, v = coroutine.resume(gen)
+    if not v then
+      break
+    elseif func(v) then
+      return v
+    end
+  end
+  return false
+end
+
+-- 位置を返す
+function Enumerable:position(func)
+  local gen = make_generator(self)
+  local n = 1
+  while true do
+    local r, v = coroutine.resume(gen)
+    if not v then
+      break
+    elseif func(v) then
+      return n
+    end
+    n = n + 1
+  end
+  return -1
+end
+
+-- 条件を満たす要素をカウントする
+function Enumerable:count(func)
+  local gen = make_generator(self)
+  local n = 0
+  while true do
+    local r, v = coroutine.resume(gen)
+    if not v then
+      break
+    elseif func(v) then
+      n = n + 1
+    end
+  end
+  return n
+end
+
+-- マッピング
+function Enumerable:map(func)
+  local a = {}
+  self:each(function(x) table.insert(a, func(x)) end)
+  return a
+end
+
+-- フィルター
+function Enumerable:filter(pred)
+  local a = {}
+  self:each(function(x) if pred(x) then table.insert(a, x) end end)
+  return a
+end
+
+-- 畳み込み
+function Enumerable:fold_left(func, init)
+  local a = init
+  self:each(function(x) a = func(a, x) end)
+  return a
+end
+</pre>
+
+<p> オブジェクトの要素はメソッド each で取り出します。each は Mix-in するオブジェクトで定義することとします。つまり、each を定義さえすれば、どんなオブジェクトにも Enumberable を Mix-in することができるわけです。
+</p>
+<p> each を呼び出す場合、途中で処理を中断して値を返すことができると便利です。これはコルーチンを使って each をジェネレータに変換すると簡単です。関数 make_generator は coroutine.create に渡す匿名関数の中で引数 obj のメソッド each を呼び出します。そして、each に渡す匿名関数の中で coroutine.yield を呼び出して引数 x を返します。
+</p>
+
+<p> あとは、Enumerable のメソッドで make_generator または each を呼び出して、結果を返すだけです。たとえば member の場合、make_generator でジェネレータ gen を生成し、coroutine.resume で要素を取り出して変数 v にセットします。func(v) が真を返す場合は v を return で返します。map の場合は each を呼び出して、each に渡す匿名関数の中で func(x) を実行し、その結果を局所変数 a の配列に追加します。最後に return で a を返します。他のメソッドも同じようにプログラムすることができます。
+</p>
+
+<p> 最後にメソッドを Mix-in する関数を作ります。
+</p>
+<pre class="list">
+リスト 4 : Mix-in
+
+-- src に dst を MIX-IN
+function mix_in(dst, src)
+  for k, v in pairs(src) do
+    dst[k] = v
+  end
+end
+</pre>
+
+<p> 関数 mix_in はオブジェクト src にあるフィールドをオブジェクト dst にコピーします。フィールドの取得は for 文と関数 pairs を使うと簡単です。pairs はキー k と値 v を返すので、dst[k] = v とすれば、src にあるフィールドを取り出して dst に追加することができます。
+</p>
+<p> たとえば、List を継承した EnumList に Enumerable を Mix-in する場合は次のようにします。
+</p>
+<pre class="list">
+リスト 5 : List に Enumerable を Mix-in する
+
+EnumList = {}
+
+-- List を継承
+setmetatable(EnumList, {__index = List})
+
+-- Enumerable を MIX-IN
+mix_in(EnumList, Enumerable)
+
+-- コンストラクタ
+function EnumList.new(...)
+  local obj = List.new(...)
+  return setmetatable(obj, {__index = EnumList})
+end
+</pre>
+<p> これで、EnumList のオブジェクトから Enumerable のメソッドを呼び出すことができます。簡単な実行例を示しましょう。
+</p>
+<pre>
+> a = EnumList.new(1,2,3,4,5,6,7,8)
+> a:each(print)
+1
+2
+3
+4
+5
+6
+7
+8
+> a:member(function(x) return x == 5 end)
+5
+> a:member(function(x) return x % 2 == 0 end)
+2
+> a:position(function(x) return x % 2 == 0 end)
+2
+> a:position(function(x) return x % 4 == 0 end)
+4
+> a:count(function(x) return x % 2 == 0 end)
+4
+> a:count(function(x) return x % 3 == 0 end)
+2
+> a:map(function(x) return x * x end)
+{1,4,9,16,25,36,49,64}
+> a:filter(function(x) return x % 2 == 0 end)
+{2,4,6,8}
+> a:fold_left(function(x, y) return x + y end, 0)
+36
+</pre>
+<p> 正常に動作していますね。また、配列にも Enumerable を Mix-in することができます。 
+</p>
+<pre class="list">
+リスト 6 : １次元配列に Enumerable を Mix-in
+
+EnumVector = {}
+
+-- Enumerable を Mix-in
+mix_in(EnumVector, Enumerable)
+
+-- コンストラクタ
+function EnumVector.new(...)
+  local obj = {...}
+  return setmetatable(obj, {__index = EnumVector})
+end
+
+-- each メソッド
+function EnumVector:each(func)
+  for i = 1, #self do
+    func(self[i])
+  end
+end
+</pre>
+<p> 簡単な実行例を示します
+</p>
+<pre>
+&gt; a = EnumVector.new(10,20,30,40,50)
+&gt; a
+{10,20,30,40,50}
+&gt; a[1]
+10
+&gt; a:map(function(x) return x * x end)
+{100,400,900,1600,2500}
+&gt; a:member(function(x) return x == 30 end)
+30
+&gt; a:member(function(x) return x ~= 30 end)
+10
+&gt; a:member(function(x) return x &gt; 30 end)
+40
+&gt; a:fold_left(function(x, y) return x + y end, 0)
+150
+</pre>
+<p> このように、複数のクラスで共通の操作 (メソッド) を定義したい場合、Mix-in はとても役に立ちます。 
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="lua05.html">PrevPage</a> | <a href="lua.html">L u a</a> | <a href="lua07.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

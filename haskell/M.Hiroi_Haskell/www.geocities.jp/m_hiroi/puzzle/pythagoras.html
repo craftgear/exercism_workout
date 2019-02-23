@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / ピタゴラス数</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881772</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>ピタゴラス数</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>パズルの説明</h3>
+<p> ピタゴラスの定理は、平面幾何学において直角三角形の辺を a, b, c (a + b &gt; c) とすると、次式が成り立つという皆さんお馴染みの有名な定理です。
+</p>
+<pre class="item">
+a<sup>2</sup> + b<sup>2</sup> = c<sup>2</sup>
+</pre>
+<p> 「ピタゴラス数」または「ピタゴラスの三つ組数 (pythagoras triple)」は、上式を満たす自然数の組 (a, b, c) のことで、とくに a, b, c が互いに素であるとき、(a, b, c) を「原始ピタゴラス数」といいます。たとえば、(3, 4, 5), (5, 12, 13), (8, 15, 17) などがあります。
+</p>
+<p> <a href="pythagoras.html#cite">参考 URL 1</a> によると、原始ピタゴラス数は次の方法で簡単に見つけることができるそうです。
+</p>
+<ul>
+  <li> (a, b, c) = (m^2 - n^2, 2mn, m^2 + n^2) or (2mn, m^2 - n^2, m^2 + n^2)
+  <li>ただし、m &gt; n, m と n は互いに素, m - n が奇数 (m + n が奇数でもよい)
+</ul>
+<p> 本ページでは証明を割愛しますが、<a href="http://d.hatena.ne.jp/inamori/20091028/p1">ピタゴラス数 - 桃の天然水</a> の説明がわかりやくて参考になると思います。inamori さんに感謝いたします。
+</p>
+<p> それでは問題です。
+</p>
+<ol>
+  <li> 三辺の合計値 (a + b + c) が k 以下の原始ピタゴラス数をすべて求めるプログラムを作ってください。
+  <li> 三辺の合計値 (a + b + c) が k 以下のピタゴラス数をすべて求めるプログラムを作ってください。
+</ol>
+<ul>
+  <li><a href="pythagoras.html#ans01">解答１</a>
+  <li><a href="pythagoras.html#ans02">解答２</a>
+</ul>
+<hr>
+<h4 id="ans01">●解答１</h4>
+<p> それでは、プログラムを作りましょう。使用するプログラミング言語は Python (PyPy ver 4.0.1) です。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 三辺の合計値が k 以下の原始ピタゴラス数を求める
+
+def primitive_pythagoras(k):
+    xs = []
+    m = 2
+    while m * m &lt;= k / 2:
+        for n in xrange(1, m):
+            if 2 * m * (m + n) &gt; k: break
+            if (m - n) % 2 != 0 and gcd(m, n) == 1:
+                a = m * m - n * n
+                b = 2 * m * n
+                c = m * m + n * n
+                if a &lt; b:
+                    xs.append((a, b, c))
+                else:
+                    xs.append((b, a, c))
+        m += 1
+    return xs
+
+print primitive_pythagoras(100)
+print primitive_pythagoras(500)
+</pre>
+<p> 三辺の合計値は次の式で求めることができます。
+</p>
+<pre class="item">
+a + b + c = 2mn + m^2 - n^2 + m^2 + n^2
+          = 2m(m + n)
+</pre>
+<p> 上式から三辺の合計値は必ず偶数になることがわかります。変数 m の値を √(k/2) とすると、n = 1 のときに三辺の合計値は 2m^2 + 2m = k + 2 * √(k/2) となり、k よりも大きくなるので、m の上限値を √(k/2) とします。
+</p>
+<p> while ループで m の値を 2 から √(k/2) まで増やしていき、for ループの中で原始ピタゴラス数を生成します。三辺の合計値が k を超えたならば break で for ループを脱出します。そうでなければ、m - n が奇数で、m と n が互いに素であることを確認します。そして、辺 a, b, c を計算して append() でリスト xs にタプル (a, b, c) を追加するだけです。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+[(3, 4, 5), (5, 12, 13), (8, 15, 17), (7, 24, 25), (20, 21, 29), (9, 40, 41),
+ (12, 35, 37)]
+
+[(3, 4, 5), (5, 12, 13), (8, 15, 17), (7, 24, 25), (20, 21, 29), (9, 40, 41),
+ (12, 35, 37), (11, 60, 61), (28, 45, 53), (33, 56, 65), (13, 84, 85), (16, 63, 65),
+ (48, 55, 73), (39, 80, 89), (15, 112, 113), (36, 77, 85), (65, 72, 97), (17, 144, 145),
+ (20, 99, 101), (60, 91, 109), (51, 140, 149), (19, 180, 181), (44, 117, 125), (88, 105, 137),
+ (85, 132, 157), (57, 176, 185), (21, 220, 221), (24, 143, 145), (119, 120, 169), (95, 168, 193),
+ (52, 165, 173), (104, 153, 185), (133, 156, 205), (28, 195, 197), (84, 187, 205)]
+</pre>
+<hr>
+<h4 id="ans02">●解答２</h4>
+<p> 三辺の合計値が k となる全てのピタゴラス数を求めることも簡単です。つきのリストを見てください。
+</p>
+<pre class="list">
+リスト : 合計値が k となるピタゴラス数をすべて求める
+
+def pythagoras(k):
+    xs = []
+    for a, b, c in primitive_pythagoras(k):
+        p = k % (a + b + c)
+        if p == 0:
+            q = k / (a + b + c)
+            xs.append((q * a, q * b, q * c))
+    return xs
+
+print pythagoras(12)
+print pythagoras(120)
+print pythagoras(240)
+</pre>
+<p> primitive_pythagoras(k) で原始ピタゴラス数を生成し、k が三辺の合計値 (a + b + c) で割り切れることを確認するだけです。とても簡単ですね。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+[(3, 4, 5)]
+[(30, 40, 50), (20, 48, 52), (24, 45, 51)]
+[(60, 80, 100), (40, 96, 104), (48, 90, 102), (15, 112, 113)]
+</pre>
+
+<p> もうひとつ、クールな方法を紹介します。この方法は nineties さんのブログ <a href="http://d.hatena.ne.jp/nineties/">ブートストラッピングでコンパイラを作る日記</a> <a href="http://d.hatena.ne.jp/nineties/20101218#1292671836">Project Euler (Problem 3～10)</a> を参考にさせていただきました。nineties さんに感謝いたします。
+</p>
+<p> 式 a^2 + b^2 = c^2 と a + b + c = k を使って変数 c を削除して因数分解すると、次のようになります。
+</p>
+<pre class="item">
+a^2 + b^2 = (k - (a + b))^2
+=&gt; k^2 - 2(a + b)k + (a + b)^2 - a^2 - b^2 = 0
+=&gt; 2(k^2 - (a + b)k + ab) - k^2 = 0
+=&gt; (k - a)(k - b) = (k^2)/2
+</pre>
+<p> 上式より k - a と k - b は (k^2)/2 の約数であることがわかります。つまり、(k^2)/2 の約数を求め、条件 a &lt; b &lt; k を満たすものを探せばいいわけです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 合計値が k となるピタゴラス数をすべて求める (2)
+
+def pythagoras1(k):
+    xs = divisor(k * k / 2)
+    ys = []
+    i = 0
+    j = len(xs) - 1
+    while i &lt;= j:
+        if xs[j] &lt; k:
+            a = k - xs[j]
+            b = k - xs[i]
+            ys.append((a, b, k - (a + b)))
+        i += 1
+        j -= 1
+    return ys
+
+s = time.clock()
+print pythagoras(10000000)
+print time.clock() - s
+s = time.clock()
+print pythagoras1(10000000)
+print time.clock() - s
+</pre>
+<p> 拙作のページ <a href="divisor.html">約数</a> で作成した関数 divisor() は約数をリストに昇順に格納して返します。約数の一つを xs[i] (i = 0, 1, 2, ...) とし、もう一つの約数を xs[j] (j = len(xs) - 1, len(xs) - 2, ...) とします。i が j よりも大きくなったら、すべての組み合わせを調べたので while ループを終了します。xs[j] が k よりも小さい場合は条件を満たしているので、a, b, c を計算してリスト ys に追加します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+[(2000000, 3750000, 4250000), (2187500, 3600000, 4212500), (234375, 4880000, 4885625)]
+0.493616908126
+[(234375, 4880000, 4885625), (2000000, 3750000, 4250000), (2187500, 3600000, 4212500)]
+0.00117230942624
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, PyPy ver 4,0.1
+</pre>
+<p> k が大きな値の場合、約数を高速に求めることができれば pythagoras1() のほうが速くなるようです。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="http://ja.wikipedia.org/wiki/%E3%83%94%E3%82%BF%E3%82%B4%E3%83%A9%E3%82%B9%E3%81%AE%E5%AE%9A%E7%90%86">ピタゴラスの定理 - Wikipedia</a> 
+  <li><a href="http://d.hatena.ne.jp/inamori/20091028/p1">ピタゴラス数 - 桃の天然水</a>, (inamori さん)
+  <li><a href="http://d.hatena.ne.jp/nineties/20101218#1292671836">Project Euler (Problem 3～10) - ブートストラッピングでコンパイラを作る日記</a>, (nineties さん)
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+import time
+
+# 素因数分解
+def factorization(n):
+    def factor_sub(n, m):
+        c = 0
+        while n % m == 0:
+            c += 1
+            n /= m
+        return c, n
+    #
+    buff = []
+    c, m = factor_sub(n, 2)
+    if c &gt; 0: buff.append((2, c))
+    c, m = factor_sub(m, 3)
+    if c &gt; 0: buff.append((3, c))
+    x = 5
+    while m &gt;= x * x:
+        c, m = factor_sub(m, x)
+        if c &gt; 0: buff.append((x, c))
+        if x % 6 == 5:
+            x += 2
+        else:
+            x += 4
+    if m &gt; 1: buff.append((m, 1))
+    return buff
+
+# p^q の約数を求める
+def divisor_sub(p, q):
+    a = []
+    for i in xrange(0, q + 1):
+        a.append(p ** i)
+    return a
+
+# 約数を求める
+def divisor(n):
+    xs = factorization(n)
+    ys = divisor_sub(xs[0][0], xs[0][1])
+    for p, q in xs[1:]:
+        ys = [x * y for x in divisor_sub(p, q) for y in ys]
+    return sorted(ys)
+
+# 最大公約数
+def gcd(a, b):
+    while b &gt; 0:
+        a, b = b, a % b
+    return a
+
+# 原始ピタゴラス数を求める
+def primitive_pythagoras(k):
+    xs = []
+    m = 2
+    while m * m &lt;= k / 2:
+        for n in xrange(1, m):
+            if 2 * m * (m + n) &gt; k: break
+            if (m - n) % 2 != 0 and gcd(m, n) == 1:
+                a = m * m - n * n
+                b = 2 * m * n
+                c = m * m + n * n
+                if a &lt; b:
+                    xs.append((a, b, c))
+                else:
+                    xs.append((b, a, c))
+        m += 1
+    return xs
+
+# ピタゴラス数を求める
+def pythagoras(k):
+    xs = []
+    for a, b, c in primitive_pythagoras(k):
+        p = k % (a + b + c)
+        if p == 0:
+            q = k / (a + b + c)
+            xs.append((q * a, q * b, q * c))
+    return xs
+
+# 別解
+def pythagoras1(k):
+    xs = divisor(k * k / 2)
+    ys = []
+    i = 0
+    j = len(xs) - 1
+    while i &lt;= j:
+        if xs[j] &lt; k:
+            a = k - xs[j]
+            b = k - xs[i]
+            ys.append((a, b, k - (a + b)))
+        i += 1
+        j -= 1
+    return ys
+
+if __name__ == '__main__':
+    # 簡単なテスト
+    print primitive_pythagoras(100)
+    print primitive_pythagoras(500)
+
+    print pythagoras(12)
+    print pythagoras(120)
+    print pythagoras(240)
+
+    s = time.clock()
+    print pythagoras(10000000)
+    print time.clock() - s
+    s = time.clock()
+    print pythagoras1(10000000)
+    print time.clock() - s
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

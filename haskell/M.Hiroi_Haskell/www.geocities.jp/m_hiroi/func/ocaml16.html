@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 OCaml プログラミング入門</title>
+  <meta name="description" content="OCaml,ML,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881750</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 OCaml プログラミング入門</h2>
+<div class="small">
+[ <a href="ocaml15.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml17.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">多重継承と Mix-in</h3>
+<p> 前回は単一継承について簡単に説明し、具体的な例題としてスタック stack を継承して格納する要素の個数を制限するスタック fixed_stack と、集合 set を継承して要素を昇順に並べて格納する sorted_set を作成しました。今回は多重継承と Mix-in について説明します。
+</p>
+
+<h4>●多重継承の使い方</h4>
+<p> 最初に、多重継承について簡単に説明します。例題として、foo と bar の 2 つのクラスを継承するクラス baz を考えてみましょう。まず、foo と bar を定義します (リスト 1, 2)。
+</p>
+<pre class="list">
+リスト 1 : クラス foo の定義
+
+class foo (x: int) =
+  object
+    val mutable a = x
+    method get_a = a
+    method set_a x = a &lt;- x
+    method print = Printf.printf "foo#method %d" a
+  end
+
+リスト 2 : クラス bar の定義
+
+class bar (x: int) =
+  object
+    val mutable b = x
+    method get_b = b
+    method set_b x = b &lt;- x
+    method print = Printf.printf "bar#method %d" b
+  end
+</pre>
+<p> クラス foo にはインスタンス変数 a とメソッド get_a, set_a、クラス bar にはインスタンス変数 b とメソッド get_b, set_b が定義されています。そして、両方のクラスともメソッド print が定義されています。foo と bar を継承するクラス Baz はリスト 3 のように定義されます。
+</p>
+<pre class="list">
+リスト 3 : クラス baz の定義
+
+class baz x y =
+  object
+    inherit foo x
+    inherit bar y
+  end
+</pre>
+<p> inherit で foo と bar を指定します。これで foo と bar を多重継承することができます。実際にクラスを定義すると次のように表示されます。
+</p>
+<pre>
+class foo :
+  int -&gt;
+  object
+    val mutable a : int
+    method get_a : int
+    method print : unit
+    method set_a : int -&gt; unit
+  end
+
+class bar :
+  int -&gt;
+  object
+    val mutable b : int
+    method get_b : int
+    method print : unit
+    method set_b : int -&gt; unit
+  end
+
+class baz :
+  int -&gt;
+  int -&gt;
+  object
+    val mutable a : int
+    val mutable b : int
+    method get_a : int
+    method get_b : int
+    method print : unit
+    method set_a : int -&gt; unit
+    method set_b : int -&gt; unit
+  end
+</pre>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+# let a = new baz 1 2;;
+val a : baz = &lt;obj&gt;
+# a#get_a;;
+- : 1
+# a#get_b;;
+- : 2
+# a#print;;
+bar#method 2 - : unit = ()
+</pre>
+
+<p> 継承したメソッド get_a と get_b を呼び出すことができるのは当然ですが、両方のクラスにある print は、どちらのクラスのメソッドが呼び出されるのでしょうか。表示された bar#method から、クラス bar のメソッドが呼び出されたことがわかります。
+</p>
+
+<p> 多重継承したクラスで同名のメソッドが存在する場合、OCaml では最後に inherit されたクラスのメソッドが有効になります。この例では、最初に foo を inherit して、次に bar を inherit しています。したがって、メソッド print はクラス bar のメソッドが有効になります。もしも、bar を inherit してから foo を inherit すると、今度は foo のメソッド print が有効になります。
+</p>
+
+<p> このように、inherit する順番で継承されるメソッドが変化することに注意してください。なお、inherit でスーパークラスの参照名を定義すれば、そのクラスのメソッドを呼び出すことは可能です。次の例を見てください。
+</p>
+
+<pre class="list">
+リスト 4 : 多重継承のメソッド結合
+
+class baz1 x y = object
+  inherit foo x as super1
+  inherit bar y as super2
+  method print = super1#print; print_newline(); super2#print
+end
+</pre>
+<p> クラス baz1 ではメソッド print をオーバーライドして、foo と bar のメソッド print を呼び出しています。それでは実際に試してみましょう。
+</p>
+<pre>
+# let c = new baz1 1 2;;
+val c : baz1 = &lt;obj&gt;
+# c#print;;
+foo#method 1
+bar#method 2 - : unit = ()
+</pre>
+<p> このように、スーパークラス foo と baz のメソッド print を呼び出すことができます。
+</p>
+<h4>●多重継承の問題点</h4>
+<p> 多重継承を使う場合、異なる性質や機能を持つクラスを継承することがあります。たとえば、クラス foo にはメソッド method_a があり、クラス bar にはメソッド method_b があるとしましょう。この 2 つのメソッドはまったく異なる働きをします。ここで、メソッド method_a はインスタンス変数 x を使っていて、method_b も変数 x を使っていると、多重継承で問題が発生します。
+</p>
+
+<p> クラス foo と bar を多重継承してクラス baz を作成した場合、クラス baz のインスタンスには変数 x がひとつ <sup><a href="ocaml16.html#note1">[*1]</a></sup> しかありません。メソッド method_a と method_b はひとつしかない変数 x を使うことになります。この場合、どちらかのメソッドは正常に動作しないでしょう。これでは多重継承する意味がありません。これが多重継承の問題点です。
+</p>
+
+<p> このように、多重継承はどんなクラスでもできるというわけではありません。同名のインスタンス変数を持つクラスは多重継承できないと考えた方がよいでしょう。それから、多重継承にはもうひとつ問題点があります。それはクラスの階層構造が複雑になることです。
+</p>
+
+<p> 単一継承の場合、クラスの階層は木構造になりますが、多重継承ではグラフになります。木構造の場合、クラスの優先順位は簡単にわかりますが、グラフになると優先順位を理解するのは難しくなります。多重継承は強力な機能ですが、使うときには十分な注意が必要なのです。 
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> OCaml ver 3.10.0 の場合、生成されたインスタンスの中で同名のインスタンス変数は一つしか存在しません。以前のバージョンでは動作が異なるようです。ご注意ください。
+</div>
+<h4>●Mix-in</h4>
+<p> これらの問題を回避するため、インスタンス変数 (属性) を継承するスーパークラスはひとつだけに限定して、あとのスーパークラスはメソッド (実装) だけを継承するという方法があります。この方法を Mix-in といいます。
+</p>
+
+<p> 具体的には、インスタンス変数を定義せずにメソッドだけを記述したクラスを用意します。属性の継承は単一継承になりますが、実装のみを記述したクラスはいくつ継承してかまいません。ひとつのクラスに複数の実装を混ぜることから Mix-in と呼ばれています。
+</p>
+
+<p> なお、Mix-in は特別な機能ではなく、多重継承を使いこなすための方法論にすぎません。多重継承を扱うことができるプログラミング言語であれば Mix-in を行うことが可能です。ちなみに、この Mix-in という方法を言語仕様に取り込んだのが Ruby です。
+</p>
+
+<p> OCaml は多重継承をサポートしているので、Mix-in を利用することができます。図 1 を見てください。
+</p>
+
+<pre class="fig">
+                Ａ
+              ／
+            Ｂ
+ Mixin A  ／  ＼    Mixin B
+    ＼  ／      ＼  ／
+      Ｃ          Ｄ
+
+      図 1 : Mix-in
+</pre>
+
+<p> クラス C はクラス B を継承していて、そこにクラス Mixin A が Mix-in されています。クラス D もクラス B を継承していますが、Mix-in されているクラスは Mixin B となります。
+</p>
+
+<p> 多重継承の問題点は Mix-in ですべて解決できるわけではありませんが、クラスの階層構造がすっきりとしてわかりやすくなることは間違いありません。Mix-in は多重継承を使いこなす優れた方法だと思います。
+</p>
+
+<h4>●enumerable</h4>
+<p> それでは Mix-in の例題として、クラス enumerable を作ってみましょう。enumerable は複数の要素を格納するコレクションクラスに高階関数 (メソッド) を Mix-in します。これは Ruby のモジュール (Mix-in 用のクラス) Enumerable を参考にしました。追加するメソッドを表 1 に示します。
+</p>
+
+<table border=1>
+<caption>表 1 : enumerable のメソッド</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>obj#member_if(func)</td><td>func が真となる要素を返す</td></tr>
+  <tr><td>obj#position_if(func)</td><td>func が真となる要素の位置を返す</td></tr>
+  <tr><td>obj#count_if(func)</td><td>func が真となる要素の個数を返す</td></tr>
+  <tr><td>obj#map(func)</td><td>要素に func を適用した結果をリストに格納して返す</td></tr>
+  <tr><td>obj#filter(func)</td><td>func が真となる要素をリストに格納して返す</td></tr>
+  <tr><td>obj#fold(func, init)</td><td>すべての要素を func を用いて結合した結果を返す</td></tr>
+</tbody>
+</table>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト 5 : Mix-in 用のクラス enumerable
+
+class virtual ['a] enumerable =
+  object(self)
+    method virtual begin0 : unit
+    method virtual next : 'a option
+
+    method member_if func =
+      let rec _member = function
+        None -&gt; None
+      | Some y when func y -&gt; Some y
+      | _ -&gt; _member self#next
+      in
+        self#begin0;
+        _member self#next
+
+    method position_if func =
+      let rec _position n = function
+        None -&gt; -1
+      | Some y when func y -&gt; n
+      | _ -&gt; _position (n + 1) self#next
+      in
+        self#begin0;
+        _position 0 self#next
+
+    method count_if func =
+      let rec _count a = function
+        None -&gt; a
+      | Some y when func y -&gt; _count (a + 1) self#next
+      | _ -&gt; _count a self#next
+      in
+        self#begin0;
+        _count 0 self#next
+
+    ... 省略 ...
+  end
+</pre>
+<p> クラス enumerable は Mix-in を前提としているので、インスタンス変数の定義は不要でメソッドだけを定義します。コレクションの要素を取り出す処理は仮想メソッド begin0 と next で行います。begin0 はコレクションから要素を取り出す準備を行います。実際に要素を取り出す処理は next で行います。next は要素を option に格納して返すことにします。要素がなくなったら None を返します。
+</p>
+
+<p> あとは enumerable を Mix-in するクラスで、メソッド begin0 と next を具体化すればいいわけです。つまり、begin0 と next を定義さえすれば、どんなクラスでも enumberable を Mix-in することができるわけです。
+</p>
+
+<p> member_if, position_if, count_if は簡単です。self#next で要素を取り出して関数 func に渡します。func が真を返す場合、member は要素を option に格納して返します。position_if は位置 n を返します。count_if は累積変数 a の値を +1 します。
+</p>
+
+<h4>●多相メソッド</h4>
+<p> 次は、map, filter, fold を作ります。ここではプログラムを簡単にするため、map と filter は結果をリストに格納して返すことにします。filter は簡単ですが、map と fold はデータ型の指定が必要になります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト 6 : 多相メソッドの定義
+
+    method map : 'b.('a -&gt; 'b) -&gt; 'b list = fun func -&gt;
+      let rec _map = function
+        None -&gt; []
+      | Some x -&gt; func x :: _map self#next
+      in
+        self#begin0;
+        _map self#next
+
+    method filter func =
+      let rec _filter = function
+        None -&gt; []
+      | Some x when func x -&gt; x :: _filter self#next
+      | _ -&gt; _filter self#next
+      in
+        self#begin0;
+        _filter self#next
+
+    method fold : 'b.('b -&gt; 'a -&gt; 'b) -&gt; 'b -&gt; 'b = fun func init -&gt;
+      let rec _fold a = function
+        None -&gt; a
+      | Some x -&gt; _fold (func a x) self#next
+      in
+        self#begin0;
+        _fold init self#next
+</pre>
+<p> map と fold の場合、データ型を指定しないでコンパイルすると、型推論により次に示すデータ型になります。
+</p>
+<pre class="item">
+map  : ('a -&gt; 'b) -&gt; 'b list 
+fold : ('b -&gt; 'a -&gt; 'b) -&gt; 'b -&gt; 'b
+</pre>
+<p> この場合、型変数 'b が定義されていないため、コンパイルでエラーになります。クラスは型変数を指定することで「多相クラス」を定義することができました。メソッドの場合も型変数を指定することで「多相メソッド」を定義することができます。指定方法は次のように行います。
+</p>
+<pre class="item">
+メソッド名 : 型変数. 型式
+</pre>
+<p> 'a はクラスの型変数として指定されているので、メソッドの型で型変数 'b を指定すればいいわけです。実際にクラス enumerable を定義すると、次のように表示されます。
+</p>
+<pre>
+class virtual ['a] enumerable :
+  object
+    method virtual begin0 : unit
+    method count_if : ('a -&gt; bool) -&gt; int
+    method filter : ('a -&gt; bool) -&gt; 'a list
+    method fold : ('b -&gt; 'a -&gt; 'b) -&gt; 'b -&gt; 'b
+    method map : ('a -&gt; 'c) -&gt; 'c list
+    method member_if : ('a -&gt; bool) -&gt; 'a option
+    method virtual next : 'a option
+    method position_if : ('a -&gt; bool) -&gt; int
+  end
+</pre>
+<p> map と fold は多相メソッドとして定義されていることがわかります。
+</p>
+<h4>●リストクラス</h4>
+<p> 次に、enumerable を Mix-in するクラスを作ります。ここでは簡単な例題として、リストクラス linkedlist を取り上げます。linkedlist のメソッドを表 2 に示します。
+</p>
+
+<table border=1>
+<caption>表 2 : linkedlist のメソッド</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>obj#insert n x</td><td>リストの n 番目に x を挿入する</td></tr>
+  <tr><td>obj#at n</td><td>リストの n 番目の要素を返す</td></tr>
+  <tr><td>obj#delete_at n</td><td>リストの n 番目の要素を削除する</td></tr>
+  <tr><td>obj#is_empty</td><td>リストが空ならば真を返す</td></tr>
+  <tr><td>obj#iter func</td><td>リストの要素に func を適用する</td></tr>
+</tbody>
+</table>
+<p> メソッド insert と delete_at は、リストを格納するインスタンス変数 content の値を書き換えます。つまり、これらのメソッドによりオブジェクトの状態が変化するわけです。このほかに enumerable で使うメソッド bigin0 と next を定義します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 7 : linkedlist クラス
+
+class ['a] linkedlist = 
+  object
+    inherit ['a] enumerable
+    val mutable content = ([] : 'a list)
+    val mutable iterator = ([] : 'a list)
+
+    method insert n x =
+      let rec _insert n ls =
+         match (n, ls) with
+           (0, _) -&gt; x::ls
+         | (_, []) -&gt; raise (Invalid_argument "linkedlist.insert")
+         | (_, y::ys) -&gt; y :: _insert (n - 1) ys
+      in
+        content &lt;- _insert n content
+
+    method at n =
+      let rec _at n ls =
+        match (n, ls) with
+          (0, x::_) -&gt; x
+        | (_, []) -&gt; raise (Invalid_argument "linkedlist.at")
+        | (_, _::xs) -&gt; _at (n - 1) xs
+      in
+        _at n content
+
+    method delete_at n =
+      let rec _delete n ls =
+        match (n, ls) with
+          (0, _::xs) -&gt; xs
+        | (_, []) -&gt; raise (Invalid_argument "linkedlist.delete")
+        | (_, x::xs) -&gt; x :: _delete (n - 1) xs
+      in
+        content &lt;- _delete n content
+
+    method is_empty = content = []
+
+    method iter f = List.iter f content
+
+    method begin0 = iterator &lt;- content
+    method next =
+      match iterator with
+        [] -&gt; None
+      | x::xs -&gt; iterator &lt;- xs; Some x
+  end
+</pre>
+
+<p> inherit で enumerable を Mix-in します。インスタンス変数 content はリストを格納します。iterator は begin0 と next で使います。begin0 は iterator に content の値をセットします。next は iterator の先頭要素を option に格納して返します。そして、iterator の値を先頭要素を取り除いたリストに更新します。これで、リストの要素を順番に取り出していくことができます。あとのメソッドは簡単なので説明は割愛いたします。
+</p>
+
+<p> 実際にクラス linkedlist を定義すると、次のように表示されます。
+</p>
+<pre>
+class ['a] linkedlist :
+  object
+    val mutable content : 'a list
+    val mutable iterator : 'a list
+    method at : int -&gt; 'a
+    method begin0 : unit
+    method count_if : ('a -&gt; bool) -&gt; int
+    method delete_at : int -&gt; unit
+    method filter : ('a -&gt; bool) -&gt; 'a list
+    method fold : ('b -&gt; 'a -&gt; 'b) -&gt; 'b -&gt; 'b
+    method insert : int -&gt; 'a -&gt; unit
+    method is_empty : bool
+    method iter : ('a -&gt; unit) -&gt; unit
+    method map : ('a -&gt; 'c) -&gt; 'c list
+    method member_if : ('a -&gt; bool) -&gt; 'a option
+    method next : 'a option
+    method position_if : ('a -&gt; bool) -&gt; int
+  end
+</pre>
+<p> enumerable のメソッドが継承されていることがわかります。
+</p>
+<h4>●実行例</h4>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+# let print x = x#iter (fun x -&gt; print_int x; print_string " ");;
+val print : &lt; iter : (int -&gt; unit) -&gt; 'a; .. &gt; -&gt; 'a = <fun>
+# let a = new linkedlist;;
+val a : '_a linkedlist = &lt;obj&gt;
+# for i = 0 to 4 do a#insert i i done;;
+- : unit = ()
+# print a;;
+0 1 2 3 4 - : unit = ()
+# a#member_if (fun x -&gt; x mod 2 = 1);;
+- : int option = Some 1
+# a#position_if (fun x -&gt; x mod 2 = 0);;
+- : int = 0
+# a#count_if (fun x -&gt; x mod 2 = 0);;
+- : int = 3
+# a#map (fun x -&gt; x * x);;
+- : int list = [0; 1; 4: 9; 16]
+# a#filter (fun x -&gt; x mod 2 = 0);;
+- : int list = [0; 2; 4]
+# a#fold (fun x y -&gt; x + y) 0;;
+- : int = 10
+</pre>
+
+<p> 正常に動作していますね。また、次のように enumerable を Mix-in した集合クラスを定義することもできます。
+</p>
+<pre class="list">
+リスト 8 : set に enumerable を Mix-in
+
+class ['a] enumerable_set =
+  object (self)
+    inherit ['a] set
+    inherit ['a] enumerable
+    val mutable iterator = ([]: 'a list)
+    method begin0 = iterator &lt;- content
+    method next =
+      match iterator with
+        [] -&gt; None
+      | x::xs -&gt; iterator &lt;- xs; Some x
+  end
+</pre>
+<p> もちろん、set ではなく sorted_set を継承してもまったく問題ありません。
+</p>
+
+<h4>●クラスの関係</h4>
+<p> 今まで説明したように、オブジェクトは関数とデータを一つにまとめたものです。オブジェクト指向プログラミングは、このオブジェクトを部品として扱います。実際には、クラス単位でプログラムを作るので、クラスの関係がとても重要になります。ここで、クラスの関係を表す is-a と has-a について簡単に説明します。
+</p>
+
+<p> is-a 関係は X is a Y. の略で、「X は Y の一種である」という意味になります。X がサブクラスで Y をスーパークラスと考えると、is-a 関係は継承で表すことができます。たとえば、制限付きスタック fixed_stack は、格納する要素の個数が制限されていますがスタックの一種であることは明らかです。fixed_stack クラスは stack クラスを継承することで簡単に実装できましたが、それは stack との間に is-a 関係があるからです。
+</p>
+
+<p> has-a 関係は X has a Y. の略で、「X は Y を持っている」という意味です。たとえば、車にはエンジンやタイヤがありますが、車とエンジンやタイヤに成り立つ関係が has-a です。車はエンジンやタイヤがないと走ることができませんね。このように、has-a 関係は「X が成立するのに欠かせない要素が Y である」という関係を表しています。
+</p>
+
+<p> has-a 関係のほかに、is-implemented-using という関係があります。これは X is implemented using Y. の略で、「X は Y を使って実装される」という意味です。たとえば、スタックの場合、配列でも連結リストでも実装することが可能です。つまり、Y の種類によらず X を実現できる関係が is-implemented-using 関係なのです。
+</p>
+
+<p> 一般に、has-a 関係や is-implemented-using 関係は、クラス X のインスタンス変数にクラス Y のオブジェクト（インスタンス）を格納することで表します。これを「X は Y を包含している」といいます。「包含」とか「集約」と呼ぶ場合もあります。そして、これらの関係を表すのに継承を使ってはいけない、ということに注意してください。
+</p>
+
+<p> たとえば、今回作成した連結リストクラス linkedlist を継承してスタックを作ることを考えてみましょう。PUSH は連結リストの先頭にデータを追加することで、POP は連結リストの先頭からデータを取り出すことで簡単に実現できます。しかし、連結リストを継承すると、ほかの操作も可能になります。スタックの途中にデータを追加したり、途中からデータを取り出すなど、スタックを破壊する危険な操作が可能になってしまいます。
+</p>
+
+<p> また、クラスの関係を考えた場合、スタックと連結リストには is-a 関係は成り立ちません。ところが、継承を使うとプログラムの上でもスタックは連結リストの一種になってしまいます。継承は強力な機能ですが万能ではありません。クラス間の関係を考えて、適切に使うことが大切です。 
+</p>
+
+<h4>●継承関係は必ずしも部分型にはならない</h4>
+<p> 最後に、ちょっと難しい話題を取り上げます。OCaml の場合、型 A の部分型を B とすると、A と B に is-a 関係が成立すると考えられます。OCaml は継承を使わなくても部分型を生成することができるという特徴があります。ところが、クラスを継承したからといって、そのサブクラスが部分型になるとは限らないという特徴もあるのです。とくに、バイナリメソッドを持つクラスを継承すると、そのサブクラスはスーパークラスの部分型にはなりません。
+</p>
+
+<p> 簡単な例として、点を表すクラスを作ってみましょう。名前は point にしました。x 座標をインスタンス変数 x に、y 座標を変数 y に格納します。リスト 9 を見てください。
+</p>
+<pre class="list">
+リスト 9 : point クラス
+
+class point xi yi =
+  object (self: 'self_type)
+    val mutable x = xi
+    val mutable y = yi
+
+    method x = x
+    method y = y
+    (* 移動 *)
+    method move dx dy =
+      x &lt;- x +. dx; y &lt;- y +. dy
+    (* 同じポイントか *)
+    method equal (p: 'self_type) =
+      x = p#x &amp;&amp; y = p#y
+  end
+</pre>
+<p> メソッド x, y は座標 x, y の値を返します。メソッド move はポイントを移動します。メソッド equal は 2 つのインスタンスが等しい座標かチェックします。実際に point を定義すると、次のように表示されます。
+</p>
+<pre>
+class point :
+  float -&gt;
+  float -&gt;
+  object ('a)
+    val mutable x : float
+    val mutable y : float
+    method equal : 'a -&gt; bool
+    method move : float -&gt; float -&gt; unit
+    method x : float
+    method y : float
+  end
+</pre>
+<p> 次に、point を継承して色付きのポイントを表す colored_point を定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 10 : colored_point クラス
+
+class colored_point xi yi (ci: int) =
+  object (self: 'self_type)
+    inherit point xi yi as super
+    val mutable c = ci
+
+    method color = c
+    method equal (p: 'self_type) =
+      super#equal p &amp;&amp; c = p#color
+  end
+</pre>
+<p> 色は整数値で表します。その値はインスタンス変数 c にセットします。ここで、メソッド equal をオーバーライドしていることに注意してください。colored_point を定義すると、次のように表示されます。
+</p>
+<pre>
+class colored_point :
+  float -&gt;
+  float -&gt;
+  int -&gt;
+  object ('a)
+    val mutable c : int
+    val mutable x : float
+    val mutable y : float
+    method color : int
+    method equal : 'a -&gt; bool
+    method move : float -&gt; float -&gt; unit
+    method x : float
+    method y : float
+  end
+</pre>
+
+<p> colored_point は point クラスを継承しているので、point の部分型になるように思います。ところが、colored_point は point の部分型にはなりません。たとえば、次のように型変換するとエラーになります。
+</p>
+<pre>
+# let a = new colored_point 0.0 0.0 0;;
+val a : colored_point = &lt;obj&gt;
+# let b = (a :> point);;
+... エラーメッセージ (省略) ...
+</pre>
+<p> これはメソッド equal の型が point と colored_point では異なるためです。
+</p>
+<pre class="item">
+point &lt; equal: point -&gt; bool; ... &gt;
+colored_point &lt; equal: colored_point -&gt; bool; ... &gt;
+</pre>
+<p> メソッド equal の引数の型が、point と colored_point で異なっていますね。同名のメソッドでその型が異なっているため、colored_point は point の部分型にはならないのです。同様に、バイナリメソッドを持つクラス、たとえば set の場合も、set を継承したクラス sorted_set は set の部分型にはなりません。
+</p>
+
+<p> 住井英二郎先生の <a href="http://itpro.nikkeibp.co.jp/article/COLUMN/20061107/252787/">数理科学的バグ撲滅方法論のすすめ 第4回　関数型言語とオブジェクト指向，およびOCamlの"O"について</a> によると、<cite>『これは「inheritance is not subtyping」問題として広く知られている。』</cite> とのことです。
+</p>
+
+<p> このように、継承したからといって is-a 関係が成り立つとは限りません。M.Hiroi は「クラス＝型」で「継承関係＝部分型」という意識が強かったので、OCaml のオブジェクト指向には大変驚きました。あらためて、オブジェクト指向は奥が深いなあと思いました。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ocaml15.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml17.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

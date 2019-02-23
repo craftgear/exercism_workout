@@ -1,0 +1,857 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 整数の符号化</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881795</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>整数の符号化</h2>
+<div class="small">
+[ <a href="pyalgo29.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo31.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> データ圧縮のお話です。前回説明した連長圧縮 (run length encoding) は、記号とその連長で符号化する方式です。連長は 8 ビット (0 - 255) の固定長で符号化しましたが、長い連長が少なくて短い連長が多くなる場合、固定長の符号語では無駄が多くなるので効率的に圧縮することはできません。そこで、任意の正整数またはある範囲の正整数をできるだけ短い符号語で符号化する方法が考案されています。これを「整数の符号化」といいます。
+</p>
+
+<p> 有名なところでは P. Elias が開発した「γ符号」と「δ符号」があります。これらの符号はランレングスの連長だけではなく、他のデータ圧縮アルゴリズムにも応用することができます。今回は整数の符号化について説明します。
+</p>
+
+<h4>●符号の種類</h4>
+<p> 最初に符号の種類について簡単に説明します。今までは符号長が等しい符号語を考えてきました。ASCII コードの場合、全ての符号語は 8 ビットと一定です。このような符号を「FF (Fixed-to-Fiexd) 符号」と呼びます。これに対して、各符号語に異なるビット長を割り当てる「可変長符号」を考えてみましょう。頻繁に出てくる記号には短い符号語を割り当て、あまり出てこない記号には長い符号語を割り当てます。
+</p>
+<p> たとえば、記号列 abccddeeeeffffgggggggghhhhhhhh を、a, b, c, d を 4 ビット、e と f を 3 ビット、g と h を 2 ビットで表すことができれば、この記号列は 80 ビットで表現できるはずです。このような符号を「FV (Fixed-to-Variable) 符号」と呼びます。
+</p>
+
+<p> ただし、問題が一つあります。それは符号語の区切りをどのように表現するかです。たとえば、a, b, c, d の 4 つの記号を、次のように符号化してみましょう。
+</p>
+<pre class="fig">
+        表 : 符号の例
++---------------------------+
+|   |CODE1|CODE2|CODE3|CODE4|
+|---+-----+-----+-----+-----|
+| a | 00  | 0   | 0   | 0   |
+|---+-----+-----+-----+-----|
+| b | 01  | 10  | 01  | 10  |
+|---+-----+-----+-----+-----|
+| c | 10  | 110 | 011 | 110 |
+|---+-----+-----+-----+-----|
+| d | 11  | 1110| 111 | 111 |
++---------------------------+
+</pre>
+<p> CODE1 は固定長の符号語です。これは 2 ビット読み込んだ時点で、記号を簡単に復号することができます。次の CODE2 は、符号語の終端として 0 を使っています。これも 0 が表れた時点で、読み込んだビット数から簡単に復号できます。ところが、記号の種類が多くなると符号長が長くなるので、テキストデータの圧縮にはあまり向いていない方式です。これに対し、CODE3 は簡単に復号することができません。次の例を見てください。
+</p>
+<pre class="fig">
+符号語の列：000110110010
+
+CODE1 ==&gt; 00 01 10 11 00 10   abcdac
+          a  b  c  d  a  a
+
+CODE2 ==&gt; 0 0 0 110 110 0 10  aaaccab
+          a a a c   c   a b
+
+CODE3 ==&gt; 0 0 011 011 0 01 0  aaccaba
+          a a c   c   a b  a
+
+0 -&gt; a と直ぐに復号できない
+
+CODE4 =&gt; 0 0 0 110 110 0 10   aaaccab
+         a a a c   c   a b
+
+
+            図 : 復号の様子
+</pre>
+<p> 上図に示すように、CODE3 でも入力された符号語列を復号することができます。ですが、最初の 0 を読み込んだ時点では、それを直ぐに記号 a に復号することができません。さらに先の符号語 0 を読み込んだ時点で、最初の符号を a と確定することができるのです。これを「瞬時に復号不可能な符号」といいます。
+</p>
+<p> ところが CODE4 の場合では、0 を読み込んだ時点で直ぐに a と復号することができます。CODE3 では a の符号語 0 が b の符号語 01 の先頭と同じになっているので、0 を読み込んだ時点では a と b のどちらの符号語か区別することができません。これに対して、CODE4 では先頭が 0 である符号語がほかにはないので、すぐに a と復号することができるのです。これを「瞬時に復号可能な符号」といいます。
+</p>
+<p> 一般に、どの符号語もほかの符号語の先頭からの部分列と一致していなければ、符号語列を先頭から順番に読み込んいくことで一語ずつ記号に復号することができます。このような符号を「接頭符号 (prefix code) 」といいます。身近な例では「電話番号」が接頭符号です。市内局番は地方によって桁数が違いますし、110 番や 119 番は 3 桁しかありません。このような可変長な番号でも、最後までダイヤルすれば相手につながります。
+</p>
+
+<p> 2 進数の接頭符号は二分木を使って表すことができます。「二分木」については拙作のページ <a href="pyalgo03.html">二分木とヒープ</a> をお読みください。CODE3 と CODE4 を二分木で表すと、次のようになります。
+</p>
+<pre class="fig">
+              ○                            ○
+            ／  ＼                        ／  ＼
+         0／      ＼1                  0／      ＼1
+        ／          ＼                ／          ＼
+      ａ              ○            ａ              ○
+   0／  ＼1       0 ／  ＼1                      0／  ＼1
+  ×      ｂ      ×      ＼                    ／      ＼
+       0／  ＼1             ○                ｂ          ○
+      ×      ｃ         0／  ＼1             10       0／  ＼1
+              011       ×      ｄ                    ｃ      ｄ
+                                111                  110     111
+
+          (1) CODE3 の場合              (2) CODE4 の場合
+
+
+                     図 : 接頭符号と符号木
+</pre>
+<p> 符号語を二分木で表す場合、左右の枝にラベル 0 と 1 を割り当てます。葉を記号とすると、その符号語は根から葉に向かってたどった枝のラベルを並べたものに対応します。途中の節に記号を対応させると、それより下にある葉に対応する記号と接頭部が等しくなってしまうので、接頭符号を構成することはできなくなります。
+</p>
+<p> 上図に示したように、CODE3 の場合は a と b が途中の節に対応しているため、接頭符号になっていないことがわかります。CODE4 の場合は各記号が二分木の葉に対応していて、接頭符号を構成しています。このように、符号語を表す木を「符号木」といいます。
+</p>
+<p> 符号語を復号する場合は、符号木の根から枝をたどり、葉に達したところで記号に復号することができます。たとえば CODE4 の場合、最初が 0 であれば葉に到達するので、すぐに a と復号できます。111 ならば、1 の枝をたどっていって、葉に達したところで d と復号できるわけです。
+</p>
+
+<h4>●γ符号とδ符号</h4>
+<p> それでは、整数の符号化について説明しましょう。整数の符号化にはいろいろな方法がありますが、ここでは瞬時に復号可能な符号で、小さな整数ほど短い符号語が割り当てられる、という特徴を持つ方法を紹介します。
+</p>
+<p> もっとも簡単な方法は、「α符号」または「unary 符号」と呼ばれるものです。次の表を見てください。
+</p>
+
+<pre class="fig">
+        表：正整数の符号化
+
+ N :   α符号   :  γ符号  :  δ符号
+---------------------------------------
+ 1 : 1          : 1        : 1
+ 2 : 01         : 01 0     : 010 0
+ 3 : 001        : 01 1     : 010 1
+ 4 : 0001       : 001 00   : 011 00
+ 5 : 00001      : 001 01   : 011 01
+ 6 : 000001     : 001 10   : 011 10
+ 7 : 0000001    : 001 11   : 011 11
+ 8 : 00000001   : 0001 000 : 00100 000
+ 9 : 000000001  : 0001 001 : 00100 001
+10 : 0000000001 : 0001 010 : 00100 010
+</pre>
+<p> α符号で整数 N を表す場合、N - 1 個の 0 を符号化した後に 1 を符号化します。つまり、0 の個数で整数を表しているのです。実際には、P. Elias が開発した「γ符号」と「δ符号」がよく使われます。γ符号は整数 x のビット数をα符号で表し、その後ろに x の最上位ビットを除いた残りの下位ビットを続けます。
+</p>
+<p> たとえば、5 は 3 ビット (101) で表すことができるので、最初の 001 で 3 ビットを表し、その後ろに残りの下位 2 ビット (01) を続けます。最初に連続する 0 の個数で、1 の後ろに続くビット数を表していると考えてもらってもかまいません。δ符号は、ビット数を表すのにα符号の代わりにγ符号を使ったものです。
+</p>
+<p> γ符号は整数 x を 1 + 2 * log(x) で表すことができ、δ符号は 1 + log(x) + 2 * log(1 + log(x)) で表すことができます。通常、小さい整数が多い場合はγ符号のほうが、大きい整数が多い場合はδ符号のほうが高い圧縮率になります。
+</p>
+
+<h4>●CBT 符号</h4>
+<p> CBT (Complete Binary Tree) 符号は固定長の符号を改良したものです。たとえば、0 から 2<sup>k</sup> - 1 以下の数値は k ビットの固定長で表すことができます。ところが、数値 n (0 &lt;= n &lt; m) の上限値 m が 2<sup>k</sup> - 1 よりも小さい場合、m 以上 2<sup>k</sup> - 1 以下の符号語は使われていません。CBT 符号はこの部分を有効に利用する方法です。
+</p>
+<p> CBT 符号は 0 &lt;= n &lt; 2<sup>k</sup> - m の数値 n を k - 1 ビットで表し、2<sup>k</sup> - m &lt;= n &lt m の数値 n を k ビットで表します。具体的には次のように符号化します。
+</p>
+<ul>
+  <li> 0 &lt;= n &lt; 2<sup>k</sup> - m ならば n を k - 1 ビットの 2 進数で表す
+  <li> 2<sup>k</sup> - m &lt;= n &lt; m ならば n + 2<sup>k</sup> - m を k ビットで表す
+</ul>
+<p> CBT 符号の一例を示します。
+</p>
+<pre class="fig">
+                    表 : CBT 符号の例
+
+    k = 4, m = 10    k = 4, m = 11    k = 4, m = 12 
+    n   符号語       n   符号語       n   符号語    
+  ---------------   ---------------  ---------------
+    0    0 0 0       0    0 0 0       0    0 0 0    
+    1    0 0 1       1    0 0 1       1    0 0 1    
+    2    0 1 0       2    0 1 0       2    0 1 0    
+    3    0 1 1       3    0 1 1       3    0 1 1    
+    4    1 0 0       4    1 0 0       4  1 0 0 0    
+    5    1 0 1       5  1 0 1 0       5  1 0 0 1    
+    6  1 1 0 0       6  1 0 1 1       6  1 0 1 0    
+    7  1 1 0 1       7  1 1 0 0       7  1 0 1 1    
+    8  1 1 1 0       8  1 1 0 1       8  1 1 0 0    
+    9  1 1 1 1       9  1 1 1 0       9  1 1 0 1    
+                    10  1 1 1 1      10  1 1 1 0    
+                                     11  1 1 1 1    
+</pre>
+<p> このように、CBT 符号は 2<sup>4</sup> - m 未満の数値を 1 ビット少ない 3 ビットで表すことができます。CBT 符号の復号も簡単です。最初に k - 1 ビット読み込み、その値が 2<sup>k</sup> - m 以上であれば、もう 1 ビット読み込んだ k ビットの値から 2<sup>k</sup> - m を引き算するだけです。
+</p>
+
+<h4>●ゴロム・ライス符号</h4>
+<p> ゴロム (Golumb) 符号は Solomon W. Golumb が開発した符号です。ライス (Rice) 符号はゴロム符号の特別な場合で、Rice がのちに再発見したことから、ゴロム・ライス符号と呼ばれています。ゴロム符号はパラメータ b を使って整数 n を符号化します。アルゴリズムは次のようになります。
+</p>
+<ol>
+  <li>商 p = n / b, 剰余 q = n % b を求める。
+  <li>p をα符号で符号化する。
+  <li>b が 2<sup>k</sup> で表せる場合、q の下位 k ビットを出力する。
+  <li>b &lt; 2<sup>k</sup> の場合、q を CBT 符号で符号化する。
+</ol>
+<p> 3 の場合、剰余は n の下位 k ビットになるので、それをそのまま出力することができます。この場合をライス符号といいます。ライス符号は実装が簡単なので、画像や音声の圧縮アルゴリズムの中で使われることがあります。ライス符号の簡単な例を示します。
+</p>
+<pre class="fig">
+    表 : Rice 符号の例
+
+ b = 4           b = 8
+ n    p   q      n   p   q
+-------------   ------------
+ 0     1  00     0   1  000
+ 1     1  01     1   1  001
+ 2     1  10     2   1  010
+ 3     1  11     3   1  011
+ 4    01  00     4   1  100
+ 5    01  01     5   1  101
+ 6    01  10     6   1  110
+ 7    01  11     7   1  111
+ 8   001  00     8  01  000
+ 9   001  01     9  01  001
+10   001  10    10  01  010
+11   001  11    11  01  011
+12  0001  00    12  01  100
+13  0001  01    13  01  101
+14  0001  10    14  01  110
+15  0001  11    15  01  111
+</pre>
+<p> このように、ゴロム・ライス符号はパラメータ b を変更すると符号語も変化します。小さな整数と大きな整数で出現確率の変化が緩やかな場合はパラメータ b の値を大きくするといいでしょう。
+</p>
+<h4>●ビット入出力処理の作成</h4>
+<p> それでは、ここで符号化・復号処理に必要となるビット単位の入出力ルーチンを作成します。必要な操作は、1 ビット単位と複数ビットの入出力です。
+</p>
+<pre class="fig">
+┌────┐      getc 
+│ファイル│&lt;== ストリーム ==&gt; [バッファ(8 bit)]
+└────┘      putc              ↑↓
+                                  ビット入出力
+
+              図 : ビット入出力ルーチン
+</pre>
+<p> ファイルの入出力はバイト単位で入出力を行う関数 getc, putc で行い、1 バイトのバッファを介してビット入出力を行います。たとえば、バッファに 8 ビット分データをセットしたら、putc でファイルへ書き込みます。1 ビット読み込むときも、バッファにデータがなければ、getc でファイルからデータをバッファに読み込み、そこから 1 ビットリードします。
+</p>
+
+<p> それでは、作成するクラスとメソッドの一覧表を示します。
+</p>
+<ol>
+ <li><b>BitIO(name, mode)</b><br>
+    ビットストリームをオープンします。name はオープンするファイル名です。mode は ROPEN がリードオープンで、WOPEN がライトオープンです。
+ <li><b>close()</b><br>
+    ビットストリームをクローズします。
+ <li><b>getbit()</b><br>
+    ビットストリームより 1 ビット読み込みます。ファイルの終了は None を返します。
+ <li><b>getbits(n)</b><br>
+    ビットストリームより n ビット読み込みます。ファイルの終了は None を返します。
+ <li><b>putbit(bit)</b><br>
+    ビットストリームへ 1 ビット出力します。
+ <li><b>putbits(n, code)</b><br>
+    ビットストリームへ code の下位 n ビットを出力します。
+</ol>
+
+<p> それでは、プログラムを作りましょう。最初にクラスを定義します。
+</p>
+
+<pre class="list">
+リスト : クラス BitIO の定義
+
+class BitIO:
+    def __init__(self, name, mode):
+        if mode == ROPEN:
+            self.cnt = 0
+        elif mode == WOPEN:
+            self.cnt = 8
+        else:
+            raise 'BitIO: file mode error'
+        self.mode = mode
+        self.file = open(name, mode)
+        self.buff = 0
+
+    def close(self):
+        if self.mode == WOPEN and self.cnt &lt; 8:
+            putc(self.file, self.buff)
+        self.file.close()
+</pre>
+
+<p> クラス名は BitIO としました。インスタンス変数 buff がバッファで、mode はファイルのアクセスモードです。アクセスモードは引数 mode で指定します。ビットデータはバッファの MSB が先頭になります。したがって、データは MSB (7 ビット目) から LSB (0 ビット目) の方向へ読み書きしていきます。
+</p>
+<p> インスタンス変数 cnt はカウンタで、リードモードの場合は 0 に、ライトモードの場合は 8 に初期化します。どちらの場合も cnt を -1 してから、その位置にあるビットを読み書きします。あとは、ファイル名 name のファイルを open でオープンし、ファイルオブジェクトをインスタンス変数 file にセットします。
+</p>
+
+<p> 次はビットストリームをクローズするメソッド close です。ライトモードでオープンしている場合は、バッファをフラッシュする作業が必要になります。カウンタ cnt が 8 より小さいのであれば、バッファにデータが残っているので putc で出力します。そのあとファイルオブジェクトのメソッド close でファイルをクローズします。リードモードの場合は単純にファイルをクローズするだけです。
+</p>
+
+<p> 次は 1 ビット読み込むメソッド getbit を作ります。
+</p>
+
+<pre class="list">
+リスト : 1 ビット読み込み
+
+    def getbit(self):
+        self.cnt -= 1
+        if self.cnt &lt; 0:
+            self.buff = getc(self.file)
+            if self.buff is None: return None
+            self.cnt = 7
+        return (self.buff &gt;&gt; self.cnt) &amp; 1
+</pre>
+<p> getbit は簡単です。cnt を一つ減らして、その位置にあるビットをチェックするだけです。cnt を一つ減らしたら、cnt が負の値になっていないかチェックします。そうであれば、バッファにデータがなくなったので、getc でファイルからデータを読み込み、cnt を 7 に再設定します。最後に、buff を右へ cnt ビットシフトして、そのビットの値を返します。
+</p>
+
+<p> 次は n ビット読み込むメソッド getbits を作ります。
+</p>
+<pre class="list">
+リスト : n ビット読み込み
+
+    def getbits(self, n):
+        v = 0
+        p = 1 &lt;&lt; (n - 1)
+        while p &gt; 0:
+            if self.getbit() == 1: v |= p
+            p &gt;&gt;= 1
+        return v
+</pre>
+<p> getbits は getbit を n 回呼び出して n ビット読み込みます。変数 v に読み込んだビットをセットします。p は v にビットをセットする位置を表します。while ループで getbit を呼び出して、返り値が 1 ならば v |= p でビットを 1 にセットします。そして、p を右へ 1 ビットシフトします。これで、ビットストリームから n ビット読み込むことができます。最後に v を返します。
+</p>
+
+<p> 次は 1 ビット書き込むメソッド putbit を作ります。
+</p>
+<pre class="list">
+リスト : 1 ビット書き込み
+
+    def putbit(self, bit):
+        self.cnt -= 1
+        if bit &gt; 0: self.buff |= (1 &lt;&lt; self.cnt)
+        if self.cnt == 0:
+            putc(self.file, self.buff)
+            self.buff = 0
+            self.cnt = 8
+</pre>
+<p> 最初に、カウンタ cnt を一つ減らします。bit が 0 よりも大きい場合は、buff の cnt の位置にビット 1 をセットします。そして、cnt が 0 であればバッファが満杯になったので putc で出力します。それから、buff を 0 に、cnt を 8 にセットします。
+</p>
+
+<p> 次は n ビット書き込むメソッド putbits を作ります。
+</p>
+<pre class="list">
+リスト : n ビット書き込み
+
+    def putbits(self, n, x):
+        p = 1 &lt;&lt; (n - 1)
+        while p &gt; 0:
+            self.putbit(p &amp; x)
+            p &gt;&gt;= 1
+</pre>
+<p> putbits も putbit を n 回呼び出して実現しています。p が出力するビットの位置を表しています。putbit は 0 よりも大きい値であれば 1 を出力するので、p &amp; x の値を渡すだけで正常に動作します。
+</p>
+
+<p> なお、getbits, putbits はループを使って実装しましたが、<a href="index.html#cite">参考文献 [2]</a> にはシフト演算子を使った方法が紹介されています。興味のある方はプログラムを書き換えてみてください。
+</p>
+<h4>●プログラムの作成</h4>
+<p> では、整数の符号化を行うプログラムを作ります。符号化・復号処理は BitIO のメソッドとして定義します。また、0 を符号化できると便利なので、今回のプログラムは 0 以上の整数を符号化することにします。
+</p>
+<p> 最初はα符号です。
+</p>
+<pre class="list">
+リスト : α符号
+
+    def alpha_encode(self, n):
+        for _ in xrange(n): self.putbit(0)
+        self.putbit(1)
+
+    def alpha_decode(self):
+        n = 0
+        while self.getbit() == 0: n += 1
+        return n
+</pre>
+<p> 符号化はメソッド alpha_encode で行います。0 を n 個出力したあと、最後に 1 を出力します。数値 0 は 1 だけの出力になります。復号はメソッド alpha_decode で行います。これは getbit で 1 ビット読み込み、0 をカウントしてその値を返すだけです。
+</p>
+
+<p> 次はγ符号のプログラムを作ります。符号化する数値に 0 を含める場合、数値 n を次のように変換します。 
+</p>
+<pre class="fig">
+     n (n+1) bit数  bit列      N      (n+1) bit数  bit列
+   ----------------------   --------------------------------------
+     0    1   0     none      11      1100   3     1 0 0
+     1   10   1     0         12      1101   3     1 0 1
+     2   11   1     1         13      1110   3     1 1 0
+     3  100   2     0 0       14      1111   3     1 1 1
+     4  101   2     0 1       15     10000   4     0 0 0 0
+     5  110   2     1 0       16     10001   4     0 0 0 1
+     6  111   2     1 1        :     :       :
+     7 1000   3     0 0 0    127  10000000   7     0 0 0 0 0 0 0
+     8 1001   3     0 0 1      :     :       :
+     9 1010   3     0 1 0    255 100000000   8     0 0 0 0 0 0 0 0
+    10 1011   3     0 1 1    256 100000001   8     0 0 0 0 0 0 0 1
+</pre>
+<p> γ符号は bit 数をα符号で符号化して、bit 列をそのまま出力します。数値 0 は bit 数 (0) だけで表します。bit 数は次のように求めることができます。 
+</p>
+<pre class="list">
+    n1 = 0    # bit 数
+    n2 = (n + 1) &gt;&gt; 1
+    while n2 &gt; 0:
+        n1 += 1
+        n2 &gt;&gt;= 1
+</pre>
+<p> 数値 n を +1 して、その最上位ビット 1 を除いた桁数が bit 数 (n1) になります。したがって、bit 列は数値 n + 1 の下位 n1 ビットになります。γ符号のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : γ符号
+
+    def gamma_encode(self, n):
+        n1 = 0
+        n2 = (n + 1) &gt;&gt; 1
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        self.alpha_encode(n1)
+        if n1 &gt; 0: self.putbits(n1, n + 1)
+
+    def gamma_decode(self):
+        n1 = self.alpha_decode()
+        if n1 &gt; 0:
+            n2 = self.getbits(n1)
+            n1 = (1 &lt;&lt; n1) + n2 - 1
+        return n1
+</pre>
+
+<p> 符号化はメソッド gamma_encode で行います。bit 数を n1 に求めて alpha_encode で符号化します。そして、n1 が 0 よりも大きければ、n + 1 の下位 n1 ビットを putbits でそのまま出力します。復号を行うメソッド gamma_decode も簡単です。alpha_decode で bit 数を復号して n1 にセットします。n1 が 0 よりも大きければ、getbits で n1 ビット読み込んで n2 を復号します。そして元の数値を計算します。
+</p>
+
+<p> 次はδ符号です。
+</p>
+<pre class="list">
+リスト : δ符号
+
+    def delta_encode(self, n):
+        n1 = 0
+        n2 = (n + 1) &gt;&gt; 1
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        self.gamma_encode(n1)
+        if n1 &gt; 0: self.putbits(n1, n + 1)
+
+    def delta_decode(self):
+        n1 = self.gamma_decode()
+        if n1 &gt; 0:
+            n2 = self.getbits(n1)
+            n1 = (1 &lt;&lt; n1) + n2 - 1
+        return n1
+</pre>
+
+<p> 符号化を行うメソッドが delta_encode で、復号を行うメソッドが delta_decode です。γ符号は bit 数をα符号で符号化しましたが、δ符号はそれをγ符号で符号化するだけです。プログラムは alpha_encode と alpha_decode を gamma_encode と gamma_decode に変更するだけです。
+</p>
+
+<p> 次は CBT 符号を作ります。
+</p>
+<pre class="list">
+リスト : CBT 符号
+
+    # 符号化
+    def cbt_encode(self, n, m, k):
+        limit = (1 &lt;&lt; k) - m
+        if n &lt; limit:
+            self.putbits(k - 1, n)
+        else:
+            self.putbits(k, n + limit)
+
+    # 復号
+    def cbt_decode(self, m, k):
+        limit = (1 &lt;&lt; k) - m
+        n = self.getbits(k - 1)
+        if n &gt;= limit:
+            n = (n &lt;&lt; 1) + self.getbit() - limit
+        return n
+</pre>
+<p> 符号化を行うメソッド cbt_encode の引数 n が数値、m が数値の最大値、k がビット数です。CBT 符号で符号化する場合、最初に 2<sup>k</sup> - m を求めて変数 limit にセットします。次に、n が limit より小さい場合は n を k - 1 ビットで符号化します。そうでなければ、n + limit を k ビットで符号化します。
+</p>
+<p> 復号を行うメソッド cbt_decode も簡単です。最初に 2<sup>k</sup> - m を求めて変数 limit にセットします。次に、getbits で k - 1 ビットを読み込んで復号して変数 n にセットします。n が limit 以上であれば、もう 1 ビット読み込んで k ビットの値を求め、その値から limit を引き算するだけです。
+</p>
+
+<p> 最後にライス符号を作ります。
+</p>
+<pre class="list">
+リスト : ライス符号
+
+    def rice_encode(self, n, k):
+        self.alpha_encode(n &gt;&gt; k)
+        self.putbits(k, n)
+
+    def rice_decode(self, k):
+        n = self.alpha_decode()
+        return (n &lt;&lt; k) + self.getbits(k)
+</pre>
+<p> 符号化を行うメソッド rice_encode の引数 n が数値、k がパラメータを表していて、値は b = 2<sup>k</sup> になります。ライス符号の場合、商の計算はビットシフトで実現できます。n を k ビット右シフトして、その値を alpha_encode で符号化します。そして、n の下位 k ビットが剰余になるので、そのまま putbits で出力します。復号を行うメソッド rice_decode は、alpha_decode で商を復号し、getbits で剰余を求めます。
+</p>
+
+<ul>
+  <li><a href="pyalgo30.html#list1">プログラムリスト１</a>
+</ul>
+<h4>●ランレングスへの応用</h4>
+<p> それでは簡単な応用例として、ランレングスの連長に整数の符号化を適用してみましょう。前回作成した同じ記号が n 個連続したらランレングスで符号化するプログラムを改造します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ランレングス符号化
+
+def run_length_encode(fin, fout, n):
+    c = getc(fin)
+    while c is not None:
+        len = 1
+        while True:
+            c1 = getc(fin)
+            if c != c1: break
+            len += 1
+        if len &gt;= n:
+            for _ in xrange(n): fout.putbits(8, c)
+            # fout.gamma_encode(len - n)
+            # fout.delta_encode(len - n)
+            fout.rice_encode(len - n, 5)
+        else:
+            for _ in xrange(len): fout.putbits(8, c)
+        c = c1
+</pre>
+<p> 引数 fout は BitIO クラスのオブジェクトです。記号 c を出力するときは putbits(8, c) で行い、連長を出力するときは整数の符号化を行います。これは符号化を行うメソッドを呼び出すだけです。同じ記号をカウントするとき、その上限値をチェックする必要ありません。256 以上の大きな値でも符号化することができます。ライス符号の場合は、パラメータ k の値を設定してください。
+</p>
+
+<p> 次は復号を行う関数 run_length_decode を修正します。
+</p>
+<pre class="list">
+リスト : ランレングス復号
+
+def run_length_decode(fin, fout, n, size):
+    c = fin.getbits(8)
+    while size &gt; 0:
+        len = 1
+        while len &lt; n:
+            c1 = fin.getbits(8)
+            if c1 != c: break
+            len += 1
+        if len == n:
+            # len += fin.gamma_decode()
+            # len += fin.delta_decode()
+            len += fin.rice_decode(6)
+            c1 = fin.getbits(8)
+        for _ in xrange(len): putc(fout, c)
+        size -= len
+        c = c1
+</pre>
+<p> 引数 fin は BitIO のオブジェクトです。記号の復号は getbits(8) で、連長の復号は対応するメソッドを呼び出すだけです。それから BitIO を使う場合、ファイルの最後の 1 バイトの中で、どこまでが符号語として有効なビットか区別することができません。ゴミの部分を誤って復号することもありえるので、元のファイルサイズをファイルの先頭にセットすることにします。引数 size が元のファイルサイズです。size が 0 になったら処理を終了します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛いたします。詳細は <a href="pyalgo30.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+<p> それでは実行結果を示します。<a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> の中の ptt5 を圧縮します。
+</p>
+
+<pre>
+    表 : ptt5 の符号化と復号
+
+    ptt5 のサイズ : 513,216 byte
+
+            RLE-3    gamma    delta   rice(3)  rice(4)  rice(5)  raice(6)
+-------------------------------------------------------------------------
+サイズ　   116,342  113,547  113,455  115,052  113,331  113,224  113,961
+符号化(秒)   0.77     3.17     3.12     3.08     3.06     3.07     3.08
+復号(秒)     0.73     3.12     3.14     3.13     3.11     3.11     3.12
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> 連長を符号化する効果は確かにありますが、それほど大きなものではありません。ビット単位で入出力を行うため、符号化と復号の実行時間は遅くなりました。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<h4>●<a name="cite">参考文献</h4>
+<ol>
+  <li>植松友彦, 『文書データ圧縮アルゴリズム入門』, ＣＱ出版社, 1994
+  <li>奥村晴彦, 『データ圧縮の基礎から応用まで』, C MAGAZINE 2002 年 7 月号, ソフトバンク
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# bitio.py : ビット入出力
+#
+#            Copyright (C) 2007 Makoto Hiroi
+#
+
+# 定数の定義
+WOPEN = "wb"
+ROPEN = "rb"
+
+# バイト単位の入出力
+def getc(f):
+    c = f.read(1)
+    if c == '': return None
+    return ord(c)
+
+def putc(f, x):
+    f.write(chr(x &amp; 0xff))
+
+
+# クラス定義
+class BitIO:
+    def __init__(self, name, mode):
+        if mode == ROPEN:
+            self.cnt = 0
+        elif mode == WOPEN:
+            self.cnt = 8
+        else:
+            raise 'BitIO: file mode error'
+        self.mode = mode
+        self.file = open(name, mode)
+        self.buff = 0
+
+    def close(self):
+        if self.mode == WOPEN and self.cnt &lt; 8:
+            putc(self.file, self.buff)
+        self.file.close()
+
+    # 1 bit input
+    def getbit(self):
+        self.cnt -= 1
+        if self.cnt &lt; 0:
+            self.buff = getc(self.file)
+            if self.buff is None: return None
+            self.cnt = 7
+        return (self.buff &gt;&gt; self.cnt) &amp; 1
+
+    # 1 bit output
+    def putbit(self, bit):
+        self.cnt -= 1
+        if bit &gt; 0: self.buff |= (1 &lt;&lt; self.cnt)
+        if self.cnt == 0:
+            putc(self.file, self.buff)
+            self.buff = 0
+            self.cnt = 8
+
+    # n bits input
+    def getbits(self, n):
+        v = 0
+        p = 1 &lt;&lt; (n - 1)
+        while p &gt; 0:
+            if self.getbit() == 1: v |= p
+            p &gt;&gt;= 1
+        return v
+
+    # n bits output
+    def putbits(self, n, x):
+        p = 1 &lt;&lt; (n - 1)
+        while p &gt; 0:
+            self.putbit(p &amp; x)
+            p &gt;&gt;= 1
+
+
+    ##### 整数の符号化 #####
+
+    # α符号
+    def alpha_encode(self, n):
+        for _ in xrange(n): self.putbit(0)
+        self.putbit(1)
+
+    def alpha_decode(self):
+        n = 0
+        while self.getbit() == 0: n += 1
+        return n
+
+    # γ符号
+    def gamma_encode(self, n):
+        n1 = 0
+        n2 = (n + 1) &gt;&gt; 1
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        self.alpha_encode(n1)
+        if n1 &gt; 0: self.putbits(n1, n + 1)
+
+    def gamma_decode(self):
+        n1 = self.alpha_decode()
+        if n1 &gt; 0:
+            n2 = self.getbits(n1)
+            n1 = (1 &lt;&lt; n1) + n2 - 1
+        return n1
+
+    # δ符号
+    def delta_encode(self, n):
+        n1 = 0
+        n2 = (n + 1) &gt;&gt; 1
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        self.gamma_encode(n1)
+        if n1 &gt; 0: self.putbits(n1, n + 1)
+
+    def delta_decode(self):
+        n1 = self.gamma_decode()
+        if n1 &gt; 0:
+            n2 = self.getbits(n1)
+            n1 = (1 &lt;&lt; n1) + n2 - 1
+        return n1
+
+
+    # CBT 符号
+    def cbt_encode(self, n, m, k):
+        limit = (1 &lt;&lt; k) - m
+        if n &lt; limit:
+            self.putbits(k - 1, n)
+        else:
+            self.putbits(k, n + limit)
+
+    def cbt_decode(self, m, k):
+        limit = (1 &lt;&lt; k) - m
+        n = self.getbits(k - 1)
+        if n &gt;= limit:
+            n = (n &lt;&lt; 1) + self.getbit() - limit
+        return n
+
+    # Golumb-Rice 符号
+    def rice_encode(self, n, k):
+        self.alpha_encode(n &gt;&gt; k)
+        self.putbits(k, n)
+
+    def rice_decode(self, k):
+        n = self.alpha_decode()
+        return (n &lt;&lt; k) + self.getbits(k)
+
+
+# test
+if __name__ == '__main__':
+    a = BitIO("test.dat", WOPEN)
+    for x in xrange(10):
+        putc(a.file, x)
+    for x in xrange(10):
+        a.putbit(x &amp; 1)
+    for x in xrange(10):
+        a.putbits(8, x)
+    a.close()
+    
+    b = BitIO("test.dat", ROPEN)
+    for x in xrange(10):
+        print getc(b.file)
+    for x in xrange(10):
+        print b.getbit()
+    for x in xrange(10):
+        print b.getbits(8)
+    b.close()
+
+    a = BitIO("test.dat", WOPEN)
+    for x in xrange(33):
+        a.alpha_encode(x)
+        a.gamma_encode(x)
+        a.delta_encode(x)
+        a.rice_encode(x, 2)
+    a.close()
+    
+    b = BitIO("test.dat", ROPEN)
+    for x in xrange(33):
+        print b.alpha_decode(),
+        print b.gamma_decode(),
+        print b.delta_decode(),
+        print b.rice_decode(2)
+    b.close()
+
+    a = BitIO("test.dat", WOPEN)
+    for k, m in [(4, 10), (4, 11), (4, 12)]:
+        for n in xrange(m):
+            a.cbt_encode(n, m, k)
+    a.close()
+    b = BitIO("test.dat", ROPEN)
+    for k, m in [(4, 10), (4, 11), (4, 12)]:
+        for n in xrange(m):
+            print b.cbt_decode(m, k)
+    b.close()
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# rle1.py : ランレングス符号化 (連長を符号化する)
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+from bitio import *
+
+# 定数
+MIN_LEN = 3
+
+# ランレングス符号化
+def run_length_encode(fin, fout, n):
+    c = getc(fin)
+    while c is not None:
+        len = 1
+        while True:
+            c1 = getc(fin)
+            if c != c1: break
+            len += 1
+        if len &gt;= n:
+            for _ in xrange(n): fout.putbits(8, c)
+            #fout.gamma_encode(len - n)
+            #fout.delta_encode(len - n)
+            fout.rice_encode(len - n, 5)
+        else:
+            for _ in xrange(len): fout.putbits(8, c)
+        c = c1
+
+# ランレングス復号
+def run_length_decode(fin, fout, n, size):
+    c = fin.getbits(8)
+    while size &gt; 0:
+        len = 1
+        while len &lt; n:
+            c1 = fin.getbits(8)
+            if c1 != c: break
+            len += 1
+        if len == n:
+            #len += fin.gamma_decode()
+            #len += fin.delta_decode()
+            len += fin.rice_decode(5)
+            c1 = fin.getbits(8)
+        for _ in xrange(len): putc(fout, c)
+        size -= len
+        c = c1
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = BitIO(name2, WOPEN)
+    outfile.putbits(32, size)
+    if size &gt; 0: run_length_encode(infile, outfile, MIN_LEN)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = BitIO(name1, ROPEN)
+    outfile = open(name2, "wb")
+    size = infile.getbits(32)
+    if size &gt; 0: run_length_decode(infile, outfile, MIN_LEN, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo29.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo31.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

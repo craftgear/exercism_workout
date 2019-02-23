@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Ruby Junk Scripts</title>
+  <meta name="description" content="Ruby,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881802</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Ruby Programming</h1>
+<h2>Ruby Junk Scripts</h2>
+<div class="small">
+[ <a href="ruby07.html">PrevPage</a> | <a href="ruby.html#rjs">R u b y</a> | NextPage ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="runlength">ランレングス</h3>
+<p> ランレングス (Run Length) とは「連続して現れるものの長さ」という意味で、データ内で同じ値が並んでいる場合はその値と個数で符号化する方法のことを、「ランレングス圧縮」または「ランレングス符号化」といいます。ランレングスはとても簡単な符号化ですが、それでもいくつかの方法が考えられます。いちばん簡単な方法は、データの値とデータの個数で表す方法です。たとえば、次の文字列を考えてみましょう。
+</p>
+<pre class="fig">
+文字列  abccddeeeeffffgggggggghhhhhhhh  (30)
+</pre>
+<p> 同じ文字が連続して並んでいますね。これを文字と個数で表すと、次のようになります。
+</p>
+<pre class="fig">
+=&gt;  a1b1c2d2e4f4g8h8  (16)
+</pre>
+<p> 元データ 30 文字を 16 文字で表すことができます。また、復号も簡単にできることは直ぐにわかると思います。このように、ランレングスはとても単純な方法ですが、画像データには大きな効果を発揮する場合があります。たとえば、白黒の画像ではデータが 2 種類しかないので、最初のデータが白か黒のどちらであるか区別できれば、あとは個数だけの情報でデータを圧縮することができます。
+</p>
+<p> ところが、通常のテキストファイルでは、同じ文字が続くことはあまりないので、この方法ではほとんど効果がありません。たとえば、先ほどの文字列の前半 4 文字に注目してください。
+</p>
+<pre class="fig">
+abccdd (6) =&gt; a1b1c2d2 (8)
+</pre>
+<p> ランレングスを使うと、6 文字のデータが 8 文字に増えてしまいます。これでは、サイズを小さくするどころか、かえって膨らませることになってしまいます。もしも、同じデータがひとつも連続していない場合、たとえば "abcdefgh" をランレングスで符号化すると、"a1b1c1d1e1f1g1h1" のようにデータ数は 2 倍にまで増えてしまいます。
+</p>
+<p> そこで、同じデータが数個以上続いていたらランレングスで符号化することにします。たとえば、同じデータが 3 つ以上続いていたら符号化することにしましょう。すると、データが "aaaaa" の場合は [a, a, a, 2] と表すことができます。逆に、"aaa" は [a, a, a, 0] と符号化されるので、1 バイト増えることになります。ですが、連続していないデータをランレングスで符号化することはないので、単純なランレングスよりもデータが膨らむ危険性は小さくなります。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+#
+# rle.rb : run length encoding
+#
+#          Copyright (C) 2006 Makoto Hiroi
+#
+require "optparse"
+MAX_LEN = 255
+
+# 単純なランレングス
+# 符号化
+def rle_encode(fin, fout)
+  c = fin.getc
+  while c
+    len = 0
+    while len &lt; MAX_LEN
+      c1 = fin.getc
+      break if c != c1
+      len += 1
+    end
+    fout.putc(c)
+    fout.putc(len)
+    if len == MAX_LEN
+      c = fin.getc
+    else
+      c = c1
+    end
+  end
+end
+
+# 復号
+def rle_decode(fin, fout)
+  while c = fin.getc
+    len = fin.getc
+    (len + 1).times do
+      fout.putc(c)
+    end
+  end
+end
+
+# 同じ記号が n 個続いたらランレングス
+# 符号化
+def rlen_encode(fin, fout, n)
+  c = fin.getc
+  while c
+    len = 1
+    while len &lt; MAX_LEN + n
+      c1 = fin.getc
+      break if c != c1
+      len += 1
+    end
+    if len &gt;= n
+      n.times do
+        fout.putc(c)
+      end
+      fout.putc(len - n)
+    else
+      len.times do
+        fout.putc(c)
+      end
+    end
+    if len == MAX_LEN + n
+      c = fin.getc
+    else
+      c = c1
+    end
+  end
+end
+
+# 復号
+def rlen_decode(fin, fout, n)
+  c = fin.getc
+  while c
+    len = 1
+    while len &lt; n
+      c1 = fin.getc
+      break if c1 != c
+      len += 1
+    end
+    if len == n
+      len += fin.getc
+      c1 = fin.getc
+    end
+    len.times do
+      fout.putc(c)
+    end
+    c = c1
+  end
+end
+
+def encode_file(name1, name2)
+  fin = open(name1, "rb")
+  fout = open(name2, "wb")
+  rle_encode(fin, fout)
+  fin.close
+  fout.close
+end
+
+def decode_file(name1, name2)
+  fin = open(name1, "rb")
+  fout = open(name2, "wb")
+  rle_decode(fin, fout)
+  fin.close
+  fout.close
+end
+
+def main
+  eflag = false
+  dflag = false
+  opts = OptionParser.new
+  opts.on("-e"){|v| eflag = true}
+  opts.on("-d"){|v| dflag = true}
+  opts.parse!(ARGV)
+  if eflag &amp;&amp; dflag
+    print "option error"
+  elsif eflag
+    encode_file(ARGV[0], ARGV[1])
+  elsif dflag
+    decode_file(ARGV[0], ARGV[1])
+  else
+    print "option error"
+  end
+end
+
+# 実行
+s = Time.now
+main
+e = Time.now - s
+print e
+</pre>
+<h4>●実行結果</h4>
+<p> テストデータは <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されている  <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> です。
+</p>
+<pre>
+  # RLE   : 単純なランレングス
+  # RLE-3 : 3 文字続いたらランレングス
+
+  ファイル名      サイズ      RLE       RLE-3
+  ---------------------------------------------
+  alice29.txt    152,089    289,852    150,130
+  asyoulik.txt   125,179    243,066    125,114
+  cp.html         24,603     46,474     24,722
+  fields.c        11,150     19,838     11,176
+  grammar.lsp      3,721      6,622      3,710
+  kennedy.xls  1,029,744  1,731,778  1,032,453
+  lcet10.txt     426,754    804,622    415,099
+  plrabn12.txt   481,861    944,618    481,221
+  ptt5           513,216    152,564    116,342
+  sum             38,240     58,594     35,772
+  xargs.1          4,227      8,294      4,227
+  ---------------------------------------------
+  合計         2,810,784  4,306,322  2,399,966
+</pre>
+<HR>
+<h3 id="srle">Switched Run Length Encoding</h3>
+<p> Switched Run Length Encoding (SRLE) はランレングスとそうでない部分に分けて符号化します。SRLE の特徴は、2 つの部分を区別するためのフラグをデータに追加するのではなく、LITERAL と FILL という 2 つのモードを使って管理するところです。次の例を見てください。
+</p>
+<pre class="fig">
+(1) LITERAL : a b c d e e e e f f f f f f f =&gt; 5 a b c d e
+              -----------
+                  記号が連続しているところを探す
+
+(2) FILL    : a b c d e e e e f f f f f f f =&gt; 5 a b c d e 3
+                        -----
+                        記号 e の数を数える
+
+(3) LITERAL : a b c d e e e e f f f f f f f =&gt; 5 a b c d e 3 1 f
+                              ---
+                              記号が連続しているところを探す
+
+(4) FILL    : a b c d e e e e f f f f f f f =&gt; 5 a b c d e 3 1 f 6
+                                -----------
+                                記号 f の数を数える
+</pre>
+<p> モードは最初 LITERAL です。LITERAL は記号が不連続でそのまま出力するモードです。LITERAL モードでは、記号が連続しているところを探し、そこまでの個数と記号列をそのまま出力します。(1) では e が連続しているので、a b c d e までの 5 文字を出力します。a b c d の 4 文字ではないことに注意してください
+</p>
+<p> 次に、モードを FILL に切り替えます。FILL は同じ記号が続くことを表すモードです。このとき、連続する記号は LITERAL モードで最後に出力した記号になります。(2) では e が 4 文字続いていますが、LITERAL モードで最初の e が出力されているので、残りの e を数えて 3 を出力します。そして、モードを LITERAL に切り替えます。
+</p>
+<p> (3) では f が続いているので、LITERAL モードの出力は f の 1 文字だけになります。そして、FILL モードに切り替えて、残りの f を数えて 6 を出力します。このように、モードを切り替えることから Switched Run Length Encoding と呼ばれています。
+</p>
+<h4>●参考文献</h4>
+<p> Switched Run Length Encoding は、Stephan T. Lavavej さんのページ <a href="http://stl.caltech.edu/bwtzip.shtml">bwtzip</a> にあるプログラムを参考にさせていただきました。Stephan T. Lavavej さんに感謝いたします。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+#
+# srle.rb : Switched Run Length Encoding
+#
+#           Copyright (C) 2006 Makoto Hiroi
+#
+
+# 定数
+LITERAL = 1
+FILL    = 0
+
+# 符号化
+def srle_encode(fin, fout)
+  mode = LITERAL
+  buff = []
+  c = fin.getc
+  while c
+    if mode == LITERAL
+      buff.clear
+      buff &lt;&lt; c
+      while buff.size &lt; MAX_LEN
+        c1 = fin.getc
+        break if c == c1 || c1 == nil
+        buff &lt;&lt; c1
+        c = c1
+      end
+      fout.putc(buff.size)
+      buff.each do |x|
+        fout.putc(x)
+      end
+      if buff.size == MAX_LEN
+        c = fin.getc
+      else
+        mode = FILL
+        c = c1
+        count = 1
+      end
+    else
+      while count &lt; MAX_LEN
+        c1 = fin.getc
+        break if c != c1
+        count += 1
+      end
+      fout.putc(count)
+      if count == MAX_LEN
+        count = 0
+      else
+        mode = LITERAL
+        c = c1
+      end
+    end
+  end
+end
+
+# 復号
+def srle_decode(fin, fout)
+  mode = LITERAL
+  c = nil
+  while len = fin.getc
+    if mode == LITERAL
+      len.times do
+        c = fin.getc
+        fout.putc(c)
+      end
+      if len &lt; MAX_LEN
+        mode = FILL
+      end
+    else
+      len.times do
+        fout.putc(c)
+      end
+      if len &lt; MAX_LEN
+        mode = LITERAL
+      end
+    end
+  end
+end
+</pre>
+<h4>●実行結果</h4>
+<p> テストデータは <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されている  <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> です。
+</p>
+<pre>
+  # RLE   : 単純なランレングス
+  # RLE-3 : 3 文字続いたらランレングス
+  # SRLE  : Switched Run Length Encoding
+
+  ファイル名      サイズ      RLE       RLE-3      SRLE
+  --------------------------------------------------------
+  alice29.txt    152,089    289,852    150,130    154,236
+  asyoulik.txt   125,179    243,066    125,114    128,227
+  cp.html         24,603     46,474     24,722     25,600
+  fields.c        11,150     19,838     11,176     11,334
+  grammar.lsp      3,721      6,622      3,710      3,790
+  kennedy.xls  1,029,744  1,731,778  1,032,453  1,186,806
+  lcet10.txt     426,754    804,622    415,099    422,092
+  plrabn12.txt   481,861    944,618    481,221    490,117
+  ptt5           513,216    152,564    116,342    107,932
+  sum             38,240     58,594     35,772     35,743
+  xargs.1          4,227      8,294      4,227      4,308
+  --------------------------------------------------------
+  合計         2,810,784  4,306,322  2,399,966  2,570,185
+</pre>
+<HR>
+<h3 id="zle">Zero Length Encoding</h3>
+<p> 記号 0 をランレングスで符号化する方法を「ゼロランレングス」といいます。ゼロランレングスは他の圧縮法、たとえばブロックソート法と組み合わせると、圧縮率が向上する場合があります。Zero Lenght Encoding はゼロランレングスの一種ですが、0 と 1 を使って記号 0 の個数を 2 進数で表すところがポイントです。つまり、1 bit を 1 byte で表して、数値を 0 と 1 の記号列で表すのです。0 と 1 を使って数値を表すので、ほかの記号も変換が必要になります。これはあとで説明します。
+</p>
+<p> 数を 2 進数で表す場合、最上位ビットは常に 1 なるので省略することが可能です。Zero Lenght Encoding では、個数 N に 1 を加えて最上位以外のビットを出力しています。たとえば、1 から 10 までの変換結果を示します。
+</p>
+<pre class="fig">
+1 =&gt;  2 (10)   =&gt; 0
+2 =&gt;  3 (11)   =&gt; 1
+3 =&gt;  4 (100)  =&gt; 0 0
+4 =&gt;  5 (101)  =&gt; 0 1 
+5 =&gt;  6 (110)  =&gt; 1 0
+6 =&gt;  7 (111)  =&gt; 1 1
+7 =&gt;  8 (1000) =&gt; 0 0 0
+8 =&gt;  9 (1001) =&gt; 0 0 1
+9 =&gt; 10 (1010) =&gt; 0 1 0
+0 =&gt; 11 (1011) =&gt; 0 1 1
+</pre>
+<p> 0 と 1 を個数の符号に使うため、ほかのデータは次のように変換します。
+</p>
+<pre class="fig">
+0x01 - 0xFD =&gt; +1 (0x02 - 0xFE)
+0xFE        =&gt; 0xFF, 0x00
+0xFF        =&gt; 0xFF, 0x01
+</pre>
+<p> これで、記号 0 をランレングスで符号化することができます。
+</p>
+<h4>●参考文献</h4>
+<p> Zero Length Encoding は、Stephan T. Lavavej さんのページ <a href="http://stl.caltech.edu/bwtzip.shtml">bwtzip</a> にあるプログラムを参考にさせていただきました。Stephan T. Lavavej さんに感謝いたします。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+#
+# zle.rb : Zero Length Encoding
+#
+#          Copyright (C) 2006 Makoto Hiroi
+#
+
+# 符号化
+def zle_encode(fin, fout)
+  c = fin.getc
+  while c
+    if c == 0
+      count = 1
+      count += 1 while (c = fin.getc) == 0
+      count += 1
+      while count != 1
+        fout.putc(count &amp; 1)
+        count &gt;&gt;= 1
+      end
+    else
+      case c
+      when 0xfe
+        fout.putc(0xff)
+        fout.putc(0)
+      when 0xff
+        fout.putc(0xff)
+        fout.putc(1)
+      else
+        fout.putc(c + 1)
+      end
+      c = fin.getc
+    end
+  end
+end
+
+# 復号
+def zle_decode(fin, fout)
+  c = fin.getc
+  buff = []
+  while c
+    if c &lt;= 1
+      count = 1
+      buff &lt;&lt; c
+      loop do
+        c = fin.getc
+        break if c == nil || c &gt; 1
+        buff &lt;&lt; c
+      end
+      count = (count &lt;&lt; 1) + buff.pop while buff.size &gt; 0
+      fout.putc(0) while (count -= 1) &gt; 0
+    else
+      if c == 0xff
+        c = fin.getc
+        if c == 0
+          fout.putc(0xfe)
+        else
+          fout.putc(0xff)
+        end
+      else
+        fout.putc(c - 1)
+      end
+      c = fin.getc
+    end
+  end
+end
+</pre>
+<h4>●実行結果</h4>
+<p> テストデータは <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されている  <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> です。
+</p>
+<pre>
+  # RLE   : 単純なランレングス
+  # RLE-3 : 3 文字続いたらランレングス
+  # SRLE  : Switched RunLength Encoding
+  # ZLE   : Zero Length Encoding
+
+  ファイル名      サイズ      RLE       RLE-3      SRLE        ZLE
+  -------------------------------------------------------------------
+  alice29.txt    152,089    289,852    150,130    154,236    152,089
+  asyoulik.txt   125,179    243,066    125,114    128,227    125,179
+  cp.html         24,603     46,474     24,722     25,600     24,603
+  fields.c        11,150     19,838     11,176     11,334     11,150
+  grammar.lsp      3,721      6,622      3,710      3,790      3,721
+  kennedy.xls  1,029,744  1,731,778  1,032,453  1,186,806    948,310
+  lcet10.txt     426,754    804,622    415,099    422,092    426,754
+  plrabn12.txt   481,861    944,618    481,221    490,117    481,861
+  ptt5           513,216    152,564    116,342    107,932    125,729
+  sum             38,240     58,594     35,772     35,743     32,376
+  xargs.1          4,227      8,294      4,227      4,308      4,227
+  -------------------------------------------------------------------
+  合計         2,810,784  4,306,322  2,399,966  2,570,185  2,335,999
+</pre>
+<HR>
+<h3 id="rangecoder">レンジコーダ</h3>
+<p> レンジコーダ (RnageCoder) でファイルを圧縮するプログラムです。レンジコーダは 1998 年に Michael Schindler が発表し、「高性能、高速、特許フリー」の方法として注目を集めるようになりました。Michael Schindler のレンジコーダは計算の途中で「桁上がり」が発生します。ところが、ロシアの Dmitry Subbotin が発表した「桁上げのないレンジコーダ」は、その名のごとく桁上がりが発生しません。現在、レンジコーダは主にこの 2 種類の形式が存在するようです。
+</p>
+
+<p> レンジコーダは原理的には算術符号と同じ方法です。性能は算術符号に比べるとわずかに劣化しますが、実現方法はとても簡単で実行速度も高速です。もちろん、ハフマン符号よりも高性能です。算術符号とレンジコーダの説明は拙作のページ <a href="../clisp/index.html">Common Lisp 入門：番外編</a> の <a href="../clisp/clispb01.html">Lisp で算術符号</a> と <a href="../clisp/clispb02.html">Lisp でレンジコーダ</a> をお読みください。
+</p>
+
+<h4>●参考文献</h4>
+<p> レンジコーダのプログラムは、yuu (yuta mori) さんのページ <a href="http://homepage3.nifty.com/wpage/">white page</a> にあるプログラムを参考にさせていただきました。yuu (yuta mori) さんに感謝いたします。
+</p>
+<p> また、出現頻度表の更新処理は Rick さんのプログラム (<a href="../memo05.html#0114_2">Memorandum 2005 年 1 月 14 日</a>) を参考にさせていただきました。Rick さんに感謝いたします。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+#
+# rangecoder.rb : レンジコーダ (桁上がりあり)
+#
+#                 Copyright (C) 2006 Makoto Hiroi
+#
+
+# 定数
+ENCODE = "encode"
+DECODE = "decode"
+
+class RangeCoder
+  MAX_RANGE = 0x100000000
+  MIN_RANGE = 0x1000000
+  MASK      = 0xffffffff
+  SHIFT     = 24
+  
+  attr_accessor :range, :low
+  
+  def initialize(file, mode)
+    @file = file
+    @range = MAX_RANGE
+    @buff = 0
+    @cnt = 0
+    if mode == ENCODE
+      @low = 0
+    elsif mode == DECODE
+      @file.getc  # buff の初期値 (0) を読み捨てる
+      # 4 byte read
+      @low = @file.getc
+      @low = (@low &lt;&lt; 8) + @file.getc
+      @low = (@low &lt;&lt; 8) + @file.getc
+      @low = (@low &lt;&lt; 8) + @file.getc
+    else
+      raise "RangeCoder mode error"
+    end
+  end
+  
+  def buff_flush(c)
+    @file.putc(@buff)
+    while @cnt &gt; 0
+      @file.putc(c)
+      @cnt -= 1
+    end
+  end
+  
+  def encode_normalize
+    while @range &lt; MIN_RANGE
+      if @low &lt; (0xff &lt;&lt; SHIFT)
+        # 桁上がりが発生しない場合
+        buff_flush(0xff)
+        @buff = (@low &gt;&gt; SHIFT) &amp; 0xff
+      elsif @low &gt;= MAX_RANGE
+        # 桁上がり
+        @buff += 1
+        buff_flush(0)
+        @buff = (@low &gt;&gt; SHIFT) &amp; 0xff
+      else
+        # 上位 8 bit が 0xff
+        @cnt += 1
+      end
+      @low = (@low &lt;&lt; 8) &amp; MASK
+      @range &lt;&lt;= 8
+    end
+  end
+  
+  def decode_normalize
+    while @range &lt; MIN_RANGE
+      @range &lt;&lt;= 8
+      @low = ((@low &lt;&lt; 8) + @file.getc) &amp; MASK
+    end
+  end
+  
+  # 符号化の終了処理
+  def finish
+    if @low &gt;= MAX_RANGE
+      # 桁上がり
+      @buff += 1
+      buff_flush(0)
+    else
+      buff_flush(0xff)
+    end
+    @file.putc((@low &gt;&gt; SHIFT) &amp; 0xff)
+    @file.putc((@low &gt;&gt; 16) &amp; 0xff)
+    @file.putc((@low &gt;&gt; 8) &amp; 0xff)
+    @file.putc(@low &amp; 0xff)
+  end
+end
+
+# 出現頻度表
+class Frequency
+  GR = 16
+  def initialize(size, limit = 0x2000, inc = 4)
+    @count = Array.new(size, 1)
+    @count_group = Array.new(size / GR + 1, GR)
+    @count_group[size / GR] = size % GR
+    @sum = size
+    @limit = limit
+    @inc = inc
+  end
+  
+  # 出現頻度表の更新
+  def update(c)
+    @count[c] += @inc
+    @count_group[c / GR] += @inc
+    @sum += @inc
+    if @sum &gt; @limit
+      @sum = 0
+      @count_group.fill(0)
+      for x in 0 ... @count.size
+        @count[x] = (@count[x] &gt;&gt;= 1) | 1
+        @count_group[x / GR] += @count[x]
+        @sum += @count[x]
+      end
+    end
+  end
+  
+  # 累積度数を求める
+  def cumul(c)
+    x = num = 0
+    for x in 0 ... (c/GR)
+      num += @count_group[x]
+    end
+    for y in ((c/GR)*GR) ... c
+      num += @count[y]
+    end
+    num
+  end
+  
+  # 記号を探す
+  def search(value)
+    x = num = 0
+    for x in 0 ... @count_group.size
+      break if value &lt; (num + @count_group[x])
+      num += @count_group[x]
+    end
+    for c in x*GR ... @count.size
+      break if value &lt; (num + @count[c])
+      num += @count[c]
+    end
+    [c, num]
+  end
+  
+  # 符号化
+  def encode(rc, c)
+    temp = rc.range / @sum
+    rc.low += cumul(c) * temp
+    rc.range = temp * @count[c]
+    update(c)
+    rc.encode_normalize
+  end
+  
+  # 復号
+  def decode(rc)
+    temp = rc.range / @sum
+    c, cum = search(rc.low / temp)
+    rc.low -= temp * cum
+    rc.range = temp * @count[c]
+    update(c)
+    rc.decode_normalize
+    c
+  end
+end
+
+#
+# rc.rb : レンジコーダによるファイルの圧縮
+#
+#         Copyright (C) 2006 Makoto Hiroi
+#
+require "rangecoder"
+require "optparse"
+
+# ファイルの終了
+EOF = 256
+
+# 符号化
+def encode(name1, name2)
+  infile = open(name1, "rb")
+  outfile = open(name2, "wb")
+  rc = RangeCoder.new(outfile, ENCODE)
+  freq = Frequency.new(257)
+  infile.each_byte do |c|
+    freq.encode(rc, c)
+  end
+  freq.encode(rc, EOF)
+  rc.finish
+  infile.close
+  outfile.close
+end
+
+# 復号
+def decode(name1, name2)
+  infile = open(name1, "rb")
+  outfile = open(name2, "wb")
+  rc = RangeCoder.new(infile, DECODE)
+  freq = Frequency.new(257)
+  while (c = freq.decode(rc)) != EOF
+    outfile.putc(c)
+  end
+  infile.close
+  outfile.close
+end
+
+def main
+  eflag = false
+  dflag = false
+  opts = OptionParser.new
+  opts.on("-e"){|v| eflag = true}
+  opts.on("-d"){|v| dflag = true}
+  opts.parse!(ARGV)
+  if eflag &amp;&amp; dflag
+    print "option error"
+  elsif eflag
+    encode(ARGV[0], ARGV[1])
+  elsif dflag
+    decode(ARGV[0], ARGV[1])
+  else
+    print "option error"
+  end
+end
+
+# 実行
+s = Time.now
+main
+e = Time.now - s
+print e
+</pre>
+<h4>●実行結果</h4>
+<p> テストデータは <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されている  <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> です。
+</p>
+<pre>
+  ファイル名      サイズ     Range    符号化   復号
+  --------------------------------------------------
+  alice29.txt    152,089     87,655    7.08    8.99
+  asyoulik.txt   125,179     75,960    5.89    7.53
+  cp.html         24,603     16,266    1.20    1.55
+  fields.c        11,150      6,983    0.52    0.66
+  grammar.lsp      3,721      2,220    0.16    0.22
+  kennedy.xls  1,029,744    422,839   38.64   45.42
+  lcet10.txt     426,754    248,272   20.05   25.59
+  plrabn12.txt   481,861    276,389   22.55   28.91
+  ptt5           513,216     72,278   16.14   20.02
+  sum             38,240     22,316    1.66    2.00
+  xargs.1          4,227      2,671    0.20    0.27
+  --------------------------------------------------
+  合計         2,810,784  1,233,849  114.09  141.16
+
+# 符号化と復号の単位 : 秒
+# Windows XP, Celeron 1,40 GHz, Ruby 1.8.3 で実行
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2006 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ruby07.html">PrevPage</a> | <a href="ruby.html#rjs">R u b y</a> | NextPage ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

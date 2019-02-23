@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 SQLite 超入門</title>
+  <meta name="description" content="SQLite,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881815</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 SQLite 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="sqlite.html">SQLite</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>SQLite の基礎知識</h3>
+<h4 id="abc01">●データベースの構造</h4>
+<p> SQLite の場合、データベースの本体は通常のファイルになります。データベースの中には、表計算ソフトのようなデータを格納するための表があります。これを「テーブル (table)」といます。テーブルは行と列で構成されていて、一番上の行はデータの項目を格納します。これを「フィールド (field)」とか「カラム (column)」といいます。2 行目から実際のデータを格納します。これを「レコード (record)」といいます。
+</p>
+<p> データベースを簡単にいえば、次に示すような「表」を複数格納したファイルと考えてください。
+</p>
+<table border=1 style="float:left; margin-right:20px;">
+<caption>表１</caption>
+<thead>
+  <tr><th>項目１</th><th>項目２</th><th>項目３</th><th>項目４</th></tr>
+</thead>
+<tbody>
+  <tr><td>データ</td><td>データ</td><td>データ</td><td>データ</td></td>
+  <tr><td>データ</td><td>データ</td><td>データ</td><td>データ</td></td>
+  <tr><td>データ</td><td>データ</td><td>データ</td><td>データ</td></td>
+</tbody>
+</table>
+<table border=1 style="float:left; margin-right:20px;">
+<caption>表２</caption>
+<thead>
+  <tr><th>項目１</th><th>項目２</th><th>項目３</th></tr>
+</thead>
+<tbody>
+  <tr><td>データ</td><td>データ</td><td>データ</td></td>
+  <tr><td>データ</td><td>データ</td><td>データ</td></td>
+  <tr><td>データ</td><td>データ</td><td>データ</td></td>
+</tbody>
+</table>
+<table border=1>
+<caption>表３</caption>
+<thead>
+  <tr><th>項目１</th><th>項目２</th><th>項目３</th><th>項目４</th></tr>
+</thead>
+<tbody>
+  <tr><td>データ</td><td>データ</td><td>データ</td><td>データ</td></td>
+  <tr><td>データ</td><td>データ</td><td>データ</td><td>データ</td></td>
+  <tr><td>データ</td><td>データ</td><td>データ</td><td>データ</td></td>
+  <tr><td>データ</td><td>データ</td><td>データ</td><td>データ</td></td>
+</tbody>
+</table>
+<p> RDBMS において、データを操作したり定義するための言語を「データベース言語」といいます。データベース言語の国際標準に SQL があり、1992 年に制定された規格を SQL92 といいます。SQLite は SQL92 の多くの機能を実装しています。
+</p>
+<p> SQLite でデータベースを操作する場合、SQLite のコマンドと SQL 文を使って行います。コマンドはドット ( . ) から始まります。SQL 文を使用する場合、文の最後にセミコロン ( ; ) を付けることに注意してください。
+</p>
+<h4 id="abc02">●SQLite のデータ型</h4>
+<p> データベースは数値や文字列などいろいろなデータを格納することができます。プログラミング言語では、データの種類のことを「データ型 (Data Type)」とか「型 (Type)」いいます。一般的なデータベースでは、カラムを設定するときにデータ型を指定しますが、SQLite はデータ型を指定しなくても動作します。
+</p>
+<p> ただし、SQLite の内部では格納するデータを下表に示す型に分けて管理しています。
+</p>
+<table border=1>
+<caption>表 : SQLite のデータ型</caption>
+<thead>
+  <tr><th>名前</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>NULL</td><td>NULL (空を表す値)</td></tr>
+  <tr><td>INTEGER</td><td>整数値 (1, 2, 4, 8 byte)</td></tr>
+  <tr><td>REAL</td><td>浮動小数点数 (8 byte)</td></tr>
+  <tr><td>TEXT</td><td>テキスト</td></tr>
+  <tr><td>BLOB</td><td>Binary Large OBject (入力データをそのまま格納)</td></tr>
+</tbody>
+</table>
+<p> SQLite はカラムにデータ型が指定されていない場合、入力されたデータの記述から型を判定します。たとえば、' や " で囲まれていれば TEXT、数字のデータで小数点も指数も無ければ INTEGER、小数点か指数があれば REAL などです。
+</p>
+<h4 id="abc03">●データベースの作成</h4>
+<p> 端末で sqlite3 ファイル名 を入力すると、端末から指定したファイルをデータベースとして操作することができます。ファイル名は何でもよいのですが、本稿ではファイル名の拡張子を sqlite とすることにします。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ sqlite3 sample01.sqlite
+SQLite version 3.11.0 2016-02-15 17:29:24
+Enter ".help" for usage hints.
+sqlite&gt; .table
+sqlite&gt;
+</pre>
+<p> sample01.sqlite が存在しない場合、新しいファイルが生成されます。既に存在する場合はそのファイルをデータベースとして操作します。.table コマンドはテーブルの一覧を表示します。sample01.sqlite が新しく作成された場合、この中にテーブルは存在しません。
+</p>
+<p> テーブルの生成は create table 文を使います。
+</p>
+<pre class="item">
+create table テーブル名 (カラム名 [データ型], ...);
+</pre>
+<p> SQLite の場合、データ型は省略することができます。指定できるデータ型を下表に示します。
+</p>
+<table border=1>
+<caption>表 : カラムで指定するデータ型</caption>
+<thead>
+  <tr><th>名前</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>TEXT</td><td>テキスト</td></tr>
+  <tr><td>NUMERIC</td><td>数値 (整数と浮動小数点数)</td></tr>
+  <tr><td>INTEGER</td><td>整数</td></tr>
+  <tr><td>REAL</td><td>浮動小数点数</td></tr>
+  <tr><td>NONE</td><td>変換しない (入力データをそのまま格納)</td></tr>
+</tbody>
+</table>
+<p> データ型の指定は小文字でもかまいません。なお、カラムにデータ型を指定した場合、入力されたデータを指定された型に変換するよう SQLite は努力しますが、必ず変換できる保証はありません。ご注意くださいませ。
+</p>
+<p> たとえば、人の名前 (name)、性別 (sex)、メールアドレス (email) を格納するテーブルを作ってみましょう。
+</p>
+<pre>
+sqlite&gt; create table person (id, name, sex, email);
+sqlite&gt; .tables
+person
+sqlite&gt; .schema
+CREATE TABLE person (id, name, sex, email);
+</pre>
+<p> id は番号です。これは連番で自動的に振っていく方法もありますが、ここでは手動で入力することにします。.table コマンドを実行すると person というテーブルが作成されていることがわかります。テーブルの構造は .schema コマンドで確認することができます。
+</p>
+<p> それから、テーブルは drop table 文で削除することができます。
+</p>
+<pre class="item">
+drop table テーブル名;
+</pre>
+<p> 簡単な実行例として、新しいテーブル test を作成したあと、それを削除してみましょう。
+</p>
+<pre>
+sqlite&gt; create table test (name, age);
+sqlite&gt; .tables
+person  test  
+sqlite&gt; .schema
+CREATE TABLE person (id, name, sex, email);
+CREATE TABLE test (name, age);
+sqlite&gt; drop table test;
+sqlite&gt; .table
+person
+</pre>
+<p> create table test ... で新しいテーブルを作成します。.tables と .schema で確認すると、test が作成されていることがわかります。次に drop table test; を実行すると、テーブル test が削除されます。.table で確認すると、確かに削除されていることがわかります。
+</p>
+<h4 id="abc04">●データの挿入</h4>
+<p> データの挿入は insert into 文を使います。
+</p>
+<pre class="item">
+insert into テーブル名 (カラム名, ...) values (値, ...);
+</pre>
+<p> 数値はそのまま入力できますが、文字列は ' で囲ってください。' を文字列に含める場合は " で囲ってください。
+</p>
+<p> それでは、テーブル person にデータを挿入してみましょう。
+</p>
+<pre>
+sqlite&gt; insert into person (id, name, sex, email)
+   ...&gt; values (1, 'foo', 'male', 'foo@yahoo.co.jp');
+sqlite&gt; select * from person;
+1|foo|male|foo@yahoo.co.jp
+sqlite&gt; .headers
+Usage: .headers on|off
+sqlite&gt; .headers on
+sqlite&gt; select * from person;
+id|name|sex|email
+1|foo|male|foo@yahoo.co.jp
+</pre>
+<p> データの閲覧には select 文を使います。
+</p>
+<pre class="item">
+select カラム名, ... from テーブル名 where 条件式;
+</pre>
+<p> カラム名に * を指定すると、すべてのカラムが対象になります。where の後ろに条件式を指定することもできます。これはあとで説明します。それから、.headers on を実行すると、最初にカラム名が表示されます。.headers off を実行すると、カラム名は表示されません。
+</p>
+<p> 複数のデータを入力する場合は、values (値, ...), (値, ...), ..., (値, ...); のようにカンマ ( , ) で区切ってください。
+</p>
+<pre>
+sqlite&gt; insert into person (id, name, sex, email)
+   ...&gt; values (2, 'bar', 'female', 'bar@yahoo.co.jp'),
+   ...&gt; (3, 'baz', 'male', 'baz@yahoo.co.jp'),
+   ...&gt; (4, 'oops', 'female', 'oops@yahoo.co.jp');
+sqlite&gt; select * from person;
+id|name|sex|email
+1|foo|male|foo@yahoo.co.jp
+2|bar|female|bar@yahoo.co.jp
+3|baz|male|baz@yahoo.co.jp
+4|oops|female|oops@yahoo.co.jp
+</pre>
+<p> データの表示方法は .mode コマンドで変更することができます。.help コマンドより抜粋します。
+</p>
+<pre>
+.mode MODE ?TABLE?     Set output mode where MODE is one of:
+                         ascii    Columns/rows delimited by 0x1F and 0x1E
+                         csv      Comma-separated values
+                         column   Left-aligned columns.  (See .width)
+                         html     HTML &lt;table&gt; code
+                         insert   SQL insert statements for TABLE
+                         line     One value per line
+                         list     Values delimited by .separator strings
+                         tabs     Tab-separated values
+                         tcl      TCL list elements
+</pre>
+<p> デフォルトは list に設定されています。column と line の例を示します。
+</p>
+<pre>
+sqlite&gt; .mode column
+sqlite&gt; select * from person;
+id          name        sex         email          
+----------  ----------  ----------  ---------------
+1           foo         male        foo@yahoo.co.jp
+2           bar         female      bar@yahoo.co.jp
+3           baz         male        baz@yahoo.co.jp
+4           oops        female      oops@yahoo.co.j
+sqlite&gt; .mode line
+sqlite&gt; select * from person;
+   id = 1
+ name = foo
+  sex = male
+email = foo@yahoo.co.jp
+
+   id = 2
+ name = bar
+  sex = female
+email = bar@yahoo.co.jp
+
+   id = 3
+ name = baz
+  sex = male
+email = baz@yahoo.co.jp
+
+   id = 4
+ name = oops
+  sex = female
+email = oops@yahoo.co.jp
+</pre>
+<h4 id="abc05">●データの更新</h4>
+<p> テーブル名の変更とカラムの追加は alter table 文で行うことができます。
+</p>
+<pre class="item">
+alter table 旧テーブル名 rename to 新テーブル名;
+alter table テーブル名 add column カラム名;
+</pre>
+<p> たとえば、テーブル person に年齢を格納するカラム age を追加してみましょう。
+</p>
+<pre>
+sqlite&gt; alter table person add column age;
+sqlite&gt; select * from person;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+1           foo         male        foo@yahoo.co.jp            
+2           bar         female      bar@yahoo.co.jp            
+3           baz         male        baz@yahoo.co.jp            
+4           oops        female      oops@yahoo.co.j            
+</pre>
+<p> この場合、age の値は空 (null) になります。カラムの値を更新するには update 文を使います。
+</p>
+<pre class="item">
+update テーブル名 set カラム名1 = 値1, ... where 条件式;
+</pre>
+<p> update 文は条件式を満たすレコードのカラムの値を更新します。一度に複数のカラムの値を更新することができます。条件式は次に示す比較演算子と論理演算子を使うことができます。
+</p>
+<pre class="item">
+比較演算子 : =, &lt;&gt;, &lt;, &gt;, &lt;=. &gt;=
+論理演算子 : and, or, not
+</pre>
+<p> 等値を判定する = と &lt;&gt; はＣ言語のように ==, != と書くこともできます。この他にも便利な演算子が用意されていますが、使用するときに詳しく説明することにしましょう。
+</p>
+<p> それでは、age に値をセットしてみましょう。
+</p>
+<pre>
+sqlite&gt; update person set age = 40 where name = 'foo';
+sqlite&gt; update person set age = 30 where name = 'bar';
+sqlite&gt; update person set age = 50 where name = 'baz';
+sqlite&gt; update person set age = 35 where name = 'oops';
+sqlite&gt; select * from person;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+1           foo         male        foo@yahoo.co.jp  40        
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+4           oops        female      oops@yahoo.co.j  35        
+</pre>
+<p> カラムを空にしたい場合は null をセットしてください。
+</p>
+<pre>
+sqlite&gt; update person set age = null where name = 'oops';
+sqlite&gt; select * from person;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+1           foo         male        foo@yahoo.co.jp  40        
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+4           oops        female      oops@yahoo.co.j            
+sqlite&gt; update person set age = 35 where name = 'oops';
+</pre>
+<h4 id="abc06">●データの抽出</h4>
+<p> select 文は where の後ろに条件式を指定することで、条件を満たすデータだけを表示することができます。たとえば、テーブル person で女性だけを取り出すには where で sex = 'female' を指定します。
+</p>
+<pre>
+sqlite&gt; select * from person where sex = 'female';
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+2           bar         female      bar@yahoo.co.jp  30        
+4           oops        female      oops@yahoo.co.j  35        
+</pre>
+<p> age &gt;= 40 を指定すると、40 才以上の人を取り出すことができます。
+</p>
+<pre>
+sqlite&gt; select * from person where age &gt;= 40;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+1           foo         male        foo@yahoo.co.jp  40        
+3           baz         male        baz@yahoo.co.jp  50        
+</pre>
+<p> 文字列を比較するとき、演算子に like を指定するとワイルドカードに % と _ を使用することができます。
+</p>
+<pre class="item">
+% : 任意の 0 文字以上の文字列
+_ : 任意の 1 文字
+</pre>
+<p> たとえば 'b%' とすると、b から始まる文字列とマッチングします。
+</p>
+<pre>
+sqlite&gt; select * from person where name like 'b%';
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+</pre>
+<p> また、演算子 glob を指定すると、bash の <a href="linuxbash1.html#chap04">Globbing</a> と同様のメタ文字を使用することができます。
+</p>
+<pre>
+sqlite&gt; select * from person where name glob 'ba[rz]';
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+sqlite&gt; select * from person where name glob 'ba[^r]';
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+3           baz         male        baz@yahoo.co.jp  50        
+</pre>
+<p> 演算子に in (値1, 値2, ...) を指定すると、カッコの中の値と等しいものが選択されます。
+</p>
+<pre>
+sqlite&gt; select * from person where age in (30, 50);
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+sqlite&gt; select * from person where age not in (30, 50);
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+1           foo         male        foo@yahoo.co.jp  40        
+4           oops        female      oops@yahoo.co.j  35        
+</pre>
+<p> in の前に not を付けると、カッコの中の値以外のものが選択されます。
+</p>
+<p> 空の値 (null) は is null でチェックすることができます。
+</p>
+<pre>
+sqlite&gt; update person set age = null where name = 'oops';
+sqlite&gt; select * from person where age is null;
+id          name        sex         email             age       
+----------  ----------  ----------  ----------------  ----------
+4           oops        female      oops@yahoo.co.jp            
+sqlite&gt; select * from person where age is not null;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+1           foo         male        foo@yahoo.co.jp  40        
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+sqlite&gt; update person set age = 35 where name = 'oops';
+</pre>
+<p> null 以外の値は is not null でチェックすることができます。
+</p>
+<p> where のかわりに order by カラム名 を指定すると、そのカラムを昇順に並び替えて出力します。
+</p>
+<pre>
+sqlite&gt; select * from person order by name;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+1           foo         male        foo@yahoo.co.jp  40        
+4           oops        female      oops@yahoo.co.j  35        
+sqlite&gt; select * from person order by age desc;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+3           baz         male        baz@yahoo.co.jp  50        
+1           foo         male        foo@yahoo.co.jp  40        
+4           oops        female      oops@yahoo.co.j  35        
+2           bar         female      bar@yahoo.co.jp  30        
+</pre>
+<p> desc を指定すると逆順に並び替えます。
+</p>
+<p> limit で表示する行数を指定することができます。
+</p>
+<pre>
+sqlite&gt; select * from person limit 3;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+1           foo         male        foo@yahoo.co.jp  40        
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+</pre>
+<p> offset で開始位置を指定することができます。
+</p>
+<pre>
+sqlite&gt; select * from person limit 2 offset 1;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+2           bar         female      bar@yahoo.co.jp  30        
+3           baz         male        baz@yahoo.co.jp  50        
+</pre>
+<p> これは select * from person limit 開始位置, 行数; と同じです。
+</p>
+<h4 id="abc07">●データの削除</h4>
+<p> データの削除は delete 文で行います。
+</p>
+<pre class="item">
+delete from テーブル名 [where 条件式];
+</pre>
+<p> delete from テーブル名; で全てのデータを削除することができます。where で条件を指定することもできます。簡単な例を示しましょう。
+</p>
+<pre>
+sqlite&gt; delete from person where name = 'bar';
+sqlite&gt; select * from person;
+id          name        sex         email            age       
+----------  ----------  ----------  ---------------  ----------
+1           foo         male        foo@yahoo.co.jp  40        
+3           baz         male        baz@yahoo.co.jp  50        
+4           oops        female      oops@yahoo.co.j  35        
+sqlite&gt; delete from person;
+sqlite&gt; select * from person;
+sqlite&gt; 
+</pre>
+<h4 id="abc08">●制約の指定</h4>
+<p> create table 文でカラムを指定するとき、入力するデータに対して制約を指定することができます。
+</p>
+<ul>
+  <li>primary key<br>
+主キーの設定 (カラムには重複したデータを入力することはできない)。
+  <li>not null<br>
+空の値 (null) を禁止する。
+  <li>unique<br>
+重複したデータを禁止する。
+  <li>default 値<br>
+入力データが省略されたときのデフォルト値を指定する (通常は null)。
+  <li>check(条件式)<br>
+条件式を満たさないデータを禁止する。
+</ul>
+<p> データ型が integer のカラムに primary key を指定すると、データを挿入するときに値を省略した場合、その値はカラムの中の最大値に 1 を足した値になります。さらに、autoincrement を指定すると、今までに使用された値の最大値に 1 を足した値になります。この機能を使って自動的に連番を振ることができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+sqlite&gt; create table person1 (id integer primary key autoincrement, name text);
+sqlite&gt; insert into person1 (name) values
+   ...&gt; ('foo'), ('bar'), ('baz'), ('oops');
+sqlite&gt; select * from person1;
+id          name      
+----------  ----------
+1           foo       
+2           bar       
+3           baz       
+4           oops      
+</pre>
+<p> id に integer primary key autoincrement を設定し、名前 (name) だけを順番に入力します。すると、id の値は 1, 2, 3, 4 と連番になります。
+</p>
+<p> 次に、oops を削除してから oops1 を追加してみます。
+</p>
+<pre>
+sqlite&gt; delete from person1 where id = 4;
+sqlite&gt; select * from person1;
+id          name      
+----------  ----------
+1           foo       
+2           bar       
+3           baz       
+sqlite&gt; insert into person1 (name) values ('oops1');
+sqlite&gt; select * from person1;
+id          name      
+----------  ----------
+1           foo       
+2           bar       
+3           baz       
+5           oops1     
+</pre>
+<p> autoincrement を指定した場合、今までに入力された id の最大値 4 に 1 を足した値になるので、oops1 の id は 5 になります。指定しない場合、現在の id の最大値 3 に 1 を足した値になるので、id は 4 になります。
+</p>
+<p> もうひとつ簡単な例題として、年齢を格納するカラム age を追加してみましょう。このとき、条件として 20 才以上であることをチェックします。
+</p>
+<pre>
+sqlite&gt; alter table person1 add column age check(age >= 20);
+sqlite&gt; select * from person1;
+id          name        age       
+----------  ----------  ----------
+1           foo                   
+2           bar                   
+3           baz                   
+5           oops1                 
+sqlite&gt; update person1 set age = 50 where name = 'foo';
+sqlite&gt; update person1 set age = 30 where name = 'bar';
+sqlite&gt; update person1 set age = 10 where name = 'baz';
+Error: CHECK constraint failed: person1
+</pre>
+<p> このように、age に 20 未満の値を代入するとエラーになります。
+</p>
+<h4 id="abc09">●ファイルからのインポート</h4>
+<p> SQLite は .import コマンドでファイルからデータを読み込むことができます。
+</p>
+<pre class="item">
+.import ファイル名 テーブル名
+</pre>
+<p> ファイルにデータを記述するとき、行の区切り記号とカラムの区切り記号を SQLite の設定に合わせる必要があります。これらの設定は .show コマンドで確認することができます。
+</p>
+<pre>
+sqlite&gt; .show
+        echo: off
+         eqp: off
+     explain: auto
+     headers: on
+        mode: column
+   nullvalue: ""
+      output: stdout
+colseparator: "|"
+rowseparator: "\n"
+       stats: off
+       width: 
+</pre>
+<p> colseparator がカラムの区切り記号、rowseparator が行の区切り記号です。これらの記号を変更したい場合は .separator コマンドを使います。
+</p>
+<pre class="item">
+.seprator col [row]
+</pre>
+<p> たとえば、カラムの区切り記号をカンマ ( , ) に変更したい場合は .separator , とするだけです。
+</p>
+<pre>
+sqlite&gt; .separator ,
+sqlite&gt; .show
+        echo: off
+         eqp: off
+     explain: auto
+     headers: on
+        mode: column
+   nullvalue: ""
+      output: stdout
+colseparator: ","
+rowseparator: "\n"
+       stats: off
+       width: 
+</pre>
+<p> 簡単な例題として、次に示す女性の名前と身長をデータベースに登録してみましょう。
+</p>
+<pre class="list">
+リスト : 身長のデータ (height.txt)
+
+1,Ada,148.7,A
+2,Alice,149.5,B
+3,Carey,133.7,C
+4,Ellen,157.9,D
+5,Hanna,154.2,A
+6,Janet,147.8,B
+7,Linda,154.6,C
+8,Maria,159.1,D
+9,Miranda,148.2,A
+10,Sara,153.1,B
+11,Tracy,138.2,C
+12,Violet,138.7,D
+</pre>
+<pre>
+sqlite&gt; create table girls_height (id integer, name text, height real, class text);
+sqlite&gt; .import height.txt girls_height
+sqlite&gt; select * from girls_height;
+id          name        height      class
+----------  ----------  ----------  ----------
+1           Ada         148.7       A
+2           Alice       149.5       B
+3           Carey       133.7       C
+4           Ellen       157.9       D
+5           Hanna       154.2       A
+6           Janet       147.8       B
+7           Linda       154.6       C
+8           Maria       159.1       D
+9           Miranda     148.2       A
+10          Sara        153.1       B
+11          Tracy       138.2       C
+12          Violet      138.7       D
+</pre>
+<p> .import でデータを読み込む場合、データ型は TEXT になるので、カラムで適切なデータ型を指定してください。カラムのデータ型に合わせて読み込んだデータを変換します。データ型は関数 typeof(カラム名) で求めることができます。
+</p>
+<pre>
+sqlite&gt; select id, typeof(id), height, typeof(height)  from girls_height;
+id          typeof(id)  height      typeof(height)
+----------  ----------  ----------  --------------
+1           integer     148.7       real          
+2           integer     149.5       real          
+3           integer     133.7       real          
+4           integer     157.9       real          
+5           integer     154.2       real          
+6           integer     147.8       real          
+7           integer     154.6       real          
+8           integer     159.1       real          
+9           integer     148.2       real          
+10          integer     153.1       real          
+11          integer     138.2       real          
+12          integer     138.7       real      
+</pre>
+<h4 id="abc10">●SQLite の関数</h4>
+<p> SQLite にはいろいろな関数が用意されています。ここでは基本的な関数の使い方を説明します。テーブルの行数は count(*) で求めることができます。引数にカラムを指定すると、null 以外のデータ数を求めることができます。
+</p>
+<pre>
+sqlite&gt; select count(*) from girls_height;
+count(*)  
+----------
+12        
+sqlite&gt; update girls_height set name = null where id = 5;
+sqlite&gt; select count(name) from girls_height;
+count(name)
+-----------
+11         
+sqlite&gt; update girls_height set name = 'Hanna' where id = 5;
+</pre>
+<p> 最大値と最小値は max(カラム名), min(カラム名) で求めることができます。
+</p>
+<pre>
+sqlite&gt; select min(height) from girls_height;
+min(height)
+-----------
+133.7      
+sqlite&gt; select name, min(height) from girls_height;
+name        min(height)
+----------  -----------
+Carey       133.7      
+sqlite&gt; select name, max(height) from girls_height;
+name        max(height)
+----------  -----------
+Maria       159.1      
+</pre>
+<p> 合計値は関数 sum(カラム名), total(カラム名) で、平均値は関数 avg(カラム名) で求めることができます。
+</p>
+<pre>
+sqlite&gt; select sum(height) from girls_height;
+sum(height)
+-----------
+1783.7     
+sqlite&gt; select total(height) from girls_height;
+total(height)
+-------------
+1783.7       
+sqlite&gt; select avg(height) from girls_height;
+avg(height)     
+----------------
+148.641666666667
+</pre>
+<p> テキストの長さは length() で求めることができます。引数が文字列の場合はその文字数を、カラムが指定された場合はカラムに格納されているテキストの文字数を返します。
+</p>
+<pre>
+sqlite&gt; select length('hello, world');
+length('hello, world')
+----------------------
+12                    
+sqlite&gt; select name, length(name) from girls_height;
+name        length(name)
+----------  ------------
+Ada         3           
+Alice       5           
+Carey       5           
+Ellen       5           
+Hanna       5           
+Janet       5           
+Linda       5           
+Maria       5           
+Miranda     7           
+Sara        4           
+Tracy       5           
+Violet      6           
+</pre>
+<p> group by カラム名 を指定すると、カラムの値でデータをグループに分けて集計することができます。
+</p>
+<pre>
+sqlite&gt; select class, count(*) from girls_height group by class;
+class       count(*)  
+----------  ----------
+A           3         
+B           3         
+C           3         
+D           3         
+sqlite&gt; select class, avg(height) from girls_height group by class;
+class       avg(height)     
+----------  ----------------
+A           150.366666666667
+B           150.133333333333
+C           142.166666666667
+D           151.9           
+sqlite&gt; select class, name, max(height) from girls_height group by class;
+class       name        max(height)
+----------  ----------  -----------
+A           Hanna       154.2      
+B           Sara        153.1      
+C           Linda       154.6      
+D           Maria       159.1      
+sqlite&gt; select class, name, min(height) from girls_height group by class;
+class       name        min(height)
+----------  ----------  -----------
+A           Miranda     148.2      
+B           Janet       147.8      
+C           Carey       133.7      
+D           Violet      138.7      
+</pre>
+<p> group by の後ろに having 条件式 を指定して、条件式を満たすグループを取り出すこともできます。
+</p>
+<pre>
+sqlite&gt; select class, avg(height) from girls_height group by class having avg(height) &lt; 150;
+class       avg(height)     
+----------  ----------------
+C           142.166666666667
+</pre>
+</section>
+<hr>
+<div align="center">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="sqlite.html">SQLite</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

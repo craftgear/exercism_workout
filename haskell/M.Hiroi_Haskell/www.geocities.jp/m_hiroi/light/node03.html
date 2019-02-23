@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Node.js 超入門</title>
+  <meta name="description" content="JavaScript,Underscore.js,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881858</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>お気楽 Node.js 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="node.html">Node.js</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3 id="chap04">簡易掲示板の作成</h3>
+<p> 今回は簡単な例題として、名前とコメントを投稿する簡易掲示板を作ってみましょう。
+</p>
+<h4>●プログラムの構成</h4>
+<p> プログラムの構成は次のようになります。
+</p>
+<pre class="fig">
+bbs.js
+public_html/
+    bbs1.ejs
+    bbs.sqlite
+</pre>
+<p> カレントディレクトリにサーバー本体のプログラム bbs.js とディレクトリ public_html を用意します。public_html の中にはテンプレートファイル bbs1.ejs とデータベース bbs.sqlite を格納します。bbs.sqlite はあらかじめ用意しておく必要はありません。あとは、node bbs.js でサーバーを起動し、ブラウザで URL localhost:1337 を入力します。
+</p>
+<h4>●テンプレートファイルの作成</h4>
+<p> テンプレートファイルは次のようになります。
+</p>
+<pre class="list">
+リスト : 簡易掲示板 (bbs1.ejs)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;簡易掲示板&lt;/title&gt;
+  &lt;style&gt;
+    body {
+      margin-left: 2em; margin-right: 2em;
+    }
+    .bbs {
+      font-family: sans-serif;
+      font-size: medium;
+    }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;% for (let data of posts) { %&gt;
+&lt;%= data.id %&gt;. &lt;%= data.name %&gt; - &lt;%= data.date %&gt;&lt;br&gt;
+&lt;pre class="bbs"&gt;
+&lt;%= data.comment %&gt;
+&lt;/pre&gt;
+&lt;hr&gt;
+&lt;% } %&gt;
+&lt;% if (msg) { %&gt;
+&lt;p&gt;&lt;b&gt;&lt;%= msg %&gt;&lt;/b&gt;&lt;/p&gt;
+&lt;% } %&gt;
+&lt;form method="post"&gt;
+&lt;label&gt;名前: &lt;input type="text" name="name"&gt;&lt;/label&gt;&lt;br&gt;
+&lt;label&gt;コメント:&lt;br&gt;
+&lt;textarea name="comment" rows="6" cols="60"&gt;&lt;/textarea&gt;&lt;/label&gt;&lt;br&gt;
+&lt;input type="submit" value="送信"&gt;
+&lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<P> 名前は input タグで、コメントは textarea タグで入力します。textarea はテキストを改行することができますが、表示するときに p タグを使うとテキストは改行されません。そこで、コメントを表示するときは pre タグで囲むことにします。これで改行されたテキストを表示することができます。
+</P>
+<h4>●プログラムの作成</h4>
+<p> サーバー側のプログラムは次のようになります。
+</p>
+<pre class="list">
+//
+// bbs.js : 簡易掲示板 (サーバー)
+//
+//          Copyright (C) 2017 Makoto Hiroi
+//
+const http = require('http'),
+      fs = require('fs'),
+      ejs = require('ejs'),
+      qs = require('querystring'),
+      sqlite = require('sqlite3'),
+      template = fs.readFileSync(__dirname + '/public_html/bbs1.ejs', 'utf-8'),
+      db = new sqlite.Database(__dirname + '/public_html/bbs.sqlite'),
+      server = http.createServer();
+
+function renderForm(db, res, msg = null) {
+  db.all('select * from bbs', (err, posts) =&gt; {
+      const data = ejs.render(template, {
+      posts: posts,
+      msg: msg
+    });
+    res.writeHead(200, {'Content-Type': 'text/html'});
+    res.write(data);
+    res.end();
+  });
+}
+
+function insertData(query, db, res) {
+  if (query.name != '' &amp;&amp; query.comment != '') { 
+    db.run('insert into bbs (name, comment, date) values (?, ?, ?)',
+           [query.name, query.comment, (new Date()).toLocaleString()]);
+    renderForm(db, res);
+  } else {
+    renderForm(db, res, "名前とコメントを入力してください");
+  }
+}
+
+db.serialize();
+db.run('create table if not exists bbs (id integer primary key autoincrement, name text, comment text, date text)');
+
+server.on('request', (req, res) =&gt; {
+  if (req.method == 'POST') {
+    let data = "";
+    req.on('data', x =&gt; data += x);
+    req.on('end', () =&gt; insertData(qs.parse(data), db, res));
+  } else {
+    renderForm(db, res);
+  }
+});
+
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> サーバー側では POST のみを受け付けて、関数 insertDate() で名前とコメントが入力されていることをチェックします。どちらも空文字列であればデータベースには登録しません。そして、テンプレートファイル (bbs1.ejs) にメッセージ msg を渡して表示します。
+</p>
+<p> あとは特に難しいところはないと思います。興味のある方は実際に動かしてみてください。
+</p>
+<h4>●フォームの入力チェック</h4>
+<p> フォームの入力チェックはクライアント側 (ブラウザ) で行うこともできます。データ入力の有無だけでよければ、HTML5 で導入された required 属性を使うと簡単です。
+</p>  
+<p> 簡単な使用例を示しますので、実際に試してみてください。
+</p>
+<pre class="list">
+リスト : required 属性の使用例
+
+&lt;form method="post" onsubmit="return false"&gt;
+&lt;label&gt;本文 &lt;input type="text" name="content" required&gt;&lt;/label&gt;
+&lt;input type="submit" value="Submit"&gt;
+&lt;/form&gt;
+</pre>
+<form method="post" onsubmit="return false">
+<label>本文 <input type="text" name="content" required></label>
+<input type="submit" value="Submit">
+</form>
+<p> form タグで onsubmit 属性にプログラムを登録すると、submit ボタンを押したときに登録されたプログラムを実行します。ここで false を返すとデータの送信は行われません。JavaScript (DOM) を使って入力データをチェックすることも可能です。これはあとで試してみましょう。
+</p> 
+  
+<p> テンプレートファイルは次のようになります。
+</p>
+<pre class="list">
+リスト : テンプレートファイル (bbs2.ejs)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;簡易掲示板&lt;/title&gt;
+  &lt;style&gt;
+    body {
+      margin-left: 2em; margin-right: 2em;
+    }
+    .bbs {
+      font-family: sans-serif;
+      font-size: medium;
+    }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;% for (let data of posts) { %&gt;
+&lt;%= data.id %&gt;. &lt;%= data.name %&gt; - &lt;%= data.date %&gt;&lt;br&gt;
+&lt;pre class="bbs"&gt;
+&lt;%= data.comment %&gt;
+&lt;/pre&gt;
+&lt;hr&gt;
+&lt;% } %&gt;
+&lt;% if (msg) { %&gt;
+&lt;p&gt;&lt;b&gt;&lt;%= msg %&gt;&lt;/b&gt;&lt;/p&gt;
+&lt;% } %&gt;
+&lt;form method="post"&gt;
+&lt;label&gt;名前: &lt;input type="text" name="name" required&gt;&lt;/label&gt;&lt;br&gt;
+&lt;label&gt;コメント:&lt;br&gt;
+&lt;textarea name="comment" rows="6" cols="60" required&gt;&lt;/textarea&gt;&lt;/label&gt;&lt;br&gt;
+&lt;input type="submit" value="送信"&gt;
+&lt;/form&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> input タグと textarea タグに属性 required を追加します。これでこのフォームの入力は必須になり、空のまま submit すると、ブラウザ側で入力を促すエラーメッセージが表示されます。
+</p>
+<p> このほかにも HTML5 には便利な機能がたくさん追加されています。興味のある方は <a href="node03.html#cite">参考 URL</a> をお読みくださいませ。
+</p>
+<h4>●JavaScript を使った入力チェック</h4>
+<p> 次は、JavaScript (DOM) を使って入力データをチェックしてみましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : テンプレートファイル (bbs3.ejs)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+
+・・・ 省略 ・・・
+
+&lt;form method="post" onsubmit="return check(this)"&gt;
+&lt;label&gt;名前: &lt;input type="text" name="name"&gt;&lt;/label&gt;&lt;br&gt;
+&lt;label&gt;コメント:&lt;br&gt;
+&lt;textarea name="comment" rows="6" cols="60"&gt;&lt;/textarea&gt;&lt;/label&gt;&lt;br&gt;
+&lt;input type="submit" value="送信"&gt;
+&lt;/form&gt;
+&lt;script&gt;
+function check(e) {
+  if (!e.name.value || !e.comment.value) {
+    alert("名前とコメントを入力してください");
+    return false;
+  }
+  return true;
+}
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> form タグの onsubmit に "return check(this)" を登録します。submit ボタンを押すと関数 check() が呼び出されて、その返り値が false ならばデータの送信を行いません。引数 this には form 要素 (HTMLFormElement のオブジェクト) が渡されます。
+</p>
+<p> form に含まれる要素はその name 属性の値で求めることができます。その入力データは value プロパティで取得することができます。ラジオボタンなど同じ名前を持つ要素が複数ある場合、それらの要素は配列に格納されていることに注意してください。JavaScript の場合、空文字列は偽として扱われるので、e.name.value または e.comment.value が偽であれば alert() で警告メッセージを表示して false を返します。そうでなければ true を返します。
+</p>
+<p> form タグの onsubmit 属性のかわりに、form 要素のプロパティ onsubmit にコールバック関数を登録する方法もあります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : テンプレートファイル (bbs4.ejs)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+
+・・・ 省略 ・・・
+
+&lt;form id="form" method="post"&gt;
+&lt;label&gt;名前: &lt;input type="text" name="name"&gt;&lt;/label&gt;&lt;br&gt;
+&lt;label&gt;コメント:&lt;br&gt;
+&lt;textarea name="comment" rows="6" cols="60"&gt;&lt;/textarea&gt;&lt;/label&gt;&lt;br&gt;
+&lt;input type="submit" value="送信"&gt;
+&lt;/form&gt;
+&lt;script&gt;
+const form = document.getElementById("form");
+form.onsubmit = () =&gt; {
+  if (!form.name.value || !form.comment.value) {
+    alert("名前とコメントを入力してください");
+    return false;
+  }
+  return true;
+};
+&lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> form タグに id="form" をセットし、getElementById() で form 要素を取得します。コールバック関数はプロパティ onsubmit に登録します。これでも入力データをチェックすることができます。
+</p>
+<h4>●掲示板からキーワードを検索する</h4>
+<p> 最後に、掲示板からキーワードを検索する機能を追加してみましょう。SQLite の場合、デフォルトでは正規表現を使用した検索をサポートしていませんが、like 句または glob 句を使ってデータを検索することができます。
+</p>
+<pre class="item">
+select カラム名 form テーブル名 where 検索カラム like 'キーワード'
+select カラム名 form テーブル名 where 検索カラム glob 'キーワード'
+</pre>
+<p> like 句で文字列を比較するとき、ワイルドカードに % と _ を使用することができます。
+</p>
+<pre class="item">
+% : 任意の 0 文字以上の文字列
+_ : 任意の 1 文字
+</pre>
+<p> glob 句の場合、bash の Globbing と同様のメタ文字を使用することができます。Globbing については、拙作のページ <a href="../linux/linuxbash1.html#chap04">お気楽 bash 超入門 : グロブ (glob)</a> をお読みくださいませ。今回は like 句を使うことにします。
+</p>
+
+<h4>●検索フォームの追加</h4>
+<p> まずは最初に、検索キーワードを入力するフォームをテンプレートファイルに追加します。プログラムは次のようになります。  
+</p>
+<pre class="list">
+リスト : 検索フォームの追加 (bbs5.ejs)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;簡易掲示板&lt;/title&gt;
+  &lt;style&gt;
+    body {
+      margin-left: 2em; margin-right: 2em;
+    }
+    .bbs {
+      font-family: sans-serif;
+      font-size: medium;
+    }
+  &lt;/style&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;% for (let data of posts) { %&gt;
+&lt;%= data.id %&gt;. &lt;%= data.name %&gt; - &lt;%= data.date %&gt;&lt;br&gt;
+&lt;pre class="bbs"&gt;
+&lt;%= data.comment %&gt;
+&lt;/pre&gt;
+&lt;hr&gt;
+&lt;% } %&gt;
+&lt;% if (msg) { %&gt;
+&lt;p&gt;&lt;b&gt;&lt;%= msg %&gt;&lt;/b&gt;&lt;/p&gt;
+&lt;% } %&gt;
+&lt;form method="post"&gt;
+&lt;input type="hidden" name="cmd" value="send"&gt;
+&lt;label&gt;名前: &lt;input type="text" name="name" required&gt;&lt;/label&gt;&lt;br&gt;
+&lt;label&gt;コメント:&lt;br&gt;
+&lt;textarea name="comment" rows="6" cols="60" required&gt;&lt;/textarea&gt;&lt;/label&gt;&lt;br&gt;
+&lt;input type="submit" value="送信"&gt;
+&lt;/form&gt;
+&lt;hr&gt;
+&lt;form method="post"&gt;
+&lt;input type="hidden" name="cmd" value="search"&gt;
+&lt;label&gt;検索:
+  &lt;input type="radio" name="column" value="name"&gt; 名前 
+  &lt;input type="radio" checked name="column" value="comment"&gt; コメント &lt;/label&gt;&lt;br&gt;
+&lt;label&gt;キーワード: &lt;input type="text" name="keyword" required&gt;&lt;/label&gt;&lt;br&gt;
+&lt;ul&gt;
+  &lt;li&gt;% : 任意の 0 文字以上の文字列 
+  &lt;li&gt;_ : 任意の 1 文字
+&lt;/ul&gt;
+&lt;input type="submit" value="検索"&gt;
+&lt;/form&gt;
+&lt;hr&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> 投稿と検索を区別するため、input タグの type="hidden" で隠しデータ cmd を設定します。投稿の時は cmd の値を send に、検索のときは search にします。submit ボタンを押すと他のデータと一緒に隠しデータも送信されます。検索は名前とコメントを区別して行います。これをラジオボタンで指定します。あとはキーワードを入力するテキストボックスを用意するだけです。
+</p>
+<h4>●サーバー側のプログラム</h4>
+<p> サーバー側のプログラムは次のようになります。
+</p>
+<pre class="list">
+//
+// bbs1.js : 簡易掲示板 (検索機能の追加)
+//
+//          Copyright (C) 2017 Makoto Hiroi
+//
+const http = require('http'),
+      fs = require('fs'),
+      ejs = require('ejs'),
+      qs = require('querystring'),
+      sqlite = require('sqlite3'),
+      template = fs.readFileSync(__dirname + '/public_html/bbs5.ejs', 'utf-8'),
+      db = new sqlite.Database(__dirname + '/public_html/bbs.sqlite'),
+      server = http.createServer();
+
+function renderForm(db, res, msg = null) {
+  db.all('select * from bbs', (err, posts) =&gt; {
+      const data = ejs.render(template, {
+      posts: posts,
+      msg: msg
+    });
+    res.writeHead(200, {'Content-Type': 'text/html'});
+    res.write(data);
+    res.end();
+  });
+}
+
+function insertData(query, db, res) {
+  if (query.name != '' &amp;&amp; query.comment != '') { 
+    db.run('insert into bbs (name, comment, date) values (?, ?, ?)',
+           [query.name, query.comment, (new Date()).toLocaleString()]);
+    renderForm(db, res);
+  } else {
+    renderForm(db, res, "名前とコメントを入力してください");
+  }
+}
+
+function searchData(query, db, res) {
+  db.all(`select * from bbs where ${query.column} like '${query.keyword}'`, (err, posts) =&gt; {
+    if (err) {
+      res.writeHead(404, {'Content-Type': 'text/plain'});
+      res.write(`${err}`);
+      res.end();
+      return;
+    }
+    const data = ejs.render(template, {
+      posts: posts,
+      msg: ""
+    });
+    res.writeHead(200, {'Content-Type': 'text/html'});
+    res.write(data);
+    res.end();
+  });
+}
+
+db.serialize();
+db.run('create table if not exists bbs (id integer primary key autoincrement, name text, comment text, date text)');
+
+server.on('request', (req, res) =&gt; {
+  if (req.method == 'POST') {
+    let data = "";
+    req.on('data', x =&gt; data += x);
+    req.on('end', () =&gt; {
+      const query = qs.parse(data);
+      if (query.cmd == 'send') {
+        insertData(query, db, res);
+      } else {
+        searchData(query, db, res);
+      }
+    });
+  } else {
+    renderForm(db, res);
+  }
+});
+
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> server.on() のコールバック関数でデータの受信が終了したとき、クエリ文字列を解析して cmd が send ならば投稿処理を、そうでなければ検索処理を関数 searchData() で行います。searchData() では SQLite のコマンドをテンプレート文字列 `...` で組み立てます。テンプレート文字列は ECMAScript2015 (ES2015) から導入された機能です。詳しい説明は拙作のページ <a href="js2015a.html#chap08">お気楽 ECMAScript2015 超入門：テンプレート文字列</a> をお読みください。
+</p>
+<p> あとは db.all() でコマンドを実行して検索結果を取得します。エラーが発生した場合は、エラーメッセージをブラウザに返します。そうでなければ、取得したデータを ejs.render() で HTML 形式のテキストに変換してブラウザに返すだけです。
+</p>
+<p> これでプログラムは完成です。興味のある方は実際に動かしてみてください。最低限の機能しかないので、いろいろ改造したり、見栄えを良くしてみるのも面白いと思います。
+</p>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="http://www.atmarkit.co.jp/ait/series/2298/">HTML5“とか”アプリ開発入門 - @IT</a>, (白石俊平さん)</li>
+  <li><a href="https://developer.mozilla.org/ja/docs/Web/HTML/HTML5">HTML5 - HTML | MDN</a></li>
+</ol>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="node.html">Node.js</a> ]
+</div>
+</body>
+</html><!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

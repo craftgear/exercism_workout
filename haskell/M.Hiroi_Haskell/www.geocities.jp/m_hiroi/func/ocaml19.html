@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 OCaml プログラミング入門</title>
+  <meta name="description" content="OCaml,ML,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881750</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 OCaml プログラミング入門</h2>
+<div class="small">
+[ <a href="ocaml18.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml20.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">パズルの解法 (1)</h3>
+<p> 今回は「パズル」を題材にプログラムを作ってみましょう。どのプログラミング言語でもそうですが、上達の秘訣は実際にプログラムを作って動作を確認してみることです。ところが、いざとなると「さて何を作ろうか」と困ってしまう方もいるのではないでしょうか。
+</p>
+<p> このようなときにぴったりな題材が「パズルの解法」です。なんといっても、実際にパズルが解けたときの喜びはとても大きく、プログラムを作る意欲をかきたててくれます。そこで、今回はバックトラック法を使って簡単なパズルを解いてみましょう。
+</p>
+
+<h4>●覆面算</h4>
+<p> 計算式の数字を文字や記号に置き換えて、それを元の数字に戻すパズルを「覆面算」といいます。異なる文字は異なる数字を表し、同じ文字は同じ数字を表します。使用する数字は 0 から 9 までで、最上位の桁に 0 を入れることはできません。
+</p>
+
+<p> 問題はデュードニーが 1924 年に発表したもので、覆面算の古典といわれる有名なパズルです。
+</p>
+<pre class="fig">
+    ＳＥＮＤ 
+ ＋ ＭＯＲＥ 
+ ----------- 
+  ＭＯＮＥＹ 
+
+図 1 : 覆面算
+</pre>
+
+<p> それではプログラムを作りましょう。式 SEND + MORE = MONEY は足し算なので、M が 1 であることはすぐにわかります。ここでは、それ以外の数字を求めるプログラムを作ります。単純な生成検定法でプログラムを作ると、次のようになります。
+</p>
+
+<pre class="list">
+リスト 1 : 覆面算 (send.ml)
+
+(* データの検定 *)
+let check = function
+  s::e::n::d::o::r::y::[] -&gt;
+  let send = s*1000+e*100+n*10+d and
+      more = 1000+o*100+r*10+e and
+      money = 10000+o*1000+n*100+e*10+y in
+  if send + more = money then
+    Printf.printf "%d + %d = %d\n" send more money
+  else ()
+| _ -&gt; raise (Failure "check")
+
+(* 要素の削除 *)
+let remove n ls = List.filter (fun x -&gt; n &lt;&gt; x) ls
+
+(* データの生成 *)
+let rec gen_perm n nums perm =
+  if n = 0 then check perm
+  else List.iter (fun x -&gt; gen_perm (n-1) (remove x nums) (x::perm)) nums
+
+(* 実行 *)
+let () = gen_perm 7 [0;2;3;4;5;6;7;8;9] []
+</pre>
+
+<p> 1 を除いた 9 個の数字の中から 7 個の数字を選んで順列を生成します。あとは関数 check で数値 send, more, money を計算して、send + more = money を満たしているかチェックします。とても簡単なプログラムですね。さっそく実行してみましょう。
+</p>
+<pre>
+C&gt;send
+9567 + 1085 = 10652
+</pre>
+<p> 答えは 9567 + 1085 = 10652 の 1 通りしかありません。興味のある方は、もっとクールな方法でプログラムを作ってみてください。
+</p>
+
+<h4>●魔方陣</h4>
+<p> 次は魔方陣を解いてみましょう。下図の A から I の場所に 1 から 9 までの数字をひとつずつ配置します。縦横斜めの合計が等しくなるように数字を配置してください。
+</p>
+<pre class="fig">
+┌─┬─┬─┐
+│Ａ│Ｂ│Ｃ│    式
+├─┼─┼─┤    A + B + C = N, B + E + H = N
+│Ｄ│Ｅ│Ｆ│    D + E + F = N, C + F + I = N
+├─┼─┼─┤    G + H + I = N, A + E + I = N
+│Ｇ│Ｈ│Ｉ│    A + D + G = N, C + E + G = N
+└─┴─┴─┘
+
+        図 2 : 魔方陣
+</pre>
+
+<p> 3 行 3 列の魔方陣は生成検定法で簡単に解くことができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 2 : 魔方陣 (mahou.ml)
+
+(*  盤面
+ *  0 1 2
+ *  3 4 5
+ *  6 7 8
+ *)
+
+(* 直線を表すデータ *)
+let line = 
+  [(0,1,2); (3,4,5); (6,7,8); (0,3,6);
+   (1,4,7); (2,5,8); (0,4,8); (2,4,6)] 
+
+(* 直線の和を求める *)
+let add_line (n1, n2, n3) ls =
+  List.nth ls n1 + List.nth ls n2 + List.nth ls n3
+
+(* 引数 n と同じ要素をカウントする *)
+let count n ls = List.fold_left (fun a b -&gt; if n = b then a + 1 else a) 0 ls
+
+(* 盤面を表示する *)
+let print_board ls =
+  Printf.printf "%d %d %d\n"   (List.nth ls 0) (List.nth ls 1) (List.nth ls 2);
+  Printf.printf "%d %d %d\n"   (List.nth ls 3) (List.nth ls 4) (List.nth ls 5);
+  Printf.printf "%d %d %d\n\n" (List.nth ls 6) (List.nth ls 7) (List.nth ls 8)
+
+(* データの検定 *)
+let check ls =
+  let result = List.map (fun x -&gt; add_line x ls) line in
+  if count (List.hd result) result = 8 then print_board ls else ()
+
+(* 要素を取り除く *)
+let remove n ls = List.filter (fun x -&gt; n &lt;&gt; x) ls
+
+(* データの生成 *)
+let rec gen_perm nums perm =
+  if nums = [] then check perm
+  else List.iter (fun x -&gt; gen_perm (remove x nums) (x::perm)) nums
+
+(* 実行 *)
+let () = gen_perm [1;2;3;4;5;6;7;8;9] []
+</pre>
+
+<p> 関数 gen_perm で 1 から 9 までの数字の順列を生成します。それを関数 check に渡して、魔方陣の条件を満たしているかチェックします。List.map で各直線の和を関数 add_line で求めてリストに格納します。リストの要素がすべて同じ値であれば魔方陣の条件を満たすので、関数 print_board で盤面を表示します。
+</p>
+
+<p> それでは実行結果を示します。
+</p>
+<pre>
+8 3 4
+1 5 9
+6 7 2
+
+8 1 6
+3 5 7
+4 9 2
+
+6 7 2
+1 5 9
+8 3 4
+
+6 1 8
+7 5 3
+2 9 4
+
+4 9 2
+3 5 7
+8 1 6
+
+4 3 8
+9 5 1
+2 7 6
+
+2 9 4
+7 5 3
+6 1 8
+
+2 7 6
+9 5 1
+4 3 8
+</pre>
+<p> 対称解を含めると、解は 8 通りあります。実行時間は ocamlc (3.10.0), Windows XP, celeron 1.40 GHz で 5.52 秒でした。けっこう時間がかかりますね。対称解を排除すると、枝刈りの効果によりプログラムを高速に実行することができます。
+</p>
+
+<h4>●対称解の排除</h4>
+<p> 対称解のチェックは、下図のように四隅の大小関係を利用すると簡単です。
+</p>
+
+<pre class="fig">
+┌─┬─┬─┐   
+│Ａ│Ｂ│Ｃ│   
+├─┼─┼─┤   A &lt; C &lt; G
+│Ｄ│Ｅ│Ｆ│   
+├─┼─┼─┤   A &lt; I
+│Ｇ│Ｈ│Ｉ│   
+└─┴─┴─┘   
+
+    図 3 : 対称解のチェック
+</pre>
+
+<p> 魔方陣の場合、回転解が 4 種類あって、鏡像解が 2 種類あります。四隅の大小関係をチェックすることで、これらの対称解を排除することができます。また、早い段階で枝刈りを行うため、盤面の番号と試行順序を工夫します。
+</p>
+
+<pre class="fig">
+    ┌─┬─┬─┐  
+    │０│４│１│  
+    ├─┼─┼─┤  
+    │５│８│６│  
+    ├─┼─┼─┤  
+    │２│７│３│  
+    └─┴─┴─┘  
+
+図 4 : 盤面の番号と試行順序
+</pre>
+
+<p> 盤面を 1 次元配列で表すことにします。試行順序を上図のように定義し、配列の添字と対応させます。そうすると、最初に四隅 (0, 1, 2, 3) の数字が選択されますね。ここで対称解のチェックが行われるので、枝刈りの効率は良くなります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 3 : 魔方陣 (mahou1.ml)
+
+(* 直線の定義 *)
+let line = [(0,4,1); (5,8,6); (2,7,3); (0,5,2);
+            (4,8,7); (1,6,3); (0,8,3); (1,8,2)]
+
+(* 直線の和を求める *)
+let add_line (n1, n2, n3) board =
+  board.(n1) + board.(n2) + board.(n3)
+
+(* 引数 n と同じ要素の個数を求める *)
+let count n ls =
+  List.fold_left (fun a b -&gt; if n = b then a + 1 else a) 0 ls
+
+(* 盤面を表示する *)
+let print_board board =
+  Printf.printf "%d %d %d\n" board.(0) board.(4) board.(1);
+  Printf.printf "%d %d %d\n" board.(5) board.(8) board.(6);
+  Printf.printf "%d %d %d\n\n" board.(2) board.(7) board.(3)
+
+(* データの検定 *)
+let check board =
+  let result = List.map (fun x -&gt; add_line x board) line in
+  if count (List.hd result) result = 8 then print_board board else ()
+
+(* 同じ要素を削除する *)
+let remove n ls = List.filter (fun x -&gt; n &lt;&gt; x) ls
+
+(* データの生成 *)
+let rec gen_perm n nums board =
+  match n with
+    2 when board.(0) &gt; board.(1) -&gt; ()
+  | 3 when board.(1) &gt; board.(2) -&gt; ()
+  | 4 when board.(0) &gt; board.(3) -&gt; ()
+  | 9 -&gt; check board
+  | _ -&gt; List.iter
+           (fun x -&gt;
+             board.(n) &lt;- x;
+             gen_perm (n + 1) (remove x nums) board)
+           nums
+
+(* 実行 *)
+let () = gen_perm 0 [1;2;3;4;5;6;7;8;9] (Array.make 9 0)
+</pre>
+<p> 実行結果を示します。
+</p>
+<pre>
+C&gt;mahou1
+2 9 4 
+7 5 3 
+6 1 8 
+</pre>
+<p> 実行時間は 0.32 秒でした。枝刈りの効果は十分に出ていると思います。
+</p>
+
+<h4>●騎士の巡歴 (Knight's Tour)</h4>
+<p> 騎士はチェスの駒のひとつで、将棋の桂馬の動きを前後左右にとることができます。次の図を見てください。
+</p>
+
+<pre class="fig">
+   ┌─┬─┬─┬─┬─┐
+   │  │●│  │●│  │
+   ├─┼─┼─┼─┼─┤    ┌─┬─┬─┐ 
+   │●│  │  │  │●│    │Ｋ│  │  │ 
+   ├─┼─┼─┼─┼─┤    ├─┼─┼─┤ 
+   │  │  │Ｋ│  │  │    │  │  │  │ 
+   ├─┼─┼─┼─┼─┤    ├─┼─┼─┤ 
+   │●│  │  │  │●│    │  │  │  │ 
+   ├─┼─┼─┼─┼─┤    ├─┼─┼─┤ 
+   │  │●│  │●│  │    │  │  │  │ 
+   └─┴─┴─┴─┴─┘    └─┴─┴─┘ 
+
+  ●：騎士 (K) が動ける位置       問題 
+
+            図 5 : 騎士の巡歴
+</pre>
+
+<p> この騎士を動かして、N 行 M 列の盤面のどのマスにもちょうど一回ずつ訪れるような経路を求めるのが問題です。ちなみに、3 行 3 列、4 行 4 列の盤面には解がありませんが、5 行 5 列の盤面には解があります。大きな盤面を解くのは大変なので、3 行 4 列の盤面で騎士の移動経路を求めてください。プログラムを作る前に、自分で考えてみるのも面白いでしょう。
+</p>
+
+<p> それではプログラムを作りましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+ ┌─┬─┬─┐
+ │０│１│２│     ０──７──２
+ ├─┼─┼─┤     │          │
+ │３│４│５│     ５──10──３
+ ├─┼─┼─┤     │          │
+ │６│７│８│     ６──１──８
+ ├─┼─┼─┤     │          │
+ │９│10│11│     11──４──９
+ └─┴─┴─┘
+
+（Ａ）３行４列盤    （Ｂ）経路図
+
+        図 6 : 騎士の移動
+</pre>
+<p> 図 6 (A) のように、3 行 4 列盤の各マスに番号を付けて表します。すると、騎士の移動は (B) のようにグラフで表すことができます。これならば、コンピュータを使わなくても解くことができますね。プログラムも隣接リストを定義すれば簡単です。あとは単純な深さ優先探索で騎士の経路を探すだけです。
+</p>
+
+<pre class="list">
+リスト 4 : 騎士の巡歴 (knight.ml)
+
+(* 隣接リスト *)
+let adjacent = [|
+  [5; 7];
+  [6; 8];
+  [3; 7];
+  [2; 8; 10];
+  [9; 11];
+  [0; 6; 10];
+  [1; 5; 11];
+  [0; 2];
+  [1; 3; 9];
+  [4; 8];
+  [3; 5];
+  [4; 6]
+|]
+
+(* 経路の表示 *)
+let print_path path =
+  List.iter (fun x -&gt; print_int x; print_string " ") path;
+  print_newline ()
+
+(* 深さ優先探索 *)
+let rec dfs n path =
+  if n = 12 then print_path (List.rev path)
+  else
+    let p = List.hd path in
+    List.iter (fun x -&gt; if List.mem x path then () else dfs (n+1) (x::path))
+              adjacent.(p)
+
+(* 実行 *)
+let () = dfs 1 [0]
+</pre>
+
+<p> 経路はリストで表します。関数 dfs の引数 n が訪れたマスの個数を表し、次の引数 path が経路を表します。n が 12 になったら見つけた経路を関数 print_path で表示します。そうでなければ、騎士を次のマスへ進めます。この処理は経路の探索と同じです。
+</p>
+<p> プログラムはこれだけです。とても簡単ですね。それでは実行してみましょう。
+</p>
+<pre>
+C&gt;knight
+0 7 2 3 10 5 6 1 8 9 4 11 
+0 7 2 3 10 5 6 11 4 9 8 1 
+</pre>
+<p> 2 通りの経路を見つけることができました。
+</p>
+<p> このほかに、どのマスにもちょうど一回ずつ訪れたのち、最初のマスに戻ってくることを条件にする「騎士の周遊」という問題もあります。この場合、3 行 4 列盤には解がありません。
+</p>
+<p> また、N 行 M 列の盤面でマスの個数が奇数のときにも、最初のマスに戻ることはできません。これは簡単に証明できるので、息抜きや気分転換に考えてみてください。
+</p>
+<p><a href="../puzzle/knight2.html#update">解答はこちら</a>
+</p>
+<h4>●マスターマインド</h4>
+<p> パズルではありませんが、簡単な例題として「マスターマインド」を解くプログラムを作りましょう。マスターマインドは拙作のページ <a href="index.html#scm_abc">お気楽 Scheme プログラミング入門</a> <a href="abcscm06.html">数当てゲーム [2]</a> で作成した、0 から 9 までの重複しない 4 つの数字からなる隠しコードを当てるゲームです。数字は合っているが位置が間違っている個数を cows で表し、数字も位置も合っている個数を bulls で表します。bulls が 4 になると正解です。
+</p>
+<pre class="fig">
+     [6; 2; 8; 1] : 正解
+-------------------------------------
+1.   [0; 1; 2; 3] : cows 2 : bulls 0
+2.   [1; 0; 4; 5] : cows 1 : bulls 0
+3.   [2; 3; 5; 6] : cows 2 : bulls 0
+4.   [3; 2; 7; 4] : cows 0 : bulls 1
+5.   [3; 6; 0; 8] : cows 2 : bulls 0
+6.   [6; 2; 8; 1] : cows 0 : bulls 4
+
+  図 7 : マスターマインドの動作例
+</pre>
+<p> 今回は、私達が出した問題をコンピュータに答えてもらうことにします。それはちょっと難しいのではないか、と思った人もいるかもしれませんね。ところが、とても簡単な方法があるのです。このゲームでは、10 個の数字の中から 4 個選ぶわけですから、全体では 10 * 9 * 8 * 7 = 5040 通りのコードしかありません。コードを生成する処理は順列と同じですから、簡単にプログラムできます。
+</p>
+
+<h4>●推測アルゴリズム</h4>
+<p> 次に、この中から正解を見つける方法ですが、質問したコードとその結果を覚えておいて、それと矛盾しないコードを作るようにします。具体的には、4 つの数字の順列を生成し、それが今まで質問したコードと矛盾しないことを確かめます。これは生成検定法と同じですね。
+</p>
+<p> 矛盾しているかチェックする方法も簡単で、以前に質問したコードと比較して、bulls と cows が等しいときは矛盾していません。たとえば、次の例を考えてみてください。
+</p>
+<pre class="fig">
+[6; 2; 8; 1] が正解の場合
+
+[0; 1; 2; 3] =&gt; bulls = 0, cows = 2
+
+           [0; 1; 2; 3]  と比較する
+     --------------------------------------------------------
+           [0; X; X; X]  0 から始まるコードは bulls = 1
+                         になるので矛盾する。
+           ・・・・
+
+           [1; 0; 3; 4]  cows = 3, bulls = 0 になるので矛盾する
+
+           ・・・・
+
+           [1; 0; 4; 5]  cows = 2, bulls = 0 で矛盾しない。
+     --------------------------------------------------------
+
+[1; 0; 4; 5] =&gt; bulls = 0, cows = 1
+
+次は、[0; 1; 2; 3] と [1; 0; 4; 5] に矛盾しない数字を選ぶ
+
+        図 8 : マスターマインドの推測アルゴリズム
+</pre>
+<p> [0; 1; 2; 3] で bulls が 0 ですから、その位置にその数字は当てはまりません。したがって、[0; X; X; X] というコードは [0; 1; 2; 3] と比較すると bulls が 1 となるので、矛盾していることがわかります。
+</p>
+<p> 次に [1; 0; 3; 4] というコードを考えてみます。[0; 1; 2; 3] の結果は cows が 2 ですから、その中で合っている数字は 2 つしかないわけです。ところが、[1; 0; 3; 4] と [0; 1; 2; 3] と比較すると cows が 3 になります。当たっている数字が 2 つしかないのに、同じ数字を 3 つ使うのでは矛盾していることになりますね。
+</p>
+<p> 次に [1; 0; 4; 5] というコードと比較すると、bulls が 0 で cows が 2 となります。これは矛盾していないので、このコードを質問することにします。その結果が bulls = 0, cows = 1 となり、今度は [0; 1; 2; 3] と [1; 0; 4; 5] に矛盾しないコードを選択するのです。
+</p>
+<h4>●プログラムの作成</h4>
+<p> それでは、プログラムを作りましょう。最初に bulls と cows を求める関数を作ります。
+</p>
+
+<pre class="list">
+リスト 5 : bulls と cows を求める
+
+(* bulls を数える *)
+let count_bulls ls1 ls2 =
+  List.fold_left2 (fun a b c -&gt; if b = c then a + 1 else a) 0 ls1 ls2
+
+(* 同じ数字を数える *)
+let count_same_number ls1 ls2 =
+  List.fold_left (fun a b -&gt; if List.mem b ls2 then a + 1 else a) 0 ls1
+</pre>
+
+<p> 関数 count_bulls は List.fold_left2 を使うと簡単です。fold_left2 の型を示します。
+</p>
+<pre class="item">
+val fold_left2 : ('a -&gt; 'b -&gt; 'c -&gt; 'a) -&gt; 'a -&gt; 'b list -&gt; 'c list -&gt; 'a = &lt;fun&gt;
+</pre>
+<p> fold_left2 は 2 つのリストを引数に受け取ります。List モジュールには map2 や fold_right2 など 2 つのリストを引数に受け取る高階関数が定義されています。匿名関数の引数 a が bulls の個数で、b と c がリストの要素になります。b と c が等しいい場合、a を +1 すれば bulls の個数を求めることができます。
+</p>
+<p> 次は、cows を数える処理を作ります。いきなり cows を数えようとすると難しいのですが、2 つのリストに共通の数字を数えることは簡単にできます。この方法では、bulls の個数を含んだ数を求めることになりますが、そこから bulls を引けば cows を求めることができます。関数名は count-same-numberとしました。この処理は List.fold_left を使うと簡単です。匿名関数の引数 a が共通の数字の個数で、b がリスト ls1 の要素です。List.mem で b が ls2 に含まれていれば、a の値を +1 します。
+</p>
+
+<p> 次は生成したコードが今までの結果と矛盾していないか調べる関数 check_query を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 6 : 今までの質問と矛盾しているか
+
+let rec check_query code = function
+  [] -&gt; true
+| (old_bulls, old_cows, old_code)::qs -&gt;
+  let bulls = count_bulls code old_code in
+  let cows = (count_same_number code old_code) - bulls in
+  if bulls = old_bulls &amp;&amp; cows = old_cows then check_query code qs else false
+| _ -&gt; raise (Failure "check_query")
+</pre>
+<p> 質問したコードとその結果は組にまとめてリストに格納します。最初が bulls の個数、次が cows の個数、最後が質問したコードです。データはパターンマッチングで取り出して、局所変数 old_bulls, old_cows, old_code にセットします。そして、code と old_colde から bulls と cows を count_bulls と count_same_number で求めます。
+</p>
+<p> bulls と old_bulls が等しくて、cows と old_cows が等しい場合、code は矛盾していないので、次のデータを調べます。そうでなれば code は矛盾しているので false を返します。すべてのデータを調べたら true を返します。
+</p>
+
+<p> マスターマインドを解くプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト 7 : マスターマインドの解法
+
+exception Finish
+
+let solve collect =
+  List.fold_left
+    (fun query code -&gt;
+      if check_query code query then
+        (* 矛盾していない *)
+        let bulls = count_bulls code collect in
+        let cows = (count_same_number code collect) - bulls in
+        Printf.printf "%d: " (1 + List.length query);
+        print_intlist code;
+        Printf.printf ": bulls = %d, cows = %d\n" bulls cows;
+        if bulls = 4 then raise Finish else ();
+        (bulls, cows, code)::query
+      else
+        query)
+    []
+    (gen_perm_list 4 [0;1;2;3;4;5;6;7;8;9])
+</pre>
+
+<p> 関数 solve の引数 collect が正解のコードです。関数 gen_perm_list は拙作のページ <a href="ocaml05.html#chap02">順列と組み合わせ</a> で作成したものと同じです。リストの中から 4 個の要素を選ぶ順列を生成し、それをリストに格納して返します。
+</p>
+
+<p> あとは fold_left でコードを順番に取り出して、今まで質問したコードと矛盾していないか調べます。匿名関数の引数 query が今までに質問したコードと結果を格納したリストで、code が質問するコードです。check_query が true を返す場合、code は矛盾していないので、code と collect を比較して bulls と cows を求めます。そして、その結果を表示します。
+</p>
+<p> もしも、bulls が 4 ならば正解なので raise で例外 Finish を送出して処理を終了します。そうでなければ、query に今回の結果を追加して返します。code が矛盾している場合は query をそのまま返すだけです。
+</p>
+
+<h4>●何回で当たるか</h4>
+<p> これでプログラムは完成です。それでは実行例を示しましょう。
+</p>
+<pre>
+# solve [9; 8; 7; 6];;
+1 : 0 1 2 3 : bulls 0, cows 0
+2 : 4 5 6 7 : bulls 0, cows 2
+3 : 5 4 8 9 : bulls 0, cows 2
+4 : 6 7 9 8 : bulls 0, cows 4
+5 : 8 9 7 6 : bulls 2, cows 2
+6 : 9 8 7 6 : bulls 4, cows 0
+Exception Finish.
+
+# solve [9; 4; 3; 1];;
+1 : 0 1 2 3 : bulls 0, cows 2
+2 : 1 0 4 5 : bulls 0, cows 2
+3 : 2 3 5 4 : bulls 0, cows 2
+4 : 3 4 0 6 : bulls 1, cows 1
+5 : 3 5 6 1 : bulls 1, cows 1
+6 : 6 5 0 2 : bulls 0, cows 0
+7 : 7 4 3 1 : bulls 3, cows 0
+8 : 8 4 3 1 : bulls 3, cows 0
+9 : 9 4 3 1 : bulls 4, cows 0
+Exception Finish.
+</pre>
+
+<p> 肝心の質問回数ですが、5, 6 回で当たる場合が多いようです。実際に、5040 個のコードをすべて試してみたところ、平均は 5.56 回になりました。これは <a href="ocaml19.html#cite">参考文献 1</a> の結果と同じです。質問回数の最大値は 9 回で、そのときのコードは [9; 4; 3; 1], [9; 2; 4; 1], [5; 2; 9; 3], [9; 2; 0; 4], [9; 2; 1; 4] でした。
+</p>
+<p> なお、参考文献 [19-1] には平均質問回数がこれよりも少なくなる方法が紹介されています。単純な数当てゲームと思っていましたが、その奥はけっこう深いようです。興味のある方はいろいろ試してみてください。
+</p>
+
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>田中哲郎, 「数当てゲーム (MOO, マスターマインド) 」, 松原仁、竹内郁雄 編 『bit 別冊 ゲームプログラミング』 pp150 - 157, 共立出版, 1997
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+(*
+ * master.ml : マスターマインドの解法
+ *
+ *             Copyright (C) 2008 Makoto Hiroi
+ *)
+
+(* bulls を数える *)
+let count_bulls ls1 ls2 =
+  List.fold_left2 (fun a b c -&gt; if b = c then a + 1 else a) 0 ls1 ls2
+
+(* 同じ数字を数える *)
+let count_same_number ls1 ls2 =
+  List.fold_left (fun a b -&gt; if List.mem b ls2 then a + 1 else a) 0 ls1
+
+(* 今までの質問と矛盾しているか *)
+let rec check_query code = function
+  [] -&gt; true
+| (old_bulls, old_cows, old_code)::qs -&gt;
+  let bulls = count_bulls code old_code in
+  let cows = (count_same_number code old_code) - bulls in
+  if bulls = old_bulls &amp;&amp; cows = old_cows then check_query code qs else false
+| _ -&gt; raise (Failure "check_query")
+
+(* リストの表示 *)
+let print_intlist ls =
+  List.iter (fun x -&gt; print_int x; print_string " ") ls
+
+(* 要素の削除 *)
+let rec remove x = function
+  [] -&gt; []
+| y :: ys -&gt; if x = y then remove x ys else y :: remove x ys
+
+(* 順列をリストに格納する *)
+let gen_perm_list n xs =
+  let rec perm n xs a b =
+    if n = 0 then (List.rev a)::b
+    else List.fold_right (fun x y -&gt; perm (n-1) (remove x xs) (x::a) y) xs b
+  in
+    perm n xs [] []
+
+(* 例外の定義 *)
+exception Finish
+
+(* マスターマインドの解法 *)
+let solve collect =
+  List.fold_left
+    (fun query code -&gt;
+      if check_query code query then
+        (* 矛盾していない *)
+        let bulls = count_bulls code collect in
+        let cows = (count_same_number code collect) - bulls in
+        Printf.printf "%d: " (1 + List.length query);
+        print_intlist code;
+        Printf.printf ": bulls = %d, cows = %d\n" bulls cows;
+        if bulls = 4 then raise Finish else ();
+        (bulls, cows, code)::query
+      else
+        query)
+    []
+    (gen_perm_list 4 [0;1;2;3;4;5;6;7;8;9])
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ocaml18.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml20.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

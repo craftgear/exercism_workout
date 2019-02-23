@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 OCaml プログラミング入門</title>
+  <meta name="description" content="OCaml,ML,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881750</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 OCaml プログラミング入門</h2>
+<div class="small">
+[ <a href="ocaml16.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml18.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">クラス型</h3>
+<p> 前回は多重継承と Mix-in について説明しました。今回は「クラス型」について説明します。
+</p>
+
+<h4>●クラス型の宣言</h4>
+<p> 通常、オブジェクトの型は型推論により定義されますが、class 文でクラスを定義するとき、シグネチャのようにクラスのデータ型を明示的に宣言することができます。これを「クラス型」といいます。クラス型を宣言することでインスタンス変数やプライベートメソッドを隠蔽することができます。ただし、公開メソッドや抽象メソッドは隠蔽することができません。
+</p>
+<p> クラス型は次のように指定します。
+</p>
+<pre class="item">
+class クラス名 :
+  object
+    inherit スーパークラス名
+    ...
+    val インスタンス変数名1 : 型v1
+    val インスタンス変数名2 : 型v2
+    ...
+    method メソッド名1 : 型m1
+    method メソッド名2 : 型m2
+    ...
+  end
+=
+  object ... end
+</pre>
+<p> モジュールと同様に、クラス名の後ろに : を付けて object ... end の中にインスタンス変数やメソッドの型を定義します。この中で継承 (inherit) を使ってもかまいません。
+</p>
+<p> 簡単な例を示しましょう。前回作成したクラス point でクラス型を宣言します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 1 : point クラスの定義
+
+(* ポイント *)
+class point xi yi :
+  object ('self_type)
+    method x : float
+    method y : float
+    method move : float -&gt; float -&gt; unit
+    method equal : 'self_type -&gt; bool
+  end
+=
+  object (self: 'self_type)
+    val mutable x = xi
+    val mutable y = yi
+
+    method x = x
+    method y = y
+    method move dx dy =
+      x &lt;- x +. dx; y &lt;- y +. dy
+    method equal (p: 'self_type) =
+      x = p#x &amp;&amp; y = p#y
+  end
+
+(* 色付きのポイント *)
+class colored_point xi yi (ci: int) :
+  object ('self_type)
+    inherit point
+    method color : int
+    method equal : 'self_type -&gt; bool
+  end
+=
+  object (self: 'self_type)
+    inherit point xi yi as super
+    val mutable c = ci
+
+    method color = c
+    method equal (p: 'self_type) =
+      super#equal p &amp;&amp; c = p#color
+  end
+</pre>
+<p> クラス型を宣言するとき、object ('self_type) のように自分自身の型を指定することができます。これで equal のようなバイナリメソッドの型を定義することができます。クラス point と colored_point の型宣言で、インスタンス変数の型は定義されていません。これでインスタンス変数の情報を隠蔽することができます。
+</p>
+<p> 実際にクラスを定義すると、次のように表示されます。
+</p>
+<pre>
+class point :
+  float -&gt;
+  float -&gt;
+  object ('a)
+    method equal : 'a -&gt; bool
+    method move : float -&gt; float -&gt; unit
+    method x : float
+    method y : float
+  end
+
+class colored_point :
+  float -&gt;
+  float -&gt;
+  int -&gt;
+  object ('a)
+    method color : int
+    method equal : 'a -&gt; bool
+    method move : float -&gt; float -&gt; unit
+    method x : float
+    method y : float
+  end
+</pre>
+<p> このように、クラス型を宣言することでインスタンス変数を隠蔽することができます。
+</p>
+
+<h4>●クラス型に名前を付ける</h4>
+<p> ところで、クラス型はシグネチャのように名前を付けることができます。これをクラスのインターフェースと呼ぶことがあります。クラス型の名前は class type 宣言で定義します。
+</p>
+<pre class="item">
+class type 名前 =
+  object
+    inherit スーパークラス名
+    ...
+    val インスタンス変数名1 : 型v1
+    val インスタンス変数名2 : 型v2
+    ...
+    method メソッド名1 : 型m1
+    method メソッド名2 : 型m2
+    ...
+  end
+</pre>
+<p> クラス型の名前はクラス名と同様にデータ型の指定や制限に使うことができます。
+</p>
+
+<p> 簡単な例を示します。point クラスの型に名前をつけてみましょう。
+</p>
+<pre class="list">
+リスト 2 : point クラス (2)
+
+(* point クラスの型名 *)
+class type point_type =
+  object ('self_type)
+    method x : float
+    method y : float
+    method move : float -&gt; float -&gt; unit
+    method equal : 'self_type -&gt; bool
+  end
+
+(* point クラス *)
+class point xi yi : point_type =
+  object (self: 'self_type)
+    val mutable x = xi
+    val mutable y = yi
+
+    method x = x
+    method y = y
+    method move dx dy =
+      x &lt;- x +. dx; y &lt;- y +. dy
+    method equal (p: 'self_type) =
+      x = p#x &amp;&amp; y = p#y
+  end
+
+(* colored_point の型名 *)
+class type colored_point_type =
+  object ('self_type)
+    inherit point
+    method color : int
+    method equal : 'self_type -&gt; bool
+  end
+
+(* colored_point クラス *)
+class colored_point xi yi (ci: int) : colored_point_type =
+  object (self: 'self_type)
+    inherit point xi yi as super
+    val mutable c = ci
+
+    method color = c
+    method equal (p: 'self_type) =
+      super#equal p &amp;&amp; c = p#color
+  end
+</pre>
+<p> point クラスの型名を point_type とし、colored_point クラスの型名を colored_point_type としました。これを使って、クラスの型を指定することができます。実際にクラスを定義すると次のように表示されます。
+</p>
+<pre>
+class type point_type =
+  object ('a)
+    method equal : 'a -&gt; bool
+    method move : float -&gt; float -&gt; unit
+    method x : float
+    method y : float
+  end
+class point : float -&gt; float -&gt; point_type
+
+class type colored_point_type =
+  object ('a)
+    method color : int
+    method equal : 'a -&gt; bool
+    method move : float -&gt; float -&gt; unit
+    method x : float
+    method y : float
+  end
+class colored_point : float -&gt; float -&gt; int -&gt; colored_point_type
+</pre>
+
+<h4>●クラス型による型指定</h4>
+<p> 次は 2 点間の距離を計算する関数 distance を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 3 : 2 点間の距離を求める
+
+let distance p1 p2 =
+  let dx = p1#x -. p2#x and dy = p1#y -. p2#y in
+  sqrt (dx *. dx +. dy *. dy)
+</pre>
+<p> プログラムは簡単です。引数 p1 と p2 は点を表すオブジェクトです。メソッド x, y で座標を求め、2 点間の距離を計算するだけです。distance をコンパイルすると、データ型は次のように推論されます。
+</p>
+
+<pre>
+val distance : &lt; x : float; y : float; .. &gt; -&gt;
+               &lt; x : float; y : float; .. &gt; -&gt; float
+</pre>
+<p> 引数のデータ型はメソッド x, y を持つ任意のオブジェクトになります。これで、point と colored_point の距離を求めることができます。ところが、それ以外のオブジェクトでも、メソッド x, y が定義されていれば distance を呼び出すことができます。たとえば、3 次元の座標を表す point3d クラスを定義しましょう。
+</p>
+<pre class="list">
+リスト 4 : point3d クラス
+
+class point3d xi yi zi =
+  object (self: 'self_type)
+    val mutable x = xi
+    val mutable y = yi
+    val mutable z = zi
+
+    method x = x
+    method y = y
+    method z = z
+    method move dx dy dz =
+      x &lt;- x +. dx; y &lt;- y +. dy; z &lt;- z +. dz
+    method equal (p: 'self_type) =
+      x = p#x &amp;&amp; y = p#y &amp;&amp; z = p#z
+  end
+</pre>
+
+<p> point3d はメソッド x, y を持っていて、そのデータ型が point と同じなので、point3d のオブジェクトを distance の引数に渡してもコンパイルエラーにはなりません。そこで、次のように引数のデータ型を制限します。
+</p>
+
+<pre class="list">
+リスト 5 : 2 点間の距離を求める (2)
+
+let distance (p1: point_type) (p2: point_type) =
+  let dx = p1#x -. p2#x and dy = p1#y -. p2#y in
+  sqrt (dx *. dx +. dy *. dy)
+</pre>
+
+<p> distance の引数のデータ型は point_type に制限されます。これで point3d のオブジェクトを渡すとエラーになりますが、これでは colored_point のオブジェクトもエラーになってしまいます。このような場合、point と colored_point の両方を満たす部分型を指定できると便利です。
+</p>
+<p> OCaml の場合、クラス名またはクラス型名の前に # を付けると、そのデータ型の任意の部分型を指定することができます。たとえば、メソッド x, y, move を持つクラス型を定義します。
+</p>
+<pre class="list">
+リスト 6 : クラス型 point0 の定義
+
+class type point0 =
+  object
+    method move : float -&gt; float -&gt; unit
+    method x : float
+    method y : float
+  end
+</pre>
+<p> point と colored_point の共通のメソッドを point0 で定義します。すると、#point0 は point0 の任意の部分型を表すことになります。実際にオブジェクトの型を示すと、次のようになります。
+</p>
+
+<pre class="item">
+ point0 : &lt; move float -&gt; float -&gt; unit; x : float; y : float &gt;
+#point0 : &lt; move float -&gt; float -&gt; unit; x : float; y : float; .. &gt;
+</pre>
+<p> #point0 は poit0 の任意の部分型なので、最後にピリオドが 2 つ ( .. ) が付いています。この #point0 を使って distance の引数の型を制限することができます。
+</p>
+
+<pre class="list">
+リスト 7 : 2 点間の距離を求める (2)
+
+let distance (p1: (#point0 as 'a)) (p2: 'a) =
+  let dx = p1#x -. p2#x and dy = p1#y -. p2#y in
+  sqrt (dx *. dx +. dy *. dy)
+</pre>
+<pre class="item">
+val distance : (#point0 as 'a) -&gt; 'a -&gt; float
+</pre>
+<p> p1 と p2 は同じデータ型であることを示すため、p1 の型指定で #point0 as 'a により p1 に型変数 'a を付けて、第 2 引数 p2 のデータ型は 'a で指定します。p2 の型指定を #point0 とすると、p1 とデータ型が異なるオブジェクト、たとえば、引数のデータ型が point と colored_point でもコンパイルエラーにはなりません。
+</p>
+
+<p> point と colored_point は point0 の部分型なので、distance で距離を求めることができます。point3d はメソッド move の型が point0 の move と異なるので、point0 の部分型にはなりません。したがって、point3d のオブジェクトを distance に渡すとコンパイルエラーになります。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+# let p1 = new point 0. 0. ;;
+val p1 : point = &lt;obj&gt;
+# let p2 = new point 10. 10. ;;
+val p2 : point = &lt;obj&gt;
+# let p3 = new colored_point 0. 0. 1;;
+val p3 : colored_point = &lt;obj&gt;
+# let p4 = new colored_point 5. 5. 1;;
+val p4 : colored_point = &lt;obj&gt;
+# distance p1 p2;;
+- : float = 14.142135623730951
+# distance p3 p4;;
+- : float = 7.0710678118654755
+</pre>
+<p> distance p1 p3 とするとエラーになります。
+</p>
+<h4>●クラス内の局所変数と局所関数</h4>
+<p> インスタンス変数は個々のインスタンス（オブジェクト）に格納される変数です。その値はインスタンスによって変わります。クラスで共通の変数や定数を使いたい場合は、class の中で変数や定数を定義します。
+</p>
+<pre class="item">
+class クラス名 =
+  let 
+    ... 局所変数や局所関数の定義 ...
+  in
+  object ... end
+</pre>
+<p> OCaml は class 文の = と object の間に、let ... in で局所変数や局所関数を定義することができます。一般に、クラス共通で使用する変数や定数のことを「クラス変数」や「クラス定数」といいます。OCaml の場合、クラス内で定義された局所変数は、クラス変数やクラス定数として利用することができます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+
+<pre class="list">
+リスト 8 : クラス定数とクラス変数
+
+class foo =
+  let name = "foo" in
+  let value = ref 0 in
+  object
+    method show = Printf.printf "%s %d\n" name !value
+    method update x = value := x
+  end
+</pre>
+
+<p> let で定義された局所変数は同じクラスのメソッドからアクセスすることができます。リスト 8 では局所変数 name がクラス定数になり、value がクラス変数になります。クラス変数は値を書き換えることがあるので、value は参照型変数として定義しています。メソッド show は name と value を表示します。メソッド update は value の値を書き換えます。
+</p>
+
+<p> それでは実際に試してみましょう。
+</p>
+
+<pre>
+# let a = new foo;;
+val a : foo = &lt;obj&gt;
+# let b = new foo;;
+val b : foo = &lt;obj&gt;
+# a#show;;
+foo 0
+- : unit = ()
+# b#show;;
+foo 0
+- : unit = ()
+# a#update 10;;
+- : unit = ()
+# a#show;;
+foo 10
+- : unit = ()
+# b#show;;
+foo 10
+- : unit = ()
+</pre>
+
+<p> 2 つのインスタンスを生成して変数 a, b にセットします。どちらのインスタンスもメソッド show で name と value の値を表示すると foo 0 になります。ここで、a#update で value の値を 10 に書き換えます。a#show は foo 10 を表示しますが、b#show も foo 10 を表示します。局所変数 value は 2 つのインスタンスで共有されていることがわかります。
+</p>
+
+<p> また、foo を継承して新しいクラスを作ると、そのクラスも foo の局所変数を共有します。簡単な例を示しましょう。
+</p>
+<pre>
+# class bar = object inherit foo end;;
+class bar : object method show : unit method update : int -&gt; unit end
+# let a = new foo;;
+val a : foo = &lt;obj&gt;
+# let b = new bar;;
+val b : bar = &lt;obj&gt;
+# a#show;;
+foo 0
+- : unit = ()
+# b#show;;
+foo 0
+- : unit = ()
+# a#update 10;;
+- : unit = ()
+# a#show;;
+foo 10
+- : unit = ()
+# b#show;;
+foo 10
+- : unit = ()
+</pre>
+<p> このように、foo と bar のインスタンスは局所変数 name と value の値を共有しています。ただし、クラス bar のメソッドから foo の局所変数に直接アクセスすることはできません。foo のメソッドを経由してアクセスする必要があります。ご注意くださいませ。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">集合 (3)</h3>
+<p> 今回は集合を例題にして、モジュール (ファンクタ) とオブジェクト指向を使ったプログラムを作りましょう。
+</p>
+<h4>●モジュール内でクラスを定義する</h4>
+<p> クラスはモジュール (ファンクタ) の中でも定義することもできます。たとえば、ファンクタ MakeSet の中でクラス set を定義すると、次のようになります。
+</p>
+
+<pre class="list">
+リスト 9 : ファンクタ内でのクラス定義
+
+(* ストラクチャ *)
+module type ITEMTYPE =
+  sig
+    type t
+    val compare : t -&gt; t -&gt; int
+  end
+
+(* ファンクタ *)
+module MakeSet(Item: ITEMTYPE) :
+  sig
+    type t = Item.t
+    class set :
+      object ('a)
+        method copy : 'a
+        method delete : t -&gt; unit
+        method difference : 'a -&gt; 'a
+        method insert : t -&gt; unit
+        method intersection : 'a -&gt; 'a
+        method is_equal : 'a -&gt; bool
+        method is_subset : 'a -&gt; bool
+        method iter : (t -&gt; unit) -&gt; unit
+        method length : int
+        method member : t -&gt; bool
+        method union : 'a -&gt; 'a
+      end
+  end
+=
+  struct
+    type t = Item.t
+    class set = 
+      object(self : 'self_type)
+        val mutable content = ([]: t list)
+        val mutable size = 0
+
+        method member p =
+          let rec mem_eq = function
+            [] -&gt; false
+          | x::xs -&gt; if Item.compare p x = 0 then true else mem_eq xs
+          in
+            mem_eq content
+
+        method insert p =
+          if not (self#member p) then begin
+            size &lt;- size + 1;
+            content &lt;- p::content
+          end else ()
+
+        method delete p =
+          if self#member p then 
+            (content &lt;- List.filter (fun x -&gt; Item.compare p x &lt;&gt; 0) content;
+             size &lt;- size - 1)
+          else raise Not_found
+
+        ... 省略 ...
+    end
+  end
+</pre>
+<p> シグネチャでは "class クラス名 : object ... end" でクラス型を定義します。シグネチャでデータ型 t を宣言しているので、t を使ってクラス型を定義します。ファンクタ本体ではデータ型 t を Item.t に定義し、それを使ってクラス set を定義します。要素の比較はストラクチャ Item の関数 compare を使います。あとは今までのプログラムと同じです。
+</p>
+<p> 簡単な例として、整数値 (int) を格納する集合 IntSet を作ってみましょう。IntSet を定義すると次のように表示されます。
+</p>
+<pre>
+# module IntSet = MakeSet(struct type t = int let compare x y = x - y end)
+module IntSet :
+  sig
+    type t = int
+    class set :
+      object ('a)
+        method copy : 'a
+        method delete : t -&gt; unit
+        method difference : 'a -&gt; 'a
+        method insert : t -&gt; unit
+        method intersection : 'a -&gt; 'a
+        method is_equal : 'a -&gt; bool
+        method is_subset : 'a -&gt; bool
+        method iter : (t -&gt; unit) -&gt; unit
+        method length : int
+        method member : t -&gt; bool
+        method union : 'a -&gt; 'a
+      end
+  end
+</pre>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+# open IntSet;;
+# let print s = s#iter (fun x -&gt; print_int x#get; print_string " ");;
+val print : &lt; iter : (int -&gt; unit) -&gt; 'a; .. &gt; -&gt; 'a = &lt;fun&gt;
+# let a = new set compare;;
+val a : IntSet.set = &lt;obj&gt;
+# for i = 1 to 5 do a#insert i done;;
+- : unit = ()
+# print a;;
+5 4 3 2 1 - : unit = ()
+# let b = new set;;
+val b : IntSet.set = &lt;obj&gt;
+# for i = 4 to 8 do b#insert i done;;
+- : unit = ()
+# print b;;
+8 7 6 5 4 - : unit = ()
+# print (a#union b);;
+1 2 3 8 7 6 5 4 - : unit = ()
+# print (a#intersection b);;
+4 5 - : unit = ()
+# print (a#difference b);;
+1 2 3 - : unit = ()
+</pre>
+<p> このようにファンクタとクラスを組み合わせることも簡単にできます。
+</p>
+<h4>●オブジェクトを格納する集合</h4>
+<p> ところで、拙作のページ <a href="ocaml14.html">集合</a> で作成したクラス set は、要素を比較する関数をクラスの引数に渡しました。ここでは異なる方法を試してみましょう。集合に格納する要素をオブジェクトとし、そのオブジェクトに要素同士を比較するメソッド compare を定義することにします。
+</p>
+
+<p> それではプログラムを作りましょう。最初にクラスを定義します。
+</p>
+<pre class="list">
+リスト 10 : クラス set の定義
+
+class ['a] set = 
+  object(self: 'self_type)
+    val mutable content = ([]: 'a list)
+    val mutable size = 0
+
+    method member p =
+      let rec mem_eq = function
+        [] -&gt; false
+      | x::xs -&gt; if p#compare x = 0 then true else mem_eq xs
+      in
+        mem_eq content
+
+    method insert p =
+      if not (self#member p) then begin
+        size &lt;- size + 1;
+        content &lt;- p::content
+      end else ()
+
+    method delete p =
+      if self#member p then 
+        (content &lt;- List.filter (fun x -&gt; p#compare x &lt;&gt; 0) content;
+         size &lt;- size - 1)
+      else raise Not_found
+
+    ... 省略 ...
+  end
+</pre>
+
+<p> 今回はオブジェクトのメソッド compare を使ってプログラムを作るので、型推論により型変数 'a はあるオブジェクトの型に制限されます。これはあとで説明します。要素の比較はオブジェクトのメソッド compare を使います。compare の仕様は OCaml の関数 compare と同じです。プログラムは compare p x を p#compare x と書き換えるだけです。
+</p>
+
+<h4>●constraint</h4>
+<p> 実際に set を定義すると次のように表示されます。
+</p>
+<pre>
+class ['a] set :
+  object ('b)
+    constraint 'a = &lt; compare : 'a -&gt; int; .. &gt;
+    val mutable content : 'a list
+    val mutable size : int
+    method copy : 'b
+    method delete : 'a -&gt; unit
+    method difference : 'b -&gt; 'b
+    method insert : 'a -&gt; unit
+    method intersection : 'b -&gt; 'b
+    method is_equal : 'b -&gt; bool
+    method is_subset : 'b -&gt; bool
+    method iter : ('a -&gt; unit) -&gt; unit
+    method length : int
+    method member : 'a -&gt; bool
+    method union : 'b -&gt; 'b
+  end
+</pre>
+<p> constraint は「制約」という意味で、集合の要素 'a はメソッド compare を持つオブジェクトでなければならないことを表しています。今回は OCaml の型推論にお任せしましたが、プログラムで constraint を記述することもできます。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示しましょう。まず最初に、集合に格納するオブジェクトを定義します。
+</p>
+<pre class="list">
+リスト 11 : 要素となるオブジェクト
+
+class ['a] item (x: 'a) =
+  object(self: 'self_type)
+    val n = x
+    method get = n
+    method compare (x: 'self_type) = compare n x#get
+  end
+</pre>
+<p> データの比較は関数 compare で行います。オブジェクト以外のデータ型であれば、これで大小関係を比較することができます。
+</p>
+<p> 実行例は次のようになります。
+</p>
+<pre>
+# let print s = s#iter (fun x -&gt; print_int x#get; print_string " ");;
+val print : &lt; iter : (&lt; get : int; .. &gt; -&gt; unit) -&gt; 'a; .. &gt; -&gt; 'a = &lt;fun&gt;
+# let a = new set;;
+val a : (&lt; compare : 'a -&gt; int; _.. &gt; as 'a) set = &lt;obj&gt;
+# for i = 1 to 5 do a#insert (new item i) done;;
+- : unit = ()
+# print a;;
+5 4 3 2 1 - : unit = ()
+# let b = new set;;
+val b : (&lt; compare : 'a -&gt; int; _.. &gt; as 'a) set = &lt;obj&gt;
+# for i = 4 to 8 do b#insert (new item i) done;;
+- : unit = ()
+# print b;;
+8 7 6 5 4 - : unit = ()
+# print (a#union b);;
+1 2 3 8 7 6 5 4 - : unit = ()
+# print (a#intersection b);;
+4 5 - : unit = ()
+# print (a#difference b);;
+1 2 3 - : unit = ()
+</pre>
+<p> 最初に集合の要素を表示する関数 print を定義します。型推論により、引数 s はメソッド iter を持つオブジェクトで、iter に渡す関数の引数はメソッド get を持つオブジェクトであることが示されています。
+</p>
+<p> 次に、集合 a と b を生成します。a は {1, 2, 3, 4. 5} で、b は {4, 5, 6, 7, 8} です。集合演算を行うと、a と b の和は {1, 2, 3, 4, 5, 6, 7, 8} になり、積は {4, 5} になり、差は {1, 2, 3} になります。
+</p>
+<p> このように、格納するオブジェクトのメソッド compare を使って集合を表すクラスを定義することもできます。
+</p>
+
+<h4>●ファンクタ MakeSet でオブジェクトを格納する</h4>
+<p> ところで、ファンクタで定義した集合でも、オブジェクトを格納することができます。次の例を見てください。
+</p>
+<pre>
+# module IntObjSet = MakeSet(struct type t = int item
+  let compare x y = x#compare y end);;
+module IntObjSet :
+  sig
+    type set
+    val create : unit -&gt; set
+    val member : int item -&gt; set -&gt; bool
+    val insert : int item -&gt; set -&gt; set
+    val delete : int item -&gt; set -&gt; set
+    val union : set -&gt; set -&gt; set
+    val intersection : set -&gt; set -&gt; set
+    val difference : set -&gt; set -&gt; set
+    val is_subset : set -&gt; set -&gt; bool
+    val is_equal : set -&gt; set -&gt; bool
+    val iter : (int item -&gt; unit) -&gt; set -&gt; unit
+    val set_of_list : int item list -&gt; set
+    val list_of_set : set -&gt; int item list
+  end
+# open IntObjSet;;
+# let print s = iter (fun x -&gt; print_int x#get; print_string " ") s;;
+val print : IntObjSet.set -&gt; unit = &lt;fun&gt;
+# let a = set_of_list (List.map (fun x -&gt; new item x) [1;2;3;4;5]);;
+val a = IntObjSet.set = &lt;abstr&gt;
+# print a;;
+1 2 3 4 5 - : unit = ()
+# let b = set_of_list (List.map (fun x -&gt; new item x) [4;5;6;7;8]);;
+val b = IntObjSet.set = &lt;abstr&gt;
+# print b;;
+4 5 6 7 8 - : unit = ()
+# print (union a b);;
+1 2 3 4 5 6 7 8 - : unit = ()
+# print (intersection a b);;
+4 5 - : unit = ()
+# print (difference a b);;
+1 2 3 - : unit = ()
+</pre>
+<p> ファンクタに渡すストラクチャで、type t = int item とし、compare x y = x#compare x とすれば、オブジェクト item を格納するモジュール IntObjSet を生成することができます。このように、OCaml にはモジュール (ファンクタ) という優れた機能があるので、複数の要素を格納するデータ構造 (コレクション) をクラスで実装することは少ないのかもしれませんね。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ocaml16.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml18.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

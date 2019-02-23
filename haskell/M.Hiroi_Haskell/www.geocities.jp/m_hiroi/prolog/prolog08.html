@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Prolog プログラミング入門</title>
+  <meta name="description" content="Prolog,Prolog入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881780</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>お気楽 Prolog プログラミング入門</h2>
+<div class="small">
+[ <a href="prolog07.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog09.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<H3><A name="chap28">パズル「地図の配色問題」</A></H3>
+<p> 今回は、Puzzle DE Programming や xyzzy Lisp Programming で取り上げた、<a href="../puzzle/colormap.html">地図の配色問題</a> を Prolog で解いてみましょう。「地図の配色問題」は、平面上にある隣り合った地域が同じ色にならないように塗り分けるという問題です。1976 年にアッペルとハーケンにより、どんな場合でも 4 色あれば塗り分けできることが証明されました。これを<b>四色問題</b>といいます。
+</p>
+<pre class="fig">
+┌─────────┐
+│        ａ        │
+├──┬───┬──┤
+│ ｂ │  ｃ  │ ｄ │
+├──┴─┬─┴──┤
+│   ｅ   │   ｆ   │
+└────┴────┘
+
+    図：簡単な地図
+</pre>
+
+<p> 今回は、図に示す簡単な地図を 4 色で塗り分けてみます。Prolog を使うと、とても簡単にプログラムできます。なお、地図は <a href ="index.html#cite">参考文献 [3]</a> から引用しました。
+</p>
+<h4>●プログラム</h4>
+<p> プログラムのポイントは各領域を変数で表すことです。変数にはその領域の色を格納します。そして、隣とは異なる色になるように値を決めるわけです。
+</p>
+<p> 各領域の変数を A, B, C, D, E, F とし、隣の関係を next(A, B) で表すことにしましょう。色を red, blue, yellow, green とすると、next は next(red, blue) や next(red, yellow) などのように、隣とは異なる色を表す事実として定義することができます。いちいち自分で定義するのは面倒なので、さくっとプログラムを作りましょう。
+</p>
+<pre class="list">
+リスト：事実 next を定義する
+
+/* 部分集合の判定 */
+selects([], Ys).
+selects([X | Xs], Ys) :- select(X, Ys, Ys1), selects(Xs, Ys1).
+
+/* 事実 next を定義する */
+make_next(Colors) :-
+    selects([A, B], Colors), assert(next(A, B)), fail.
+</pre>
+<p> make_next の引数 Colors には、色を格納したリストを渡します。このリストの中から 2 色を選ぶには、<A href="prolog02.html#chap12">集合としてのリスト</A> で作成した述語 selects を使うと簡単です。selects で 4 色から 2 色を選んで、assert で事実 next を定義します。最後に fail を使って失敗駆動ループを形成します。これで、隣とは異なる色の関係をすべて定義することができます。
+</p>
+<p> あとは、各領域の隣接関係を表すだけでプログラムは完成です。
+</p>
+<pre class="list">
+リスト：地図の配色問題
+
+color_map(A, B, C, D, E, F) :-
+    not(make_next([red, blue, yellow, green])), 
+    next(A, B), next(A, C), next(A, D),
+    next(B, C), next(B, E), 
+    next(C, D), next(C, E), next(C, F),
+    next(D, F),
+    next(E, F).
+</pre>
+
+<p> make_next は失敗駆動ループを使っているので、結果は必ず失敗します。このため not を使って結果を反転させています。隣接関係を定義する場合、たとえば A と B であれば next(A, B) だけで十分で、next(B, A) は必要ありません。next(A, B) が成功すれば A と B に異なる色がセットされているので、next(B, A) が成功するのは当たり前だからです。これでプログラムは完成です。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre class="fig">
+┌─────────┐  
+│        <font color="red">■</font>        │  
+├──┬───┬──┤  
+│ <font color="blue">■</font> │  <font color="yellow">■</font>  │ <font color="blue">■</font> │  
+├──┴─┬─┴──┤  
+│   <font color="red">■</font>   │   <font color="green">■</font>   │  
+└────┴────┘  
+
+    図：パズルの解答
+</pre>
+<pre>
+?- color_map(A, B, C, D, E, F).
+
+A = red
+B = blue
+C = yellow
+D = blue
+E = red
+F = green
+
+Yes
+</pre>
+
+<p> 3 色で試したい場合は、make_next に 3 色のリストを渡してください。実際に実行してみると No が表示されます。つまり、この地図を 3 色で塗り分けることはできないのです。
+</p>
+<p> 今回はとても簡単なプログラムでしたが、Puzzle DE Programming や xyzzy Lisp Programming と同じように、「隣接リスト」を使ってもプログラムを作ることができます。
+</p>
+<h4 id="update">●隣接リストによる解法</h4>
+<p> 「隣接リスト」とは、隣の地域をすべてリストに格納する方法です。最初に、隣接リストを表す述語 neighbor と色を表す述語 color を定義します。次のプログラムを見てください。
+</p>
+<pre class="list">
+リスト：隣接リストと色の定義
+
+/* 隣接リスト */
+neighbor(a, [b, c, d]).       neighbor(b, [a, c, e]).
+neighbor(c, [a, b, d, e, f]). neighbor(d, [a, c, f]).
+neighbor(e, [b, c, f]).       neighbor(f, [c, d, e]).
+
+/* 色 */
+color(red).    color(blue).
+color(yellow). color(green).
+</pre>
+
+<p> 述語 neighbor(R, L) は、地域 R の隣接リストは L という関係を表しています。述語 color は使用できる色を表します。蛇足ですが、隣接リストは次に示すような「隣の関係」を定義しておいて、集合述語 findall で求める方法もあります。
+</p>
+<pre class="list">
+リスト：隣の地域
+
+neighbor(a, b). neighbor(a, c). neighbor(a, e).
+neighbor(b, c). neighbor(b, e).
+neighbor(c, d). neigbhor(c, e). neighbor(c, f).
+neighbor(d, f).
+neighbor(e, f).
+
+/* X の隣を求める */
+next(X, Y) :- neighbor(X, Y).
+next(X, Y) :- neighbor(Y, X).
+</pre>
+<p> このように定義すると、地域 a の隣接リストは次のように求めることができます。
+</p>
+<pre>
+?- findall(A, next(a, A), L).
+
+A = _G313
+L = [b, c, e] ;
+
+No
+</pre>
+<h4>●連想リスト</h4>
+<p> 次は、地域の色を記憶する方法を考えましょう。いろいろな方法があるのですが、今回は連想リスト (association list) を使ってみます。連想リストは Lisp でよく用いられるデータ構造です。次の図を見てください。
+</p>
+<pre class="fig">
+                   ┌───┬───┬───┬──→ データ  
+                   │      │      │      │
+連想リスト =&gt; [ [a, b], [c, d], [e, f], [g, h] ]
+                │      │      │      │
+                └───┴───┴───┴──→ キー
+
+        図：連想リストの構造
+</pre>
+<p> 連想リストの要素はリストです。そのリストは、第 1 要素がキーで、第 2 要素がデータに対応します。上図の場合、キーが a, c, e, g で、データが b, d, f, h となります。ちなみに Lisp の場合、「ドット対」を使って連想リストを表します。この場合、CAR 部がキーで CDR 部がデータとなります。もちろん Prolog でも [ Key | Data ] と表すことができますが、今回はわかりやすさを優先しました。
+</p>
+<p> Lisp の場合、連想リストからデータを検索する関数 assoc が用意されていますが、Prolog は述語 member を使って簡単にデータを取り出すことができます。次の例を見てください。
+</p>
+<pre>
+?- member([b, X], [ [a, 1], [b, 2], [c, 3] ]).
+
+X = 2 ;
+
+No
+
+?- member([X, 2], [ [a, 1], [b, 2], [c, 3] ]).
+
+X = b ;
+
+No
+</pre>
+<p> 最初の例は、キー b の値が変数 X とマッチングします。次の例では、逆にデータ 2 を持つキーが変数 X とマッチングするので、値は b となります。
+</p>
+<p> 本来ならば、連想リストを操作する述語を用意した方が良いのですが、今回は member で済ますことにします。興味のある方は、検索、挿入、削除といった基本的な操作を行う述語を作成してみてください。連想リストといってもリスト操作の応用なので、それほど難しいことではありません。
+</p>
+<h4>●プログラム</h4>
+<p> それでは、プログラムを作りましょう。地図を塗り分ける述語を color_map1 とします。この述語には、地域のリスト [a, b, c, d, e, f] と連想リストを引数として渡します。地域の色は連想リストに格納します。この場合、地域がキーで色がデータとなります。
+</p>
+<p> 最初、どの地域にも色は塗られていないので、連想リストは空リストになります。地域の色を決めるには、隣接リストから隣の地域を求めて、それらの地域とは異なる色を選びます。地域 Region の色 C が決まったら、連想リストの先頭に [ Region, C ] を追加し、次の地域の色を決めるため再帰します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：地図の配色問題
+
+color_map1([], Alist) :- write(Alist), nl, !.
+
+color_map1([Region | Rest], Alist) :-
+    neighbor(Region, Neighbors),
+    color(C),
+    check(C, Neighbors, Alist),
+    color_map1(Rest, [[Region, C] | Alist]).
+</pre>
+
+<p> 最初の規則が、すべての地域に色を塗った場合です。連想リストには各地域の色がセットされているので、それを述語 write で出力するだけです。次の規則で、リストから地域 Region を取り出して色を選択します。
+</p>
+<p> 述語 neighbor により、変数 Neighbors には Region の隣接リストがマッチングします。述語 color で色 C を選んで、隣接する地域に同じ色が塗られていないか述語 check で確認します。失敗した場合は、color が再試行されて違う色が選択されます。成功した場合は、連想リスト Alist に地域と選んだ色 [ Region, C ] を追加して再帰します。
+</p>
+<p> 最後に、色をチェックする述語 check を作ります。
+</p>
+<pre class="list">
+リスト：同一色のチェック
+
+check(C, [], Alist).
+
+check(C, [Region | Rest], Alist) :-
+    not(member([Region, C], Alist)),
+    check(C, Rest, Alist).
+</pre>
+
+<p> 隣接リストから地域をひとつ取り出し、それが色 C で塗られていないことを確かめます。これは member で [ Region, C ] を連想リストから探して、同じデータが見つかれば失敗、見つからなければ成功です。あとは再帰して、隣接リストの地域をすべて調べれば OK です。
+</p>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+<pre>
+?- color_map1([a, b, c, d, e, f],[]).
+[ [f, green], [e, red], [d, blue], [c, yellow], [b, blue], [a, red] ]
+
+Yes
+</pre>
+<p> 結果は前のプログラムと同じです。ちなみに、<a href="index.html#cite">参考文献 [3]</a> では地図を次のリストで表しています。
+</p>
+<pre>
+[ region(a, A, [B, C, D]),       region(b, B, [A, C, E]),
+  region(c, C, [A, B, D, E, F]), region(d, D, [A, C, F]),
+  region(e, E, [B, C, F]),       region(f, F, [C, D, E]) ]
+</pre>
+<p> 各地域の色は変数に格納されるのですが、その変数で隣接リストを表しています。なかなか凝ったデータ構造ですね。興味のある方は、このデータ構造でプログラムを作ってみてください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap29">積木の移動</h3>
+<p> 今回は、積木の移動手順を求めるプログラムを作ります。
+</p>
+<pre class="fig">
+  <font color="red"  >■</font>                        <font color="red"  >■</font>  
+  <font color="blue" >■</font>         ──→         <font color="blue" >■</font>  
+  <font color="green">■</font>                        <font color="green">■</font>  
+  ─────        ─────
+  ｘ  ｙ  ｚ        ｘ  ｙ  ｚ
+
+  (初期状態）       (最終状態)
+
+        図：積木の移動
+</pre>
+<p> 積木は赤 (red)、青 (blue)、緑 (green)の 3 種類あり、積木を置く場所は x, y, z の 3 ヵ所あります。積木は、一回にひとつしか移動できません。また、上に積木が置かれている場合も、移動することはできません。上にある積木をどかしてから移動します。左図の初期状態の場合、積木 red を場所 y か場所 z へ動かすことはできますが、積木 blue や green を動かすことはできません。
+</p>
+<p> 問題は、初期状態から積木をひとつずつ動かして、最終状態になるまでの移動手順を求めることです。
+</p>
+<h4>●データ構造</h4>
+<p> 最初にデータ構造を決めましょう。積木を red, blue, green で表し、場所を x, y, z で表します。積木の配置を表す方法はいろいろありますが、前回と同じく連想リストで表すことにしましょう。この場合、2 つの方法があります。ひとつは、場所をキーとしてデータを積木とする方法です。この方法で初期状態を表すと次のようになります。
+</p>
+<pre class="item">
+[ [ x, red, blue, green ], [ y ], [ z ] ]
+</pre>
+<p> 積木は上から下へ並べることに注意してください。積木はいちばん上にあるものしか動かすことができません。このように並べておくと、積木を移動するときに [Place, Block | Rest ] とマッチングさせることで、いちばん上の積木 Block を取り出すことができます。
+</p>
+<p> もうひとつは、積木をキーとして、その積木が置かれている場所 (または積木) をデータとする方法です。この方法で初期状態を表すと次のようになります。
+</p>
+<pre class="item">
+[ [ red, blue ], [ blue, green ], [ green, x ] ]
+</pre>
+<p> red は blue の上にあり、blue は green の上にあり、green は x の上にあることを表しています。この場合、積木を移動するときに、上に積木がないことをチェックする必要があります。この処理は member を使って簡単に実現できます。
+</p>
+<p> 今回は 2 つの方法でプログラムを作ってみます。探索アルゴリズムは深さ優先探索を使います。そのあとで、幅優先探索<b>以外</b>の方法で最短手順を求めてみましょう。
+</p>
+<h4>●プログラム（その１）</h4>
+<p> 最初に、場所をキーとしてデータを積木とする方法でプログラムを作ります。まず、積木を移動して新しい状態を作る述語 move_block(From, To, Via, State, NewState) を作りましょう。move_block は場所 From にある積木をひとつ取り出し、それを場所 To へ移動します。Via は残りの場所を表します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：積木を移動する
+
+move_block(From, To, Via, State, [[From | Rest1], [To, Block | Rest2], [Via | Rest3]]) :-
+    member([From, Block | Rest1], State),
+    member([To | Rest2], State),
+    member([Via | Rest3], State).
+</pre>
+
+<p> 述語 member で場所 From, To, Via に置かれている積木を求めます。From の場合、いちばん上にある積木が Block とマッチングします。もしも From に積木がなければ member は失敗し、From から To へ積木を移動することはできません。新しい状態の作成は簡単です。場所 From からは Block を取り除いて、場所 To に Block を挿入すればいいわけです。
+</p>
+<p> あとのプログラムも簡単です。まずは、深さ優先探索を行う search_depth を作ります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：深さ優先探索
+
+/* 移動：move(From, To, Via) */
+move(x, y, z). move(x, z, y).
+move(y, x, z). move(y, z, x).
+move(z, x, y). <STRIKE>move(z, y, z).</STRIKE> move(z, y, x).  /* 修正 2009/09/04 */
+
+/* 移動手順を発見 */
+search_depth([State | History]) :-
+    <STRIKE>equal_state([ [x], [y], [red, blue, green] ], State), !,</STRIKE> /* 修正 2009/09/04 */
+    equal_state([ [x], [y], [z, red, blue, green] ], State), !,
+    print_answer([State | History]).
+
+/* 探索 */
+search_depth([State | History]) :-
+    move(From, To, Via),
+    move_block(From, To, Via, State, NewState),
+    check_state(NewState, History),
+    search_depth([NewState, State | History]).
+</pre>
+<div class="note">
+-- <a name="update20090904"><b>[修正]</b></a> (2009/09/04) --------<br>
+事実 move の定義と述語 search_depth の定義が間違っていました。equal_state でリスト [red, blue, green] と比較していたため、解を見つけることができずに No (false) となります。修正するとともにお詫び申しあげます。
+</div>
+<p> 事実 move(From, To, Via) で積木の移動パターンを定義します。場所 From にある積木を場所 To へ動かし、残りの場所を Via で表しています。積木の移動パターンは全部で 6 通りになります。search_depth は move から移動元と移動先の場所を求め、move_block で積木を移動します。失敗した場合は move が再試行されて、違う移動パターンを試します。
+</p>
+<p> 次に、述語 check_state で History に NewState と同じ状態がないか確認します。同じ状態がある場合、check_state は失敗します。この場合も move が再試行されます。新しい状態であることを確認したら、search_depth を再帰呼び出しします。
+</p>
+<p> search_depth の最初の規則で、最終状態 (ゴール) に到達したか調べます。equal_state で State と最終状態 (ゴール) が等しいかチェックします。状態は連想リストで表されていて、リスト内で場所 x, y, z の順番は不定です。したがって、述語 == で状態を比較することはできません。専用の述語 equal_state を作る必要があります。ゴールに到達していれば print_answer で移動手順を表示します。
+</p>
+<p> 次は述語 equal_state を作ります。
+</p>
+<pre class="list">
+リスト：状態の比較
+
+equal_state(State1, State2) :-
+    member([x | X1], State1), member([x | X2], State2), X1 == X2,
+    member([y | Y1], State1), member([y | Y2], State2), Y1 == Y2,
+    member([z | Z1], State1), member([z | Z2], State2), Z1 == Z2.
+</pre>
+
+<p> これは簡単です。場所 x, y, z の位置は不定なので、member で求めてから述語 == で比較するだけです。
+</p>
+<p> 最後に、check_state と print_answer を作ります。これは簡単なので説明は省略します。リストを読んでください。
+</p>
+<pre class="list">
+リスト：同一局面のチェック
+
+check_state(_, []).
+check_state(State1, [State2 | History]) :-
+    not(equal_state(State1, State2)), check_state(State1, History).
+</pre>
+
+<pre class="list">
+リスト：移動手順を表示
+
+print_answer([]) :- !.
+print_answer([State | Rest]) :-
+    print_answer(Rest),
+    member([x | X], State), member([y | Y], State), member([z | Z], State),
+    write(X), write(Y), write(Z), nl.
+</pre>
+<h4>●実行結果</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+?- search_depth([[[x,red,blue,green],[y],[z]]]).
+[red, blue, green][][]
+[blue, green][red][]
+[green][blue, red][]
+[][green, blue, red][]
+[][blue, red][green]
+[blue][red][green]
+[][red][blue, green]
+[red][][blue, green]
+[][][red, blue, green]
+
+Yes
+</pre>
+<p> ちょっと見にくいですね。print_answer の改造は皆さんにお任せするので、きれいに表示するように工夫してみてください。今回は手作業で直しました。
+</p>
+<pre>
+x:[red, blue, green]  y:[]                  z:[]
+x:[blue, green]       y:[red]               z:[]
+x:[green]             y:[blue, red]         z:[]
+x:[]                  y:[green, blue, red]  z:[]
+x:[]                  y:[blue, red]         z:[green]
+x:[blue]              y:[red]               z:[green]
+x:[]                  y:[red]               z:[blue, green]
+x:[red]               y:[]                  z:[blue, green]
+x:[]                  y:[]                  z:[red, blue, green]
+</pre>
+<p> 8 手で解くことができました。無駄な移動手順がけっこうありますね。深さ優先探索ですから、最初に見つかる解が最短手順とはかぎりません。興味のある方は、幅優先探索でプログラムを作ってみてください。
+</p>
+<h4 id="update">●プログラム（その２）</h4>
+<p> 次は、積木をキーとして、その積木が置かれている場所 (または積木) をデータとする方法でプログラムを作りましょう。前のプログラムでは、状態を表す連想リストの中で、キーの順番は不定でした。そのため、状態を比較する述語 equal_state を作りました。これから作成するプログラムでは、キーの順番を固定することにしましょう。
+</p>
+<p> たとえば、初期状態から積木 a を場所 y に動かす場合、連想リストは次のようになります。
+</p>
+<pre class="item">
+[ [a, b], [b, c], [c, x]] -- a を y へ --&gt; [ [a, y], [b, c], [c, x] ]
+</pre>
+<p> このように、キーが a, b, c の順番になるように並べるわけです。このような場合、ソートを使うこともできますが、該当する要素を新しい要素に置き換えた方が簡単です。つまり、[ a, b ] という要素を [ a, y ] に置き換えるのです。このような処理を<b>リストの置換</b>といい、基本的なリスト操作のひとつです。
+</p>
+<h4>●置換処理</h4>
+<p> まず、リストの置換を説明しましょう。トップレベルの要素だけを置換する、たとえば [ a, b, c ] の b を 1 に置換するといった処理は、とても簡単にプログラムできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト：置換処理
+
+substitute(X, Y, [], []).
+substitute(X, Y, [X | Z], [Y | Z1]) :- substitute(X, Y, Z, Z1).
+<STRIKE>substitute(X, Y, [X1 | Z], [X1 | Z1]) :- substitute(X, Y, Z, Z1).</STRIKE> 修正 (2011/09/04)
+substitute(X, Y, [X1 | Z], [X1 | Z1]) :- X \== X1, substitute(X, Y, Z, Z1).
+</pre>
+<p> 述語 substitute(X, Y, L, Z) ですが、リスト L の中で X と等しい要素をすべて Y に置き換えたリストが Z である、ということを表しています。最初の規則が再帰の停止条件です。次の規則が、X と等しい要素を見つけた場合です。X を Y に置き換えて、残りのリストを置換するため再帰します。
+</p>
+<p> リストを組み立てるときは、残りのリストを置換した Z1 を使うことに注意してください。最後の規則は、リストの要素と X が異なる場合です。これは簡単ですね。残りのリストを置換するため再帰して、その結果を使ってリストを組み立てます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+?- substitute(b, 2, [a, b, c, a, b, c], Z).
+
+Z = [a, 2, c, a, 2, c] ;
+
+No
+?- substitute(A, B, [a, b, c, a, b, c], [a, b, 3, a, b, 3]).
+
+A = c,
+B = 3 ;
+
+No
+</pre>
+<p> 最初の例は b を 2 に置換します。次の例では、2 つのリストから置換前のデータと置換後のデータを求めています。このように、逆方向の処理も可能なところが Prolog の面白い特徴です。
+</p>
+<p> 積木の移動はこれよりも簡単です。
+</p>
+<pre class="list">
+リスト：積木の移動（その２）
+
+move_block(Block, Place, [[Block, _] | Rest], [[Block, Place] | Rest]).
+move_block(Block, Place, [X | Rest], [X | Rest1]) :-
+    move_block(Block, Place, Rest, Rest1).
+</pre>
+
+<p> move_block は積木 Block を場所 Place の上へ移動します。この処理は、連想リストからキー Block を探し、そのデータを Place に置き換えます。
+</p>
+<p> 最初の規則が Block を見つけた場合です。移動する Block はひとつしかないので、残りのリストを置換する必要はありません。データを Place に置き換えるだけです。最後の規則で、リストの中から Block を探します。先頭のキーが Block でなければ、残りのリストから Block を探すために再帰します。これで、キーの順番を変えずに積木を移動することができます。
+</p>
+<h4>●探索処理</h4>
+<p> 次は、動かす積木と場所を求めるプログラムを作りましょう。
+</p>
+<pre class="list">
+リスト：移動する場所を求める
+
+/* 積木と場所の定義 */
+block(red). block(blue). block(green).
+place(x). place(y). place(z).
+
+/* 移動する場所を求める */
+move_to(Place) :- block(Place).
+move_to(Place) :- place(Place).
+</pre>
+
+<p> 積木と場所は事実 block と place で定義します。動かす積木は block で求めることができます。積木は場所 x, y, z だけではなく、積木の上にも動かすことができるので、場所を求める述語 move_to を定義することにします。
+</p>
+<p> あとのプログラムも簡単です。深さ優先探索を行う search_depth は次のようになります。
+</p>
+<pre class="list">
+リスト：深さ優先探索（その２）
+
+search_depth([State | History]) :-
+    State == [[red, blue], [blue, green], [green, z]],
+    !,
+    print_answer([State | History]).
+
+search_depth([State | History]) :-
+    block(B),
+    not(member([_, B], State)),
+    move_to(P),
+    B \== P,
+    not(member([_, P], State)),
+    move_block(B, P, State, NewState),
+    check_state(NewState, History),
+    search_depth([NewState, State | History]).
+</pre>
+
+<p> 最初の規則が最終状態 (ゴール) に到達した場合です。状態を表す連想リストは、キーの順番が固定されているため、== で比較することができます。ゴールに到達していれば print_answer で移動手順を表示します。
+</p>
+<p> 次の規則で積木を動かします。block で積木を求めて、その上に積木がないことを member を使ってチェックします。連想リストのデータ部に積木 B がなければ、その上に積木はありません。積木 B を動かすことができます。
+</p>
+<p> 動かす場所 P は move_to で求めます。このとき、自分自身の上に移動することはできないので、B \== P でチェックする必要があります。それから、場所 P の上に積木がないことを確認し、述語 move_block で積木を移動します。
+</p>
+<p> 次に、述語 check_state で History に NewState と同じ状態がないか確認します。NewState が新しい状態であることを確認したら、search_depth を再帰呼び出しします。
+</p>
+<p> 最後に、check_state と print_answer を作ります。これは簡単なので説明は省略します。リストを読んでください。
+</p>
+<pre class="list">
+リスト：同一局面のチェック
+
+check_state(_, []).
+check_state(State1, [State2 | History]) :-
+    State1 \== State2, check_state(State1, History).
+</pre>
+
+<pre class="list">
+リスト：手順の表示
+
+print_answer([]) :- !.
+print_answer([State | Rest]) :-
+    print_answer(Rest), write(State), nl.
+</pre>
+
+<h4>●実行結果</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+?- search_depth([[[red,blue],[blue,green],[green,x]]]).
+[[red, blue], [blue, green], [green, x]]
+[[red, y], [blue, green], [green, x]]
+[[red, z], [blue, green], [green, x]]
+[[red, z], [blue, red], [green, x]]
+[[red, z], [blue, y], [green, x]]
+[[red, blue], [blue, y], [green, x]]
+[[red, green], [blue, y], [green, x]]
+[[red, green], [blue, red], [green, x]]
+[[red, green], [blue, z], [green, x]]
+[[red, blue], [blue, z], [green, x]]
+[[red, y], [blue, z], [green, x]]
+[[red, y], [blue, red], [green, x]]
+[[red, y], [blue, red], [green, blue]]
+[[red, y], [blue, red], [green, z]]
+[[red, y], [blue, green], [green, z]]
+[[red, blue], [blue, green], [green, z]]
+
+Yes
+</pre>
+<p> 移動手順は状態を表示しているだけなので、ちょっとわかりにくいと思います。print_answer の改造は皆さんにお任せするので、きれいに表示するように工夫してみてください。
+</p>
+<p> それにしても、びっくりするような移動手順ですね。ゴールに到達するまで 15 手もかかっています。そこで、次回は幅優先探索ではなく、「反復深化」というアルゴリズムを使って最短手順を求めてみましょう。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="prolog07.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog09.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

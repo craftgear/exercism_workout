@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / ブロックソート (BlockSorting)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881797</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>ブロックソート (BlockSorting) [2]</h2>
+<div class="small">
+[ <a href="pyalgo48.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo50.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> ブロックソート (BlockSorting) の続きです。前回説明したように、ブロックソートしたあとのデータは、同じ記号が多数並びます。このデータを MTF (Move To Front) 法で符号化することにより、データ全体の中で記号 0 の割合が著しく増加し、記号の出現頻度を偏らせることができます。このあと、適応型レンジコーダで圧縮するだけでも高い圧縮率を達成することできますが、ここで「連長圧縮 (ランレングス) 」を適用する、またはブロックソートに適した「情報源モデル」を作成すると、圧縮率をさらに改善できる場合があります。最初にランレングスから説明します。
+</p>
+<h4>●ブロックソートとランレングス</h4>
+<p> ランレングスは拙作のページ <a href="pyalgo29.html">連長圧縮</a> で詳しく説明しました。この中で説明した単純なランレングスや PackBits, Switched Run Length Encoding は、ブロックソートに適用しても効果はほとんどありません。本当にランレングスには効果があるのか疑問に思ったのですが、Google で圧縮関連のページを調べたり、いろいろと試行錯誤してみたところ、簡単で効果的な方法が 2 つありました。
+</p>
+
+<p> ひとつは、「記号 0 だけをランレングスで符号化する」という方法です。これを「ゼロランレングス」と呼びます。この方法では、記号 0 をランレングスの開始記号にすることができるので、「0 + データの個数」のように 2 バイトで符号化することができます。MTF 法で変換したデータは 0 の個数が極めて多くなるので、0 だけをランレングスで符号化した方がより効果的なのでしょう。
+</p>
+
+<p> もうひとつは、「同じ記号が数個以上続いていたらランレングスで符号化する」という方法です。たとえば、同じ記号が 3 つ以上続いていたら符号化することにしましょう。すると、データが "aaaaa" の場合は [a, a, a, 2] と表すことができます。逆に、"aaa" は [a, a, a, 0] と符号化されるので、1 バイト増えることになります。ですが、連続していない記号をランレングスで符号化することはないので、単純なランレングスよりもデータが膨らむ危険性は小さくなるはずです。そして、記号 0 は長く連なっている場合が多いので、ランレングスで符号化されるわけです。
+</p>
+
+<p> どちらの方法でも効果はあるのですが、その中で特に優れている方法に Zero Length Encoding (ZLE) があります。ZLE はゼロランレングスの一種で、MTF 法で変換したあとに適用すると大きな効果を発揮します。ZLE の詳しい説明は拙作のページ <a href="pyalgo29.html">連長圧縮</a> をお読みください。
+</p>
+<h4>●プログラムの作成</h4>
+<p> それでは、ブロックソート + MTF 法のあとに Zero Length Encoding (ZLE) を適用してみましょう。符号化のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : ブロックソートの符号化
+
+def bs_encode(fin, fout, size):
+    # 入力
+    buff = array('B')
+    buff.fromfile(fin, size)
+    buff *= 2
+    # BlockSorting
+    work, top = suffix_sort(buff, size)
+    # Move To Front
+    mtf2_encode(work)
+    # Run Length Encoding
+    r_size = zle_encode(work, buff)
+    write_number(top, fout)
+    write_number(r_size, fout)
+    # RangeCoder
+    rc = RangeCoder(fout, ENCODE)
+    freq = Freq(256)
+    for x in xrange(r_size):
+        freq.encode(rc, buff[x])
+    rc.finish()
+    # 終了
+    fin.close()
+    fout.close()
+</pre>
+<p> 関数 zle_encode はデータを ZLE で符号化します。入力データは work で、出力バッファに buff を指定します。ランレングスで符号化する場合、データが伸張する危険性があります。今回のプログラムではデータの伸張をチェックしていませんが、実際に圧縮ツールを作成する場合、データが伸張したらランレングスを不適用にするといった工夫が必要になるでしょう。
+</p>
+<p> zle_encode の返り値は符号化したあとのデータ数です。これを変数 r_size にセットします。そして、r_size を出力ファイルに書き込んでから、buff のデータを適応型レンジコーダで符号化します。
+</p>
+
+<p> 復号のプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ブロックソートの復号
+
+def bs_decode(fin, fout, size):
+    top = read_number(fin)
+    r_size = read_number(fin)
+    buff = array('B')
+    for _ in xrange(size): buff.append(0)
+    work = array('B')
+    # RangeCoder
+    rc = RangeCoder(fin, DECODE)
+    freq = Freq(256)
+    for _ in xrange(r_size):
+        work.append(freq.decode(rc))
+    # Run Length Encoding
+    zle_decode(work, buff)
+    # Move To Front
+    mtf2_decode(buff)
+    # BlockSorting
+    idx = array('L')
+    for _ in xrange(size): idx.append(0)
+    # 分布数えソート
+    count = [0] * 256
+    for x in xrange(size): count[ buff[x] ] += 1
+    for x in xrange(1, 256): count[x] += count[x - 1]
+    for x in xrange(size - 1, -1, -1):
+        c = buff[x]
+        count[c] -= 1
+        idx[ count[c] ] = x
+    # 出力
+    x = idx[top]
+    for _ in xrange(size):
+        putc(fout, buff[x])
+        x = idx[x]
+</pre>
+<p> 関数 read_number で入力ファイルからデータ数を読み込んで r_size にセットします。次に、適応型レンジコーダで r_size 個の記号を復号してバッファ work にセットします。それから、関数 zle_decode で ZLE の復号を行います。入力データが work で、出力バッファが buff です。buff の大きさは size になります。そして、MTF 法とブロックソートの復号を行います。
+</p>
+<p> あとは特に難しいところはないでしょう。説明は割愛いたしますので、詳細は <a href="pyalgo49.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+            表 : ブロックソートの結果
+    (BlockSorting + MTF-2 + ZLE + RangeCoder)
+
+ファイル名      サイズ   Range   符号化   復号   bzip2
+--------------------------------------------------------
+alice29.txt    152,089   43,513    4.26   2.68   43,202
+asyoulik.txt   125,179   40,027    3.63   2.36   39,569
+cp.html         24,603    7,760    0.91   0.46    7,624
+fields.c        11,150    3,120    0.52   0.20    3,039
+grammar.lsp      3,721    1,264    0.31   0.08    1,283
+kennedy.xls  1,029,744  138,023   31.60  29.70  130,280
+lcet10.txt     426,754  107,989   11.69   7.06  107,706
+plrabn12.txt   481,861  145,671   13.42   8.95  145,577
+ptt5           513,216   48,366    7.93   4.90   49,759
+sum             38,240   13,060    2.22   0.92   12,909
+xargs.1          4,227    1,740    0.34   0.10    1,762
+--------------------------------------------------------
+合計         2,810,784  550,533   76.83  57.41  542,710
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+
+<p> 結果を見ればおわかりのように、前回よりも圧縮率は大幅に向上しています。ZLE の効果はとても高いことがわかります。実行速度もバイナリレンジコーダより高速です。それにしても、簡単な方法の組み合わせで bzip2 にせまる圧縮率を達成できるのですから、ブロックソートは本当に優れた方法だと思います。ここで、ブロックソート向きの「情報源モデル」を作成すると、さらに圧縮率を向上させることができます。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4>●情報源モデルの改良</h4>
+<p> ブロックソートの場合、MTF 法で変換することにより記号 0 がとても多くなるため、無記憶情報源モデルの適応型レンジコーダでも効率よく圧縮することができました。ですが、「ブロックソート + MTF 法」の特徴はそれだけではありません。1 や 2 などの小さな記号も多くなり、逆に 0xfe や 0xff などの大きな記号はとても少なくなります。つまり、記号が大きくなるにしたがって個数が減少していく反比例の関係になります。
+</p>
+
+<p> このあと、Zero Length Encoding を適用すると 0 と 1 の個数は減少しますが、それでも記号 0 の個数は多くて、反比例の関係に大きな変化はないと考えられます。実際に、<a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> の alice29.txt を MTF-2 で変換した場合と、そのあと ZLE で圧縮した場合で、各記号の個数をカウントしてみました。記号 0 から 9 までの個数は次のようになりました。
+</p>
+<pre>
+ 表 : 記号の個数 (alice29.txt)
+
+MTF-2 のみ    MTF-2 -&gt; ZLE
+----------   --------------
+ 0: 85986     0: 20407
+ 1: 21296     1: 10616
+ 2:  9782     2: 21296
+ 3:  6498     3:  9782
+ 4:  4612     4:  6498
+ 5:  3572     5:  4612
+ 6:  3024     6:  3572
+ 7:  2530     7:  3024
+ 8:  2165     8:  2530
+ 9:  1785     9:  2165
+</pre>
+<p> ZLE により 0 と 1 の個数は大幅に減少しましたが、それでも記号 0, 1, 2 の個数はとても多く、そのあとの記号と個数は反比例の関係になっています。もしも、このような関係に適した情報源モデルを作成できれば、ブロックソートの圧縮率を改善することができるはずです。
+</p>
+<h4>●structured model</h4>
+<p> そこで、バイナリレンジコーダの「γモデル」で用いた sturctured model を多値レンジコーダにも適用してみましょう。次の図を見てください。
+</p>
+<pre class="fig">
+   Group (first code)
+ ┌───┐
+ │  ０  │            second code
+ ├───┤    ┌─────────────┐
+ │  １─┼─→│記号数 2,   記号 1 - 2    │
+ ├───┤    ├─────────────┤
+ │  ２─┼─→│記号数 4,   記号 3 - 6    │
+ ├───┤    ├─────────────┤
+ │  ３─┼─→│記号数 8,   記号 7 - 14   │
+ ├───┤    ├─────────────┤
+ │  ４─┼─→│記号数 16,  記号 15 - 30  │
+ ├───┤    ├─────────────┤
+ │  ５─┼─→│記号数 32,  記号 31 - 62  │
+ ├───┤    ├─────────────┤
+ │  ６─┼─→│記号数 64,  記号 63 - 126 │
+ ├───┤    ├─────────────┤
+ │  ７─┼─→│記号数 128, 記号 127 - 254│
+ ├───┤    ├─────────────┤
+ │  ８─┼─→│記号数 256, 記号 255 - 510│
+ └───┘    └─────────────┘
+
+
+            図 : structured model
+</pre>
+<p> 最初のポイントは、上図のように記号をグループに分けるところです。Group 0 は記号 0 だけですが、Group 1 は 1 と 2 で、Group 2 は 3, 4, 5, 6 というように、グループに割り当てる記号の個数を増やしていきます。次に、記号を Group 番号 (first code) と Group 内の番号 (second code) の 2 つに分けて符号化します。つまり、first code (0 - 8) をレンジコーダで符号化し、次に second code を符号化するのです。これが第 2 のポイントです。
+</p>
+<p> そして最後のポイントが、second code を符号化するときに first code によって記号の出現頻度表を切り替えるところです。このようなモデルを structured model と呼びます。Group 0 は記号 0 を表すので second code は必要ありません。その分だけ記号 0 は効率よく符号化することができます。また、second code の場合でも、小さな記号の出現確率は高く、大きな記号になるほど出現確率は小さくなるので、ブロックソートに適した情報源モデルといえるでしょう。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : structured model
+
+# 定数
+LIMIT1 = 0x100
+LIMIT2 = 0x200
+LIMIT3 = 0x800
+
+# structured model
+class Freq1:
+    def __init__(self, size):
+        n2 = size &gt;&gt; 1
+        n1 = 0
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        self.size = n1
+        self.context1 = Freq(n1 + 1, 4, LIMIT2)
+        self.context2 = [None] * (n1 + 1)
+        for x in xrange(1, n1 + 1):
+            self.context2[x] = Freq(2 ** x, 4, LIMIT3)
+</pre>
+
+<p> クラス名は Freq1 としました。メソッド __init__ の引数 size は記号の種類を表します。最初に、Group 番号 (first code) の最大値を n1 に求めます。たとえば、n1 が 8 であれば、first code は 0 から 8 までになります。インスタンス変数 context1 に first code 用の出現頻度表をセットします。そして、context2 に second code 用の出現頻度表をセットします。
+</p>
+
+<p> structured model の場合、累積度数の上限値と記号の増分値により、圧縮率が少し変化することに注意してください。今回はテストプログラムということで、増分値は +4 で固定しますが、累積度数の上限値は first code, second code で値を変更します。first code は LIMIT2 (0x200) とし、second code は LIMIT3 (0x800) としました。興味のある方はいろいろ試してみてください。
+</p>
+
+<p> 次は符号化と復号を行うメソッドを作ります。
+</p>
+
+<pre class="list">
+リスト : structured model の符号化と復号
+
+    # 符号化
+    def encode(self, rc, c):
+        n1 = 0
+        n2 = (c + 1) &gt;&gt; 1
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        self.context1.encode(rc, n1)
+        if n1 &gt; 0:
+            self.context2[n1].encode(rc, (c + 1) &amp; ((2 ** n1) - 1))
+
+    # 復号
+    def decode(self, rc):
+        n1 = self.context1.decode(rc)
+        if n1 &gt; 0:
+            n2 = self.context2[n1].decode(rc)
+            n1 = (1 &lt;&lt; n1) + n2 - 1
+        return n1
+</pre>
+
+<p> メソッド encode のポイントは、記号 c を first code と second code に分けて符号化するところです。最初に記号 c を first code (n1) に変換し、context1 の出現頻度表で符号化します。n1 が 0 よりも大きい場合は second code を符号化します。second code は c + 1 の下位 n1 ビットで、用いる出現頻度表は context2[n1] になります。
+</p>
+
+<p> メソッド decode は encode と同様に、まず first code を復号し、それが 0 よりも大きければ second code を復号します。このとき、first code と second code から記号 n1 を復号することに注意してください。出現頻度表を切り替える処理は encode とまったく同じです。
+</p>
+
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+            表 : ブロックソートの結果
+    (BlockSorting + MTF-2 + ZLE + structured model)
+
+ファイル名      サイズ  s-model  符号化   復号   bzip2
+--------------------------------------------------------
+alice29.txt    152,089   42,309    5.22   3.56   43,202
+asyoulik.txt   125,179   38,979    4.45   3.12   39,569
+cp.html         24,603    7,612    1.03   0.57    7,624
+fields.c        11,150    3,045    0.57   0.25    3,039
+grammar.lsp      3,721    1,226    0.32   0.09    1,283
+kennedy.xls  1,029,744  122,323   30.58  18.36  130,280
+lcet10.txt     426,754  105,293   14.04   9.29  107,706
+plrabn12.txt   481,861  142,271   16.62  11.92  145,577
+ptt5           513,216   48,051    8.82   5.63   49,759
+sum             38,240   12,638    2.37   0.94   12,909
+xargs.1          4,227    1,698    0.35   0.12    1,762
+--------------------------------------------------------
+合計         2,810,784  525,445   84.37  53.85  542,710
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+
+<p> 結果を見ればおわかりのように、structured model は多値レンジコーダよりも圧縮率が向上しています。そして、bzip2 を上回る圧縮率になりました。structured model の効果は十分に出ていると思います。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+
+<p> ところで、ブロックソートに適した情報源モデルは structured model だけではありません。ほかにも優れたモデルがあります。次は、有限文脈モデルを用いた "0-1-2 coding" というモデルを説明します。
+</p>
+<hr>
+<h4>●0-1-2 coding</h4>
+<p> 0-1-2 coding は難しい方法ではありません。名前が示すように記号 0, 1, 2 を符号化する方法です。このとき、2 以上の記号は 2 に変換して符号化するところがポイントです。つまり、記号を 0, 1, 2 の 3 つに分けて符号化するのです。
+</p>
+<p> ブロックソートのあと MTF 法で変換すると、記号 0 と 1 の個数はとても多くなります。記号を 0, 1, 2 の 3 種類に限定すれば、高次の有限文脈モデルを適用することにより、圧縮率は極めて高くなります。あとは、残りの記号を適切な情報源モデルで符号化することにより、トータルで高い圧縮率を達成しようというのが 0-1-2 coding の目的です。
+</p>
+
+<p> 0-1-2 coding の符号化のアルゴリズムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 0-1-2 coding の符号化（疑似コード）
+
+符号化(記号 c):
+    c1 = c が 2 以上であれば 2 に変換する
+    直前の N 文字から N 次モデルの出現頻度表 freq を求める
+    記号 c1 をレンジコーダで符号化
+    freq を更新する
+    直前の文字を更新する
+    if c &gt;= 2:
+        # 2 以上の記号の符号化 (structured model)
+        c2 = c - 2
+        c21 = 記号 c2 の first code を求める
+        記号 c21 をレンジコーダで符号化
+        出現頻度表を更新する
+        if c21 &gt; 0:
+            c22 = 記号 c2 の second code を求める
+            記号 c22 をレンジコーダで符号化
+            出現頻度表を更新する
+</pre>
+
+<p> 0-1-2 coding は記号 c1 (0, 1, 2) を N 次の有限文脈モデルで符号化し、記号 c が 2 以上の場合は記号 c2 (= c - 2) を適切な情報源モデル（たとえば structured model など) で符号化します。とても簡単ですね。復号も簡単で、まず記号 c1 を復号して値が 2 であれば、記号 c2 を復号して元の記号を求めるだけです。有限文脈モデルの次数ですが、試してみたところ order-3 で十分なようです。
+</p>
+
+<p> このように、0-1-2 coding は記号 0, 1, 2 に高次の有限文脈モデルを適用することで圧縮率を向上させる方法です。このため、ランレングスとは相性があまりよくありません。特に、Zero Length Encoding の場合、0-1-2 coding ではほとんど効果がありません。逆にいえば、ランレングスを適用しなくても、高い圧縮率を達成できる方法が 0-1-2 coding なのです。もっとも、データによってはランレングスが有効な場合もあります。これはあとで試してみましょう。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 0-1-2 coding
+
+class Freq012:
+    def __init__(self, size):
+        self.context1 = [Freq(3, 4, LIMIT1) for _ in xrange(27)]
+        self.context2 = Freq1(size - 2)
+        self.c0 = self.c1 = self.c2 = 0
+
+    # 符号化
+    def encode(self, rc, c):
+        freq = self.context1[self.c2 * 9 + self.c1 * 3 + self.c0]
+        self.c2 = self.c1
+        self.c1 = self.c0
+        if c &lt; 2:
+            freq.encode(rc, c)
+            self.c0 = c
+        else:
+            freq.encode(rc, 2)
+            self.c0 = 2
+            self.context2.encode(rc, c - 2)
+
+    # 復号
+    def decode(self, rc):
+        freq = self.context1[self.c2 * 9 + self.c1 * 3 + self.c0]
+        self.c2 = self.c1
+        self.c1 = self.c0
+        c = freq.decode(rc)
+        self.c0 = c
+        if c &gt;= 2:
+            c = self.context2.decode(rc)
+            c += 2
+        return c
+</pre>
+
+<p> クラス名は Freq012 としました。インスタンス変数 context1 には order-3 の出現頻度表をセットします。3 種類の記号で order-3 の有限文脈モデルを構成するので、出現頻度表の個数は 27 になります。累積度数の上限値は LIMIT1 (0x100) としました。context2 には sutructured model の出現頻度表をセットします。直前の 3 記号は c0, c1, c2 に格納します。すると、出現頻度表の選択は context1[c2 * 9 + c1 * 3 + c0] になります。
+</p>
+<p> 符号化を行うメソッド encode は、context1 から出現頻度表を選んで記号 (0, 1, 2) を符号化します。記号 c が 2 以上であれば、structured model で c - 2 を符号化します。復号を行うメソッド decode は、context1 から出現頻度表を選んで記号 c を復号します。c が 2 の場合は、structured model で記号 c を復号して、c + 2 を返します。
+</p>
+
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+            表 : ブロックソートの結果
+       (BlockSorting + MTF-2 + 0-1-2 coding)
+
+ファイル名      サイズ   0-1-2   符号化   復号   bzip2
+--------------------------------------------------------
+alice29.txt    152,089   42,041    5.72   4.12   43,202
+asyoulik.txt   125,179   38,796    4.90   3.61   39,569
+cp.html         24,603    7,474    1.13   0.69    7,624
+fields.c        11,150    2,925    0.60   0.29    3,039
+grammar.lsp      3,721    1,200    0.33   0.11    1,283
+kennedy.xls  1,029,744  108,395   38.66  29.84  130,280
+lcet10.txt     426,754  104,533   15.60  11.09  107,706
+plrabn12.txt   481,861  141,789   18.22  13.79  145,577
+ptt5           513,216   47,834   13.04  10.67   49,759
+sum             38,240   12,274    2.51   1.13   12,909
+xargs.1          4,227    1,665    0.36   0.14    1,762
+--------------------------------------------------------
+合計         2,810,784  508,890  101.07  75.48  542,710
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+
+<p> 0-1-2 coding の圧縮率は structured model だけの場合よりも高くなります。0-1-2 coding はランレングス (ZLE) を適用しなくても高い圧縮率を達成できることがわかります。0-1-2 coding はブロックソートに適した優れた情報源モデルだと思います。そのかわり、実行時間はかなり遅くなります。それでもバイナリレンジコーダよりは高速です。
+</p>
+
+<p> ところで、0-1-2 coding とランレングスを組み合わせることもできます。この場合、2 以上の記号に対して、同じ記号が 7 個以上続いたときにランレングスで符号化します。ランレングスのプログラムは <a href="pyalgo49.html#list1">プログラムリスト１</a> の rle.py (rle_encode2, rle_decode2) をお読みください。
+</p>
+<p> 結果は次のようになりました。
+</p>
+<pre>
+            表 : ブロックソートの結果
+     (BlockSorting + MTF-2 + RLE-2 + 0-1-2 coding)
+
+ファイル名      サイズ   0-1-2   符号化   復号   bzip2
+--------------------------------------------------------
+alice29.txt    152,089   42,045    5.88   4.37   43,202
+asyoulik.txt   125,179   38,801    5.07   3.82   39,569
+cp.html         24,603    7,478    1.17   0.75    7,624
+fields.c        11,150    2,929    0.63   0.31    3,039
+grammar.lsp      3,721    1,204    0.37   0.11    1,283
+kennedy.xls  1,029,744   89,401   35.73  24.48  130,280
+lcet10.txt     426,754  104,537   16.09  11.81  107,706
+plrabn12.txt   481,861  141,793   18.82  14.61  145,577
+ptt5           513,216   47,838   13.51  11.38   49,759
+sum             38,240   12,273    2.61   1.12   12,909
+xargs.1          4,227    1,664    0.39   0.16    1,762
+--------------------------------------------------------
+合計         2,810,784  489,963  100.27  72.92  542,710
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> ランレングスのデータ数 (4 バイト) をファイルに付加しているので、ほとんどのファイルで 4 バイト増加していますが、バイナリファイル (kennedy.xls, sum) では効果があるようです。特に、kennedy.xls の圧縮率は大幅に向上しました。ファイルによっては、ランレングスにも効果があるようです。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4>●混合法</h4>
+<p> 次は 0-1-2 coding に「混合法」を適用してみましょう。拙作のページ <a href="pyalgo42.html">バイナリレンジコーダ [3]</a> で簡単に説明しましたが、混合法は複数のモデルを混ぜ合わせて得られる出現確率を使って記号を符号化する方法です。
+</p>
+<p> バイナリレンジコーダの場合、コンテキストに混合法を適用して圧縮率を改善することができました。混合法はコンテキストだけではなく、ほかのモデルにも適用することができます。実際に 0-1-2 coding に混合法を適用してみたところ、圧縮率を改善することができました。混合するモデルの次数と記号数の増分値を示します。
+</p>
+<pre class="fig">
+0-1-2 coding                  : order-4 (INC +2), order-1 (INC +14)
+structured model (first code) : order-2 (INC +4), order-0 (INC +12)
+</pre>
+<p> 0-1-2 coding の場合、order-3 と order-0 を混合するよりも、order-4 と order-1 を混合した方が少しだけ圧縮率が良くなりました。そして、0-1-2 coding だけではなく、structured model の first code に混合法を適用することで、圧縮率はさらに向上します。structured model の場合、first code に高次の有限文脈モデルを適用しても効果はほとんど無かったのですが、order-2 と order-0 を混合してみたところ圧縮率を改善することができました。
+</p>
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。最初に、2 つの出現頻度表を混合して記号を符号化・復号する関数を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 混合法
+
+# 符号化
+def _encode(rc, freq1, freq2, c):
+    def cumul():
+        n = 0
+        for x in xrange(c):
+            n += freq1.count[x] + freq2.count[x]
+        return n
+    #
+    temp = rc.range / (freq1.sum + freq2.sum)
+    rc.low += cumul() * temp
+    rc.range = (freq1.count[c] + freq2.count[c]) * temp
+    rc.encode_normalize()
+    freq1.update(c)
+    freq2.update(c)
+
+# 復号
+def _decode(rc, freq1, freq2):
+    def search_code(value):
+        n = 0
+        for c in xrange(freq1.size):
+            m = freq1.count[c] + freq2.count[c]
+            if value &lt; n + m: break
+            n += m
+        return c, n
+    #
+    temp = rc.range / (freq1.sum + freq2.sum)
+    c, num = search_code(rc.low / temp)
+    rc.low -= temp * num
+    rc.range = temp * (freq1.count[c] + freq2.count[c])
+    rc.decode_normalize()
+    freq1.update(c)
+    freq2.update(c)
+    return c
+</pre>
+<p> 関数 _encode と _decode は二つの出現頻度表 freq1 と freq2 の count を加算して、記号を符号化・復号します。そのあと、メソッド update で二つの出現頻度表 freq1 と freq2 を更新します。
+</p>
+<p> 次は structured model に混合法を適用しましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : structured model の混合法
+
+class Freq1m:
+    def __init__(self, size):
+        n2 = size &gt;&gt; 1
+        n1 = 0
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        n1 += 1
+        self.size = n1
+        self.c0 = self.c1 = 0
+        self.context1 = [Freq(n1, 4, LIMIT2) for _ in xrange(n1 * n1)]  # order-2
+        self.context2 = Freq(n1, 12, LIMIT2)
+        self.context3 = [None] * n1
+        for x in xrange(1, n1):
+            self.context3[x] = Freq(2 ** x, 4, LIMIT3)
+
+    # 符号化
+    def encode(self, rc, c):
+        n1 = 0
+        n2 = (c + 1) &gt;&gt; 1
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        freq1 = self.context1[self.c1 * self.size + self.c0]
+        freq2 = self.context2
+        _encode(rc, freq1, freq2, n1)
+        self.c1 = self.c0
+        self.c0 = n1
+        if n1 &gt; 0:
+            self.context3[n1].encode(rc, (c + 1) &amp; ((2 ** n1) - 1))
+
+    # 復号
+    def decode(self, rc):
+        freq1 = self.context1[self.c1 * self.size + self.c0]
+        freq2 = self.context2
+        n1 = _decode(rc, freq1, freq2)
+        self.c1 = self.c0
+        self.c0 = n1
+        if n1 &gt; 0:
+            n2 = self.context3[n1].decode(rc)
+            n1 = (1 &lt;&lt; n1) + n2 - 1
+        return n1
+</pre>
+
+<p> クラス名は freq1m としました。インスタンス変数 context1 には first code の高次モデル (order-2) を、context2 には低次モデル (order-0) を格納します。context3 には second code の出現頻度表を格納します。first code の種類が n1 個とすると、context1 の大きさは n1 * n1 になります。n1 はインスタンス変数 size に格納します。高次モデルは order-2 なので、直前の 2 記号をインスタンス変数 c0, c1 に格納します。
+</p>
+
+<p> メソッド encode と decode は、context1[c1 * size + c0] と context2 の出現頻度表を混合して、記号を符号化・復号します。この処理は関数 _encode, _decode を呼び出すだけなので簡単です。first code が 0 よりも大きい場合は、context3 の出現頻度表を使って second code を符号化・復号します。
+</p>
+
+<p> 次は 0-1-2 coding に混合法を適用します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 0-1-2 coding の混合法
+
+class Freq012m:
+    def __init__(self, size):
+        self.context1 = [Freq(3, 2, LIMIT1) for _ in xrange(81)]  # order-4
+        self.context2 = [Freq(3, 14, LIMIT1) for _ in xrange(3)]  # order-1
+        self.context3 = Freq1m(size - 2)
+        self.c0 = self.c1 = self.c2 = self.c3 = 0
+
+    # 符号化
+    def encode(self, rc, c):
+        freq1 = self.context1[self.c3 * 27 + self.c2 * 9 + self.c1 * 3 + self.c0]
+        freq2 = self.context2[self.c0]
+        self.c3 = self.c2
+        self.c2 = self.c1
+        self.c1 = self.c0
+        if c &lt; 2:
+            _encode(rc, freq1, freq2, c)
+            self.c0 = c
+        else:
+            _encode(rc, freq1, freq2, 2)
+            self.c0 = 2
+            self.context3.encode(rc, c - 2)
+
+    # 復号
+    def decode(self, rc):
+        freq1 = self.context1[self.c3 * 27 + self.c2 * 9 + self.c1 * 3 + self.c0]
+        freq2 = self.context2[self.c0]
+        self.c3 = self.c2
+        self.c2 = self.c1
+        self.c1 = self.c0
+        c = _decode(rc, freq1, freq2)
+        self.c0 = c
+        if c &gt;= 2:
+            c = self.context3.decode(rc) + 2
+        return c
+</pre>
+<p> クラス名は freq012m としました。インスタンス変数 context1 に高次モデル (order-4) を、context2 に低次モデル (order-1) を格納します。そして、context3 に Freq1m のオブジェクトをセットします。高次モデルは order-4 なので、直前の 4 記号をインスタンス変数 c0, c1, c2, c3 に格納します。
+</p>
+<p> あとは、メソッド encode と decode で、高次モデルの出現頻度表 freq1 と低次モデルの出現頻度表 freq2 を選択し、関数 _encode, _decode を呼び出して記号を符号化・復号するだけです。記号が 2 以上の場合は、context3 の structured model (混合法) を使って、記号を符号化・復号します。
+</p>
+
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+            表 : ブロックソートの結果
+     (BlockSorting + MTF-2 + 0-1-2 coding:混合法)
+
+ファイル名      サイズ   0-1-2   符号化   復号   bzip2
+--------------------------------------------------------
+alice29.txt    152,089   41,452    6.67   5.35   43,202
+asyoulik.txt   125,179   38,327    5.70   4.32   39,569
+cp.html         24,603    7,396    1.28   0.83    7,624
+fields.c        11,150    2,912    0.66   0.35    3,039
+grammar.lsp      3,721    1,185    0.36   0.13    1,283
+kennedy.xls  1,029,744  107,085   44.20  34.63  130,280
+lcet10.txt     426,754  103,146   18.12  13.29  107,706
+plrabn12.txt   481,861  140,002   21.36  16.54  145,577
+ptt5           513,216   47,481   15.47  12.84   49,759
+sum             38,240   12,109    2.74   1.33   12,909
+xargs.1          4,227    1,654    0.39   0.16    1,762
+--------------------------------------------------------
+合計         2,810,784  502,749  116.95  89.77  542,710
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> 混合法を適用したことにより、圧縮率は 0-1-2 coding よりも少し高くなりました。混合法の効果は十分に出ていると思います。実行時間は 2 つの出現頻度表を混合する分だけ  0-1-2 coding よりも遅くなります。2 以上の記号にランレングスを適用すると、kennedy.xls の圧縮率はもっと高くなります。興味のある方は試してみてください。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>広井誠, 『高性能圧縮ツール bsrc の理論と実装（前編, 後編）』, Interface 2003 年 12 月号, 2004 年 1 月号, ＣＱ出版社
+  <li>広井誠, 『高性能圧縮ツール bsrc の改良 bsrc2（前編, 後編）』, Interface 2004 年 10 月号, 11 月号, ＣＱ出版社
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# rle.py : Run Length Encoding
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+
+# 定数
+MAX_LEN = 255
+
+##### Run Length Encoding #####
+
+# ランレングス符号化
+def rle_encode(buff1, buff2, n):
+    size = len(buff1)
+    i = 0
+    j = 0
+    while i &lt; size:
+        c = buff1[i]
+        i += 1
+        k = 1
+        while i &lt; size and k &lt; MAX_LEN + n:
+            if buff1[i] != c: break
+            k += 1
+            i += 1
+        if k &gt;= n:
+            for _ in xrange(n):
+                buff2[j] = c
+                j += 1
+            k -= n
+            buff2[j] = k
+            j += 1
+        else:
+            for _ in xrange(k):
+                buff2[j] = c
+                j += 1
+    return j
+
+# ランレングス復号
+def rle_decode(buff1, buff2, n):
+    size = len(buff1)
+    i = 0
+    j = 0
+    while i &lt; size:
+        c = buff1[i]
+        i += 1
+        k = 1
+        while i &lt; size and k &lt; n:
+            if buff1[i] != c: break
+            i += 1
+            k += 1
+        if k == n:
+            k += buff1[i]
+            i += 1
+        for _ in xrange(k):
+            buff2[j] = c
+            j += 1
+    return j
+
+
+##### 2 以上の記号を符号化 #####
+
+# ランレングス符号化
+def rle_encode2(buff1, buff2, n):
+    size = len(buff1)
+    i = 0
+    j = 0
+    while i &lt; size:
+        c = buff1[i]
+        i += 1
+        if c &lt; 2:
+            buff2[j] = c
+            j += 1
+            continue
+        k = 1
+        while i &lt; size and k &lt; MAX_LEN + n:
+            if buff1[i] != c: break
+            k += 1
+            i += 1
+        if k &gt;= n:
+            for _ in xrange(n):
+                buff2[j] = c
+                j += 1
+            k -= n
+            buff2[j] = k
+            j += 1
+        else:
+            for _ in xrange(k):
+                buff2[j] = c
+                j += 1
+    return j
+
+# ランレングス復号
+def rle_decode2(buff1, buff2, n):
+    size = len(buff1)
+    i = 0
+    j = 0
+    while i &lt; size:
+        c = buff1[i]
+        i += 1
+        if c &lt; 2:
+            buff2[j] = c
+            j += 1
+            continue
+        k = 1
+        while i &lt; size and k &lt; n:
+            if buff1[i] != c: break
+            i += 1
+            k += 1
+        if k == n:
+            k += buff1[i]
+            i += 1
+        for _ in xrange(k):
+            buff2[j] = c
+            j += 1
+    return j
+
+
+##### Zero Length Encoding #####
+
+# 符号化
+def zle_encode(buff1, buff2):
+    size = len(buff1)
+    i = 0
+    j = 0
+    while i &lt; size:
+        c = buff1[i]
+        i += 1
+        if c == 0:
+            count = 1
+            while i &lt; size and buff1[i] == 0:
+                count += 1
+                i += 1
+            count += 1
+            while count != 1:
+                buff2[j] = count &amp; 1
+                j += 1
+                count &gt;&gt;= 1
+        elif c == 0xfe:
+            buff2[j] = 0xff
+            buff2[j + 1] = 0
+            j += 2
+        elif c == 0xff:
+            buff2[j] = 0xff
+            buff2[j + 1] = 1
+            j += 2
+        else:
+            buff2[j] = c + 1
+            j += 1
+    return j
+
+# 復号
+def zle_decode(buff1, buff2):
+    size = len(buff1)
+    i = 0
+    j = 0
+    while i &lt; size:
+        if buff1[i] &lt;= 1:
+            # 0 と 1 を探す
+            k = 0
+            while i &lt; size and buff1[i] &lt;= 1:
+                k += 1
+                i += 1
+            # 数値に変換する
+            count = 1
+            for x in xrange(1, k + 1):
+                count = (count &lt;&lt; 1) + buff1[i - x]
+            count -= 1
+            for _ in xrange(count):
+                buff2[j] = 0
+                j += 1
+        else:
+            c = buff1[i]
+            i += 1
+            if c == 0xff:
+                c = buff1[i]
+                i += 1
+                if c == 0:
+                    buff2[j] = 0xfe
+                else:
+                    buff2[j] = 0xff
+            else:
+                buff2[j] = c - 1
+            j += 1
+</pre>
+<pre class="list">
+# coding: utf-8
+#
+# bsrc.py : ブロックソート (BlockSorting) によるファイルの圧縮
+#
+#           Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+from array import *
+from bwt import *
+from mtf import *
+from rle import *
+from freq import *
+from rangecoder import *
+
+# 4 バイトの正整数値を出力
+def write_number(num, fout):
+    putc(fout, (num &gt;&gt; 24) &amp; 0xff)
+    putc(fout, (num &gt;&gt; 16) &amp; 0xff)
+    putc(fout, (num &gt;&gt; 8) &amp; 0xff)
+    putc(fout, num &amp; 0xff)
+
+# 4 バイトの正整数値を入力
+def read_number(fin):
+    num = 0
+    for _ in xrange(4):
+        num = (num &lt;&lt; 8) + getc(fin)
+    return num
+
+# 符号化
+def bs_encode(fin, fout, size):
+    # 入力
+    buff = array('B')
+    buff.fromfile(fin, size)
+    buff *= 2
+    # BlockSorting
+    work, top = suffix_sort(buff, size)
+    # Move To Front
+    mtf2_encode(work)
+    # Run Length Encoding
+    r_size = zle_encode(work, buff)
+    write_number(top, fout)
+    write_number(r_size, fout)
+    # RangeCoder
+    rc = RangeCoder(fout, ENCODE)
+    freq = Freq1m(256)
+    for x in xrange(r_size):
+        freq.encode(rc, buff[x])
+    rc.finish()
+    # 終了
+    fin.close()
+    fout.close()
+
+# ブロックソートの復号
+def bs_decode(fin, fout, size):
+    top = read_number(fin)
+    r_size = read_number(fin)
+    buff = array('B')
+    for _ in xrange(size): buff.append(0)
+    work = array('B')
+    # RangeCoder
+    rc = RangeCoder(fin, DECODE)
+    freq = Freq1m(256)
+    for _ in xrange(r_size):
+        work.append(freq.decode(rc))
+    # Run Length Encoding
+    zle_decode(work, buff)
+    # Move To Front
+    mtf2_decode(buff)
+    # BlockSorting
+    idx = array('L')
+    for _ in xrange(size): idx.append(0)
+    # 分布数えソート
+    count = [0] * 256
+    for x in xrange(size): count[ buff[x] ] += 1
+    for x in xrange(1, 256): count[x] += count[x - 1]
+    for x in xrange(size - 1, -1, -1):
+        c = buff[x]
+        count[c] -= 1
+        idx[ count[c] ] = x
+    # 出力
+    x = idx[top]
+    for _ in xrange(size):
+        putc(fout, buff[x])
+        x = idx[x]
+
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    write_number(size, outfile)
+    if size &gt; 0: bs_encode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    size = read_number(infile)
+    if size &gt; 0: bs_decode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# freq.py : 適応型レンジコーダ用の出現頻度表
+#
+#           Copyright (C) 2007 Makoto Hiroi
+#
+
+# 出現頻度表
+class Freq:
+    def __init__(self, size, inc = 4, limit = 0x4000):
+        self.size = size
+        self.inc = inc
+        self.limit = limit
+        self.count = [1] * size
+        self.sum = size
+
+    # 出現頻度表の更新
+    def update(self, c):
+        self.count[c] += self.inc
+        self.sum += self.inc
+        if self.sum &gt;= self.limit:
+            n = 0
+            for x in xrange(self.size):
+                self.count[x] = (self.count[x] &gt;&gt; 1) | 1
+                n += self.count[x]
+            self.sum = n
+
+    # 記号の累積度数を求める
+    def cumul(self, c):
+        n = 0
+        for x in xrange(c): n += self.count[x]
+        return n
+
+    # 符号化
+    def encode(self, rc, c):
+        temp = rc.range / self.sum
+        rc.low += self.cumul(c) * temp
+        rc.range = self.count[c] * temp
+        rc.encode_normalize()
+        self.update(c)
+
+    # 復号
+    def decode(self, rc):
+        # 記号の探索
+        def search_code(value):
+            n = 0
+            for c in xrange(self.size):
+                if value &lt; n + self.count[c]: break
+                n += self.count[c]
+            return c, n
+        #
+        temp = rc.range / self.sum
+        c, num = search_code(rc.low / temp)
+        rc.low -= temp * num
+        rc.range = temp * self.count[c]
+        rc.decode_normalize()
+        self.update(c)
+        return c
+
+##### structured model #####
+
+LIMIT1 = 0x100
+LIMIT2 = 0x200
+LIMIT3 = 0x800
+
+class Freq1:
+    def __init__(self, size):
+        n2 = size &gt;&gt; 1
+        n1 = 0
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        self.size = n1
+        self.context1 = Freq(n1 + 1, 4, LIMIT2)
+        self.context2 = [None] * (n1 + 1)
+        for x in xrange(1, n1 + 1):
+            self.context2[x] = Freq(2 ** x, 4, LIMIT3)
+
+    # 符号化
+    def encode(self, rc, c):
+        n1 = 0
+        n2 = (c + 1) &gt;&gt; 1
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        self.context1.encode(rc, n1)
+        if n1 &gt; 0:
+            self.context2[n1].encode(rc, (c + 1) &amp; ((2 ** n1) - 1))
+
+    # 復号
+    def decode(self, rc):
+        n1 = self.context1.decode(rc)
+        if n1 &gt; 0:
+            n2 = self.context2[n1].decode(rc)
+            n1 = (1 &lt;&lt; n1) + n2 - 1
+        return n1
+
+##### 0-1-2 coding #####
+
+class Freq012:
+    def __init__(self, size):
+        self.context1 = [Freq(3, 4, LIMIT1) for _ in xrange(27)]
+        self.context2 = Freq1(size - 2)
+        self.c0 = self.c1 = self.c2 = 0
+
+    # 符号化
+    def encode(self, rc, c):
+        freq = self.context1[self.c2 * 9 + self.c1 * 3 + self.c0]
+        self.c2 = self.c1
+        self.c1 = self.c0
+        if c &lt; 2:
+            freq.encode(rc, c)
+            self.c0 = c
+        else:
+            freq.encode(rc, 2)
+            self.c0 = 2
+            self.context2.encode(rc, c - 2)
+
+    # 復号
+    def decode(self, rc):
+        freq = self.context1[self.c2 * 9 + self.c1 * 3 + self.c0]
+        self.c2 = self.c1
+        self.c1 = self.c0
+        c = freq.decode(rc)
+        self.c0 = c
+        if c &gt;= 2:
+            c = self.context2.decode(rc)
+            c += 2
+        return c
+
+
+##### 混合法 #####
+
+# 符号化
+def _encode(rc, freq1, freq2, c):
+    def cumul():
+        n = 0
+        for x in xrange(c):
+            n += freq1.count[x] + freq2.count[x]
+        return n
+    #
+    temp = rc.range / (freq1.sum + freq2.sum)
+    rc.low += cumul() * temp
+    rc.range = (freq1.count[c] + freq2.count[c]) * temp
+    rc.encode_normalize()
+    freq1.update(c)
+    freq2.update(c)
+
+# 復号
+def _decode(rc, freq1, freq2):
+    def search_code(value):
+        n = 0
+        for c in xrange(freq1.size):
+            m = freq1.count[c] + freq2.count[c]
+            if value &lt; n + m: break
+            n += m
+        return c, n
+    #
+    temp = rc.range / (freq1.sum + freq2.sum)
+    c, num = search_code(rc.low / temp)
+    rc.low -= temp * num
+    rc.range = temp * (freq1.count[c] + freq2.count[c])
+    rc.decode_normalize()
+    freq1.update(c)
+    freq2.update(c)
+    return c
+
+class Freq1m:
+    def __init__(self, size):
+        n2 = size &gt;&gt; 1
+        n1 = 0
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        n1 += 1
+        self.size = n1
+        self.c0 = self.c1 = 0
+        self.context1 = [Freq(n1, 4, LIMIT2) for _ in xrange(n1 * n1)]  # order-2
+        self.context2 = Freq(n1, 12, LIMIT2)
+        self.context3 = [None] * n1
+        for x in xrange(1, n1):
+            self.context3[x] = Freq(2 ** x, 4, LIMIT3)
+
+    # 符号化
+    def encode(self, rc, c):
+        n1 = 0
+        n2 = (c + 1) &gt;&gt; 1
+        while n2 &gt; 0:
+            n1 += 1
+            n2 &gt;&gt;= 1
+        freq1 = self.context1[self.c1 * self.size + self.c0]
+        freq2 = self.context2
+        _encode(rc, freq1, freq2, n1)
+        self.c1 = self.c0
+        self.c0 = n1
+        if n1 &gt; 0:
+            self.context3[n1].encode(rc, (c + 1) &amp; ((2 ** n1) - 1))
+
+    # 復号
+    def decode(self, rc):
+        freq1 = self.context1[self.c1 * self.size + self.c0]
+        freq2 = self.context2
+        n1 = _decode(rc, freq1, freq2)
+        self.c1 = self.c0
+        self.c0 = n1
+        if n1 &gt; 0:
+            n2 = self.context3[n1].decode(rc)
+            n1 = (1 &lt;&lt; n1) + n2 - 1
+        return n1
+
+class Freq012m:
+    def __init__(self, size):
+        self.context1 = [Freq(3, 2, LIMIT1) for _ in xrange(81)]  # order-4
+        self.context2 = [Freq(3, 14, LIMIT1) for _ in xrange(3)]  # order-1
+        self.context3 = Freq1m(size - 2)
+        self.c0 = self.c1 = self.c2 = self.c3 = 0
+
+    # 符号化
+    def encode(self, rc, c):
+        freq1 = self.context1[self.c3 * 27 + self.c2 * 9 + self.c1 * 3 + self.c0]
+        freq2 = self.context2[self.c0]
+        self.c3 = self.c2
+        self.c2 = self.c1
+        self.c1 = self.c0
+        if c &lt; 2:
+            _encode(rc, freq1, freq2, c)
+            self.c0 = c
+        else:
+            _encode(rc, freq1, freq2, 2)
+            self.c0 = 2
+            self.context3.encode(rc, c - 2)
+
+    # 復号
+    def decode(self, rc):
+        freq1 = self.context1[self.c3 * 27 + self.c2 * 9 + self.c1 * 3 + self.c0]
+        freq2 = self.context2[self.c0]
+        self.c3 = self.c2
+        self.c2 = self.c1
+        self.c1 = self.c0
+        c = _decode(rc, freq1, freq2)
+        self.c0 = c
+        if c &gt;= 2:
+            c = self.context3.decode(rc) + 2
+        return c
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo48.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo50.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

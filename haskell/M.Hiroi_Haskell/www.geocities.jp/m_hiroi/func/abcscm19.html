@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881785</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm18.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm26.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>パズルの解法 [3]</h3>
+<p> 前回は幅優先探索の例題として 8 パズルを解いてみました。今回は反復深化の例題として、ペグ・ソリテアと 8 パズルを解いてみましょう。
+</p>
+
+<p> 拙作のページ <a href="abcscm17.html">経路の探索</a> で説明したように、反復深化は最短手数を求めることができるアルゴリズムです。幅優先探索と違って局面を保存する必要が無いため、必要となるメモリは深さ優先探索と同程度で済みます。また、プログラムも深さ優先探索と同じくらい簡単に作成することができます。
+</p>
+
+<p> ただし、同じ探索を何度も繰り返すため実行時間が増大する、という欠点があります。ようするに、使用するメモリは少ないが実行時間が長くなるアルゴリズムなのです。実行時間が長くなるといっても、枝刈りを工夫することでパズルを高速に解くことができます。メモリ不足になる場合には、積極的に使ってみたいアルゴリズムといえるでしょう。
+</p>
+
+<p> なお、ペグ・ソリテアの解法は拙作のページ <a href="http://www.geocities.jp/m_hiroi/prolog/scheme.html">Prolog Programming</a> <a href="../prolog/prolog12.html">パズルに挑戦！ (Hoppers)</a> を、8 パズルの解法は <a href="http://www.geocities.jp/m_hiroi/light/scheme.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo27.html">幅優先探索と反復深化</a> を Scheme で書き直したものです。内容は重複しますが、あしからずご了承ください。
+</p>
+
+<h4>●ペグ・ソリテア</h4>
+<p> ペグ・ソリテアは盤上に配置されたペグ（駒）を、最後にはひとつ残るように取り除いていく古典的なパズルです。ペグは、次のルールに従って移動し、除去することができます。
+</p>
+<ol>
+  <li>ペグは隣にあるペグをひとつだけ跳び越して、空き場所へ着地する。
+  <li>跳び越されたペグは盤上から取り除かれる。
+  <li>移動方向はふつう縦横のみの 4 方向だが、ルールによっては斜め方向の移動を許す場合もある。
+  <li>同じペグの連続跳びは 1 手と数える。
+</ol>
+<p> 盤は今までに多数考案されていますが、33 穴英国盤、37 穴フランス盤、41 穴盤が有名です。下図に 33 穴英国盤を示します。
+</p>
+<pre class="fig">
+        ●─●─●
+        │  │  │
+        ●─●─●
+        │  │  │
+●─●─●─●─●─●─●
+│  │  │  │  │  │  │
+●─●─●─○─●─●─●
+│  │  │  │  │  │  │
+●─●─●─●─●─●─●
+        │  │  │
+        ●─●─●
+        │  │  │
+        ●─●─●
+
+    図 : 33 穴英国盤
+</pre>
+
+<p> 33 の穴にペグがありますが、そこからひとつペグを取り除いてゲームを始めます。図では黒丸でペグを表し、白丸で空き場所を表しています。ルールに従ってペグを移動し、最後にひとつだけ残ればクリアとなります。ただし、最初に取り除くペグの位置によって、解けない場合もあるので注意してください。
+</p>
+
+<p> 橋本哲氏の記事 <a href="abcscm19.html#cite">参考文献 3</a> によると、最初の空き位置と最後に残ったペグの位置が同じになることを「補償型の解」といい、最初の空き位置が盤の中央で、なおかつ、補償型の解がある場合を「中央補償型の解」と呼ぶそうです。33 穴英国盤には、中央補償型の解があるそうです。
+</p>
+
+<p> ペグ・ソリテアの場合、昔から補償型や中央補償型の解の最小手数を求めることが行われてきました。33 穴英国盤のように、ペグの数が多くなるとパソコンで解くのは大変になります。そこで、今回はサイズを小さくした簡単なペグ・ソリテアを反復深化で解いてみましょう。
+</p>
+
+<h4>●Hoppers</h4>
+<p> Hoppers は芦ヶ原伸之氏が考案されたペグ・ソリテアです。次の図を見てください。
+</p>
+<pre class="fig">
+●───●───●  
+│＼  ／│＼  ／│  
+│  ●  │  ●  │  
+│／  ＼│／  ＼│  
+●───○───●  
+│＼  ／│＼  ／│  
+│  ●  │  ●  │  
+│／  ＼│／  ＼│  
+●───●───●  
+
+   図 : Hoppers
+</pre>
+<p> Hoppers は穴を 13 個に減らしていて、遊ぶのに手頃な大きさになっています。上図に示したように、最初に中央のペグを取り除きます。この状態から始めて、最後のペグが中央の位置に残る跳び方の最小手数を求めることにします。
+</p>
+
+<h4>●跳び先表とペグの移動</h4>
+<p> それでは、プログラムを作りましょう。今回は Hoppers の盤面をベクタではなく、整数値のビットを使って表すことにします。つまり、ペグがある状態をビットオン (1) で、ペグがない状態をビットオフ (0) で表します。盤面とビットの対応は、下図を見てください。
+</p>
+<pre class="fig">
+●───●───●    ０───１───２
+│＼  ／│＼  ／│    │＼  ／│＼  ／│
+│  ●  │  ●  │    │  ３  │  ４  │
+│／  ＼│／  ＼│    │／  ＼│／  ＼│
+●───○───●    ５───６───７
+│＼  ／│＼  ／│    │＼  ／│＼  ／│
+│  ●  │  ●  │    │  ８  │  ９  │
+│／  ＼│／  ＼│    │／  ＼│／  ＼│
+●───●───●    10───11───12
+ 
+  (1) Hoppers         (2) ビットの位置
+
+          図 : Hoppers の盤面
+</pre>
+<p> ペグの移動は跳び先表を用意すると簡単です。次のプログラムを見てください。
+</p>
+<pre class="list">
+リスト : 跳び先表
+
+(define *jump-table*
+    #(((1 2) (3 6) (5 10))
+      ((3 5) (6 11) (4 7))
+      ((1 0) (4 6) (7 12))
+      ((6 9))
+      ((6 8))
+      ((3 1) (6 7) (8 11))
+      ((3 0) (4 2) (8 10) (9 12))
+      ((4 1) (6 5) (9 11))
+      ((6 4))
+      ((6 3))
+      ((5 0) (8 6) (11 12))
+      ((8 5) (6 1) (9 7))
+      ((11 10) (9 6) (7 2))))
+</pre>
+<p> ペグの跳び先表はベクタ *jump-table* で定義します。ベクタの要素はリストであることに注意してください。リストの要素は、跳び越されるペグの位置と跳び先の位置を格納したリストです。たとえば、0 番の位置にあるペグは、1 番を跳び越して 2 番へ移動する場合と、3 番を跳び越して 6 番へ移動する場合と、5 番を飛び越して 10 番へ移動する場合の 3 通りがあります。これをリスト (1 2), (3 6), (5 10) で表しています。
+</p>
+
+<p> 次にペグを動かして新しい盤面を作る関数 move-peg を作ります。
+</p>
+<pre class="list">
+リスト : ペグの移動
+
+(define (move-peg board from del to)
+    (logior
+        (logand board 
+                (lognot (ash 1 from))
+                (lognot (ash 1 del)))
+        (ash 1 to)))
+</pre>
+
+<p> 引数 from は跳ぶペグの位置、del は削除されるペグの位置、to は跳び先の位置を表します。from と del のビットをオフに、to のビットをオンにして、新しい盤面を生成します。
+</p>
+<p> ash は整数を左右にシフトする関数です。
+</p>
+<ul>
+  <li> ash n count
+</ul>
+<p> ash は count が正整数の場合、n を左へ count ビット分シフトします。count が負の場合は右へ count ビット分シフトします。左へ 1 ビットシフトすると n は 2 倍になり、右へ 1 ビットシフトすると n は 1 / 2 になります。
+</p>
+<ul>
+  <li>lognot n
+</ul>
+<p> 関数 lognot は整数のビット否定、つまり 0 を 1 に、1 を 0 に反転した値を返します。
+</p>
+<p> lognot と ash でビットパターンを生成して、logand で board との論理積を求めると、該当するビットをオフにすることができます。ビットをオンにするには ash で to 番目のビットを 1 にセットして、logior で論理和を求めるだけです。
+</p>
+<p> このほかに、関数 copy-bit を使ってビットのオンオフを操作することもできます。
+</p>
+<ul>
+  <li>copy-bit index n bit
+</ul>
+<p> bit が真の場合、copy-bit は整数 n の index 番目のビットをオン (1) にします。bit が偽の場合はビットをオフ (0) にします。copy-bit を使うと、move-peg は次のようになります。
+</p>
+<pre class="list">
+リスト : ペグの移動 (2)
+
+(define (move-peg board from del to)
+    (copy-bit
+        from
+        (copy-bit
+            del
+            (copy-bit to board #t)
+            #f)
+        #f))
+</pre>
+<h4>●反復深化による Hoppers の解法</h4>
+<p> あとは単純な反復深化で最短手順を求めます。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 反復深化による解法
+
+(define (solve start goal)
+  ; フラグ
+  (define found 0)
+  ; 
+  (define (id-search board jc limit move)
+    (when (&lt;= jc limit)
+      (cond ((= (length move) MAX-JUMP)
+             (when (= board goal)
+               (print-answer (reverse move))
+               (set! found (+ found 1))))
+            (else
+             (dotimes (from SIZE)
+               (when (logbit? from board)
+                 (dolist (pos (vector-ref *jump-table* from))
+                   (when (and (logbit? (car pos) board)
+                              (not (logbit? (cadr pos) board)))
+                     (id-search
+                       (move-peg board from (car pos) (cadr pos))
+                       (if (= from (cdar move))
+                           jc
+                           (+ jc 1))
+                       limit
+                       (cons (cons from (cadr pos)) move))))))))))
+  ;
+  (let loop ((i 2))
+    (cond ((&lt;= i MAX-JUMP)
+           (format #t "----- ~D -----~%" i)
+           ; 初手を 0 -&gt; 6 に限定
+           (id-search (move-peg start 0 3 6) 1 i '((0 . 6)))
+           (if (zero? found)
+               (loop (+ i 1)))))))
+</pre>
+
+<p> 反復深化の処理は内部関数 id-search で行います。引数 board が盤面を表す整数値、jc がペグが跳んだ回数、limit が反復深化の上限値、move が移動手順を格納するリストで、要素はドット対 (form . to) です。
+</p>
+
+<p> ペグ・ソリテアを反復深化で解く場合、上限値 limit に達していても連続跳びによりペグを移動できることに注意してください。最初に、jc をチェックして limit 以下であればペグを移動します。Hoppers の場合、ペグの総数は 12 個なので、MAX-JUMP (11) 回ペグを移動すると残りのペグは 1 個になります。解を見つけたら print-answer で手順を表示して、見つけた解の個数 found を +1 します。
+</p>
+
+<p> そうでなければペグを移動します。dotimes の変数 from が動かすペグの位置を表します。dotimes はもともと Common Lisp の関数 (マクロ) ですが、Gauche でも使うことができます。dotimes の構文を示します。
+</p>
+<pre class="item">
+(dotimes (変数 上限値 結果) Ｓ式 ...)
+</pre>
+<p> dotimes は上限値で指定した回数だけ、与えられた S 式を繰り返し実行します。dotimes は最初に上限値を評価します。このとき、その評価結果が 0 以上の整数値でなければいけません。評価結果を n とすると、0 から n - 1 までの整数が順番に変数に代入され、S 式を評価します。
+</p>
+<p> 変数は局所変数として扱われ、dotimes が実行されている間だけ有効です。最後に結果が評価され、それが dotimes の評価値として返されます。結果が省略された場合は #t を返します。簡単な実行例を示しましょう。
+</p>
+<pre>
+gosh&gt; (dotimes (x 5) (display x))
+01234#t
+</pre>
+<p> この処理は、局所変数 x の値を display で表示するだけですが、繰り返しのたびに、変数 x の値が +1 されていく様子がよくわかると思います。最後の #t は dotimes の返り値です。
+</p>
+
+<p> プログラムの説明に戻りましょう。まず from の位置にペグがあることを logbit? で確認します。それから、跳び先表から跳び越されるペグの位置と跳び先の位置を取り出して pos にセットします。(car pos) が跳び越されるペグの位置 del で、(cadr pos) が跳び先の位置 to になります。del の位置にペグがあり to の位置にペグがなければ、from のペグを to へ移動することができます。これを logbit? でチェックします。
+</p>
+
+<p> ペグを動かすことができる場合は id-search を再帰呼び出しします。move-peg でペグを動かして新しい盤面を生成します。そして、このプログラムのポイントが連続跳びのチェックをするところです。直前に移動した場所からペグを動かすときは、連続跳びと判断することができます。つまり、move の先頭要素の CDR 部 (cdar move) が from と等しい場合は、跳んだ回数 jc を増やしません。異なる場合は jc の値を +1 します。
+</p>
+
+<p> あとは反復深化の上限値を増やしながら id-search を呼び出します。loop の変数 i が上限値を表します。最初の移動は、四隅にあるペグのひとつを中央に動かす手順しかありません。そこで、最初は 0 のペグを 6 へ動かすことに決めて、その状態から探索を開始します。found が 0 でなければ、解を見つけたので反復深化を終了します。
+</p>
+
+<p> 最後に手順を表示する関数 print-answer を作ります。
+</p>
+<pre class="list">
+リスト : 手順の表示
+
+(define (print-answer move)
+    (let ((prev (cdar move)))
+        ; 初手を表示
+        (format #t "[~D,~D" (caar move) prev)
+        ; 2 手目以降を表示する
+        (dolist (x (cdr move))
+            (cond ((= prev (car x))
+                   ; 同じ駒が続けて跳ぶ
+                   (set! prev (cdr x))
+                   (format #t ",~D" prev))
+                  (else
+                   (set! prev (cdr x))
+                   (format #t "]~%[~D,~D" (car x) prev))))
+        (format #t "]~%~%")))
+</pre>
+<p> 移動手順は 1 手を [from, to] で表し、連続跳びの場合は [from, to1, to2, ..., to3] とします。1 手前の跳び先の位置を変数 prev にセットしておいて、それと動かすペグの位置が同じであれば連続跳びです。跳び先の位置を prev にセットして、それを表示します。違うペグが跳ぶ場合は、] [ を表示してから動かすペグの位置と跳び先の位置を表示します。
+</p>
+<ul>
+  <li><a href="abcscm19.html#list1">プログラムリスト１</a>
+</ul>
+<h4>●実行結果</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (solve #b1111110111111 #b0000001000000)
+----- 2 -----
+----- 3 -----
+----- 4 -----
+----- 5 -----
+----- 6 -----
+----- 7 -----
+[0,6]
+[9,3]
+[2,0,6]
+[11,1]
+[10,0,2,6]
+[8,4]
+[12,2,6]
+
+・・・省略・・・
+
+[0,6]
+[9,3]
+[10,6]
+[4,8]
+[12,10,6]
+[1,11]
+[2,12,10,0,6]
+</pre>
+<p> 7 手で解くことができました。解は全部で 18 通りになりました。実行時間は 0.52 秒 (Windows XP, celeron 1.40 GHz, Gauche 0.8.12) でした。最近のパソコンは高性能なので、穴の数が少ない盤面であれば、単純な反復深化でも高速に解くことができるようです。
+</p>
+<hr>
+<h4>●反復深化による 8 パズルの解法</h4>
+<p> 次は 8 パズルを反復深化で解いてみましょう。幅優先探索では全ての局面を保存しましたが、反復深化ではその必要はありません。前回と同様に盤面はベクタで表して、変数 board に格納します。駒の移動は board を書き換えて、バックトラックする時は元に戻すことにします。動かした駒はリスト move に格納します。動かした駒がわかれば盤面を再現できるので、それで移動手順を表すことにしましょう。
+</p>
+<p> それでは、さっそくプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 単純な反復深化による解法
+
+(define (solve1 board goal)
+  ; フラグ
+  (define found 0)
+  ; n 番目にある駒を求める
+  (define (get-piece n) (vector-ref board n))
+  ; 反復深化
+  (define (id-search n limit space move)
+    (cond ((= n limit)
+           (when (equal? board goal)
+             (set! found (+ found 1))
+             (format #t "~A~%" (cdr (reverse move)))))
+          (else
+           (dolist (x (vector-ref *adjacent* space))
+             (unless (= (get-piece x) (car move))
+               ; 駒の移動
+               (vector-set! board space (get-piece x))
+               (vector-set! board x 0)
+               (id-search (+ n 1)
+                          limit
+                          x
+                          (cons (get-piece space) move))
+               ; 元に戻す
+               (vector-set! board x (get-piece space))
+               (vector-set! board space 0))))))
+  ;
+  (let loop ((i 1))
+      (cond ((&lt;= i 31)
+             (format #t "-----~D-----~%" i)
+             (id-search 0 i (vector-position zero? board) '(-1))
+             (if (zero? found)
+                 (loop (+ i 1)))))))
+</pre>
+<p> 内部関数 id-search の引数 n が手数、limit が上限値、space が空き場所の位置、move が移動手順を格納したリストです。手数が上限値に達したら、パズルが解けたかチェックします。goal は完成形を表すベクタです。完成形に到達したら、format で手順を表示します。上限値に達していない場合は、駒を移動して新しい局面を作ります。
+</p>
+
+<p> 8 パズルのように、元の局面に戻すことが可能（可逆的）なパズルの場合、単純な深さ優先探索では同じ移動手順を何度も繰り返すことがあります。そうなると、とんでもない解を出力するだけではなく、再帰呼び出しが深くなるとスタックがオーバーフローしてプログラムの実行ができなくなることがあります。
+</p>
+
+<p> このような場合、局面の履歴を保存しておいて同じ局面がないかチェックすることで、解を求めることができるようになります。ただし、同一局面をチェックする分だけ時間が余分にかかりますし、最初に見つかる解が最短手数とは限りません。
+</p>
+
+<p> 反復深化では深さが制限されているため、同一局面のチェックを行わなくてもスタックオーバーフローが発生することはありません。そのかわり、無駄な探索はどうしても避けることができません。8 パズルの場合、1 手前に動かした駒を再度動かすと 2 手前の局面に戻ってしまいます。完全ではありませんが、このチェックを入れるだけでもかなりの無駄を省くことができます。
+</p>
+
+<p> プログラムでは、リスト move に移動した駒を格納しているので、1 手前と同じ駒は動かさないようにチェックしています。なお、move の最後尾の要素はダミーデータで -1 をセットします。解を表示するときは、reverse でリストを反転したあと、ダミーデータを取り除くことに注意してください。
+</p>
+
+<p> あとは、関数 solve1 から内部関数 id-search を呼び出すだけです。変数 i が上限値を表します。i を 1 手ずつ増やして id-search を呼び出します。変数 found が 0 でなければ、解が見つかったのでループを脱出します。プログラムはこれで完成です。
+</p>
+
+<ul>
+  <li><a href="abcscm19.html#list2">プログラムリスト２</a>
+</ul>
+<h4>●実行結果</h4>
+<p> 実際に実行してみると、当然ですが最短手数は 31 手で 40 通りの手順が表示されました。実行時間は 650 秒 (Windows XP, celeron 1.40 GHz, Gauche 0.8.12) かかりました。11 分近くかかるのですから、やっぱり遅いですね。反復深化の場合、枝刈りを工夫しないと高速に解くことはできません。そこで、反復深化の常套手段である「下限値枝刈り法」を使うことにしましょう。
+</p>
+<h4>●下限値枝刈り法</h4>
+<p> 下限値枝刈り法は難しいアルゴリズムではありません。たとえば、5 手進めた局面を考えてみます。探索の上限値が 10 手とすると、あと 5 手だけ動かすことができますね。この時、パズルを解くのに 6 手以上かかることがわかれば、ここで探索を打ち切ることができます。
+</p>
+<p> このように、必要となる最低限の手数が明確にわかる場合、この値を「下限値 (Lower Bound)」と呼びます。この下限値を求めることができれば、「今の移動手数＋下限値」が探索手数を超えた時点で、枝刈りすることが可能になります。これが下限値枝刈り法の基本的な考え方です。
+</p>
+
+<p> 一般に、このような方法を「分岐限定法」とか「分岐制約法」といいます。<a href="abcscm19.html#cite">参考文献 [19-1]</a> には、巡回セールスマンの問題を例題にした分岐制約法の説明があります。また、思考ルーチンを作る時の常套手段である <a href="../light/pyalgo24.html">アルファベータ法</a> も分岐制約法のひとつです。
+</p>
+
+<p> さて、下限値を求める方法ですが、これにはいろいろな方法が考えられます。今回は、各駒が正しい位置へ移動するまでの手数 (移動距離) <sup><a href="abcscm19.html#note1">[*1]</a></sup> を下限値として利用することにしましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+┌─┬─┬─┐    ┌──┬──┬──┐
+│１│２│３│    │8(3)│6(2)│7(4)│
+├─┼─┼─┤    ├──┼──┼──┤
+│４│５│６│    │2(2)│5(0)│4(2)│
+├─┼─┼─┤    ├──┼──┼──┤
+│７│８│  │    │3(4)│    │1(4)│
+└─┴─┴─┘    └──┴──┴──┘
+                   (n) : n は移動距離
+
+  (1) 完成形     (2) 初期状態：合計 21
+
+          図 : 下限値の求め方
+</pre>
+
+<p> たとえば、右下にある 1 の駒を左上の正しい位置に移動するには、最低でも 4 手必要です。もちろん、ほかの駒との関連で、それ以上の手数が必要になる場合もあるでしょうが、4 手より少なくなることは絶対にありません。同じように、各駒について最低限必要な手数を求めることができます。そして、その合計値はパズルを解くのに最低限必要な手数となります。これを下限値として利用することができます。ちなみに、上図 (2) の初期状態の下限値は 21 手になります。
+</p>
+
+<p> 下限値枝刈り法を使う場合、下限値の計算を間違えると正しい解を求めることができなくなります。たとえば、10 手で解ける問題の下限値を 11 手と計算すれば、最短手数を求めることができなくなります。それどころか、10 手の解しかない場合は、答えを求めることすらできなくなります。下限値の計算には十分に注意してください。
+</p>
+
+<div class="note">
+-- note -----<br>
+<a name="note1">[*1]</a> これを「マンハッタン距離 (Manhattan Distance) 」と呼ぶことがあります。
+</div>
+<h4>●下限値枝刈り法のプログラム</h4>
+<p> それでは、プログラムを作りましょう。下限値の求め方ですが、駒を動かすたびに各駒の移動距離を計算していたのでは時間がかかります。8 パズルの場合、1 回に一つの駒しか移動しないので、初期状態の下限値を求めておいて、動かした駒の差分だけ計算すればいいでしょう。また、駒の移動距離はいちいち計算するのではなく、あらかじめ計算した結果をベクタに格納しておきます。このベクタを *distance* とすると、盤面から移動距離を求めるプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 移動距離を求める
+
+; 移動距離
+(define *distance*
+    #(#(0 0 0 0 0 0 0 0 0)  ; dummy
+      #(0 1 2 1 2 3 2 3 4)
+      #(1 0 1 2 1 2 3 2 3)
+      #(2 1 0 3 2 1 4 3 2)
+      #(1 2 3 0 1 2 1 2 3)
+      #(2 1 2 1 0 1 2 1 2)
+      #(3 2 1 2 1 0 3 2 1)
+      #(2 3 4 1 2 3 0 1 2)
+      #(3 2 3 2 1 2 1 0 1)))
+
+; アクセス関数
+(define (get-distance piece pos)
+    (vector-ref (vector-ref *distance* piece) pos))
+
+; 移動距離を求める
+(define (calc-distance board)
+    (let loop ((i 0) (d 0))
+        (if (&lt;= (vector-length board) i)
+            d
+            (let ((p (vector-ref board i)))
+                (loop
+                    (+ i 1)
+                    (+ d (get-distance p i)))))))
+</pre>
+<p>  *distance* は 2 次元配列で「駒の種類×駒の位置」を表しています。Scheme の場合、2 次元配列はベクタのベクタで表します。簡単にアクセスできるように関数 get-distance を用意します。空き場所は関係ないので、0 番目のベクタは全部の要素が 0 となります。関数 calc-distance は盤面 board にある駒と位置から移動距離を求めます。変数 d を 0 に初期化して、駒の移動距離を get-distance で求めて d に足し算するだけです。
+</p>
+
+<p> 次は、下限値枝刈り法による反復深化を行う関数 solve2 を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 下限値枝刈り法
+
+(define (solve2 board goal)
+  ; フラグ
+  (define found 0)
+  ; n 番目の要素を求める
+  (define (get-piece n) (vector-ref board n))
+  ;
+  (define (id-search n limit space move lower)
+    (cond ((= n limit)
+           (when (equal? board goal)
+             (set! found (+ found 1))
+             (format #t "~A~%" (cdr (reverse move)))))
+          (else
+           (dolist (x (vector-ref *adjacent* space))
+             (unless (= (get-piece x) (car move))
+               (let* ((p (get-piece x))
+                      (new-lower (+ (- lower (get-distance p x))
+                                    (get-distance p space))))
+                 ; 下限値枝刈り法
+                 (when (&lt;= (+ new-lower n) limit)
+                   ; 駒の移動
+                   (vector-set! board space p)
+                   (vector-set! board x 0)
+                   (id-search (+ n 1)
+                              limit
+                              x
+                              (cons p move)
+                              new-lower)
+                   ; 元に戻す
+                   (vector-set! board x p)
+                   (vector-set! board space 0))))))))
+  ;
+  (let ((lower (calc-distance board)))
+    (let loop ((i lower))
+      (cond ((&lt;= i 31)
+             (format #t "-----~D-----~%" i)
+             (id-search 0 i (vector-position zero? board) '(-1) lower)
+             (if (zero? found)
+                 (loop (+ i 1))))))))
+</pre>
+<p> 内部関数 id-search の引数 lower は現在の盤面 board の下限値を表しています。駒を動かしたら差分を計算して、新しい下限値 new-lower を求めます。そして、new-lower + n が上限値 limit を越えたら枝刈りを行います。limit 以下であれば id-search を再帰呼び出しします。追加する処理はこれだけで、あとは反復深化のプログラムと同じです。とても簡単ですね。
+</p>
+
+<p>  最後に id-search を呼び出す処理を修正します。関数 calc-distance で初期状態の下限値 lower を求めます。下限値がわかるのですから、上限値 limit は 1 手からではなく下限値 lower からスタートします。あとは id-search に下限値 lower を渡して呼び出すだけです。
+</p>
+<ul>
+  <li><a href="abcscm19.html#list2">プログラムリスト２</a>
+</ul>
+<h4>●実行結果</h4>
+<p> プログラムの主な修正はこれだけです。実際に実行してみると、実行時間は 0.61 秒 (Windows XP, celeron 1.40 GHz, Gauche 0.8.12) でした。約 100 倍という高速化に驚いてしまいました。下限値枝刈り法の効果は極めて高いですね。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>A.V.Aho,J.E.Hopcroft,J.D.Ullman, 『データ構造とアルゴリズム』, 培風館, 1987
+  <li>高橋謙一郎, 『特集 悩めるプログラマに効くアルゴリズム』, C MAGAZINE 2000 年 11 月号, ソフトバンク
+  <li>橋本哲, 『特集コンピュータパズルへの招待 ペグ・ソリテア編』, C MAGAZINE 1996 年 2 月号, ソフトバンク
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; hoppers.scm : ホッパーズ (ペグ・ソリテア)
+;
+;               Copyright (C) 2008 Makoto Hiroi
+;
+
+; 跳び先表
+(define *jump-table*
+    #(((1 2) (3 6) (5 10))
+      ((3 5) (6 11) (4 7))
+      ((1 0) (4 6) (7 12))
+      ((6 9))
+      ((6 8))
+      ((3 1) (6 7) (8 11))
+      ((3 0) (4 2) (8 10) (9 12))
+      ((4 1) (6 5) (9 11))
+      ((6 4))
+      ((6 3))
+      ((5 0) (8 6) (11 12))
+      ((8 5) (6 1) (9 7))
+      ((11 10) (9 6) (7 2))))
+
+; 定数
+(define MAX-JUMP 11)
+(define SIZE 13)
+
+; 手順の表示
+(define (print-answer move)
+    (let ((prev (cdar move)))
+        ; 初手を表示
+        (format #t "[~D,~D" (caar move) prev)
+        ; 2 手目以降を表示する
+        (dolist (x (cdr move))
+            (cond ((= prev (car x))
+                   ; 同じ駒が続けて跳ぶ
+                   (set! prev (cdr x))
+                   (format #t ",~D" prev))
+                  (else
+                   (set! prev (cdr x))
+                   (format #t "]~%[~D,~D" (car x) prev))))
+        (format #t "]~%~%")))
+
+; ペグの移動
+(define (move-peg board from del to)
+    (logior
+        (logand board 
+                (lognot (ash 1 from))
+                (lognot (ash 1 del)))
+        (ash 1 to)))
+
+; 反復深化による解法
+(define (solve start goal)
+  ; フラグ
+  (define found 0)
+  ; 
+  (define (id-search board jc limit move)
+    (when (&lt;= jc limit)
+      (cond ((= (length move) MAX-JUMP)
+             (when (= board goal)
+               (print-answer (reverse move))
+               (set! found (+ found 1))))
+            (else
+             (dotimes (from SIZE)
+               (when (logbit? from board)
+                 (dolist (pos (vector-ref *jump-table* from))
+                   (when (and (logbit? (car pos) board)
+                              (not (logbit? (cadr pos) board)))
+                     (id-search
+                       (move-peg board from (car pos) (cadr pos))
+                       (if (= from (cdar move))
+                           jc
+                           (+ jc 1))
+                       limit
+                       (cons (cons from (cadr pos)) move))))))))))
+  ;
+  (let loop ((i 2))
+    (cond ((&lt;= i MAX-JUMP)
+           (format #t "----- ~D -----~%" i)
+           ; 初手を 0 -&gt; 6 に限定
+           (id-search (move-peg start 0 3 6) 1 i '((0 . 6)))
+           (if (zero? found)
+               (loop (+ i 1)))))))
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+;
+; eight1.scm : 8 Puzzle (反復深化による解法)
+;
+;              Copyright (C) 2008 Makoto Hiroi
+;
+
+; 隣接リスト
+(define *adjacent*
+    #((1 3)     ; 0
+      (0 2 4)   ; 1
+      (1 5)     ; 2
+      (0 4 6)   ; 3
+      (1 3 5 7) ; 4
+      (2 4 8)   ; 5
+      (3 7)     ; 6
+      (4 6 8)   ; 7
+      (5 7)))   ; 8
+
+; 見つけたデータの位置を返す
+(define (vector-position p v)
+    (let loop ((n 0))
+        (cond ((= (vector-length v) n) #f)
+              ((p (vector-ref v n)) n)
+              (else
+               (loop (+ n 1))))))
+
+; 単純な反復深化
+(define (solve1 board goal)
+  ; フラグ
+  (define found 0)
+  ; n 番目の駒を求める
+  (define (get-piece n) (vector-ref board n))
+  ; 反復深化
+  (define (id-search n limit space move)
+    (cond ((= n limit)
+           (when (equal? board goal)
+             (set! found (+ found 1))
+             (format #t "~A~%" (cdr (reverse move)))))
+          (else
+           (dolist (x (vector-ref *adjacent* space))
+             (unless (= (get-piece x) (car move))
+               ; 駒の移動
+               (vector-set! board space (get-piece x))
+               (vector-set! board x 0)
+               (id-search (+ n 1)
+                          limit
+                          x
+                          (cons (get-piece space) move))
+               ; 元に戻す
+               (vector-set! board x (get-piece space))
+               (vector-set! board space 0))))))
+  ;
+  (let loop ((i 1))
+      (cond ((&lt;= i 31)
+             (format #t "-----~D-----~%" i)
+             (id-search 0 i (vector-position zero? board) '(-1))
+             (if (zero? found)
+                 (loop (+ i 1)))))))
+
+;
+; 下限値枝刈り法
+;
+
+; 移動距離
+(define *distance*
+    #(#(0 0 0 0 0 0 0 0 0)  ; dummy
+      #(0 1 2 1 2 3 2 3 4)
+      #(1 0 1 2 1 2 3 2 3)
+      #(2 1 0 3 2 1 4 3 2)
+      #(1 2 3 0 1 2 1 2 3)
+      #(2 1 2 1 0 1 2 1 2)
+      #(3 2 1 2 1 0 3 2 1)
+      #(2 3 4 1 2 3 0 1 2)
+      #(3 2 3 2 1 2 1 0 1)))
+
+; アクセス関数
+(define (get-distance piece pos)
+    (vector-ref (vector-ref *distance* piece) pos))
+
+; 移動距離を求める
+(define (calc-distance board)
+    (let loop ((i 0) (d 0))
+        (if (&lt;= (vector-length board) i)
+            d
+            (let ((p (vector-ref board i)))
+                (loop
+                    (+ i 1)
+                    (+ d (get-distance p i)))))))
+
+; 反復深化 (下限値枝刈り法)
+(define (solve2 board goal)
+  ; フラグ
+  (define found 0)
+  ; n 番目の要素を求める
+  (define (get-piece n) (vector-ref board n))
+  ;
+  (define (id-search n limit space move lower)
+    (cond ((= n limit)
+           (when (equal? board goal)
+             (set! found (+ found 1))
+             (format #t "~A~%" (cdr (reverse move)))))
+          (else
+           (dolist (x (vector-ref *adjacent* space))
+             (unless (= (get-piece x) (car move))
+               (let* ((p (get-piece x))
+                      (new-lower (+ (- lower (get-distance p x))
+                                    (get-distance p space))))
+                 ; 下限値枝刈り法
+                 (when (&lt;= (+ new-lower n) limit)
+                   ; 駒の移動
+                   (vector-set! board space p)
+                   (vector-set! board x 0)
+                   (id-search (+ n 1)
+                              limit
+                              x
+                              (cons p move)
+                              new-lower)
+                   ; 元に戻す
+                   (vector-set! board x p)
+                   (vector-set! board space 0))))))))
+  ;
+  (let ((lower (calc-distance board)))
+    (let loop ((i lower))
+      (cond ((&lt;= i 31)
+             (format #t "-----~D-----~%" i)
+             (id-search 0 i (vector-position zero? board) '(-1) lower)
+             (if (zero? found)
+                 (loop (+ i 1))))))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm18.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm26.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

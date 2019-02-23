@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881770</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb02.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb04.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap05">2 色木（その１）</h3>
+<p> <a href="../xyzzy_lisp.html#abclisp">Common Lisp 入門</a> の番外編です。今回は「平衡木」というデータ構造のひとつである「2 色木」を取り上げます。なお、このドキュメントは拙作のページ Memorandum で説明した「2 色木：データの挿入」をまとめたものです。内容は重複していますが、ご了承くださいませ。
+</p>
+<h4>●はじめに</h4>
+<p> 二分木は左右の部分木のバランスが崩れると、性能が劣化する欠点があります。極端な例ですが、ソートされたデータを二分木に挿入していくと、データは右側の木にしか挿入されず、連結リストと同じ線形探索になってしまいます。
+</p>
+<p> これを補うために、木のバランスを一定の範囲に収める「平衡木」が考案されています。有名なところでは、AVL 木、2-3 木、B 木、B* 木などがあります。また、Ｃ++ の STL (Standard Template Library) では「2 色木 (Red-Black tree : 赤黒木) 」という平衡木が使われています。
+</p>
+<p> そこで、今回は 2 色木について説明し、Common Lisp でプログラムを作ってみましょう。
+</p>
+
+<h4>●2 色木とは？</h4>
+<p> 2 色木は次の条件を満たす「二分木」です。
+</p>
+<ul>
+  <li>各節は赤または黒に区分される。
+  <li>ある節が赤ならばその子は必ず黒である。黒節の子に制限はない。
+  <li>ルートから終端 (NIL) までの黒節の個数（黒高さ）はどの経路でも同じ。
+  <li>ルートの節は黒である。
+</ul>
+<p> 2 色木は AVL 木と同様に二分木の一種ですが、節を赤と黒で色分けするところが特徴です。
+</p>
+このことから 2 色木は「赤黒木 (Red-Black tree) 」と呼ばれています。2 色木のポイントは、ルートから終端までの全経路の黒高さを同じにすることです。簡単な例を示しましょう。次の図を見てください。
+
+<pre class="fig">
+      root
+       <font color="black">●</font> 14
+     ／  ＼            
+   ／      ＼          
+ <font color="black">●</font> 12       <font color="red">■</font> 16
+   ＼      ／  ＼      
+  13 <font color="red">■</font>  <font color="black">●</font> 15   <font color="black">●</font> 17
+                   ＼ 
+                     <font color="red">■</font> 18   
+
+<font color="red">■</font>：赤節点, <font color="black">●</font>：黒節点
+
+    図：2 色木の一例
+</pre>
+
+<p> 上図は黒高さが 2 の場合です。ルートから終端までのすべての経路で黒高さが 2 になっています。節が格納している値は整数値で、二分木の条件を満たしていることはすぐにわかると思います。図では root の節が黒で、その子は 12 が黒で 16 が赤になっています。2 色木では、赤節の子は必ず黒になりますが、黒節の子は制限が無いので赤でも黒でもかまいません。
+</p>
+
+<p> 節 16 は赤なので、その子は 2 つとも黒になります。また、節 13, 18 のように子がない赤節もあります。赤節の子がひとつだけ存在すると黒高さが同じにならないので、赤節は子が 2 つある場合と子がひとつもない「葉」になる場合の 2 通りしかありません。
+</p>
+
+<p> 黒高さが 2 の場合、一番短い経路はすべての節が黒の場合（黒 - 黒）になります。逆に、一番長い経路は黒節の子が赤になる場合（黒 - 赤 - 黒 - 赤）になります。図では 14 - 12 の経路 (A) が最短で、14 - 16 - 17 - 18 の経路 (B) が最長になります。2 色木の条件により、(A) より短い経路や (B) より長い経路はありえません。したがって、黒高さが n の 2 色木の場合、木の高さは n 以上 2 * n 以下になります。このように、2 色木は黒高さを揃えることで平衡木を実現しているのです。
+</p>
+
+<h4>●二分木の回転操作</h4>
+<p> 2 色木は二分木の一種なので、データの探索は二分木と同様に簡単にプログラムできます。ところが、2 色木にデータの挿入する場合、二分木のように簡単ではありません。2 色木の条件を満たすように、木の修正が必要になる場合があるからです。
+</p>
+
+<p> 2 色木にデータを挿入する場合、データを格納する新しい節の色は「赤」とします。挿入する節が赤の場合、親が黒であれば 2 色木の条件を満たすので問題ありません。二分木と同様に、データをそのまま挿入するだけで済みます。問題は親が赤の場合です。2 色木の場合、赤節の子は必ず黒になるのが条件です。だからといって新しい節を「黒」に変えると、黒高さが同じにならないので 2 色木の条件を満たしません。
+</p>
+
+<p> そこで、条件を満たすように木を修正します。ここで用いられる操作が「回転 (rotate) 」です。回転は<b>二分木の条件を満たしたまま</b>木構造を修正する基本的な操作です。ここで回転について詳しく説明しましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+          Ａ         右回転         Ｂ 
+        ／  ＼     ────→     ／  ＼ 
+      ／      ＼                ／      ＼ 
+    Ｂ          Ｃ   左回転   Ｄ          Ａ
+  ／  ＼           ←────           ／  ＼ 
+Ｄ      Ｅ                            Ｅ      Ｃ  
+
+        （１）                    （２）
+
+どちらの木も Ｄ＜Ｂ＜Ｅ＜Ａ＜Ｃ を満たしている
+
+              図：二分木の回転
+</pre>
+<table border=1>
+<caption>表：レベルの変化</caption>
+<tr><th></th><th>右回転</th><th>左回転</th></tr>
+<tr><td>Ｃ</td><td>+1</td><td>-1</td></tr>
+<tr><td>Ｄ</td><td>-1</td><td>+1</td></tr>
+<tr><td>Ｅ</td><td>0</td><td>0</td></tr>
+</table>
+<p> 回転は節 A と B の親子関係を反転する操作です。(1) -&gt; (2) の操作を「右回転 (right rotate) 」といい、逆に (2) -&gt; (1) の操作を「左回転 (left rotate) 」といいます。このような操作を行っても、(1) と (2) は二分木の条件である「左の子 &lt; 節のデータ &lt; 右の子」 を満たしています。
+</p>
+<p> また、木を回転すると、部分木（C, D, E) に含まれる節のレベル（ルートからの節までの経路長）は上表のように変化します。このような回転操作を行うことで、木のバランスを修正することができます。
+</p>
+
+<p> それでは、実際に二分木の回転を Common Lisp でプログラムしてみましょう。
+</p>
+次のリストを見てください。
+
+<pre class="list">
+リスト：二分木の操作
+
+; 節の定義
+(defstruct Node
+  data left right)
+
+; データの挿入
+(defun insert-tree (node num)
+  (cond ((null node)
+         (setq node (make-Node :data num)))
+        ((&lt; num (Node-data node))
+         (setf (Node-left node)
+               (insert-tree (Node-left node) num)))
+        ((&lt; (Node-data node) num)
+         (setf (Node-right node)
+               (insert-tree (Node-right node) num))))
+  ; 最後は node を返す
+  node)
+
+; 表示
+(defun print-tree (n node)
+  (when node
+    (print-tree (1+ n) (Node-left node))
+    (dotimes (x n) (princ "  "))
+    (format t "~D~%" (Node-data node))
+    (print-tree (1+ n) (Node-right node))))
+</pre>
+
+<p> このプログラムは <a href="clispb02.html#chap04">二分木：データの削除</a> と同じです。節は構造体で定義します。格納するデータは整数値とします。データの挿入は関数 insert-tree で、二分木の表示は print-tree で行います。
+</p>
+
+<p> insert-tree と print-tree の実行例を示します。
+</p>
+<pre class="fig">
+(setq *root* nil)
+(dolist (x '(40 20 10 30 50))
+  (setq *root* (insert-tree *root* x)))
+(print-tree 0 *root*)
+
+    10
+  20
+    30
+40
+  50
+</pre>
+<p> ルートの節は変数 *root* に格納します。*root* は nil に初期化しておくことをお忘れなく。
+</p>
+print-tree は昇順にデータを出力するので、左部分木が上に右部分木が下に表示されます。
+
+<p> 次は回転操作を行う関数 right-rotate と left-rotate を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：二分木の回転操作
+
+; 右回転
+(defun right-rotate (node)
+  (let ((left-node (Node-left node)))
+    (setf (Node-left node) (Node-right left-node)
+          (Node-right left-node) node)
+    left-node))
+
+; 左回転
+(defun left-rotate (node)
+  (let ((right-node (Node-right node)))
+    (setf (Node-right node) (Node-left right-node)
+          (Node-left right-node) node)
+    right-node))
+</pre>
+
+<p> どちらの関数も引数 node 以下の部分木に対して回転操作を行います。右回転は node と「左の子」の親子関係を反転します。左の子を変数 left-node にセットし、node と left-node の子を書き換えます。そして、新しく親になる left-node を返します。
+</p>
+
+<p> 左回転は node と「右の子」の親子関係を反転します。右の子を変数 right-node にセットし、node と right-node の子を書き換えます。そして、新しく親になる right-node を返します。回転操作の図を見ながらプログラムを読んでみると、よくわかると思います。
+</p>
+
+<p> それでは、簡単な実行例を示しましょう。insert-tree の実行例で作成した二分木 (*root*) に回転操作を行います。
+</p>
+<pre class="fig">
+(print-tree 0 *root*)
+
+    10
+  20
+    30
+40
+  50
+
+(setq *root* (right-rotate *root*))
+(print-tree 0 *root*)
+
+  10
+20
+    30
+  40
+    50
+</pre>
+<p> *root* に右回転を行うとルートの節は 20 になり、右部分木の高さがひとつ増えて、左部分木の高さがひとつ減ります。右回転を続けて行うと次のようになります。
+</p>
+<pre class="fig">
+(setq *root* (right-rotate *root*))
+(print-tree 0 *root*)
+
+10
+  20
+      30
+    40
+      50
+</pre>
+<p> ルートの節は 10 になり、左部分木は空になります。この状態で左回転を 2 回行うと元の状態に戻ります。
+</p>
+<pre class="fig">
+(setq *root* (left-rotate *root*))
+(print-tree 0 *root*)
+
+  10
+20
+    30
+  40
+    50
+
+(setq *root* (left-rotate *root*))
+(print-tree 0 *root*)
+
+    10
+  20
+    30
+40
+  50
+</pre>
+<p> このように、回転操作を行うことで木の高さを修正することができます。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データの挿入について詳しく説明します。赤節の親にデータを挿入する場合、大きく分けると次の 2 通りがあります。
+</p>
+
+<pre class="fig">
+          <font color="black">●</font>Ａ                <font color="red">■</font>Ａ                <font color="black">●</font>Ａ              <font color="black">●</font>Ｂ      
+        ／  ＼              ／  ＼              ／  ＼     =&gt;     ／  ＼      
+      <font color="red">■</font>Ｂ    <font color="red">■</font>Ｃ =&gt;     <font color="black">●</font>Ｂ    <font color="black">●</font>Ｃ        <font color="red">■</font>Ｂ    ○Ｃ      <font color="red">■</font>Ｄ    <font color="red">■</font>Ａ  
+    ／                  ／                  ／                
+  <font color="red">■</font>Ｄ                <font color="red">■</font>Ｄ                <font color="red">■</font>Ｄ                
+
+                （１）                                   （２）
+
+                        図：データの挿入(1)
+</pre>
+<p> 節 D が新しく挿入するデータで、節 B が赤節で節 A が黒節になります。場合分けは節 B の兄弟である節 C で行います。(1) は節 C が赤の場合で、(2) は節 C が終端（空の木）の場合です。
+</p>
+<p> (2) の場合、右回転で木のバランスを修正することができますね。あとは節の色を塗り替えることで 2 色木の条件を満たすことができます。ところが (1) の場合、木のバランスは回転操作では修正できません。この場合、節 B と C を黒に、節 A を赤に塗り替えます。すると、節 A 以下の部分木では 2 色木の条件を満たしますね。あとは、節 A とその親が 2 色木の条件を満たしているかチェックします。
+</p>
+<p> このとき、節 A の親が黒節ならば簡単ですね。節 A を赤に塗り替えても 2 色木の条件を満たしているので、修正はこれで終わりです。問題は節 A の親が赤の場合です。この場合も木の修正が必要になります。つまり (1) の場合、バランスの修正は節 A よりも上の木で行うのです。この場合、大きく分けると 3 通りのパターンがあります。次の図を見てください。
+</p>
+
+<pre class="fig">
+          <font color="black">●</font>Ｘ               <font color="black">●</font>Ｘ               <font color="black">●</font>Ｘ     
+        ／  ＼             ／  ＼             ／  ＼     
+      <font color="red">■</font>Ｙ    <font color="red">■</font>Ｚ       <font color="red">■</font>Ｙ    <font color="black">●</font>Ｚ       <font color="red">■</font>Ｙ    <font color="black">●</font>Ｚ 
+    ／  ＼             ／  ＼             ／  ＼         
+  <font color="red">■</font>Ａ    <font color="black">●</font>Ｗ       <font color="red">■</font>Ａ    <font color="black">●</font>Ｗ       <font color="black">●</font>Ｗ    <font color="red">■</font>Ａ     
+
+        （１）             （２）             （３）
+
+                図：データの挿入(2)
+</pre>
+
+<p> ここでも場合分けは節 A の親 Y の兄弟である節 Z の色で行います。(1) は節 Z が赤の場合、(2) と (3) は節 Z が黒の場合です。(1) の場合、回転操作で木のバランスを修正できないので、節 Y と Z の色を黒に、節 X の色を赤に塗り替えて、節 X よりも上の木でチェックを行います。
+</p>
+
+<p> このように、ルート方向に向かって 2 色木の条件をチェックしていきます。(1) の場合が続くと、最後にはルートにたどり着きます。(1) で節 X がルートの場合を考えてください。2 色木の条件からルートの節は黒でなければいけません。したがって、節 X を赤に塗り替えても黒に戻すことになります。つまり、ここで黒高さがひとつ増えるわけです。
+</p>
+
+<p> (2) と (3) は回転操作で木のバランスを修正することができます。まず、(2) から説明しましょう。次の図を見てください。
+</p>
+<pre class="fig">
+          <font color="black">●</font>Ｘ                 <font color="black">●</font>Ｙ     
+        ／  ＼     右回転    ／  ＼     
+      <font color="red">■</font>Ｙ    <font color="black">●</font>Ｚ   =&gt;    <font color="red">■</font>Ａ    <font color="red">■</font>Ｘ 
+    ／  ＼                       ／  ＼ 
+  <font color="red">■</font>Ａ    <font color="black">●</font>Ｗ                 <font color="black">●</font>Ｗ    <font color="black">●</font>Ｚ 
+
+        図：右回転による 2 色木の修正
+</pre>
+<p> この場合、節 X と Z は黒と黒のつながりなので、回転操作によってその間に赤節を挿入すると考えてください。回転したあとで、節 X と Y の色を塗り替えます。
+</p>
+<p> 2 色木の場合、どの経路でも黒高さは同じなので、回転前の部分木 A, W, Z に含まれている黒節の個数は同じになります。そして、回転した後でも黒高は変化しないことに注意してください。回転操作によって右部分木の高さはひとつ増えますが、そこに赤節を挿入するので黒高さは同じままなのです。
+</p>
+
+<p> (3) の場合はちょっと複雑です。次の図を見てください。
+</p>
+
+<pre class="fig">
+          <font color="black">●</font>Ｘ                         <font color="black">●</font>Ｘ                 <font color="black">●</font>Ａ     
+        ／  ＼     左回転            ／  ＼     右回転    ／  ＼     
+      <font color="red">■</font>Ｙ    <font color="black">●</font>Ｚ   =&gt;            <font color="red">■</font>Ａ    <font color="black">●</font>Ｚ   =&gt;    <font color="red">■</font>Ｙ    <font color="red">■</font>Ｘ 
+    ／  ＼                       ／  ＼                       ／  ＼ 
+  <font color="black">●</font>Ｗ    <font color="red">■</font>Ａ                 <font color="red">■</font>Ｙ    <font color="black">●</font>Ｃ                 <font color="black">●</font>Ｃ    <font color="black">●</font>Ｚ  
+        ／  ＼               ／  ＼                     
+      <font color="black">●</font>Ｂ    <font color="black">●</font>Ｃ         <font color="black">●</font>Ｗ    <font color="black">●</font>Ｂ                 
+
+                図：左回転と右回転による 2 色木の修正
+</pre>
+<p> まず、節 Y 以下の部分木に対して左回転を行います。すると、赤節 A の左の子が赤節 Y になります。この形は (2) の場合と同じなので、節 X 以下の部分木に対して右回転を行えば、木のバランスを修正することができます。このあと、節 A と X の色を塗り替えます。このように回転操作を 2 回行いますが、この操作でも黒高さは変化しないことに注意してください。
+</p>
+
+<p> それから、今までの説明では左部分木にデータを挿入しましたが、当然ですが右部分木にデータが挿入されることもあります。この場合も同じように回転操作で木のバランスを修正することができます。実際にプログラムを作るときには、回転操作の場合分けに注意してください。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは、2 色木にデータを挿入するプログラムを Common Lisp で作ってみましょう。まず最初に必要なデータを定義します。
+</p>
+
+<pre class="list">
+リスト：節と終端の定義
+
+; 節の定義
+(defstruct Node
+  color data right left)
+
+; 終端を表すオブジェクトの定義
+(setf END (make-Node :color 'B))
+</pre>
+
+<p> 節は構造体 Node で定義します。スロット color には節の色をセットします。
+</p>
+赤をシンボル R で、黒をシンボル B で表します。スロット data に格納するデータは整数値とします。それから、二分木のプログラムでは終端を nil で表しましたが、今回のプログラムでは終端を Node のオブジェクト END で表すことにします。終端 END を黒節で定義すると、終端と黒節の場合分けが不用になるのでプログラムが簡単になります。
+
+<p> 次はデータを挿入する関数 insert-rb-tree を作成します。2 色木の場合、新しい節を挿入したらルートの方に向かって木のバランスをチェックします。二分木ではデータの挿入を再帰呼び出しでプログラムしましたが、木のバランスをチェックするには少々面倒なのでループに展開することにします。ただし、単純なループではたどってきた経路がわからなくなるので、通過した節をリストに記憶しておきます。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：データの挿入
+
+(defun insert-rb-tree (root num)
+  (let ((path (search-path root num)) new-node node)
+    (cond
+     ; 空の木
+     ((eq root END)
+      (make-Node :color 'B :data num :left END :right END))
+     ; 同じデータがある
+     ((null path) root)
+     ; データの挿入
+     (t (setf node (pop path)
+              new-node (make-Node :color 'R :data num :left END :right END))
+        (if (< num (Node-data node))
+            (setf (Node-left node) new-node)
+            (setf (Node-right node) new-node))
+        (check-balance root new-node node path)))))
+</pre>
+
+<p> 関数 search-path は root からデータを挿入する節までの経路を求めます。ただし、経路は逆順であることに注意してください。root が空の木、または引数 num と同じデータを見つけたら nil を返します。次に、root が空の木の場合は新しい節を生成して返します。この場合、その節の色は黒になります。同じデータが見つかった場合はデータを挿入しないので root をそのまま返します。
+</p>
+<p> 次は、データ num を挿入する場合です。path より先頭要素を取り出して node にセットし、新しい節を生成して new-node にセットします。このとき、new-node の色は赤になります。そして、num が node の data より小さければ node の left に、大きければ right に new-node を挿入します。最後に、関数 check-balance を呼び出して 2 色木のバランスをチェックします。
+</p>
+
+<p> それから、2 色木の終端は END で表しているので、ルートを格納する変数も END で初期化しておくことをお忘れなく。
+</p>
+
+<p> 関数 search-path は簡単なので説明は省略いたします。次は関数 check-balance を説明します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：木のバランスをチェックする
+
+(defun check-balance (root node pnode path)
+  (let (gnode pnode-bro)
+    (loop
+      ; node の親 pnode が黒節ならば終了
+      (if (eq (Node-color pnode) 'B) (return root))
+      ; pnode の親 gnode から兄弟 pnode-bro を求める
+      (setf gnode (pop path))
+      (if (eq (Node-left gnode) pnode)
+          (setf pnode-bro (Node-right gnode))
+          (setf pnode-bro (Node-left gnode)))
+      ; 兄弟が黒節ならば回転処理で終了
+      (if (eq (Node-color pnode-bro) 'B)
+          (return (rotate-tree root node pnode gnode path)))
+      ; 兄弟が赤節ならば色を塗り替えて上の木でチェック
+      (setf (Node-color pnode) 'B
+            (Node-color pnode-bro) 'B)
+      ; gnode が root ならば終了
+      (if (eq gnode root) (return root))
+      ; gnode を赤に書き換えてチェックを続行する
+      (setf (Node-color gnode) 'R
+            node gnode
+            pnode (pop path)))))
+</pre>
+
+<p> 関数 check-balance の引数 root がルート、node が新しく挿入した節、pnode が node の親節、path が root までの経路です。処理内容は、データの挿入で説明した方法とまったく同じです。最初に pnode の色を調べます。黒節ならば 2 色木の修正は完了です。return で loop を脱出して root を返します。
+</p>
+
+<p> 次に、pnode の親節を path から取り出して gnode にセットします。そして、gnode から pnode の兄弟を求めて pnode-bro にセットします。pnode-bro が黒節ならば、木を回転することでバランスを修正することができます。この処理を関数 rotate-tree で行います。これで 2 色木の修正は完了です。return で loop を脱出して rotate-tree の返り値をそのまま返します。
+</p>
+
+<p> 最後は、兄弟が両方とも赤節の場合です。pnode と pnode-bro の色を黒に塗り替えて gnode とその親節でチェックを行います。gnode が root の場合、2 色木の修正はこれで完了です。return で loop を脱出して root を返します。そうでなければ、gnode の色を赤に塗り替えます。そして gnode を node に、gnode を親節を path から取り出して pnode にセットし、loop の先頭に戻って処理を繰り返します。
+</p>
+
+<p> 次は木を回転してバランスを修正する関数 rotate-tree を説明します。
+</p>
+
+<pre class="list">
+リスト：回転による木の修正
+
+(defun rotate-tree (root node pnode gnode path)
+  (let (rnode ggnode)
+    (cond ((eq (Node-left gnode) pnode)
+           ; node が pnode の右の子であれば pnode を左回転
+           (if (eq (Node-right pnode) node)
+               (setf (Node-left gnode) (left-rotate pnode)))
+           ; 色の塗り替え
+           (setf (Node-color gnode) 'R
+                 (Node-color (Node-left gnode)) 'B)
+           ; gnode を右回転
+           (setf rnode (right-rotate gnode)))
+          (t
+           ; node が pnode の左の子であれば pnode を右回転
+           (if (eq (Node-left pnode) node)
+               (setf (Node-right gnode) (right-rotate pnode)))
+           ; 色の塗り替え
+           (setf (Node-color gnode) 'R
+                 (Node-color (Node-right gnode)) 'B)
+           ; gnode を左回転
+           (setf rnode (left-rotate gnode))))
+    ; gnode の親節を変更
+    (cond ((eq gnode root) rnode)    ; gnode は root なので rnode を返す
+          (t
+           (setf ggnode (pop path))  ; gnode の親節を書き換えて root を返す
+           (if (eq (Node-left ggnode) gnode)
+               (setf (Node-left ggnode) rnode)
+               (setf (Node-right ggnode) rnode))
+           root))))
+</pre>
+<p> rotate-tree の引数 root がルート、pnode が node の親節、gnode が pnode の親節、path が root までの経路です。最初に、pnode が gnode の左部分木か右部分木かで場合分けします。pnode が左部分木の場合は、次に node が pnode の右部分木かチェックします。そうであれば、木の修正は 2 重回転が必要です。その場合は pnode に関数 left-rotate を適用して左回転を行います。返り値は gnode の left にセットします。
+</p>
+
+<p> 次に、gnode を赤に gnode の左の子を黒に塗り替えます。データの挿入の説明では、木を回転してから節の色を塗り替えましたが、このプログラムでは節の色を塗り替えてから木を回転しています。このとき、先に左回転を行っている場合があるので、pnode の色を塗り替えてはいけません。最後に、gnode に関数 right-rotate を適用して右回転を行います。返り値は変数 rnode にセットしておいて、あとで gnode の親節を書き換えます。
+</p>
+
+<p> pnode が gnode の右部分木の場合は、回転操作の左右が逆になるだけです。node が pnode の左部分木であれば pnode を右回転して、返り値を gnode の right にセットします。節の色を塗り替えたら、gnode を左回転して返り値を rnode にセットします。
+</p>
+
+<p> 最後に gnode の親節を書き換えます。もしも gnode が root ならば、書き換える親節がないので rnode をそのまま返します。そうでなければ、path から先頭要素を取り出して ggnode にセットし、gnode を格納しているスロットの値を rnode に書き換えます。
+</p>
+
+<p> これでプログラムは完成です。詳細は <a href="red_black.html">プログラムリスト</a> をお読みくださいませ。よくわからない方はデータの挿入で説明した図を見ながらプログラムを読んでみてください。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示しましょう。1 から 10 までの数値を順番に挿入してみます。二分木では右部分木しかない偏った木になりますが、2 色木はこのようなデータでも木のバランスが大きく崩れることはありません。
+</p>
+<pre class="list">
+(setq *root* END) =&gt; #S(Node color B data nil right nil left nil)
+
+(dolist (x '(1 2 3 4 5 6 7 8 9 10))
+  (format t "~% -- insert ~D --~%" x)
+  (setq *root* (insert-rb-tree *root* x))
+  (print-rb-tree 0 *root*))
+</pre>
+<pre class="fig">
+ -- insert 1 --
+  <font color="black">●</font>1
+
+ -- insert 2 --
+  <font color="black">●</font>1
+      <font color="red">■</font>2
+
+ -- insert 3 --
+      <font color="red">■</font>1
+  <font color="black">●</font>2
+      <font color="red">■</font>3
+
+ -- insert 4 --
+      <font color="black">●</font>1
+  <font color="black">●</font>2
+      <font color="black">●</font>3
+          <font color="red">■</font>4
+
+ -- insert 5 --
+      <font color="black">●</font>1
+  <font color="black">●</font>2
+          <font color="red">■</font>3
+      <font color="black">●</font>4
+          <font color="red">■</font>5
+
+ -- insert 6 --
+      <font color="black">●</font>1
+  <font color="black">●</font>2
+          <font color="black">●</font>3
+      <font color="red">■</font>4
+          <font color="black">●</font>5
+              <font color="red">■</font>6
+
+ -- insert 7 --
+      <font color="black">●</font>1
+  <font color="black">●</font>2
+          <font color="black">●</font>3
+      <font color="red">■</font>4
+              <font color="red">■</font>5
+          <font color="black">●</font>6
+              <font color="red">■</font>7
+
+ -- insert 8 --
+          <font color="black">●</font>1
+      <font color="red">■</font>2
+          <font color="black">●</font>3
+  <font color="black">●</font>4
+          <font color="black">●</font>5
+      <font color="red">■</font>6
+          <font color="black">●</font>7
+              <font color="red">■</font>8
+
+ -- insert 9 --
+          <font color="black">●</font>1
+      <font color="red">■</font>2
+          <font color="black">●</font>3
+  <font color="black">●</font>4
+          <font color="black">●</font>5
+      <font color="red">■</font>6
+              <font color="red">■</font>7
+          <font color="black">●</font>8
+              <font color="red">■</font>9
+
+ -- insert 10 --
+          <font color="black">●</font>1
+      <font color="black">●</font>2
+          <font color="black">●</font>3
+  <font color="black">●</font>4
+          <font color="black">●</font>5
+      <font color="black">●</font>6
+              <font color="black">●</font>7
+          <font color="red">■</font>8
+              <font color="black">●</font>9
+                  <font color="red">■</font>10
+
+図：データ挿入の実行例
+</pre>
+<p> 図では print-rb-tree の出力を書き換えて、黒節を <font color="black">●</font> で、赤節を <font color="red">■</font> で表しています。どの経路でも黒高さが同じになっていることはすぐにわかると思います。このように、2 色木ではどのようなデータでも木のバランスが大きく崩れることはありません。興味のある方は、いろいろなデータで試してみてください。
+</p>
+<p><a href="red_black.html">●2 色木：プログラムリスト</a>
+</p>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb02.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb04.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

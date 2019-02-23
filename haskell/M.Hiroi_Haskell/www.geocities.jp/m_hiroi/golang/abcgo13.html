@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Go 言語プログラミング入門</title>
+  <meta name="description" content="Go,Golang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881805</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Go Language Programming</h1>
+<h2>お気楽 Go 言語プログラミング入門</h2>
+<div class="small">
+[ <a href="abcgo12.html">PrevPage</a> | <a href="index.html">Golang</a> | <a href="abcgo14.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>並行プログラミング (2)</h3>
+<p> 並行プログラミングの続きです。今回は簡単な例題として「エラトステネスの篩」と「哲学者の食事」を取り上げます。
+</p>
+<h4>●エラトステネスの篩</h4>
+<p> goroutine とチャネルを使って素数を求めるプログラムを作ってみましょう。考え方は簡単です。最初に、2 から始まる整数列を生成するチャネルを用意します。この場合、チャネルは「遅延ストリーム」として機能します。
+</p>
+
+<p> 一般に、データの流れを抽象化したデータ構造を「ストリーム (stream) 」と呼びます。たとえば、ファイル入出力はストリームと考えることができます。また、配列 (スライス) を使ってストリームを表すこともできます。ただし、単純な配列では有限個のデータの流れしか表すことができません。ところが、「遅延評価」を用いると擬似的に無限個のデータを表すことができます。これを「遅延ストリーム」と呼びます。
+</p>
+
+<p> 遅延ストリームの基本的な考え方は、必要になったときに新しいデータを生成することです。このときに遅延評価を用います。具体的にはデータを生成する関数を用意し、それを遅延評価してストリームに格納しておきます。そして、必要になった時点で遅延評価しておいた関数を呼び出して、新しいデータを求めればよいわけです。Go 言語の場合、goroutine とチャネルを使えば「遅延ストリーム」と同じような動作 <sup><a href="abcgo13.html#note1">[*1]</a></sup> をするプログラムを簡単に作ることができます。
+</p>
+<p> 最初に、2 から始まる整数列を生成するストリームを作ります。これは goroutine とチャネルを使えば簡単に作成することができます。2 は素数なので、この整数列から 2 で割り切れる整数を取り除き除きます。ここでも goroutine を使って、入力ストリームから 2 で割り切れる整数を取り除いたストリームを返すフィルターを作ります。
+</p>
+
+<p> 2 で割り切れる整数が取り除かれたので、次の要素は 3 になります。今度は 3 で割り切れる整数を取り除けばいいのです。これもフィルターを使えば簡単です。このとき、入力用のストリームは 2 で割り切れる整数が取り除かれています。したがって、このストリームに対して 3 で割り切れる整数を取り除くようにフィルターを設定すればいいわけです。
+</p>
+
+<p> このように、素数を見つけたらそれで割り切れる整数を取り除いていくアルゴリズムを「エラトステネスの篩」といいます。ようするに、2 から始まる整数ストリームに対して、見つけた素数 2, 3, 5, 7, 11, ... を順番にフィルターで設定して素数でない整数をふるい落としていくわけです。
+</p>
+
+<div class="note">
+-- <a name="note1">note</a> --------<br>
+[*1] 今回作成する goroutine とチャネルを使ったプログラムは副作用があります。関数型言語で用いられる「遅延ストリーム」は副作用がないので、まったく同じ動作になるわけではありません。
+</div>
+<h4>●数列の生成</h4>
+<p> 最初に整数列を生成するプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 数列の生成 (1)
+
+type Stream chan int
+
+func makeInt(n, m int) Stream {
+    s := make(Stream)
+    go func() {
+        for i := n; i &lt;= m; i++ {
+            s &lt;- i
+        }
+        close(s)
+    }()
+    return s
+}
+</pre>
+<p> チャネル chan int に Stream という別名を付けました。これ以降、このチャネルのことをストリームと呼ぶことにします。
+</p>
+<p> 関数 makeInt は n から m までの整数列を生成するストリームを返します。最初に、整数列を生成するストリーム s を make で作成します。次に、go で匿名関数を実行します。この中で、for ループの変数 i の値を n から m まで増やしていき、ストリーム s に i を書き込みます。繰り返しが終了したら close でストリームをクローズします。
+</p>
+
+<p> 同じようにフィボナッチ数列を生成することもできます。また、同じ数値を無限に生成することも簡単にできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 数列の生成 (2)
+
+// n を無限に出力する
+func makeNum(n int) Stream {
+    s := make(Stream)
+    go func() {
+        for { s &lt;- n }
+    }()
+    return s
+}
+
+// フィボナッチ数列
+func makeFibo() Stream {
+    s := make(Stream)
+    go func() {
+        a, b := 1, 1
+        for {
+            s &lt;- a
+            a, b = b, a + b
+            if a &lt; 0 { break }
+        }
+        close(s)
+    }()
+    return s
+}
+</pre>
+<p> 関数 makeNum は引数 n を無限に出力するストリームを返します。関数 makeFibo はフィボナッチ数列を出力するストリームを返します。オーバーフローしたらストリームをクローズすることに注意してください。このように、数列を生成するプログラムは goroutine とチャネルを使って簡単にプログラムすることができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre class="list">
+リスト : 簡単な実行例
+
+func main() {
+    s0 := makeInt(1, 20)
+    for x := range s0 {
+        fmt.Print(x, " ")
+    }
+    fmt.Println("")
+    s1 := makeNum(1)
+    for i := 0; i &lt; 10; i++ {
+        fmt.Print(&lt;- s1, " ")
+    }
+    fmt.Println("")
+    s2 := makeFibo()
+    for x := range s2 {
+        fmt.Print(x, " ")
+    }
+    fmt.Println("")
+}
+</pre>
+<pre>
+C&gt;go run stream.go
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
+1 1 1 1 1 1 1 1 1 1
+1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711
+28657 46368 75025 121393 196418 317811 514229 832040 1346269 2178309 3524578
+5702887 9227465 14930352 24157817 39088169 63245986 102334155 165580141
+267914296 433494437 701408733 1134903170 1836311903
+</pre>
+<h4>●高階関数</h4>
+<p> 次はストリーム用の高階関数を定義します。
+</p>
+
+<pre class="list">
+リスト : ストリーム用の高階関数
+
+// マッピング
+func streamMap(f func(int) int, in Stream) Stream {
+    s := make(Stream)
+    go func(){
+        for {
+            x, ok := &lt;- in
+            if !ok { break }
+            s &lt;- f(x)
+        }
+        close(s)
+    }()
+    return s
+}
+
+// フィルター
+func streamFilter(f func(int) bool, in Stream) Stream {
+    s := make(Stream)
+    go func(){
+        for {
+            x, ok := &lt;- in
+            if !ok { break }
+            if f(x) {
+                s &lt;- x
+            }
+        }
+        close(s)
+    }()
+    return s
+}
+</pre>
+<p> 関数 streamMap はストリーム in の要素に関数 f を適用し、その結果をストリーム s に書き込みます。関数 streamFilter はストリーム in の要素に関数 f を適用し、真を返す要素をストリーム s に書き込みます。どちらの関数も難しいところはないと思います。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : 簡単な使用例
+
+func main() {
+    //
+    // 省略
+    //
+    square := func(x int) int { return x * x }
+    s3 := streamMap(square, makeInt(1, 10))
+    for x := range s3 {
+        fmt.Print(x, " ")
+    }
+    fmt.Println("")
+    isOdd := func(x int) bool { return x % 2 != 0 }
+    s4 := streamFilter(isOdd, makeInt(1, 20))
+    for x := range s4 {
+        fmt.Print(x, " ")
+    }
+    fmt.Println("")
+}
+</pre>
+<pre>
+C&gt;go run stream.go
+
+・・・省略・・・
+
+1 4 9 16 25 36 49 64 81 100
+1 3 5 7 9 11 13 15 17 19
+</pre>
+<h4>●素数を求める</h4>
+<p> 最後に素数を求める関数 sieve を作ります。
+</p>
+<pre class="list">
+リスト : エラトステネスの篩
+
+// n で割り切れる要素を取り除く
+func filter(n int, in Stream) Stream {
+    return streamFilter(func(x int) bool { return x % n != 0 }, in)
+}
+
+// 素数を求める
+func sieve(n int) Stream {
+    s := make(Stream)
+    go func() {
+        in := makeInt(2, n)
+        for {
+            x, ok := &lt;- in
+            if !ok { break }
+            s &lt;- x
+            if x * x &lt;= n {
+                in = filter(x, in)
+            }
+        }
+        close(s)
+    }()
+    return s
+}
+</pre>
+<p> 関数 sieve は n 以下の素数を生成するストリームを返します。最初に、素数を生成するストリーム s を make で作ります。次に、go で匿名関数を実行します。この中で、2 から n まで生成するストリームを makeInt で作って変数 in にセットします。次の for ループで in から素数を取り出してストリーム s に書き込みます。
+</p>
+<p> 要素 x が √n より大きければ、残りの要素はすべて素数です。そうでなければ、x と割り切れる要素を取り除くフィルターを設定します。この処理を関数 filter で行います。filter は streamFilter を使えば簡単に定義できます。そして、ストリーム in の値を filter の返り値 (ストリーム) で書き換えます。これで in から要素を読み込むと、filter の中で書き換える前の in からデータが読み込まれ、x で割り切れる要素を取り除くことができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre class="list">
+リスト : 簡単な実行例
+
+func main() {
+    //
+    // 省略
+    //
+    for x := range sieve(500) {
+        fmt.Print(x, " ")
+    }
+}
+</pre>
+<pre>
+C&gt;go run stream.go
+
+・・・省略・・・
+
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211
+223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331
+337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449
+457 461 463 467 479 487 491 499
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●哲学者の食事とは？</h4>
+<p> 次は「哲学者の食事」という並行プログラミングでは有名な問題を解いてみましょう。
+</p>
+<div class="question">
+<b>[哲学者の食事]</b>
+<p> 5 人の哲学者が丸いテーブルに座っています．テーブルの中央にはスパゲッティが盛られた大皿があり、哲学者の間には 5 本のフォークが置かれています。哲学者は思索することとスパゲッティを食べることを繰り返します。食事のときには 2 本のフォークを持たなければなりません。食事が終わると 2 本のフォークを元の位置に戻します。
+</p>
+</DIV>
+<p> 詳しい説明は <a href="http://ja.wikipedia.org/wiki/%E9%A3%9F%E4%BA%8B%E3%81%99%E3%82%8B%E5%93%B2%E5%AD%A6%E8%80%85%E3%81%AE%E5%95%8F%E9%A1%8C">食事する哲学者の問題 -- Wikipedia</a> をお読みください。
+</p>
+
+<h4>●データ構造の定義</h4>
+<p> それではプログラムを作りましょう。5 人の哲学者を 5 つの goroutine で表します。それから、フォークを管理する goroutine を 1 つ作ります。これをサーバーとして使います。哲学者はサーバーにフォークを要求します。サーバーは要求されたフォークがあれば使用を許可し、なければ不許可とします。哲学者はフォークがなければ一定時間待機して、再度フォークを要求することにしましょう。
+</p>
+
+<p> まず最初に、必要となるデータ構造を定義します。
+</p>
+<pre class="list">
+リスト : データ構造の定義
+
+// 定数
+const (
+    GET = 0   // フォークの取得
+    RET = 1   // フォークの返却
+)
+
+// フォークのリクエスト
+type Req struct {
+    req, fork int
+    reply chan&lt;- bool
+}
+
+// リクエストの生成
+func newReq(req, fork int, reply chan bool) *Req {
+    p := new(Req)
+    p.req = req
+    p.fork = fork
+    p.reply = reply
+    return p
+}
+</pre>
+<p> 構造体 Req はフォークのリクエストを表します。フィールド変数 req にリクエストの種類、fork にフォークの番号、reply は応答用のチャネルです。リクエストの種類は定数 GET と RET で表します。 GET はフォークの取得、RET はフォークの返却を表します。関数 newReq はリクエストを生成します。
+</p>
+
+<h4>●サーバーの作成</h4>
+<p> 次はフォークを管理するサーバー forks を作ります。
+</p>
+<pre class="list">
+リスト : フォークの管理
+
+func forks(n int, ch chan *Req) {
+    forkTbl := make([]bool, n)
+    for i := 0; i &lt; n; i++ {
+        forkTbl[i] = true
+    }
+    for {
+        r := &lt;- ch
+        switch r.req {
+        case GET:
+            if forkTbl[r.fork] {
+                forkTbl[r.fork] = false
+                r.reply &lt;- true
+            } else {
+                r.reply &lt;- false
+            }
+        case RET:
+            forkTbl[r.fork] = true
+            r.reply &lt;- true
+        }
+    }
+}
+</pre>
+<p> 引数 n はフォークの本数、ch はリクエストを受け付けるチャネルです。最初にフォークの有無を表す配列 forkTbl を作って true で初期化します。それから、次の for ループ (無限ループ) でリクエストを受け付けます。チャネル ch からリクエストを取り出して変数 r にセットします。
+</p>
+<p> r.req が GET ならば、r.fork が forkTbl にあるかチェックします。フォークがあれば forkTbl[r.fork] を false に書き換えてから、チャネル r.reply に true を送信します。フォークがなければ false を送信します。r.req が RET の場合はフォークを返却するだけなので、forkTbl[r.fork] を true に書き換えてから、r.reply に true を送信します。
+</p>
+
+<h4>●フォークの取得と返却</h4>
+<p> 次はフォークを取得する関数 getFork を作ります。
+</p>
+<pre class="list">
+リスト : フォークの取得
+
+func getFork(fork int, out chan *Req, in chan bool) int {
+    r := newReq(GET, fork, in)
+    for {
+        out &lt;- r
+        if &lt;- in {
+            time.Sleep(100 * time.Millisecond)
+            return fork
+        } else {
+            time.Sleep(500 * time.Millisecond)
+        }
+    }
+}
+</pre>
+<p> 関数 getFork はフォーク fork をサーバーに要求します。newReq でリクエストを生成して変数 r にセットします。そして、for ループの中で r をチャネル out に送信し、その応答をチャネル in で受け取ります。true の場合はフォークの使用許可がおりたので、準備時間として 100 msec 待ったあと fork を返します。不許可の場合は 500 msec 待ったあと再度メッセージを送信します。
+</p>
+
+<p> 次はフォークを返却する関数 retFork を作ります。
+</p>
+<pre class="list">
+リスト : フォークの返却
+
+func retFork(fork int, out chan *Req, in chan bool) bool {
+    time.Sleep(100 * time.Millisecond)
+    out &lt;- newReq(RET, fork, in)
+    return &lt;- in
+}
+</pre>
+<p> retFork は fork を返す準備時間として 100 msec 待ったあと、チャネル out にフォークを返却するリクエストを送信します。そして、チャネル in からの応答結果 (true) を返します。
+</p>
+
+<h4>●哲学者の動作</h4>
+<p> 次は哲学者の動作をプログラムします。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 哲学者の動作
+
+func person(m, forkR, forkL int, out chan *Req, quit chan bool) {
+    in := make(chan bool)
+    for n := 2 ; n &gt; 0; n-- {
+        fmt.Printf("Philosopher%d is thinking\n", m)
+        time.Sleep(1000 * time.Millisecond)
+        getFork(forkR, out, in)
+        getFork(forkL, out, in)
+        fmt.Printf("Philosopher%d is eating\n", m)
+        time.Sleep(500 * time.Millisecond)
+        retFork(forkR, out, in)
+        retFork(forkL, out, in)
+    }
+    fmt.Printf("Philosopher%d is sleeping\n", m)
+    quit &lt;- true
+}
+</pre>
+<p> 関数 person の引数 m は哲学者の番号を表します。forkR が右側のフォーク、forkL が左側のフォークです。最初にリクエストの返答を受けるチャネル in を生成します。次の for ループで、哲学者が食事を取る回数だけ処理を繰り返します。
+</p>
+<p> 哲学者が食事をする場合、最初に getFork で右側のフォークを取り、次に左側のフォークを取ります。食事を終えたら returnFork で右側のフォークを返却し、次に左側のフォークを返却します。
+</p>
+<p> このように、goroutine を使うと簡単にプログラムできますが、実は並行プログラミング特有の大きな問題点があるのです。これはプログラムを実行してみるとわかります。
+</p>
+
+<h4>●実行結果 (1)</h4>
+<p> 最後にプログラムを実行する関数 main を作ります。
+</p>
+<pre class="list">
+リスト : 実行
+
+func main() {
+    ch := make(chan *Req)
+    quit := make(chan bool)
+    go forks(5, ch)
+    go person(1, 0, 1, ch, quit)
+    go person(2, 1, 2, ch, quit)
+    go person(3, 2, 3, ch, quit)
+    go person(4, 3, 4, ch, quit)
+    go person(5, 4, 0, ch, quit)
+    for n := 5; n &gt; 0; n-- {
+        &lt;- quit
+    }
+}
+</pre>
+<p> 最初に、リクエストを受け付けるチャネル ch と、終了通知を受け付けるチャネル quit を生成します。それから go forks(5, ch) でサーバーを起動して、go person() で 5 人の哲学者を起動します。フォークは整数 0, 1, 2, 3, 4 で表しています。哲学者は円形に並んでいるので、5 人目の左側のフォークが 1 人目の右側のフォークになります。あとは、最後の for ループで 5 人の哲学者が終了するのを待つだけです。
+</p>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+C&gt;go run ph.go
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher5 is thinking
+exit status 2            &lt;-- CTRL-C を入力
+</pre>
+<p> このように、すべての goroutine が待ち状態となり先へ進むことができなくなります。これを「デッドロック (deadlock) 」といいます。哲学者全員が右側のフォークを取り、左側のフォークが置かれるのを待つときにデッドロックとなるわけです。
+</p>
+
+<h4>●デッドロックの防止</h4>
+<p> デッドロックを防止する簡単な方法は、右側のフォークを取っても左側のフォークを取れないときは、右側のフォークを元に戻すことです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : デッドロックの防止 (1)
+
+// 左側のフォークを要求する
+func getFork1(fork int, out chan *Req, in chan bool) bool {
+    out &lt;-  newReq(GET, fork, in)
+    return &lt;- in
+}
+
+// 哲学者の動作
+func person(m, forkR, forkL int, out chan *Req, quit chan bool) {
+    in := make(chan bool)
+    for n := 2 ; n &gt; 0; {
+        fmt.Printf("Philosopher%d is thinking\n", m)
+        time.Sleep(1000 * time.Millisecond)
+        getFork(forkR, out, in)
+        if getFork1(forkL, out, in) {
+            fmt.Printf("Philosopher%d is eating\n", m)
+            time.Sleep(500 * time.Millisecond)
+            retFork(forkR, out, in)
+            retFork(forkL, out, in)
+            n--
+        } else {
+            retFork(forkR, out, in)
+        }
+    }
+    fmt.Printf("Philosopher%d is sleeping\n", m)
+    quit &lt;- true
+}
+</pre>
+<p> 右側のフォークを取ったあと、関数 getFork1 で左側のフォークを要求します。フォークを受け取った場合は true を返すので、食事をすることができます。false の場合は右側のフォークを返却して思索に戻ります。
+</p>
+<p> Lua のようなノンプリエンプティブなコールチンの場合、これでデッドロックを解消して正常に動作するのですが、goroutine やプリエンプティブなスレッドでは新たな問題が発生します。
+</p>
+
+<h4>●実行結果 (2)</h4>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+C&gt;go run ph1.go
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher5 is thinking
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher5 is thinking
+Philosopher1 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher2 is thinking
+Philosopher5 is thinking
+exit status 2            &lt;-- CTRL-C 入力
+</pre>
+<p> 哲学者全員が右側のフォークを受け取っては返却することを繰り返すため、次の状態へ進むことができません。デッドロックではありませんが、無限ループに陥っているわけです。このような状態を「ライブロック (livelock) 」といいます。
+</p>
+
+<h4>●ライブロックの解消</h4>
+<p> 「哲学者の食事」の場合、ライブロックを解消する簡単な方法があります。フォークが残り 1 本の場合、右側のフォークを要求されたらそれを待たせることにするのです。左側のフォークであれば、その要求を受け付けます。4 人の哲学者が右側のフォークを持ったとき、5 人目の哲学者は右側のフォークを持つことができません。次に、4 人のうちの誰かが左側のフォークを要求し、それが受け付けられるので、最低でもひとりの哲学者が食事をすることができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データ構造の定義
+
+// 定数
+const (
+    GET   = 0
+    RET   = 1
+    LEFT  = 2
+    RIGHT = 3
+)
+
+// フォークのリクエスト
+type Req struct {
+    req, fork, side int
+    reply chan bool
+}
+
+// リクエストの生成
+func newReq(req, fork, side int, reply chan bool) *Req {
+    p := new(Req)
+    p.req = req
+    p.fork = fork
+    p.side = side
+    p.reply = reply
+    return p
+}
+</pre>
+<p> 構造体 Req にフィールド変数 side を追加します。右側のフォークであれば定数 RIGHT を、左側のフォークであれば LEFT をセットします。
+</p>
+
+<p> 次に関数 forks を修正します。
+</p>
+<pre class="list">
+リスト : フォークの管理
+
+func forks(n int, ch chan *Req) {
+    forkTbl := make([]bool, n)
+    for i := 0; i &lt; n; i++ {
+        forkTbl[i] = true
+    }
+    for {
+        r := &lt;- ch
+        switch r.req {
+        case GET:
+            if forkTbl[r.fork] {
+                if n == 1 && r.side == RIGHT {
+                    r.reply &lt;- false
+                } else {
+                    forkTbl[r.fork] = false
+                    n--
+                    r.reply &lt;- true
+                }
+            } else {
+                r.reply &lt;- false
+            }
+        case RET:
+            forkTbl[r.fork] = true
+            n++
+            r.reply &lt;- true
+        }
+    }
+}
+</pre>
+<p> フォークの残数を変数 n で管理します。フォークの使用を許可するとき、n が 1 で r.side が RIGHT の場合は許可しません。それ以外の場合はフォークの使用を許可します。フォークの使用を許可したときは n を値を -1 して、フォークが返却された場合は n の値を +1 することをお忘れなく。
+</p>
+<p> 次はフォークを取得する関数 getFork を修正します。
+</p>
+<pre class="list">
+リスト : フォークの取得
+
+func getFork(fork, side int, out chan *Req, in chan bool) bool {
+    r := newReq(GET, fork, side, in)
+    for {
+        out &lt;- r
+        if &lt;- in {
+            time.Sleep(100 * time.Millisecond)
+            return true
+        } else if side == LEFT {
+            return false
+        } else {
+            time.Sleep(500 * time.Millisecond)
+        }
+    }
+}
+</pre>
+<p> チャネル in からの応答が false の場合、それが左側のフォークであれば false を返します。それ以外の処理は今までと同じです。
+</p>
+
+<p> 最後に関数 person を修正します。
+</p>
+
+<pre class="list">
+リスト : ライブロックの解消
+
+func person(m, forkR, forkL int, out chan *Req, quit chan bool) {
+    in := make(chan bool)
+    for n := 2 ; n &gt; 0; {
+        fmt.Printf("Philosopher%d is thinking\n", m)
+        time.Sleep(1000 * time.Millisecond)
+        getFork(forkR, RIGHT, out, in)
+        if getFork(forkL, LEFT, out, in) {
+            fmt.Printf("Philosopher%d is eating\n", m)
+            time.Sleep(500 * time.Millisecond)
+            retFork(forkR, RIGHT, out, in)
+            retFork(forkL, LEFT, out, in)
+            n--
+        } else {
+            retFork(forkR, RIGHT, out, in)
+        }
+    }
+    fmt.Printf("Philosopher%d is sleeping\n", m)
+    quit &lt;- true
+}
+
+</pre>
+<p> getFork で左側のフォークを要求し、応答が false の場合は retFork で右側のフォークを返却します。あとの処理は今までと同じです。
+</p>
+<p> <a href="abcgo13.html#list1">プログラムリスト１</a>
+</p>
+<h4>●実行結果 (3)</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+C&gt;go run ph2.go
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher5 is thinking
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is eating
+Philosopher4 is thinking
+Philosopher5 is eating
+Philosopher2 is thinking
+Philosopher3 is eating
+Philosopher5 is thinking
+Philosopher3 is thinking
+Philosopher1 is eating
+Philosopher4 is eating
+Philosopher1 is thinking
+Philosopher3 is thinking
+Philosopher4 is sleeping
+Philosopher2 is eating
+Philosopher5 is eating
+Philosopher2 is thinking
+Philosopher5 is sleeping
+Philosopher3 is eating
+Philosopher1 is eating
+Philosopher3 is sleeping
+Philosopher1 is sleeping
+Philosopher2 is eating
+Philosopher2 is sleeping
+</pre>
+<p> どの哲学者も 2 回食事をして睡眠まで到達しています。
+</p>
+
+<h4>●デッドロックの防止 (2)</h4>
+<p> もうひとつ簡単な方法を紹介しましょう。奇数番目の哲学者は、まず左側のフォークを取り上げてから右側のフォークを取り、偶数番目の哲学者は、今までのように右側のフォークを取り上げてから左側のフォークを取ります。こんな簡単な方法で動作するのは不思議なように思います。たとえば、哲学者が 2 人の場合を考えてみてください。
+</p>
+<p> 哲学者 0 の右側のフォークを A、左側のフォークを B とします。哲学者 1 からみると、B が右側のフォークで、A が左側のフォークになります。デッドロックは、哲学者 0 が A を取り、哲学者 1 が B を取ったときに発生します。ここで、哲学者 1 が左側のフォーク A から取るようにします。先に哲学者 0 が A を取った場合、哲学者 1 は A があくまで待つことになるので、哲学者 0 はフォーク B を取って食事をすることができます。哲学者 1 が先にフォーク A を取った場合も同じです。これでデッドロックを防止することができます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : デッドロックの防止 (2)
+
+func person(m, forkR, forkL int, out chan *Req, quit chan bool) {
+    in := make(chan bool)
+    for n := 2 ; n &gt; 0; n-- {
+        fmt.Printf("Philosopher%d is thinking\n", m)
+        time.Sleep(1000 * time.Millisecond)
+        if m % 2 == 0 {
+            getFork(forkR, out, in)
+            getFork(forkL, out, in)
+        } else {
+            getFork(forkL, out, in)
+            getFork(forkR, out, in)
+        }            
+        fmt.Printf("Philosopher%d is eating\n", m)
+        time.Sleep(500 * time.Millisecond)
+        retFork(forkR, out, in)
+        retFork(forkL, out, in)
+    }
+    fmt.Printf("Philosopher%d is sleeping\n", m)
+    quit &lt;- true
+}
+</pre>
+<p> if で m が偶数の場合は右側から、奇数の場合は左側のフォークから取るように処理を分けるだけです。
+</p>
+<p> <a href="abcgo13.html#list2">プログラムリスト２</a>
+</p>
+<h4>●実行結果 (4)</h4>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+C&gt;go run ph3.go
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher5 is thinking
+Philosopher5 is eating
+Philosopher5 is thinking
+Philosopher4 is eating
+Philosopher1 is eating
+Philosopher4 is thinking
+Philosopher1 is thinking
+Philosopher5 is eating
+Philosopher3 is eating
+Philosopher5 is sleeping
+Philosopher3 is thinking
+Philosopher2 is eating
+Philosopher4 is eating
+Philosopher2 is thinking
+Philosopher1 is eating
+Philosopher4 is sleeping
+Philosopher3 is eating
+Philosopher1 is sleeping
+Philosopher3 is sleeping
+Philosopher2 is eating
+Philosopher2 is sleeping
+</pre>
+<p> 正常に動作していますね。興味のある方はいろいろ試してみてください。
+</p>
+<h4>●参考文献, URL</h4>
+<ol>
+  <li>Paul Graham (著)，野田 開 (訳), 『On Lisp』, <a href="http://www.komaba.utmc.or.jp/~flatline/">Web 版</a>
+  <li>Timothy Buddy (著), 吉田雄二 (監修), 長谷川明生・大田義勝 (訳), 『Little Smalltake 入門』, アスキー出版, 1989
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』, アジソンウェスレイ, 1995
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+//
+// ph2.go : 哲学者の食事
+//
+//          Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+// 定数
+const (
+    GET   = 0
+    RET   = 1
+    LEFT  = 2
+    RIGHT = 3
+)
+
+// フォークのリクエスト
+type Req struct {
+    req, fork, side int
+    reply chan bool
+}
+
+// リクエストの生成
+func newReq(req, fork, side int, reply chan bool) *Req {
+    p := new(Req)
+    p.req = req
+    p.fork = fork
+    p.side = side
+    p.reply = reply
+    return p
+}
+
+// フォークの管理
+func forks(n int, ch chan *Req) {
+    forkTbl := make([]bool, n)
+    for i := 0; i &lt; n; i++ {
+        forkTbl[i] = true
+    }
+    for {
+        r := &lt;- ch
+        switch r.req {
+        case GET:
+            if forkTbl[r.fork] {
+                if n == 1 &amp;&amp; r.side == RIGHT {
+                    r.reply &lt;- false
+                } else {
+                    forkTbl[r.fork] = false
+                    n--
+                    r.reply &lt;- true
+                }
+            } else {
+                r.reply &lt;- false
+            }
+        case RET:
+            forkTbl[r.fork] = true
+            n++
+            r.reply &lt;- true
+        }
+    }
+}
+
+// フォークの取得
+func getFork(fork, side int, out chan *Req, in chan bool) bool {
+    r := newReq(GET, fork, side, in)
+    for {
+        out &lt;- r
+        if &lt;- in {
+            time.Sleep(100 * time.Millisecond)
+            return true
+        } else if side == LEFT {
+            return false
+        } else {
+            time.Sleep(500 * time.Millisecond)
+        }
+    }
+}
+
+// フォークの返却
+func retFork(fork, side int, out chan *Req, in chan bool) bool {
+    time.Sleep(100 * time.Millisecond)
+    out &lt;- newReq(RET, fork, side, in)
+    return &lt;- in
+}
+
+// 哲学者の動作
+func person(m, forkR, forkL int, out chan *Req, quit chan bool) {
+    in := make(chan bool)
+    for n := 2 ; n &gt; 0; {
+        fmt.Printf("Philosopher%d is thinking\n", m)
+        time.Sleep(1000 * time.Millisecond)
+        getFork(forkR, RIGHT, out, in)
+        if getFork(forkL, LEFT, out, in) {
+            fmt.Printf("Philosopher%d is eating\n", m)
+            time.Sleep(500 * time.Millisecond)
+            retFork(forkR, RIGHT, out, in)
+            retFork(forkL, LEFT, out, in)
+            n--
+        } else {
+            retFork(forkR, RIGHT, out, in)
+        }
+    }
+    fmt.Printf("Philosopher%d is sleeping\n", m)
+    quit &lt;- true
+}
+
+// 実行
+func main() {
+    ch := make(chan *Req)
+    quit := make(chan bool)
+    go forks(5, ch)
+    go person(1, 0, 1, ch, quit)
+    go person(2, 1, 2, ch, quit)
+    go person(3, 2, 3, ch, quit)
+    go person(4, 3, 4, ch, quit)
+    go person(5, 4, 0, ch, quit)
+    for n := 5; n &gt; 0; n-- {
+        &lt;- quit
+    }
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+//
+// ph3.go : 哲学者の食事
+//
+//          Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import (
+    "fmt"
+    "time"
+)
+
+// 定数
+const (
+    GET = 0
+    RET = 1
+)
+
+// フォークのリクエスト
+type Req struct {
+    req, fork int
+    reply chan bool
+}
+
+// リクエストの生成
+func newReq(req, fork int, reply chan bool) *Req {
+    p := new(Req)
+    p.req = req
+    p.fork = fork
+    p.reply = reply
+    return p
+}
+
+// フォークの管理
+func forks(n int, ch chan *Req) {
+    forkTbl := make([]bool, n)
+    for i := 0; i &lt; n; i++ {
+        forkTbl[i] = true
+    }
+    for {
+        r := &lt;- ch
+        switch r.req {
+        case GET:
+            if forkTbl[r.fork] {
+                forkTbl[r.fork] = false
+                r.reply &lt;- true
+            } else {
+                r.reply &lt;- false
+            }
+        case RET:
+            forkTbl[r.fork] = true
+            r.reply &lt;- true
+        }
+    }
+}
+
+// フォークの取得
+func getFork(fork int, out chan *Req, in chan bool) int {
+    r := newReq(GET, fork, in)
+    for {
+        out &lt;- r
+        if &lt;- in {
+            time.Sleep(100 * time.Millisecond)
+            return fork
+        } else {
+            time.Sleep(500 * time.Millisecond)
+        }
+    }
+}
+
+// フォークの返却
+func retFork(fork int, out chan *Req, in chan bool) bool {
+    time.Sleep(100 * time.Millisecond)
+    out &lt;- newReq(RET, fork, in)
+    return &lt;- in
+}
+
+// 哲学者の動作
+func person(m, forkR, forkL int, out chan *Req, quit chan bool) {
+    in := make(chan bool)
+    for n := 2 ; n &gt; 0; n-- {
+        fmt.Printf("Philosopher%d is thinking\n", m)
+        time.Sleep(1000 * time.Millisecond)
+        if m % 2 == 0 {
+            getFork(forkR, out, in)
+            getFork(forkL, out, in)
+        } else {
+            getFork(forkL, out, in)
+            getFork(forkR, out, in)
+        }            
+        fmt.Printf("Philosopher%d is eating\n", m)
+        time.Sleep(500 * time.Millisecond)
+        retFork(forkR, out, in)
+        retFork(forkL, out, in)
+    }
+    fmt.Printf("Philosopher%d is sleeping\n", m)
+    quit &lt;- true
+}
+
+// 実行
+func main() {
+    ch := make(chan *Req)
+    quit := make(chan bool)
+    go forks(5, ch)
+    go person(1, 0, 1, ch, quit)
+    go person(2, 1, 2, ch, quit)
+    go person(3, 2, 3, ch, quit)
+    go person(4, 3, 4, ch, quit)
+    go person(5, 4, 0, ch, quit)
+    for n := 5; n &gt; 0; n-- {
+        &lt;- quit
+    }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcgo12.html">PrevPage</a> | <a href="index.html">Golang</a> | <a href="abcgo14.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

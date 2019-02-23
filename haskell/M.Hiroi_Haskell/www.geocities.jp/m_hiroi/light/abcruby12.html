@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Ruby プログラミング入門</title>
+  <meta name="description" content="Ruby,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881800</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>お気楽 Ruby プログラミング入門</h1>
+<h2>第 12 回 多重継承と Mix-in</h2>
+<div class="small">
+[ <a href="abcruby11.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby13.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 前回は単一継承について簡単に説明し、具体的な例題として連結リストクラス List を継承して制限付き連結リストクラス FixedList を作成しました。今回は多重継承と Mix-in について説明します。
+</p>
+
+<h4>●多重継承の問題点</h4>
+<p> 一般のオブジェクト指向言語の場合、継承によって引き継がれる性質は定義されたデータ (インスタンス変数など) やメソッドになります。これを「実装の継承」と呼びます。また、インスタンス変数を継承することを特別に「属性の継承」と呼ぶ場合があります。なお、Java の interface のようにメソッドの仕様だけを継承する方法もあります。これを「仕様の継承」といいます。
+</p>
+
+<p> 多重継承を行う場合、異なる性質や機能を持つクラスを継承することがあります。たとえば、クラス Foo にはメソッド method_a() があり、クラス Bar にはメソッド method_b() があるとしましょう。この 2 つのメソッドはまったく異なる働きをします。ここで、メソッド method_a() はインスタンス変数 @x を使っていて、method_b() も @x を使っていると、多重継承で問題が発生します。
+</p>
+
+<p> 一般的な多重継承で、クラス Foo と Bar を継承してクラス Baz を作成した場合、クラス Baz のインスタンスに変数 @x は一つしか存在しません。メソッド method_a() と method_b() は一つしかない @x を使うことになります。この場合、どちらかのメソッドは正常に動作しないでしょう。これでは多重継承する意味がありませんね。
+</p>
+
+<p> また、多重継承ではインスタンス変数だけではなく、メソッド名が衝突する場合もあります。このように、多重継承では名前の衝突が発生する危険性があるのです。それから、多重継承にはもう一つ問題点があります。それはクラスの階層構造が複雑になることです。
+</p>
+
+<p> 単一継承の場合、クラスの階層は木構造になりますが、多重継承ではグラフになります。木構造の場合、クラスの優先順位は簡単に決めることができますが、グラフになると優先順位を決めるためのアルゴリズムは複雑になり、それを理解するのは難しくなります。多重継承は強力な機能ですが、使うときには十分な注意が必要になるのです。 
+</p>
+
+<p> ちなみにＣ++の場合、多重継承したクラスに同名のメソッドがある場合、どちらを呼び出すのか明確に指定しないとコンパイルでエラーとなります。またＣ++はメンバ変数も継承されるため、変数名の衝突も発生します。この場合も、どちらの変数を使用するのか明確に指定しないとコンパイルエラーとなります。
+</p>
+
+<p> このほかにも、多重継承ではいろいろな問題が発生するため、それを解決するためにＣ++ではいろいろな機能が用意されています。ところが、それらの機能がＣ++をいっそう複雑な言語にしていると筆者には思えてなりません。Ｃ++はコンパイラ型の言語で、なによりも効率を重視するため、Ruby のようなインタプリタ型の言語よりも複雑な言語仕様になるのは避けられないのかもしれません。
+</p>
+
+<h4>●Mix-in</h4>
+<p> これらの問題を回避するため、属性を継承するスーパークラスは一つだけに限定して、あとのスーパークラスは実装だけを継承するという方法があります。この方法を Mix-in といいます。
+</p>
+
+<p> 具体的には、インスタンス変数を定義せずにメソッドだけを記述したクラスを用意します。属性の継承は単一継承になりますが、実装のみを記述したクラスはいくつ継承してかまいません。一つのクラスに複数の実装を混ぜることから Mix-in と呼ばれています。
+</p>
+
+<p> なお、Mix-in は特別な機能ではなく、多重継承を使いこなすための方法論にすぎません。多重継承を扱うことができるプログラミング言語であれば Mix-in を行うことが可能です。
+</p>
+
+<p> この Mix-in という方法を言語仕様に取り込んだのが Ruby です。Ruby では実装だけを記述するクラスのことをモジュール (Module) といいます。モジュールはインスタンスを生成することができませんし、他のクラスを継承することも、スーパークラスになることもできません。定義できるのは定数やメソッドだけになります。
+</p>
+
+<p> Ruby の Mix-in を図 1 に示します。
+</p>
+
+<pre class="figw">
+<img src="img/fig1201.png" alt="図 1 : Mix-in">
+                図 1 : Mix-in
+</pre>
+
+<p> クラス C はクラス B を継承していて、そこに ModuleA が Mix-in されています。クラス D もクラス B を継承していますが、Mix-in されているモジュールは ModuleB となります。
+</p>
+
+<p> 多重継承の問題点は Mix-in ですべて解決できるわけではありませんが、クラスの階層構造がすっきりとしてわかりやすくなることは間違いありません。Mix-in は多重継承を使いこなす優れた方法だと思います。
+</p>
+
+<h4>●モジュールの使い方</h4>
+<p> それでは、具体的にモジュールの使い方を説明しましょう。モジュールの定義は module 文で行います。
+</p>
+
+<pre class="fig">
+module モジュール名
+  メソッドの定義
+  ...
+end
+</pre>
+
+<p> メソッドの定義は今までと同じで def 文を使います。また、モジュールの中で定数を定義することもできます。クラスでモジュールを Mix-in するには、class の中で include 文を使います。簡単な例を示しましょう。リスト 1 を見てください。
+</p>
+
+<pre class="list">
+リスト 1 : モジュールの使い方
+
+class Foo
+  def initialize
+    @a = 10
+  end
+  attr_accessor :a
+  def method_foo
+    puts "method_foo #{@a}"
+  end
+end
+
+module Baz
+  def method_baz
+    puts "method_baz"
+    method_foo
+    method_bar
+  end
+end
+
+class Bar &lt; Foo
+  include Baz
+  def initialize
+    super
+    @b = 20
+  end
+  attr_accessor :b
+  def method_bar
+    puts "method_bar #{@b}"
+  end
+end
+</pre>
+
+<p> クラス Foo にはインスタンス変数 @a とメソッド method_foo()、クラス Bar にはインスタンス変数 @b とメソッド method_bar()、モジュール Baz にはメソッド method_baz() が定義されています。
+</p>
+
+<p> Baz は Bar から include されているので、Baz のメソッドは Bar のメソッドと同様に呼び出すことができます。また、Baz のメソッドから Foo や Bar のメソッドを呼び出すこともできますし、Foo や Bar のインスタンス変数にもアクセスすることができます。
+</p>
+
+<p> 実際に実行すると、次のようになります。
+</p>
+
+<pre>
+irb&gt; a = Bar.new
+=&gt; #&lt;Bar: ... &gt;
+irb&gt; a.method_baz
+method_baz
+method_foo 10
+method_bar 20
+=&gt; nil
+</pre>
+
+<p> このように、モジュールをインクルードとすることで、そこに定義されているメソッドを呼び出すことができます。
+</p>
+
+<p> ところで、Ruby はインスタンス変数を実行時に生成することができるので、モジュールのメソッド内でインスタンス変数を定義することも可能です。この場合、インクルードされているクラスのインスタンスに新しいインスタンス変数が追加されることになります。
+</p>
+
+<p> ただし、この方法はお勧めいたしません。インスタンス変数の定義と初期化はクラス内の initialize() で行い、そのアクセスはメソッドを経由して行ったほうがわかりやすいプログラムになると思います。モジュール内で定義するのは定数やメソッドだけに限定したほうが無難です。
+</p>
+
+<p> なお、モジュールは Mix-in のためだけではなく、Math モジュールのように関数的なメソッドをまとめておくことや、名前が衝突しないようにクラスや定数をまとめておくことにも使われています。
+</p>
+
+<h4>●モジュールとクラスの優先順位</h4>
+<p> Ruby の場合、モジュールはクラスの一種なので、メソッドの優先順位を定めるため、クラスとインクルードされたモジュールは次のような階層関係になります。
+</p>
+<pre class="figw">
+<img src="img/fig1202.png" alt="図 2 : モジュールとクラスの階層構造">
+（１）
+<img src="img/fig1203.png" alt="図 2 : モジュールとクラスの階層構造">
+（２）
+
+図 2 : モジュールとクラスの階層構造
+</pre>
+
+<p> インクルードされたモジュールはスーパークラスとインクルードしたクラスの間に入ります。図 2 (1) で Foo と Baz に同名のメソッドが存在する場合、Baz のメソッドが優先されます。複数のモジュールをインクルードする場合も同じです。たとえば inluce Baz1, include Baz2 とすると、図 2 (2) に示す階層構造になります。したがって、Baz1 と Baz2 に同名のメソッドが存在した場合、Baz2 のメソッドが優先されます。
+</p>
+
+<h4>●Comparable と Enumerable モジュール</h4>
+<p> Ruby には便利なモジュールがあらかじめ用意されています。特に、Comparable と Enumerable はとても役に立ちます。Comparable をインクルードすると、インスタンスの大小関係を比べるのに通常の比較演算子を使うことができるようになります。Comparable で定義されているメソッドは、そのクラスのメソッド &lt;=&gt;() を呼び出して動作するように実装されています。
+</p>
+
+<p> また、Enumerable をインクルードすると、member?() や map() など役に立つメソッドが利用できるようになります。Enumerable のメソッドは、そのクラスのメソッド each() を呼び出して動作するように実装されています。たとえば、前々回に作成した List クラスには each() が定義されているので、Enumerable をインクルードするだけで便利なメソッドを追加することができます。
+</p>
+
+<p> それでは、クラス List で Comparable と Enumerable モジュールをインクルードしてみましょう。List にはメソッド each() が定義されているので、メソッド &lt;=&gt;() が必要になります。リスト 2 を見てください。
+</p>
+
+<pre class="list">
+リスト 2 : メソッド &lt;=&gt; の定義
+
+  def &lt;=&gt;(other)
+    cp1 = @top.link
+    cp2 = other.top.link
+    while true
+      return 0 if !cp1 &amp;&amp; !cp2
+      if !cp1 || (cp2 &amp;&amp; cp1.data &lt; cp2.data)
+        return -1
+      elsif !cp2 || cp1.data &gt; cp2.data
+        return 1
+      end
+      cp1 = cp1.link
+      cp2 = cp2.link
+    end
+  end
+</pre>
+
+<p> 連結リストの先頭から順番に要素を比較していきます。cp1 と cp2 が nil ならば、すべての要素が等しいので 0 を返します。次に、cp1 が nil ならば、cp1 のリストが短いので -1 を返します。また、cp2 のリストに要素が残っていて、cp1.data &lt; cp2.data の場合も -1 を返します。
+</p>
+
+<p> 次に、cp2 が nil であれば、cp2 のリストが短いので 1 を返します。また、cp1.data &gt; cp2.data の場合も 1 を返します。それ以外の場合は cp1.data と cp2.data が等しいので次の要素を調べます。
+</p>
+
+<p> あとは、モジュールを include するだけです。簡単な実行例を示しましょう。
+</p>
+
+<pre>
+irb&gt; a = List.new 1,2,3,4
+=&gt; #&lt;List: ... &gt;
+irb&gt; b = List.new 1,2,3,5
+=&gt; #&lt;List: ... &gt;
+irb&gt; a &lt; b
+=&gt; true
+irb&gt; b &lt; a
+=&gt; false
+irb&gt; a.member? 4
+=&gt; true
+irb&gt; b.member? 4
+=&gt; false
+</pre>
+
+<p> このように、Comparable と Enumerable をインクルードするだけで、クラスに便利なメソッドを追加することができます。
+</p>
+
+<h4>●スタック</h4>
+<p> 次は連結リストを使って「スタック (stack)」という基本的なデータ構造を作ってみましょう。図 3 を見てください。
+</p>
+
+<pre class="figw">
+<img src="img/fig1204.png" alt="図 3 : スタックの動作例">
+                図 3 : スタックの動作例
+</pre>
+
+<p> 図 3 はバネがついた容器を表していて、上から品物を出し入れすることができます。初めは空の状態です。ここに品物を乗せると、重さによってバネを圧縮し、品物が容器に格納されます。さらにもう一つ品物を上に乗せると、さらにバネを圧縮し、その品物も容器に格納することができます。バネが限界まで圧縮されると、もう品物は追加できなくなります。取り出す場合は、上にある品物から行います。一つ取り出すと、その分バネが伸びて下にある品物が上に押し出されます。
+</p>
+
+<p> この容器の動作がスタックの動作なのです。スタックにデータを追加する操作をプッシュ (PUSH) といい、スタックからデータを取り出す操作をポップ (POP) といいます。品物をデータに見立てれば、データ A をスタックにプッシュし (2)、次にデータ B をプッシュします (3)。データを取り出す場合、あとから入れたデータ B が先にポップされ (4)、その次にデータ A がポップされてスタックが空になります (5)。
+</p>
+
+<p> このように、スタックはあとから入れたデータが先に取り出されるので、後入れ先出し (LIFO : Last-In, First-Out) と呼ばれます。 
+</p>
+
+
+<h4>●継承は is-a 関係を表す</h4>
+<p> 今まで説明したように、オブジェクトは関数とデータを一つにまとめたものです。オブジェクト指向プログラミングは、このオブジェクトを部品として扱います。実際には、クラス単位でプログラムを作るので、クラス間の関係がとても重要になります。ここで、クラス間の関係 is-a と has-a を簡単に説明します。
+</p>
+
+<p> is-a 関係は X is a Y. の略で、「X は Y の一種である」という意味になります。X がサブクラスで Y をスーパークラスと考えると、is-a 関係は継承で表すことができます。たとえば、制限付き連結リストは、格納する要素の個数が制限されていますが連結リストの一種であることは明らかです。FixedList クラスは List クラスを継承することで簡単に実装できましたが、それは連結リストとの間に is-a 関係があるからです。
+</p>
+
+<p> has-a 関係は X has a Y. の略で、「X は Y を持っている」という意味です。たとえば、車にはエンジンやタイヤがありますが、車とエンジンやタイヤに成り立つ関係が has-a です。車はエンジンやタイヤがないと走ることができません。このように、has-a 関係は「X が成立するのに欠かせない要素が Y である」という関係を表しています。
+</p>
+
+<p> has-a 関係のほかに、is-implemented-using という関係があります。これは X is implemented using Y. の略で、「X は Y を使って実装される」という意味です。たとえば、スタックの場合、配列でも連結リストでも実装することが可能です。つまり、Y の種類によらず X を実現できる関係が is-implemented-using 関係なのです。
+</p>
+
+<p> 一般に、has-a 関係や is-implemented-using 関係は、クラス X のインスタンス変数にクラス Y のオブジェクト（インスタンス）を格納することで表します。これを「X は Y を包含している」といいます。そして、これらの関係を表すのに継承を使ってはいけない、ということに注意してください。
+</p>
+
+<p> たとえば、連結リストを継承してスタックを作ることを考えてみましょう。PUSH は連結リストの先頭にデータを追加することで、POP は連結リストの先頭からデータを取り出すことで簡単に実現できます。しかし、連結リストを継承すると、ほかの操作も可能になります。スタックの途中にデータを追加したり、途中からデータを取り出すなど、スタックを破壊する危険な操作が可能になってしまいます。
+</p>
+
+<p> また、クラスの関係を考えた場合、スタックと連結リストには is-a 関係は成り立ちません。ところが、継承を使うとデータ型も引き継がれるため、プログラムの上でもスタックは連結リストの一種になってしまいます。継承は強力な機能ですが万能ではありません。クラス間の関係を考えて、適切に使うことが大切です。 
+</p>
+
+<h4>●スタックの実装</h4>
+<p> それでは、実際に連結リストを使ってスタックを実装してみましょう。クラス名は Stack とし、表 1 に示すメソッドを定義します。プログラムはリスト 3 のようになります。
+</p>
+
+<table border=1>
+<caption>表 1 : スタックのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th> 機能</th></tr>
+</thead>
+<tbody>
+  <tr><td> s.push(x)  </td><td> スタック s にデータを追加する</td></tr>
+  <tr><td> s.pop()    </td><td> スタック s からデータを取り出す</td></tr>
+  <tr><td> s.top()    </td><td> スタック s の先頭データを返す</td></tr>
+  <tr><td> s.empty?() </td><td> スタック s が空ならば true を返す</td></tr>
+</tbody>
+</table>
+<pre class="list">
+リスト 3 : スタック
+
+class Stack
+  def initialize
+    @content = List.new
+  end
+  
+  def push(x)
+    @content.insert!(0, x)
+  end
+  
+  def pop
+    @content.delete_at!(0)
+  end
+  
+  def top
+    @content.at(0)
+  end
+  
+  def empty?
+    @content.empty?
+  end
+
+  def inspect
+    sprintf("#&lt;Stack:%#x&gt;", self.object_id)
+  end
+end
+</pre>
+
+<p> メソッド initialize() でインスタンス変数 @content に List のインスタンスを生成してセットします。あとは、このインスタンスを使ってスタックを実装します。
+</p>
+
+<p> メソッド push() はスタックにデータ x を追加します。これは連結リストの先頭に x を追加すればいいので、メソッド insert!(0, x) を呼び出すだけです。メソッド pop() は先頭のデータを delete_at!(0) で取り出します。delete_at!() は取り出したデータを返すので、これでスタックの動作になります。メソッド top() は先頭のデータを削除せずに返し、メソッド empty?() はスタックが空の場合は true を返します。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+
+<pre>
+irb&gt; a = Stack.new
+=&gt; #&lt;Stack: ... &gt;
+irb&gt; 5.times {|x|
+irb&gt; a.push x
+irb&gt; }
+=&gt; 5
+irb&gt; while not a.empty?
+irb&gt; puts a.pop
+irb&gt; end
+4
+3
+2
+1
+0
+=&gt; nil
+</pre>
+
+<p> スタックに 0 から 4 まで push() で格納します。その後、pop() でデータを取り出すと 4, 3, 2, 1, 0 になります。このように、スタックは後から入れたデータが先に取り出されます。
+</p>
+
+<h4>●キュー</h4>
+<p> 最後にもう一つ「キュー (queue)」という基本的なデータ構造を作ってみましょう。たとえばチケットを買う場合、カウンタの前に並んで順番を待たなくてはいけません。キューはカウンタの前に並ぶ行列と考えてください。列の先頭にいる人から順番にチケットを買うことができますが、あとから来た人は列の後ろに並ばなくてはいけません。列の先頭まで進むと、チケットを購入することができます。これを表したのが図 4 です。
+</p>
+
+<pre class="figw">
+<img src="img/fig1205.png" alt="図 4 : キューの構造">
+                図 4 : キューの構造
+</pre>
+
+<p> このように、キューはデータを取り出すときは列の先頭から行い、データを追加するときは列の後ろへ行います。このため、キューは「待ち行列」とか「先入れ先出し (FIFO : first-in,first-out)」と呼ばれます。
+</p>
+
+<p> キューは連結リストを使って簡単に実装することができますが、大きな欠点もあります。連結リストをキューとして使う場合、データを追加するときに最後尾までセルをたどっていく操作が必要になるため、要素数が多くなるとデータの追加に時間がかかってしまうのです。
+</p>
+
+<p> この場合、最後尾のセルを参照する変数を用意する、または「循環リスト (circular list)」というデータ構造を使うといった方法が考えられます。今回はちょっと変わった方法ですが、連結リストを 2 つ使ってキューを作ってみましょう。
+</p>
+
+<h4>●キューの実装</h4>
+<p> 考え方は簡単です。2 つの連結リストを @front と @rear に用意します。@front のリストの先頭がキューの先頭を表し、@rear のリストの先頭がキューの最後尾を表します。したがって、データを取り出す操作は @front の先頭から要素を取り出すだけですみ、データを追加する操作は @rear の先頭にデータを追加するだけですみます。
+</p>
+
+<p> データを取り出すとき、@front が空リストの場合は @rear からデータを移動します。このとき、@rear の先頭から順番に要素を取り出して、それを @front の先頭に追加していくと、@front の要素は @rear の逆順で並ぶことになります。つまり、最初に追加されたデータが @front の先頭になるわけです。
+</p>
+
+<p> たとえば、空のキューにデータ 1, 2, 3 を追加すると、@front = nil, @rear = (3, 2, 1) になります。ここでキューからデータを取り出すとき、@rear から @front へデータを移動すると @front = (1, 2, 3), @reaf = nil になります。そして、@front の先頭の要素を順番に取り出すと 1, 2, 3 になり、キューとして動作することが分かります。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは、プログラムを作りましょう。定義するメソッドを表 2 に、プログラムをリスト 4 に示します。
+</p>
+
+<table border=1>
+<caption>表 2 : キューのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td> q.enqueue!(x) </td><td>キューにデータを追加する</td></tr>
+  <tr><td> q.dequeue!()  </td><td>キューからデータを取り出す</td></tr>
+  <tr><td> q.peek()      </td><td>キューの先頭のデータを返す</td></tr>
+  <tr><td> q.empty?()    </td><td>キューが空ならば true を返す</td></tr>
+</tbody>
+</table>
+
+<pre class="list">
+リスト 4 : キュー
+
+class Queue
+  def initialize
+    @size = 0
+    @front = List.new
+    @rear = List.new
+  end
+  
+  def move_data
+    while not @rear.empty?
+      @front.insert!(0, @rear.delete_at!(0))
+    end
+  end
+  private :move_data
+  
+  def enqueue!(x)
+    @size += 1
+    @rear.insert!(0, x)
+  end
+  
+  def dequeue!
+    if @size &gt; 0
+      move_data if @front.empty?
+      @size -= 1
+      @front.delete_at!(0)
+    end
+  end
+  
+  def peek
+    if @size &gt; 0
+      move_data if @front.empty?
+      @front.at(0)
+    end
+  end
+  
+  def empty?
+    @size == 0
+  end
+  
+  def inspect
+    sprintf("#&lt;Queue:%#x&gt;", self.object_id)
+  end
+end
+</pre>
+
+<p> キューのクラス名は Queue としました。initialize() で 2 つの連結リストを生成して @front と @rear にセットします。そして、データ数を表すインスタンス変数 @size を 0 に初期化します。
+</p>
+
+<p> 次に private メソッド move_data() を定義します。@rear にデータがある限り、delete_at!() で先頭のデータを取り出して、@front の先頭に insert!() で追加します。
+</p>
+
+<p> データの追加はメソッド enqueue!() で行います。この操作は簡単で、@size を +1 してから insert!() で @rear の先頭にデータを追加するだけです。
+</p>
+
+<p> データの取り出しはメソッド dequeue!() で行います。@size が0 より大きい場合はデータを取り出し、そうでなければ nil を返します。@front が空リストの場合は move_data() で @rear のデータを移動します。そして、@size を -1 してから delete_at!() で @front の先頭要素を取り出して返します。
+</p>
+
+<p> それでは、簡単な実行例を示します。
+</p>
+
+<pre>
+irb&gt; q = Queue.new
+=&gt; #&lt;Queue: ... &gt;
+irb&gt; 5.times {|x|
+irb&gt; q.enqueue! x
+irb&gt; }
+=&gt; 5
+irb&gt; while not q.empty?
+irb&gt; puts q.dequeue!
+irb&gt; end
+0
+1
+2
+3
+4
+=&gt; nil
+</pre>
+
+<p> 0 から 4 まで順番に enqueue!() でキューに追加します。その後、dequeue()! でデータを取り出すと 0, 1, 2, 3, 4 になります。スタックとは逆に、キューはデータを入れた順番でデータが取り出されます。
+</p>
+
+<div class="column">
+<h4>●コラム クラスベースとプロトタイプベース</h4>
+<p> Ruby のオブジェクト指向機能は、まず最初にクラスを定義し、それを元にしてインスタンス (オブジェクト) を生成します。これは Smalltalk, Ｃ++, Java などポピュラーなオブジェクト指向言語でも同じです。このようにクラスを中心としたオブジェクト指向を「クラスベース」といいます。
+</p>
+
+<p> クラスはオブジェクト指向機能の中心で、クラスがなければ何も始まらないと思われる方もいるでしょう。ところが、クラスが存在しないオブジェクト指向もあるのです。これを「プロトタイプベース」といいます。もしくは「インスタンスベース」と呼ばれることもあるようです。代表的な言語として Self や JavaScript があります。
+</p>
+
+<p> プロトタイプベースの言語では、元となるインスタンスをコピーすることで新しいインスタンスを生成します。このコピー元のインスタンスを「プロトタイプ」といいます。そして、新しいインスタンスに必要となる機能 (メソッドなど) を追加します。このインスタンスが新たなプロトタイプとなり、あとはこのプロトタイプを必要な分だけコピーしてインスタンスを生成すればいいわけです。
+</p>
+
+<p> 特定のインスタンスにメソッドを追加する機能は Ruby の特異メソッドそのものです。Ruby はクラスベースのオブジェクト指向言語ですが、クラスメソッドの実装に特異メソッドが使われているように、プロトタイプベースのオブジェクト指向を取り込んでいて、それを有効に活用しています。
+</p>
+</div>
+<h4>●おわりに</h4>
+<p> 多重継承と Mix-in について説明しました。クラスに Comparable と Enumerable モジュールを Mix-in することで、比較演算子やコレクションを操作する便利なメソッドを簡単に追加することができます。継承は強力な機能ですが、クラス間の関係を考えて使う必要があります。スタックやキューのように、継承ではなく包含関係を使った方がよい場合もあります。次回はプログラムでよく用いられるデータ構造である「二分木」を作ってみましょう。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+#
+# list12.rb : お気楽 Ruby プログラミング入門
+#             第 12 回 プログラムリスト
+#
+#             Copyright (C) 2008 Makoto Hiroi
+#
+
+# 連結リスト
+class List
+  include Enumerable
+  include Comparable
+  
+  # セルの定義
+  class Cell
+    attr_accessor :data, :link
+    def initialize(data, link = nil)
+      @data = data
+      @link = link
+    end
+  end
+  
+  # 初期化
+  def initialize(*args)
+    @top = Cell.new(nil)   # Header Cell をセット
+    args.reverse_each do |x|
+      insert!(0, x)
+    end
+  end
+  
+  attr_accessor :top
+  protected :top, :top=
+  
+  # n 番目のセルを求める
+  def nth(n)
+    i = -1
+    cp = @top
+    while cp
+      return cp if n == i
+      i += 1
+      cp = cp.link
+    end
+  end
+  private :nth
+  
+  # n 番目にデータを挿入する
+  def insert!(n, data)
+    cp = nth(n - 1)
+    if cp
+      cp.link = Cell.new(data, cp.link)
+      data
+    end
+  end
+  
+  # n 番目のデータを求める
+  def at(n)
+    cp = nth(n)
+    cp.data if cp
+  end
+  
+  # n 番目のデータを削除する
+  def delete_at!(n)
+    cp = nth(n - 1)
+    if cp and cp.link
+      data = cp.link.data
+      cp.link = cp.link.link
+      data
+    end
+  end
+  
+  # 空リストか
+  def empty?
+    !@top.link
+  end
+  
+  # 演算子 [] の定義
+  # 参照
+  def [](n)
+    at(n)
+  end
+  
+  # 代入
+  def []=(n, value)
+    cp = nth(n)
+    if cp
+      cp.data = value
+    end
+  end
+  
+  # リストの連結
+  def append(cp1, cp2)
+    if !cp1
+      cp2
+    else
+      Cell.new(cp1.data, append(cp1.link, cp2))
+    end
+  end
+  private :append
+  
+  def +(other)
+    raise TypeError unless other.instance_of?(List)
+    ls = List.new
+    ls.top.link = append(@top.link, other.top.link)
+    ls
+  end
+  
+  def *(n)
+    ls = List.new
+    n.times do
+      ls.top.link = append(@top.link, ls.top.link)
+    end
+    ls
+  end
+  
+  # Enumerable 用
+  def each
+    cp = @top.link
+    while cp
+      yield cp.data
+      cp = cp.link
+    end
+    self
+  end
+  
+  # 配列に変換
+  def to_a
+    a = []
+    each do |x| a.push(x) end
+    a
+  end
+  
+  # 文字列に変換
+  def to_s
+    "(" &lt;&lt; to_a.join(",") &lt;&lt; ")"
+  end
+  
+  def inspect
+    sprintf("#&lt;List:%#x&gt;", self.object_id)
+  end
+  
+  # Comparable 用
+  def &lt;=&gt;(other)
+    cp1 = @top.link
+    cp2 = other.top.link
+    while true
+      return 0 if !cp1 &amp;&amp; !cp2
+      if !cp1 || (cp2 &amp;&amp; cp1.data &lt; cp2.data)
+        return -1
+      elsif !cp2 || cp1.data &gt; cp2.data
+        return 1
+      end
+      cp1 = cp1.link
+      cp2 = cp2.link
+    end
+  end
+end
+
+# スタック
+class Stack
+  def initialize
+    @content = List.new
+  end
+  
+  def push(x)
+    @content.insert!(0, x)
+  end
+  
+  def pop
+    @content.delete_at!(0)
+  end
+  
+  def top
+    @content.at(0)
+  end
+  
+  def empty?
+    @content.empty?
+  end
+  
+  def inspect
+    sprintf("#&lt;Stack:%#x&gt;", self.object_id)
+  end
+end
+
+# キュー
+class Queue
+  def initialize
+    @size = 0
+    @front = List.new
+    @rear = List.new
+  end
+  
+  def move_data
+    while not @rear.empty?
+      @front.insert!(0, @rear.delete_at!(0))
+    end
+  end
+  private :move_data
+  
+  def enqueue!(x)
+    @size += 1
+    @rear.insert!(0, x)
+  end
+  
+  def dequeue!
+    if @size &gt; 0
+      move_data if @front.empty?
+      @size -= 1
+      @front.delete_at!(0)
+    end
+  end
+  
+  def peek
+    if @size &gt; 0
+      move_data if @front.empty?
+      @front.at(0)
+    end
+  end
+  
+  def empty?
+    @size == 0
+  end
+  
+  def inspect
+    sprintf("#&lt;Queue:%#x&gt;", self.object_id)
+  end
+end
+</pre>
+</section>
+<hr>
+<div align="right">
+初版 2008 年 12 月 13 日<br>
+改訂 2017 年 1 月 15 日
+</div>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008-2017 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcruby11.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby13.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

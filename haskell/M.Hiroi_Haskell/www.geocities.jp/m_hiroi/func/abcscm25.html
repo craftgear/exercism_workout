@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881783</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm24a.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm28.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>便利なリスト操作関数</h3>
+<p> Scheme の仕様書 (R5RS) はとてもコンパクトにまとまっています。ところが、必要最低限の機能しか定義されていないため、多くの Scheme 処理系で機能追加や拡張が行われています。この拡張機能の標準化を目的に Scheme Requests For Implementation (SRFI) という仕様が定められています。
+</p>
+
+<p> その中で、SRFI-1 にはリスト操作を行う関数が多数定義されています。それらを使いこなすとプログラムを簡単に作ることができるようになります。SRFI-1 は Gauche でもサポートされていますが、今回は Scheme のお勉強ということで、SRFI-1 の中から便利なリスト操作関数や高階関数をいくつか作ってみましょう。
+</p>
+
+<p> なお、今回はプログラムを簡単にするため、SRFI-1 の仕様を忠実に実装しているわけではありません。エラーチェック処理や難しい仕様は省略しております。SRFI-1 の仕様は <a href="http://www.ueda.info.waseda.ac.jp/~ichibe/pub/members.tripod.co.jp/zzyyb/srfi/ja/srfi-1/srfi-1.html">SRFI 1 : リストライブラリ</a> を、実装は <a href="http://www.ueda.info.waseda.ac.jp/~ichibe/pub/members.tripod.co.jp/zzyyb/srfi/ja/srfi-1/srfi-1-reference.scm">SRFI-1 list-processing library Reference implementation</a> で公開されているプログラムをお読みください。
+</p>
+
+<h4>●iota と list-tabulate</h4>
+<p> 最初は数列を生成する関数 iota と list-tabulate を作りましょう。iota は n 個の数列を生成する関数です。
+</p>
+<ul>
+  <li> iota n [start step]
+</ul>
+<p> start から始まり step ずつ増加する数列を生成します。start と step が省略された場合は 0 から始まり 1 ずつ増加する数列になります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 数列の生成
+
+(define (iota n . args)
+  (let ((start (if (pair? args) (car args) 0))
+        (step  (if (and (pair? args) (pair? (cdr args))) (cadr args) 1)))
+    (let loop ((m n) (last (+ start (* step (- n 1)))) (a '()))
+      (if (zero? m)
+          a
+        (loop (- m 1) (- last step) (cons last a))))))
+</pre>
+<p> 最初に引数 args から start と step の値を取得します。次に、最後尾の値 last を求めます。そして、named let で n 個の要素を生成してリスト a に格納します。このとき、後ろの要素から順番に生成していくことに注意してください。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (iota 10)
+(0 1 2 3 4 5 6 7 8 9)
+gosh&gt; (iota 10 1)
+(1 2 3 4 5 6 7 8 9 10)
+gosh&gt; (iota 10 1 2)
+(1 3 5 7 9 11 13 15 17 19)
+gosh&gt; (iota 10 0 -2)
+(0 -2 -4 -6 -8 -10 -12 -14 -16 -18)
+</pre>
+
+<p> 関数 list-tabulate は iota で生成した数列に関数 fn を適用した結果をリストに格納して返します。
+</p>
+<UL>
+  <LI> list-tabulate n fn
+</UL>
+<p> list-tabulate は (map fn (iota n)) と同じですが、この方法では iota で新しいリストを生成し、なおかつ map で新しいリストを生成することになります。list-tabulate は数列を生成しながら関数 fn を適用するので、無駄なリストを生成することがありません。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 数列の生成 (2)
+
+(define (list-tabulate n fn)
+  (let loop ((m (- n 1)) (a '()))
+    (if (negative? m)
+        a
+      (loop (- m 1) (cons (fn m) a)))))
+</pre>
+
+<p> list-tabulate は生成した数値 m に関数 fn を適用し、その結果をリスト a に格納するだけです。簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (list-tabulate 10 (lambda (x) x))
+(0 1 2 3 4 5 6 7 8 9)
+gosh&gt; (list-tabulate 10 (lambda (x) (* x x)))
+(0 1 4 9 16 25 36 49 64 81)
+</pre>
+
+<h4>●take と drop</h4>
+<p> 次はリストの先頭から n 個の要素を取り出す関数 take とリストの先頭から n 個の要素を取り除く関数 drop を作りましょう。
+</p>
+<ul>
+  <li> take ls n
+  <li> drop ls n
+</ul>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : take と drop
+
+; リストの先頭から n 個の要素を取り出す
+(define (take ls n)
+  (if (or (zero? n) (null? ls))
+      '()
+    (cons (car ls) (take (cdr ls) (- n 1)))))
+
+; リストの先頭から n 個の要素を取り除く
+(define (drop ls n)
+  (if (or (zero? n) (null? ls))
+      ls
+    (drop (cdr ls) (- n 1))))
+</pre>
+<p> take はリスト ls の先頭から n 個の要素を取り出してリストに格納して返します。リストの長さが n 以下の場合は、リストをコピーして返すことになります。drop は先頭から n 個の要素を取り除きます。つまり、リスト ls に n 回 cdr を適用することになります。これは Common Lisp の関数 nthcdr と同じ動作です。
+</p>
+<p> なお、このプログラムは Gauche (SRFI-1) と動作が異なり、引数 n がリスト ls の長さより大きくてもエラーにはなりません。Gauche はエラーになるので注意してください。
+</p>
+
+<p> それでは簡単な応用例として、一つのリストを長さ n の部分リストに分ける関数 group を作ってみましょう。
+</p>
+<pre class="list">
+リスト : リストを部分リストに分ける
+
+(define (group ls n)
+  (if (null? ls)
+      '()
+    (cons (take ls n) (group (drop ls n) n))))
+</pre>
+<p> 関数 group は take の返り値と group を再帰呼び出しした返り値を cons で連結するだけです。group を再帰呼び出しするときは、drop で先頭から n 個の要素を取り除くことに注意してください。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (take '(a b c d e) 2)
+(a b)
+gosh&gt; (drop '(a b c d e) 2)
+(c d e)
+gosh&gt; (group '(a b c d e) 2)
+((a b) (c d) (e))
+gosh&gt; (group '(a b c d e f) 2)
+((a b) (c d) (e f))
+</pre>
+
+<h4>●マッピング</h4>
+<p> マッピングは拙作のページ <a href="abcscm09.html">Scheme プログラミング中級編 (1)</a> で説明しました。このとき作成したマップ関数は、関数と一つのリストしか受け取ることができません。R5RS と SRFI-1 のマップ関数は複数のリストを渡しても動作します。今回は複数のリストを受け付けるようにマップ関数を修正しましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : マップ関数
+
+(define (mapn fn ls . args)
+  <strike>(define (end? xs) (member '() xs)))    ; 修正 2011/01/23</strike>
+  (define (end? xs) (member '() xs))     ; 修正 2011/01/23, 2017/04/27
+  (define (map-1 fn ls)
+    (if (null? ls)
+        '()
+      (cons (fn (car ls)) (map-1 fn (cdr ls)))))
+  (if (null? args)
+      (map-1 fn ls)
+    (letrec ((recr
+              (lambda (xs)
+                (if (end? xs)
+                    '()
+                  (cons (apply fn (map-1 car xs))
+                        (recr (map-1 cdr xs)))))))
+      (recr (cons ls args)))))
+</pre>
+<div class="note">
+-- <a name="update2"><b>[修正]</b> (2011/01/23) --------<br>
+関数 end? が未定義でした。修正するとともにお詫び申しあげます。
+</div>
+<p> 関数名は mapn としました。局所関数 map-1 は <a href="abcscm09.html">Scheme プログラミング中級編 (1)</a> で作成したマップ関数 my-map と同じです。mapn の引数 args が空リストの場合は map-1 を呼び出します。そうでない場合は ls を args の先頭に追加して局所関数 recr を呼び出します。
+</p>
+
+<p> recr は 2 個以上のリストの要素に関数 fn を適用します。リストは引数 xs に格納されています。各リストの要素は (map-1 car xs) で取り出すことができるので、apply でこの返り値に fn を適用すればいいわけです。そして、(map-1 cdr xs) で各リストの先頭の要素を取り除き、apply で recr を再帰呼び出しします。
+</p>
+
+<p> そして、member で xs の要素に空リストを見つけたら、そこで処理を終了します。R5RS の場合、引数のリストの長さは同じでなければいけませんが、SRFI-1 ではリストの長さが異なっていてもかまいません。今回のプログラムのように、一番短いリストの要素がなくなった時点で処理を終了します。これで複数のリストに対してマッピングを行うことができます。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (mapn - '(1 2 3 4 5))
+(-1 -2 -3 -4 -5)
+gosh&gt; (mapn + '(1 2 3) '(4 5 6 7))
+(5 7 9)
+gosh&gt; (mapn * '(1 2 3) '(4 5 6) '(7 8))
+(28 80)
+</pre>
+<h4><a name="appendix">●補足</a> (2011/01/23)</h4>
+<p> 関数 mapn は次のように定義することもできます。
+</p>
+<pre class="list">
+リスト : マップ関数
+
+(define (mapn fn . args)
+  (define (map-1 fn ls)
+    (if (null? ls)
+        '()
+      (cons (fn (car ls)) (map-1 fn (cdr ls)))))
+  (if (member '() args)
+      '()
+    (cons (apply fn (map-1 car args))
+          (apply mapn fn (map-1 cdr args)))))
+</pre>
+<p> apply で mapn を再帰呼び出しするところがポイントです。こちらのほうが簡潔でわかりやすいと思います。
+</p>
+<h4>●フィルター</h4>
+<p> フィルター (filter) はリストの要素に述語 pred を適用し、pred が真を返す要素をリストに格納して返す関数です。<a href="abcscm09.html">Scheme プログラミング中級編 (1)</a> では filter と remove-if を作りましたが、SRFI-1 には関数 filter と remove が用意されています。remove は Common Lisp の関数 remove-if と同じです。また、リストを破壊的に修正する関数 filter! と remove! もあります。
+</p>
+
+<p> filter と remove のプログラムリストを示します。
+</p>
+<pre class="list">
+リスト : 述語が真となる要素を取り出す
+
+(define (filter pred ls)
+    (cond ((null? ls) '())
+          ((pred (car ls))
+           (cons (car ls) (filter pred (cdr ls))))
+          (else
+           (filter pred (cdr ls)))))
+</pre>
+<pre class="list">
+リスト ; 述語が真となる要素を削除する
+
+(define (remove pred ls)
+    (cond ((null? ls) '())
+          ((pred (car ls))
+           (remove pred (cdr ls)))
+          (else
+           (cons (car ls) (remove pred (cdr ls))))))
+</pre>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (filter odd? '(1 2 3 4 5))
+(1 3 5)
+gosh&gt; (filter even? '(1 2 3 4 5))
+(2 4)
+gosh&gt; (remove odd? '(1 2 3 4 5))
+(2 4)
+gosh&gt; (remove even? '(1 2 3 4 5))
+(1 3 5)
+</pre>
+<h4>●畳み込み</h4>
+<p> 拙作のページ <a href="abcscm09.html">Scheme プログラミング中級編 (1)</a> では、畳み込みを行う関数 my-reduce と my-reduce-right を作成しました。SRFI-1 の場合、my-reduce に対応する関数が fold で、my-reduce-right に対応する関数が fold-right になります。これらの関数は複数のリストを受け取ることができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 畳み込み
+
+(define (fold fn a ls . args)
+  (if (null? args)
+      (let loop ((a a) (ls ls))
+        (if (null? ls)
+            a
+          (loop (fn (car ls) a) (cdr ls))))
+    (let loop ((a a) (xs (cons ls args)))
+      (if (member? '() xs)
+          a
+        (loop (apply fn (append (map car xs) (list a)))
+              (map cdr xs))))))
+
+(define (fold-right fn a ls . args)
+  (if (null? args)
+      (letrec ((recr
+                 (lambda (a ls)
+                   (if (null? ls)
+                       a
+                     (fn (car ls) (recr a (cdr ls)))))))
+        (recr a ls))
+    (letrec ((recr
+               (lambda (a xs)
+                 (if (member? '() xs)
+                     a
+                   (apply fn (append (map car xs)
+                                     (list (recr a (map cdr xs)))))))))
+      (recr a (cons ls args)))))
+</pre>
+<p> fold の場合、関数 fn の引数の順番は my-reduce と逆になることに注意してください。つまり、第 1 引数にリストの要素、第 2 引数に累積変数 a の値が渡されます。fold は繰り返しで実現できます。fold-right は letrec で局所変数 recr を定義して再帰呼び出しで処理します。引数に複数のリストがある場合、関数 fn に渡す引数の最後に累積変数の値を追加するため、append で (map car xs) と (list a) の値を連結します。fold-right の場合は (map car xs) と (list (recr ...)) を連結します。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (fold (lambda (x y a) (cons (list x y) a)) '() '(a b c) '(d e f))
+((c f) (b e) (a d))
+gosh&gt; (fold-right (lambda (x y a) (cons (list x y) a)) '() '(a b c) '(d e f))
+((a d) (b e) (c f))
+</pre>
+<h4>●解きほぐし (逆畳み込み)</h4>
+<p> ところで、iota や list-tabulate のようなリストを生成する関数は、次のように一般化することができます。
+</p>
+
+<pre class="list">
+リスト : 解きほぐし
+
+(define (unfold p f g seed tail-gen)
+  (if (p seed)
+      (tail-gen seed)
+    (cons (f seed)
+          (unfold p f g (g seed) tail-gen))))
+
+(define (unfold-right p f g seed tail)
+  (define (iter seed acc)
+    (if (p seed)
+        acc
+      (iter (g seed) (cons (f seed) acc))))
+  (iter seed tail))
+</pre>
+<p> 関数 unfold と unfold-right は畳み込みを行う fold と fold-right の逆変換に相当する処理で、「解きほぐし」とか「逆畳み込み」と呼ばれています。
+</p>
+
+<p> unfold は値 seed に関数 f を適用し、その要素をリストに格納して返します。引数 p は終了条件を表す関数で、p が真を返すときリストの終端を関数 tail-gen で生成して返します。一般に、tail-gen は空リスト ( ) を返すのが普通です。関数 g は seed の値を更新するために使用します。したがって、生成されるリストの要素は次のようになります。
+</p>
+<pre class="fig">
+( (f (g seed))                   ; g を 1 回適用
+  (f (g (g seed)))               ; g を 2 回適用
+  (f (g (g (g seed))))           ; g を 3 回適用
+  ...
+  (f (g (g ... (g seed) ...))) ) ; g を n 回適用
+</pre>
+<p> リストの長さが n の場合、最後の要素は g を n 回適用し、その結果に f を適用することになります。unfold-right は生成されるリストの要素が unfold の逆になります。また、引数 tail は関数値ではなくリストの終端を表す値になります。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; (unfold (lambda (x) (&gt; x 10)) (lambda (x) x)
+ (lambda (x) (+ x 1)) 1 (lambda (x) '()))
+(1 2 3 4 5 6 7 8 9 10)
+gosh&gt; (unfold-right (lambda (x) (&gt; x 10)) (lambda (x) x)
+ (lambda (x) (+ x 1)) 1 '())
+(10 9 8 7 6 5 4 3 2 1)
+</pre>
+<p> このように、unfold を使って iota を実現することができます。また、関数 (lambda (x) x) のかわりに他の関数を渡すことで、関数 list-tabulate と同じ動作を実現できます。
+</p>
+<p> もう一つ簡単な例を示しましょう。start から始まって増分値が step で合計値が sum 以上になる数列で、要素が最小個数となるものを求めます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 合計値が sum 以上になる数列を求める
+
+(define (unfold-sum sum start step)
+  (unfold (lambda (x) (&lt;= sum (car x)))
+          cdr
+          (lambda (x) (cons (+ (car x) (cdr x)) (+ (cdr x) step)))
+          (cons 0 start)
+          (lambda (x) '())))
+</pre>
+<p> 関数名は unfold-sum としました。プログラムは簡単で、リストの要素を start から始めて step ずつ値を増やしていき、合計値が sum 以上になったらリストの生成を終了します。
+</p>
+<p> リストの生成中には、要素の値とそれまでの合計値が必要になります。そこで、これらの値をコンスセルにまとめて unfold の seed に渡すことにします。CAR 部が合計値で、CDR 部が要素の値です。したがって、終了条件は引数の CAR 部が sum 以上になったときで、seed の更新は "CAR 部 + CDR 部" と "CDR 部 + step" の値を cons でまとめたものになります。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (fold (lambda (x y) (+ x y)) 0 '(1 2 3 4 5))
+15
+gosh&gt; (unfold-sum 15 1 1)
+(1 2 3 4 5)
+gosh&gt; (unfold-sum 16 1 1)
+(1 2 3 4 5 6)
+gosh&gt; (fold (lambda (x y) (+ x y)) 0 '(1 3 5 7 9))
+25
+gosh&gt; (unfold-sum 25 1 2)
+(1 3 5 7 9)
+gosh&gt; (unfold-sum 26 1 2)
+(1 3 5 7 9 11)
+</pre>
+<p> 要素の合計値がちょうど sum にならない場合もありますが、合計値は sum 以上で要素の個数は最小になっています。なお、合計値が sum 以下で、できるだけ sum に近い数列を生成することもできます。興味のある方はプログラムを作ってみてください。
+</p>
+<p> ところで、unfold と unfold-right の seed は、数値だけではなくリストを渡すこともできます。たとえば、fold-right に cons を渡すとリストをコピーする処理を実現できますが、解きほぐしを行う unfold で car と cdr を渡しても同じを実現することができます。
+</p>
+
+<pre>
+gosh&gt; (fold-right cons '() '(a b c d e))
+(a b c d e)
+gosh&gt; (unfold null? car cdr '(a b c d e) (lambda (x) '()))
+(a b c d e)
+</pre>
+<p> なお、リストのコピーは SRFI-1 の関数 list-copy で行うことができます。
+</p>
+<h4>●リストの探索</h4>
+<p> リストの探索は関数 member, memv, memq で行うことができますが、SRFI-1 にはリストを探索する高階関数 find, find-tail, list-index があります。
+</p>
+<ul>
+  <li> find pred ls
+  <li> find-tail pred ls
+  <li> list-index pred ls
+</ul>
+<p> find は Common Lisp の find-if と同じで、述語 pred が真となる最初の要素を返します。find-tail は member の高階関数版で、述語 pred が真となる最初の要素を見つけた場合、見つけた要素以降のリストの残りを返します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの探索 (1)
+
+(define (find pred ls)
+  (cond ((null? ls) #f)
+        ((pred (car ls)) (car ls))
+        (else (find pred (cdr ls)))))
+
+(define (find-tail pred ls)
+  (cond ((null? ls) #f)
+        ((pred (car ls)) ls)
+        (else (find-tail pred (cdr ls)))))
+</pre>
+<p> プログラムは簡単なので、説明は不要でしょう。実行例を示します。
+</p>
+<pre>
+gosh&gt; (find even? '(1 3 5 6 7 9))
+6
+gosh&gt; (find-tail even? '(1 3 5 6 7 9))
+(6 7 9)
+gosh&gt; (find even? '(1 3 5 7 9))
+#f
+gosh&gt; (find-tail even? '(1 3 5 7 9))
+#f
+</pre>
+
+<p> list-index は述語が真となる最初の要素の位置を返します。これは Common Lisp の関数 position-if と同じ機能です。ただし、list-index は複数のリストを受け取ることができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データの探索 (2)
+
+(define (list-index pred ls . args)
+  (if (null? args)
+      (let loop ((i 0) (ls ls))
+        (cond ((null? ls) #f)
+              ((pred (car ls)) i)
+              (else (loop (+ i 1) (cdr ls)))))
+    (let loop ((i 0) (xs (cons ls args)))
+      (cond ((member '() xs) #f)
+            ((apply pred (map car xs)) i)
+            (else (loop (+ i 1) (map cdr xs)))))))
+</pre>
+<p> 変数 i が位置を表します。そして、pred が真となる要素を見つけたら i を返すだけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (list-index even? '(1 3 5 6 7 9))
+3
+gosh&gt; (list-index &gt; '(1 3 5 6 7 9) '(5 4 3 2 1 0))
+2
+</pre>
+<p> この他にも、SRFI-1 には便利な関数がたくさん用意されています。興味のある方は Gauche のリファレンスマニュアルをお読みください。
+</p>
+<h4>●リスト操作関数の一般化</h4>
+<p> さて、SRFI-1 のお話はここまでにして、次は汎用的なリスト操作について考えてみましょう。今まで説明したリスト操作の多くは、次のように一般化することができます。
+</p>
+
+<pre class="list">
+リスト : リスト操作の一般化
+
+(define (for-each-list fn comb term ls)
+  (if (null? ls)
+      term
+    (comb (fn (car ls)) (for-each-list fn comb term (cdr ls)))))
+</pre>
+
+<p> 関数 for-each-list の引数 fn はリストの要素に適用する関数、comb は CAR 部と CDR 部を結合する関数、term はリストの終端で返す値です。プログラムは簡単で、引数のリスト ls が空リストならば term を返します。そうでなければ、リストの要素に関数 fn を適用し、その返り値と for-each-list の返り値を関数 comb で結合します。
+</p>
+
+<p> たとえば、map-1, filter, fold-right を for-each-list を使ってプログラムすると、次のようになります。
+</p>
+<pre class="list">
+リスト : for-each-list の使用例
+
+; マッピング
+(define (map-1 fn ls)
+  (for-each-list fn cons '() ls))
+
+; フィルター
+(define (filter pred ls)
+  (for-each-list (lambda (x) (if (pred x) (list x) '())) append '() ls))
+
+; 畳み込み
+(define (fold-right fn a ls)
+  (for-each-list (lambda (x) x)
+                 (lambda (x y) (fn x y))
+                 a
+                 ls))
+</pre>
+<p> map-1 は comb に cons を、term に ( ) を渡せば実現できます。filter はリストの要素 x に関数 fn を適用し、真を返す場合は (list x) を返し、偽の場合は ( ) を返します。それを append で連結すると、( ) はリストの要素に含まれないので、filter として動作します。fold-right も簡単です。(lambda (x) x) でリストの要素をそのまま返し、要素を連結する関数の中で fn を呼び出します。これで畳み込みを行うことができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (map-1 (lambda (x) (* x x)) '(1 2 3 4 5))
+(1 4 9 16 25)
+gosh&gt; (filter odd? '(1 2 3 4 5  6))
+(1 3 5)
+gosh&gt; (fold-right + 0 '(1 2 3 4 5))
+15
+gosh&gt; (fold-right cons '() '(1 2 3 4 5))
+(1 2 3 4 5)
+</pre>
+
+<h4>●木の操作関数の一般化</h4>
+<p> 次はリストを「木」として扱う関数を紹介します。ここでは、コンスセルが木の「節 (node) 」でアトムが「葉 (leaf) 」と考えることにします。木を操作する関数も高階関数として簡単にプログラムすることができます。たとえば、葉に関数 fn を適用するマップ関数 map-tree は次のようになります。
+</p>
+<pre class="list">
+リスト : 木のマップ関数
+
+(define (map-tree fn ls)
+  (cond ((null? ls) '())
+        ((not (pair? ls) (fn ls))
+        (else
+         (cons (map-tree fn (car ls))
+               (map-tree fn (cdr ls))))))
+</pre>
+<p> 引数 fn が葉に適用する関数、引数 ls が木を表すリストです。木を順番にたどっていき、ls が空リストならば ( ) を返します。リストでなければ葉に到達したので、ls に fn を適用します。そうでなければ、ls を car と cdr で分解して map-tree を再帰呼び出しして、その返り値を cons で結合します。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; (map-tree (lambda (x) x) '(a b (c d (e . f) g) h))
+(a b (c d (e . f) g) h)
+&gt; (map-tree (lambda (x) (* x x)) '(1 2 (3 4 (5 . 6) 7) 8))
+(1 4 (9 16 (25 . 36) 49) 64)
+</pre>
+<p> map-tree に関数 (lambda (x) x) を渡すと木をコピーすることができます。数値を 2 乗する関数を渡せば、葉の値を 2 乗した木を求めることができます。
+</p>
+
+<p> リストと同様に、木を操作する関数も一般化することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 汎用的な木の操作関数
+
+(define (for-each-tree fn comb term tree)
+  (cond ((null? tree) term)
+        ((not (pair? tree)) (fn tree))
+        (else
+         (comb (for-each-tree fn comb term (car tree))
+               (for-each-tree fn comb term (cdr tree))))))
+</pre>
+<p> 引数 comb は節を結合する関数、term はリストの終端で返す値です。プログラムは簡単で、引数のリスト ls が空リストならば term を返します。ls がアトムであれば、ls に関数 fn を適用します。それ以外の場合は、リスト ls を car と cdr で分解して for-each-tree を再帰呼び出しし、その返り値を comb で結合します。
+</p>
+
+<p> for-each-tree を使うと、木を操作する関数を簡単に作ることができます。簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : for-each-tree の使用例
+
+; マッピング
+(define (map-tree fn ls)
+  (for-each-tree fn cons '() ls))
+
+; フィルター
+(define (filter-tree pred ls)
+  (for-each-tree (lambda (x) (if (pred x) x '()))
+                 (lambda (x y) (if (null? x) y (cons x y)))
+                 '()
+                 ls))
+
+; 平坦化
+(define (flatten ls)
+  (for-each-tree list append '() ls))
+
+; 葉を数える
+(define (count-leaf ls)
+  (for-each-tree (lambda (x) 1) + 0 ls))
+
+; 合計値を求める
+(define (sum-tree ls)
+  (for-each-tree (lambda (x) x) + 0 ls))
+</pre>
+<p> map-tree は for-each-tree の comb に cons を渡し、term に空リストを渡すことで実現できます。filter-tree は葉に適用する関数で fn を呼び出し、返り値が真の場合はその要素を返します。そうでなければ空リストを返します。そして、comb に渡す関数で、引数 x が空リストの場合は引数 y をそのまま返し、そうでなければ (cons x y) を返します。これで真を返す要素を取り出すことができます。
+</p>
+<p> 平坦化を行う flatten も簡単です。葉に list を適用して、それを append で連結するだけです。葉を数える count-leaf は、葉に到達したら 1 を返す関数を渡して、それを + で加算するだけです。葉の合計値を求める sum-tree も簡単です。(lambda (x) x) で葉の数値をそのまま返して + で加算するだけです。
+</p>
+
+<p> それでは実行例を示します。
+</p>
+<pre>
+gosh&gt; (map-tree (lambda (x) (* x x)) '(1 (2 (3 (4 . 5) 6) 7) 8))
+(1 (4 (9 (16 . 25) 36) 49) 64)
+gosh&gt; (filter-tree even? '(1 (2 (3 (4 . 5) 6) 7) 8))
+((2 ((4) 6)) 8)
+gosh&gt; (flatten '(1 (2 (3 (4 . 5) 6) 7) 8))
+(1 2 3 4 5 6 7 8)
+gosh&gt; (count-leaf '(1 (2 (3 (4 . 5) 6) 7) 8))
+8
+gosh&gt; (sum-tree '(1 (2 (3 (4 . 5) 6) 7) 8))
+36
+</pre>
+<h4 id="update">●追記 (2009/11/22)</h4>
+<p> for-each-list は関数 fn にリストの要素を渡していますが、リストそのものを渡すこともできます。このほうが便利な場合もあります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : リスト操作の一般化 (2)
+
+(define (for-each-list fn comb term ls)
+  (if (null? ls)
+      term
+    (comb (fn ls) (for-each-list fn comb term (cdr ls)))))
+</pre>
+<p> この場合、for-each-list の動作は次のようになります。
+</p>
+<pre>
+gosh&gt; (display (for-each-list (lambda (x) x) cons '() '(a b c d e)))
+((a b c d e) (b c d e) (c d e) (d e) (e))#&lt;undef&gt;
+</pre>
+<p> この動作は Common Lisp の関数 maplist と同じです。マップ関数、フィルター、畳み込みなどの高階関数は、for-each-list を使って次のように定義することができます。
+</p>
+<pre class="list">
+リスト 18 : for-each-list の使用例
+
+; マッピング
+; (mapcar は Scheme の map と同じ動作)
+(define (mapcar fn ls)
+  (for-each-list (lambda (xs) (fn (car xs))) cons '() ls))
+
+(define (maplist fn ls)
+  (for-each-list (lambda (xs) (fn xs)) cons '() ls))
+
+; フィルター
+(define (filter fn ls)
+  (for-each-list car (lambda (x y) (if (fn x) (cons x y) y)) '() ls))
+
+; 畳み込み
+(define (fold-right fn a ls)
+  (for-each-list car (lambda (x y) (fn x y)) a ls))
+</pre>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+gosh&gt; (mapcar (lambda (x) (cons x x)) '(a b c d e))
+((a . a) (b . b) (c . c) (d . d) (e . e))
+gosh&gt; (maplist (lambda (x) (cons (car x) (length x))) '(a b c d e))
+((a . 5) (b . 4) (c . 3) (d . 2) (e . 1))
+gosh&gt; (filter even? '(1 2 3 4 5 6))
+(2 4 6)
+gosh&gt; (fold-right + 0 '(1 2 3 4 5 6))
+21
+</pre>
+<p> もう一つ簡単な例を示しましょう。リストから重複した要素を取り除く関数 remove-dup は、for-each-list を使って次のように定義することができます。
+</p>
+<pre class="list">
+リスト : 重複した要素を取り除く
+
+(define (remove-dup ls)
+  (for-each-list
+   (lambda (x) x)
+   (lambda (xs a) (if (memv (car xs) (cdr xs)) a (cons (car xs) a)))
+   '()
+   ls))
+</pre>
+<p> 実行例を示します。
+</p>
+<pre>
+gosh&gt; (remove-dup '(a a b a b c a b c d a b c d e))
+(a b c d e)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009-2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm24a.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm28.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

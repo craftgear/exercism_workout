@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Python/Tkinter 入門</title>
+  <meta name="description" content="Ptyhon,Tkinter,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881800</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lightweigth Language</h1>
+<h2>お気楽 Python/Tkinter 入門</h2>
+<div class="small">
+[ <a href="pytk05.html">PrevPage</a> | <a href="index.html#python_tkinter">Python</a> | <a href="pytk07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap20">テキストウィジェット</h3>
+<p> いよいよ巨大なウィジェットである <b>テキストウィジェット</b> を説明します。エントリーウィジェットがラインエディタとするならば、テキストウィジェットはスクリーンエディタに相当し、柔軟で高度なテキスト編集を行うことができます。
+</p>
+
+<h4>●テキストウィジェットの生成</h4>
+<p> テキストウィジェットは Text() で生成します。テキストウィジェットには標準動作が用意されていて、それだけでテキスト編集が可能になっています。マウスの操作は、左クリックでカーソル位置の変更、ドラッグで範囲の選択、ダブルクリックで単語の選択が行えます。また、トリプルクリックで行の選択、ドラッグで文字列の選択ができます。カーソルなどのキー操作は、おおむね Emacs と同じなので、Emacs / Mule ユーザーには馴染みやすいでしょう。
+</p>
+
+<p> テキストウィジェットの場合、オプション width と height は桁数と行数を表します。使用するフォントによってウィンドウのサイズが変わることに注意してください。また、オプション state に disabled を設定すると、テキストの変更を禁止することができます。これはキーボートからの入力だけでなく、プログラムによる挿入や削除も禁止されるので、必要なテキストデータをウィジェットに挿入してから、state を disabled に設定してください。
+</p>
+<p> それから、オプション wrap で行の折り畳みを設定することができます。none を指定すると折り畳みは行われません。char は文字の切れ目で、word は単語の切れ目で折り畳みます。
+</p>
+<h4>●位置の指定</h4>
+<p> テキストウィジェットはリストボックスと同様に、スクロールバーと組み合わせて表示範囲を変更することができます。垂直スクロールバー付きのテキストウィジェットはモジュール ScrolledText を使うと簡単です。このほかにも、文字列の挿入、削除、検索といった、テキストエディタとして必要なメソッドが多数用意されています。詳細は Tkinter のマニュアルや Module Docs などを参照してください。また、多くのメソッドで位置の指定が必要になります。基本的な指定方法を表に示します。
+</p>
+<table border=1>
+<caption>表：位置の基本指定</caption>
+<tbody>
+<tr><td>N.M</td><td>N 行の M 文字目</td></tr>
+<tr><td>@x,y</td><td>テキスト内の (x,y) の位置にある文字</td></tr>
+<tr><td>end</td><td>テキスト末尾</td></tr>
+<tr><td>マーク名</td><td>その名前のマークをつけた位置</td></tr>
+<tr><td>タグ名.first</td><td>その名前のタグの最初の位置</td></tr>
+<tr><td>タグ名.last</td><td>その名前のタグの最後の位置</td></tr>
+</tbody>
+</table>
+<p> マークとタグについてはあとで詳しく説明します。テキストウィジェットでは、行は 1 から数えますが、文字は 0 から数えるので注意してください。この基本指定に加えて、次に示す相対指定を組み合わせることができます。
+</p>
+
+<table border=1>
+<caption>表：位置の相対指定</caption>
+<tbody>
+<tr><td>+Nchars, -Nchars</td><td>そこから N 文字先、手前</td></tr>
+<tr><td>+Nlines, -Nlines</td><td>そこから N 行先、手前</td></tr>
+<tr><td>linestart, lineend</td><td>その行の先頭、末尾</td></tr>
+<tr><td>wordstart, wordend</td><td>その単語の先頭、末尾</td></tr>
+</tbody>
+</table>
+
+<h4>●テキストファイルを表示する</h4>
+<p> テキストウィジェットは多機能なので、ほかのウィジェットに比べて使いこなすのはちょっと難しいと思います。ですが、テキストを表示するだけならば、とても簡単にプログラムすることができます。まず最初に、テキストファイルを表示するプログラムを作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：テキストファイルを表示する
+
+from Tkinter import *
+from tkFileDialog import *
+from ScrolledText import *
+import sys, os.path
+
+# MainWindow
+root = Tk()
+root.option_add('*font', ('FixedSys', 14))
+root.title('Text Viewer')
+
+# Global
+path_name = ""
+
+# Text
+t0 = ScrolledText()
+t0.pack()
+
+# File Select
+def load_file():
+    global path_name
+    filename = askopenfilename(filetypes = [('Text Files', ('.txt', '.py'))],
+                               initialdir = path_name)
+    if filename != "":
+        path_name = os.path.dirname(filename)
+        fi = open(filename)
+        t0.delete('1.0', 'end')
+        for x in fi:
+            t0.insert('end', x.decode('shift_jis'))
+        fi.close()
+        t0.focus_set()
+
+# Menu
+m0 = Menu(root);
+root.configure(menu = m0);
+
+m1 = Menu(m0, tearoff = 0)
+m1.add_command(label = 'Open', under = 0, command = load_file)
+m1.add_separator
+m1.add_command(label = 'Exit', under = 0, command = sys.exit)
+m0.add_cascade(label = 'File', under = 0, menu = m1 )
+
+root.mainloop()
+</pre>
+<p> メニューの設定とファイルの選択は <a href="pytk03.html#chap09">イメージとファイルの選択</a> で作成した GIF / PPM 画像ローダーと同じです。テキストウィジェットの生成は ScrolledText() で生成します。これで垂直スクロールバーが付いたテキストウィジェットを生成することができます。
+</p>
+
+<p> ファイルの読み込みは関数 load_file() で行います。askopenfilename() でファイル選択ダイアログを表示してファイル名を取得します。テキストウィジェットにデータを挿入するメソッドが <b>insert()</b> で、削除するメソッドが <b>delete()</b> です。まず、表示しているテキストを delete() で削除します。1.0 は 1 行目の 0 文字、つまりテキストの先頭を表します。
+</p>
+<p> 次に、open() でファイルをリードオープンし、1 行ずつデータを入力していきます。日本語のファイルを読み込む場合は unicode に変換する必要があります。このプログラムでは enocde('shift_jis') で shift_jis で書かれた文字列を unicode に変換しています。insert() の位置指定は end なので、データはテキストウィジェットの最後に追加されます。最後に close() でファイルを閉じて、focus_set() でフォーカスを設定します。
+</p>
+
+<p> <img SRC="img/text00.png" ALT="テキストウィジェット"> テキストウィジェット
+</p>
+<p> <img SRC="img/text01.png" ALT="ファイルの表示"> ファイルの表示
+</p>
+
+<h4>●行番号の挿入と削除</h4>
+<p> テキストを表示するだけでは面白くないので、今度は行番号を表示してみましょう。メニューに次の項目を追加します。
+</p>
+<pre class="item">
+m1.add_checkbutton(label = 'Number', under = 0, variable = num_flag, command = change_number)
+</pre>
+
+<p> Number がチェックされていれば行番号を表示し、そうでなければ行番号を表示しません。チェックボタンの値はグローバル変数 num_flag に格納し、行番号の処理は関数 change_number() で行います。
+</p>
+
+<pre class="list">
+リスト：行番号の挿入と削除
+
+def change_number():
+    line = int(float(t0.index('end')))
+    if num_flag.get():
+        for x in range(1, line):
+            t0.insert('%d.0' % x, '%6d:' % x)
+    else:
+        for x in range(1, line):
+            t0.delete('%d.0' % x, '%d.7' % x)
+</pre>
+
+<p> 最初に行数を <b>index()</b> メソッドで求めます。index() はテキストの位置を line.char の形式の文字列で返します。end を指定することで最終行の次の行を求めることができます。たとえば、ファイルの行数が 55 行であれば、index('end') は '56.0' を返します。int(float('56.0')) で整数値に変換すればファイルの行数を求めることができます。
+</p>
+<p> 行番号は行の先頭に挿入することで表示します。変数 x は行番号を表し、挿入する文字列を '%6d:' % x で作成しています。この場合、先頭に空白を含めて 7 文字挿入することになります。行番号の削除は行の先頭から 7 文字削除するだけです。テキストウィジェットのメソッドで範囲指定を指定する場合、終了位置の文字は範囲に含まれません。ご注意くださいませ。これで 0 から 6 文字目までの 7 文字が削除されます。
+</p>
+<p> 最後に、関数 load_file() を修正します。ファイルを読み込んだあとで num_flag が真であれば、change_number() を呼び出して行番号を挿入します。これでプログラムは完成です。
+</p>
+
+<p><img src="img/text03.png" alt="行番号の表示"> 行番号の表示
+</p>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+リスト：行番号の表示
+
+from Tkinter import *
+from tkFileDialog import *
+from ScrolledText import *
+import sys, os.path
+
+# MainWindow
+root = Tk()
+root.option_add('*font', ('FixedSys', 14))
+root.title('Text Viewer')
+
+# Global
+path_name = ""
+
+# Text
+t0 = ScrolledText()
+t0.pack()
+
+#
+num_flag = BooleanVar()
+num_flag.set(False)
+
+# Change Number
+def change_number():
+    line = int(float(t0.index('end')))
+    if num_flag.get():
+        for x in range(1, line):
+            t0.insert('%d.0' % x, '%6d:' % x)
+    else:
+        for x in range(1, line):
+            t0.delete('%d.0' % x, '%d.7' % x)
+
+# File Select
+def load_file():
+    global path_name
+    filename = askopenfilename(filetypes = [('Text Files', ('.txt', '.py'))],
+                               initialdir = path_name)
+    if filename != "":
+        path_name = os.path.dirname(filename)
+        fi = open(filename)
+        t0.delete('1.0', 'end')
+        for x in fi:
+            t0.insert('end', x.decode('shift_jis'))
+        fi.close()
+        if num_flag.get(): change_number()
+        t0.focus_set()
+
+# Menu
+m0 = Menu(root);
+root.configure(menu = m0);
+
+m1 = Menu(m0, tearoff = 0)
+m1.add_command(label = 'Open', under = 0, command = load_file)
+m1.add_checkbutton(label = 'Number', under = 0, variable = num_flag, command = change_number)
+m1.add_separator
+m1.add_command(label = 'Exit', under = 0, command = sys.exit)
+m0.add_cascade(label = 'File', under = 0, menu = m1 )
+
+root.mainloop()
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap21">テキストウィジェット：マークとタグ</h3>
+<p> テキストウィジェットの最大の特徴は、特定の位置をマークしたり、特定の文字列にタグをつけ、フォントや色といった属性の変更やバインディングの設定が可能なことです。また、キャンバスウィジェットと同様に、テキストの中にウィジェットを表示することもできます。
+</p>
+
+<h4>●マーク</h4>
+<p> それではマークから説明しましょう。マークはテキストの位置を表す名前のことです。マークは文字自体につけられるのではなく、文字と文字の間に設定されます。このため、マークで指定した位置に文字列を挿入する場合はとても便利です。また、テキストを操作するメソッドで、位置の指定にマークを使うこともできます。
+</p>
+
+<p> マークを操作するおもなメソッドを表に示します。
+</p>
+
+<table border=1>
+<caption>表：マーク操作用のおもなメソッド</caption>
+<tbody>
+<tr><td>mark_set(markname, index)</td><td>マークの設定</td></tr>
+<tr><td>mark_unset(*markname)</td><td>マークの削除</td></tr>
+<tr><td>mark_names()</td><td>定義されているすべてのマークを返す</td></tr>
+<tr><td>mark_gravity(markname, left_or_right)</td><td>マークのつき方を left と right で指定</td></tr>
+<tr><td>mark_next(index)</td><td>index より後ろにあるマークを返す</td></tr>
+<tr><td>mark_previous(index)</td><td>index より前にあるマークを返す</td></tr>
+</tbody>
+</table>
+
+<p> マークの設定は mark_set() メソッドで行います。マークは指定した位置の文字とその前の文字の間に設定されます。たとえば '1.3' と指定すると、1 行目の 2 文字目と 3 文字目の間にマークが設定されます。文字は 0 から数えることに注意してください。たとえば、テキストウィジェットの 1 行目に abcdefg が書き込まれている状態で、次のように first という名前のマークを設定します。
+</p>
+<pre class="item">
+t0.mark_set(first, '1.3')
+</pre>
+<p> 変数 t0 はテキストウィジェットのオブジェクトです。これで、マーク first は 1 行目の 2 文字目 ( c ) と 3 文字目 ( d ) の間に設定されます。この状態で 1 行目の先頭文字 a を削除すると文字 d は 2 文字目になるので、first の位置は 1.3 ではなく 1.2 に変わります。また、行頭に文字 A を挿入すれば d は 4 文字目になるので、first は 1.3 から 1.4 に変わります。このように指定した文字 d が移動すれば、その文字とともにマークも移動するわけです。
+</p>
+
+<p> マークの位置に文字列を挿入する場合、マークは挿入した文字列の左右どちらかにつきます。mark_gravity() メソッドは、文字列を挿入したときのマークのつき方を指定します。left であれば挿入した文字列の左側に、right であれば右側にマークが設定されます。たとえば、first の位置に文字列 1234 を挿入するには、次のように行います。
+</p>
+<pre class="item">
+t0.insert(first, '1234')
+</pre>
+<p> first の位置が c と d の間であれば、文字列は abc1234defg となります。このとき、マークが挿入した文字列の左側につく場合は c と 1 の間にマークが設定されます。逆に、右側につく場合は 4 と d の間に設定されます。デフォルトの設定は right なので、ここでもう一度 first に文字列 5678 を挿入すると、文字列は abc12345678defg となります。
+</p>
+
+<p> それから、特別なマークとしてカーソル位置を表す insert と、マウスカーソルが指す文字位置を表す current があります。たとえば、カーソルの位置に文字列を挿入したい場合は、次のように行います。
+</p>
+<pre class="item">
+t0.insert(insert, 'string')
+</pre>
+<p> これで指定した string がカーソル位置に挿入されます。
+</p>
+
+<h4>●タグ</h4>
+<p> テキストウィジェットのタグはキャンバスウィジェットのタグと同様に、指定した文字列に名前（タグ名）をつける機能です。そして、タグごとにフォントや色などの表示属性やバインディングを設定することができます。この機能により、テキストウィジェットは単なるテキスト編集だけではなく、ある単語をクリックしたら別のテキストを表示する、といったハイパーテキストを構成することができます。
+</p>
+
+<p> Python/Tkinter では、タグを操作するメソッドが多数用意されています。タグの設定、削除、検索といった基本的な機能のほかに、オプションやバインディングの設定を行うことができます。フォント、色、アンダーラインなどの表示属性はオプションで設定します。おもなメソッドを表に示します。
+</p>
+
+<table border=1>
+<caption>表：タグ操作用のおもなメソッド</caption>
+<tbody>
+<tr><td>tag_add(tagname, index1, index2)</td><td>指定した範囲に対して、タグ tagname を設定</td></tr>
+<tr><td>tag_delete(*tagname)</td><td>タグの削除</td></tr>
+<tr><td>tag_names(index)</td><td>index の位置にある文字と関連するすべてのタグを返す</td></tr>
+<tr><td>tag_cget(tagname, option)</td><td>タグ tagname のオプションの値を返す</td></tr>
+<tr><td>tag_configure(tagname, option, value)</td><td>タグ tagname のオプションを設定する</td></tr>
+<tr><td>tag_bind(tagname, event, callback)</td><td>タグ tagname にバインドを設定する</td></tr>
+</tbody>
+</table>
+
+<p> このほかにも、いろいろなメソッドやオプションが用意されています。詳細は Python/Tkinter のマニュアルや Module Docs を参照してもらうことにして、さっそく簡単な例題を示します。前回作成したテキストを表示するプログラムで、行番号を赤く表示してみましょう。行番号を表す文字列にタグ LINENUM を指定し、色をオプションで設定します。
+</p>
+オプションは tag_configure() で設定します。タグ LINENUM の設定は次のようになります。
+<pre class="item">
+t0.tag_configure('LINENUM', foreground = 'red')
+</pre>
+<p> 文字の色は今まで使ってきたウィジェットと同じく foreground で指定します。また、background で背景色も指定することができます。このオプションが指定されていると、borderwidth でふちの幅を、relief で形状を指定することができます。
+</p>
+<p> 行番号にタグを設定することはとても簡単です。insert() メソッドでタグを指定するだけです。
+</p>
+<pre class="item">
+t0.insert(index, string, tagname, ...)
+</pre>
+<p> タグを指定すると、挿入した文字列にそのタグが設定されます。したがって、前回作成した change_number() を次のように修正するだけです。
+</p>
+
+<pre class="list">
+リスト：行番号の挿入と削除
+
+def change_number():
+    line = int(float(t0.index('end')))
+    if num_flag.get():
+        for x in range(1, line):
+            t0.insert('%d.0' % x, '%6d:' % x, 'LINENUM')
+    else:
+        for x in range(1, line):
+            t0.delete('%d.0' % x, '%d.7' % x)
+</pre>
+<p> このように、挿入する文字列の後ろにタグ名 LINENUM を指定します。これで行番号が赤く表示されます。
+</p>
+
+<p><img src="img/tag00.png" alt="テキストの表示"> テキストを表示する
+</p>
+<p><img src="img/tag01.png" alt="行番号を赤く表示"> 行番号を赤く表示する
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap22">テキストウィジェット：ウィジェットの表示</h3>
+<h4>●埋め込みウィンドウ</h4>
+<p> テキストウィジェットはキャンバスウィジェットと同様に、テキストだけではなくほかのウィジェットも表示することができます。これを <b>埋め込みウィンドウ</b> といいます。埋め込みウィンドウ用のメソッドを次に示します。
+</p>
+<ul>
+  <li><b>window_create(index, option = value, ...)</b><br>
+      オプション window で指定したウィジェットを表示する。
+  <li><b>window_names()</b><br>
+      テキストウィジェットに表示されているほかのウィジェットをリストで返す。
+  <li><b>window_configure(index, option = value)</b><br>
+      <b>window_cget(index, option)</b><br>
+      位置 index にあるウィジェットのオプションの設定 (window_configure()) と値の取得 (window_cget()) を行う。
+</ul>
+
+<p> window_create() メソッド で使用するオプションを表に示します。
+</p>
+
+<table border=1>
+<caption>表：windowCreate メソッドのオプション</caption>
+<tbody>
+<tr><td>window</td><td>ウィジェット名</td></tr>
+<tr><td>create</td><td>ウィジェットを生成するコマンドを指定（window を指定しない場合のみ有効）</td></tr>
+<tr><td>align</td><td>上下方向の揃え指定 (baseline, top, bottom, center) </td></tr>
+<tr><td>stretch</td><td>上下方向の引き延ばし</td></tr>
+<tr><td>padx, pady</td><td>スペースの指定</td></tr>
+</tbody>
+</table>
+
+<h4>●プログラムの改造</h4>
+<p> それでは、テキストにイメージを挿入できるように、前回作成したプログラムを改造してみましょう。ラベルにイメージを貼り付けて、そのラベルをテキストウィジェットに埋め込みます。画像ファイルはメニュー Image で選択し、カーソル位置にその画像を挿入します。
+</p>
+
+<p> メニュー Image の設定は簡単です。次の 1 行を追加するだけです。
+</p>
+<pre class="item">
+m1.add_command(label = 'Image', under = 0, command = insert_image)
+</pre>
+
+<p>ラベル（画像）を挿入する関数 insert_image() は次のようになります。
+</p>
+
+<pre class="list">
+リスト：ラベル（画像）の挿入
+
+def insert_image():
+    global path_name_image
+    filename = askopenfilename(filetypes = [('Image Files', ('.gif', '.ppm')),
+                                            ('GIF Files', '.gif'),
+                                            ('PPM Files', '.ppm')],
+                               initialdir = path_name_image)
+    if filename != "":
+        if filename in image_buff:
+            image_data = image_buff[filename]
+        else:
+            image_data = PhotoImage(file = filename)
+            image_buff[filename] = image_data
+        path_name_image = os.path.dirname(filename)
+        label = Label(root, image = image_data, relief = 'raised', borderwidth = 4)
+        t0.window_create('insert', window = label, align = 'baseline')
+</pre>
+
+<p> askopenfilename() でファイル選択ダイアログを表示し、画像ファイル名を取得します。PhotoImage() で生成したイメージ image_data は、ファイル名をキーにしてディクショナリ image_buff に格納します。同一のファイル名が image_buff にある場合は、そのイメージを再利用します。
+</p>
+<p> あとは、image_data を Label() でラベルに貼り付けます。そして、そのラベルを window_create() メソッドでテキストウィジェットに表示します。表示位置はマーク insert で指定できるので簡単です。
+</p>
+<p> ウィジェットを挿入したあとで、テキストを編集することはもちろん可能です。ウィジェットの前に文字を挿入すればウィジェットは後ろへ移動しますし、文字を削除すれば前の方へ移動します。挿入したウィジェットは、文字と同じ操作で削除することができます。
+</p>
+
+<p><img src="img/text04.png" alt="テキストウィジェット"> テキストを表示
+</p>
+<p><img src="img/text05.png" alt="画像挿入"> Tcl/Tk Logo を挿入
+</p>
+<p><img src="img/text06.png" alt="テキスト編集"> テキストの編集
+</p>
+
+<h4>●埋め込み画像</h4>
+<p> ちなみに、テキストウィジェットに画像を表示するだけならば、画像専用のメソッドを使った方が簡単です。これを <b>埋め込み画像</b> といいます。埋め込み画像用のメソッドを次に示します。
+</p>
+<ul>
+  <li><b>image_create(index, option = value, ... )</b><br>
+      オプション image で指定した画像を表示する。
+  <li><b>image_names()</b><br>
+      テキストウィジェットに表示されている画像をリストで返す。
+  <li><b>image_configure(index, option = value)</b><br>
+      <b>image_cget(index, option)</b><br>
+      位置 index にある画像のオプションの設定 (image_configure()) と値の取得 (image_cget()) を行う。
+</ul>
+
+<p> image_create() メソッド で使用するオプションを表に示します。
+</p>
+
+<table border=1>
+<caption>表：image_create メソッドのオプション</caption>
+<tbody>
+<tr><td>image</td><td>表示する画像</td></tr>
+<tr><td>name</td><td>画像を参照するための名前を付ける</td></tr>
+<tr><td>align</td><td>上下方向の揃え指定(baseline, top, bottom, center)</td></tr>
+<tr><td>padx, pady</td><td>スペースの指定</td></tr>
+</tbody>
+</table>
+
+<p> 画像を挿入する関数 insert_image() は、次のようになります。
+</p>
+
+<pre class="list">
+リスト：画像の挿入
+
+def insert_image():
+    global path_name_image
+    filename = askopenfilename(filetypes = [('Image Files', ('.gif', '.ppm')),
+                                            ('GIF Files', '.gif'),
+                                            ('PPM Files', '.ppm')],
+                               initialdir = path_name_image)
+    if filename != "":
+        if filename in image_buff:
+            image_data = image_buff[filename]
+        else:
+            image_data = PhotoImage(file = filename)
+            image_buff[filename] = image_data
+        path_name_image = os.path.dirname(filename)
+        t0.image_create('insert', image = image_data, align = 'baseline')
+</pre>
+
+<p> PhotoImage() で生成したイメージを image_create() メソッドでテキストウィジェットに直接表示します。このように、ラベルウィジェットを生成しない分だけプログラムは簡単になります。
+</p>
+
+<p><img src="img/text07.png" alt="画像挿入"> Tcl/Tk Logo を挿入
+</p>
+
+<h4>●プログラムリスト</h4>
+<pre class="list">
+リスト：画像の挿入
+
+from Tkinter import *
+from tkFileDialog import *
+from ScrolledText import *
+import sys, os.path
+
+# MainWindow
+root = Tk()
+root.option_add('*font', ('FixedSys', 14))
+root.title('Text Viewer')
+
+# Global
+path_name = ""
+path_name_image = ""
+image_buff = {}
+
+# Text
+t0 = ScrolledText()
+t0.pack()
+t0.tag_configure('LINENUM', foreground = 'red')
+
+#
+num_flag = BooleanVar()
+num_flag.set(False)
+
+# Change Number
+def change_number():
+    line = int(float(t0.index('end')))
+    if num_flag.get():
+        for x in range(1, line):
+            t0.insert('%d.0' % x, '%6d:' % x, 'LINENUM')
+    else:
+        for x in range(1, line):
+            t0.delete('%d.0' % x, '%d.7' % x)
+
+# File Select
+def load_file():
+    global path_name
+    filename = askopenfilename(filetypes = [('Text Files', ('.txt', '.py'))],
+                               initialdir = path_name)
+    if filename != "":
+        path_name = os.path.dirname(filename)
+        fi = open(filename)
+        t0.delete('1.0', 'end')
+        for x in fi:
+            t0.insert('end', x.decode('shift_jis'))
+        fi.close()
+        if num_flag.get(): change_number()
+        t0.focus_set()
+
+# insert image
+def insert_image():
+    global path_name_image
+    filename = askopenfilename(filetypes = [('Image Files', ('.gif', '.ppm')),
+                                            ('GIF Files', '.gif'),
+                                            ('PPM Files', '.ppm')],
+                               initialdir = path_name_image)
+    if filename != "":
+        if filename in image_buff:
+            image_data = image_buff[filename]
+        else:
+            image_data = PhotoImage(file = filename)
+            image_buff[filename] = image_data
+        path_name_image = os.path.dirname(filename)
+        t0.image_create('insert', image = image_data, align = 'baseline')
+
+# Menu
+m0 = Menu(root);
+root.configure(menu = m0);
+
+m1 = Menu(m0, tearoff = 0)
+m1.add_command(label = 'Open', under = 0, command = load_file)
+m1.add_checkbutton(label = 'Number', under = 0, variable = num_flag, command = change_number)
+m1.add_command(label = 'Image', under = 0, command = insert_image)
+m1.add_separator
+m1.add_command(label = 'Exit', under = 0, command = sys.exit)
+m0.add_cascade(label = 'File', under = 0, menu = m1 )
+
+root.mainloop()
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2006 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pytk05.html">PrevPage</a> | <a href="index.html#python_tkinter">Python</a> | <a href="pytk07.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

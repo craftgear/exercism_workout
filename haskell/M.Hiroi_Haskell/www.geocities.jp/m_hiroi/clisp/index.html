@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>M.Hiroi's Home Page / Common Lisp Programming</title>
+  <meta name="description" content="Lisp,Common Lisp,Common Lisp Object System,CLOS,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881752</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+</div>
+<div class="small">
+[ <A href="../index.html">Home</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> ]
+<hr>
+</div>
+<section class="contents">
+<h2>WHAT'S NEW</h2>
+<ul>
+  <li>2017/02/26 <a href="index.html#new">遅延ストリーム (3), シリーズ (series)</a> を追加
+  <li>2017/02/19 遅延ストリーム (1), (2) を改訂
+</ul>
+<h2>CONTENTS</h2>
+<ul>
+  <li><a href="index.html#clisp">CLISP について</a> (改訂 2010/10/03)
+  <li>Common Lisp 入門</a>
+    <ul>
+      <li><a href="index.html#chap01">番外編</a>
+      <li><a href="index.html#data_algo">データ構造とアルゴリズム</a>
+      <li><a href="index.html#puzzle">パズルの解法</a>
+      <li><a href="index.html#yaclp">Yet Another Common Lisp Problems</a>
+    </ul>
+  <li><a href="index.html#clos">お気楽 CLOS プログラミング入門</a>
+  <li><a href="islisp.html">お気楽 ISLisp プログラミング超入門</a> (別ページへ移動)
+  <li><a href="index.html#cite">参考文献</a>
+</ul>
+</section>
+<hr>
+<section class="contents">
+<h3 id="clisp">CLISP について</h3>
+<p> CLISP は GNU GPL ライセンスで配布されている Common Lisp です。Windows 用のバイナリも用意されているので、簡単にインストールすることができます。<a href="http://clisp.cons.org/">CLISP</a> からダウンロードのページへ複数のリンクが張られているので、適当なページからダウンロードしてください。
+M.Hiroi は SourceForge の <a href="http://sourceforge.net/project/showfiles.php?group_id=1355">CLISP - an ANSI Common Lisp</a> からダウンロードしました。
+</p>
+<p> CLISP はプログラムをバイトコードにコンパイルする方式です。<a href="http://www.cons.org/cmucl/">CMUCL</a> や <a href="http://www.sbcl.org/">SBCL</a> のようなネイティブコードにコンパイルする処理系にはかなわないと思いますが、バイトコードにコンパイルする方式では速い方だと思います。実際に拙作のページ <a href="../memo00.html#24">Memorandum 2000 年 10 月 24 日</a> の「たらいまわし関数」で実行速度を比較してみました。
+</p>
+<pre class="list">
+リスト : たらいまわし関数 (Common Lisp)
+
+(defun tak (x y z)
+  (if (&lt;= x y)
+      z
+    (tak (tak (1- x) y z)
+         (tak (1- y) z x)
+         (tak (1- z) x y))))
+</pre>
+<p> CLISP の場合、関数単位でコンパイルすることができます。(compile 'tak) としてください。これで tak をコンパイルすることができます。または、関数 compile-file でファイルをコンパイルし、関数 load でプログラムをロードすることもできます。たとえば、ファイル名を tak.lisp とすると、(compile-file "tak.lisp") で tak.lisp がバイトコンパイルされ、結果がファイル tak.fas に出力されます。次に (load "tak.fas") とすれば、バイトコンパイルされたプログラムをロードすることができます。
+</p>
+<p> それでは実行結果を示します。(tak 18 9 0) を計算しました。実行時間は (time (tak 18 9 0)) で計測できます。使用した Common Lisp は CLISP ver 2.44 と SBCL ver 1.0.29 です。SBCL も Windows 用のバイナリが用意されているので、簡単にインストールすることができます。ただし、Windows 版 SBCL はまだ開発途中で、安定したバージョンはありません。ご自分の責任でご使用ください。
+</p>
+<p> 比較のため、Python, Ruby, Gauche (Scheme), Ｃ言語 (GCC) の実行結果を示します。GCC と SBCL 以外の処理系はプログラムをバイトコードにコンパイルするものです。
+</p>
+<table border=1>
+<caption>表 : tak 18 9 0 の結果</caption>
+<thead>
+  <tr><th>処理系</th><th>秒</th></tr>
+</thead>
+<tbody>
+  <tr><td>Python (ver 2.5.2)</td><td>7.88</td></tr>
+  <tr><td>Ruby (ver 1.9,0)</td><td>7.42</td></tr>
+  <tr><td>Gauche (ver 0.8.12)</td><td>3.16</td></tr>
+  <tr><td>CLISP (ver 2.44)</td><td>2.57</td></tr>
+  <tr><td>SBCL (ver 1.0.29)</td><td>0.47</td></tr>
+  <tr><td>GCC (ver 3.4.4)</td><td>0.19</td></tr>
+  <tr><td>SBCL (最適化)</td><td>0.172</td></tr>
+</tbody>
+</table>
+<ul>
+  <li>実行環境 : Windows XP, celeron 1.40 GHz
+</ul>
+<p> Common Lisp の場合、次のように関数単位でデータ型や最適化の指定を行うことができます。
+</p>
+<pre class="list">
+リスト : たらいまわし関数 (Common Lisp, 最適化の指定)
+
+(defun tak (x y z)
+  (declare (type fixnum x y z)
+	   (optimize (speed 3) (safety 0)))
+  (if (&lt;= x y)
+      z
+    (tak (tak (1- x) y z)
+         (tak (1- y) z x)
+         (tak (1- z) x y))))
+</pre>
+<p> 最適化を指定することで SBCL が GCC よりも速くなるとは驚きました。GCC のコンパイルオプションは -O2 を指定しただけなので、他のオプションを指定するともう少し速くなるかもしれません。ちなみに CLISP の場合、最適化を指定しても実行速度はほとんどかわりませんでした。興味のある方は、ほかのプログラムでも試してみてください。
+</p>
+<div class="note">
+-- 改訂 --------<BR>
+2010/10/03 たらいまわし関数の実行結果に SBCL (Common Lisp) を追加
+</div>
+</section>
+<hr>
+<section class="contents">
+<h2 id="chap01">Common Lisp 入門：番外編</h2>
+<p> <a href="../xyzzy_lisp.html#abclisp">Common Lisp 入門</a> の番外編です。このドキュメントは拙作のページで説明したデータ構造やアルゴリズムなどのプログラムを Common Lisp 用に加筆・修正したものです。内容は重複していますが、ご了承くださいませ。
+</p>
+<h3>CONTENTS</h3>
+<ul>
+  <li>2008/10/26 <a href="clispb08.html">継続渡しスタイル</a><br>
+継続とは？、継続渡しスタイルとは？、再帰呼び出しと継続渡しスタイル、二重再帰と継続渡しスタイル、CPS の便利な使い方
+  <li>2008/10/26 <a href="clispb08.html#chap11">リスト操作と高階関数 (1)</a><br>
+マッピング、フィルター、畳み込み、畳み込みの使用例、リスト操作関数の一般化、<a href="clispb08.html#update">追記 (2009/11/22)</a>
+  <li>2008/11/02 <a href="clispb09.html">リスト操作と高階関数 (2)</a><br>
+iota と tabulate、解きほぐし、リストの分割、木の操作関数
+  <li>2008/11/02 <a href="clispb09.html#chap13">メモ化と遅延評価</a><br>
+たらいまわし関数、メモ化による高速化、メモ化関数、遅延評価による高速化、delay と force の実装
+  <li>2017/02/19 <a href="clispb10.html">遅延ストリーム (1)</a><br>
+遅延ストリームの構造、遅延ストリームの生成、遅延ストリームへの変換、遅延ストリームの操作関数、遅延ストリームの連結、高階関数、stream-map の便利な使い方、stream-flatmap、stream-take-while と stream-drop-while、エラトステネスの篩、より高速な方法
+  <li>2017/02/19 <a href="clispb11.html">遅延ストリーム (2)</a><br>
+遅延ストリームの併合、集合演算、ハミングの問題、順列の生成、遅延ストリーム版、８クイーンの解法、木の巡回と CPS、木の巡回と遅延ストリーム、ツリーマッチング
+  <li>2017/02/26 <a name="new" href="clispb11a.html">遅延ストリーム (3)</a><br>
+遅延ストリームを遅延オブジェクトで表す、stream-delay、実行速度の比較、問題点
+  <li>2017/02/26 <a href="clispb11a.html#chap02">シリーズ (series)</a><br>
+シリーズとは？、インストール、シリーズの生成、集積関数、マッピング、フィルター、変換関数、ジェネレータとギャザラ、簡単な例題
+  <li>2009/08/09 <a href="clispb12.html">Common Lisp で作る micro Scheme</a><br>
+Scheme の特徴、最小の Lisp 処理系、S 式の評価、関数適用、変数束縛と値の取得、シンタックス形式の処理、read-eval-print-loop、簡単な実行例、レキシカルスコープとクロージャの動作、再帰定義とリスト操作、ダイナミックスコープと funarg 問題
+  <li>2009/08/15 <a href="clispb13.html">Common Lisp で作る micro Scheme (2)</a><br>
+マクロの定義、バッククオートの処理、マクロの評価、set! と eqv? の追加、リードマクロ、let、and と or、let*、letrec、名前付き let、begin、cond、case、do
+  <li>2009/08/22 <a href="clispb14.html">Common Lisp で作る micro Scheme (3)</a><br>
+継続渡しスタイルによる継続の実装、継続とは？、S 式の評価の修正、シンタックス形式の修正、マクロの修正、関数適用の修正、REPL の修正、簡単な実行例、大域脱出、繰り返しからの脱出、再帰呼び出しからの脱出、イテレータの生成、末尾再帰最適化
+  <li>2009/08/29 <a href="clispb15.html">Common Lisp で作る micro Scheme (4)</a><br>
+末尾呼び出しの最適化、m-if と eval-body の修正、m-eval の修正、マクロ展開の修正、簡単な実行例、たらいまわし関数、遅延評価
+  <li>2009/09/26 <a href="clispb16.html">Common Lisp で作る micro Scheme コンパイラ</a><br>
+SECD 仮想マシン、SECD 仮想マシンの命令、コンパイラの作成、引数とラムダ式本体の評価、局所変数の位置を求める、簡単なコンパイルのテスト、仮想マシンの作成、read-eval-print-loop、簡単な実行例、レキシカルスコープとクロージャの動作、再帰定義とリスト操作
+  <li>2009/09/27 <a href="clispb17.html">Common Lisp で作る micro Scheme コンパイラ (2)</a><br>
+マクロの定義、マクロのコンパイル、バッククオートの処理、簡単な実行例、set! と eqv? の追加、let、and と or、let*、letrec、名前付き let、begin、cond、case、do
+  <li>2009/10/03 <a href="clispb18.html">Common Lisp で作る micro Scheme コンパイラ (3)</a><br>
+継続の実装、call/cc のコンパイル、ldct の追加と app の修正、apply の実装、簡単な実行例、大域脱出、繰り返しからの脱出、再帰呼び出しからの脱出、イテレータの生成
+  <li>2009/10/04 <a href="clispb19.html">Common Lisp で作る micro Scheme コンパイラ (4)</a><br>
+末尾呼び出しの最適化、コンパイラの修正、仮想マシンの修正、簡単な実行例、たらいまわし関数、遅延評価<br>
+2012/03/04 <a href="clispb19.html#appendix">Appendix: ldg, gset 命令の改良</a><br>
+2013/08/24 <a href="clispb19.html#appendix1">Appendix: バッククォートの修正</a>
+  <li>2010/12/12 <a href="clispb31.html">仮想計算機 COMETⅡの簡易シミュレータ</a><br>
+コンピュータの基本構造、アセンブリ言語とアセンブラ、COMETⅡのハードウェア構成、COMETⅡの命令、命令語の構成、S 式によるプログラムの記述、アセンブラの作成、命令語の生成、アセンブラの実行例
+  <li>2010/12/19 <a href="clispb32.html">仮想計算機 COMETⅡの簡易シミュレータ (2)</a><br>
+レジスタとメモリの構成、仮想マシンの作成、データ転送、算術演算、論理演算、比較演算、シフト演算、ジャンプ命令、スタック操作とサブルーチン、その他、プログラムのロードと実行、簡単な実行例
+  <li>2010/12/26 <a href="clispb33.html">仮想計算機 COMETⅡの簡易シミュレータ (3)</a><br>
+アセンブリ言語の条件分岐と繰り返し、サブルーチンの使い方、サブルーチンの必要性、引数の渡し方、レジスタの保護、サブルーチンの例題、乗算、除算、再帰呼び出し、整数値の表示、エラトステネスの篩
+  <li>2011/01/02 <a href="clispb34.html">仮想計算機 COMETⅡの簡易シミュレータ (4)</a> (<a href="clispb34.html#update">修正</a> 2011/01/22)<br>
+COMET2A の作成、スタックポインタを汎用レジスタとして使う、局所変数とスタックの関係、LINK 命令と UNLK 命令、乗算と除算、アセンブラの修正、仮想マシンの修正、乗算と除算の追加、LINK と UNLINK の追加、簡単な実行例
+  <li>2011/01/09 <a href="clispb35.html">仮想計算機 COMETⅡの簡易シミュレータ (5)</a> (改訂 2011/01/22)<br>
+COMET2A 用の簡単なライブラリ、フィボナッチ関数、フィボナッチ関数 (2)、ユークリッドの互除法、バブルソート、選択ソート、単純挿入ソート、クイックソート、８クイーン
+  <li>2011/01/16 <a href="clispb36.html">仮想計算機 COMETⅡの簡易シミュレータ (6)</a><br>
+メモリの動的割り当て、malloc の動作、free の動作、メモリの管理方法、ブロックの選択アルゴリズム、Common Lisp での実装、first-fit 法、best-fit 法と worst-fit 法、メモリの解放、簡単なテスト
+  <li>2011/01/23 <a href="clispb37.html">仮想計算機 COMETⅡの簡易シミュレータ (7)</a><br>
+COMET2A のメモリ管理プログラム、ヒープ領域の初期化、align 擬似命令の追加、メモリの割り当て、メモリの解放、簡単なテスト
+  <li>2011/01/30 <a href="clispb38.html">仮想計算機 COMETⅡの簡易シミュレータ (8)</a><br>
+連結リストの構造、連結リストを操作するサブルーチン、セルのデータ構造、セルの生成と廃棄、リストの生成と廃棄、n 番目のセルを求める、データの参照、データの更新、データの挿入、データの削除、データの変換、連結リストの表示、実行例
+  <li>2011/02/06 <a href="clispb39.html">仮想計算機 COMETⅡの簡易シミュレータ (9)</a><br>
+リストを操作するサブルーチン、セル領域の初期化、セルの取得、リストの生成、再帰呼び出しとスタックオーバーフロー、畳み込み、リストの削除、エラトステネスの篩
+  <li>2011/02/13 <a href="clispb40.html">仮想計算機 COMETⅡの簡易シミュレータ (10)</a><br>
+ガベージコレクションの基礎知識、マークスイープ法によるゴミ集め、Common Lisp での実装、セル領域の初期化、セルの取得、リスト操作関数の実装、ガベージコレクションの実装、簡単な実行例、COMET2A での実装、マークとスイープ、簡単な実行例 (2)
+  <li>2011/02/20 <a href="clispb41.html">仮想計算機 COMETⅡの簡易シミュレータ (11)</a><br>
+順列の生成、リストのマージ、マージソート
+  <li>2011/02/26 <a href="clispb42.html">仮想計算機 COMETⅡの簡易シミュレータ (付録)</a><br>
+リストのマージ (破壊的修正)、マージソート (破壊的修正)、32 bit 無符号整数演算
+  <li>2015/05/23 <a name="new" href="clispb46.html">funarg 問題</a><br>
+funarg 問題とは？、function と quote の違い、ダイナミックスコープで動作する場合、ダイナミックスコープでも動作しない場合、クロージャの導入、クロージャは環境を保持する、クロージャを使用するときの注意点、(追記 2015/06/06)
+</ul>
+<h3 id="data_algo">データ構造とアルゴリズム</h3>
+<ul>
+  <li>2003/12/03 <a href="clispb01.html">Lisp で算術符号</a><br>
+算術符号の符号化、算術符号の復号、符号化のプログラム、復号のプログラム
+  <li>2003/12/03 <a href="clispb01.html#chap02">Lisp で適応型算術符号</a><br>
+符号化のプログラム、復号のプログラム
+  <li>2003/12/03 <a href="clispb02.html">Lisp でレンジコーダ</a><br>
+レンジコーダの基本的な考え方、レンジコーダの符号化、レンジコーダの復号、符号化のプログラム、復号のプログラム
+  <li>2003/12/03 <a href="clispb02.html#chap04">二分木：データの削除</a><br>
+二分木からデータを削除する、プログラムの作成
+  <li>2003/12/03 <a href="clispb03.html">2 色木（その１）</a><br>
+2 色木とは？、二分木の回転操作、データの挿入、プログラムの作成、実行例
+  <li>2003/12/03 <a href="clispb04.html">2 色木（その２）</a><br>
+データの削除、木の修正、プログラムの作成、バランスの修正、実行例
+  <li>2006/06/03 <a href="clispb07.html">スプレイ木</a><br>
+スプレイ操作の基本、Top-Down Splay、Splay 操作のプログラム、データの探索、データの挿入、データの削除
+  <li>2010/09/26 <a href="clispb23.html">ヒープとハフマン符号</a><br>
+ヒープとは？、ヒープの仕様、構造体の定義、ヒープの構築 (1)、ヒープの再構築、ヒープの構築 (2)、操作関数の作成、実行例、ハフマン符号、ハフマン符号のアルゴリズム、符号木の定義、出現頻度表の作成、ハフマン木の生成、符号化と復号
+  <li>2010/10/03 <a href="clispb24.html">ハフマン符号 (2)</a><br>
+エントロピーとは？、ビット入出力処理の作成、ビットストリームの生成、ビットストリームからの入力、ビットストリームへの出力、符号木の取り扱い、符号化のプログラム、復号のプログラム、実行結果
+  <li>2010/10/10 <a href="clispb25.html">レンジコーダ (2)</a><br>
+レンジコーダの実装、出現頻度表と累積度数表の作成、符号化のプログラム、桁上がりの処理、符号化の終了処理、ファイルの符号化、復号のプログラム、ファイルの復号、実行結果
+  <li>2010/10/17 <a href="clispb26.html">適応型レンジコーダ</a><br>
+静的符号化と動的符号化、Binary Indexed Tree、構造体の定義、累積度数の求め方、出現頻度の求め方、出現頻度の更新、記号の探索、簡単な実行例、出現頻度表の初期化と更新、適応型レンジコーダの符号化、適応型レンジコーダの復号、実行結果
+  <li>2010/10/24 <a href="clispb27.html">整数の符号化</a><br>
+符号の種類、γ符号とδ符号、CBT 符号、ゴロム・ライス符号、プログラムの作成、MTF (Move To Front) 法、MTF 法のプログラム、実行結果
+  <li>2010/10/31 <a href="clispb28.html">バイナリレンジコーダ</a><br>
+バイナリレンジコーダと数値の対応、αモデル、バイナリモデル、バイナリレンジコーダのプログラム、バイナリモデルの作成、実行結果
+  <li>2010/11/07 <a href="clispb29.html">有限文脈モデル</a><br>
+マルコフ情報源モデル、有限文脈モデル、プログラムの作成、実行結果、適応型レンジコーダの改良、バイナリレンジコーダによる実装
+  <li>2010/11/14 <a href="clispb30.html">有限文脈モデル (2)</a><br>
+PPM (Prediction by Partial Matching) とエスケープ記号、エスケープ確率の計算方法、出現頻度表の生成と更新、update exclusion、符号化と復号処理、実行結果、exclusion、exclusion の実装、実行結果 (2)
+  <li>2012/01/14 <a href="clispb43.html">動的計画法</a><br>
+組み合わせの数、動的計画法による高速化、動的計画法とメモ化、整数の分割、部分和問題、分岐限定法による解法、動的計画法による解法、ナップザック問題、プログラムの作成、実行結果
+  <li>2014/01/26 <a href="clispb44.html">Algorithm X</a><br>
+敷き詰め問題、Exact Cover Problem、プログラムの作成 (1)、実行結果 (1)、Algorithm X の基本、連結リストによる Algorithm X の実装、プログラムの作成 (2)、実行結果 (2)
+  <li>2014/02/01 <a href="clispb45.html">Dancing Links</a><br>
+Dancing Links とは？、Dancing Links の操作方法、データ構造の定義、Dancing Links の生成、行と列の削除、行と列の復元、Dancing Links による Algorithm X の実装、実行結果
+</ul>
+<h3 id="puzzle">パズルの解法</h3>
+<ul>
+  <li>2003/12/10 <a href="clispb05.html">パズル「フリップ・イット」</a><br>
+パズルの説明、プログラムの作成、フリップ・イットの解答、フリップ・イットの最長手数、ルールの変更
+  <li>2005/02/06 <a href="clispb06.html">三目並べ</a><br>
+ゲームの説明、プログラムの作成、実行結果
+  <li>2005/02/25 <a href="clispb06.html#chap08">変形魔方陣</a><br>
+問題１、プログラムの作成、問題２、問題３
+  <li>2010/09/05 <a href="clispb20.html">ペグ・ソリテア</a><br>
+ペグ・ソリテアの説明、変形三角盤、跳び先表、大域変数の定義、変形三角盤の下限値、解法プログラム、実行結果、ペグのグループ分け、下限値の改善、実行結果 (2)
+  <li>2010/09/12 <a href="clispb21.html">N Queens Problem</a><br>
+8 クイーンの解法、プログラムの作成、実行結果、8 クイーンの高速化、実行結果 (2)、ちょっと便利なビット操作関数、ビット演算による高速化、N Queens Problem の高速化、実行結果 (3)、Appendix : ペグ・ソリテアの高速化
+  <li>2010/09/19 <a href="clispb22.html">箱入り娘</a><br>
+パズルの説明、盤面と駒の定義、駒の移動、キューとハッシュ表の定義、幅優先探索による解法、実行結果
+</ul>
+<h3 id="yaclp">Yet Another Common Lisp Problems</h3>
+<ul>
+  <li>2010/11/21 <a href="yaclp01.html">Yet Another Common Lisp Problems (1)</a>
+  <li>2010/11/21 <a href="yaclp01.html#ans01">解答 (1)</a>
+  <li>2010/11/28 <a href="yaclp02.html">Yet Another Common Lisp Problems (2)</a>
+  <li>2010/11/28 <a href="yaclp02.html#ans26">解答 (2)</a> (<a href="yaclp02.html#ans50update">別解 (2012/10/08))</a>
+  <li>2010/12/05 <a href="yaclp03.html">Yet Another Common Lisp Problems (3)</a>
+  <li>2010/12/05 <a href="yaclp03.html#ans51">解答 (3)</a>
+  <li>2011/07/16 <a href="yaclp04.html">Yet Another Common Lisp Problems (4)</a>
+  <li>2011/07/16 <a href="yaclp04.html#ans61">解答 (4)</a>
+  <li>2011/07/23 <a href="yaclp05.html">Yet Another Common Lisp Problems (5)</a>
+  <li>2011/07/23 <a href="yaclp05.html#ans81">解答 (5)</a> (2011/12/25,2012/01/08 別解を追加)
+  <li>2012/12/02 <a href="yaclp06.html">Yet Another Common Lisp Problems (6)</a>
+  <li>2012/12/02 <a href="yaclp06.html#ans101">解答 (6)</a>
+</ul>
+<h3 id="copyright_b">権利・免責事項など</h3>
+<p> 『Common Lisp 入門：番外編』の著作権は筆者「広井誠 (Makoto Hiroi) 」が保持します。無断使用や無断転載は禁止いたします。『Common Lisp 入門：番外編』で作成したプログラムはフリーソフトウェアとします。ご自由にお使いください。プログラムの改造や配布もご自由にどうぞ。その際は、出典を明記してくださるようお願いいたします。
+</p>
+<p> ただし、これらのプログラムは無保証であり、使用したことにより生じた損害について、作者「広井誠 (Makoto Hiroi) 」は一切の責任を負いません。また、これらのプログラムを販売することで利益を得るといった商行為は禁止いたします。
+</p>
+<div align="right"><b>Copyright (C) 2003-2017 Makoto Hiroi<br>
+All rights reserved.</b>
+</div>
+</section>
+<hr>
+<section class="contents">
+<h2 id="clos">お気楽 CLOS プログラミング入門</h2>
+<h3>CONTENTS</h3>
+<ul>
+  <li><a href="index.html#begin">はじめに</a>
+  <li><a href="index.html#copyright">権利・免責事項など</a>
+</ul>
+<ul>
+  <li><a href="clisp01.html">オブジェクト指向の基礎知識</a><br>
+オブジェクトとは？、クラスとインスタンス、メソッド、クラスの定義、インスタンスの生成、メソッドの定義、メソッドの選択、スロットのアクセス、point クラス
+  <li><a href="clisp02.html">双方向リスト</a><br>
+双方向リストとは？、双方向リストの仕様、クラスの定義、データの参照、データの更新、データの挿入、データの削除、畳み込みと巡回、データの変換、その他のメソッド、実行例
+  <li><a href="clisp03.html">継承</a><br>
+継承とは？、単一継承の使い方、スロットとメソッドの継承、スーパークラスに同じスロット名がある場合、データ型の継承、メソッドの選択、複数の引数がある場合、メソッドのオーバーライド
+  <li><a href="clisp04.html">継承 (2)</a><br>
+制限付き双方向リスト、継承は is-a 関係を表す、スタックの実装、キューの実装、ディーキューの実装
+  <li><a href="clisp05.html">多重継承</a><br>
+多重継承の使い方、メソッドの選択、スーパークラスに同じスロット名がある場合、多重継承の問題点、Mix-in、クラス enumerable、イテレータを使う方法
+  <li><a href="clisp06.html">二分木</a><br>
+二分木の仕様、クラスの定義、スロットのアクセス、データの探索、データの挿入、データの削除、巡回、畳み込み、実行例
+  <li><a href="clisp07.html">メソッド結合</a><br>
+:before メソッドと :after メソッド、:around メソッド、補助メソッドはアクセスメソッドにも定義できる
+  <li><a href="clisp07.html#chap0702">インスタンスの初期化</a><br>
+initialize-instance、ベクタによるキューの実装
+  <li><a href="clisp07.html#chap0703">共有スロット</a><br>
+共有スロットの設定、共有スロットの継承、共有スロットの衝突、局所スロットと共有スロットの衝突
+  <li><a href="clisp08.html">トライとパトリシア</a><br>
+トライとは？、トライの実装方法、クラスの定義、節の操作関数、データの探索、データの挿入、データの削除、巡回と畳み込み、共通接頭辞を持つデータの探索、実行例<br>
+パトリシアとは？、パトリシアのクラス定義、部分列のマッチング、子の探索、最長一致の探索、データの探索、データの挿入、データの削除、共通接頭辞を持つデータの探索、実行例 (その２)
+  <li><a href="clisp09.html">積木の移動</a><br>
+クラスの定義、インスタンスの生成、メソッドの作成、実行例、プログラムの改良
+  <li><a href="clisp09.html#chap0902">ちょっと寄り道：分数を使ったパズル</a><br>
+パズル「小町分数 (1) 」、パズル「小町分数 (2) 」、単位分数の和
+</ul>
+<div align="right">
+2003 年 9 月 - 12 月 初出<br>
+2010 年 4 月 24 日 改訂
+</div>
+<hr>
+<h3 id="begin">はじめに</h3>
+<p> Common Lisp には CLOS (Common Lisp Object System) というオブジェクト指向システムがあります。CLOS はＣ++や Java とはちょっと違ったオブジェクト指向で、とても興味深いシステムです。残念ながら <a href="../xyzzy_lisp.html">xyzzy Lisp</a> は CLOS をサポートしていませんが、CLOS を利用できるフリーの Lisp 処理系がいくつかあります。
+</p>
+<p> その中で Windows でも動作する処理系に <a href="index.html#clisp">CLISP</a> があります。この CLISP を使って、<B>CLOS でオブジェクト指向を勉強しながらプログラミングを楽しもう</B> というのが本ページの趣旨であります。まあ、実際に CLOS を使うのは M.Hiroi も初めてなので、少しずつですが勉強したことをこのページで公開できればいいなと思っています。お付き合いのほどよろしくお願いいたします。 
+</p>
+<p> ところで、Common Lisp は初めてという方は、まず最初に <a href="../xyzzy_lisp.html#abclisp">xyzzy Lisp Programming：Common Lisp 入門</a> をお読みください。Common Lisp の基本を詳しく説明しています。
+</p>
+<h3 id="copyright">権利・免責事項など</h3>
+<p> 『お気楽 CLOS プログラミング入門』の著作権は筆者「広井誠 (Makoto Hiroi) 」が保持します。無断使用や無断転載は禁止いたします。『お気楽 CLOS プログラミング入門』で作成したプログラムはフリーソフトウェアとします。ご自由にお使いください。プログラムの改造や配布もご自由にどうぞ。その際は、出典を明記してくださるようお願いいたします。
+</p>
+<p> ただし、これらのプログラムは無保証であり、使用したことにより生じた損害について、作者「広井誠 (Makoto Hiroi) 」は一切の責任を負いません。また、これらのプログラムを販売することで利益を得るといった商行為は禁止いたします。
+</p>
+<div align="right"><b>Copyright (C) 2003-2010 Makoto Hiroi<br>
+All rights reserved.</b>
+</div>
+</section>
+<hr>
+<section class="contents">
+<h3 id="cite">参考文献</h3>
+<ol>
+  <li>Patrick Henry Winston, Berthold Klaus Paul Horn, 『LISP 原書第 3 版 (1) (2)』, 培風館, 1992
+  <li>Guy L. Steele Jr., 『COMMON LISP 第 2 版』, 共立出版, 1991
+  <li>小暮裕明, 『オブジェクト指向のすべて』, ＣＱ出版社, 1990
+  <li>B.J.コックス, A.J.ノボビルスキ, 『オブジェクト指向のプログラミング』, トッパン, 1992
+  <li>井田昌之, 『new はやわかり Java』, 共立出版, 1997
+</ol>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003-2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

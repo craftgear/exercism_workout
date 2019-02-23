@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / カラーダイスパズル</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881774</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>カラーダイスパズル</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p> 「カラーダイスパズル」は各面にそれぞれ赤、青、緑、黄のいずれかの色を塗った 4 つのサイコロを使ったパズルです。一般には「インスタント・インサニティ」と呼ばれています。それでは問題です。
+</p>
+<pre class="fig">
+    ┌─┐              ┌─┐              ┌─┐              ┌─┐          
+    │<font color="blue">■</font>│              │<font color="blue">■</font>│              │<font color="red">■</font>│              │<font color="green">■</font>│          
+┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐  
+│<font color="red">■</font>│<font color="green">■</font>│<font color="green">■</font>│<font color="yellow">■</font>│  │<font color="red">■</font>│<font color="blue">■</font>│<font color="green">■</font>│<font color="yellow">■</font>│  │<font color="red">■</font>│<font color="green">■</font>│<font color="yellow">■</font>│<font color="yellow">■</font>│  │<font color="blue">■</font>│<font color="green">■</font>│<font color="yellow">■</font>│<font color="green">■</font>│  
+└─┼─┼─┴─┘  └─┼─┼─┴─┘  └─┼─┼─┴─┘  └─┼─┼─┴─┘  
+    │<font color="blue">■</font>│              │<font color="red">■</font>│              │<font color="blue">■</font>│              │<font color="red">■</font>│          
+    └─┘              └─┘              └─┘              └─┘          
+
+                        図 : カラーダイスパズル
+</pre>
+<p> 上図の 4 つのサイコロを柱状に積み重ねて、どの側から見ても 4 つのサイコロの面が異なる色になるような積み方を考えてください。
+</p>
+
+<h4>●参考 URL</h4>
+<ul>
+  <li><a href="http://www.torito.jp/puzzles/puzzle_asobi.shtml">パズル遊びへの招待・オンライン版</a> <a href="http://www.torito.jp/puzzles/317.shtml">３－１７．インスタント・インサニティ</a>
+</ul>
+<hr>
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。プログラミング言語は Python を使うことにします。
+</p>
+<p> 最初にサイコロの積み方が何通りあるか数えてみます。サイコロは 6 つの面があります。上下の面を基準にすると、その置き方は 6 通りあり、上下を軸に回転して得られる置き方が 4 通りあるので、一つのサイコロの置き方は全部で 24 通りあります。サイコロは 4 つありますがその順番は関係ないので、サイコロの積み方は全部で 24 * 24 * 24 * 24 = 331776 通りになります。積み方の総数はそれほど多くないので、とりあえず簡単な生成検定法でプログラムを作ることにします。
+</p>
+
+<p> 上下の面を基準にした 6 通りの置き方を下図に示します。
+</p>
+<pre class="fig">
+      上
+    ┌─┐              ┌─┐              ┌─┐        
+    │０│              │１│              │２│        
+┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐
+│１│２│３│４│  │５│２│０│４│  │１│５│３│０│
+└─┼─┼─┴─┘  └─┼─┼─┴─┘  └─┼─┼─┴─┘
+    │５│              │３│              │４│        
+    └─┘              └─┘              └─┘        
+      下
+
+    （Ａ）              （Ｂ）              （Ｃ）
+
+      上
+    ┌─┐              ┌─┐              ┌─┐        
+    │５│              │３│              │４│        
+┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐
+│１│４│３│２│  │５│４│０│２│  │１│０│３│５│
+└─┼─┼─┴─┘  └─┼─┼─┴─┘  └─┼─┼─┴─┘
+    │０│              │１│              │２│        
+    └─┘              └─┘              └─┘        
+      下
+
+    （Ｄ）              （Ｅ）              （Ｆ）
+
+                   図 : 縦の回転パターン
+</pre>
+<p> (A) を標準形とすると、1 の面が上になるよう縦に 90 度回転したものが (B)、2 の面が上になるように回転したものが (C) になります。そして、(A), (B), (C) を 180 度縦に回転 (上下を反転) したものが (D), (E), (F) になります。
+</p>
+
+<p> 色を数字 1 (赤), 2 (青), 3 (緑), 4 (黄) で表すと、サイコロと縦の回転パターンは次のように定義することができます。
+</p>
+<pre class="list">
+リスト : サイコロと回転パターンの設定
+
+# サイコロの設定
+CUBE = [[2, 1, 3, 3, 4, 2], [2, 1, 2, 3, 4 ,1],
+        [1, 1, 3, 4, 4 ,2], [3, 2, 3, 4, 3, 1]]
+
+# 縦の回転パターン
+PATTERN = [[0, 1, 2, 3, 4, 5], [5, 1, 4, 3, 2, 0], [1, 5, 2, 0, 4, 3],
+           [3, 5, 4, 0, 2, 1], [2, 1, 5, 3, 0, 4], [4, 1, 0, 3, 5, 2]]
+</pre>
+<p> CUBE の要素を xs, PATTERN の要素を pat とすると、サイコロを回転するプログラムは関数 map を使って簡単に記述することができます。
+</p>
+<pre class="item">
+map(lambda x: xs[x], pat)
+</pre>
+<p> 横の回転はサイコロを表す配列の 1, 2, 3, 4 番目の要素を回転させるだけです。たとえば、xs が [0, 1, 2, 3, 4, 5] の場合、xs を 90 度回転すると [0, 2, 3, 4, 1, 5] になります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 横の回転パターン
+
+def rotate_dice(xs):
+    ys = xs[:]
+    y = ys[1]
+    del ys[1]
+    ys.insert(4, y)
+    return ys
+</pre>
+<p> 関数 rotate_dice はサイコロを横に 90 度回転させます。引数 xs はサイコロを表す配列です。最初に xs をコピーして変数 ys にセットします。そして、1 番目の要素を取り出し、それをメソッド insert で 4 番目に挿入します。最後に ys を return で返します。rotatice_dice を 2 回呼び出せば、サイコロは 180 度回転し、3 回呼び出せば 270 度 (反回転で 90 度) 回転します。
+</p>
+
+<p> パズルの解法プログラムは簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : カラーダイスパズルの解法
+
+def solve(n, ds, a = []):
+    if n == 4:
+        if check(*a): print a
+    else:
+        xs = ds[n]
+        for pat in PATTERN:
+            ys = map(lambda x: xs[x], pat)
+            for _ in xrange(4):
+                a.append(ys)
+                solve(n + 1, ds, a)
+                a.pop()
+                ys = rotate_dice(ys)
+</pre>
+
+<p> 関数 solve の引数 ds が 4 つのサイコロを格納した配列、a が積み上げたサイコロを格納する配列、n が ds から取り出すサイコロの位置です。n が 4 になったら関数 check を呼び出して、横の 4 つの面に赤、青、緑、黄の 4 色があるかチェックします。n が 4 未満の場合、ds[n] のサイコロ xs を積み上げます。PATTERN から縦の回転パターン pat を取り出し、map でサイコロ xs に pat を適用して、向きを変えたサイコロ ys を生成します。あとは ys を a に格納して solve を呼び出し、そのあと rotate_dice でサイコロを横に回転します。これで 24 通りの置き方を試すことができます。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="colordice.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+[[2, 1, 3, 3, 4, 2], [1, 2, 4, 1, 2, 3], [4, 3, 2, 4, 1, 1], [3, 4, 1, 2, 3, 3]]
+[[2, 3, 3, 4, 1, 2], [1, 4, 1, 2, 2, 3], [4, 2, 4, 1, 3, 1], [3, 1, 2, 3, 4, 3]]
+[[2, 3, 4, 1, 3, 2], [1, 1, 2, 2, 4, 3], [4, 4, 1, 3, 2, 1], [3, 2, 3, 4, 1, 3]]
+[[2, 4, 1, 3, 3, 2], [1, 2, 2, 4, 1, 3], [4, 1, 3, 2, 4, 1], [3, 3, 4, 1, 2, 3]]
+[[2, 1, 4, 3, 3, 2], [3, 2, 2, 1, 4, 1], [1, 3, 1, 4, 2, 4], [3, 4, 3, 2, 1, 3]]
+[[2, 4, 3, 3, 1, 2], [3, 2, 1, 4, 2, 1], [1, 1, 4, 2, 3, 4], [3, 3, 2, 1, 4, 3]]
+[[2, 3, 3, 1, 4, 2], [3, 1, 4, 2, 2, 1], [1, 4, 2, 3, 1, 4], [3, 2, 1, 4, 3, 3]]
+[[2, 3, 1, 4, 3, 2], [3, 4, 2, 2, 1, 1], [1, 2, 3, 1, 4, 4], [3, 1, 4, 3, 2, 3]]
+</pre>
+<p> 先頭のサイコロを基準にすると、標準形 (A) を横に回転した 4 通りと、(A) を上下に反転した (D) を横に回転した 4 通り、合計で 8 通りの解が出力されました。
+</p>
+
+<h4>●重複解の排除</h4>
+<p> 次は重複解を排除することを考えてみましょう。横に回転して得られる解は先頭のサイコロを横に回転しなければ排除することができますね。また、(A) の解において、すべてのサイコロを上下反転すると (D) の解と一致します。(B) と (D), (E) と (F) も同様です。したがって、先頭のサイコロは (A), (B), (C) のパターンだけを調べればよいことになります。
+</p>
+<p> これをプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 重複解の排除
+
+PATTERN1 = [[0, 1, 2, 3, 4, 5], [1, 5, 2, 0, 4, 3], [2, 1, 5, 3, 0, 4]]
+
+def solve1(ds, a = []):
+    xs = ds[0]
+    for pat in PATTERN1:
+        zs = map(lambda x: xs[x], pat)
+        a.append(zs)
+        solve(1, ds, a)
+        a.pop()
+</pre>
+
+<p> PATTERN1 に (A), (B), (C) の回転パターンをセットします。そして、関数 solve1 では先頭のサイコロを取り出して、それに PATTERN1 のパターン pat を適用したサイコロ zs を生成します。あとは zs を a にセットして関数 solve を呼び出すだけです。これで先頭のサイコロの置き方を 3 通りに限定して重複解を排除することができます。
+</p>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+[[2, 1, 3, 3, 4, 2],
+ [1, 2, 4, 1, 2, 3],
+ [4, 3, 2, 4, 1, 1],
+ [3, 4, 1, 2, 3, 3]]
+</pre>
+<p> 重複解を排除すると、解は 1 通りになります。
+</p>
+<p> ご参考までに Common Lisp で作成したプログラムを <a href="colordice.html#list2">プログラムリスト２</a> に、Prolog で作成したプログラムを <a href="colordice.html#list3">プログラムリスト３</a> に示します。興味のある方はお読みくださいませ。
+</p>
+
+<h4>●Appendix : サイコロを 5 つに増やす場合</h4>
+<p> ちなみに、5 色に塗り分けられたサイコロを 5 つ使って、どの側から見ても 5 つのサイコロの面が異なる色になるような積み方を考えることもできます。
+</p>
+<pre class="fig">
+    ┌─┐              ┌─┐              ┌─┐        
+    │Ｂ│              │Ｇ│              │Ｙ│        
+┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐
+│Ｂ│Ｙ│Ｃ│Ｇ│  │Ｇ│Ｙ│Ｒ│Ｃ│  │Ｙ│Ｃ│Ｂ│Ｒ│
+└─┼─┼─┴─┘  └─┼─┼─┴─┘  └─┼─┼─┴─┘
+    │Ｒ│              │Ｂ│              │Ｇ│        
+    └─┘              └─┘              └─┘        
+
+    ┌─┐              ┌─┐        
+    │Ｃ│              │Ｒ│        
+┌─┼─┼─┬─┐  ┌─┼─┼─┬─┐
+│Ｃ│Ｒ│Ｇ│Ｂ│  │Ｒ│Ｂ│Ｙ│Ｇ│
+└─┼─┼─┴─┘  └─┼─┼─┴─┘
+    │Ｙ│              │Ｃ│        
+    └─┘              └─┘        
+
+    Ｒ : 赤    Ｂ : 青    Ｇ : 緑    Ｙ : 黄    Ｃ : 水色
+
+
+        図 : 5 色のカラーダイスパズル
+</pre>
+<p> 上図の場合、3 通りの解があります。興味のある方は解答を見るまえに挑戦してみてください。
+</p>
+<p><a href="colordice.html#answer">解答</a>
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: shift_jis
+#
+# dice.py : カラーダイスパズル
+#
+#           Copyright (C) 2012 Makoto Hiroi
+#
+
+# 座標
+#   上
+#   ０
+# １２３４
+#   ５
+#   下
+#
+# 色 : r (red), b (blue), g (green), y (yellow)
+#      1        2         3          4
+
+# キューブの設定
+CUBE = [[2, 1, 3, 3, 4, 2], [2, 1, 2, 3, 4 ,1],
+        [1, 1, 3, 4, 4 ,2], [3, 2, 3, 4, 3, 1]]
+
+# 縦の回転パターン
+PATTERN = [[0, 1, 2, 3, 4, 5], [5, 1, 4, 3, 2, 0], [1, 5, 2, 0, 4, 3],
+           [3, 5, 4, 0, 2, 1], [2, 1, 5, 3, 0, 4], [4, 1, 0, 3, 5, 2]]
+
+PATTERN1 = [[0, 1, 2, 3, 4, 5], [1, 5, 2, 0, 4, 3], [2, 1, 5, 3, 0, 4]]
+
+# 横の回転パターン
+def rotate_dice(xs):
+    ys = xs[:]
+    y = ys[1]
+    del ys[1]
+    ys.insert(4, y)
+    return ys
+
+# 色のチェック
+def check(xs1, xs2, xs3, xs4):
+    for x in xrange(1, 5):
+        c = 1 &lt;&lt; (xs1[x] - 1)
+        c |= 1 &lt;&lt; (xs2[x] - 1)
+        c |= 1 &lt;&lt; (xs3[x] - 1)
+        c |= 1 &lt;&lt; (xs4[x] - 1)
+        if c != 0x0f: return False
+    return True
+
+# 解法
+def solve(n, ds, a = []):
+    if n == 4:
+        if check(*a): print a
+    else:
+        xs = ds[n]
+        for pat in PATTERN:
+            ys = map(lambda x: xs[x], pat)
+            for _ in xrange(4):
+                a.append(ys)
+                solve(n + 1, ds, a)
+                a.pop()
+                ys = rotate_dice(ys)
+
+# 重複解の排除
+def solve1(ds, a = []):
+    xs = ds[0]
+    for pat in PATTERN1:
+        zs = map(lambda x: xs[x], pat)
+        a.append(zs)
+        solve(1, ds, a)
+        a.pop()
+
+# 実行
+solve(0, CUBE)
+print '-----'
+solve1(CUBE)
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+;
+; dice.l : カラーダイスパズル
+;
+;          Copyright (C) 2012 Makoto Hiroi
+;
+
+; 座標
+;   上
+;   ０
+; １２３４
+;   ５
+;   下
+;
+; 色 : r (red), b (blue), g (green), y (yellow)
+;      1        2         3          4
+
+
+; キューブの設定
+(defvar *cube* '((b r g g y b) (b r b g y r) (r r g y y b) (g b g y g r)))
+
+; 縦の回転パターン
+(defvar *pattern*
+  '((0 1 2 3 4 5)
+    (5 1 4 3 2 0)
+    (1 5 2 0 4 3)
+    (3 5 4 0 2 1)
+    (2 1 5 3 0 4)
+    (4 1 0 3 5 2)))
+
+(defvar *pattern1*
+  '((0 1 2 3 4 5)
+    (1 5 2 0 4 3)
+    (2 1 5 3 0 4)))
+
+; 横の回転
+(defun rotate-dice (xs)
+  (let ((ys (copy-list xs)))
+    (rotatef (nth 1 ys) (nth 2 ys) (nth 3 ys) (nth 4 ys))
+    ys))
+
+; 色のチェック
+(defun check (xs1 xs2 xs3 xs4)
+  (dolist (xs (mapcar #'list xs1 xs2 xs3 xs4) t)
+    (when (set-difference '(r g b y) xs)
+      (return))))
+
+; 解法
+(defun solve (ds &amp;optional a)
+  (if (null ds)
+      (if (apply #'check (mapcar #'(lambda (xs) (subseq xs 1 5)) a))
+	  (print (reverse a)))
+    ;
+    (let ((xs (car ds)))
+      (dolist (pat *pattern*)
+	(let ((ys (mapcar #'(lambda (x) (nth x xs)) pat)))
+	  (dotimes (x 4)
+	    (solve (cdr ds) (cons ys a))
+	    (setq ys (rotate-dice ys))))))))
+
+; 重複解の排除
+(defun solve1 (ds)
+  (let ((xs (car ds)))
+    (dolist (pat *pattern1*)
+      (let ((ys (mapcar #'(lambda (x) (nth x xs)) pat)))
+	(solve (cdr ds) (cons ys nil))))))
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+/*
+ * dice.swi : カラーダイスパズル
+ *
+ *            Copyright (C) 2012 Makoto Hiroi
+ */
+
+/*
+
+  座標
+  ０
+１２３４
+  ５
+
+色 : r (red), b (blue), g (green), y (yellow)
+
+*/
+
+/* 縦の回転パターン  */
+pattern([A,B,C,D,E,F], [A,B,C,D,E,F]).
+pattern([A,B,C,D,E,F], [F,B,E,D,C,A]).
+pattern([A,B,C,D,E,F], [B,F,C,A,E,D]).
+pattern([A,B,C,D,E,F], [D,F,E,A,C,B]).
+pattern([A,B,C,D,E,F], [C,B,F,D,A,E]).
+pattern([A,B,C,D,E,F], [E,B,A,D,F,C]).
+
+pattern1([A,B,C,D,E,F], [A,B,C,D,E,F]).
+pattern1([A,B,C,D,E,F], [B,F,C,A,E,D]).
+pattern1([A,B,C,D,E,F], [C,B,F,D,A,E]).
+
+/* 横の回転パターン */
+rotate_dice([A, B, C, D, E, F], [A, B, C, D, E, F]).
+rotate_dice([A, B, C, D, E, F], [A, C, D, E, B, F]).
+rotate_dice([A, B, C, D, E, F], [A, D, E, B, C, F]).
+rotate_dice([A, B, C, D, E, F], [A, E, B, C, D, F]).
+
+/* 集合の差 */
+difference([], _, []).
+difference([X | Xs], Ys, Zs) :-
+    member(X, Ys), !, difference(Xs, Ys, Zs).
+difference([X | Xs], Ys, [X | Zs]) :- difference(Xs, Ys, Zs).
+
+/* 色のチェック */
+check(4, _).
+check(N, [[X1 | Xs1], [X2 | Xs2], [X3 | Xs3], [X4 | Xs4]]) :-
+    N &lt; 4,
+    difference([r, g, b, y], [X1, X2, X3, X4], []),
+    N1 is N + 1,
+    check(N1, [Xs1, Xs2, Xs3, Xs4]).
+
+/* 解法 */
+solve(4, _, A) :-
+    [[_ | Xs1], [_ | Xs2], [_ | Xs3], [_ | Xs4]] = A,
+    check(0, [Xs1, Xs2, Xs3, Xs4]),
+    write(A),
+    !,
+    fail.
+solve(N, [X | Xs], A) :-
+    pattern(X, Y),
+    rotate_dice(Y, Z),
+    N1 is N + 1,
+    solve(N1, Xs, [Z | A]).
+
+/* 重複解の排除 */
+solve1([X | Xs]) :- pattern1(X, Y), solve(1, Xs, [Y]).
+
+/* 実行 */
+test :- solve(0, [[b,r,g,g,y,b],[b,r,b,g,y,r],[r,r,g,y,y,b],[g,b,g,y,g,r]],[]).
+test1 :- solve1([[b,r,g,g,y,b],[b,r,b,g,y,r],[r,r,g,y,y,b],[g,b,g,y,g,r]]).
+</pre>
+<hr>
+<h4 id="answer">●Appendix : 解答</h4>
+<pre>
+((B B Y C G R)
+ (B G C R Y G)
+ (G Y R B C Y)
+ (Y C B G R C)
+ (C R G Y B R))
+
+((B R Y B G C)
+ (R B C G Y G)
+ (B G R Y C Y)
+ (G Y B C R C)
+ (Y C G R B R))
+
+((Y B R C B G)
+ (Y G B R G C)
+ (C Y G B Y R)
+ (R C Y G C B)
+ (B R C Y R G))
+</pre>
+<p> ご参考までに Common Lisp のプログラムを示します。
+</p>
+<pre class="list">
+;
+; dice5.l : カラーダイスパズル
+;           (5 色に塗り分けた 5 つのサイコロを使う)
+;
+;           Copyright (C) 2012 Makoto Hiroi
+;
+;
+; 座標
+;   上
+;   ０
+; １２３４
+;   ５
+;   下
+;
+; 色 : r (red), b (blue), g (green), y (yellow), c (cyan)
+;
+
+; キューブの設定
+; 3 通り
+(defvar *cube3*
+  '((b b y c g r)
+    (g g y r c b)
+    (y y c b r g)
+    (c c r g b y)
+    (r r b y g c)))
+
+; 縦の回転パターン
+(defvar *pattern*
+  '((0 1 2 3 4 5)
+    (5 1 4 3 2 0)
+    (1 5 2 0 4 3)
+    (3 5 4 0 2 1)
+    (2 1 5 3 0 4)
+    (4 1 0 3 5 2)))
+
+(defvar *pattern1*
+  '((0 1 2 3 4 5)
+    (1 5 2 0 4 3)
+    (2 1 5 3 0 4)))
+
+; 横の回転
+(defun rotate-dice (xs)
+  (let ((ys (copy-list xs)))
+    (rotatef (nth 1 ys) (nth 2 ys) (nth 3 ys) (nth 4 ys))
+    ys))
+
+; 色のチェック
+(defun check (xs1 xs2 xs3 xs4 xs5)
+  (dolist (xs (mapcar #'list xs1 xs2 xs3 xs4 xs5) t)
+    (when (set-difference '(r g b y c) xs)
+      (return))))
+
+; 解法
+(defun solve (ds &amp;optional a)
+  (if (null ds)
+      (if (apply #'check (mapcar #'(lambda (xs) (subseq xs 1 5)) a))
+	  (print (reverse a)))
+    ;
+    (let ((xs (car ds)))
+      (dolist (pat *pattern*)
+	(let ((ys (mapcar #'(lambda (x) (nth x xs)) pat)))
+	  (dotimes (x 4)
+	    (solve (cdr ds) (cons ys a))
+	    (setq ys (rotate-dice ys))))))))
+
+; 重複解の削除
+(defun solve1 (ds)
+  (let ((xs (car ds)))
+    (dolist (pat *pattern1*)
+      (let ((ys (mapcar #'(lambda (x) (nth x xs)) pat)))
+	(solve (cdr ds) (cons ys nil))))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

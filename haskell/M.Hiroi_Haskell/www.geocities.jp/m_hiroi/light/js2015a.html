@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 ECMAScritp2015 超入門</title>
+  <meta name="description" content="JavaScript,ECMAScript2015,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881858</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>お気楽 ECMAScript2015 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="js2015.html">ES2015</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3 id="chap01">let と const</h3>
+<p> 今まで局所変数は var で宣言し、その有効範囲 (スコープ) は関数単位でした。ES2015 では let / const で局所変数を宣言すると、その有効範囲をブロック { ... } に限定することができます。let は変数で、const は定数を宣言します。
+</p>
+<pre class="item">
+let var1, var2, ..., varnN;
+let var1 = value1, var2 = value2, ..., varN = valueN;
+</pre>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; {
+... var a = 10;
+... let b = 20;
+... console.log(a);
+... console.log(b);
+... }
+10
+20
+undefined
+&gt; console.log(a);
+10
+undefined
+&gt; console.log(b);
+ReferenceError: b is not defined
+
+&gt; { let a = 10; { let a = 20; console.log(a); } console.log(a) }
+20
+10
+undefined
+&gt; { let a = 10, b = 20; { let a = 30; console.log(a); console.log(b); } console.log(a) }
+30
+20
+10
+undefined</pre>
+<p> 変数 a は var で宣言されているので、ブロックを終了したあとでも存在します。これに対し、変数 b は let で宣言されているので、有効範囲はブロックの中だけです。ブロックを終了したあと、変数 b は存在しなくなる (破棄される) ので、console.log(b) はエラーになります。
+</p>
+<p> ブロックは入れ子にすることができます。この場合、外側のブロックの変数 a と、内側のブロックの変数 a は別のものになります。内側のブロックで外側のブロックと同じ名前の変数を宣言すると、外側のブロックの変数は「隠蔽 (shadowing)」されるので、アクセスすることはできなくなります。隠蔽されてなければ、内側のブロックから外側のブロックの変数にアクセスすることができます。
+</p>
+<p> これはＣ/Ｃ++ のスコープや関数型言語の let 文と同じ動作ですが、他のプログラミング言語、たとえば Java や C# では、ブロックが入れ子の場合、内側のブロックで外側のブロックと同名の変数を宣言することはできません。ご注意くださいませ。
+</p>
+<hr>
+<h3 id="chap02">アロー関数</h3>
+<p> ES2015 では、匿名関数を =&gt; で表記することができます。これを「アロー関数 (Arrow Functions)」といいます。
+</p>
+<pre class="item">
+(引数, ...) =&gt; { 処理; ... }
+</pre>
+<p> ( ... ) の中に仮引数を指定します。引数が一つしかない場合、丸カッコを省略することができます。関数本体の処理は { ... } の中に記述します。値を返す場合は return 文を使います。また、処理 (式) がひとつしかない場合、波カッコと return 文を省略することができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; var square = x =&gt; x * x;
+undefined
+&gt; square(10)
+100
+&gt; var add = (a, b) =&gt; a + b;
+undefined
+&gt; add(1, 2)
+3
+&gt; (x =&gt; x * x)(3)
+9
+&gt; ((a, b) =&gt; a + b)(10, 20)
+30
+&gt; var adder = x =&gt; y =&gt; x + y
+undefined
+&gt; var add10 = adder(10)
+undefined
+&gt; add10(20)
+30
+&gt; adder(10)(20)
+30
+</pre>
+<p> 当然ですが、アロー関数はクロージャとしても使用することができます。
+</p>
+<h4>●this について</h4>
+<p> JavaScript の場合、関数の中で this を使用することができます。たとえば、object.method() のように関数 (メソッド) を呼び出した場合、this には object がセットされます。関数呼び出しでも this を参照することができますが、その値は大域変数を格納しているオブジェクト (グローバルオブジェクト) になります。
+</p>
+<pre>
+&gt; var x = 100
+undefined
+&gt; function foo() { return this.x; }
+undefined
+&gt; foo()
+100
+&gt; var obj = {x: 123}
+undefined
+&gt; obj.f = foo
+[Function: foo]
+&gt; obj.f()
+123
+</pre>
+<p> foo() と呼び出すと、this はグローバルオブジェクトになるので、x の値は 100 になります。obj を生成して、関数 foo() をプロパティ f にセットします。obj.f() を呼び出すと this の値は obj になるので、x は 123 になります。
+</p>
+<p> call() や apply() を使うと、this の値を変更することができます。
+</p>
+<pre>
+&gt; var oops = {x: "oops!"}
+undefined
+&gt; foo.call(oops)
+'oops!'
+&gt; foo.call(obj)
+123
+&gt; foo.call()
+100
+&gt; foo.call(null)
+100
+&gt; foo.call(undefined)
+100
+</pre>
+<p> foo.call(oops) とすると、this の値は oops になるので oops! と表示されます。obj を渡すと 123 になり、引数無し (または null や undefined) だとグローバルな関数呼び出しになります。
+</p>
+<p> new を使うと新しいオブジェクトが関数の this に渡されます。
+</p>
+<pre>
+&gt; function bar() { this.x = 1.2345; }
+undefined
+&gt; new bar()
+bar { x: 1.2345 }
+&gt; bar()
+undefined
+&gt; x
+1.2345
+</pre>
+<p> new を付けずに bar() を呼び出すと this の値はグローバル変数になるので、変数 x の値を書き換えることになります。
+</p>
+<h4>●匿名関数とアロー関数の違い</h4>
+<p> 局所関数の場合、匿名関数とアロー関数では this の値が異なるので注意が必要です。匿名関数の場合、this の値はグローバルオブジェクトになるので、外側の関数の this を参照することはできません。逆に、アロー関数は this をレキシカルスコープで管理するので、外側の関数の this を参照することができます。
+</p>
+<pre>
+&gt; function baz() {
+... var f1 = function() { console.log(this.x); };
+... var f2 = () =&gt; { console.log(this.x); };
+... f1();
+... f2();
+... }
+undefined
+&gt; var x = 100
+undefined
+&gt; var obj = {x: 123}
+undefined
+&gt; baz.call(obj)
+100
+123
+undefined
+</pre>
+<p> 匿名関数 f1 は大域変数 x の値 100 を表示しますが、アロー関数は baz() の this の値 (obj) を参照するので、obj のプロパティ x の値 123 を表示します。
+</p>
+<p> グローバルな環境でアロー関数を定義すると、this の値はグローバルオブジェクトになります。この場合、メソッド形式の呼び出しでも、call() や apply() を使っても this の値はグローバルオブジェクトのままです。
+</p>
+<pre>
+&gt; var func = () =&gt; { console.log(this.x); }
+undefined
+&gt; func()
+100
+undefined
+&gt; obj.f = func
+[Function: func]
+&gt; obj.f()
+100
+undefined
+&gt; func.call(obj)
+100
+undefined
+</pre>
+<p> 詳細な説明はリファレンス <a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Reference/Operators/this">this | JavaScript MDN</a> をお読みくださいませ。
+</p>
+<hr>
+<h3 id="chap03">可変長引数とデフォルト引数</h3>
+<h4>●可変長引数</h4>
+<p> 仮引数の個数よりも多くの値を受け取りたい場合は、仮引数の前に ... を付けます。これを「可変長引数」といい、... を「スプレッド演算子」と呼びます。仮引数に入りきらない値は、配列に格納されて可変長引数に渡されます。これで可変個の引数を受け取る関数を定義することができます。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; function foo(a, ...args) { console.log(a); console.log(args); }
+undefined
+&gt; foo(1)
+1
+[]
+undefined
+&gt; foo(1, 2)
+1
+[ 2 ]
+undefined
+&gt; foo(1, 2, 3)
+1
+[ 2, 3 ]
+undefined
+&gt; function foo0(...args) {
+... console.log(args);
+... }
+undefined
+&gt; foo0()
+[]
+undefined
+&gt; foo0(1)
+[ 1 ]
+undefined
+&gt; foo0(1, 2, 3)
+[ 1, 2, 3 ]
+undefined
+</pre>
+<p> 可変長引数は通常の仮引数よりも後ろに定義します。関数 foo() は通常の引数が一つしかありません。foo(1) と呼び出すと、引数 a に 1 がセットされます。実引数はもうないので、仮引数 args には空の配列が渡されます。次に foo(1, 2) と呼び出すと、実引数 2 が配列に格納されて仮引数 args に渡されます。同様に、foo(1, 2, 3) は 2 と 3 が配列に格納されて仮引数 args に渡されます。
+</p>
+<p> 関数 foo0() は、0 個以上の引数を受け取る関数、つまり、引数があってもなくてもどちらでも動作します。この場合、仮引数は args だけになります。実引数がない場合、引数 args には空の配列 [ ] が渡されます。もし、複数の引数があれば、それらを配列にまとめて仮引数 args に渡します。
+</p>
+<p> 配列に格納されたデータを関数に渡す場合、要素を取り出す処理をいちいちプログラムするのは面倒です。この場合、実引数の前に ... を付けると、配列を展開して仮引数に要素を渡すことができます。
+</p>
+<pre>
+&gt; function foo(a, b, c) { console.log([a,b,c]); }
+undefined
+&gt; var ary = [1, 2, 3]
+undefined
+&gt; foo(..ary)
+...
+&gt; foo(...ary)
+[ 1, 2, 3 ]
+undefined
+&gt; foo(10, ...[20, 30])
+[ 10, 20, 30 ]
+undefined
+> [...ary, 4, 5, 6]
+[ 1, 2, 3, 4, 5, 6 ]
+</pre>
+<p> 変数 ary には配列 [1, 2, 3] が格納されています。要素を関数 foo() の引数に渡す場合、...ary のように ... を付けて foo() に渡します。すると、配列が展開されて引数 a, b, c に要素 1, 2, 3 が渡されます。配列の前に直接 ... を付けても大丈夫です。また、配列を生成する [ ] の中でも配列を展開することができます。
+</p>
+<h4>●デフォルト引数</h4>
+<p> ES2015 では関数の引数にデフォルトの値を設定することができます。これを「デフォルト引数」といいます。値は = で指定します。簡単な例を示しましょう。
+</p>
+<pre>
+> function foo(a, b = 10, c = 100) { console.log([a,b,c]); }
+undefined
+> foo(1)
+[ 1, 10, 100 ]
+undefined
+> foo(1, 2)
+[ 1, 2, 100 ]
+undefined
+> foo(1, 2, 3)
+[ 1, 2, 3 ]
+undefined
+</pre>
+<p> 関数 foo() の引数 a は通常の引数で、引数 b と c がデフォルト値を指定した引数です。デフォルト引数は通常の引数の後ろに定義してください。foo() を呼び出すとき、引数 a には値を渡さないといけませんが、引数 b と c の値は省略することができます。このとき、使用される値がデフォルト値です。
+</p>
+<p> たとえば、foo(1) と呼び出すと [ 1, 10, 100 ] と表示され、引数 b と c の値はデフォルト値が使用されていることがわかります。foo(1, 2) と呼び出すと、引数 b の値はデフォルト値ではなく、実引数 2 が b の値になります。同様に、foo(1, 2, 3) と呼び出すと、仮引数 c の値は実引数 3 になるので [ 1, 2, 3 ] と表示されます。
+</p>
+<hr>
+<h3 id="chap04">分割代入</h3>
+<p> 「分割代入 (Destructuring assignment)」は、配列またはオブジェクトからデータを取り出して別々の変数に代入するための構文です。<a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment">JavaScript | MDN</a> では分割と訳していますが、Lisp 好きなユーザならば「分配」のほうがしっくりくるかもしれません。
+</p>
+<h4>●配列の分割代入</h4>
+<p> 配列の分割代入は代入演算子 = の左辺式に角カッコを使い、その中に変数を指定します。
+</p>
+<pre class="item">
+var [変数1, 変数2, ..., 変数N] = [値1, 値2, ..., 値N];
+または
+var 変数1, 変数2, ..., 変数N;
+[変数1, 変数2, ..., 変数N] = [値1, 値2, ..., 値N];
+</pre>
+<p> 配列の分割代入は他のスクリプト言語、たとえば Ruby の多重代入とよく似ています。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; var [a, b] = [100, 200]
+undefined
+&gt; a
+100
+&gt; b
+200
+&gt; [a, b] = [b, a]
+[ 200, 100 ]
+&gt; a
+200
+&gt; b
+100
+</pre>
+<p> 変数 a と b に 100 と 200 を代入しています。a と b の値を交換することも分割代入を使えば簡単に行うことができます。
+</p>
+<pre>
+&gt; [a, b] = [1, 2, 3]
+[ 1, 2, 3 ]
+&gt; a
+1
+&gt; b
+2
+&gt; [a, b] = [10]
+[ 10 ]
+&gt; a
+10
+&gt; b
+undefined
+</pre>
+<p> 右辺の要素数が代入先よりも多い場合、残りの要素は無視されます。最初の例では、a と b に 1 と 2 が代入されますが、要素 3 は捨てられます。逆に、代入先の変数が多い場合、残った変数には undefined がセットされます。[a, b] = [10] の場合、a には 10 が代入されて、b の値は undefined になります。
+</p>
+<p> 分割代入は関数のデフォルト引数のようにデフォルト値を設定することができます。
+</p>
+<pre>
+&gt; [a, b = 123] = [100]
+[ 100 ]
+&gt; a
+100
+&gt; b
+123
+&gt; [a, b = 123] = [100, 200]
+[ 100, 200 ]
+&gt; a
+100
+&gt; b
+200
+</pre>
+<p> 分割代入したとき、値が undefined になった変数でデフォルト値が設定される場合は、その値が使用されます。
+</p>
+<p> 関数の可変長引数と同じく、配列の分割代入でもスプレッド演算子 (...) を使用することができます。
+</p>
+<pre>
+&gt; var [x, y, ...z] = [1, 2, 3, 4, 5]
+undefined
+&gt; x
+1
+&gt; y
+2
+&gt; z
+[ 3, 4, 5 ]
+&gt; var [x, y, ...z] = [1, [2, 3, 4, 5]]
+undefined
+&gt; x
+1
+&gt; y
+[ 2, 3, 4, 5 ]
+&gt; z
+[]
+&gt; var [x, y, ...z] = [1, ...[2, 3, 4, 5]]
+undefined
+&gt; x
+1
+&gt; y
+2
+&gt; z
+[ 3, 4, 5 ]
+</pre>
+<p> 角カッコは入れ子になってもかまいません。この機能は関数型言語のパターンマッチングや Common Lisp の defmacro にある機能「分配 (destructuring)」とよく似ています。
+</p>
+<pre>
+&gt; var [x, [y, z]] = [1, [2, 3, 4, 5]]
+undefined
+&gt; x
+1
+&gt; y
+2
+&gt; z
+3
+&gt; var [x, [y, ...z]] = [1, [2, 3, 4, 5]]
+undefined
+&gt; x
+1
+&gt; y
+2
+&gt; z
+[ 3, 4, 5 ]
+</pre>
+<p> 右辺と左辺で配列の構造が合わないとエラーになります。
+</p>
+<pre>
+&gt; var [x, [y, ...z]] = [1, 2, [3, 4, 5]]
+TypeError: undefined is not a function
+</pre>
+<h4>●オブジェクトの分割代入</h4>
+<p> オブジェクトの分割代入は代入演算子 = の左辺式に { ... } を使い、その中に変数を指定します。
+</p>
+<pre class="item">
+var {名前1, 名前2, ..., 名前N} = {名前1: 値1, 名前2: 値2, ..., 名前N: 値N};
+または
+var 名前1, 名前2, ..., 名前N;
+({名前1, 名前2, ..., 名前N} = {名前1: 値1, 名前2: 値2, ..., 名前N: 値N});
+</pre>
+<p> オブジェクトの分割代入では、オブジェクトのプロパティ名と同じ名前の変数にプロパティの値がセットされます。後者の場合、カッコで囲まないと動作しません。ご注意くださいませ。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; var {a, b} = {a: 10, b: 20}
+undefined
+&gt; a
+10
+&gt; b
+20
+&gt; ({b, a} = {a: 100, b: 200})
+{ a: 100, b: 200 }
+&gt; a
+100
+&gt; b
+200
+</pre>
+<p> オブジェクトの分割代入でもデフォルト値を指定することができます。
+</p>
+<pre>
+&gt; ({a, b} = {a: 1000})
+{ a: 1000 }
+&gt; a
+1000
+&gt; b
+undefined
+&gt; ({a, b = 2000} = {a: 1000})
+{ a: 1000 }
+&gt; a
+1000
+&gt; b
+2000
+</pre>
+<p> プロパティ名とは異なる変数に値を代入することもできます。その場合は左辺式でプロパティの値に代入先の変数名を指定します。
+</p>
+<pre>
+&gt; var x, y
+undefined
+&gt; ({a: x, b: y} = {a: 1234, b: 5678})
+{ a: 1234, b: 5678 }
+&gt; x
+1234
+&gt; y
+5678
+</pre>
+<p> それから、オブジェクトの分割代入は入れ子にすることができ、配列の分割代入と混在してもかまいません。詳細は JavaScript | MDN の <a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Reference/Operators/Destructuring_assignment">分割代入</a> をお読みくださいませ。
+</p>
+<hr>
+<h3 id="chap05">シンボル</h3>
+<p> シンボル (Symbol) は ES2015 で追加された新しいデータ型で、プロパティーなどの識別子として使用することができます。シンボルは関数 Symbol() で生成します。
+</p>
+<pre class="item">
+Symbol("名前")
+</pre>
+<p> 引数の名前は省略することができます。Symbol() はユニークなシンボル型のデータを返します。引数の名前が同じでも異なるシンボルが生成されます。
+</p>
+<pre>
+&gt; Symbol()
+Symbol()
+&gt; var foo = Symbol("foo")
+undefined
+&gt; foo
+Symbol(foo)
+&gt; foo === Symbol("foo")
+false
+&gt; Symbol("foo") === Symbol("foo")
+false
+&gt; foo === foo
+true
+</pre>
+<p> グローバルな環境でシンボルを共有したい場合は Symbol.for() を使います。
+</p>
+<pre class="item">
+Symbol.for(string)
+</pre>
+<p> Symbol.for() は名前が string のシンボルを生成します。既に同じ名前のシンボルが生成されていれば、そのシンボルを返します <sup><a href="js2015a.html#note1">[*1]</a></sup>。
+</p>
+<pre>
+&gt; var bar = Symbol.for("bar")
+undefined
+&gt; bar
+Symbol(bar)
+&gt; bar === Symbol.for("bar")
+true
+</pre>
+<p> グローバルな環境にシンボルが登録されているかチェックする関数が Symbol.keyFor() です。
+</p>
+<pre class="item">
+Symbol.keyFor(symbol)
+</pre>
+<pre>
+&gt; Symbol.keyFor(foo)
+undefined
+&gt; Symbol.keyFor(bar)
+'bar'
+</pre>
+<p> 見つからない場合は undefined を、見つけた場合はシンボルの名前を文字列で返します。
+</p>
+<p> シンボルをオブジェクトのプロパティとして使用するときは、object[symbol] や {[symbol]: 123} のように角カッコを使ってください。object.name は object["name"] と同じなので、この構文でシンボルを使うことはできません。
+</p>
+<pre>
+&gt; var foo = Symbol("foo")
+undefined
+&gt; var obj = {}
+undefined
+&gt; obj[foo] = 123
+123
+&gt; obj[foo]
+123
+&gt; obj
+{}
+&gt; obj.foo = 1.2345
+1.2345
+&gt; obj.foo
+1.2345
+&gt; obj["foo"]
+1.2345
+&gt; obj
+{ foo: 1.2345 }
+&gt; var bar = Symbol("bar")
+undefined
+&gt; var obj1 = {[foo]: 10, [bar]: 20}
+undefined
+&gt; obj1[foo]
+10
+&gt; obj1[bar]
+20
+&gt; for (var x in obj) { console.log(x); console.log(obj[x]); }
+foo
+1.2345
+undefined
+</pre>
+<p> プロパティがシンボル (Symbol プロパティ) の場合、for...in 構文でそれを取り出すことはできません。Symbol プロパティを求めるには Object.getOwnPropertySymbols() を使います。
+</p>
+<pre>
+&gt; Object.getOwnPropertySymbols(obj1)
+[ Symbol(foo), Symbol(bar) ]
+</pre>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> M.Hiroi は Lisp / Scheme が大好きなので、Symbol() は gensym で、Symbol.for() は intern かなと思いました。
+</div>
+<hr>
+<h3 id="chap06">メソッド定義</h3>
+<p> ES2015 からメソッドを簡単に定義するための構文が導入されました。
+</p>
+<pre class="item">
+旧 { name: function(...) { .... }、... }
+新 { name(...) { ... }, ...}
+   { [symbol](...) { ... }, ...}
+</pre>
+<p> プロパティを省略して名前付きの関数を定義すると、関数名がプロパティになります。プロパティにシンボル (symbol) を使いたい場合は、角カッコを使って関数名を [symbol] と指定してください。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; var foo = Symbol("foo")
+undefined
+&gt; var obj = { foo() { console.log("string foo"); },
+... [foo]() { console.log("symbol foo"); }
+... }
+undefined
+&gt; obj.foo()
+string foo
+undefined
+&gt; obj[foo]()
+symbol foo
+undefined
+</pre>
+<p> 角カッコはシンボルだけではなく、その中でプロパティ名を計算で求めることもできます。
+</p>
+<pre>
+&gt; var obj = {
+... ["foo" + 1]() { console.log("foo" + 1); },
+... ["bar" + 10]() { console.log("bar" + 10); }
+... }
+undefined
+&gt; obj.foo1()
+foo1
+undefined
+&gt; obj.bar10()
+bar10
+undefined
+</pre>
+<h4>●getter と setter</h4>
+<p> getter と setter はメソッドで、プロパティのアクセスと同じ構文で呼び出すことができます。つまり、obj.prop のときは getter が呼び出され、obj.prop = value のときは setter が呼び出されます。
+</p>
+<p> getter と setter の定義は簡単で、名前の前にキーワード get, set を付けるだけです。
+</p>
+<pre class="item">
+{ get name() {...} }
+{ get [expr]() {...} }
+{ set name(value) { ... } }
+{ set [expr](value) { ... } }
+</pre>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt; var obj = {
+... get foo() { return this._foo; },
+... set foo(val) { this._foo = val; }
+... }
+undefined
+&gt; obj.foo = 100
+100
+&gt; obj.foo
+100
+&gt; obj
+{ foo: [Getter/Setter], _foo: 100 }
+</pre>
+<p> getter を定義する場合、getter の名前と実際のプロパティ名を同じにすると、無限の再帰呼び出しになってしまうので、値を格納するプロパティは _foo としました。
+</p>
+<p> setter と getter を削除する場合は delete 文を使います。delete はオブジェクトから指定したプロパティを削除します。
+</p>
+<pre>
+&gt; delete obj.foo
+true
+&gt; obj
+{ _foo: 100 }
+</pre>
+<hr>
+<h3 id="chap07">イテレータとジェネレータ</h3>
+<h4>●イテレータ</h4>
+<p> 「イテレータ (iterator)」はコレクションの要素を順番にアクセスするための機能です。イテレータは「反復子」と訳されることがありますが、最近は訳さずにそのまま使われることが多いようです。JavaScript にはいろいろなコレクションが用意されていますが、for...in 文で取り出すことができるのはプロパティだけです。ES2015 から導入されたイテレータを使うと、コレクションの要素を順番に取り出していくことができます。
+</p>
+<p> JavaScript では、要素を順番に取り出すメソッド next() を持つオブジェクトを「イテレータ」と呼びます。next() の仕様を示します。
+</p>
+<pre class="item">
+iterator.next() =&gt; {value: 要素, done: 真偽値}
+</pre>
+<p> next() は引数無しで呼び出して、返り値はプロパティ value と done を持つオブジェクトです。通常、value にはコレクションの要素がセットされます。要素がない場合、done は true がセットされ、value は省略されるか undefined がセットされます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : 配列のイテレータ
+
+function makeIter(ary) {
+  return {
+    idx: 0,
+    next() {
+      if (ary.length == this.idx) {
+        return {value: undefined, done: true};
+      } else {
+        return {value: ary[this.idx++], done: false};
+      }
+    }
+  }
+}
+</pre>
+<p> 関数 makeIter() は配列 ary のイテレータを返します。処理は簡単で、next() は idx の位置にある要素を返して、idx を +1 するだけです。idx が配列の最後に到達したら、done を true にセットしたオブジェクトを返します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+&gt; var iter = makeIter([1,2,3,4])
+undefined
+&gt; iter.next()
+{ value: 1, done: false }
+&gt; iter.next()
+{ value: 2, done: false }
+&gt; iter.next()
+{ value: 3, done: false }
+&gt; iter.next()
+{ value: 4, done: false }
+&gt; iter.next()
+{ value: undefined, done: true }
+</pre>
+<h4>●ジェネレータ</h4>
+<p> イテレータを自分で作るのはけっこう面倒ですが、ES2015 で導入された「ジェネレータ (Generator)」を使うと、もっと簡単にイテレータを作ることができます。
+</p>
+<pre class="item">
+function* name(仮引数, ...) { 処理; ... }
+</pre>
+<p> function の後ろに * を付けると、その関数は「ジェネレータ関数」になります。ジェネレータ関数はイテレータを返しますが、処理はすぐに実行されません。イテレータのメソッド next() を実行すると、ジェネレータ関数の実行が開始されます。そして、ジェネレータ関数の処理中で yield 文があると、そこでジェネレータ関数の実行を中断し、その引数を呼び出し元の next() に返します。つまり、next() を実行するたびにジェネレータ関数の実行が再開され、yield 文で実行を中断して値を next() に返すわけです。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt; function* foogen() {
+... console.log("foo start");
+... yield 1;
+... console.log("foo 1 end");
+... yield 2;
+... console.log("foo 2 end");
+... yield 3;
+... console.log("foo 3 end");
+... }
+undefined
+&gt; var foo = foogen()
+undefined
+&gt; foo.next()
+foo start
+{ value: 1, done: false }
+&gt; foo.next()
+foo 1 end
+{ value: 2, done: false }
+&gt; foo.next()
+foo 2 end
+{ value: 3, done: false }
+&gt; foo.next()
+foo 3 end
+{ value: undefined, done: true }
+&gt; foo.next()
+{ value: undefined, done: true }
+</pre>
+<p> next() を呼び出すたびに yield 文の引数を順番に取得していることがわかります。たとえば、配列のジェネレータは次のように簡単に定義することができます。
+</p>
+<pre>
+&gt; function* makeGen(ary){
+... for (let i = 0; i &lt; ary.length; i++) yield ary[i];
+... }
+undefined
+&gt; var gen = makeGen([1, 2, 3, 4, 5])
+undefined
+&gt; gen.next()
+{ value: 1, done: false }
+&gt; gen.next()
+{ value: 2, done: false }
+&gt; gen.next()
+{ value: 3, done: false }
+&gt; gen.next()
+{ value: 4, done: false }
+&gt; gen.next()
+{ value: 5, done: false }
+&gt; gen.next()
+{ value: undefined, done: true }
+</pre>
+<p> ジェネレータ関数から他のジェネレータ関数を呼び出すときは yiled* 文を使います。
+</p>
+<pre>
+&gt; function* genbar(ary1, ary2) {
+... yield* makeGen(ary1);
+... yield* makeGen(ary2);
+... }
+undefined
+&gt; var bar = genbar([1, 2, 3], [4, 5]);
+undefined
+&gt; bar.next()
+{ value: 1, done: false }
+&gt; bar.next()
+{ value: 2, done: false }
+&gt; bar.next()
+{ value: 3, done: false }
+&gt; bar.next()
+{ value: 4, done: false }
+&gt; bar.next()
+{ value: 5, done: false }
+&gt; bar.next()
+{ value: undefined, done: true }
+</pre>
+<p> ES2015 では匿名のジェネレータ関数も定義することができます。
+</p>
+<pre>
+&gt; var genfunc = function*() { yield 1; yield 2; yield 3; }
+undefined
+&gt; var gen = genfunc()
+undefined
+&gt; gen.next();
+{ value: 1, done: false }
+&gt; gen.next();
+{ value: 2, done: false }
+&gt; gen.next();
+{ value: 3, done: false }
+&gt; gen.next();
+{ value: undefined, done: true }
+</pre>
+<h4>●for...of</h4>
+<p> ES2015 では、プロパティ [Symbol.iterator] を持ったオブジェクトを「iterable オブジェクト」といいます。Symbol.iterator はあらかじめグローバルに定義されたシンボルです。マニュアルでは @@iterator と表記されることがあります。@@iterator は関数で、返り値はイテレータです。配列などの基本的なコレクションは iterable オブジェクトです。
+</p>
+<pre>
+&gt; var ary = [1, 2, 3, 4, 5]
+undefined
+&gt; var gen = ary[Symbol.iterator]()
+undefined
+&gt; gen.next()
+{ value: 1, done: false }
+&gt; gen.next()
+{ value: 2, done: false }
+&gt; gen.next()
+{ value: 3, done: false }
+&gt; gen.next()
+{ value: 4, done: false }
+&gt; gen.next()
+{ value: 5, done: false }
+&gt; gen.next()
+{ value: undefined, done: true }
+</pre>
+<p> iterable オブジェクトは、構文 for...of を使って要素を順番に取り出すことができます。
+</p>
+<pre class="item">
+for (変数 of iterable) { ... }
+</pre>
+<pre>
+&gt; for (let x of ary) console.log(x)
+1
+2
+3
+4
+5
+undefined
+</pre>
+<p> オブジェクトのプロパティ [Symbol.iterator] にジェネレータ関数をセットすれば、そのオブジェクトは iterable になります。
+</p>
+<pre>
+&gt; var obj = {}
+undefined
+&gt; obj[Symbol.iterator] = function*() { yield 1; yield 2; yield 3; }
+[Function]
+&gt; for (let x of obj) console.log(x)
+1
+2
+3
+undefined
+</pre>
+<p> 上記のプログラムは次のように記述することもできます。
+</p>
+<pre class="list">
+リスト ; iterable オブジェクトの定義
+
+var obj = {
+  *[Symbol.iterator]() { yeild 1; yield 2; yield 3; }
+}
+</pre>
+<p> iterable オブジェクトはスプレッド演算子で展開することができます。
+</p>
+<pre>
+&gt; [...obj]
+[ 1, 2, 3 ]
+&gt; [...obj, 4, 5, 6]
+[ 1, 2, 3, 4, 5, 6 ]
+</pre>
+<hr>
+<h3 id="chap08">テンプレート文字列</h3>
+<p> 「テンプレート文字列 (Template literal)」はバッククォート ( ` ) で囲まれた文字列で、${...} で変数や式を展開することができます。
+</p>
+<pre>
+&gt; var x = "foo"
+undefined
+&gt; `hello ${x}!`
+'hello foo!'
+&gt; var a = 123
+undefined
+&gt; var b = 456
+undefined
+&gt; `a + b = ${a + b}`
+'a + b = 579'
+</pre>
+<p> テンプレート文字列は複数行に渡って文字列を記述することができます。つまり、改行文字がそのまま含まれます。もちろん \n や \t などエスケープシーケンスも使うことができます。
+</p>
+<pre>
+&gt; var s = `hello world
+... hello, foo`
+undefined
+&gt; console.log(s)
+hello world
+hello, foo
+undefined
+&gt; s
+'hello world\nhello, foo'
+&gt; var s1 = `hello\tworld`
+undefined
+&gt; console.log(s1)
+hello   world
+undefined
+</pre>
+<p> タグ付きテンプレート文字列は、テンプレート文字列を ${...} の結果とそれ以外の文字列に分けて、それをタグ名と同じ名前の関数に渡して実行します。
+</p>
+<pre class="item">
+tag_name `...`
+</pre>
+<p> 関数の仕様を示します。
+</p>
+<pre class="item">
+tag_name(strings, ...values)
+
+`abc${n}def${m}ghi` =&gt; strings[0] = "abc"
+                       strings[1] = "def"
+                       strings[2] = "ghi"
+                       values[0] = ${n} の結果
+                       values[1] = ${m} の結果
+</pre>
+<p> 関数の返り値は文字列以外でもかまいません。簡単な実行例を示します。
+</p>
+<pre>
+&gt; function foo_tag(strings, ...values) {
+... console.log(strings);
+... console.log(values);
+... return "oops!";
+... }
+undefined
+&gt; var x = 100
+undefined
+&gt; var y = 200
+undefined
+&gt; foo_tag`x + y = ${x + y}`
+[ 'x + y = ', '' ]
+[ 300 ]
+'oops'
+&gt; foo_tag`x + y = ${x + y}, x * y = ${x * y}`
+[ 'x + y = ', ', x * y = ', '' ]
+[ 300, 20000 ]
+'oops'
+</pre>
+<p> 引数の strings にはエスケープシーケンスなどの処理をした文字列が格納されますが、入力された生の文字列は、引数 strings のプロパティ raw から求めることができます。
+</p>
+<pre>
+&gt; function bar_tag(strings, ...values) {
+... console.log(strings.raw);
+... console.log(strings);
+... console.log(values);
+... return "oops!";
+... }
+undefined
+&gt; bar_tag`hello\tworld\n`
+[ 'hello\\tworld\\n' ]
+[ 'hello\tworld\n' ]
+[]
+'oops!'
+</pre>
+<p> 関数 String.raw`...` は ${...} を処理をした結果と生の文字列を連結して返します。
+</p>
+<pre>
+&gt; var x = 123
+undefined
+&gt; var y = 456
+undefined
+&gt; String.raw`hello${x}\t\tworld${y}\n`
+'hello123\\t\\tworld456\\n'
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="js2015.html">ES2015</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

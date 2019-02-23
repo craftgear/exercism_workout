@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Go 言語プログラミング入門</title>
+  <meta name="description" content="Go,Golang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881806</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Go Language Programming</h1>
+<h2>お気楽 Go 言語プログラミング入門</h2>
+<div class="small">
+[ <a href="abcgo18.html">PrevPage</a> | <a href="index.html">Golang</a> | <a href="abcgo20.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>電卓プログラムの作成 (4)</h3>
+<p> 今回は電卓プログラムに論理演算子、比較演算子、条件分岐の機能を追加してみましょう。
+</p>
+<p> なお、このドキュメントは拙作のページ <a href="../func/scheme.html">Scheme 入門</a> <a href="../func/abcscm53.html">電卓プログラムの作成 (4)</a> を Go 言語向けに書き直したものです。内容は重複していますが、あしからずご了承くださいませ。
+</p>
+
+<h4>●論理演算子と比較演算子の優先順位</h4>
+<p> 論理演算子と比較演算子を使う場合、真偽値を表すデータが必要になります。電卓プログラムのデータは実数しかないので、0.0 を偽、それ以外を真と定義することにしましょう。論理演算子と比較演算子は、結果が真であれば 1.0 を、偽であれば 0.0 を返すことにします。
+</p>
+<p> 電卓プログラムで使用する論理演算子と比較演算子を表に示します。
+</p>
+<table border=1>
+<caption>表 : 論理演算子</caption>
+<thead>
+  <tr><th>操作</th><th>意味</th><th>トークン</th></tr>
+</thead>
+<tbody>
+  <tr><td>not x, ! x </td><td>x の否定（真偽の反転）</td><td>NOT</td></tr>
+  <tr><td>x and y </td><td>x が真かつ y が真ならば真</td><td>AND</td></tr>
+  <tr><td>x or y  </td><td>x が真まはた y が真ならば真</td><td>OR</td></tr>
+</tbody>
+</table>
+<br>
+<table border=1>
+<caption>表 : 比較演算子</caption>
+<thead>
+  <tr><th>演算子</th><th>意味</th><th>トークン</th></tr>
+</thead>
+<tbody>
+  <tr><td> ==   </td><td>等しい</td><td>EQ</td></tr>
+  <tr><td> !=   </td><td>等しくない</td><td>NE</td></tr>
+  <tr><td> &lt;  </td><td>より小さい</td><td>LT</td></tr>
+  <tr><td> &gt;  </td><td>より大きい</td><td>GT</td></tr>
+  <tr><td> &lt;= </td><td>より小さいか等しい</td><td>LE</td></tr>
+  <tr><td> &gt;= </td><td>より大きいか等しい</td><td>GE</td></tr>
+</tbody>
+</table>
+
+<p> 論理演算子は not (!), and, or で、not は単項演算子になります。比較演算子は ==, !=, &lt;, &gt;, &lt;=, &gt;= の 6 種類で、Go 言語の比較演算子と同じです。演算子の優先順位ですが、他のプログラミング言語のように細かく分けることはしないで、次のように設定することにしました。
+</p>
+<pre class="item">
+優先順位 (高)
+単項演算子 (+, -, not)
+乗法演算子 (*, /)
+加法演算子 (+, -)
+比較演算子 (==, !=, &lt;, &gt;, &lt;=, &gt;=)
+論理演算子 (and, or)
+代入演算子 (=)
+優先順位 (低)
+</pre>
+
+<h4>●条件分岐</h4>
+<p> 条件分岐は「文」として定義することもできますが、今回は簡単な電卓プログラムなので「if 式」として組み込むことにします。if 式の構文を示します。
+</p>
+<pre class="item">
+if 条件式 then 式a else 式b end
+if 条件式 then 式a end
+</pre>
+<p> if は条件式が真であれば式a を実行し、その結果が if 式の値になります。条件式が偽であれば 式b を実行して、その結果が if 式の値になります。else 節が省略されていて、かつ条件式が偽の場合、if 式は実数 0.0 を返すことにしましょう。
+</p>
+
+<h4>●文法の修正</h4>
+<p> 文法を EBNF で表すと次のようになります。
+</p>
+<pre class="item">
+[EBNF]
+   文    = 関数定義 | 式.
+関数定義 = "def", 関数, "(", [仮引数リスト], ")", 式, "end".
+   式    = 代入式 | 式１.
+ 代入式  = 変数, "=", 式.
+  式１   = 式２, { ("and" | "or"), 式２}.
+  式２   = 式３, ("==" | "!=" | "&lt;" | "&lt;=" | "&gt;" | "&gt;="), 式３.
+  式３   = 項, { ("+" | "-"), 項 }.
+   項    = 因子, { ("*" | "/"), 因子 }.
+  因子   = 数値 | ("+" | "-" | "not"), 因子 | "(", 式, ")" | 変数 | 関数, "(", [引数リスト], ")" | if式.
+  if式   = "if", 式, "then", 式, ["else", 式], "end".
+  変数   = 識別子
+  関数   = 識別子
+
+仮引数リスト = 変数, { ",", 変数 }.
+引数リスト   = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+<p> 論理演算子と比較演算子の処理は、文法をそのままプログラムするだけなので簡単です。if 式も構文木に変換すると簡単にプログラムすることができます。
+</p>
+<h4>●データ型の定義</h4>
+<p> データ型の定義は次のようになります。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+// キーワード
+const (
+    DEF = -(iota+10)
+    END
+    IF
+    THEN
+    ELSE
+    NOT
+    AND
+    OR
+    EQ
+    NE
+    LT
+    GT
+    LE
+    GE
+)
+
+// キーワード表
+var keyTable = make(map[string]rune)
+
+func initKeyTable() {
+    keyTable["def"]  = DEF
+    keyTable["end"]  = END
+    keyTable["if"]   = IF
+    keyTable["then"] = THEN
+    keyTable["else"] = ELSE
+    keyTable["and"]  = AND
+    keyTable["or"]   = OR
+    keyTable["not"]  = NOT
+}
+
+// 短絡演算子
+type Ops struct {
+    code rune
+    left, right Expr
+}
+
+func newOps(code rune, left, right Expr) Expr {
+    return &amp;Ops{code, left, right}
+}
+
+// if
+type Sel struct {
+    testForm, thenForm, elseForm Expr
+}
+
+func newSel(testForm, thenForm, elseForm Expr) *Sel {
+    return &amp;Sel{testForm, thenForm, elseForm}
+}
+</pre>
+<p> トークンに論理演算子 (NOT, AND, OR)、比較演算子 (EQ, NE, LT, GT, LE, GE)、if 式を表す IF, THEN, ELSE を追加します。そして、KeyTable に and, or, not, if, then, else を追加します。比較演算子は関数 getToken で記号をトークンに変換します。
+</p>
+<p> 構造体 Ops は and と or を「短絡演算子」として機能させるために用意しました。if 式を表す構造体が Sel です。フィールド変数 testForm が条件式、thenForm が then 節、elseForm が else 節を表します。
+</p>
+
+<h4>●字句解析の修正</h4>
+<p> それではプログラムを作りましょう。まず最初に、関数 getToken を修正します。
+</p>
+<pre class="list">
+リスト : トークンの切り出し
+
+func (lex *Lex) getToken() {
+    lex.Token = lex.Scan()
+    switch lex.Token {
+    case scanner.Ident:
+        key, ok := keyTable[lex.TokenText()]
+        if ok {
+            lex.Token = key
+        }
+    case '=':
+        if lex.Peek() == '=' {
+            lex.Next()
+            lex.Token = EQ
+        }
+    case '!':
+        if lex.Peek() == '=' {
+            lex.Next()
+            lex.Token = NE
+        } else {
+            lex.Token = NOT
+        }
+    case '&lt;':
+        if lex.Peek() == '=' {
+            lex.Next()
+            lex.Token = LE
+        } else {
+            lex.Token = LT
+        }
+    case '&gt;':
+        if lex.Peek() == '=' {
+            lex.Next()
+            lex.Token = GE
+        } else {
+            lex.Token = GT
+        }
+    }
+}
+</pre>
+<p> lex.Token が '=' の場合、次の記号が '=' かチェックします。次の記号は Scanner のメソッド Peek を使うと求めることができます。このとき、Peek で求めた記号は読み捨てていないことに注意してください。'=' であれば、Scanner のメソッド Next で '=' を読み捨てて、lex.Token を EQ に書き換えます。あとは同様に記号 '!', '&lt;', '&gt;' を処理するだけです。
+</p>
+
+<h4>●構文解析の修正</h4>
+<p> 次は構文解析の処理を修正します。論理演算子の処理は次のようになります。
+</p>
+<pre class="list">
+リスト : 論理演算子の処理
+
+func expr1(lex *Lex) Expr {
+    e := expr2(lex)
+    for {
+        x := lex.Token
+        switch x {
+        case AND, OR:
+            lex.getToken()
+            e = newOps(x, e, expr2(lex))
+        default:
+            return e
+        }
+    }
+}
+
+func expression(lex *Lex) Expr {
+    e := expr1(lex)
+    if lex.Token == '=' {
+        v, ok := e.(Variable)
+        if ok {
+            lex.getToken()
+            return newAgn(v, expression(lex))
+        } else {
+            panic(fmt.Errorf("invalid assign form"))
+        }
+    }
+    return e
+}
+</pre>
+<p> 式を評価する expression から関数 expr1 を呼び出します。expr1 は and と or の処理を行います。最初に関数 expr2 を呼び出して、返り値を変数 e にセットします。トークンは変数 x にセットします。x が AND または OR であれば、expr2 を呼び出して右辺を求め、左辺 e と右辺を Ops に格納し、それを変数 e にセットします。AND, OR でなければ、変数 e を返します。
+</p>
+
+<p> 次は比較演算子の処理を作ります。
+</p>
+<pre class="list">
+リスト : 比較演算子の処理
+
+func expr2(lex *Lex) Expr {
+    e := expr3(lex)
+    x := lex.Token
+    switch x {
+    case EQ, NE, LT, GT, LE, GE:
+        lex.getToken()
+        return newOp2(x, e, expr3(lex))
+    default:
+        return e
+    }
+}
+</pre>
+
+<p> 関数 expr2 は比較演算子の処理を行います。最初に、expr3 を呼び出して、その返り値を変数 e にセットします。トークンは変数 x にセットします。そして、トークンが比較演算子であれば Op2 を生成して返します。
+</p>
+
+<p> 次は factor に not と if の処理を追加します。
+</p>
+<pre class="list">
+リスト : 因子の処理
+
+func factor(lex *Lex) Expr {
+    switch lex.Token {
+
+    ・・・省略・・・
+
+    case NOT:
+        lex.getToken()
+        return newOp1(NOT, factor(lex))
+    case IF:
+        lex.getToken()
+        return makeSel(lex)
+
+    ・・・省略・・・
+
+}
+</pre>
+<p> if の処理は関数 makeSel で行います。NOT は Op1 を生成して返すだけです。
+</p>
+
+<h4>●条件分岐の処理</h4>
+<p> 次は if 式を組み立てる関数 makeSel を作ります。
+</p>
+<pre class="list">
+リスト : if の処理
+
+func makeSel(lex *Lex) Expr {
+    testForm := expression(lex)
+    if lex.Token == THEN {
+        lex.getToken()
+        thenForm := expression(lex)
+        switch lex.Token {
+        case ELSE:
+            lex.getToken()
+            elseForm := expression(lex)
+            if lex.Token != END {
+                panic(fmt.Errorf("'end' expected"))
+            }
+            lex.getToken()
+            return newSel(testForm, thenForm, elseForm)
+        case END:
+            lex.getToken()
+            return newSel(testForm, thenForm, Value(0.0))
+        default:
+            panic(fmt.Errorf("'else' or 'end' expected"))
+        } 
+    } else {
+        panic(fmt.Errorf("'then' expected"))
+    }
+}
+</pre>
+<p> 最初に expression を呼び出して条件式を読み込み、変数 testForm にセットします。次に、トークンが THEN であることを確認し、 expression で then 節を読み込み、変数 thenForm にセットします。トークンが ELSE の場合、同様に else 節を読み込みます。トークンが END であることを確認したら Sel を生成して返します。END でない場合はエラーを送出します。else 節がない場合は else 節のかわりに Value(0.0) を Sel に格納して返します。
+</p>
+
+<h4>●式の評価</h4>
+<p> 次は式の評価を行うメソッド Eval を修正します。
+</p>
+<pre class="list">
+リスト : 式の評価
+
+// bool を電卓の真偽値に変換する
+func boolToValue(x bool) Value {
+    if x {
+        return 1.0
+    } else {
+        return 0.0
+    }
+}
+
+// 真か
+func isTrue(x Value) bool {
+    return x != 0.0
+}
+
+// 偽か
+func isFalse(x Value) bool {
+    return x == 0.0
+}
+
+// 単項演算子の評価
+func (e *Op1) Eval(env *Env) Value {
+    v := e.expr.Eval(env)
+    switch e.code {
+    case '-': return -v
+    case '+': return v
+    case NOT: return boolToValue(isFalse(v))
+    default:
+        panic(fmt.Errorf("invalid Op1 code"))
+    }
+}
+</pre>
+<p> 関数 boolToValue は引数 x が true ならば 1.0 を、false ならば 0.0 を返します。単項演算子 NOT の処理は簡単です。expr を評価した値 v が偽であるか関数 isFalse で判定し、その結果を boolToValue に渡すだけです。
+</p>
+
+<pre class="list">
+リスト : 二項演算子の評価
+
+func (e *Op2) Eval(env *Env) Value {
+    x := e.left.Eval(env)
+    y := e.right.Eval(env)
+    switch e.code {
+    case '+': return x + y
+    case '-': return x - y
+    case '*': return x * y
+    case '/': return x / y
+    case EQ: return boolToValue(x == y)
+    case NE: return boolToValue(x != y)
+    case LT: return boolToValue(x &lt; y)
+    case GT: return boolToValue(x &gt; y)
+    case LE: return boolToValue(x &lt;= y)
+    case GE: return boolToValue(x &gt;= y)
+    default:
+        panic(fmt.Errorf("invalid Op2 code"))
+    }
+}
+</pre>
+<p> 比較演算子の処理も簡単です。トークンに対応する演算子で x と y を比較して、その結果を boolToValue に渡すだけです。
+</p>
+
+<p> 次は Ops を評価する処理を作ります。
+</p>
+<pre class="list">
+リスト : 短絡演算子の評価
+
+func (e *Ops) Eval(env *Env) Value {
+    x := e.left.Eval(env)
+    switch e.code {
+    case AND:
+        if isTrue(x) {
+            return e.right.Eval(env)
+        }
+        return x
+    case OR:
+        if isTrue(x) {
+            return x
+        }
+        return e.right.Eval(env)
+    default:
+        panic(fmt.Errorf("invalid Ops code"))
+    }
+}
+</pre>
+<p> 左辺 e.left の評価結果を変数 x にセットします。AND の場合、x が真であれば右辺 e.right を評価し、その結果を返します。偽であれば expr2 を評価せずに x を返します。OR の場合、x が真であれば右辺 e.right を評価しないで x を返します。偽の場合は e.right を評価してその結果を返します。
+</p>
+
+<p> 次は if 式を評価するプログラムを作ります。
+</p>
+<pre class="list">
+リスト : if 式の評価
+
+func (e *Sel) Eval(env *Env) Value {
+    if isTrue(e.testForm.Eval(env)) {
+        return e.thenForm.Eval(env)
+    }
+    return e.elseForm.Eval(env)
+}
+</pre>
+<p> if 式の処理 Sel も簡単です。最初に条件式 e.testForm を Eval で評価し、その返り値が真であれば then 節 (e.thenForm) を、偽であれば else 節 (elseForm) を Eval で評価するだけです。
+</p>
+
+<h4>●再帰呼び出しの対応</h4>
+<p> さて、電卓プログラムで if 式が使えるようになると、関数の再帰呼び出しが可能になります。ところが、前回作成したプログラムでは、関数の再帰呼び出しに対応していません。たとえば、階乗を求める関数は次のようになります。
+</p>
+<pre class="list">
+リスト : 階乗の計算
+
+def fact(n)
+    if n == 0 then 1 else n * fact(n - 1) end
+end
+</pre>
+
+<p> 電卓プログラムは funcTable に登録されている識別子を関数と判断します。def 文 は式を構文木に変換する expression を実行したあとに fact を funcTable に登録するので、expression を実行する段階では、fact を関数ではなく変数として認識してしまいます。これでは関数の再帰呼び出しができません。そこで、expression を実行する前に、funcTable に関数を登録し、expression を評価したあと値を書き換えることにします。
+</p>
+
+<p> 関数 defineFunc の修正は次のようになります。
+</p>
+<pre class="list">
+リスト : 関数定義の修正
+
+func defineFunc(lex *Lex) {
+    lex.getToken()
+    if lex.Token != scanner.Ident {
+        panic(fmt.Errorf("invalid define form"))
+    }
+    name := lex.TokenText()
+    lex.getToken()
+    xs := getParameter(lex)    
+    v, ok := funcTable[name]
+    if ok {
+        switch f := v.(type) {
+        case *FuncU:
+            if len(f.xs) != len(xs) {
+                panic(fmt.Errorf("wrong number of arguments: %v", name))
+            }
+            body := expression(lex)
+            if lex.Token != END {
+                panic(fmt.Errorf("'end' expected"))
+            }
+            f.xs = xs
+            f.body = body
+        default:
+            panic(fmt.Errorf("%v is built-in function", name))
+        }
+    } else {
+        // 再帰呼び出し対応
+        f := newFuncU(name, xs, nil)
+        funcTable[name] = f
+        f.body = expression(lex)
+        if lex.Token != END {
+            delete(funcTable, name)
+            panic(fmt.Errorf("'end' expected"))
+        }
+    }
+    fmt.Println(name)
+}
+</pre>
+<p> 関数名と仮引数リストを取得したあと、関数が定義されているかチェックします。未定義の場合、newFuncU で FuncU を生成して funcTable にセットします。このとき、フィールド変数 body にはダミーデータとして nil をセットします。それから expression で本体を取得してフィールド変数 body にセットします。トークンが END で終わっていない場合は funcTable から関数を削除して panic でエラーを送出します。
+</p>
+
+<p> プログラムの大きな修正はこれだけです。あとは簡単なので説明は割愛します。詳細は <a href="abcgo19.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+Calc&gt; not 0;
+1
+Calc&gt; not 1;
+0
+Calc&gt; not 1.1;
+0
+Calc&gt; !0;
+1
+Calc&gt; !1;
+0
+Calc&gt; 0 and 0;
+0
+Calc&gt; 1 and 0;
+0
+Calc&gt; 1 and 2;
+2
+Calc&gt; 0 or 0;
+0
+Calc&gt; 2 or 0;
+2
+Calc&gt; 0 or 3;
+3
+Calc&gt; 2 == 2;
+1
+Calc&gt; 2 != 2;
+0
+Calc&gt; 1 &lt; 2;
+1
+Calc&gt; 1 &lt;= 2;
+1
+Calc&gt; 2 &lt;= 2;
+1
+Calc&gt; 1 &gt; 2;
+0
+Calc&gt; 1 &gt;= 2;
+0
+Calc&gt; 2 &gt;= 2;
+1
+</pre>
+<p> 論理演算子と比較演算子は正常に動作しているようです。次は論理演算子と比較演算子を組み合わせてみましょう。
+</p>
+<pre>
+Calc&gt; not 1 or not 0;
+1
+Calc&gt; not 1 or not 1;
+0
+Calc&gt; not 0 or not 1;
+1
+Calc&gt; not 0 and not 0;
+1
+Calc&gt; not 0 and not 1;
+0
+Calc&gt; 1 &lt; 2 and 2 &lt; 3;
+1
+Calc&gt; 1 &gt; 2 and 2 &lt; 3;
+0
+Calc&gt; 1 &lt; 2 and 2 &gt; 3;
+0
+Calc&gt; 1 &lt; 2 or 2 &lt; 3;
+1
+Calc&gt; 1 &gt; 2 or 2 &lt; 3;
+1
+Calc&gt; 1 &gt; 2 or 2 &gt; 3;
+0
+</pre>
+<p> これも正常に動作しているようです。次は if 式を試してみましょう。
+</p>
+<pre>
+Calc&gt; if 1 &lt; 2 then 10 else -10 end;
+10
+Calc&gt; if 1 &gt; 2 then 10 else -10 end;
+-10
+Calc&gt; if 1 &gt; 2 then 10 end;
+0
+Calc&gt; def abs(n) if n &gt; 0 then n else - n end end
+abs
+Calc&gt; abs(10);
+10
+Calc&gt; abs(-10);
+10
+Calc&gt; abs(11 - 10);
+1
+Calc&gt; abs(10 - 11);
+1
+</pre>
+<p> 正常に動作していますね。条件分岐があると、再帰呼び出しで繰り返しを実現することができます。階乗を求める関数 fact とフィボナッチ数列を求める関数 fibo は次のようになります。
+</p>
+<pre>
+Calc&gt; def fact(n) if n == 0 then 1 else n * fact(n - 1) end end
+fact
+Calc&gt; fact(9);
+362880
+Calc&gt; fact(10);
+3.6288e+06
+Calc&gt; fact(20);
+2.43290200817664e+18
+
+Calc&gt; def fibo(n) if n == 0 or n == 1 then 1 else fibo(n - 1) + fibo(n - 2) end
+end
+fibo
+Calc&gt; fibo(5);
+8
+Calc&gt; fibo(6);
+13
+Calc&gt; fibo(7);
+21
+Calc&gt; fibo(8);
+34
+Calc&gt; fibo(9);
+55
+Calc&gt; fibo(10);
+89
+</pre>
+<p> 関数 fibo は二重再帰ですが、累積変数を使って末尾再帰に変換することができます。
+</p>
+<pre>
+Calc&gt; def fiboi(n, a, b) if n == 0 then a else fiboi(n - 1, a + b, a) end end
+fiboi
+Calc&gt; fiboi(5, 1, 0);
+8
+Calc&gt; fiboi(10, 1, 0);
+89
+Calc&gt; fiboi(20, 1, 0);
+10946
+</pre>
+<p> 電卓プログラムは末尾再帰最適化を行わないので繰り返しに変換することはできませんが、二重再帰よりも高速にフィボナッチ数列を求めることができます。
+</p>
+<p> このように、再帰呼び出しは簡単にできますが、「相互再帰」を実現しようとするとちょっとした工夫が必要になります。相互再帰とは、関数 foo が関数 bar を呼び出し、bar でも foo を呼び出すというように、お互いに再帰呼び出しを行っていることをいいます。今回の電卓プログラムでは、foo から bar を呼び出そうとしても、bar が未定義の場合は bar を関数ではなく変数として認識してしまいます。
+</p>
+<p> この場合、次のようにダミーの関数 bar を定義してから関数 foo を定義し、そのあとで関数 bar を再定義することで相互再帰を実現することができます。
+</p>
+<pre>
+Calc&gt; def bar(n) n end
+bar
+Calc&gt; def foo(n) if n == 0 then 1 else bar(n - 1) end end
+foo
+Calc&gt; def bar(n) if n == 0 then 0 else foo(n - 1) end end
+bar
+Calc&gt; bar(3);
+1
+Calc&gt; bar(2);
+0
+Calc&gt; bar(1);
+1
+Calc&gt; foo(3);
+0
+Calc&gt; foo(2);
+1
+Calc&gt; foo(1);
+0
+</pre>
+<p> 結果を見ればおわかりのように、foo は n が偶数のときに真を返し、bar は n が奇数のときに真を返します。なお、このプログラムはあくまでも相互再帰の例題であり、実用的なプログラムではありません。
+</p>
+
+<p> 今回はここまでです。次回は複数の式を順番に実行する begin 式、式を繰り返し実行する while 式、局所変数を定義する let 式を追加してみましょう。
+</p>
+
+<h4>●参考文献</h4>
+<ol>
+  <li> 松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li> 水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li> 松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li> 高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li> 久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+  <li> <a href="http://www.oki-osk.jp/esc/index.htm">OKIソフトウェア エンジニアリングソリューションセンタ ESC</a>, <a href="http://www.oki-osk.jp/esc/golang/calc.html">『Go 言語による有理数電卓』</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// calc4.go : 電卓プログラム (論理演算子、比較演算子, 条件分岐の追加)
+//
+//            Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import (
+    "fmt"
+    "os"
+    "math"
+    "text/scanner"
+)
+
+// キーワード
+const (
+    DEF = -(iota+10)
+    END
+    IF
+    THEN
+    ELSE
+    NOT
+    AND
+    OR
+    EQ
+    NE
+    LT
+    GT
+    LE
+    GE
+)
+
+// キーワード表
+var keyTable = make(map[string]rune)
+
+func initKeyTable() {
+    keyTable["def"]  = DEF
+    keyTable["end"]  = END
+    keyTable["if"]   = IF
+    keyTable["then"] = THEN
+    keyTable["else"] = ELSE
+    keyTable["and"]  = AND
+    keyTable["or"]   = OR
+    keyTable["not"]  = NOT
+}
+
+// 値
+type Value float64
+
+// 局所変数の環境
+type Env struct {
+    name Variable
+    val  Value
+    next *Env
+}
+
+func newEnv(name Variable, val Value, env *Env) *Env {
+    return &amp;Env{name, val, env}
+}
+
+// 構文木の型
+type Expr interface {
+    Eval(*Env) Value
+}
+
+// 局所環境の生成
+func makeBinding(xs []Variable, es []Expr, env *Env) *Env {
+    var env1 *Env
+    for i := 0; i &lt; len(xs); i++ {
+        env1 = newEnv(xs[i], es[i].Eval(env), env1)
+    }
+    return env1
+}
+
+// 局所変数の探索
+func lookup(name Variable, env *Env) (Value, bool) {
+    for ; env != nil; env = env.next {
+        if name == env.name {
+            return env.val, true
+        }
+    }
+    return 0.0, false
+}
+
+// 局所変数の更新
+func update(name Variable, val Value, env *Env) bool {
+    for ; env != nil; env = env.next {
+        if name == env.name {
+            env.val = val
+            return true
+        }
+    }
+    return false
+}
+
+// 評価
+func (e Value) Eval(_ *Env) Value {
+    return e
+}
+
+// 単項演算子
+type Op1 struct {
+    code rune
+    expr Expr
+}
+
+func newOp1(code rune, e Expr) Expr {
+    return &amp;Op1{code, e}
+}
+
+// bool を電卓の真偽値に変換する
+func boolToValue(x bool) Value {
+    if x {
+        return 1.0
+    } else {
+        return 0.0
+    }
+}
+
+// 真か
+func isTrue(x Value) bool {
+    return x != 0.0
+}
+
+// 偽か
+func isFalse(x Value) bool {
+    return x == 0.0
+}
+
+func (e *Op1) Eval(env *Env) Value {
+    v := e.expr.Eval(env)
+    switch e.code {
+    case '-': return -v
+    case '+': return v
+    case NOT: return boolToValue(isFalse(v))
+    default:
+        panic(fmt.Errorf("invalid Op1 code"))
+    }
+}
+
+// 二項演算子
+type Op2 struct {
+    code rune
+    left, right Expr
+}
+
+func newOp2(code rune, left, right Expr) Expr {
+    return &amp;Op2{code, left, right}
+}
+
+func (e *Op2) Eval(env *Env) Value {
+    x := e.left.Eval(env)
+    y := e.right.Eval(env)
+    switch e.code {
+    case '+': return x + y
+    case '-': return x - y
+    case '*': return x * y
+    case '/': return x / y
+    case EQ: return boolToValue(x == y)
+    case NE: return boolToValue(x != y)
+    case LT: return boolToValue(x &lt; y)
+    case GT: return boolToValue(x &gt; y)
+    case LE: return boolToValue(x &lt;= y)
+    case GE: return boolToValue(x &gt;= y)
+    default:
+        panic(fmt.Errorf("invalid Op2 code"))
+    }
+}
+
+// 短絡演算子
+type Ops struct {
+    code rune
+    left, right Expr
+}
+
+func newOps(code rune, left, right Expr) Expr {
+    return &amp;Ops{code, left, right}
+}
+
+func (e *Ops) Eval(env *Env) Value {
+    x := e.left.Eval(env)
+    switch e.code {
+    case AND:
+        if isTrue(x) {
+            return e.right.Eval(env)
+        }
+        return x
+    case OR:
+        if isTrue(x) {
+            return x
+        }
+        return e.right.Eval(env)
+    default:
+        panic(fmt.Errorf("invalid Ops code"))
+    }
+}
+
+// if - then - else
+type Sel struct {
+    testForm, thenForm, elseForm Expr
+}
+
+func newSel(testForm, thenForm, elseForm Expr) *Sel {
+    return &amp;Sel{testForm, thenForm, elseForm}
+}
+
+func (e *Sel) Eval(env *Env) Value {
+    if isTrue(e.testForm.Eval(env)) {
+        return e.thenForm.Eval(env)
+    }
+    return e.elseForm.Eval(env)
+}
+
+// 変数
+type Variable string
+
+// 大域的な環境
+var globalEnv = make(map[Variable]Value)
+
+func (v Variable) Eval(env *Env) Value {
+    // 局所変数の探索
+    val, ok := lookup(v, env)
+    if ok {
+        return val
+    }
+    // 大域変数の探索
+    val, ok = globalEnv[v]
+    if !ok {
+        panic(fmt.Errorf("unbound variable: %v", v))
+    }
+    return val
+}
+
+// 代入演算子
+type Agn struct {
+    name Variable
+    expr Expr
+}
+
+func newAgn(v Variable, e Expr) *Agn {
+    return &amp;Agn{v, e}
+}
+
+func (a *Agn) Eval(env *Env) Value {
+    val := a.expr.Eval(env)
+    if !update(a.name, val, env) {
+        globalEnv[a.name] = val
+    }
+    return val
+}
+
+// 組み込み関数
+type Func interface {
+    Argc() int
+}
+
+type Func1 func(float64) float64
+
+func (f Func1) Argc() int {
+    return 1
+}
+
+type Func2 func(float64, float64) float64
+
+func (f Func2) Argc() int {
+    return 2
+}
+
+// ユーザ定義関数
+type FuncU struct {
+    name string
+    xs   []Variable
+    body Expr
+}
+
+func newFuncU(name string, xs []Variable, body Expr) *FuncU {
+    return &amp;FuncU{name, xs, body}
+}
+
+func (f *FuncU) Argc() int {
+    return len(f.xs)
+}
+
+
+// 関数呼び出し
+type App struct {
+    fn Func
+    xs []Expr
+}
+
+func newApp(fn Func, xs []Expr) *App {
+    return &amp;App{fn, xs}
+}
+
+func (a *App) Eval(env *Env) Value {
+    switch f := a.fn.(type) {
+    case Func1:
+        x := float64(a.xs[0].Eval(env))
+        return Value(f(x))
+    case Func2:
+        x := float64(a.xs[0].Eval(env))
+        y := float64(a.xs[1].Eval(env))
+        return Value(f(x, y))
+    case *FuncU:
+        return f.body.Eval(makeBinding(f.xs, a.xs, env))
+    default:
+        panic(fmt.Errorf("function Eval error"))
+    }
+}
+
+// 組み込み関数の初期化
+var funcTable = make(map[string]Func)
+
+func initFunc() {
+    funcTable["sqrt"]  = Func1(math.Sqrt)
+    funcTable["sin"]   = Func1(math.Sin)
+    funcTable["cos"]   = Func1(math.Cos)
+    funcTable["tan"]   = Func1(math.Tan)
+    funcTable["sinh"]  = Func1(math.Sinh)
+    funcTable["cosh"]  = Func1(math.Cosh)
+    funcTable["tanh"]  = Func1(math.Tanh)
+    funcTable["asin"]  = Func1(math.Asin)
+    funcTable["acos"]  = Func1(math.Acos)
+    funcTable["atan"]  = Func1(math.Atan)
+    funcTable["atan2"] = Func2(math.Atan2)
+    funcTable["exp"]   = Func1(math.Exp)
+    funcTable["pow"]   = Func2(math.Pow)
+    funcTable["log"]   = Func1(math.Log)
+    funcTable["log10"] = Func1(math.Log10)
+    funcTable["log2"]  = Func1(math.Log2)
+}
+
+
+// 字句解析
+type Lex struct {
+    scanner.Scanner
+    Token rune
+}
+
+func (lex *Lex) getToken() {
+    lex.Token = lex.Scan()
+    switch lex.Token {
+    case scanner.Ident:
+        key, ok := keyTable[lex.TokenText()]
+        if ok {
+            lex.Token = key
+        }
+    case '=':
+        if lex.Peek() == '=' {
+            lex.Next()
+            lex.Token = EQ
+        }
+    case '!':
+        if lex.Peek() == '=' {
+            lex.Next()
+            lex.Token = NE
+        } else {
+            lex.Token = NOT
+        }
+    case '&lt;':
+        if lex.Peek() == '=' {
+            lex.Next()
+            lex.Token = LE
+        } else {
+            lex.Token = LT
+        }
+    case '&gt;':
+        if lex.Peek() == '=' {
+            lex.Next()
+            lex.Token = GE
+        } else {
+            lex.Token = GT
+        }
+    }
+}
+
+// 仮引数の取得
+func getParameter(lex *Lex) []Variable {
+    e := make([]Variable, 0)
+    if lex.Token != '(' {
+        panic(fmt.Errorf("'(' expected"))
+    }
+    lex.getToken()
+    if lex.Token == ')' {
+        lex.getToken()
+        return e
+    }
+    for {
+        if lex.Token == scanner.Ident {
+            e = append(e, Variable(lex.TokenText()))
+            lex.getToken()
+            switch lex.Token {
+            case ')':
+                lex.getToken()
+                return e
+            case ',':
+                lex.getToken()
+            default:
+                panic(fmt.Errorf("unexpected token in parameter list"))
+            }
+        } else {
+            panic(fmt.Errorf("unexpected token in parameter list"))
+        }
+    }
+}
+
+
+// 引数の取得
+func getArgs(lex *Lex) []Expr {
+    e := make([]Expr, 0)
+    if lex.Token != '(' {
+        panic(fmt.Errorf("'(' expected"))
+    }
+    lex.getToken()
+    if lex.Token == ')' {
+        lex.getToken()
+        return e
+    }
+    for {
+        e = append(e, expression(lex))
+        switch lex.Token {
+        case ')':
+            lex.getToken()
+            return e
+        case ',':
+            lex.getToken()
+        default:
+            panic(fmt.Errorf("unexpected token in argument list"))
+        }
+    }
+}
+
+// if 式の解析
+func makeSel(lex *Lex) Expr {
+    testForm := expression(lex)
+    if lex.Token == THEN {
+        lex.getToken()
+        thenForm := expression(lex)
+        switch lex.Token {
+        case ELSE:
+            lex.getToken()
+            elseForm := expression(lex)
+            if lex.Token != END {
+                panic(fmt.Errorf("'end' expected"))
+            }
+            lex.getToken()
+            return newSel(testForm, thenForm, elseForm)
+        case END:
+            lex.getToken()
+            return newSel(testForm, thenForm, Value(0.0))
+        default:
+            panic(fmt.Errorf("'else' or 'end' expected"))
+        } 
+    } else {
+        panic(fmt.Errorf("'then' expected"))
+    }
+}
+
+// 因子
+func factor(lex *Lex) Expr {
+    switch lex.Token {
+    case '(':
+        lex.getToken()
+        e := expression(lex)
+        if lex.Token != ')' {
+            panic(fmt.Errorf("')' expected"))
+        }
+        lex.getToken()
+        return e
+    case '+':
+        lex.getToken()
+        return newOp1('+', factor(lex))
+    case '-':
+        lex.getToken()
+        return newOp1('-', factor(lex))
+    case NOT:
+        lex.getToken()
+        return newOp1(NOT, factor(lex))
+    case IF:
+        lex.getToken()
+        return makeSel(lex)
+    case scanner.Int, scanner.Float:
+        var n float64
+        fmt.Sscan(lex.TokenText(), &amp;n)
+        lex.getToken()
+        return Value(n)
+    case scanner.Ident:
+        name := lex.TokenText()
+        lex.getToken()
+        if name == "quit" {
+            panic(name)
+        }
+        v, ok := funcTable[name]
+        if ok {
+            xs := getArgs(lex)
+            if len(xs) != v.Argc() {
+                panic(fmt.Errorf("wrong number of arguments: %v", name))
+            }
+            return newApp(v, xs)
+        } else {
+            return Variable(name)
+        }
+    default:
+        panic(fmt.Errorf("unexpected token: %v", lex.TokenText()))
+    }
+}
+
+// 項
+func term(lex *Lex) Expr {
+    e := factor(lex)
+    for {
+        switch lex.Token {
+        case '*':
+            lex.getToken()
+            e = newOp2('*', e, factor(lex))
+        case '/':
+            lex.getToken()
+            e = newOp2('/', e, factor(lex))
+        default:
+            return e
+        }
+    }
+}
+
+// 式
+func expr3(lex *Lex) Expr {
+    e := term(lex)
+    for {
+        switch lex.Token {
+        case '+':
+            lex.getToken()
+            e = newOp2('+', e, term(lex))
+        case '-':
+            lex.getToken()
+            e = newOp2('-', e, term(lex))
+        default:
+            return e
+        }
+    }
+}
+
+// 比較演算子
+func expr2(lex *Lex) Expr {
+    e := expr3(lex)
+    x := lex.Token
+    switch x {
+    case EQ, NE, LT, GT, LE, GE:
+        lex.getToken()
+        return newOp2(x, e, expr3(lex))
+    default:
+        return e
+    }
+}
+
+// 論理演算子
+func expr1(lex *Lex) Expr {
+    e := expr2(lex)
+    for {
+        x := lex.Token
+        switch x {
+        case AND, OR:
+            lex.getToken()
+            e = newOps(x, e, expr2(lex))
+        default:
+            return e
+        }
+    }
+}
+
+func expression(lex *Lex) Expr {
+    e := expr1(lex)
+    if lex.Token == '=' {
+        v, ok := e.(Variable)
+        if ok {
+            lex.getToken()
+            return newAgn(v, expression(lex))
+        } else {
+            panic(fmt.Errorf("invalid assign form"))
+        }
+    }
+    return e
+}
+
+// ユーザ関数の定義
+func defineFunc(lex *Lex) {
+    lex.getToken()
+    if lex.Token != scanner.Ident {
+        panic(fmt.Errorf("invalid define form"))
+    }
+    name := lex.TokenText()
+    lex.getToken()
+    xs := getParameter(lex)    
+    v, ok := funcTable[name]
+    if ok {
+        switch f := v.(type) {
+        case *FuncU:
+            if len(f.xs) != len(xs) {
+                panic(fmt.Errorf("wrong number of arguments: %v", name))
+            }
+            body := expression(lex)
+            if lex.Token != END {
+                panic(fmt.Errorf("'end' expected"))
+            }
+            f.xs = xs
+            f.body = body
+        default:
+            panic(fmt.Errorf("%v is built-in function", name))
+        }
+    } else {
+        // 再帰呼び出し対応
+        f := newFuncU(name, xs, nil)
+        funcTable[name] = f
+        f.body = expression(lex)
+        if lex.Token != END {
+            delete(funcTable, name)
+            panic(fmt.Errorf("'end' expected"))
+        }
+    }
+    fmt.Println(name)
+}
+
+// 式の入力と評価
+func toplevel(lex *Lex) (r bool) {
+    r = false
+    defer func(){
+        err := recover()
+        if err != nil {
+            mes, ok := err.(string)
+            if ok &amp;&amp; mes == "quit" {
+                r = true
+            } else {
+                fmt.Fprintln(os.Stderr, err)
+                for {
+                    c := lex.Peek()
+                    if c == '\n' { break }
+                    lex.Next()
+                }
+            }
+        }
+    }()
+    for {
+        fmt.Print("Calc&gt; ")
+        lex.getToken()
+        if lex.Token == DEF {
+            defineFunc(lex)
+        } else {
+            e := expression(lex)
+            if lex.Token != ';' {
+                panic(fmt.Errorf("invalid expression"))
+            } else {
+                fmt.Println(e.Eval(nil))
+            }
+        }
+    }
+    return r
+}
+
+func main() {
+    var lex Lex
+    lex.Init(os.Stdin)
+    initKeyTable()
+    initFunc()
+    for {
+        if toplevel(&amp;lex) { break }
+    }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcgo18.html">PrevPage</a> | <a href="index.html">Golang</a> | <a href="abcgo20.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,848 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881790</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell21.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell23.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">書き換え可能な変数</h3>
+<p> Haskell は純粋な関数型言語なので、関数の引数や let で定義した局所変数の値を書き換えることはできません。ところが、Haskell には値を書き換えることができるデータ型 IORef がモジュール Data.IORef に用意されています。ただし、IORef は IO モナドの中でしか使用することができません。このほかにも、ST モナドの中で使う STRef というデータ型がありますが、まだ ST モナドを説明していないので、本稿では取り上げません。配列や IORef を使うと、手続き型言語のように「副作用」を伴う操作を Haskell でも行うことができます。
+</p>
+
+<h4>●IORef の使い方</h4>
+<p> 書き換え可能な変数のデータ型は IORef a で表されます。a は型変数です。IORef a は関数 newIORef で生成します。newIORef の型を示します。
+</p>
+<pre class="item">
+newIORef :: a -&gt; IO (IORef a)
+</pre>
+<p> newIORef x は初期値が x の IORef を生成します。返り値は IO に格納されて返されます。
+</p>
+<p> データの参照と更新は関数 readIORef と writeIORef で行います。IORef の値に関数を適用して値を書き換える関数 modifyIORef もあります。
+</p>
+<pre class="item">
+readIORef :: IORef a -&gt; IO a
+writeIORef :: IORef a -&gt; a -&gt; IO ()
+modifyIORef :: IORef a -&gt; (a -&gt; a) -&gt; IO ()
+</pre>
+<p> 返り値は IO に格納されて返されます。簡単な使用例を示します。
+</p>
+<pre>
+Prelude Data.IORef&gt; a &lt;- newIORef 0
+Prelude Data.IORef&gt; :t a
+a :: IORef Integer
+Prelude Data.IORef&gt; readIORef a
+0
+Prelude Data.IORef&gt; writeIORef a 10
+Prelude Data.IORef&gt; readIORef a
+10
+Prelude Data.IORef&gt; modifyIORef a (*2)
+Prelude Data.IORef&gt; readIORef a
+20
+</pre>
+<p> newIORef で初期値が 0 の IORef を生成します。この場合、変数 a の型は IORef Integer になります。readIORef で a の値を参照すると 0 になります。次に、writeIORef で a の値を 10 に書き換えます。再度、readIORef で a の値を参照すると 10 になり、変数の値が書き換えられていることがわかります。modifyIORef で a に関数 (*2) を適用すると、変数 a の値は 10 * 2 = 20 に書き換えられます。
+</p>
+<h4>●配列によるスタックの実装</h4>
+<p> Haskell の場合、スタックはリストを使って簡単に実現できます。関数型言語の場合、データ構造の主役はリストですが、配列を使ってもスタックを実装することができます。実際のところ、Haskell でこのようなスタックを使うことはないと思いますが、IORef の簡単な例題ということで、ご容赦くださいませ。
+</p>
+<p> 配列でスタックを実現する場合、データを格納するための配列本体と、スタックのトップを表す変数が必要になります。この変数のことを「スタックポインタ (stack pointer) 」と呼びます。次の図を見てください。
+</p>
+
+<pre class="fig">
+ buffer 0  1  2  3  4  5    top
+ (1) [                    ]  0    空の状態 
+ (2) [  A                 ]  1    PUSH A
+ (3) [  A  B              ]  2    PUSH B
+ (4) [  A  B  C           ]  3    PUSH C
+ (5) [  A  B              ]  2    POP =&gt; C 
+ (6) [  A                 ]  1    POP =&gt; B 
+ (7) [                    ]  0    POP =&gt; A 
+
+    図 : 配列によるスタックの実現
+</pre>
+
+<p> まず、配列 buffer とスタックポインタ top を用意します。top の値は 0 に初期化しておきます。データをプッシュするときは buffer の top 番目にデータを格納してから、top の値をインクリメントします。逆にポップするときは、top の値をデクリメントしてから、buffer の top 番目にあるデータを取り出します。スタックを操作するたびに、top の値は上図のように変化します。
+</p>
+<p> データをプッシュしていくと、top の値は配列の大きさと等しくなります。配列はリストと違って大きさに限りがあるので、これ以上データを追加することはできません。つまり、スタックは満杯となります。したがって、データをプッシュするとき、スタックに空きがあるかチェックする必要があります。また、top の値が 0 のときはスタックが空の状態なので、ポップすることはできません。このチェックも必要です。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 配列によるスタックの実装
+
+import Data.Array.IO
+import Data.IORef
+
+-- データ型の定義
+data Stack a = S Int (IORef Int) (IOArray Int a)
+
+-- スタックの生成
+makeStack :: Int -&gt; IO (Stack a)
+makeStack n = do
+  buff &lt;- newArray_ (0, n - 1)
+  cnt  &lt;- newIORef 0
+  return (S n cnt buff)
+
+-- スタックにデータを追加する
+push :: Stack a -&gt; a -&gt; IO ()
+push (S size cnt buff) x = do
+  n &lt;- readIORef cnt
+  if n &gt;= size
+    then error "Full Stack"
+    else do
+      writeArray buff n x
+      writeIORef cnt (n + 1)
+
+-- スタックからデータを取り出す
+pop :: Stack a -&gt; IO a
+pop (S _ cnt buff) = do
+  n &lt;- readIORef cnt
+  if n &lt;= 0
+    then error "Empty Stack"
+    else do
+      writeIORef cnt (n - 1)
+      readArray buff (n - 1)
+
+-- スタックは空か
+isEmpty :: Stack a -&gt; IO Bool
+isEmpty (S _ cnt _) = do
+  n &lt;- readIORef cnt
+  return (n == 0)
+
+-- スタックは満杯か
+isFull :: Stack a -&gt; IO Bool
+isFull (S size cnt _) = do
+  n &lt;- readIORef cnt
+  return (n == size)
+
+-- データ数を求める
+len :: Stack a -&gt; IO Int
+len (S _ cnt _) = readIORef cnt
+</pre>
+<p> スタックのデータ型は Stack a とし、データ構築子を S としました。S の第 1 引数がスタックの大きさを表す整数値 (Int) で、第 2 引数がスタックポインタを表す変数です。値を書き換えるので IORef Int とします。なお、このプログラムでは、スタックポインタはスタックに格納されているデータ数を表すことになります。第 3 引数がスタック本体を表す配列です。
+</p>
+
+<p> 関数 makeStack n は大きさ n のスタックを生成して、IO に格納して返します。newArray_ で大きさ (0, n - 1) の配列を生成し、newIORef で初期値 0 の変数 (スタックポインタ) を生成し、それらを S に格納して返します。
+</p>
+<p> 関数 push s x はスタック s に x を追加します。最初に readIORef でスタックポインタの値を取り出して変数 n にセットします。n がスタックの大きさ size 以上であれば、スタックは満杯なのでエラーを送出します。そうでなければ、配列の n 番目の位置に writeArray で x を書き込み、writeIORef でスタックポインタの値を +1 します。
+</p>
+<p> 関数 pop s はスタックからデータを取り出して IO に格納して返します。最初にスタックポインタの値を取り出して変数 n にセットします。n が 0 以下であれば、スタックは空なのでエラーを送出します。そうでなければ、writeIORef でスタックポインタの値を -1 して、readArray で buff の n - 1 番目の値を取り出して返します。
+</p>
+<p> isEmpty s はスタック s が空ならば True を返します。関数 isFull s はスタック s が満杯であれば True を返します。関数 len はスタックに格納されているデータの個数を返します。これらの関数は返り値を IO に格納して返すことに注意してください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; a &lt;- makeStack 10 :: IO (Stack Integer)
+*Main&gt; isEmpty a
+True
+*Main&gt; mapM_ (push a) [1..10]
+*Main&gt; isEmpty a
+False
+*Main&gt; isFull a
+True
+*Main&gt; pop a
+10
+*Main&gt; pop a
+9
+*Main&gt; pop a
+8
+*Main&gt; pop a
+7
+*Main&gt; pop a
+6
+*Main&gt; pop a
+5
+*Main&gt; pop a
+4
+*Main&gt; pop a
+3
+*Main&gt; pop a
+2
+*Main&gt; pop a
+1
+*Main&gt; isEmpty a
+True
+</pre>
+<h4>●配列によるキューの実装</h4>
+<p> 拙作のページ <a href="haskell08.html">モジュール</a> では、リストを使ってキュー (queue) を実現しました。キューは配列を使っても簡単に実現できます。先頭位置を示す front と末尾を示す rear を用意し、front と rear の間にあるデータをキューに格納されているデータとするのがポイントです。次の図を見てください。
+</p>
+
+<pre class="fig">
+           0  1  2  3  4  5  6  7  8  9
+rear = 0  ↓
+QUEUE    [                              ]  : QUEUE は空
+front= 0  ↑
+
+rear = 3           ↓
+QUEUE    [10 20 30                      ]  : データの追加
+front= 0  ↑
+
+rear = 3           ↓
+QUEUE    [10 20 30                      ]  : 10を取り出す
+front= 1     ↑
+
+rear = 3           ↓
+QUEUE    [10 20 30                      ]  : 20,30を取り出す
+front= 3           ↑
+
+                    図 : キューの動作
+</pre>
+
+<p> まずキューは空の状態で、rear, front ともに 0 です。データの追加は、rear が示す位置にデータを書き込み、rear の値をインクリメントします。データ 10, 20, 30 を追加すると、図のようにデータが追加され rear は 3 になります。このとき front は 0 のままなので、先頭のデータは 10 ということになります。
+</p>
+<p> 次に、データを取り出す場合、front の示すデータを取り出してから front の値をインクリメントします。この場合、front が 0 なので 10 を取り出して front の値は 1 となり、次のデータ 20 が先頭になります。データを順番に 20, 30 と取り出していくと、3 つしかデータを書き込んでいないので当然キューは空になります。このとき front は 3 になり rear と同じ値になります。このように、front と rear の値が 0 の場合だけが空の状態ではなく、front と rear の値が等しくなると、キューは空になることに注意してください。
+</p>
+<p> rear, fornt ともに値は増加していく方向なので、いつかは配列の範囲をオーバーします。このため、配列を先頭と末尾がつがっているリング状と考え、rear, front が配列の範囲を超えたら 0 に戻すことにします。これを「循環配列」とか「リングバッファ」と呼びます。一般に、配列を使ってキューを実現する場合は、リングバッファとするのがふつうです。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> Haskell の場合、リングバッファを使うことはほとんどないと思いますが、配列と IORef の簡単な例題ということで、実際に作ってみることにしましょう。最初に、キューを表すデータ型を定義します。
+</p>
+
+<pre class="list">
+リスト : キューの定義と生成
+
+-- データ型の定義
+data Queue a = Q Int (IORef Int) (IORef Int) (IORef Int) (IOArray Int a)
+
+-- キューの生成
+makeQueue :: Int -&gt; IO (Queue a)
+makeQueue n = do
+  a &lt;- newIORef 0
+  b &lt;- newIORef 0
+  c &lt;- newIORef 0
+  d &lt;- newArray_ (0, n - 1)
+  return (Q n a b c d)
+</pre>
+
+<p> データ型は Queue a とし、データ構築子は Q としました。第 1 引数がキューの大きさを表す整数値 (Int) で、第 2, 3, 4 引数が front, rear, cnt を表します。cnt はキューに格納されているデータ数を表します。これらの変数は値を書き換えるので IORef Int を使っています。最後の引数がキュー本体を表す配列です。
+</p>
+<p> 配列を生成する関数 makeQueue も簡単です。newIORef で front, rear, cnt 用の変数を、newArray_ でキュー本体を生成し、それらを Q に格納して返すだけです。
+</p>
+<p> 次はデータを追加する関数 enqueue を作ります。
+</p>
+
+<pre class="list">
+リスト : キューにデータを追加する
+
+enqueue :: Queue a -&gt; a -&gt; IO ()
+enqueue (Q size _ rear cnt buff) x = do
+  c &lt;- readIORef cnt
+  if c &gt;= size
+    then error "Full Queue"
+    else do
+      r &lt;- readIORef rear
+      writeArray buff r x
+      writeIORef cnt (c + 1)
+      if r + 1 &gt;= size
+        then writeIORef rear 0
+        else writeIORef rear (r + 1)
+</pre>
+
+<p> まず、cnt の値と readIORef で取り出して変数 c にセットします。c がキューの大きさ size 以上の場合、キューは満杯なのでエラーを送出します。そうでなければ、readIORef で rear の値を取り出して r にセットします。そして、writeArray で buff の r 番目に x を書き込み、writeIORef で cnt の値を c + 1 に書き換えます。最後に、r + 1 が size 以上になるかチェックします。その場合は rear を 0 に書き換えます。そうでなければ rear の値を +1 します。
+</p>
+
+<p> 次は、キューからデータを取り出す関数 dequeue を作ります。
+</p>
+
+<pre class="list">
+リスト : キューからデータを取り出す
+
+dequeue :: Queue a -&gt; IO a
+dequeue (Q size front _ cnt buff) = do
+  c &lt;- readIORef cnt
+  if c &lt;= 0
+    then error "Empty Queue"
+    else do
+      f &lt;- readIORef front
+      x &lt;- readArray buff f
+      writeIORef cnt (c - 1)
+      if f + 1 &gt;= size
+        then writeIORef front 0
+        else writeIORef front (f + 1)
+      return x
+</pre>
+
+<p> 最初に readIORef で cnt の値を取り出して変数 c にセットします。c が 0 以下であればキューは空なのでエラーを送出します。そうでなければ、front の値を readIORef で取り出して変数 f にセットし、buff の f 番目のデータを readArray で取り出して変数 x にセットします。あとは、writeIORef で cnt の値を -1 して、f + 1 が size 以上になるかチェックします。そうであれば、front の値を 0 に書き換えます。そうでなければ、front の値を +1 します。最後に、x を IO に格納して返します。
+</p>
+<p> あとの関数 isEmpty, isFull, clear は簡単なので説明は省略します。プログラムリストをお読みくださいませ。
+</p>
+
+<pre class="list">
+リスト : キューの操作関数
+
+-- キューは空か
+isEmpty :: Queue a -&gt; IO Bool
+isEmpty (Q _ _ _ cnt _) = do
+  c &lt;- readIORef cnt
+  return (c == 0)
+
+-- キューは満杯か
+isFull :: Queue a -&gt; IO Bool
+isFull (Q _ _ _ cnt _) = do
+  c &lt;- readIORef cnt
+  return (c /= 0)
+
+-- キューを空にする
+clear :: Queue a -&gt; IO ()
+clear (Q _ front rear cnt _) = do
+  writeIORef front 0
+  writeIORef rear  0
+  writeIORef cnt   0
+</pre>
+
+<h4>●実行例</h4>
+<p> これでプログラムは完成です。それでは、簡単な実行例を示しましょう。
+</p>
+<pre>
+*Main&gt; a &lt;- makeQueue 8 :: IO (Queue Integer)
+*Main&gt; isEmpty a
+True
+*Main&gt; isFull a
+False
+*Main&gt; mapM_ (enqueue a) [1..8]
+*Main&gt; isEmpty a
+False
+*Main&gt; isFull a
+True
+*Main&gt; dequeue a
+1
+*Main&gt; dequeue a
+2
+*Main&gt; dequeue a
+3
+*Main&gt; dequeue a
+4
+*Main&gt; dequeue a
+5
+*Main&gt; dequeue a
+6
+*Main&gt; dequeue a
+7
+*Main&gt; dequeue a
+8
+*Main&gt; isEmpty a
+True
+*Main&gt; isFull a
+False
+</pre>
+<p> makeQueue でキューを作成して変数 a にセットします。mapM_ でキューにデータを 8 個セットします。これでキューは満杯になるので、これ以上データを追加することはできません。次に、dequeue でデータを取り出します。先に入れたデータから順番に取り出されていることがわかりますね。これでキューは空の状態になります。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">ヒープ</h3>
+<p> 「ヒープ (heap) 」は「半順序木 (partial ordered tree) 」と呼ばれる木構造の一種で、普通は二分木を使った二分ヒープのことを指します。ヒープを利用すると、最小値をすぐに見つけることができ、新しくデータを挿入する場合も、高々要素の個数 (n) の対数 (log<sub>2</sub> n) に比例する程度の時間で済みます。
+</p>
+
+<p> ヒープは配列を使って簡単に実装することができます。また、二分木を使ったヒープの実装では Leftist Heap と Skew Heap というアルゴリズムがあります。Haskell の場合、配列の操作は副作用を伴うので、木構造である Leftist Heap や Skew Heap の方が扱いやすいと思います。今回は配列によるヒープの実装を説明し、Leftist Heap と Skew Heap は次回以降に説明します。
+</p>
+<p> なお、このドキュメントは拙作のページ <a href="../light/index.html#python_algo">Algorithms with Paython</a> <a href="../light/pyalgo03.html">二分木とヒープ</a> のヒープのプログラムを Haskell で書き直したものです。内容は重複しますが、あしからずご了承くださいませ。
+</p>
+<h4>●配列によるヒープの実装</h4>
+<p> 一般的な二分木では、親よりも左側の子のほうが小さく、親よりも右側の子が大きい、という関係を満たすように作ります。「半順序木」の場合、親は子より小さいか等しい、という関係を満たすように作ります。このとき、葉はすべて同じ高さになるか、そうでなければ、葉は左から右へ順番に埋めていきます。このような二分木は配列で表すことができます。ヒープの場合、木の根を配列の添字 0 とすると、0 番目には必ず最小値のデータが格納されます。
+</p>
+<p> 下図にヒープと配列の関係を示します。
+</p>
+<pre class="fig">
+            0  1  2  3  4  5  6
+    TABLE [10 20 30 40 50 60 70]
+
+         (root)
+           10 (0)
+         ／   ＼            親の添字を k とすると
+       ／       ＼          その子は 2*k+1, 2*k+2 になる。
+     20 (1)       30 (2)    子の添字を k とすると
+   ／  ＼       ／  ＼      その親は (k - 1) / 2 になる。
+ 40     50   60      70     親の値 &lt;= 子の値 の関係を満たす。
+ (3)    (4)  (5)     (6)
+
+    図 : ヒープと配列の対応関係
+</pre>
+
+<h4>●ヒープの構築 (1)</h4>
+<p> ヒープは、次の手順で作ることができます。
+</p>
+<pre class="fig">
+TABLE [＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     最初は空
+
+      [80 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     最初のデータをセット
+
+      [80 10 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     次のデータをセットし親と比較
+       親 子                              親の位置 0 = (1 - 1)/2
+
+      [10 80 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     順序が違っていたら交換
+
+      [10 80 60 ＊ ＊ ＊ ＊ ＊ ＊ ＊]     データをセットし比較
+       親    子                           親の位置 0 = (2 - 1)/2
+
+      [10 80 60 20 ＊ ＊ ＊ ＊ ＊ ＊]     データをセットし比較
+          親    子                        親の位置 1 = (3 - 1)/2
+
+      [10 20 60 80 ＊ ＊ ＊ ＊ ＊ ＊]     交換する
+
+      ・・・・データがなくなるまで繰り返す・・・・
+
+                図 : ヒープの構築 (1)
+</pre>
+<p> まず、データを最後尾に追加します。そして、このデータがヒープの条件を満たしているかチェックします。もしも、条件を満たしていなければ、親と子を入れ換えて、次の親をチェックします。これを木のルート方向 (添字 0 の方向) に向かって繰り返します。条件を満たすか、木のルート (添字 0) まで到達すれば、処理を終了します。これをデータの個数だけ繰り返します。
+</p>
+<p> このアルゴリズムを Haskell でプログラムすると、次のようになります。
+</p>
+<pre class="list">
+リスト : ヒープの構築 (1)
+
+-- 要素の比較
+compItem :: Ord a =&gt; IOArray Int a -&gt; Int -&gt; Int -&gt; IO Ordering
+compItem buff i j = liftM2 (compare) (readArray buff i) (readArray buff j)
+
+-- 要素の交換
+swapItem :: IOArray Int a -&gt; Int -&gt; Int -&gt; IO ()
+swapItem buff i j = do
+  a &lt;- readArray buff i
+  b &lt;- readArray buff j
+  writeArray buff i b
+  writeArray buff j a
+
+-- ルート方向に向かってヒープを構築
+upheap :: Ord a =&gt; IOArray Int a -&gt; Int -&gt; IO ()
+upheap buff n = do
+  when (n &gt; 0) $ do
+    let p = (n - 1) `div` 2
+    t &lt;- compItem buff p n
+    when (t == GT) $ do
+      swapItem buff p n
+      upheap buff p
+</pre>
+<p> 関数 compItem は配列の要素を比較します。関数 swapItem は配列の要素を交換します。Ordering は大小関係を表すデータ型です。
+</p>
+<pre class="item">
+data Ordering = LT | EQ | GT
+</pre>
+<p> 関数 compare x y は x &lt; y であれば LT を、x == y であれば EQ を、x &gt; y であれば GT を返します。Ordering は大小関係 LT &lt; EQ &lt; GT が定義されているので、たとえば compare x y の返り値を t とすると、x &lt;= y は t &lt;= EQ で調べることができます。
+</p>
+
+<p> 関数 upheap はヒープを満たすように n 番目の要素をルート方向に向かって移動させます。0 から n - 1 番目までの要素はヒープの条件を満たしているとします。n が 0 の場合、ルートまでたどったので処理を終了します。n の親を p とすると、p は (n - 1) / 2 で求めることができます。そして、親 p が子 n よりも大きい場合、ヒープの条件を満たさないので p 番目と n 番目の要素を swapItem で交換し、upheap を再帰呼び出しして次の親子関係をチェックします。そうでなければ、ヒープの条件を満たしているので処理を終了します。
+</p>
+
+<p> 実際にヒープを構築する場合は、配列の最後尾にデータを追加して、upheap を呼び出せばいいわけです。また、データが格納されている配列でも、upheap を適用してヒープを構築することができます。簡単な例を示します。
+</p>
+<pre>
+*Main&gt; a &lt;- newListArray (0,9) [5,6,4,7,3,8,2,9,1,0] :: IO (IOArray Int Int)
+*Main&gt; mapM_ (upheap a) [1..9]
+*Main&gt; getElems a
+[0,1,3,4,2,8,5,9,7,6]
+</pre>
+<p> ただし、この方法はデータ数を n とすると upheap を n - 1 回呼び出すため、それほど速い方法ではありません。もう少し高速な方法はあとで説明することにしましょう。
+</p>
+
+<h4>●ヒープの再構築</h4>
+<p> 次は、最小値を取り出したあとで新しいデータを追加し、ヒープを再構築する手順を説明します。
+</p>
+<pre class="fig">
+TABLE [10 20 30 40 50 60 70 80 90 100]    ヒープを満たしている
+
+      [＊ 20 30 40 50 60 70 80 90 100]    最小値を取り出す
+
+      [66 20 30 40 50 60 70 80 90 100]    新しい値をセット
+
+      [66 20 30 40 50 60 70 80 90 100]    小さい子と比較する
+       ^  ^                               (2*0+1) &lt; (2*0+2)
+       親 子 子
+
+      [20 66 30 40 50 60 70 80 90 100]    交換して次の子と比較
+          ^     ^                         (2*1+1) &lt; (2*1+2)
+          親    子 子
+
+      [20 40 30 66 50 60 70 80 90 100]    交換して次の子と比較
+                ^        ^                (2*3+1) &lt; (2*3+2)
+                親       子 子            親が小さいから終了
+
+                図 : ヒープの再構築
+</pre>
+<p> 最初に、ヒープの最小値である添字 0 の位置にあるデータを取り出します。次に、その位置に新しいデータをセットし、ヒープの条件を満たしているかチェックします。ヒープの構築とは逆に、葉の方向 (添字の大きい方向) に向かってチェックしていきます。
+</p>
+<p> まず、2 つの子の中で小さい方の子を選び、それと挿入したデータを比較します。もしも、ヒープの条件を満たしていなければ、親と子を交換し、その次の子供と比較します。これを、条件を満たすか、子供がなくなるまで繰り返します。
+</p>
+<p> このアルゴリズムを Haskell でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : ヒープの再構築
+
+downheap :: Ord a =&gt; IOArray Int a -&gt; Int -&gt; Int -&gt; IO ()
+downheap buff n h = iter n h
+  where
+    selectChild c1 h = do
+      let c2 = c1 + 1
+      if c2 &gt; h
+        then return c1
+        else do
+          t &lt;- compItem buff c1 c2
+          if t == GT
+            then return c2
+            else return c1
+    iter n h = do
+      let c1 = 2 * n + 1
+      when (c1 &lt;= h) $ do
+        c &lt;- selectChild c1 h
+        t &lt;- compItem buff n c
+        when (t == GT) $ do
+          swapItem buff n c
+          iter c h
+</pre>
+<p> 関数 downheap はヒープを満たすように n 番目の要素を葉の方向へ移動させます。n + 1 番目から最後までの要素はヒープを満たしているとします。引数 h は最後の要素の位置を表します。実際の処理は局所関数 iter で行います。
+</p>
+<p> 最初に、n の子 c1 を求めます。これが h よりも大きければ処理を終了します。そして、もう一つの子 (c + 1) がある場合は、小さい子を選択します。この処理を局所関数 selectChild で行っています。もう一つの子を c2 とすると、c2 が h より大きければ c1 を返します。そうでなければ、compItem で c1 と c2 を比較して小さな子を選びます。
+</p>
+<p> 次に、selectChild で選んだ子 c と親 n を比較し、親が大きい場合は swapItem で親と子を交換します。それから、iter を再帰呼び出しして次の親子関係をチェックします。親が子以下の場合はヒープの条件を満たしているので処理を終了します。
+</p>
+
+<p> 最小値を取り出したあと新しいデータを挿入しない場合は、新しいデータの代わりに配列 buff の最後尾のデータを buff の 0 番目にセットしてヒープを再構築します。上図の例でいえば、100 を buff[0] にセットして、ヒープを再構築すればいいわけです。この場合、ヒープに格納されているデータの個数は一つ減ることになります。
+</p>
+
+<h4>●ヒープの構築 (2)</h4>
+<p> ところで、n 個のデータをヒープに構築する場合、n - 1 回 upheap を呼び出さなければいけません。ところが、すべてのデータを配列に格納したあと、ヒープを構築するうまい方法があります。次の図を見てください。
+</p>
+<pre class="fig">
+TABLE [100 90 80 70 60|50 40 30 20 10]    後ろ半分が葉に相当
+
+      [100 90 80 70|60 50 40 30 20 10]    60 を挿入する
+                    ^
+      [100 90 80 70|60 50 40 30 20 10]    子供と比較する
+                    ^              ^       (2*4+1), (2*4+2)
+                    親             子
+
+      [100 90 80 70|10 50 40 30 20 60]    交換する
+
+      ・・・ 70 80 90 を順番に挿入し修正する ・・・
+
+      [100|10 40 20 60 50 80 30 70 90]    90 を挿入し修正した
+
+      [100 10 40 20 60 50 80 30 70 90]    100 を挿入、比較
+        ^  ^  ^                           (2*0+1), (2*0+2)
+        親 子 子
+
+      [10 100 40 20 60 50 80 30 70 90]    小さい子と交換し比較
+           ^     ^  ^                     (2*1+1), (2*1+2)
+           親    子 子
+
+      [10 20 40 100 60 50 80 30 70 90]    小さい子と交換し比較
+                 ^           ^  ^         (2*3+1), (2*3+2)
+                 親          子 子
+
+      [10 20 40 30 60 50 80 100 70 90]    交換して終了
+
+                図 : ヒープの構築 (2)
+</pre>
+<p> 配列を前半と後半の 2 つに分けると、後半部分はこれより下にはデータが繋がっていない葉の部分になります。つまり、後半部分の要素は互いに関係がなく、前半部分の枝にあたる要素と関係しているだけでなのです。したがって、後半部分だけを見れば、それはヒープを満たしていると考えることができます。
+</p>
+
+<p> あとは、前半部分の要素に対して、葉の方向に向かってヒープの関係を満たすよう修正していけば、配列全体がヒープを満たすことになります。この処理は関数 downheap を使うと次のように簡単にプログラムできます。
+</p>
+<pre>
+*Main&gt; a &lt;- newListArray (0,9) [5,6,4,7,3,8,2,9,1,0] :: IO (IOArray Int Int)
+*Main&gt; mapM_ (\x -&gt; downheap a x 9) [4,3,2,1,0]
+*Main&gt; getElems a
+[0,1,2,5,3,8,4,9,7,6]
+</pre>
+<p> 後ろからヒープを再構築していくと考えるとわかりやすいでしょう。この方法の場合、要素 n の配列に対して、n / 2 個の要素の修正を行えばよいので、最初に説明したヒープの構築方法よりも速くなります。
+</p>
+
+<h4>●優先度つき待ち行列</h4>
+<p> それでは、ヒープを使って「優先度つき待ち行列 (priority queue) 」を作ってみましょう。一般に、キューは先入れ先出し (FIFO : first-in, first-out) のデータ構造です。キューからデータを取り出すときは、先に挿入されたデータから取り出されます。これに対し、優先度つき待ち行列は、データに優先度をつけておいて、優先度の高いデータから取り出していきます。
+</p>
+
+<p> 優先度つき待ち行列は、優先度を基準にヒープを構築することで実現できます。最初に作成する関数を示します。
+</p>
+<UL>
+  <LI> makeHeap :: Int -&gt; IO (Heap a)<BR>空のヒープを生成する
+  <LI> fromList :: Ord a =&gt; [a] -&gt; IO (Heap a)<BR>リストからヒープを生成する
+  <LI> insert :: Ord a =&gt; Heap a -&gt; a -&gt; IO ()<BR>ヒープにデータを追加する
+  <LI> deleteMin :: Ord a =&gt; Heap a -&gt; IO a<BR>ヒープから最小値を取り出す
+  <LI> findMin :: Ord a =&gt; Heap a -&gt; IO a<BR>ヒープの最小値を求める
+  <LI> isEmpty :: Heap a -&gt; IO Bool<BR>ヒープが空ならば True を返す
+  <LI> isFull :: Heap a -&gt; IO Bool<BR>ヒープが満杯ならば True を返す
+</UL>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 優先度つき待ち行列
+
+-- データ型の定義
+data Heap a = Heap Int (IORef Int) (IOArray Int a)
+
+-- ヒープの生成
+makeHeap :: Int -&gt; IO (Heap a)
+makeHeap n = do
+  a &lt;- newArray_ (0, n - 1)
+  b &lt;- newIORef 0
+  return (Heap n b a)
+
+-- リストからヒープを生成する
+fromList :: Ord a =&gt; [a] -&gt; IO (Heap a)
+fromList xs = do
+  let n = length xs
+      m = n `div` 2 - 1
+  a &lt;- newListArray (0, n - 1) xs
+  b &lt;- newIORef n
+  mapM_ (\x -&gt; downheap a x (n - 1)) [m, m-1 .. 0]
+  return (Heap n b a)
+</pre>
+<p> データ型は Heap a とし、データ構築子を Heap としました。第 1 引数が配列 (ヒープ) の大きさ (Int)、第 2 引数が要素の個数 (IORef Int)、第 3 引数が配列を表します。関数 makeHeap n は大きさが n の空のヒープを生成します。配列と IORef を生成して Heap に格納して返すだけです。
+</p>
+<p> 関数 fromList はリストからヒープを生成します。リスト xs の要素数を length で求めて変数 n にセットし、n / 2 - 1 の値を変数 m にセットします。配列本体は newListArray で生成し、mapM_ で m 番目から 0 番目の要素に downheap を適用してヒープを構築します。
+</p>
+
+<p> 次はデータを追加する関数 insert を作ります。
+</p>
+<pre class="list">
+リスト : データの追加
+
+insert :: Ord a =&gt; Heap a -&gt; a -&gt; IO ()
+insert (Heap size cnt buff) x = do
+  c &lt;- readIORef cnt
+  if c &gt;= size
+    then error "Full Heap"
+    else do
+      writeArray buff c x
+      writeIORef cnt (c + 1)
+      upheap buff c
+</pre>
+<p> 最初にヒープに格納されているデータ数を求めて変数 c にセットします。c がヒープの大きさ size 以上の場合、ヒープは満杯なのでエラーを送出します。そうでなければ、配列の c 番目に x を挿入し、upheap でヒープを再構築します。データの個数 cnt を +1 することをお忘れなく。
+</p>
+<p> 次は最小値を取り出す関数 deleteMin を作ります。
+</p>
+<pre class="list">
+リスト : 最小値の取り出し
+
+deleteMin :: Ord a =&gt; Heap a -&gt; IO a
+deleteMin (Heap _ cnt buff) = do
+  c &lt;- readIORef cnt
+  if c &lt;= 0 
+    then error "Empty Heap"
+    else do
+      x &lt;- readArray buff 0
+      let c1 = c - 1
+      writeIORef cnt c1
+      when (c1 &gt; 0) $ do
+        swapItem buff 0 c1
+        downheap buff 0 (c1 - 1)
+      return x
+</pre>
+<p> 最初にデータの個数を求めて変数 c にセットします。c が 0 以下の場合、ヒープは空なのでエラーを送出します。そうでなければ、配列 buff の 0 番目の要素を取り出して変数 x にセットします。次に、データの個数を -1 します。データが残ってる場合じはヒープを再構築します。最後尾の要素と 0 番目の要素を swapItem で交換し、downheap でヒープを再構築します。最後に x を return で IO に格納して返します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛いたします。詳細は <a href="haskell22.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+*Main&gt; a &lt;- makeHeap 8 :: IO (Heap Int)
+*Main&gt; isEmpty a
+True
+*Main&gt; isFull a
+False
+*Main&gt; mapM_ (insert a) [7, 6 .. 0]
+*Main&gt; deleteMin a
+0
+*Main&gt; deleteMin a
+1
+*Main&gt; deleteMin a
+2
+*Main&gt; deleteMin a
+3
+*Main&gt; deleteMin a
+4
+*Main&gt; deleteMin a
+5
+*Main&gt; deleteMin a
+6
+*Main&gt; deleteMin a
+7
+*Main&gt; isEmpty a
+True
+
+*Main&gt; a &lt;- fromList [5,6,4,7,3,8,2,9,1,0]
+*Main&gt; isFull a
+True
+*Main&gt; isEmpty a
+False
+*Main&gt; deleteMin a
+0
+*Main&gt; deleteMin a
+1
+*Main&gt; deleteMin a
+2
+*Main&gt; deleteMin a
+3
+*Main&gt; deleteMin a
+4
+*Main&gt; deleteMin a
+5
+*Main&gt; deleteMin a
+6
+*Main&gt; deleteMin a
+7
+*Main&gt; deleteMin a
+8
+*Main&gt; deleteMin a
+9
+*Main&gt; isEmpty a
+True
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+--
+-- heap.hs : 配列を使ったヒープの実装
+--
+--            Copyright (C) 2013 Makoto Hiroi
+--
+import Data.Array.IO
+import Data.IORef
+import Control.Monad
+
+-- データ型の定義
+data Heap a = Heap Int (IORef Int) (IOArray Int a)
+
+-- 要素の比較
+compItem :: Ord a =&gt; IOArray Int a -&gt; Int -&gt; Int -&gt; IO Ordering
+compItem buff i j = liftM2 (compare) (readArray buff i) (readArray buff j)
+
+-- 要素の交換
+swapItem :: IOArray Int a -&gt; Int -&gt; Int -&gt; IO ()
+swapItem buff i j = do
+  a &lt;- readArray buff i
+  b &lt;- readArray buff j
+  writeArray buff i b
+  writeArray buff j a
+
+-- ルート方向に向かってヒープを構築
+upheap :: Ord a =&gt; IOArray Int a -&gt; Int -&gt; IO ()
+upheap buff n = do
+  when (n &gt; 0) $ do
+    let p = (n - 1) `div` 2
+    t &lt;- compItem buff p n
+    when (t == GT) $ do
+      swapItem buff p n
+      upheap buff p
+
+-- 葉の方向に向かってヒープを構築
+downheap :: Ord a =&gt; IOArray Int a -&gt; Int -&gt; Int -&gt; IO ()
+downheap buff n h = iter n h
+  where
+    selectChild c1 h = do
+      let c2 = c1 + 1
+      if c2 &gt; h
+        then return c1
+        else do
+          t &lt;- compItem buff c1 c2
+          if t == GT
+            then return c2
+            else return c1
+    iter n h = do
+      let c1 = 2 * n + 1
+      when (c1 &lt;= h) $ do
+        c &lt;- selectChild c1 h
+        t &lt;- compItem buff n c
+        when (t == GT) $ do
+          swapItem buff n c
+          iter c h
+
+-- ヒープの生成
+makeHeap :: Int -&gt; IO (Heap a)
+makeHeap n = do
+  a &lt;- newArray_ (0, n - 1)
+  b &lt;- newIORef 0
+  return (Heap n b a)
+
+-- リストからヒープを生成する
+fromList :: Ord a =&gt; [a] -&gt; IO (Heap a)
+fromList xs = do
+  let n = length xs
+      m = n `div` 2 - 1
+  a &lt;- newListArray (0, n - 1) xs
+  b &lt;- newIORef n
+  mapM_ (\x -&gt; downheap a x (n - 1)) [m, m-1 .. 0]
+  return (Heap n b a)
+
+-- データの追加
+insert :: Ord a =&gt; Heap a -&gt; a -&gt; IO ()
+insert (Heap size cnt buff) x = do
+  c &lt;- readIORef cnt
+  if c &gt;= size
+    then error "Full Heap"
+    else do
+      writeArray buff c x
+      writeIORef cnt (c + 1)
+      upheap buff c
+
+-- 最小値を取り出す
+deleteMin :: Ord a =&gt; Heap a -&gt; IO a
+deleteMin (Heap _ cnt buff) = do
+  c &lt;- readIORef cnt
+  if c &lt;= 0 
+    then error "Empty Heap"
+    else do
+      x &lt;- readArray buff 0
+      let c1 = c - 1
+      writeIORef cnt c1
+      when (c1 &gt; 0) $ do
+        swapItem buff 0 c1
+        downheap buff 0 (c1 - 1)
+      return x
+
+-- 最小値を求める
+findMin :: Ord a =&gt; Heap a -&gt; IO a
+findMin (Heap _ cnt buff) = do
+  c &lt;- readIORef cnt
+  if c &lt;= 0
+    then error "Empty Heap"
+    else readArray buff 0
+
+-- ヒープは空か
+isEmpty :: Heap a -&gt; IO Bool
+isEmpty (Heap _ cnt _) = do
+  c &lt;- readIORef cnt
+  return (c == 0)
+
+-- ヒープは満杯か
+isFull :: Heap a -&gt; IO Bool
+isFull (Heap size cnt _) = do
+  c &lt;- readIORef cnt
+  return (c == size)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell21.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell23.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

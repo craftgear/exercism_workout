@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Julia プログラミング超入門</title>
+  <meta name="description" content="Julia 入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881803</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="ce">
+<h1>Julia Language Programming</h1>
+<h2>お気楽 Julia プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>遅延ストリーム (前編)</h3>
+<p> ストリーム (stream) はデータの流れを抽象化したデータ構造です。たとえば、ファイル入出力はストリームと考えることができます。また、1 次元配列 (ベクタ) を使ってストリームを表すこともできます。ただし、単純なベクタでは有限個のデータの流れしか表すことができません。ここで遅延評価を用いると、擬似的に無限個のデータを表すことができるようになります。これを「遅延ストリーム」と呼びます。
+</p>
+<p> 遅延ストリームの基本的な考え方は、必要になったときに新しいデータを生成することです。このときに遅延評価を用います。具体的にはデータを生成する関数を用意し、それを遅延評価してストリームに格納しておきます。そして、必要になった時点で遅延評価しておいた関数を呼び出して値を求めればよいわけです。
+</p>
+<p> Julia の場合、イテレータを使って無限ストリームを表すことができるので、遅延ストリームを使う機会はほとんどないと思いますが、Julia のお勉強ということで、あえてプログラムを作ってみましょう。
+</p>
+<h4>●データ型の定義</h4>
+<p> 遅延ストリームを表すデータ型は次のようになります。
+<pre class="list">
+リスト : 遅延ストリームのデータ型
+
+# 抽象型
+abstract type LazyStream end
+
+# 終端
+struct Nil &lt;: LazyStream
+end
+
+# 定数
+const nils = Nil()
+
+# 終端の判定
+Base.isempty(s::LazyStream) = s === nils
+
+# 遅延ストリーム
+struct Cons &lt;: LazyStream
+    head
+    tail::Promise
+end
+
+# ストリームを生成するマクロ
+macro cons(x, s)
+esc(:(Cons($x, @delay $s)))
+end
+
+# アクセス関数
+head(s::Nil) = nils
+head(s::Cons) = s.head
+tail(s::Nil) = nils
+tail(s::Cons) = force(s.tail)
+</pre>
+<p> データ型は LazyStream としました。Nil がストリームの終端で、Cons が遅延ストリームを表します。無限ストリームだけを扱うのであれば Nil は必要ありません。Cons の head が現時点での先頭データを表し、tail が遅延ストリームを生成する関数を格納するプロミスになります。遅延ストリームを簡単に生成できるようにマクロ @cons を定義しています。
+</p>
+<p> アクセス関数 head() は遅延ストリームの先頭データ head を返します。tail() は tail を force() して次の要素を格納した遅延ストリームを返します。どちらの関数も引数 s が終端の場合は nils を返しますが、ここでエラーを送出してもかまいません。head() と tail() は Lisp / Scheme のリスト操作関数 car, cdr に相当します。Common Lisp の場合、空リストに car と cdr を適用すると nil というデータを返しますが、Scheme ではエラーになります。今回は Common Lisp の流儀に従うことにしましょう。
+</p>
+<h4>●iterate() と show() の作成</h4>
+<p> Julia の場合、イテレータを用意しておくといろいろ便利です。ここで itereate() と表示用の関数 show() を多重定義しておきます。
+</p>
+<pre class="list">
+リスト : イテレータと遅延ストリームの表示
+
+# イテレータ
+function Base.iterate(s::LazyStream, state = s)
+    if isempty(state)
+        nothing
+    else
+        (head(state), tail(state))
+    end
+end
+
+# 表示
+function Base.show(io::IO, s::LazyStream)
+    if isempty(s)
+        print(io, "LazyStream()")
+    else
+        print(io, "LazyStream($(head(s)), ?)")
+    end
+end
+</pre>
+<p> イテレータは拙作のページ <a href="juliaa03.html#chap23">連結リスト</a> で作成したものと同じ考え方で大丈夫です。ただし、無限ストリームを与えると正常に動作しません。また、length() を多重定義していないので、collect() で遅延ストリームの要素を配列に格納することもできません。ご注意くださいませ。show() の場合、無限ストリームのことも考えて、先頭要素だけ表示するようにしました。
+</p>
+<h4>●遅延ストリームの生成</h4>
+<p> それでは、遅延ストリームを生成する関数を作りましょう。たとえば、low から high までの整数列を生成するストリームは次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 整数列を生成するストリーム
+
+function integers(low, high)
+    if low &gt; high
+        nils
+    else
+        @cons(low, integers(low + 1, high))
+    end
+end
+</pre>
+<p> 関数 integers() は遅延ストリームを生成して返します。@cons の第 1 引数が現時点でのデータになります。第 2 引数のプロミスを force すると、integers(low + 1, high) が実行されて次のデータを格納した遅延ストリームが返されます。そして、その中の遅延オブジェクトを force すると、その次のデータを得ることができます。low が high よりも大きくなったら終端 nils を返します。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; s = integers(1, 10)
+LazyStream(1, ?)
+
+julia&gt; head(s)
+1
+
+julia&gt; head(tail(s))
+2
+
+julia&gt; head(tail(tail(s)))
+3
+
+julia&gt; head(tail(tail(tail(s))))
+4
+
+julia&gt; for x = s print("$x ") end
+1 2 3 4 5 6 7 8 9 10
+</pre>
+
+<p> もう一つ、簡単な例を示しましょう。フィボナッチ数列を生成する遅延ストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : フィボナッチ数列を生成する遅延ストリーム
+
+fibonacci(a, b) = @cons(a, fibonacci(b, a + b))
+</pre>
+<p> 関数 fibonacci() の引数 a がフィボナッチ数列の最初の項で、b が次の項です。したがって、プロミスに fibonacci(b, a + b) を格納しておけば、force することでフィボナッチ数列を生成することができます。
+</p>
+<pre>
+julia&gt; f = fibonacci(0, 1)
+LazyStream(0, ?)
+
+julia&gt; for _ = 1 : 40
+           print("$(head(f)) ")
+           global f = tail(f)
+       end
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 28657 46368 75025 121393 196418 
+317811 514229 832040 1346269 2178309 3524578 5702887 9227465 14930352 24157817 39088169 63245986
+</pre>
+<p> なお、fibonacci() は無限ストリームを生成するので、直接イテレータを使用してはいけません。ご注意くださいませ。
+</p>
+<p> これらの関数の動作を一般化すると、次のような関数を定義することができます。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの生成 (逆畳み込み)
+
+function unfold(iter, seed, cond = _ -&gt; false)
+    if cond(seed)
+        nils
+    else
+        @cons(seed, unfold(iter, iter(seed), cond))
+    end
+end
+</pre>
+<p> 関数 unfold() は初項 seed を受け取り、次項を関数 iter() で生成します。@cons の第 1 引数に seed を渡して、第 2 引数で unfold() を呼び出すときに iter(seed) の返り値を渡します。引数 cond は終了条件を表す関数です。デフォルト値は常に false を返す関数です。これで、無限のストリームを生成することができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+julia&gt; s = unfold(x -&gt; x + 1, 1)
+LazyStream(1, ?)
+
+julia&gt; head(s)
+1
+
+julia&gt; head(tail(s))
+2
+
+julia&gt; head(tail(tail(s)))
+3
+
+julia&gt; head(tail(tail(tail(s))))
+4
+
+julia&gt; f = unfold(x -&gt; (x[2], x[1] + x[2]), (0, 1))
+LazyStream((0, 1), ?)
+
+julia&gt; head(f)
+(0, 1)
+
+julia&gt; head(tail(f))
+(1, 1)
+
+julia&gt; head(tail(tail(f)))
+(1, 2)
+
+julia&gt; head(tail(tail(tail(f))))
+(2, 3)
+
+julia&gt; head(tail(tail(tail(tail(f)))))
+(3, 5)
+
+julia&gt; head(tail(tail(tail(tail(tail(f))))))
+(5, 8)
+</pre>
+<p> イテレータを遅延ストリームに変換することも簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : イテレータを遅延ストリームに変換
+
+function tolazy(iter, state = nothing)
+    next = state === nothing ? iterate(iter) : iterate(iter, state)
+    if next === nothing
+        nils
+    else
+        @cons(next[1], tolazy(iter, next[2]))
+    end
+end
+</pre>
+<p> 関数 tolzay() は引数 iter だけを指定して呼び出します。最初の呼び出しでは引数 state が nothing になります。この場合、iterate(iter) を呼び出します。その返り値 next が nothing ならば nils を返します。
+</p>
+<p> そうでなければ、next はタプル (val, state) なので、@cons の第 1 引数に next[1] を、第 2 引数に tolazy(iter, next[2]) を渡して遅延ストリームを生成します。プロミスを force() すると iterate(iter, state) が呼び出されて、イテレータから次の要素を取り出すことができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+julia&gt; s = tolazy(1 : 10)
+LazyStream(1, ?)
+
+julia&gt; for x = s print("$x ") end
+1 2 3 4 5 6 7 8 9 10
+</pre>
+<p> このように、範囲オブジェクトを使って遅延ストリームを生成することができます。
+</p>
+<h4>●遅延ストリームの操作関数</h4>
+<p> 次は遅延ストリームを操作する関数を作りましょう。最初は n 番目の要素を求める関数 nth() です。今回は先頭の要素を 1 番目とします。
+</p>
+<pre class="list">
+リスト  : n 番目の要素を求める
+
+function nth(s::LazyStream, n::Int)
+    while n &gt; 1
+        if isempty(s)
+            error("nth: empty stream")
+        end
+        s = tail(s)
+        n -= 1
+    end
+    head(s)
+end
+</pre>
+<p> nth() は tail() を n 回繰り返すことで n 番目の要素を求めます。getindex() を多重定義すると、角カッコで要素を取り出すことができますが、要素のアクセスには O(N) かかるので定義していません。
+</p>
+<p> ストリームから n 個の要素を取り出す関数 take() と n 個の要素を取り除く関数 drop() も同様にプログラムすることができます。
+</p>
+<pre class="list">
+リスト : take() と drop()
+
+# 先頭から n 個の要素を取り出す
+function take(s::LazyStream, n::Int)
+    if isempty(s) || n &lt;= 0
+        nils
+    else
+        @cons(head(s), take(tail(s), n - 1))
+    end
+end
+
+# 先頭から n 個の要素を取り除く
+function drop(s::LazyStream, n::Int)
+    while !isempty(s) &amp;&amp; n &gt; 0
+        s = tail(s)
+        n -= 1
+    end
+    s
+end
+</pre>
+<p> take() は有限の遅延ストリームを返すことに注意してください。それでは、簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; f = fibonacci(big(0), big(1))
+LazyStream(0, ?)
+
+julia&gt; for x = 1 : 20
+       print("$(nth(f, x)) ")
+       end
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+julia&gt; for x = take(f, 20)
+       print("$x ")
+       end
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+julia&gt; for x = take(drop(f, 20), 20)
+       print("$x ")
+       end
+6765 10946 17711 28657 46368 75025 121393 196418 317811 514229 832040 1346269 2178309 3524578 5702887 9227465 
+14930352 24157817 39088169 63245986
+julia&gt; nth(f, 40)
+63245986
+
+julia&gt; nth(f, 50)
+7778742049
+
+julia&gt; nth(f, 100)
+218922995834555169026
+</pre>
+<p> 変数 f にフィボナッチ数列を生成する遅延ストリームをセットします。nth() で順番に要素を 20 個取り出すと、その値はフィボナッチ数列になります。take() で 20 個の要素を取り出すと、イテレータを使って要素を取り出すことができます。drop() で 20 個の要素を取り除き、次に take() で 20 個の要素を取り出すと、そのあとのフィボナッチ数列を求めることができます。初期値は多倍長整数 (BigInt) で指定しているので、メモリの許す限り大きなフィボナッチ数でも求めることができます。
+</p>
+<h4>●遅延ストリームの連結</h4>
+<p> 次は、2 つの遅延ストリームを受け取って 1 つの遅延ストリームを返す関数を考えます。一番簡単な操作は 2 つの遅延ストリームを連結することです。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 遅延ストリームの連結
+
+function append(s1::LazyStream, s2::LazyStream)
+    if isempty(s1)
+        s2
+    else
+        @cons(head(s1), append(tail(s1), s2))
+    end
+end
+</pre>
+
+<p> 関数 append() はストリーム s1 と s2 を連結したストリームを返します。処理は簡単で、s1 の要素を順番に取り出していき、s1 が空になったら s2 を返すだけです。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; s1 = integers(1, 4)
+LazyStream(1, ?)
+
+julia&gt; s2 = integers(5, 8)
+LazyStream(5, ?)
+
+julia&gt; s3 = append(s1, s2)
+LazyStream(1, ?)
+
+julia&gt; for x = s3 println(x) end
+1
+2
+3
+4
+5
+6
+7
+8
+</pre>
+<p> 次は遅延ストリーム s1 と s2 の要素を交互に出力するストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの要素を交互に出力
+
+function interleave(s1::LazyStream, s2::LazyStream)
+    if isempty(s1)
+        s2
+    else
+        @cons(head(s1), interleave(s2, tail(s1)))
+    end
+end
+</pre>
+
+<p> 関数 interleave() はストリーム s1 と s2 を受け取ります。そして、s1 の要素を新しい遅延ストリームに格納したら、次は s2 の要素を新しい遅延ストリームに格納します。これはプロミスで interleave() を呼び出すとき、引数 s1 と s2 の順番を交換するだけです。このとき、s1 は tail() で次の要素を求めます。これで s1 と s2 の要素を交互に出力することができます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; s4 = interleave(s1, s2)
+LazyStream(1, ?)
+
+julia&gt; for x = s4 println(x) end
+1
+5
+2
+6
+3
+7
+4
+8
+</pre>
+
+<p> append() の場合、無限ストリームを連結することはできませんが、interleave() ならば無限ストリームにも対応することができます。簡単な例を示しましょう。
+</p>
+<pre>
+julia&gt; one_s = @cons 1 one_s
+LazyStream(1, ?)
+
+julia&gt; for x = take(one_s, 8) print("$x ") end
+1 1 1 1 1 1 1 1
+julia&gt; two_s = @cons 2 two_s
+LazyStream(2, ?)
+
+julia&gt; for x = take(two_s, 8) print("$x ") end
+2 2 2 2 2 2 2 2
+julia&gt; for x = take(interleave(one_s, two_s), 8) print("$x ") end
+1 2 1 2 1 2 1 2
+</pre>
+
+<p> one_s は 1 を無限に出力するストリームで、two_s は 2 を無限に出力するストリームです。append() で one_s と two_s を連結しても無限に 1 を出力するだけですが、interleave() で one_s と two_s を連結すれば、1 と 2 を交互に出力することができます。これで無限ストリームの要素を混ぜ合わせることができます。
+</p>
+
+<h4>●遅延ストリームの反転</h4>
+<p> 有限の遅延ストリームであれば、append() を使って遅延ストリームを反転する関数 reverse() を定義することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの反転
+
+function reverse(s::LazyStream)
+    if isempty(s)
+        nils
+    else
+        append(reverse(tail(s)), @cons(head(s), nils))
+    end
+end
+</pre>
+<p> reverse() は遅延ストリームを head() と tail() で分解して、残りの遅延ストリームを反転させてから先頭の要素を最後尾に追加することで実現できます。簡単なプログラムですが append() を使っているので、遅延ストリームが長くなると時間がかかるのが欠点です。また、遅延ストリームを末尾までたどるので、遅延ストリームに格納される要素はすべて生成されることに注意してください。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+julia&gt; s = integers(1, 10)
+LazyStream(1, ?)
+
+julia&gt; s1 = reverse(s)
+LazyStream(10, ?)
+
+julia&gt; for x = s1 print("$x ") end
+10 9 8 7 6 5 4 3 2 1
+</pre>
+<h4>●高階関数</h4>
+<p> 次は遅延ストリーム用の高階関数を作りましょう。
+</p>
+<pre class="list">
+リスト : 高階関数
+
+# マッピング
+function Base.map(func::Function, xs::LazyStream...)
+    if any(isempty, xs)
+        nils
+    else
+        @cons(func(map(head, xs)...), map(func, map(tail, xs)...))
+    end
+end
+
+# フィルター
+function Base.filter(pred::Function, s::LazyStream)
+    while !isempty(s)
+        if pred(head(s))
+            return @cons(head(s), filter(pred, tail(s)))
+        end
+        s = tail(s)
+    end
+    nils
+end
+
+# 畳み込み
+# foldl は Julia の関数で OK
+function Base.foldr(func::Function, s::LazyStream, a)
+    if isempty(s)
+        a
+    else
+        func(head(s), foldr(func, tail(s), a))
+    end
+end
+
+# 巡回
+function Base.foreach(func::Function, s::LazyStream)
+    for x = s func(x) end
+end
+</pre>
+<p> map() は引数の遅延ストリームの要素に関数 func を適用した結果を新しい遅延ストリームに格納して返します。map() は複数の遅延ストリームを受け取ることができます。filter() は述語 pred が真を返す要素だけを新しい遅延ストリームに格納して返します。
+</p>
+<p> foldr() は遅延ストリームに対して畳み込み処理を行います。foldl() は Julia の関数をそのまま使うことができます。foreach() は遅延ストリームの要素に関数 func を適用します。無限ストリームの場合、これらの関数は処理が終了しないので注意してください。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; s1 = unfold(x -&gt; x + 1, 1)
+LazyStream(1, ?)
+
+julia&gt; s2 = map(x -&gt; x * x, s1)
+LazyStream(1, ?)
+
+julia&gt; for x = take(s2, 10); print("$x "); end
+1 4 9 16 25 36 49 64 81 100
+
+julia&gt; s3 = filter(iseven, s1)
+LazyStream(2, ?)
+
+julia&gt; for x = take(s3, 10); print("$x "); end
+2 4 6 8 10 12 14 16 18 20
+
+julia&gt; foldl(+, integers(1, 100))
+5050
+
+julia&gt; foldr(+, integers(1, 100), 0)
+5050
+
+julia&gt; foreach(println, integers(1, 10))
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre>
+<p> 変数 s1 に 1 から始まる整数列を生成する遅延ストリームをセットします。次に、s1 の要素を 2 乗する遅延ストリームを map() で生成して変数 s2 にセットします。take() で s2 から要素を 10 個取り出すと、s1 の要素を 2 乗した値になります。
+</p>
+<p> s1 から偶数列の遅延ストリームを得るには、引数が偶数のときに真を返す関数 iseven() を filter() に渡します。その返り値を変数 s3 にセットして、take() で 10 個の要素を取り出すと、リストの要素は 2 から 20 までの値になります。
+</p>
+<p> integers() で有限個の遅延ストリームを生成すると畳み込みを行うことができます。foldl() と foldr() で要素の合計値を求めると 5050 になります。もちろん、foreach() も正常に動作します。
+</p>
+<h4>●map() の便利な使い方</h4>
+<p> map() は複数の遅延ストリームを受け取ることができるので、それらの遅延ストリームに対していろいろな処理を定義することができます。次の例を見てください。
+</p>
+<pre>
+julia&gt; addstream(s1, s2) = map(+, s1, s2)
+addstream (generic function with 1 method)
+
+julia&gt; s1 = integers(1, 4)
+LazyStream(1, ?)
+
+julia&gt; s2 = integers(11, 14)
+LazyStream(11, ?)
+
+julia&gt; s5 = addstream(s1, s2)
+LazyStream(12, ?)
+
+julia&gt; foreach(println, s5)
+12
+14
+16
+18
+</pre>
+<p> addstream() は s1 と s2 の要素を加算した遅延ストリームを返します。この addstream() を使うと、整数を生成する遅延ストリームは次のように定義することができます。
+</p>
+<pre>
+julia&gt; one_s = @cons 1 one_s
+LazyStream(1, ?)
+
+julia&gt; int_s = @cons 1 addstream(one_s, int_s)
+LazyStream(1, ?)
+
+julia&gt; foreach(println, take(int_s, 10))
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+
+julia&gt; fibo_s = @cons(0, @cons(1, addstream(tail(fibo_s), fibo_s)))
+LazyStream(0, ?)
+
+julia&gt; foreach(println, take(fibo_s, 10))
+0
+1
+1
+2
+3
+5
+8
+13
+21
+34
+</pre>
+<p> 遅延ストリーム int_s は、int_s に 1 を足し算することで整数を生成しています。fibo_s は tail(fibo_s) で次の要素を求め、それと fibo_s を足し算することで、その次の要素を求めています。この場合、ストリームの初期値として 2 つの要素が必要になることに注意してください。
+</p>
+<h4>●遅延ストリームの平坦化</h4>
+<p> 次は高階関数 flatmap() を作りましょう。flatmap() は map() の結果を平坦化する関数で、具体的には map() が返す遅延ストリームの要素を append() で連結する動作になります。ところが、append() を使うと問題が発生します。
+</p>
+<pre class="list">
+リスト : flatmap() の定義 (間違い)
+
+function flatmap_bad(func, s::LazyStream)
+    if isempty(s)
+        s
+    else
+        append(func(head(s)), flatmap_bad(func, tail(s)))
+    end
+end
+</pre>
+<p> Julia の関数は正格評価なので、append() を実行する前に引数が評価されます。つまり、flatmap() の評価は遅延されるのではなく、遅延ストリームが空になるまで flatmap() が再帰呼び出しされるのです。これでは無限ストリームに対応することができません。
+</p>
+<p> そこで、引数を遅延評価する関数 append_delay() を作ることにします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : append_delay() と flatmap()
+
+# 遅延ストリームの連結 (遅延評価版)
+function append_delay(s1::LazyStream, s2::Promise)
+    if isempty(s1)
+        force(s2)
+    else
+        @cons(head(s1), append_delay(tail(s1), s2))
+    end
+end
+
+# マッピングの結果を平坦化する
+function flatmap(func::Function, s::LazyStream)
+    if isempty(s)
+        s
+    else
+        append_delay(func(head(s)), @delay flatmap(func, tail(s)))
+    end
+end
+</pre>
+<p> append_delay() は append() とほぼ同じですが、遅延ストリーム s1 が空になったらプロミス s2 を force() で評価するところが異なります。flatmap() では、appned() のかわりに append_delay() を使います。このとき、@delay で生成したプロミスを引数に渡します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+julia&gt; s1 = unfold(x -&gt; x + 1, 1)
+LazyStream(1, ?)
+
+julia&gt; s2 = flatmap(x -&gt; integers(0, x), s1)
+LazyStream(0, ?)
+
+julia&gt; foreach(x -&gt; print("$x "), take(s2, 30))
+0 1 0 1 2 0 1 2 3 0 1 2 3 4 0 1 2 3 4 5 0 1 2 3 4 5 6 0 1 2
+</pre>
+<p> s1 は無限ストリームになりますが、flatmap() は正常に動作していますね。
+</p>
+<h4>●takewhile() と dropwhile()</h4>
+<p> 次は、遅延ストリームの先頭から関数が真を返す要素を取り出す takewhile() と要素を取り除く dropwhile() を作ります。
+</p>
+<pre class="list">
+リスト : takewhile() と dropwhile()
+
+# 関数 pred が真を返す間、先頭から要素を取り出す
+function takewhile(pred, s::LazyStream)
+    if isempty(s) || !pred(head(s))
+        nils
+    else
+        @cons(head(s), takewhile(pred, tail(s)))
+    end
+end
+
+# 関数 pred が真を返す間、先頭から要素を取り除く
+function dropwhile(pred, s::LazyStream)
+    while !isempty(s) && pred(head(s))
+        s = tail(s)
+    end
+    s
+end
+</pre>
+<p> どちらの関数も難しいところはないと思います。簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; s1 = unfold(x -&gt; x + 1, 1)
+LazyStream(1, ?)
+
+julia&gt; s2 = takewhile(x -&gt; x &lt; 10, s1)
+LazyStream(1, ?)
+
+julia&gt; foreach(println, s2)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+julia&gt; s3 = dropwhile(x -&gt; x &lt; 10, s1)
+LazyStream(10, ?)
+
+julia&gt; foreach(println, take(s3, 10))
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre>
+<h4>●組 (pair) を生成するストリーム</h4>
+<p> それでは簡単な例題として、2 つのストリームからその要素の組 (pair) を生成するストリームを作りましょう。要素が n 個のストリームの場合、組の総数は n * n 個あります。次の図を見てください。
+<pre class="fig">
+(a0, b0) (a0, b1) (a0, b2) ... (a0, bn)
+(a1, b0) (a1, b1) (a1, b2) ... (a1, bn)
+(a2, b0) (a2, b1) (a2, b2) ... (a2, bn)
+
+                           ...
+
+(an, b0) (an, b1) (an, b2) ... (an, bn)
+
+        図 : n * n 個の組
+</pre>
+<p> これは「直積集合 (direct product)」を求めることと同じです。遅延ストリームが有限とすると、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 直積集合 (有限)
+
+function product(s1::LazyStream, s2::LazyStream)
+    flatmap(x -&gt; map(y -&gt; (x, y), s2), s1)
+end
+</pre>
+<p> map() と flatmap() を使えば簡単に組を生成することができます。簡単な実行例を示しましょう。
+</p>
+<pre>
+julia&gt; s1 = tolazy(1:5)
+LazyStream(1, ?)
+
+julia&gt; s2 = tolazy(6:10)
+LazyStream(6, ?)
+
+julia&gt; s3 = product(s1, s2)
+LazyStream((1, 6), ?)
+
+julia&gt; foreach(print, s3)
+(1, 6)(1, 7)(1, 8)(1, 9)(1, 10)
+(2, 6)(2, 7)(2, 8)(2, 9)(2, 10)
+(3, 6)(3, 7)(3, 8)(3, 9)(3, 10)
+(4, 6)(4, 7)(4, 8)(4, 9)(4, 10)
+(5, 6)(5, 7)(5, 8)(5, 9)(5, 10)
+</pre>
+<h4>●無限ストリームで組を生成する</h4>
+<p> ところで、product() は無限ストリームに対応していません。実際、引数 s2 に無限ストリームを渡した場合、引数 s1 の最初の要素を a0 とすると (a0, s2 の要素) という組しか生成されません。そこで、下図に示すように、対角線上に組を生成していくことにします。
+<pre class="fig">
+   | a0  a1  a2  a3  a4  a5
+---+-----------------------------
+b0 | 1   2   4   7   11  16  ...
+   |
+b1 | 3   5   8   12  17  ...
+   |
+b2 | 6   9   13  18  ...
+   |
+b3 | 10  14  19  ...
+   |
+b4 | 15  20  ...
+   |
+b5 | 21 ...
+   |
+   | ...
+   |
+
+図 : 無限ストリームによる組の生成
+</pre>
+<p> 図を見ればおわかりのように、対角線の要素数を n とすると、組は (an-1, b0), (an-2, b1), ..., (a1, bn-2), (a0, bn-1) となっています。これは、s1 から n 個の要素を取り出したストリームの要素と、s2 から n 個の要素を取り出して反転したストリームの要素を、タプルにまとめた形になっています。これをプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 直積集合 (無限)
+
+function product_inf(s1::LazyStream, s2::LazyStream, n = 1)
+    append_delay(map((x, y) -&gt; (x, y), take(s1, n), reverse(take(s2, n))),
+                 @delay product_inf(s1, s2, n + 1))
+end
+</pre>
+<p> 関数 product_inf() の引数 n が対角線上の要素数を表します。take() で s1 と s2 から遅延ストリーム取り出し、s2 から取り出した遅延ストリームを reverse() で反転します。そして、2 つの遅延ストリームの要素を map() でタプルに格納します。あとは、次の対角線を product_inf() で生成し、append_delay() で連結するだけです。これで組を対角線上の順番で生成することができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+julia&gt; s = unfold(x -&gt; x + 1, 1)
+LazyStream(1, ?)
+
+julia&gt; s1 = product_inf(s, s)
+LazyStream((1, 1), ?)
+
+julia&gt; foreach(print, take(s1, 55))
+(1, 1)
+(1, 2)(2, 1)
+(1, 3)(2, 2)(3, 1)
+(1, 4)(2, 3)(3, 2)(4, 1)
+(1, 5)(2, 4)(3, 3)(4, 2)(5, 1)
+(1, 6)(2, 5)(3, 4)(4, 3)(5, 2)(6, 1)
+(1, 7)(2, 6)(3, 5)(4, 4)(5, 3)(6, 2)(7, 1)
+(1, 8)(2, 7)(3, 6)(4, 5)(5, 4)(6, 3)(7, 2)(8, 1)
+(1, 9)(2, 8)(3, 7)(4, 6)(5, 5)(6, 4)(7, 3)(8, 2)(9, 1)
+(1, 10)(2, 9)(3, 8)(4, 7)(5, 6)(6, 5)(7, 4)(8, 3)(9, 2)(10, 1)
+</pre>
+<p> 表示は手作業で整形しています。正常に動作していますね。
+</p>
+<h4>●格子点の生成</h4>
+<p> 平面や空間などの座標において、各成分がすべて整数であるような点を「格子点 (lattice point)」といいます。たとえば、二次元の座標 (x, y) で x と y の範囲が有限であれば、格子点は直積集合で求めることができます。x と y が無限の場合、直積集合と同様に対角線上に格子点を生成していくことになります。
+</p>
+<p> 二次元において、0 から無限大の格子点を生成するプログラムは unfold() だけで定義することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 二次元の格子点
+
+lattice2() = unfold(st -&gt; st[1] == 0 ? (st[2] + 1, 0) : (st[1] - 1, st[2] + 1), (0, 0))
+</pre>
+<p> unfold() の初期値は (0, 0) です。対角線上に格子点 (x, y) を出力すると、(0, 0), (1, 0), (0, 1), (2, 0), (1, 1), (0, 2), ... となります。n 番目の対角線の場合は (n, 0), (n - 1, 1), ... (1, n - 1), (0, n) になるので、(x - 1, y + 1) で次の項を生成することができます。(0, n) を出力したら次の対角線 (n + 1) に移ります。これは (x, y) を (y + 1, 0) にするだけです。
+</p>
+<p> それでは実際に試してみましょう。
+<pre>
+julis&gt; s = lattice2()
+LazyStream((0, 0), ?)
+
+julis&gt; foreach(print, take(s, 55))
+(0, 0)
+(1, 0)(0, 1)
+(2, 0)(1, 1)(0, 2)
+(3, 0)(2, 1)(1, 2)(0, 3)
+(4, 0)(3, 1)(2, 2)(1, 3)(0, 4)
+(5, 0)(4, 1)(3, 2)(2, 3)(1, 4)(0, 5)
+(6, 0)(5, 1)(4, 2)(3, 3)(2, 4)(1, 5)(0, 6)
+(7, 0)(6, 1)(5, 2)(4, 3)(3, 4)(2, 5)(1, 6)(0, 7)
+(8, 0)(7, 1)(6, 2)(5, 3)(4, 4)(3, 5)(2, 6)(1, 7)(0, 8)
+(9, 0)(8, 1)(7, 2)(6, 3)(5, 4)(4, 5)(3, 6)(2, 7)(1, 8)(0, 9)
+</pre>
+<p> 次は lattice2() を一般化して、d 次元の格子点を生成する関数 lattice(d) を考えてみましょう。二次元の場合、同じ対角線上にある格子点 (x, y) は x + y の値が同じになりますね。d 次元の場合、座標 (x, y, z, ...) の合計値を基準に考えればよさそうです。たとえば、三次元の場合は次のようになります。
+</p>
+<pre class="fig">
+ n |     0     |     1     |     2     
+---+-----------+-----------+------------
+   | (0, 0, 0) | (0, 0, 1) | (0, 0, 2) 
+               | (0, 1, 0) | (0, 1, 1) 
+               | (1, 0, 0) | (0, 2, 0) 
+                           | (1, 0, 1) 
+                           | (1, 1, 1) 
+                           | (1, 1, 0) 
+                           | (2, 0, 0) 
+</pre>
+<p> これは笹川さんの twitter と MARUYAMA Satosi さんのページ <a href="http://www.ne.jp/asahi/music/marinkyo/funkcio/haskell.html.ja">関数型言語 Haskell</a> を参考にさせていただきました。お二人は参考文献に向井淳氏の「入門Haskell―はじめて学ぶ関数型言語」をあげておられます。有益な情報を Web 上で公開されている笹川さんと MARUYAMA Satosi さんに感謝いたします。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : d 次元格子点の生成
+
+function lattice_sub(d::Int, n::Int)
+    if d == 1
+        @cons((n,), nils)
+    elseif n == 0
+        @cons(Tuple(zeros(Int, d)), nils)
+    else
+        flatmap(x -&gt; map(xs -&gt; (x, xs...), lattice_sub(d - 1, n - x)), tolazy(0 : n))
+    end
+end
+
+function lattice(d::Int)
+    flatmap(n -&gt; lattice_sub(d, n), unfold(x -&gt; x + 1, 0))
+end
+</pre>
+<p> 実際の処理は関数 lattice_sub(d, n) で行います。d が次元を、n が要素の合計値を表します。d が 1 のとき、合計値は n しかありません。(n,) を格納した遅延ストリームを返します。n が 0 のときは、d 個の 0 を格納したタプルを生成し、それを遅延ストリームに格納して返します。そうでなければ、先頭の要素 x を 0 から n まで順番に選び、d - 1 次元の格子点を lattice_sub(d - 1, n - x) で生成します。あとは latticd() で 0 から始まる無限整数列を生成し、lattice_sub() を呼び出すだけです。
+</p>
+<p> それでは実行してみましょう。
+<pre>
+julis&gt; s1 = lattice(1)
+LazyStream((0,), ?)
+
+julis&gt; foreach(print, take(s1, 60))
+(0,)(1,)(2,)(3,)(4,)(5,)(6,)(7,)(8,)(9,)(10,)(11,)(12,)(13,)(14,)(15,)(16,)(17,)(18,)(19,)
+(20,)(21,)(22,)(23,)(24,)(25,)(26,)(27,)(28,)(29,)(30,)(31,)(32,)(33,)(34,)(35,)(36,)(37,)(38,)(39,)
+(40,)(41,)(42,)(43,)(44,)(45,)(46,)(47,)(48,)(49,)(50,)(51,)(52,)(53,)(54,)(55,)(56,)(57,)(58,)(59,)
+
+julis&gt; s2 = lattice(2)
+LazyStream((0, 0), ?)
+
+julis&gt; foreach(print, take(s2, 60))
+(0, 0)(0, 1)(1, 0)(0, 2)(1, 1)(2, 0)(0, 3)(1, 2)(2, 1)(3, 0)(0, 4)(1, 3)(2, 2)(3, 1)(4, 0)(0, 5)
+(1, 4)(2, 3)(3, 2)(4, 1)(5, 0)(0, 6)(1, 5)(2, 4)(3, 3)(4, 2)(5, 1)(6, 0)(0, 7)(1, 6)(2, 5)(3, 4)
+(4, 3)(5, 2)(6, 1)(7, 0)(0, 8)(1, 7)(2, 6)(3, 5)(4, 4)(5, 3)(6, 2)(7, 1)(8, 0)(0, 9)(1, 8)(2, 7)
+(3, 6)(4, 5)(5, 4)(6, 3)(7, 2)(8, 1)(9, 0)(0, 10)(1, 9)(2, 8)(3, 7)(4, 6)
+
+julis&gt; s3 = lattice(3)
+LazyStream((0, 0, 0), ?)
+
+julis&gt; foreach(print, take(s3, 60))
+(0, 0, 0)(0, 0, 1)(0, 1, 0)(1, 0, 0)(0, 0, 2)(0, 1, 1)(0, 2, 0)(1, 0, 1)(1, 1, 0)(2, 0, 0)(0, 0, 3)
+(0, 1, 2)(0, 2, 1)(0, 3, 0)(1, 0, 2)(1, 1, 1)(1, 2, 0)(2, 0, 1)(2, 1, 0)(3, 0, 0)(0, 0, 4)(0, 1, 3)
+(0, 2, 2)(0, 3, 1)(0, 4, 0)(1, 0, 3)(1, 1, 2)(1, 2, 1)(1, 3, 0)(2, 0, 2)(2, 1, 1)(2, 2, 0)(3, 0, 1)
+(3, 1, 0)(4, 0, 0)(0, 0, 5)(0, 1, 4)(0, 2, 3)(0, 3, 2)(0, 4, 1)(0, 5, 0)(1, 0, 4)(1, 1, 3)(1, 2, 2)
+(1, 3, 1)(1, 4, 0)(2, 0, 3)(2, 1, 2)(2, 2, 1)(2, 3, 0)(3, 0, 2)(3, 1, 1)(3, 2, 0)(4, 0, 1)(4, 1, 0)
+(5, 0, 0)(0, 0, 6)(0, 1, 5)(0, 2, 4)(0, 3, 3)
+
+julis&gt; s4 = lattice(4)
+LazyStream((0, 0, 0, 0), ?)
+
+julis&gt; foreach(print, take(s4, 60))
+(0, 0, 0, 0)(0, 0, 0, 1)(0, 0, 1, 0)(0, 1, 0, 0)(1, 0, 0, 0)(0, 0, 0, 2)(0, 0, 1, 1)(0, 0, 2, 0)
+(0, 1, 0, 1)(0, 1, 1, 0)(0, 2, 0, 0)(1, 0, 0, 1)(1, 0, 1, 0)(1, 1, 0, 0)(2, 0, 0, 0)(0, 0, 0, 3)
+(0, 0, 1, 2)(0, 0, 2, 1)(0, 0, 3, 0)(0, 1, 0, 2)(0, 1, 1, 1)(0, 1, 2, 0)(0, 2, 0, 1)(0, 2, 1, 0)
+(0, 3, 0, 0)(1, 0, 0, 2)(1, 0, 1, 1)(1, 0, 2, 0)(1, 1, 0, 1)(1, 1, 1, 0)(1, 2, 0, 0)(2, 0, 0, 1)
+(2, 0, 1, 0)(2, 1, 0, 0)(3, 0, 0, 0)(0, 0, 0, 4)(0, 0, 1, 3)(0, 0, 2, 2)(0, 0, 3, 1)(0, 0, 4, 0)
+(0, 1, 0, 3)(0, 1, 1, 2)(0, 1, 2, 1)(0, 1, 3, 0)(0, 2, 0, 2)(0, 2, 1, 1)(0, 2, 2, 0)(0, 3, 0, 1)
+(0, 3, 1, 0)(0, 4, 0, 0)(1, 0, 0, 3)(1, 0, 1, 2)(1, 0, 2, 1)(1, 0, 3, 0)(1, 1, 0, 2)(1, 1, 1, 1)
+(1, 1, 2, 0)(1, 2, 0, 1)(1, 2, 1, 0)(1, 3, 0, 0)
+</pre>
+<p> 正常に動作していますね。
+</p>
+<ul>
+  <li><a href="juliaa09a.html">後編へ</a>
+</ul>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li><a href="https://sicp.iijlab.net/fulltext/">計算機プログラムの構造と解釈 (第二版)</a> <a href="https://sicp.iijlab.net/fulltext/x350.html">3.5 ストリーム</a>
+  <li><a href="http://practical-scheme.net/gauche/man/gauche-refj/Chi-Yan-Ping-Jia-.html#g_t_9045_5ef6_8a55_4fa1">Gauche ユーザリファレンス: 6.19 遅延評価</a>
+</ol>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016-2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

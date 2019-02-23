@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881785</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm42.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm44.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>ミニマックス法と三目並べ</h3>
+<p> 今回は囲碁や将棋のように 2 人が交互に 1 手ずつ指していくゲームを取り上げます。コンピュータにゲームの相手をさせる場合、コンピュータの指し手を決定するためのプログラム、いわゆる「思考ルーチン」が必要になります。この思考ルーチンで使われる基本的なアルゴリズムが「ミニマックス法 (mini-max method) 」です。難しそうな名前がついていますが、ミニマックス法は基本的には深さ優先探索と同じです。拙作のページ <a href="abcscm17.html">集合、グラフ、経路の探索</a> で説明した基本的な探索アルゴリズムを理解していれば、それほど難しい話ではありません。
+</p>
+
+<p> そうはいっても、実際のゲームで強い思考ルーチンを作成するのは簡単な話ではありません。チェスや将棋などに比べると、リバーシの思考ルーチンは簡単だといわれています。ところが、実際にプログラムしてみると強い思考ルーチンを作るのは本当に難しい、というのが M.Hiroi の実感です。それでも、リバーシは終盤になると最後まで読み切ることができるので、初心者や初級者レベルよりも強いプログラムを作るのは比較的簡単なほうでしょう。
+</p>
+
+<p> 今回は思考ゲームの基本とミニマックス法について説明します。そして、簡単なゲームである「三目並べ」の勝敗結果 (先手必勝、後手必勝、引き分け) をミニマックス法で調べてみましょう。最初に思考ゲームの基本とミニマックス法について説明します。なお、この説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo24.html">ミニマックス法とアルファベータ法</a> と同じです。読んだことがある方や思考ゲームついて理解されている方は読み飛ばしてもらってもかまいません。
+</p>
+<p> <a href="abcscm43.html#next_chap">次へ</a>
+</p>
+<h4>●ゲームの木</h4>
+<p> 二人で対戦するゲームの場合、ゲームの進行状況は盤面の状態で表すことができます。指し手が進むにつれて盤面の状態は変化し、最後にはゲームが終了します。このようなゲームでは、その状態の変化を木構造に対応させることができます。これを「ゲームの木 (game tree) 」といいます。
+</p>
+
+<p> たとえば、「エイト」というゲームを考えてみます。このゲームのルールは、2 人のプレーヤーが 1 から 3 までの数字を交互に選び、2 人が選んだ数の合計が 8 になったら勝ち、8 を越えたら負けになります。数字の選び方には条件があって、一番最初は好きな数字を選ぶことができますが、それ以降は前回相手が選んだ数を選ぶことはできません。このゲームの木は、手作業でも簡単に作成することができます。下図にゲームの木の一部を示します。
+</p>
+<pre class="fig">
+                                         root
+                                        ／│＼
+    先手                              １  ２  ３
+                                        ／  ＼
+    後手                              １(3)   ３(5)
+                                    ／  ＼
+                                  ／      ＼
+                                ／          ＼
+                              ／              ＼
+                            ／                  ＼
+    先手                  ２(5)                   ３(6)
+                        ／  ＼                  ／  ＼
+                      ／      ＼              ／      ＼
+    後手            １(6)       ３(8)       １(7)       ２(8)
+                  ／  ＼        ●        ／  ＼        ●
+    先手        １(7)   ３(9)           ２(9)   ３(10)
+              ／  ＼    ●              ●      ●
+    後手    ２(9)   ３(10)
+            ○      ○
+                                ○：先手勝ち  ●：後手勝ち
+
+
+                    図 : ゲームの木（一部）
+</pre>
+
+<p> 先手は最初に 1 から 3 の中の好きな数字を選ぶことができます。この木は、最初に先手が 2 を選び、次に後手が 1 を選んだ状態のゲームの木を示しています。数字の合計が 8 以上になったらゲームは終了です。木の高さはたかだか 6 レベルしかないので、エイトはとても簡単なゲームであることがわかります。
+</p>
+
+<p> エイトのように、ゲーム開始から終了までの「ゲームの木」を作成できれば完璧な指し手を実現できます。ところが一般のゲームでは、ある局面で可能な指し手は多数あるので、ゲームの木はとても大きくなります。このため、完全なゲームの木を作成することは不可能です。
+</p>
+
+<p> そこで、不完全ですが数レベル分の木を作成します。つまり、数手先読みするわけです。先読みした局面の状態は、ほとんどが勝ちでも負けでもない曖昧なものです。ここで、その局面の状態を評価して、自分が有利であれば 50 点とか不利であれば -10 点という具合に、局面の状態を数値化します。この処理を行う関数を「評価関数」といいます。とりあえず勝ち負けはわかりませんが、この評価値が高くなるように、つまり自分が有利になるように指し手を進めていくわけです。
+</p>
+
+<p> もしも、完璧な評価関数がわかれば、その局面の状態から最善手がわかることになり、わざわざ木を探索する必要はありません。ところが、一般のゲームは状況がとても複雑なので、局面を正確に評価することは至難の技です。計算した評価値はどうしても適当なものになってしまいます。そこで、これを補うために「ミニマックス法」という手法を使います。
+</p>
+
+<p> ミニマックス法の考え方はそれほど難しいものではありません。自分にとって良い指し手は相手にとって都合が悪く、逆もまたそうであるという仮説に基づいたアルゴリズムです。ゲームの木を何層か探索して、その局面を評価することは同じですが、「相手は自分に取って最悪の指し手を選択する」と仮定するところが、このアルゴリズムのポイントです。つまり、自分の指し手では評価値が最大になるように選択し、相手の指し手では評価値が最小になるように選択するのです。これが「ミニマックス」という名前の由来です。
+</p>
+
+<p> ひらたくいえば、相手の手を先読みして自分の手を決めるということです。たとえば将棋の場合でも、駒の動かし方がわかる程度の初心者では相手の手を読むことは難しいですが、慣れてくると 2 手 3 手程度の先読みはできるようになります。これがプロ棋士になると、十数手から二十手前後まで考えるというのですから驚きです。
+</p>
+
+<p> ミニマックス法を使う場合でも、評価関数が適切なものであれば、ゲームの木を深く探索するほど正確な評価値を求めることができるようになります。ただし、木を深いレベルまで探索しようとすると、特に囲碁や将棋のような一つの局面で有効な指し手が多数あるゲームでは、木の枝が多数分岐するので、探索のために消費するメモリと時間が膨大なものになってしまいます。
+</p>
+
+<p> これを防ぐために「アルファベータ法」という方法を用いたり、ほかにもさまざまな工夫を行うことで無駄な木の探索を極力省くようにします。それでもハードウェアの限界により、ある程度のレベルで探索を打ち切ることになります。また、持ち時間が設定されている場合は、それも考慮して探索レベルを決める必要があります。
+</p>
+
+<h4>●ミニマックス法</h4>
+<p> それでは、具体的にミニマックス法を説明しましょう。ここでは、簡単な仮想ゲームを考えてみます。このゲームは、先手後手とも指し手は常に 2 通りあって、そのうちの一つを選ぶことでゲームが進行します。
+</p>
+
+<p> ミニマックス法を使う場合、局面の評価値が必要になります。評価関数は、先手が有利（後手が不利）な局面ほど大きな値（正の値）、逆に後手が有利（先手が不利）なほど小さな値（負の値）、互角の場合は 0 になるように作るのが一般的です。
+</p>
+
+<p> 探索のレベルは、先手－後手－先手の 3 手先まで読むことにします。先手の局面 R を探索すると、下図に示すゲームの木になりました。
+</p>
+
+<pre class="fig">
+                       Ｒ                        先手の局面
+                     ／  ＼
+                   ／      ＼
+                 ／          ＼
+               ／              ＼
+             ／                  ＼
+           Ａ(3)                   Ｂ(2)         後手の局面
+         ／  ＼                  ／  ＼
+       ／      ＼              ／      ＼
+     Ｃ(3)       Ｄ(4)       Ｅ(2)       Ｆ(5)   先手の局面
+   ／  ＼      ／  ＼      ／  ＼      ／  ＼
+ Ｇ      Ｈ  Ｉ      Ｊ  Ｋ      Ｌ  Ｍ      Ｎ  後手の局面
+
+ １      ３  ４      ２  ２      １  ３      ５  評価値
+
+
+              図 : ミニマックス法
+</pre>
+
+<p> 評価値は最も深いレベル、この場合は 3 手指した後手の局面で計算します。3 レベルまで探索すると 8 通りの評価値が計算されますが、この評価値を使って、A と B のどちらの手を指すかミニマックス法で決定します。
+</p>
+
+<p> R - A - C の局面に注目してください。この局面では、先手は 2 通りの指し手があり、それぞれ G と H という局面になります。この局面の評価値を計算すると、それぞれ 1 と 3 になります。ここでは先手の手番ですから、評価値が最大になるような指し手を選択します。したがって、局面 C の評価値は 3 に定まります。
+</p>
+
+<p> 同様に R - A - D の局面を計算すると、局面 D の評価値は 4 になります。局面 C と D の評価値が決まったので、局面 A の評価値を決めることができます。局面 A は後手の手番ですから、今度は評価値が最小になるような指し手を選びます。局面 C と D の小さい方を選ぶので、局面 A の評価値は 3 になります。
+</p>
+
+<p> 同様に局面 B の評価値を求めると 2 になります。局面 R は先手の手番なので、評価値の大きい指し手を選びます。この場合は、A が有利であることがわかります。このように、先手番では評価値が最大値となる指し手を選び、後手番では評価値が最小値となる指し手を選ぶことで、指し手を決定する方法がミニマックス法なのです。
+</p>
+
+<p> ただし、ミニマックス法で選んだ指し手が最善手である保証はありません。この例では、ゲームの木を 3 レベル探索して A を選びましたが、もう一段深く探索してみると B の方が有利だった、ということもありえます。ようするに、3 手先までは読んでいたが、その先の手は読んでいなかった、ということです。これは私達がゲームをプレイする場合でもあることですね。
+</p>
+
+<p> もしも、ゲームの木を最後まで探索できれば、最善手を指すことができます。たとえば、リバーシは終盤になると最後まで読み切ることが可能なゲームです。この状態になるとコンピュータは最善手を指してきます。コンピュータリバーシの得意技「終盤の大逆転」は、ゲームの木を最後まで読み切るからこそできることなのです。
+</p>
+<h4 id="next_chap">●三目並べ</h4>
+<p> 三目並べは皆さんお馴染みの二人で対戦するゲームです。ひとりが○側でもうひとりが×側を受け持ち、3 行 3 列のマス目に○×を書いて、3 つ並べた方が勝ちというゲームです。
+</p>
+<pre class="fig">
+ ┌─┬─┬─┐ 
+ │×│○│○│ 
+ ├─┼─┼─┤ 
+ │○│○│×│ 
+ ├─┼─┼─┤ 
+ │×│×│○│ 
+ └─┴─┴─┘ 
+
+  図 : 三目並べ
+</pre>
+<p> 上図は○側が先手で引き分けになった例です。三目並べは、両者が最善を尽くすと引き分けになることが知られています。本当に引き分けになるのか、プログラムを作って確かめてみましょう。
+</p>
+
+<p> 三目並べは簡単なゲームなので、ゲーム終了まで読み切ることができます。局面の状態は、○側の勝ち、×側の勝ち、引き分けの 3 通りしかありません。あとは、ミニマックス法により最善手を選択させ、その結果を求めればいいわけです。
+</p>
+<p> とりあえず、プログラムでは指し手を保存しないで、評価値の結果だけを出力することにします。初手をどこに選んでも、引き分けの評価値が出力されるはずです。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作ります。最初に大域変数とアクセス関数を定義します。
+</p>
+<pre class="fig">
+ ┌─┬─┬─┐ 
+ │０│１│２│ 
+ ├─┼─┼─┤ 
+ │３│４│５│ 
+ ├─┼─┼─┤ 
+ │６│７│８│ 
+ └─┴─┴─┘ 
+
+図 : 盤面の番号
+</pre>
+<pre class="list">
+リスト : 大域変数とアクセス関数の定義
+
+; 定数
+(define SIZE  9)
+(define MARU  1)
+(define DRAW  0)
+(define BATU -1)
+(define MAX-VALUE  2)
+(define MIN-VALUE -2)
+
+; 盤面 : #f space, O maru, X batu
+(define *board* (make-vector SIZE #f))
+
+; 直線
+(define *lines* #(((1 2) (3 6) (4 8))       ; 0
+                  ((0 2) (4 7))             ; 1
+                  ((0 1) (5 8) (4 6))       ; 2
+                  ((0 6) (4 5))             ; 3
+                  ((1 7) (3 5) (0 8) (2 6)) ; 4
+                  ((2 8) (3 4))             ; 5
+                  ((0 3) (2 4) (7 8))       ; 6
+                  ((1 4) (6 8))             ; 7
+                  ((0 4) (2 5) (6 7))))     : 8
+
+; アクセス関数
+(define (get-piece n)    (vector-ref *board* n))
+(define (put-piece! n p) (vector-set! *board* n p))
+(define (del-piece! n)   (vector-set! *board* n #f))
+</pre>
+<p> 盤面はベクタ *board* で表します。先手 ○ をシンボル O で、後手 × をシンボル X で、空き場を #f で表します。*board* のアクセスは関数 get-piece, put-piece!, del-piece! で行います。盤面の場所とベクタの対応は、上図のように定義します。駒を置いた場所から直線を求めるためベクタ *lines* を定義します。たとえば、場所 0 が属する直線は 3 本あって、残り 2 か所の場所は (1 2), (3 6), (4 8) となります。
+</p>
+<h4>●勝敗の判定</h4>
+<p> 勝敗を判定するプログラムは *lines* を使うと簡単にプログラムできます。
+</p>
+
+<pre class="list">
+リスト : 勝敗の判定
+
+; p と同じ駒が 3 つ並ぶか
+(define (check-line p a b)
+  (and (eq? (get-piece a) p)
+       (eq? (get-piece b) p)
+       p))
+
+; 勝敗の判定
+(define (win? n p)
+  (let loop ((ls (vector-ref *lines* n)))
+    (if (null? ls)
+        DRAW
+      (case (apply check-line p (car ls))
+        ((O) MARU)
+        ((X) BATU)
+        (else (loop (cdr ls)))))))
+</pre>
+
+<p> 関数 win? は駒 p を場所 n に置いたときに勝負が決まるか調べます。*lines* から n が属する直線を順番に取り出して、関数 check-line で p と同じ駒が 3 つ並ぶかチェックします。check-line の返り値が O ならば、先手が勝ちなので MARU (1) を返します。X ならば後手が勝ちなので BATU (-1) を返します。同じ駒が 3 つ並んでいなければ DRAW (0) を返します。
+</p>
+<p> 三目並べの場合、ゲーム終了まで読み切ることができるので、評価値は、勝ち、負け、引き分けの 3 つで十分です。ただし、この関数はゲームの途中でも DRAW を返しますので、引き分けの判定には注意が必要です。これはあとで説明します。
+</p>
+<h4>●先手の指し手</h4>
+<p> 次は、先手 (○) の指し手を決める think-maru を作ります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 先手の指し手
+
+(define (think-maru ls)
+  (let loop ((xs ls) (value MIN-VALUE))
+    (if (null? xs)
+        value
+      (let* ((x (car xs))
+             (v (win? x 'O)))
+        (cond ((and (= v DRAW)
+                    (pair? (cdr ls)))
+               (put-piece! x 'O)
+               (set! v (think-batu (remove-item x ls)))
+               (del-piece! x)))
+        (cond ((= v MARU) MARU)
+              (else
+               (loop (cdr xs) (if (&gt; v value) v value))))))))
+</pre>
+
+<p> think-maru は先手が有利になる指し手、つまり、評価値が大きい手を選べばいいわけです。引数 ls は空き場所を格納したリストです。選んだ指し手の評価値は value に格納します。MIN-VALUE は BATU よりも小さな値にします。この値は、まだ指し手を選んでいないことを表します。
+</p>
+<p> 次に、リスト xs から空き場所 x を取り出して、そこに O を置くと勝つことができるか win? を呼び出してチェックします。評価値 v が DRAW で、盤面にまだ駒が置ける状態であればゲームは終了していません。(cdr ls) が空リストでなければゲーム続行、そうでなければ引き分けです。ゲームを続行する場合は、場所 x に O を書き込んでから、関数 think-batu を呼び出して手番を相手に移します。そのあと、del-piece! で場所 x の O を取り除きます。
+</p>
+
+<p> ミニマックス法による指し手の決定は簡単です。先手は評価値が大きい手を選べばいいのですから、v が value よりも大きな値であれば、それを指し手として選びます。value は MIN-VALUE に初期化されているので、最初に調べた指し手は必ず選ばれることになります。ただし、三目並べの場合はゲームを最後まで読みきるので、value の最大値は MARU (1) しかありません。v が MARU の場合は先手勝ちでゲーム終了なので、MARU をそのまま返します。
+</p>
+<h4>●後手の指し手</h4>
+<p> 次は、後手 (×) の指し手を決める think-batu を作ります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 後手の指し手
+
+(define (think-batu ls)
+  (let loop ((xs ls) (value MAX-VALUE))
+    (if (null? xs)
+        value
+      (let* ((x (car xs))
+             (v (win? x 'X)))
+        (cond ((and (= v DRAW)
+                    (pair? (cdr ls)))
+               (put-piece! x 'X)
+               (set! v (think-maru (remove-item x ls)))
+               (del-piece! x)))
+        (cond ((= v BATU) BATU)
+              (else
+               (loop (cdr xs) (if (&lt; v value) v value))))))))
+</pre>
+
+<p> 関数 think-batu は think-maru とは逆に、後手が有利になる指し手 (評価値が小さな手) を選びます。value は MARU (1) よりも大きな値 MAX-VALUE に初期化しておきます。そして、ミニマックス法では、v が value よりも小さければ、それを選べばいいわけです。ミニマックス法のプログラムはこれだけです。
+</p>
+
+<h4>●初手の評価値を求める</h4>
+<p> 最後に関数 solve を作ります。
+</p>
+
+<pre class="list">
+リスト : 三目並べの解法
+
+(define (solve ls)
+  (for-each
+    (lambda (x)
+      (put-piece! x 'O)
+      (format #t "~D: value = ~D~%" x (think-batu (remove-item x ls)))
+      (del-piece! x))
+    ls))
+
+; 実行
+(solve (iota 9))
+</pre>
+
+<p> solve の引数 ls は空き場所を格納したリストです。初手を指してから think-batu を呼び出して手番を相手に移します。この返り値が勝敗の結果を表しているので、それを出力するだけです。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実行結果を示しましょう。
+</p>
+<pre>
+0: value = 0
+1: value = 0
+2: value = 0
+3: value = 0
+4: value = 0
+5: value = 0
+6: value = 0
+7: value = 0
+8: value = 0
+</pre>
+<p> 初手がどこでも、結果は引き分けとなりました。これで、両者が最善を尽くすと引き分けになることが確かめられました。
+</p>
+<p> それでは、ルールを「3 つ並べた方が負け」に変更すると、結果はどうなるでしょうか。プログラムは簡単に改造できます。関数 win? では、O が 3 つ並んでいたら MARU を出力していましたが、これを BATU に変更します。逆に、X が 3 つ並んでいたら MARU を出力します。ようするに、勝敗の判定を逆にするだけです。
+</p>
+<p> このルールでは先手が不利なように思いますが、それでも引き分けになるのでしょうか。さっそく実行してみましょう。
+</p>
+<pre>
+0: value = -1
+1: value = -1
+2: value = -1
+3: value = -1
+4: value = 0
+5: value = -1
+6: value = -1
+7: value = -1
+8: value = -1
+</pre>
+<p> 初手が中央の場合のみ引き分けで、あとは後手の勝ちとなりました。後手必勝にはなりませんでしたね。興味のある方は、実際にプレイして確かめてみてください。また、今回のプログラムは評価値を出力するだけでしたが、指し手を表示するように改造してみるのも面白いと思います。
+</p>
+<h4>●戦略に基づいたプレイ</h4>
+<p> ところで、<a href="abcscm43.html#cite">参考文献 [1]</a> によると、三目並べで両者が次の戦略を用いると、ゲームは常に引き分けになります。
+</p>
+<ol>
+  <li>3 つ並べることができるならばそうする
+  <li>相手が 3 つ並べるのを妨げる
+  <li>可能ならば中央へ着手する
+  <li>可能ならば隅へ着手する
+</ol>
+<p> 本当に引き分けになるのか、実際にプログラムを作って確かめてみましょう。
+</p>
+<h4>●プログラムの作成 (2)</h4>
+<p> 最初に同じ駒を 3 つ並べることができる場所を探す関数 get-win-position を作ります。
+</p>
+<pre class="list">
+リスト : 勝てる場所を探す
+
+(define (get-win-position p ls)
+  (find (lambda (x)
+          (let ((v (win? x p)))
+            (or (= v MARU) (= v BATU))))
+        ls))
+</pre>
+<p> この処理は次の 1 手で勝てる場所を探すことになるので、関数名を get-win-position としました。引数 p は駒の種類を、ls は空き場所を格納したリストです。関数 find は SRFI-1 に用意されている高階関数です。ラムダ式の引数 x が調べる場所を表します。(win? x p) を呼び出して、返り値が MARU または BATU であれば勝つことができるので x を返します。
+</p>
+
+<p> 次はコンピュータの指し手を決める関数 move-com を作ります。
+</p>
+<pre class="list">
+リスト : コンピュータの指し手を決定する
+
+; 空いているコーナーを探す
+(define (get-corner)
+  (find (lambda (x) (not (get-piece x))) '(0 2 6 8)))
+
+; COM の指し手
+(define (move-com p ls)
+  (or (get-win-position p ls)
+      (get-win-position (if (eq? p 'O) 'X 'O) ls)
+      (and (not (get-piece 4)) 4)
+      (get-corner)
+      (car ls)))
+</pre>
+
+<p> 関数 move-com は戦略に従ってコンピュータの指し手を決定します。引数 p は自分の駒の種類を表します。まず最初に get-win-position を呼び出して、駒を 3 つ並べることができるか調べます。自分が勝てるのであれば、その場所を返します。そうでなければ、相手が駒を 3 つ並べることができるか調べます。これは get-win-position で相手の駒の種類を渡せば調べることができます。そうであれば、その場所に自分の駒をおきます。
+</p>
+<p> それ以外の場合は、優先順位（中央 -&gt; 隅 -&gt; 空き場所) に従って駒を置きます。空いているコーナーは関数 get-corner で求めます。空き場所は引数 ls の先頭要素を返すだけです。
+</p>
+
+<p> 最後にゲームを進める関数 play を作ります。
+</p>
+<pre class="list">
+リスト : ゲームの進行
+
+(define (play ls)
+  (let loop ((ls ls) (turn 'O))
+    (if (null? ls)
+        (format #t "DRAW~%")
+      (let* ((x (move-com turn ls))
+             (v (win? x turn)))
+        (put-piece! x turn)
+        (print-board)
+        (if (or (= v MARU) (= v BATU))
+            (format #t "~S WIN!~%" turn)
+          (loop (remove-item x ls) (if (eq? turn 'O) 'X 'O)))))))
+</pre>
+<p> 引数 ls は空き場所を格納したリストです。turn は手番を表す変数です。move-com で指し手を決め、(win? x turn) を呼び出して勝敗の判定を行います。変数 v の値が MARU または BATU の場合はゲーム終了です。そうでなければ、手番を変えてゲームを続行します。
+</p>
+
+<h4>●実行結果 (2)</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+_ _ _
+_ O _
+_ _ _
+
+X _ _
+_ O _
+_ _ _
+
+X _ O
+_ O _
+_ _ _
+
+X _ O
+_ O _
+X _ _
+
+X _ O
+O O _
+X _ _
+
+X _ O
+O O X
+X _ _
+
+X _ O
+O O X
+X _ O
+
+X X O
+O O X
+X _ O
+
+X X O
+O O X
+X O O
+DRAW
+</pre>
+<p> 確かに引き分けになりますね。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>松原仁・竹内郁雄 編著,『bit別冊 ゲームプログラミング』, 共立出版, 1997
+</ol>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+;
+; tictactoe.scm : 三目並べ (ミニマックス法)
+;
+;                 Copyright (C) 2010 Makoto Hiroi
+;
+(use srfi-1)
+
+; 定数
+(define SIZE  9)
+(define MARU  1)
+(define DRAW  0)
+(define BATU -1)
+(define MAX-VALUE  2)
+(define MIN-VALUE -2)
+
+; 盤面 : #f space, O maru, X batu
+; 0 1 2
+; 3 4 5
+; 6 7 8
+(define *board* (make-vector SIZE #f))
+
+; 直線
+(define *lines* #(((1 2) (3 6) (4 8))       ; 0
+                  ((0 2) (4 7))             ; 1
+                  ((0 1) (5 8) (4 6))       ; 2
+                  ((0 6) (4 5))             ; 3
+                  ((1 7) (3 5) (0 8) (2 6)) ; 4
+                  ((2 8) (3 4))             ; 5
+                  ((0 3) (2 4) (7 8))       ; 6
+                  ((1 4) (6 8))             ; 7
+                  ((0 4) (2 5) (6 7))))     : 8
+
+; アクセス関数
+(define (get-piece n)    (vector-ref *board* n))
+(define (put-piece! n p) (vector-set! *board* n p))
+(define (del-piece! n)   (vector-set! *board* n #f))
+
+; 3 つ並ぶか
+(define (check-line p a b)
+  (and (eq? (get-piece a) p)
+       (eq? (get-piece b) p)
+       p))
+
+; 勝負の判定
+(define (win? n p)
+  (let loop ((ls (vector-ref *lines* n)))
+    (if (null? ls)
+        DRAW
+      (case (apply check-line p (car ls))
+        ((O) MARU)
+        ((X) BATU)
+        (else (loop (cdr ls)))))))
+
+; 要素の削除
+(define (remove-item x ls)
+  (remove (lambda (y) (eqv? x y)) ls))
+
+; 先手（まる）
+(define (think-maru ls)
+  (let loop ((xs ls) (value MIN-VALUE))
+    (if (null? xs)
+        value
+      (let* ((x (car xs))
+             (v (win? x 'O)))
+        (cond ((and (= v DRAW)
+                    (pair? (cdr ls)))
+               (put-piece! x 'O)
+               (set! v (think-batu (remove-item x ls)))
+               (del-piece! x)))
+        (cond ((= v MARU) MARU)
+              (else
+               (loop (cdr xs) (if (&gt; v value) v value))))))))
+
+; 後手（ばつ）
+(define (think-batu ls)
+  (let loop ((xs ls) (value MAX-VALUE))
+    (if (null? xs)
+        value
+      (let* ((x (car xs))
+             (v (win? x 'X)))
+        (cond ((and (= v DRAW)
+                    (pair? (cdr ls)))
+               (put-piece! x 'X)
+               (set! v (think-maru (remove-item x ls)))
+               (del-piece! x)))
+        (cond ((= v BATU) BATU)
+              (else
+               (loop (cdr xs) (if (&lt; v value) v value))))))))
+
+; 三目並べの解法
+(define (solve ls)
+  (for-each
+    (lambda (x)
+      (put-piece! x 'O)
+      (format #t "~D: value = ~D~%" x (think-batu (remove-item x ls)))
+      (del-piece! x))
+    ls))
+
+;;
+;; 戦略に基づいたプレイ
+;;
+
+; 勝てる場所を探す
+(define (get-win-position p ls)
+  (find (lambda (x)
+          (let ((v (win? x p)))
+            (or (= v MARU) (= v BATU))))
+        ls))
+
+; 空いているコーナーを探す
+(define (get-corner)
+  (find (lambda (x) (not (get-piece x))) '(0 2 6 8)))
+
+; COM の指し手
+(define (move-com p ls)
+  (or (get-win-position p ls)
+      (get-win-position (if (eq? p 'O) 'X 'O) ls)
+      (and (not (get-piece 4)) 4)
+      (get-corner)
+      (car ls)))
+
+; 盤面の表示
+(define (print-piece p)
+  (format #t "~S " (if p p '_)))
+
+(define (print-board)
+  (dotimes (x 9 (newline))
+    (if (zero? (modulo x 3)) (newline))
+    (print-piece (get-piece x))))
+
+; ゲームの進行
+(define (play ls)
+  (let loop ((ls ls) (turn 'O))
+    (if (null? ls)
+        (format #t "DRAW~%")
+      (let* ((x (move-com turn ls))
+             (v (win? x turn)))
+        (put-piece! x turn)
+        (print-board)
+        (if (or (= v MARU) (= v BATU))
+            (format #t "~S WIN!~%" turn)
+          (loop (remove-item x ls) (if (eq? turn 'O) 'X 'O)))))))
+
+; 実行
+(solve (iota 9))
+(play (iota 9))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2010 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm42.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm44.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

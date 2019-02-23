@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Prolog プログラミング入門</title>
+  <meta name="description" content="Prolog,Prolog入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881779</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>お気楽 Prolog プログラミング入門</h2>
+<div class="small">
+[ PrevPage | <a href="index.html">Prolog</a> | <a href="prolog02.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap1">Prolog で扱う事実とは？</h3>
+<p> 私たちが使う文章には主語と述語があります。たとえば、「太郎はコーヒーが好きである」という文では、主語は「太郎」で述語は「好き」となりますね。Prolog は述語を中心に物事の関係を表します。「好き」は、「太郎」と「コーヒー」の関係を表しています。この関係を Prolog で表現すると次のようになります。
+</p>
+<pre class="item">
+like(taro, coffee).
+</pre>
+<p> Prolog の場合、最後に必ずピリオド ( . ) をつけます。忘れないように注意してください。ほかにも考えてみましょう。
+</p>
+<pre class="item">
+太郎はココアが好き =&gt; like(taro, cocoa).
+花子は紅茶が好き   =&gt; like(hanako, tea).
+</pre>
+<p> このように、関係を示す言葉をいちばん前に持ってきて表現する方法を <b>述語表記</b> といいます。後ろに続く言葉を引数といいます。すなわち、Prolog では <b>述語(引数, ..., 引数).</b> という形で事実を表現します。
+</p>
+<p> それでは、実際にいままでの例をプログラムしてみましょう。ファイル like.swi に like(taro, coffee). だけを書いて保存します。そして、そのファイルをダブルクリックしてください。すると、SWI-Prolog <sup><a href="prolog01.html#note1">[*1]</a></sup> が起動して like.swi を読み込みます。これで「太郎はコーヒーが好きである」という事実が定義されました。
+</p>
+<p> それでは、太郎がコーヒーを好きか、たずねてみましょう。質問する場合は、その関係をそのまま入力します。
+</p>
+<pre>
+?- like(taro, coffee).
+YES
+</pre>
+<p> まあ、これは当たり前ですね。では、花子は紅茶が好きか、たずねてみましょう。
+</p>
+<pre>
+?- like(hanako, tea).
+NO
+</pre>
+<p> これは、「花子は紅茶が好きである」という事実がないので、Prolog は違うといってきたのです。それでは、like(hanako, tea). と like(taro, cocoa). を like.swi に定義して、SWI-Prolog を再起動してください。そして、質問してみましょう。
+</p>
+<pre>
+?- like(hanako, tea).
+YES
+?- like(taro, cocoa).
+YES
+</pre>
+<p> 今度は、そうだよといってきました。
+</p>
+<p> ある事実に対して、YES, NO しかたずねることができないのであれば、面白くありませんね。事実が増えてくると、たとえば、太郎が好きなものは何か？ とか、コーヒーを好きな人は誰か？、といった質問をしたいと思うでしょう。もちろん Prolog は、そのような質問を受け付けることができます。そのために、<b>変数</b> というマジックを使います。Prolog の変数は、ほかのプログラミング言語の変数とは少々変わっています。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> SWI-Prolog はソースファイルを中間コードに変換します。SWI-Prolog の場合、D. H. Warren 氏が提案した WAM (Warren Abstract Machine) という中間コードに変換します。
+</div>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap2">Prolog の変数はちょっとヘン？</h3>
+<p> Prolog の標準であるエジンバラ Prolog に準拠してる処理系では、半角英大文字から始まる名前を変数として扱います。SWI-Prolog もそうです。
+</p>
+<pre class="item">
+【変数の例】 X Y Z Prolog Lisp Abc
+【名前の例】 x y z prolog lisp abc
+</pre>
+<p> 使い方は、何を当てはめてもよい場合に変数を用いて表します。たとえば、先ほどの質問の場合、「太郎は何が好きか」の「何が」を変数で表すのです。この質問は次のようになります。
+</p>
+<pre class="item">
+like(taro, X).
+</pre>
+<p> 変数は X 以外でもかまいません。それでは、たずねてみましょう。Prolog にはいままで入力した事実が定義されているものとします。
+</p>
+<pre>
+?- like(taro, X).
+X = coffee
+</pre>
+<p> ほかの処理系では X = coffee -&gt のように、-&gt; が表示されることがあります。これは別の解を調べるか、Prolog がたずねていることを示す記号です。SWI-Prolog の場合、この記号は表示されませんが、ここで <b>;</b> を入力すると、Prolog は別の解を探します。それでは、別の解があるか調べてみましょう。
+</p>
+<pre>
+X = coffee ;
+
+X = cocoa ;
+
+NO
+</pre>
+<p> ; を入力すると Prolog は別の解を探索し、今度は cocoa を見つけました。ここで再度 ; を入力すると別の解を探索しますが、見つからなかったので Prolog は NO を返します。
+</p>
+<p> 変数は複数使うことができます。like(X, Y) と質問すれば、「好き」という関係を持つすべての事実を求めることができます。ただし、述語の部分を変数にすることはできません。
+</p>
+<pre>
+?- like(X, Y).
+X = taro
+Y = coffee ;
+
+X = hanako
+Y = tea ;
+
+X = taro
+Y = cocoa ;
+
+NO
+</pre>
+<p> 別解を求めない場合は、リターンキーを入力します。すると、YES と表示して入力待ちの状態 (トップレベル) に戻ります。
+</p>
+<pre>
+?- like(X, Y).
+X = taro
+Y = coffee
+
+YES
+?-
+</pre>
+
+<p> いままでの例でわかるように、Prolog の変数は一般的なプログラミング言語の変数とは違った働きをします。Ｃ言語や Perl などの変数は値を記憶する入れ物であり、その中に格納されるデータの種類は決まっています。
+</p>
+<p> ところが、Prolog の変数はそれだけでは何が入るのか決まっていません。Prolog は質問に答える場合、質問と一致する事実がないか調べます。このことを <b>パターンマッチング</b> といいます。このパターンマッチングによって変数の値が決まるのです。
+</p>
+<p> パターンマッチングの動作を追いかけてみましょう。質問 like(X, Y). と、事実 like(taro, coffee). について考えます。最初、変数 X, Y ともに値は定まっていません。このような変数を <b>自由変数</b> といいます。まず X と taro を調べます。Prolog の場合、<b>自由変数はどんなデータにでもパターンマッチングは成功します。</b>そして、<b>変数にはそのデータが代入されます。</b>
+</p>
+<p> この場合、X に taro という値がセットされます。その次に、Y と coffee を調べます。Y も自由変数なのでパターンマッチングは成功します。このとき、Y に coffee という値がセットされます。残りの項目がないので like(X, Y). と like(taro, coffee). のパターンマッチングは成功です。Prolog は変数 X と Y の値を出力します。
+</p>
+<p> それでは質問を変えて like(X, X). としたらどうでしょう。最初の X は同じですね。その次の X と coffee は一致するのでしょうか。X には taro がセットされています。Prolog では、<b>変数に値がセットされている場合、その値を使ってパターンマッチングを行います。</b>この場合、taro と coffee を比較します。同じ値ではないのでパターンマッチングは失敗となります。Prolog は NO と出力します。
+</p>
+<p> 別解を求める場合は、値がセットされた変数を自由変数に戻します。そして次に定義されている事実とパターンマッチングを行います。この動作を <B>バックトラック</B> といい、Prolog の大きな特徴になっています。Prolog の基本動作は 「パターンマッチングとバックトラックを組み合わせたもの」 といえるでしょう。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap3">Prolog のプログラムとは？</h3>
+<h4>●規則</h4>
+<p> Prolog  は複数の事実を用いて、ひとつの事実を表すことができます。これを <b>規則 (rule)</b> といいます。一般に規則は次のような形をとります。
+</p>
+<pre class="item">
+head :- goal1, goal2, ..., goalN.
+</pre>
+<p> これは、goal1 から goalN までの規則がすべて成り立てば規則 head が成立する、ということを表します。つまり、goal1 かつ goal2 かつ・・・かつ goalN ならば head である、という意味なのです。
+</p>
+<p> 先頭の head を <b>頭部</b> といい、残りの goal をまとめて <b>体部</b> といいます。頭部と体部は <b>:-</b> で区切ります。また、各々の goal を <b>ゴール</b> といいます。そして、事実、規則および質問のことを <b>節(clause)</b> と呼びます。規則の中で頭部しかない特別なものが事実である、と考えてもいいでしょう。
+</p>
+<p> 簡単な例を示します。次に示すプログラムをファイル fly.swi に書いて、SWI-Prolog を起動してください。
+</p>
+<pre class="list">
+リスト：fly.swi
+
+fly(X) :- airplane(X).
+airplane(jet_plane).
+airplane(helicopter).
+</pre>
+<p> 最初の節は、「飛行機は空を飛ぶ」という規則を表しています。次の 2 つの節は、「ジェット機は飛行機である」と「ヘリコプターは飛行機である」という事実を表しています。このことから、「ジェット機は空を飛ぶ」という結論を導くことができます。では、Prolog に質問してみましょう。
+</p>
+<pre>
+?- fly(jet_plane).
+YES
+</pre>
+<p> それでは、太郎君が空を飛べるか、質問してみましょう。
+</p>
+<pre>
+?- fly(taro).
+NO
+</pre>
+<p> 太郎君は空を飛べません。ところで、空を飛べるのは飛行機だけではありません。スーパーマンも空を飛べます。じつは、太郎君はなんとスーパーマンだったのです。次のように fly.swi を修正して SWI-Prolog を再起動してください。
+</p>
+<pre class="list">
+リスト : fly.swi の修正
+
+fly(X) :- airplane(X).
+fly(X) :- superman(X).   /* 追加 */
+
+airplane(jet_plane).
+airplane(helicopter).
+superman(taro).          /* 追加 */
+</pre>
+<p> 再び、太郎君が飛べるか、質問してみます。
+</p>
+<pre>
+?- fly(taro).
+YES
+</pre>
+<p> 太郎君は空を飛ぶことができました。変数を使うと、空を飛ぶものすべてを求めることができます。
+</p>
+<pre>
+?- fly(Y).
+Y = jet_plane ;
+
+Y = helicopter ;
+
+Y = taro ;
+NO
+</pre>
+<p> このように、Prolog は定義された事実と規則から答えを見つけてくれます。これは Prolog がプログラムを実行するときに、<b>バックトラック (backtrack)</b> を行っているからです。
+</p>
+<p> たとえば、簡単な例として迷路を考えてみましょう。ある地点 A で道が左右に分かれているとします。ここで、左の道を選んで先へ進むと、行き止まりになってしまいました。この場合は A 地点まで戻って右の道へ進まないといけませんね。つまり、失敗したら <b>後戻り</b> して別の道を選ぶ、という試行錯誤をゴールに行き着くまで繰り返すわけです。Prolog の場合も、このような試行錯誤をしながら答えを探しているのです。
+</p>
+<H4>●Prolog の動作</H4>
+<p> それでは、このプログラムを例にして Prolog の動作を具体的に説明します。簡単なプログラムですが、実行過程はけっこう複雑です。最初に、図 1 を見てください。
+</p>
+<pre class="fig">
+fly(Y).
+   │
+   │   頭部とマッチングする規則を探索する  
+   ↓
+fly(X) :- airplaine(X).
+
+図 1 : パターンマッチングする頭部の探索
+</pre>
+<p> Prolog は質問とマッチングする規則または事実を探します。規則は頭部とマッチングするものを選択します。この場合 fly(X) とマッチングし、規則 fly(X) :- airplane(X). を選択します。
+</p>
+<p> 2 つの変数 Y  と X がパターンマッチングに成功するのは、不思議に思われるかもしれません。Y と X は変数ですが、お互いにまだ値が定まっていない自由変数です。Prologでは、自由変数同士のパターンマッチング <SUP><A href="prolog01.html#note2">[*2]</A></SUP> は成功するのです。これはほかの言語とは違う Prolog の大きな特徴です。これにより変数 Y と X が関連付けられます。
+</p>
+<p> 次に体部 airplane(X) を実行します。図 2 を見てください。
+</p>
+<pre class="fig">
+  fly(Y)   Y = jet_plane
+  │ ↑
+  │ │    X = jet_plane
+  ↓ │
+  fly(X) :- airplane(X).
+           ^^^^^^^^^^^^^^
+                 │ ↑
+head とマッチング│ │  X と jet_plane がマッチング  
+する節を探索する │ │
+                 ↓ │
+         airplane(jet_plane).
+         airplane(helicopter).
+
+        図 2 : 体部の実行
+</pre>
+<p> 同じように airplane(X) とマッチングする規則または事実を選択します。この場合、事実 airplane(jet_plane) とマッチングし、変数 X の値は jet_plane となります。
+</p>
+<p> 事実ですから、ほかに実行するゴールはありません。体部の実行を続けますが、airplane(X) は最後のゴールなので、規則 fly(X) :- airplane(X). は成功です。<p> この規則を呼び出したのは質問 fly(Y) です。呼び出した規則が成功したので、質問の答えが見つかりました。Y は X とマッチングしているので、Y = jet_plane となります。
+</p>
+<p> 次は、別解の探索を説明しましょう。図 3 を見てください。
+</p>
+<pre class="fig">
+fly(Y).  Y = helicopter
+│ ↑
+│ │    X = helicopter
+↓ │
+fly(X) :- airplane(X).
+         ^^^^^^^^^^^^^^
+               │ ↑
+               │ │  X と helicopter がマッチング  
+               │ │
+               ↓ │
+            airplane(helicopter).
+         × airplane(jet_plane).
+
+        図 3 : 再試行 (1)
+</pre>
+<p> Prolog では、別解を探索することを <b>再試行</b> といいます。Prolog は実行した節の順番を覚えていて、最後に実行した節から探索を再開します。
+</p>
+<p> この場合は、規則 fly(X) :- airplane(X). のゴール airplane(X) です。再度 airplane(X) とマッチングする節を探索します。このとき、変数は自由変数に戻されること、すでにマッチングした事実 airplane(jet_plane). は探索の対象から外されることに注意してください。
+</p>
+<p> 今度は airplane(helicopter). とマッチングしました。X の値は helicopter になります。最後のゴール airplane(X) が成功したので、今度も規則 fly(X) :- airplane(X) は成功です。Y = helicopter という結果になります。
+</p>
+<p> また再試行しましょう。 図 4 を見てください。
+</p>
+<pre class="fig">
+fly(Y) ←───────────┐ Y = taro
+ │↑└───────────┐│
+ ││                        ││ X = taro
+ ││失敗              再試行││
+ ↓│                        ↓│
+fly(X) :- airplane(X).      fly(X) :- superman(X).
+         ^^^^^^^^^^^^^               ^^^^^^^^^^^^^^
+             │ ↑ 失敗                  │ ↑
+             ↓ │                       ↓ │
+      × airplane(helicopter).        superman(taro).
+      × airplane(jet_plane).
+
+        図 4 : 再試行 (2)
+</pre>
+
+<p> 1 回目の再試行と同様に airplane(X) を実行しますが、これ以上事実は定義されていません。したがって、airplane(X) は失敗します。ゴールが失敗した場合、ひとつ前のゴールに後戻り (バックトラック) します。すべてのゴールが失敗したら、その規則は失敗となります。この場合、後戻りするゴールがないので、規則 fly(X) :- airplane(X). は失敗します。
+</p>
+<p> 規則が失敗した場合、その規則を呼び出した節に後戻りします。この場合は質問 fly(Y) に戻り、fly(Y) とマッチングする別の節を探します。すると、規則 fly(X) :- superman(X). が見つかります。今度はこの規則を実行します。同じようにゴールを実行して、taro という答えが見つかります。
+</p>
+<p> またまた再試行しましょう。図 5 を見てください。
+</p>
+<pre class="fig">
+             失敗
+    fly(Y) ←────────┐
+         └────────┐│
+                           ││ 失敗
+                     再試行││
+                           ↓│
+×fly(X) :- airplane(X).  fly(X) :- superman(X).
+           ^^^^^^^^^^^^^^          ^^^^^^^^^^^^^^
+                │ ↑ 失敗             │ ↑  失敗
+                ↓ │                  ↓ │
+      × airplane(helicopter).   × superman(taro).
+      × airplane(jet_plane).
+
+                図 5 ：再試行 (3)
+</pre>
+
+<p> いままでと同じように superman(X) の別解を探索しますが、マッチングする節は見つかりません。したがって、規則 fly(X) :- superman(X). は失敗します。そして、質問 fly(Y) に後戻りしますが、もはやマッチングする節はありません。したがって fly(Y) は失敗します。fly(Y) は質問でしたから、NO という結果が表示されます。
+</p>
+<p> このように、簡単なプログラムですが Prolog の動作は複雑です。とりあえずバックトラックのことを考えずに、Prolog が答えを見つけてくれる、と理解してもらってもかまいません。実際、バックトラックのことを考えなくても、Prolog でプログラムを作ることができます。
+</p>
+<p> まあ、そこが Prolog の面白いところなんですが、複雑なプログラムになると、どうしてもバックトラックのことを考えなければならない場合も出てきます。そのときになったら、また詳しく説明することにしましょう。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note2">[*2]</a> Prolog では、2 つのパターンともに変数を含んでいる場合のマッチングをユニフィケーション (unification) と呼び、片方のパターンだけに変数が含まれる場合のマッチングを パターンマッチング (pattern matching) として区別します。ここでは 2 つの意味でパターンマッチングを使っています。
+</div>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap4">簡単な例題：家系図</h3>
+<p> もう少し具体的な例として、次のような家系図を考えてみましょう。
+</p>
+<pre class="fig">
+                     ┌─── 三郎  
+              幸子   │
+               ┃──┤
+       ┌── 一郎   │
+太郎   │            └─── 洋子
+ ┃──┼── 次郎
+花子   │
+       └── 友子
+
+            図 : 家系図
+</pre>
+
+<p> この家系図を男性、女性、父親、母親の関係を表す述語で定義します。
+</p>
+<pre class="list">
+リスト：家系図の定義
+
+/* 男性 */
+male(taro).
+male(ichiro).
+male(jiro).
+male(saburo).
+/* 女性 */
+female(hanako).
+female(tomoko).
+female(sachiko).
+female(youko).
+/* 父親 */
+father_of(taro, ichiro).
+father_of(taro, jiro).
+father_of(taro, tomoko).
+father_of(ichiro, saburo).
+father_of(ichiro, youko).
+/* 母親 */
+mother_of(hanako, ichiro).
+mother_of(hanako, jiro).
+mother_of(hanako, tomoko).
+mother_of(sachiko, saburo).
+mother_of(sachiko, youko).
+</pre>
+<p> Prolog で p(a, b) と書いた場合、a は b の p なのか、それとも a の p が b なのか、はっきりしないことがあります。たとえば、father(taro, ichiro). の場合、太郎は一郎の父親なのか、それとも太郎の父親が一郎なのか、はっきりわからないのです。
+</p>
+<p> 英語では前者を taro is father of ichiro と書きますので、Prolog でも father_of(taro, ichiro) と _of をつけて表すことが多いようです。後者の場合はそのままです。今回の例題はこの表記法に従っています。
+</p>
+<p> それでは、定義した事実を使って規則を作ってみましょう。まず「両親 (parents_of) 」という規則を定義します。両親は、父親か母親という事実を満たせばいいですね。このような場合、Prolog では次のように定義します。
+</p>
+<pre class="list">
+リスト：両親 (parents_of) の定義
+
+parents_of(X, Y) :- father_of(X, Y).
+parents_of(X, Y) :- mother_of(X, Y).
+</pre>
+<p>「両親は父親である」と「両親は母親である」という規則を定義するだけです。このようなプログラムでも、Prolog では最初の節が失敗したら次の節が選択されるので、「両親は父親または母親である」という条件を満たしています。
+</p>
+<p> ほかのプログラム言語では、「または」という条件は <b>OR</b> を使って表現するのが一般的ですが、Prolog では規則を並べることで実現できます。逆に、「かつ」という条件は、前に説明したようにゴールを並べることで実現できます。このように、Prolog は事実および規則を宣言することでプログラミングを行います。もちろん、一般的な OR にあたる制御構造も備えていますのでご安心を。
+</p>
+<p> それでは実行してみましょう。一郎の両親は誰か質問します。
+</p>
+<pre>
+?- parents_of(X, ichiro).
+
+X = taro ;
+
+X = hanako ;
+NO
+</pre>
+<p> 正解は太郎と花子です。うまく動作していますね。それでは、この述語を使って「息子 (son_of) 」という規則を定義しましょう。X が Y の息子であるならば、Y は X の両親でかつ X は男性のはずです。Prolog では次のように定義します。
+</p>
+<pre class="list">
+リスト：息子 (son_of) の定義
+
+son_of(X, Y) :- parents_of(Y, X), male(X).
+</pre>
+<p> 「かつ」は規則でゴールを順番に並べれば実現できましたね。まず parents_of(Y, X) を満たす関係を求めます。そのあと male(X) で X が男性であることを確かめます。male(X) で失敗しても、parents_of(Y, X) に後戻りして次の候補を探すので大丈夫です。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+?- son_of(X, hanako).
+
+X = ichiro;
+
+X = jiro ;
+NO
+</pre>
+<p> 花子の息子は一郎と次郎である、と答えが出ました。
+</p>
+<p> ここで、male(X) を female(X) に変更すると、「娘 (daughter_of) 」の関係を表すことができます。
+</p>
+<pre class="list">
+リスト：娘 (daughter_of) の定義
+
+daughter_of(X, Y) :- parents_of(Y, X), female(X).
+</pre>
+<p> 最後に、「祖父 (grandfather_of) 」の関係を求める規則を定義しましょう。これはいままでと違ってちょっと面倒です。X の祖父 Y を求めるには、まず X の両親を求め、さらにその父親を求めます。母方と父方に祖父がいますから、父親の父親を求めるのでは母方の祖父がわかりません。このような場合、X と Y 以外の変数を使うとうまくいきます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト： 祖父 (grandfather_of) の定義
+
+grandfather_of(X, Y) :- parents_of(Z, Y), father_of(X, Z).
+</pre>
+
+<p> parents_of(Z, Y) で、変数 Z には Y  の父親か母親がセットされています。そして、father_of(X, Z) で Z の父親を探せばいいわけです。変数を使うことで実行結果を保持し、それを次のゴールへ渡すことができるのです。
+</p>
+<p>それでは実行してみましょう。
+</p>
+<pre>
+?- grandfather_of(X, saburo).
+
+X = taro;
+NO
+
+?- grandfather_of(X, Y).
+
+X = taro
+Y = saburo ;
+
+X = taro
+Y = youko ;
+NO
+</pre>
+<p> 祖父と同じように、「祖母 (grandmother_of) 」の関係も定義できますのでやってみて下さい。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap5">算術演算</h3>
+<p> SWI-Prolog で扱うことのできる数値は次の 3 種類です。
+</p>
+<ul>
+  <li>整数 (integer) <BR>
+      <STRIKE>-2147483648 から 2147483647 まで (32 bit integer)</STRIKE>
+      整数の大きさに制限はありません。
+  <li>有理数 (rational)<BR>
+      n と m を整数とすると、n / m の有理数は n rdiv m または rdiv(n, m) と表します。
+  <li>浮動小数点数 (float)<BR>
+      絶対値で 2.2250738585072014e-308 から 1.7976931348623157e+308
+</ul>
+<p> Ｃ言語でいえば、<STRIKE>整数は long int に、</STRIKE>浮動小数点数は double に相当します。なお、算術演算には version 5.5 から the GNU multiple precision arithmetic library が使われています。
+</p>
+<p> 四則演算は一般のプログラミング言語と同じく、演算子 + * - / が用意されています。なお、整数同士の除算 / の結果は浮動小数点数になります。商を求める場合は演算子 // を、剰余を求める場合は演算子 mod を使ってください。そして、演算結果を変数にセットするには <b>is</b> を使います。簡単な例を示しましょう。
+</p>
+<pre>
+?- X is 1 + 2 + 3.
+
+X = 6 ;
+NO
+</pre>
+<p> Prolog の場合、パターンマッチングにより変数に値がセットされました。is の場合も同じです。左辺の数式を計算し、それを右辺の変数とマッチングを行います。次の例を見てください。
+</p>
+<pre>
+?- X is 1 + 2, X is 3 + 4.
+
+NO
+</pre>
+<p> 最初の計算で、変数 X の値は 3 になりました。次に 3 + 4 を計算し、その値 7 と X をマッチングします。この場合、X の値は 3 なのでマッチングは失敗します。このように Prolog の is は、一般のプログラミング言語の代入とは働きが違います。また、数値演算関連の述語は、再試行すると失敗することにも注意して下さい。
+</p>
+<p> 今度は、「X の 2 乗は Y である」という述語を定義します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 2 乗を求める
+
+square(X, Y) :- Y is X * X.
+</pre>
+<p> square は、X * X の計算結果を Y とマッチングさせるだけです。それでは、実際に実行してみましょう。
+</p>
+<pre>
+?- square(2, Y).
+
+Y = 4 ;
+NO
+
+?- square(2, 4).
+YES
+
+?- square(X, 4).
+=&gt; エラー
+</pre>
+<p> 最初の例は、2 乗の計算結果が Y にセットされます。square は述語ですから、2 つの引数に数値を与えると、2 乗の関係であれば成功し、そうでなければ失敗します。では、最後の例のように X を求めることはできるのでしょうか。この場合は、X が自由変数で算術演算が実行できないため、エラーとなります。
+</p>
+<p> 家系図で示したプログラム、たとえば grandfather_of(X, Y) では、X から Y を求める、逆に Y から X を求める、そして X と Y の関係をすべて求めることができました。このように、ひとつの述語で複数の使い方ができるのが、ほかのプログラミング言語にはない Prolog の面白い特徴です。ですが、数値演算の場合は、自由変数が含まれていると演算不能になるため、このような使い方はできません。ご注意ください。
+</p>
+<p> 数値の大小を比較する場合は、次の述語を使います。
+</p>
+<table border=1>
+<caption>数値を比較する述語</caption>
+<thead>
+  <tr><th>述語</th><th>条件</th></tr>
+</thead>
+<tbody>
+  <tr><td>Expr1 &gt; Expr2</td><td>Expr1 が Expr2 より大きい</td></tr>
+  <tr><td>Expr1 &lt; Expr2</td><td>Expr1 が Expr2 より小さい</td></tr>
+  <tr><td>Expr1 &gt;= Expr2</td><td>Expr1 が Expr2 より大きいかまたは等しい</td></tr>
+  <tr><td>Expr1 =&lt; Expr2</td><td>Expr1 が Expr2 より小さいかまたは等しい</td></tr>
+  <tr><td>Expr1 =\= Expr2</td><td>Expr1 が Expr2 と等しくない</td></tr>
+  <tr><td>Expr1 =:= Expr2</td><td>Expr1 が Expr2 と等しい</td></tr>
+</tbody>
+</table>
+<p> これらの述語は数式 (Expr) を計算して、その結果が条件を満たしていれば成功します。
+</p>
+<div class="note">
+-- 改訂 2008/11/23 --------<br>
+多倍長整数と有理数の説明を追加
+</div>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ PrevPage | <a href="index.html">Prolog</a> | <a href="prolog02.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

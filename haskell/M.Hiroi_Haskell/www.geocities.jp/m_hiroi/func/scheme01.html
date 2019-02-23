@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Scheme Junk Scripts</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881787</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scheme Programming</h1>
+<h2>Scheme Junk Scripts</h2>
+<div class="small">
+[ PrevPage | <a href="scheme.html#junk">Scheme</a> | <a href="scheme02.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="fact">階乗</h3>
+<p> 階乗を求めるプログラムです。
+</p>
+<pre class="fig">
+階乗の定義
+
+0! = 1
+n! = n * (n - 1)!
+</pre>
+<h4>●プログラム</h4>
+<pre class="list">
+;
+; fact.scm : 階乗の計算
+;
+
+; 再帰
+(define (fact n)
+    (if (zero? n)
+        1
+        (* n (fact (- n 1)))))
+
+; 末尾再帰
+(define (fact1 n)
+  (define (facti n a)
+    (if (zero? n)
+        a
+        (facti (- n 1) (* a n))))
+  (facti n 1))
+
+; letrec
+(define (fact2 n)
+  (letrec ((facti (lambda (n a)
+                    (if (zero? n)
+                        a
+                        (facti (- n 1) (* a n))))))
+    (facti n 1)))
+
+; named let
+(define (fact3 n)
+  (let loop ((n n) (a 1))
+    (if (zero? n)
+        a
+        (loop (- n 1) (* a n)))))
+
+; CPS (Continuation Passing Style)
+(define (fact4 n k)
+  (if (zero? n)
+      (k 1)
+      (fact4 (- n 1) (lambda (x) (k (* n x))))))
+
+; テスト
+(let loop ((n 10))
+  (when (&lt; n 20)
+    (display (fact4 n (lambda (x) x)))
+    (newline)
+    (loop (+ n 1))))
+</pre>
+<h4>●実行例</h4>
+<pre>
+3628800
+39916800
+479001600
+6227020800
+87178291200
+1307674368000
+20922789888000
+355687428096000
+6402373705728000
+121645100408832000
+</pre>
+<hr>
+<h3 id="fibo">フィボナッチ関数</h3>
+<p> フィボナッチ関数のプログラムです。
+</p>
+<pre class="fig">
+フィボナッチ関数の定義
+
+            ┌ 1                      n = 0
+fibo(n) = ─┤ 1                      n = 1
+            └ fibo(n-1) + fibo(n-2)  n &gt; 1
+
+1, 1, 2, 3, 5, 8, 13 .... という直前の 2 項を足していく数列
+</pre>
+<h4>●プログラム</h4>
+<pre class="list">
+;
+; fibo.scm : フィボナッチ関数
+;
+
+; 二重再帰
+(define (fibo n)
+  (if (or (= n 0) (= n 1))
+      1
+      (+ (fibo (- n 1))
+         (fibo (- n 2)))))
+
+; 末尾再帰
+(define (fibo1 n)
+  (define (fiboi n a b)
+    (if (= n 0)
+        a
+        (fiboi (- n 1) (+ a b) a)))
+  (fiboi n 1 0))
+
+; letrec
+(define (fibo2 n)
+  (letrec ((fiboi (lambda (n a b)
+                    (if (= n 0)
+                        a
+                        (fiboi (- n 1) (+ a b) a)))))
+    (fiboi n 1 0)))
+
+; named let
+(define (fibo3 n)
+  (let loop ((n n) (a 1) (b 0))
+    (if (zero? n)
+        a
+        (loop (- n 1) (+ a b) a))))
+
+; CSP (Continuation Passing Style)
+(define (fibo4 n k)
+  (if (or (= n 0) (= n 1))
+      (k 1)
+      (fibo4 (- n 1)
+             (lambda (x) (fibo4 (- n 2)
+                                (lambda (y) (k (+ x y))))))))
+
+; test
+(let loop ((n 0))
+  (when (&lt; n 10)
+    (display (fibo n))
+    (display " ")
+    (display (fibo1 n))
+    (display " ")
+    (display (fibo2 n))
+    (display " ")
+    (display (fibo3 n))
+    (display " ")
+    (display (fibo4 n (lambda (x) x)))
+    (newline)
+    (loop (+ n 1))))
+</pre>
+<h4>●実行例</h4>
+<pre>
+1 1 1 1 1
+1 1 1 1 1
+2 2 2 2 2
+3 3 3 3 3
+5 5 5 5 5
+8 8 8 8 8
+13 13 13 13 13
+21 21 21 21 21
+34 34 34 34 34
+55 55 55 55 55
+</pre>
+<hr>
+<h3 id="list_func">リストの操作</h3>
+<p> 基本的なリスト操作のプログラムです。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+;
+; length ls : リストの長さ
+;
+(define (length1 ls)
+  (if (null? ls)
+      0
+      (+ 1 (length1 (cdr ls)))))
+
+; 末尾再帰
+(define (length2 ls)
+  (let loop ((ls ls) (n 0))
+    (if (null? ls)
+        n
+        (loop (cdr ls) (+ n 1)))))
+
+; CPS (Continuation Passing Style)
+(define (length3 ls k)
+  (if (null? ls)
+      (k 0)
+      (length3 (cdr ls) (lambda (x) (k (+ x 1))))))
+
+;
+; reverse ls : リストの反転
+;
+(define (reverse1 ls)
+  (if (null? ls)
+      '()
+      (append (reverse1 (cdr ls)) (list (car ls)))))
+
+; 末尾再帰
+(define (reverse2 ls)
+  (let loop ((ls ls) (a '()))
+    (if (null? ls)
+        a
+        (loop (cdr ls) (cons (car ls) a)))))
+
+; CSP (Continuation Passing Style)
+(define (reverse3 ls k)
+  (if (null? ls)
+      (k '())
+      (reverse3 (cdr ls)
+                (lambda (x) (k (append x (list (car ls))))))))
+
+; reverse! (破壊的操作)
+(define (reverse1! ls)
+  (let loop ((ls ls) (r '()))
+    (if (null? ls)
+        r
+        (let ((x (cdr ls)))
+          (set-cdr! ls r)
+          (loop x ls)))))
+
+;
+; append x y : リストの結合
+;
+(define (append1 x y)
+  (if (null? x)
+      y
+      (cons (car x) (append1 (cdr x) y))))
+
+; CSP (Continuation Passing Style)
+(define (append2 x y k)
+  (if (null? x)
+      (k y)
+      (append2 (cdr x) y (lambda (z) (k (cons (car x) z))))))
+
+;
+; list-ref ls n : リストの n 番目の要素を求める
+;
+(define (list-ref1 ls n)
+  (cond ((null? ls ) #f)
+        ((zero? n) (car ls))
+        (else (list-ref1 (cdr ls) (- n 1)))))
+
+;
+; list-tail ls n : リストの先頭から n 個の要素を取り除く
+;
+(define (list-tail1 ls n)
+  (cond ((null? ls) #f)
+        ((zero? n) ls)
+        (else (list-tail1 (cdr ls) (- n 1)))))
+
+;
+; memv obj ls : obj と等しい要素を探す (eqv? で比較)
+;
+(define (memv1 obj ls)
+  (cond ((null? ls) #f)
+        ((eqv? obj (car ls)) ls)
+        (else (memv1 obj (cdr ls)))))
+
+;
+; assv obj alist : 連想リストの探索 (eqv? で比較)
+;
+(define (assv1 obj alist)
+  (cond ((null? alist) #f)
+        ((eqv? obj (caar alist)) (car alist))
+        (else (assv1 obj (cdr alist)))))
+
+;
+; copy-list ls : リストのコピー
+;
+(define (copy-list ls)
+  (if (pair? ls)
+      (cons (car ls) (copy-list (cdr ls)))
+      ls))
+
+; CPS (Continuation Passing Style)
+(define (copy-list1 ls k)
+  (if (pair? ls)
+      (copy-list1 (cdr ls) (lambda (x) (k (cons (car ls) x))))
+      (k ls)))
+
+;
+; flatten ls : リストの平坦化
+;
+(define (flatten ls)
+  (cond ((null? ls) '())
+        ((pair? ls)
+         (append (flatten (car ls)) (flatten (cdr ls))))
+        (else (list ls))))
+
+; CPS (Continuation Passing Style)
+(define (flatten1 ls k)
+  (cond ((null? ls) (k '()))
+        ((pair? ls)
+         (flatten1 (car ls)
+                   (lambda (x) (flatten1 (cdr ls)
+                                         (lambda (y) (k (append x y)))))))
+        (else (k (list ls)))))
+
+;
+; テスト
+;
+(define a '(0 1 2 3 4 5 6 7 8 9))
+
+; length のテスト
+(display (length1 a))
+(newline)
+(display (length2 a))
+(newline)
+(display (length3 a (lambda (x) x)))
+(newline)
+
+; reverse のテスト
+(display (reverse1 a))
+(newline)
+(display (reverse2 a))
+(newline)
+(display (reverse3 a (lambda (x) x)))
+(newline)
+(define b (list 1 2 3 4 5 6))
+(display b)
+(newline)
+(display (reverse1! b))
+(newline)
+(display b)
+(newline)
+
+; append のテスト
+(display (append1 '(1 2 3) '(4 5 6)))
+(newline)
+(display (append2 '(1 2 3) '(4 5 6) (lambda (x) x)))
+(newline)
+
+; list-ref, list-tail のテスト
+(let loop ((n 0))
+  (when (&lt; n 10)
+    (display (list-ref1 a n))
+    (newline)
+    (display (list-tail1 a n))
+    (newline)
+    (loop (+ 1 n))))
+
+; memv のテスト
+(let loop ((n 0))
+  (when (&lt; n 11)
+    (display (memv1 n a))
+    (newline)
+    (loop (+ n 1))))
+
+; assv のテスト
+(define b '((a . 1) (b . 2) (c . 3)))
+(display (assv1 'a b))
+(newline)
+(display (assv1 'b b))
+(newline)
+(display (assv1 'c b))
+(newline)
+(display (assv1 'd b))
+(newline)
+
+; copy-list のテスト
+(display (copy-list '(1 2 3 4 5 6 7 8 . 9)))
+(newline)
+(display (copy-list1 '(1 2 3 4 5 6 7 8 . 9) (lambda (x) x)))
+(newline)
+
+; flatten のテスト
+(display (flatten '(1 2 (3 4 5) (6 (7 8 (9 . 10))))))
+(newline)
+(display (flatten1 '(1 2 (3 4 5) (6 (7 8 (9 . 10)))) (lambda (x) x)))
+(newline)
+</pre>
+<h4>●実行例</h4>
+<pre>
+; length
+10
+10
+10
+
+; reverse
+(9 8 7 6 5 4 3 2 1 0)
+(9 8 7 6 5 4 3 2 1 0)
+(9 8 7 6 5 4 3 2 1 0)
+
+; reverse!
+(1 2 3 4 5 6)
+(6 5 4 3 2 1)
+(1)
+
+; append
+(1 2 3 4 5 6)
+(1 2 3 4 5 6)
+
+; list-ref, list-tail
+0
+(0 1 2 3 4 5 6 7 8 9)
+1
+(1 2 3 4 5 6 7 8 9)
+2
+(2 3 4 5 6 7 8 9)
+3
+(3 4 5 6 7 8 9)
+4
+(4 5 6 7 8 9)
+5
+(5 6 7 8 9)
+6
+(6 7 8 9)
+7
+(7 8 9)
+8
+(8 9)
+9
+(9)
+
+; memv
+(0 1 2 3 4 5 6 7 8 9)
+(1 2 3 4 5 6 7 8 9)
+(2 3 4 5 6 7 8 9)
+(3 4 5 6 7 8 9)
+(4 5 6 7 8 9)
+(5 6 7 8 9)
+(6 7 8 9)
+(7 8 9)
+(8 9)
+(9)
+#f
+
+; assv
+(a . 1)
+(b . 2)
+(c . 3)
+#f
+
+; copy-list
+(1 2 3 4 5 6 7 8 . 9)
+(1 2 3 4 5 6 7 8 . 9)
+
+; flatten
+(1 2 3 4 5 6 7 8 9 10)
+(1 2 3 4 5 6 7 8 9 10)
+</pre>
+<hr>
+<h3 id="high_func">高階関数</h3>
+<p> 基本的な高階関数 map. filter, fold (reduce) のプログラムです。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+;
+; map func ls
+;
+(define (map1 func ls)
+  (if (null? ls)
+      '()
+      (cons (func (car ls)) (map1 func (cdr ls)))))
+
+; CSP
+(define (map2 func ls k)
+  (if (null? ls)
+      (k '())
+      (map2 func (cdr ls) (lambda (x) (k (cons (func (car ls)) x))))))
+
+; map のテスト
+(define a '(0 1 2 3 4 5 6 7 8 9))
+(display (map1 (lambda (x) (* x x)) a))
+(newline)
+(display (map2 (lambda (x) (* x x)) a (lambda (x) x)))
+(newline)
+
+;
+; filter pred ls
+;
+(define (filter p ls)
+  (cond ((null? ls) '())
+        ((p (car ls))
+         (cons (car ls) (filter p (cdr ls))))
+        (else (filter p (cdr ls)))))
+
+; CPS
+(define (filter1 p ls k)
+  (cond ((null? ls) (k '()))
+        ((p (car ls))
+         (filter1 p (cdr ls) (lambda (x) (k (cons (car ls) x)))))
+        (else (filter1 p (cdr ls) (lambda (x) (k x))))))
+
+; filter のテスト
+(display (filter odd? a))
+(newline)
+(display (filter1 even? a (lambda (x) x)))
+(newline)
+
+;
+; fold func g ls
+;
+; fold-right
+(define (foldr func g ls)
+  (if (null? ls)
+      g
+      (func (car ls) (foldr func g (cdr ls)))))
+
+; CPS
+(define (foldr1 func g ls k)
+  (if (null? ls)
+      (k g)
+      (foldr1 func g (cdr ls) (lambda (x) (k (func (car ls) x))))))
+
+; fold-left
+(define (foldl func g ls)
+  (if (null? (cdr ls))
+      (func g (car ls))
+      (foldl func (func g (car ls)) (cdr ls))))
+
+; fold のテスト
+; sum
+(display (foldr + 0 a))
+(newline)
+(display (foldr1 + 0 a (lambda (x) x)))
+(newline)
+(display (foldl + 0 a))
+(newline)
+
+; copy-list
+(display (foldr cons '() a))
+(newline)
+(display (foldr1 cons '() a (lambda (x) x)))
+(newline)
+
+; length
+(display (foldr (lambda (x y) (+ y 1)) 0 a))
+(newline)
+(display (foldl (lambda (x y) (+ x 1)) 0 a))
+(newline)
+
+; append
+(display (foldr cons '(4 5 6) '(1 2 3)))
+(newline)
+
+; map
+(display (foldr (lambda (x y) (cons ((lambda (z) (* z z)) x) y)) '() a))
+</pre>
+<h4>●実行例</h4>
+<pre>
+; map
+(0 1 4 9 16 25 36 49 64 81)
+(0 1 4 9 16 25 36 49 64 81)
+
+; filter
+(1 3 5 7 9)
+(0 2 4 6 8)
+
+; fold
+; sum
+45
+45
+45
+
+; copy-list
+(0 1 2 3 4 5 6 7 8 9)
+(0 1 2 3 4 5 6 7 8 9)
+
+; length
+10
+10
+
+; append
+(1 2 3 4 5 6)
+
+; map
+(0 1 4 9 16 25 36 49 64 81)
+</pre>
+<hr>
+<h3 id="sort_merge">ソートとマージ</h3>
+<p> リストのソートとマージを行うプログラムです。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+;
+; 挿入ソート
+;
+(define (insert-sort ls f)
+  (define (insert-element n ls)
+    (cond ((null? ls) (cons n '()))
+          ((f n (car ls)) (cons n ls))
+          (else
+           (cons (car ls) (insert-element n (cdr ls))))))
+  (if (null? ls)
+      '()
+      (insert-element (car ls) (insert-sort (cdr ls) f))))
+
+;
+; クイックソート
+;
+(define (quicksort ls f)
+  (define (partition x ls a b)
+    (cond ((null? ls) (cons a b))
+          ((f (car ls) x)
+           (partition x (cdr ls) (cons (car ls) a) b))
+          (else
+           (partition x (cdr ls) a (cons (car ls) b)))))
+  (if (null? ls)
+      '()
+      (let ((z (partition (car ls) (cdr ls) '() '())))
+          (append (quicksort (car z) f)
+                  (cons (car ls) (quicksort (cdr z) f))))))
+
+;
+; リストのマージ
+;
+(define (merge-list xs ys f)
+  (cond ((null? xs) ys)
+        ((null? ys) xs)
+        ((f (car xs) (car ys))
+         (cons (car xs) (merge-list (cdr xs) ys f)))
+        (else
+         (cons (car ys) (merge-list xs (cdr ys) f)))))
+
+;
+; マージソート
+;
+(define (merge-sort ls n f)
+  (cond ((= n 1) (list (car ls)))
+        ((= n 2)
+         (let ((x (car ls)) (y (cadr ls)))
+           (if (f x y) (list x y) (list y x))))
+        (else
+         (let ((m (quotient n 2)))
+           (merge-list
+             (merge-sort ls m f)
+             (merge-sort (list-tail ls m) (- n m) f)
+             f)))))
+
+: テスト
+(display (insert-sort '(5 9 1 8 2 7 3 6 4) <))
+(newline)
+(display (quicksort '(5 9 1 8 2 7 3 6 4) <))
+(newline)
+(display (merge-list '(1 3 5 7) '(2 4 6 8) <))
+(newline)
+(display (merge-sort '(5 9 1 8 2 7 3 6 4) 9 <))
+</pre>
+<h4>●実行例</h4>
+<pre>
+(1 2 3 4 5 6 7 8 9)
+(1 2 3 4 5 6 7 8 9)
+(1 2 3 4 5 6 7 8)
+(1 2 3 4 5 6 7 8 9)
+</pre>
+<hr>
+<h3 id="perm">順列</h3>
+<p> 順列を生成するプログラムです。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+;
+; perm.scm : 順列の生成
+;
+
+; 最初に見つけた要素を削除する
+(define (remove1 x ls)
+  (cond ((null? ls) '())
+        ((eqv? x (car ls)) (cdr ls))
+        (else (cons (car ls) (remove1 x (cdr ls))))))
+
+; リストの中から n 個を選ぶ
+(define (perm n ls func)
+  (define (perm_sub m ls a)
+    (if (zero? m)
+        (func (reverse a))
+        (for-each
+          (lambda (x)
+            (perm_sub (- m 1) (remove1 x ls) (cons x a)))
+          ls)))
+  (perm_sub n ls '()))
+
+; map の結果を平坦化する
+(define (flatmap func ls)
+  (apply append (map func ls)))
+
+; 順列をリストに格納して返す
+(define (perm1 n ls)
+  (if (zero? n)
+      (list '())
+      (flatmap
+        (lambda (x)
+          (map (lambda (y) (cons x y))
+               (perm1 (- n 1) (remove1 x ls))))
+        ls)))
+
+; テスト
+(perm 3 '(1 2 3 4) (lambda (x) (display x) (newline)))
+(newline)
+(display (perm1 3 '(1 2 3 4)))
+</pre>
+<h4>●実行例</h4>
+<pre>
+(1 2 3)
+(1 2 4)
+(1 3 2)
+(1 3 4)
+(1 4 2)
+(1 4 3)
+(2 1 3)
+(2 1 4)
+(2 3 1)
+(2 3 4)
+(2 4 1)
+(2 4 3)
+(3 1 2)
+(3 1 4)
+(3 2 1)
+(3 2 4)
+(3 4 1)
+(3 4 2)
+(4 1 2)
+(4 1 3)
+(4 2 1)
+(4 2 3)
+(4 3 1)
+(4 3 2)
+
+((1 2 3) (1 2 4) (1 3 2) (1 3 4) (1 4 2) (1 4 3)
+ (2 1 3) (2 1 4) (2 3 1) (2 3 4) (2 4 1) (2 4 3)
+ (3 1 2) (3 1 4) (3 2 1) (3 2 4) (3 4 1) (3 4 2)
+ (4 1 2) (4 1 3) (4 2 1) (4 2 3) (4 3 1) (4 3 2))
+</pre>
+<hr>
+<h3 id="comb">組み合わせ</h3>
+<p> 組み合わせの数を求めるプログラムと、組み合わせを生成するプログラムです。
+</p>
+<h4>●プログラム</h4>
+<pre class="list">
+;
+; comb.scm : 組み合わせ
+;
+
+; 組み合わせの数 (1)
+(define (comb n r)
+  (if (or (= n r) (= r 0))
+      1
+      (+ (comb (- n 1) r) (comb (- n 1) (- r 1)))))
+
+; 組み合わせの数 (2)
+(define (comb1 n r)
+  (if (or (= n r) (= r 0))
+      1
+      (/ (* (comb1 n (- r 1)) (+ (- n r) 1)) r)))
+
+; パスカルの三角形 (1)
+(define (pascal n)
+  (let loop1 ((i 0))
+    (when (&lt;= i n)
+      (let loop2 ((j 0))
+        (when (&lt;= j i)
+           (display (comb1 i j))
+           (display " ")
+           (loop2 (+ j 1))))
+      (newline)
+      (loop1 (+ i 1)))))
+
+;
+; 組み合わせの数を使わない方法
+;
+
+; 次のラインを生成する
+(define (next-line n line)
+  (if (null? line)
+      '(1)
+      (cons (+ n (car line))
+            (next-line (car line) (cdr line)))))
+
+; パスカルの三角形 (2)
+(define (pascal1 n)
+  (let loop ((i 0) (line '(1)))
+    (display line)
+    (newline)
+    (if (&lt; i n)
+      (loop (+ i 1) (next-line 0 line)))))
+
+;
+; 組み合わせの生成
+;
+(define (comb2 n ls func)
+  (define (comb-sub m ls a)
+    (cond ((= m 0) (func (reverse a)))
+          ((= m (length ls))
+           (func (append (reverse a) ls)))
+          (else
+           (comb-sub (- m 1) (cdr ls) (cons (car ls) a))
+           (comb-sub m (cdr ls) a))))
+  (comb-sub n ls '()))
+
+; 組み合わせをリストに格納する
+(define (comb3 n ls)
+  (cond ((= n 0) (list '()))
+        ((= n (length ls)) (list ls))
+        (else
+         (append
+           (map (lambda (x) (cons (car ls) x))
+                (comb3 (- n 1) (cdr ls)))
+           (comb3 n (cdr ls))))))
+
+; テスト
+(pascal 10)
+(pascal1 10)
+(comb2 3 '(a b c d e) (lambda (x) (display x) (newline)))
+(display (comb3 3 '(a b c d e)))
+</pre>
+<h4>●実行例</h4>
+<pre>
+1 
+1 1 
+1 2 1 
+1 3 3 1 
+1 4 6 4 1 
+1 5 10 10 5 1 
+1 6 15 20 15 6 1 
+1 7 21 35 35 21 7 1 
+1 8 28 56 70 56 28 8 1 
+1 9 36 84 126 126 84 36 9 1 
+1 10 45 120 210 252 210 120 45 10 1 
+
+(1)
+(1 1)
+(1 2 1)
+(1 3 3 1)
+(1 4 6 4 1)
+(1 5 10 10 5 1)
+(1 6 15 20 15 6 1)
+(1 7 21 35 35 21 7 1)
+(1 8 28 56 70 56 28 8 1)
+(1 9 36 84 126 126 84 36 9 1)
+(1 10 45 120 210 252 210 120 45 10 1)
+
+(a b c)
+(a b d)
+(a b e)
+(a c d)
+(a c e)
+(a d e)
+(b c d)
+(b c e)
+(b d e)
+(c d e)
+
+((a b c) (a b d) (a b e) (a c d) (a c e) (a d e)
+ (b c d) (b c e) (b d e) (c d e))
+</pre>
+<hr>
+<h3 id="master">マスターマインド</h3>
+<p> マスターマインド (master mind) は異なる 4 つの数字を当てるゲームです。コンピュータは 0 から 9 までの中から重複しないように数字を 4 つ選びます。私たちは数字だけではなく、その位置も当てなくてはいけません。数字は合っているが位置が間違っている個数を cows で表し、数字も位置も合っている個数を bulls で表します。つまり、bulls が 4 になると正解というわけです。ゲームの進行状況を下図に示します。
+</p>
+<pre class="fig">
+   6 2 8 1
+------------------------------
+1. 0 1 2 3 : bulls 0 : cows 2
+2. 1 0 4 5 : bulls 0 : cows 1 
+3. 2 3 5 6 : bulls 0 : cows 2 
+4. 3 2 7 4 : bulls 1 : cows 0 
+5. 3 6 0 8 : bulls 0 : cows 2 
+6. 6 2 8 1 : bulls 4 : cows 0  ***** 正解 *****
+
+    図 : マスターマインドの動作例
+</pre>
+<p> コンピュータが決めた数字は 6 2 8 1 です。プレーヤーは、最初に 0 1 2 3 を入力しました。0 と 3 は 6 2 8 1 に含まれていません。1 と 2 は 6 2 8 1 の中にあるのですが、位置が異なっているので、cows が 2 となります。この場合の bulls は 0 です。あとは bulls が 4 になるように数字を選んで入力していきます。4 番目の入力では、2 の位置が合っているので bulls は 1 となります。この例では 6 回で正解となりました。
+</p>
+<h4>●プログラム１</h4>
+<pre class="list">
+;
+; mastermind.scm : マスターマインド
+;
+;                  Copyright (C) 2006 Makoto Hiroi
+;
+(use srfi-27)
+(random-source-randomize! default-random-source)
+
+; 数字の個数
+(define num-size 4)
+
+; 問題を作る
+(define (make-code)
+  (let loop ((a '()))
+    (if (= (length a) num-size)
+        a
+        (let ((n (random-integer 10)))
+          (if (memv n a)
+              (loop a)
+              (loop (cons n a)))))))
+
+; bulls を数える
+(define (count-bulls xs ys)
+  (cond ((null? xs) 0)
+        ((= (car xs) (car ys))
+         (+ 1 (count-bulls (cdr xs) (cdr ys))))
+        (else (count-bulls (cdr xs) (cdr ys)))))
+
+; 同じ数字の個数を数える
+(define (count-same-number xs ys)
+  (let loop ((xs xs) (n 0))
+    (cond ((null? xs) n)
+          ((memv (car xs) ys)
+           (loop (cdr xs) (+ n 1)))
+          (else (loop (cdr xs) n)))))
+
+; 入力データのチェック
+(define (check-code code)
+  (let loop ((ls code))
+    (cond ((null? ls) #t)
+          ((or (not (integer? (car ls))) (&lt; (car ls) 0) (&lt; 9 (car ls)))
+           (display "0 - 9 の数字を入力してください\n")
+           #f)
+          ((memv (car ls) (cdr ls))
+           (display "異なる数字を入力してください\n")
+           #f)
+          (else (loop (cdr ls))))))
+
+; 入力
+(define (input-code)
+  (let loop ()
+    (let ((code (map string-&gt;number (string-split (read-line) " "))))
+      (cond ((not (= (length code) num-size))
+             (display "数字を 4 つ入力してください\n")
+             (loop))
+            ((check-code code) code)
+            (else (loop))))))
+
+(define (main args)
+  (display "***** Master Mind *****\n")
+  (display "異なる数字 (0 - 9) を 4 つ入力してください\n")
+  (let ((question (make-code)))
+    (let loop ((x 1))
+      (if (&lt;= x 10)
+        (let* ((code (input-code))
+               (bulls (count-bulls question code))
+               (cows (- (count-same-number question code) bulls)))
+          (format #t "~D: bulls ~D, cows ~D\n" x bulls cows)
+          (if (= bulls num-size)
+              (display "おめでとう！\n")
+              (loop (+ x 1))))
+        (format #t "残念、正解は ~A でした\n" question)))))
+</pre>
+<h4>●プログラム２</h4>
+<pre class="list">
+;
+; mastermaind1.scm : マスターマインドの解法
+;
+;               Copyright (C) 2006 Makoto Hiroi
+;
+(use srfi-27)
+(random-source-randomize! default-random-source)
+
+; 数字の個数
+(define num-size 4)
+
+; 質問したコードを記憶
+; ((code bulls cows) ,,,  )
+(define *query* '())
+
+; query と矛盾しないか
+(define (check-query code)
+  (let loop ((qs *query*))
+    (if (null? qs)
+        #t
+        (let* ((qs1 (car qs))
+               (bulls (count-bulls (car qs1) code))
+               (cows (- (count-same-number (car qs1) code) bulls)))
+          (if (or (not (= bulls (cadr qs1))) (not (= cows (caddr qs1))))
+              #f
+              (loop (cdr qs)))))))
+
+; 問題を作る
+(define (make-code)
+  (let loop ((a '()))
+    (if (= (length a) num-size)
+        a
+        (let ((n (random-integer 10)))
+          (if (memv n a)
+              (loop a)
+              (loop (cons n a)))))))
+
+; bulls を数える
+(define (count-bulls xs ys)
+  (cond ((null? xs) 0)
+        ((= (car xs) (car ys))
+         (+ 1 (count-bulls (cdr xs) (cdr ys))))
+        (else (count-bulls (cdr xs) (cdr ys)))))
+
+; 同じ数字の個数を数える
+(define (count-same-number xs ys)
+  (let loop ((xs xs) (n 0))
+    (cond ((null? xs) n)
+          ((memv (car xs) ys)
+           (loop (cdr xs) (+ n 1)))
+          (else (loop (cdr xs) n)))))
+
+; 最初に見つけた要素を削除する
+(define (remove1 x ls)
+  (cond ((null? ls) '())
+        ((eqv? x (car ls)) (cdr ls))
+        (else (cons (car ls) (remove1 x (cdr ls))))))
+
+; リストの中から n 個を選ぶ
+(define (perm n ls func)
+  (define (perm_sub m ls a)
+    (if (zero? m)
+        (func (reverse a))
+        (for-each
+          (lambda (x)
+            (perm_sub (- m 1) (remove1 x ls) (cons x a)))
+          ls)))
+  (perm_sub n ls '()))
+
+; 解法
+(define (solve code)
+  (call/cc
+    (lambda (exit)
+      (perm num-size '(0 1 2 3 4 5 6 7 8 9)
+        (lambda (x)
+          (when (check-query x)
+            (let* ((bulls (count-bulls code x))
+                   (cows (- (count-same-number code x) bulls)))
+              (set! *query* (cons (list x bulls cows) *query*))
+              (format #t "~D: ~A, bulls ~D, cows ~D~%"
+                         (length *query*) x bulls cows)
+              (when (= bulls num-size)
+                (format #t "Good Job!\n")
+                (exit #t)))))))))
+
+; 実行
+(define (main args)
+  (solve (make-code)))
+</pre>
+<h4>●実行例</h4>
+<pre>
+1: (0 1 2 3), bulls 1, cows 1
+2: (0 2 4 5), bulls 1, cows 1
+3: (0 3 5 6), bulls 1, cows 2
+4: (0 5 3 7), bulls 0, cows 2
+5: (6 2 5 3), bulls 4, cows 0
+Good Job!
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2006 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ PrevPage | <a href="scheme.html#junk">Scheme</a> | <a href="scheme02.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

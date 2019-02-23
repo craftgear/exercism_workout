@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 三目並べ</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881774</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>三目並べ</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p> 三目並べは、皆さんお馴染みの二人で対戦するゲームです。ひとりが○側でもうひとりが×側を受け持ち、3 行 3 列のマス目に○×を書いて、3 つ並べた方が勝ちというゲームです。
+</p>
+<pre class="fig">
+ ┌─┬─┬─┐ 
+ │×│○│○│ 
+ ├─┼─┼─┤ 
+ │○│○│×│ 
+ ├─┼─┼─┤ 
+ │×│×│○│ 
+ └─┴─┴─┘ 
+
+  図：三目並べ
+</pre>
+<p> 上図は○側が先手で引き分けになった例です。三目並べは、両者が最善を尽くすと引き分けになることが知られています。本当に引き分けになるのか、プログラムを作って確かめてみましょう。
+</p>
+
+<p> 三目並べは簡単なゲームなので、ゲーム終了まで読み切ることができます。局面の状態は、○側の勝ち、×側の勝ち、引き分けの 3 通りしかありません。あとは、ミニマックス法により最善手を選択させ、その結果を求めればいいわけです。
+</p>
+<p> とりあえず、プログラムでは指し手を保存しないで、評価値の結果だけを出力することにします。初手をどこに選んでも、引き分けの評価値が出力されるはずです。
+</p>
+<hr>
+<h4>●プログラム</h4>
+<p> それではプログラムを作ります。最初にマクロとグローバル変数を定義します。
+</p>
+<pre class="fig">
+ ┌─┬─┬─┐ 
+ │０│１│２│ 
+ ├─┼─┼─┤ 
+ │３│４│５│ 
+ ├─┼─┼─┤ 
+ │６│７│８│ 
+ └─┴─┴─┘ 
+
+ 図：盤面の番号
+</pre>
+<pre class="list">
+リスト：マクロの定義
+
+#define SIZE  9
+#define FREE  0
+#define MARU  1
+#define BATU (-1)
+#define LINE  8
+#define MARU_WIN 1
+#define BATU_WIN (-1)
+#define DRAW  0
+#define MAX_VALUE 2
+#define MIN_VALUE (-2) 
+</pre>
+<pre class="list">
+リスト：グローバル変数の定義
+
+/* 盤面 */
+char board[SIZE];
+
+/* 直線 */
+const char line[LINE][3] = {
+  0, 1, 2,   3, 4, 5,   6, 7, 8,
+  0, 3, 6,   1, 4, 7,   2, 5, 8,
+  0, 4, 8,   2, 4, 6,
+};
+</pre>
+<p> 盤面は 1 次元配列 board で表します。盤面の位置と配列の添字の対応は、左図のように定義します。すると、駒が 3 つ並ぶ直線は配列 line で表すことができます。勝敗を判定するプログラムは、line を使えば簡単にプログラムできます。
+</p>
+
+<pre class="list">
+リスト：勝敗の判定
+
+int check_winner( void )
+{
+  int i;
+  for( i = 0; i &lt; LINE; i++ ){
+    int piece = board[ line[i][0] ];
+    if( piece != FREE &amp;&amp; piece == board[ line[i][1] ] &amp;&amp; piece == board[ line[i][2] ] ){
+      return (piece == MARU ? MARU_WIN : BATU_WIN);
+    }
+  }
+  return DRAW;
+}
+</pre>
+
+<p> check_winner は 8 本の直線を調べ、同じ駒が 3 つ並んでいないか調べます。直線の最初の位置に MARU か BATU があり、残り 2 つの場所に同じ駒があれば 3 つ並んでいることがわかります。MARU が 3 つ並んでいれば評価値 MARU_WIN (1) を、BATU であれば BATU_WIN (-1) を返します。MARU も BATU も 3 つ並んでいなければ、DRAW (0) を返します。
+</p>
+<p> ミニマックス法を使う場合、局面の評価値が必要になります。局面から評価値を計算する関数を「評価関数」といいます。評価関数は、先手が有利 (後手が不利) な局面ほど大きな値 (正の値)、逆に後手が有利 (先手が不利) なほど小さな値 (負の値)、互角の場合は 0 になるように作るのが一般的です。
+</p>
+<p> 三目並べの場合、ゲーム終了まで読み切ることができるので、評価値は、勝ち、負け、引き分けの 3 つでいいわけです。ただし、この関数はゲームの途中でも DRAW を返しますので、引き分けの判定には注意が必要です。これはあとで説明します。
+</p>
+
+<p> 次は、先手 (○) の指し手を決める think_maru を作ります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：先手の指し手
+
+int think_maru( int n )
+{
+  int i, v, value = MIN_VALUE;
+  for( i = 0; i &lt; SIZE; i++ ){
+    if( board[i] != FREE ) continue;
+    /* MARU を書く */
+    board[i] = MARU;
+    /* 勝敗の判定 */
+    v = check_winner();
+    /* 決着していなければ相手の手番へ */
+    if( v == DRAW &amp;&amp; n &lt; SIZE - 1 ) v = think_batu( n + 1 );
+    /* ミニマックス法 */
+    if( v &gt; value ) value = v;
+    /* 元に戻す */
+    board[i] = FREE;
+  }
+  return value;
+}
+</pre>
+
+<p> think_maru は先手が有利になる指し手、つまり、評価値が大きい手を選べばいいわけです。引数 n は手数を表します。選んだ指し手の評価値は value に格納します。MIN_VALUE は BATU_WIN よりも小さな値にします。この値は、まだ指し手を選んでいないことを表します。
+</p>
+<p> 次に、盤面 board を調べて、空き場所に MARU を書き込みます。そして、関数 check_winner を呼び出して、勝敗の判定を行います。もしも、評価値 v が DRAW の場合、盤面にまだ駒が置ける状態であれば、ゲームは終了していません。盤面には n + 1 個の駒があるので、n &lt; SIZE - 1 であればゲーム続行、そうでなければ引き分けです。ゲームを続行する場合は、関数 think_batu を呼び出して手番を相手に移します。
+</p>
+<p> ミニマックス法による指し手の決定は簡単です。先手は評価値が大きい手を選べばいいのですから、v が value よりも大きな値であれば、それを指し手として選びます。value は MIN_VALUE に初期化されているので、最初に調べた指し手は必ず選ばれることになります。そして、盤面 board を元の値に戻して、次の指し手を調べます。最後に、選んだ指し手の評価値 value を返します。
+</p>
+
+<p> 次は、後手 (×) の指し手を決める think_batu を作ります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：後手の指し手
+
+int think_batu( int n )
+{
+  int i, v, value = MAX_VALUE;
+  for( i = 0; i &lt; SIZE; i++ ){
+    if( board[i] != FREE ) continue;
+    /* BATU を書く */
+    board[i] = BATU;
+    /* 勝敗の判定 */
+    v = check_winner();
+    /* 決着していなければ相手の手番へ */
+    if( v == DRAW &amp;&amp; n &lt; SIZE - 1 ) v = think_maru( n + 1 );
+    /* ミニマックス法 */
+    if( v &lt; value ) value = v;
+    /* 元に戻す */
+    board[i] = FREE;
+  }
+  return value;
+}
+</pre>
+
+<p> 関数 think_batu は think_maru とは逆に、後手が有利になる指し手 (評価値が小さな手) を選びます。value は MARU_WIN よりも大きな値 MAX_VALUE に初期化しておきます。そして、ミニマックス法では、v が value よりも小さければ、それを選べばいいわけです。ミニマックス法のプログラムはこれだけです。
+</p>
+
+<p> 最後にメインルーチンを作ります。
+</p>
+
+<pre class="list">
+リスト：メインルーチン
+
+int main()
+{
+  int v, i, j;
+  for( i = 0; i &lt; SIZE; i++ ){
+    memset( board, FREE, SIZE );    /* 初期化 */
+    board[i] = MARU;                /* 初手 */
+    v = think_batu( 1 );            /* 相手の手番 */
+    printf("初手 %d: 評価値 %d\n", i, v );
+  }
+  return 0;
+}
+</pre>
+
+<p> 最初に memset で board を FREE (0) に初期化します。そして、初手を指してから、think_batu を呼び出して手番を相手に移します。この返り値が勝敗の結果を表しているので、それを出力するだけです。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実行結果を示しましょう。
+</p>
+<pre>
+初手 0: 評価値 0
+初手 1: 評価値 0
+初手 2: 評価値 0
+初手 3: 評価値 0
+初手 4: 評価値 0
+初手 5: 評価値 0
+初手 6: 評価値 0
+初手 7: 評価値 0
+初手 8: 評価値 0
+</pre>
+<p> 初手がどこでも、結果は引き分けとなりました。これで、両者が最善を尽くすと引き分けになることが確かめられました。
+</p>
+<p> それでは、ルールを「3 つ並べた方が負け」に変更すると、結果はどうなるでしょうか。プログラムは簡単に改造できます。関数 check_winner では、MARU が 3 つ並んでいたら MARU_WIN を出力していましたが、これを BATU_WIN に変更します。逆に、BATU が 3 つ並んでいたら MARU_WIN を出力します。ようするに、勝敗の判定を逆にするだけです。
+</p>
+<p> このルールでは先手が不利なように思いますが、それでも引き分けになるのでしょうか。さっそく実行してみましょう。
+</p>
+<pre>
+初手 0: 評価値 -1
+初手 1: 評価値 -1
+初手 2: 評価値 -1
+初手 3: 評価値 -1
+初手 4: 評価値 0
+初手 5: 評価値 -1
+初手 6: 評価値 -1
+初手 7: 評価値 -1
+初手 8: 評価値 -1
+</pre>
+<p> 初手が中央の場合のみ引き分けで、あとは後手の勝ちとなりました。後手必勝にはなりませんでしたね。興味のある方は、実際にプレイして確かめてみてください。また、今回のプログラムは評価値を出力するだけでしたが、指し手を表示するように改造してみるのも面白いと思います。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+/*
+ * tictactoe.c : 三目並べ
+ *
+ *               Copyright (C) 2001 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+
+#define SIZE  9
+#define FREE  0
+#define MARU  1
+#define BATU  2
+#define LINE  8
+#define MARU_WIN 1
+#define BATU_WIN (-1)
+#define DRAW  0
+#define MAX_VALUE 2
+#define MIN_VALUE (-2)
+
+/* 関数宣言 */
+int think_maru( int n );
+int think_batu( int n );
+
+/* 直線 */
+const char line[LINE][3] = {
+  0, 1, 2,  3, 4, 5,  6, 7, 8,
+  0, 3, 6,  1, 4, 7,  2, 5, 8,
+  0, 4, 8,  2, 4, 6,
+};
+
+char board[SIZE];  /* 盤面 */
+
+
+/* 勝敗の判定 */
+int check_winner( void )
+{
+  int i;
+  for( i = 0; i &lt; LINE; i++ ){
+    int piece = board[ line[i][0] ];
+    if( piece != FREE &amp;&amp; piece == board[ line[i][1] ] &amp;&amp; piece == board[ line[i][2] ] ){
+      return (piece == MARU ? MARU_WIN : BATU_WIN);
+    }
+  }
+  return 0;
+}
+
+/* 先手 */
+int think_maru( int n )
+{
+  int i, v, value = MIN_VALUE;
+  for( i = 0; i &lt; SIZE; i++ ){
+    if( board[i] != FREE ) continue;
+    /* MARU を書く */
+    board[i] = MARU;
+    /* 勝敗の判定 */
+    v = check_winner();
+    /* 決着していなければ相手の手番へ */
+    if( v == DRAW &amp;&amp; n &lt; SIZE - 1 ) v = think_batu( n + 1 );
+    /* ミニマックス */
+    if( v &gt; value ) value = v;
+    /* 元に戻す */
+    board[i] = FREE;
+  }
+  return value;
+}
+
+/* 後手 */
+int think_batu( int n )
+{
+  int i, v, value = MAX_VALUE;
+  for( i = 0; i &lt; SIZE; i++ ){
+    if( board[i] != FREE ) continue;
+    /* BATU を書く */
+    board[i] = BATU;
+    /* 勝敗の判定 */
+    v = check_winner();
+    /* 決着していなければ相手の手番へ */
+    if( v == DRAW &amp;&amp; n &lt; SIZE - 1 ) v = think_maru( n + 1 );
+    /* ミニマックス */
+    if( v &lt; value ) value = v;
+    /* 元に戻す */
+    board[i] = FREE;
+  }
+  return value;
+}
+
+int main()
+{
+  int v, i, j;
+  for( i = 0; i &lt; SIZE; i++ ){
+    /* 初期化 */
+    memset( board, FREE, SIZE );
+    /* 初手 */
+    board[i] = MARU;
+    /* 相手の手番 */
+    v = think_batu( 1 );
+    /* 結果 */
+    printf("初手 %d: 評価値 %d\n", i, v );
+  }
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2001-2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

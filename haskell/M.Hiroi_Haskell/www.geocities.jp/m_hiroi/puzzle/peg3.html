@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / ペグ・ソリテア : 変形三角盤</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881773</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>ペグ・ソリテア : 変形三角盤</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p><img src="triangle01.png" alt="変形三角盤" width=237 heith=240 align="left">
+</p>
+<p> またまた少しだけサイズを大きくした「ペグ・ソリテア」に挑戦しましょう。
+</p>
+<p> 左図は「変形三角盤」と呼ばれるペグ・ソリテアです。21 個のマスが少し変わった三角形に並んでいて、そこにペグを配置します。ペグは別のペグをひとつだけ跳び超えることで、任意の方向へ移動することができます。もちろん、着地する地点が空いていなければ、跳び越えることはできません。21 個のペグの中からひとつのペグを取り除き、最後にひとつだけペグが残る跳び方の最短手数を求めることにします。
+</p>
+<br clear="left">
+<hr>
+<h4>●プログラムを作る</h4>
+<p> それではプログラムを作りましょう。使用するプログラミング言語はＣ言語です。また、ペグの管理は双方向リストを使って行います。まず、ペグの跳び先表を定義します。下図のように座標を定義すると、跳び先表は次のようになります。
+</p>
+<p><img src="triangle02.png" alt="変形三角盤の座標" width=237 heith=240>
+</p>
+<pre class="list">
+リスト：跳び先表の定義
+
+const char jump_table[][SIZE] = {
+  { 2,  4, -1},                         /*  0 */
+  { 2,  3, -1},                         /*  1 */
+  { 3,  5,  4,  7, -1},                 /*  2 */
+  { 2,  1,  5,  8,  6, 10, -1},         /*  3 */
+  { 2,  0,  6,  9,  7, 11, -1},         /*  4 */
+  { 3,  2,  6,  7,  8, 13,  9, 15, -1}, /*  5 */
+  { 9, 14, 10, 16, -1},                 /*  6 */
+  { 4,  2,  6,  5, 10, 15, 11, 17, -1}, /*  7 */
+  { 5,  3,  9, 10, 13, 19, -1},         /*  8 */
+  { 6,  4, 10, 11, -1},                 /*  9 */
+  { 6,  3,  9,  8, -1},                 /* 10 */
+  { 7,  4, 10,  9, 17, 20, -1},         /* 11 */
+  {13, 14, -1},                         /* 12 */
+  { 8,  5, 14, 15, -1},                 /* 13 */
+  { 9,  6, 13, 12, 15, 16, -1},         /* 14 */
+  { 9,  5, 10,  7, 14, 13, 16, 17, -1}, /* 15 */
+  {10,  6, 15, 14, 17, 18, -1},         /* 16 */
+  {11,  7, 16, 15, -1},                 /* 17 */
+  {17, 16, -1},                         /* 18 */
+  {13,  8, -1},                         /* 19 */
+  {17, 11, -1},                         /* 20 */
+};
+</pre>
+
+<p> 今回は、最初に取り除くペグの位置は 6 番とし、最後に残ったペグが 6 番となる「補償型の解」を求めることにします。
+</p>
+<p> 次にグローバル変数を定義します。
+</p>
+
+<pre class="list">
+リスト：グローバル変数の定義(1)
+
+DNODE *header;           /* 双方向リストヘッダ */
+DNODE *board[SIZE];      /* 盤面  NULL：ペグ無し */
+char move[MAX_JUMP][2];  /* 跳び手順を格納 */
+int count = 0;           /* 解の総数をカウント */
+int jump_limit;          /* 探索する手数 */
+</pre>
+<p> DNODE は双方向リストのセルを定義した構造体です。これでペグを表します。ヘッダ header と配列 board は関数 init_peg で初期化します。探索はこの配列を直接書き換え、バックトラックするときに元の値に戻します。移動手順は配列 move に格納します。ペグが 19 回移動すると盤上のペグはひとつになるので、MAX_JUMP は 19 となります。
+</p>
+
+<p> ところで、ペグが 20 個を超えると、単純な反復深化では時間がとてもかかります。実際、探索手数を 10 から始めたのですが、いつまでたっても 10 手の探索が終わりません。そこで、<a href="index.html#puz_cite">参考文献 [11]</a> で解説されていた「下限値枝刈り法」を使うことにします。
+</p>
+<h4>●下限値枝刈り法</h4>
+<p> 下限値枝刈り法は難しいアルゴリズムではありません。たとえば、5 手進めた局面を考えてみます。探索の上限が 10 手とすると、あと 5 手だけ動かすことができますね。このとき、パズルを解くのに 6 手以上かかることがわかれば、ここで探索を打ち切ることができます。このように、必要となる最低限の手数が明確にわかる場合、この値を「下限値 (Lower Bound) 」と呼びます。この下限値を求めることができれば、「今の移動手数 + 下限値」が探索手数を超えた時点で、枝刈りすることが可能になります。これが下限値枝刈り法の基本的な考え方です。
+</p>
+<p> 一般に、このような手法を「分岐限定法」とか「分岐制約法」といいます。<a href="index.html#puz_cite">参考文献 [1]</a> には、「巡回セールスマン問題 (TSP) 」を例題にした分岐制約法の説明があります。また、思考ルーチンを作るときの常套手段である「αβ枝刈り」も分岐制約法のひとつです。
+</p>
+
+<p> ペグ・ソリテアの場合、コーナーにあるペグはほかのペグから跳び越されることはありません。つまり、コーナーのペグは自分でジャンプするしか移動する方法がないのです。したがって、コーナーにペグが残っていれば、最低でもその個数だけ移動手数が必要になります。変形三角盤の場合、コーナーは 0, 1, 12, 18, 19, 20 番の 6 か所あります。これを下限値として利用することにしましょう。
+</p>
+
+<h4>●下限値枝刈り法のプログラム</h4>
+<p> 下限値を求めるときに、コーナーに残っているペグをいちいち数えているようでは、面倒で時間もかかりそうです。そこで、グローバル変数 corner_rest にコーナーに残っているペグの数を記憶しておきます。そして、コーナーからジャンプするときは、corner_rest の値をひとつ減らし、コーナーに着地するときは、ひとつ増やすことにします。もちろん、バックトラックするときは、元の値に戻します。この処理のため、グローバル変数にコーナーを判定するための配列 corner を追加します。
+</p>
+
+<pre class="list">
+リスト：グローバル変数の定義(2)
+
+/* corner */
+const char corner[SIZE] = {
+  1,1,0,0,0,0,0,
+  0,0,0,0,0,1,0,
+  0,0,0,0,1,1,1,
+};
+
+/* corner に残っているペグ */
+int corner_rest = 6;
+</pre>
+<p> そして、ペグを動かす move_piece とペグを元に戻す back_piece で、コーナーにあるペグのチェックを行います。
+</p>
+
+<pre class="list">
+リスト：ペグを動かす
+
+DNODE *move_piece( int n, int from, int del, int to )
+{
+  DNODE *j_peg = board[from];
+  DNODE *r_peg = board[del];
+  board[from] = NULL;
+  board[del] = NULL;
+  board[to] = j_peg;
+  move[n][0] = from;
+  move[n][1] = to;
+  j_peg-&gt;postion = to;
+  /* 双方向リストから削除 */
+  r_peg-&gt;prev-&gt;next = r_peg-&gt;next;
+  r_peg-&gt;next-&gt;prev = r_peg-&gt;prev;
+  /* corner check */
+  if( corner[from] ){
+    corner_rest--;
+  } else if( corner[to] ){
+    corner_rest++;
+  }
+  return r_peg;
+}
+</pre>
+<p> コーナーにあるペグは跳び越されることがないので、from か to をチェックすれば OK です。form がコーナーであれば、ペグがコーナーから取り除かれました。この場合、corner_rest をひとつ減らします。to がコーナーであれば、ペグがコーナーに着地したわけですから、corner_rest をひとつ増やせばいいわけです。
+</p>
+<p> 関数 back_piece では、この逆の操作になること、つまり from がコーナーであれば corner_rest をひとつ増やし、to がコーナーであれば corner_rest をひとつ減らすことに注意してください。
+</p>
+
+<p> 最後に探索を行う関数 search_move を修正します。
+</p>
+
+<pre class="list">
+リスト：探索
+
+void search_move( int n, int jc )
+{
+  /* 下限値枝刈り法 */
+  if( jc + corner_rest &gt; jump_limit ) return;
+
+  /* 補償解を求める */
+  if( n == MAX_JUMP &amp;&amp; board[6] != NULL ){
+    count++;
+    print_move();
+  } else {
+    DNODE *peg = header;
+    while( (peg = peg-&gt;next) != header ){
+      int from = peg-&gt;postion;
+      int del, to, i = 0;
+      while( (del = jump_table[from][i++]) &gt; 0 ){
+        to = jump_table[from][i++];
+        if( board[del] &amp;&amp; !board[to] ){
+          DNODE* r_peg = move_piece( n, from, del, to );
+          search_move( n + 1, (move[n-1][1] == from ? jc : jc + 1) );
+          back_piece( from, del, to, r_peg );
+        }
+      }
+    }
+  }
+}
+</pre>
+<p> 下限値枝刈り法の修正は最初の if 文だけです。移動手数 jc と探索手数の上限値 jump_limit を比較するとき、jc に corner_rest の値を加算します。そして、この値が jump_limit より大きくなれば、そこで探索を打ち切ればいいわけです。修正はこれだけです。とても簡単ですね。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。あいかわらず Pentium 166 MHz のオンボロマシンで実行しました。
+</p>
+<pre>
+・・・手数 10 を探索中・・・
+・・・手数 11 を探索中・・・
+・・・手数 12 を探索中・・・
+(14, 6)(11, 9)( 3,10)( 1, 3)( 7, 2)( 0, 4)(12,14, 6)( 5, 2, 7, 5,13)
+(20,11, 9)(15,17)(19, 8,10)(18,16, 6)
+
+・・・ 省略 ・・・
+
+(14, 6)(11, 9)( 3,10)(12,14, 6)(20,11, 9)(15,17)( 1, 3)( 7, 2)( 0, 4)
+( 5, 7, 2, 5,13)(19, 8,10)(18,16, 6)
+総数 96 個, 時間 63679
+</pre>
+
+<p> 最短手数は 12 手で、96 通りの解を見つけることができました。実行時間は約 1 分ちょっとかかりました。何も工夫しないプログラムでは、10 手の探索でさえ時間がかかりましたが、下限値枝刈り法を使ったところ、10 手の探索はあっという間に終了しました。効果はとても高いですね。
+</p>
+<p> 今回はコーナーにあるペグに着目しましたが、ほかにも下限値を求める方法があると思います。興味のある方は、高速化に挑戦してみてください。
+</p>
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+/*
+ * triangle.c : 変形三角盤の解法
+ *
+ *              Copyright (C) 2000 by Makoto Hiroi
+ *
+ *              双方向リストと下限値枝刈り法を使う
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;time.h&gt;
+
+#define SIZE 21
+#define MAX_JUMP 19
+
+/* 双方向リスト */
+typedef struct dnode {
+  int postion;
+  struct dnode *prev;
+  struct dnode *next;
+} DNODE;
+
+/* 双方向リストヘッダ */
+DNODE *header;
+/* 盤面 */
+DNODE *board[SIZE];    /* NULL：ペグ無し */
+
+/* 跳び表 */
+const char jump_table[][SIZE] = {
+  { 2,  4, -1},                         /*  0 */
+  { 2,  3, -1},                         /*  1 */
+  { 3,  5,  4,  7, -1},                 /*  2 */
+  { 2,  1,  5,  8,  6, 10, -1},         /*  3 */
+  { 2,  0,  6,  9,  7, 11, -1},         /*  4 */
+  { 3,  2,  6,  7,  8, 13,  9, 15, -1}, /*  5 */
+  { 9, 14, 10, 16, -1},                 /*  6 */
+  { 4,  2,  6,  5, 10, 15, 11, 17, -1}, /*  7 */
+  { 5,  3,  9, 10, 13, 19, -1},         /*  8 */
+  { 6,  4, 10, 11, -1},                 /*  9 */
+  { 6,  3,  9,  8, -1},                 /* 10 */
+  { 7,  4, 10,  9, 17, 20, -1},         /* 11 */
+  {13, 14, -1},                         /* 12 */
+  { 8,  5, 14, 15, -1},                 /* 13 */
+  { 9,  6, 13, 12, 15, 16, -1},         /* 14 */
+  { 9,  5, 10,  7, 14, 13, 16, 17, -1}, /* 15 */
+  {10,  6, 15, 14, 17, 18, -1},         /* 16 */
+  {11,  7, 16, 15, -1},                 /* 17 */
+  {17, 16, -1},                         /* 18 */
+  {13,  8, -1},                         /* 19 */
+  {17, 11, -1},                         /* 20 */
+};
+
+/* corner */
+const char corner[SIZE] = {
+  1,1,0,0,0,0,0,
+  0,0,0,0,0,1,0,
+  0,0,0,0,1,1,1,
+};
+
+int corner_rest = 6;
+
+/* 跳び手順を格納 */
+char move[MAX_JUMP][2];
+
+/* 解の総数をカウント */
+int count = 0;
+
+/* 探索する手数 */
+int jump_limit;
+
+/* 双方向リストのメモリ取得 */
+DNODE *get_dnode( void )
+{
+  DNODE *node = malloc( sizeof( DNODE ) );
+  if( node == NULL ){
+    fprintf( stderr, "Out of Memory\n" ); exit( 1 );
+  }
+  return node;
+}
+
+/* 初期化 */
+void init_peg( void )
+{
+  int i;
+  /* ヘッダセット */
+  header = get_dnode();
+  header-&gt;postion = SIZE;    /* 範囲外のデータをセット */
+  header-&gt;next = header;     /* 自分だけの循環リストを作る */
+  header-&gt;prev = header;
+
+  /* ペグデータセット */
+  for( i = 0; i &lt; SIZE; i++ ){
+    DNODE *node;
+    if( i == 6 ){
+      board[i] = NULL;
+      continue;
+    }
+    node = get_dnode();
+    node-&gt;postion = i;
+    node-&gt;prev = header-&gt;prev;
+    node-&gt;next = header;
+    header-&gt;prev-&gt;next = node;
+    header-&gt;prev = node;
+    board[i] = node;
+  }
+}
+
+
+/* ペグを動かす */
+DNODE *move_piece( int n, int from, int del, int to )
+{
+  DNODE *j_peg = board[from];
+  DNODE *r_peg = board[del];
+  board[from] = NULL;
+  board[del] = NULL;
+  board[to] = j_peg;
+  move[n][0] = from;
+  move[n][1] = to;
+  j_peg-&gt;postion = to;
+  /* 双方向リストから削除 */
+  r_peg-&gt;prev-&gt;next = r_peg-&gt;next;
+  r_peg-&gt;next-&gt;prev = r_peg-&gt;prev;
+  /* corner check (corner は from か to しかない)*/
+  if( corner[from] ){
+    corner_rest--;
+  } else if( corner[to] ){
+    corner_rest++;
+  }
+  return r_peg;
+}
+
+/* ペグを元に戻す */
+void back_piece( int from, int del, int to, DNODE* r_peg )
+{
+  DNODE* j_peg = board[to];
+  j_peg-&gt;postion = from;
+  board[from] = j_peg;
+  board[del] = r_peg;
+  board[to] = NULL;
+  /* 双方向リストへ戻す */
+  r_peg-&gt;prev-&gt;next = r_peg;
+  r_peg-&gt;next-&gt;prev = r_peg;
+  /* corner check (corner は from か to しかない)*/
+  if( corner[from] ){
+    corner_rest++;
+  } else if( corner[to] ){
+    corner_rest--;
+  }
+}
+
+/* 手順を表示 */
+void print_move( void )
+{
+  int i, j;
+  for( i = 0, j = 1; i &lt; MAX_JUMP; i++, j++ ){
+    printf("(%2d,%2d", move[i][0], move[i][1] );
+    for( ; j &lt; MAX_JUMP; i++, j++ ){
+      if( move[i][1] != move[j][0] ) break;
+      printf(",%2d", move[j][1] );
+    }
+    printf(")");
+  }
+  printf("\n");
+}
+
+/* 手順の探索 */
+void search_move( int n, int jc )
+{
+  /* 下限値枝刈り法 */
+  if( jc + corner_rest &gt; jump_limit ) return;
+  if( n == MAX_JUMP &amp;&amp; board[6] != NULL ){
+    count++;
+    print_move();
+  } else {
+    DNODE *peg = header;
+    while( (peg = peg-&gt;next) != header ){
+      int from = peg-&gt;postion;
+      int del, to, i = 0;
+      while( (del = jump_table[from][i++]) &gt; 0 ){
+        to = jump_table[from][i++];
+        if( board[del] &amp;&amp; !board[to] ){
+          /* 跳び越せる */
+          DNODE* r_peg = move_piece( n, from, del, to );
+          search_move( n + 1, (move[n-1][1] == from ? jc : jc + 1) );
+          back_piece( from, del, to, r_peg );
+        }
+      }
+    }
+  }
+}
+
+int main()
+{
+  int move, start, end;
+  start = clock();
+  /* 双方向リストの初期化 */
+  init_peg();
+  move_piece( 0, 14, 9, 6 );    /* 14 からスタート */
+  for( move = 10; move &lt;= MAX_JUMP; move++ ){
+    printf("・・・手数 %d を探索中・・・\n", move );
+    jump_limit = move;
+    search_move( 1, 1 );
+    if( count ) break;
+  }
+  end = clock();
+  fprintf( stdout, "総数 %d 個, 時間 %d\n", count, end - start );
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

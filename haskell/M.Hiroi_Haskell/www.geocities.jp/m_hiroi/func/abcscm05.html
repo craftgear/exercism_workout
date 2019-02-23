@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881781</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm04.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm06.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>数当てゲーム（その１）</h3>
+<p> 今回は「数当て」ゲームを作りましょう。ゲームの内容は、1 から 100 までの数字の中からコンピュータが選んだ数字を、私達が 7 回以内に当てるという単純なものです。コンピュータは当たりはずれだけではなく、大きいか小さいかを答えてくれますので、範囲を絞り込めば制限内で答えることができるというゲームです。
+</p>
+
+<p> それでは、順番に処理内容を考えていきましょう。まず、コンピュータが数字を決めないことには、ゲームを始めることができません。コンピュータで適当な数字を選ぶためには、「乱数 (random numbers) 」という方法を使います。
+</p>
+
+<h4>●乱数のお話</h4>
+<p> 私たちが適当な数字を決める場合、サイコロを使えば 1 から 6 までの数字を簡単に決めることができます。たとえば、サイコロを振って出た目を記録したら、次のようになったとしましょう。
+</p>
+
+<pre class="item">
+5, 2, 1, 2, 6, 3, 4, 3, 1, 5, .....
+</pre>
+
+<p> サイコロの目は、イカサマをしないかぎり、出る確率が 1 / 6 で規則性はまったくありません。したがって、数字の出る順番には規則性はなく、まったくでたらめになります。いま 2 が出たから次は 1 が出るとか、3, 4 と続いたから次は 5 が出るといったように、前に出た数字から次に出る数字を予測することはできないのです。このように、でたらめに並んだ数列を「乱数列 (random sequence) 」といい、乱数列の中のひとつひとつの数字を「乱数」といいます。
+</p>
+
+<p> コンピュータは、決められた手順 (プログラム) を高速に実行することは得意なのですが、まったくでたらめの数を作れといわれると、とたんに困ってしまいます。そこで、何かしらの数式をプログラムして、それを実行することで乱数を発生させます。厳密にいえば乱数ではありませんが、それを乱数としてみなして使うことにするのです。このような乱数を「疑似乱数 (pseudo-random numbers) 」といいます。
+</p>
+<h4>●線形合同法</h4>
+<p> Scheme の仕様書 R5RS には乱数の規定がないので、ここでは「線形合同法」という簡単なアルゴリズムを使って乱数を生成することにしましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 線形合同法による乱数の生成
+
+; 種 (seed)
+(define *seed* 1)
+
+; シードの設定
+(define (srand x)
+    (set! *seed* x))
+
+; 整数の一様乱数
+(define (irand)
+    (set! *seed* (modulo (+ (* 69069 *seed*) 1) #x100000000))
+    *seed*)
+
+; 実数の一様乱数
+(define (random)
+    (* (/ 1.0 #x100000000) (irand)))
+</pre>
+<p> 線形合同法の説明は拙作のページ <a href="http://www.geocities.jp/m_hiroi/light/scheme.html#python_algo">Algorithms with Python</a> の <a href="../light/pyalgo18.html">乱数</a> をお読みください。なお、Gauche には「メルセンヌ・ツイスター」という優秀なアルゴリズムを使って擬似乱数を生成するライブラリが用意されています。興味のある方は Gauche のマニュアルをお読みください。
+</p>
+
+<p> 関数 irand は 0 以上 #xffffffff (32 bit) 以下の整数を返します。関数 random は 0 以上 1.0 未満の実数を返します。それでは、実際に乱数を 5 個作ってみましょう。
+</p>
+
+<pre>
+gosh&gt; (irand)
+69070
+gosh&gt; (irand)
+475628535
+gosh&gt; (irand)
+3277404108
+gosh&gt; (irand)
+772999773
+gosh&gt; (irand)
+3877832058
+</pre>
+
+<p> この乱数を使うためにはちょっとしたテクニックが必要になります。実は、プログラムを読み込んで irand を評価すると、必ずこの乱数列が生成されます。一般に、擬似乱数を生成する場合、種 (seed : シード) となる数値が必要になります。このプログラムは大域変数 *seed* にシードを保持しています。プログラムを読み込むと *seed* は 1 に初期化されるため、その直後に irand を評価すれば必ず同じ乱数列が生成されるというわけです。
+</p>
+
+<p> 異なる乱数列を生成するには、シードに違う値を設定すればいいのです。シードに値を設定する関数が srand です。ゲームを作る場合、とくに数当てゲームでは、プレイするたびに違う乱数列を発生させないと、当てる数字が同じになってしまうのでおもしろくありません。そこで、起動するたびに異なった値をシードに設定するようにします。
+</p>
+
+<p> この設定に乱数を使うことはできません。そこで、よく使われるテクニックを紹介しましょう。それは、シードの設定に現在時刻を使う方法です。R5RS には規定されていませんが、Gauche には現在時刻を整数値で返す sys-time が用意されています。それでは sys-time で現在時刻を求めてみましょう。
+</p>
+
+<pre>
+gosh&gt; (sys-time)
+1198378800
+gosh&gt; (sys-ctime 1198378800)
+"Sun Dec 23 12:00:00 2007\n"
+</pre>
+
+<p> sys-time で得た現在時刻を文字列に直す関数が sys-ctime です。Gauche の sys-time が返す現在時刻は、世界標準時で 1970 年 1 月 1 日 00:00:00 から経過した秒数を表したものです。これに対して、sys-ctime は日本時間を表すので、sys-ctime で 0 を評価すると "Thu Jan 01 09:00:00 1970\n" となります。
+</p>
+
+<p> sys-time を使ってシードを設定すると、起動するたびに異なる乱数列を発生させることができます。
+</p>
+
+<pre>
+gosh&gt; (srand (get-time))
+1198378800
+gosh&gt; (irand)
+2510575985
+gosh&gt; (irand)
+2258066558
+gosh&gt; (irand)
+3546642151
+gosh&gt; (irand)
+3861967356
+gosh&gt; (irand)
+3279393485
+</pre>
+
+<p> この乱数列は、sys-time が 1198378800 だった場合のものです。このように、シードの値を変更することで、異なる乱数列を生成することができます。逆にいえば、シードに同じ値を設定すれば、同じ乱数列を生成できるということです。乱数列を再現できることが擬似乱数の特徴です。
+</p>
+<h4>●1 から 100 までの乱数を生成する</h4>
+<p> 数当てゲームは 1 から 100 までの数字を使います。irand は 0 から #xffffffff までの整数値を返すので、1 から 100 までの整数値を返す関数を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 1 から n までの乱数を生成する (悪い例)
+
+(define (make-number-bad n)
+    (+ (modulo (irand) n) 1))
+</pre>
+<p> irand の返り値と引数 n の剰余を求めると 0 以上 n - 1 以下の値になります。それに 1 を加算すれば 1 以上 n 以下の乱数を生成することができます。ところが、この方法には重大な欠点があります。実際に n の値を 8 にして乱数を生成したところ、次のようになりました。
+</p>
+<pre class="item">
+7 8 5 6 3 4 1 2 7 8 5 6 3 4 1 2 7 8 5 6 3 4 1 2 ...
+</pre>
+<p> 同じ乱数列 (7, 8, 5, 6, 3, 4, 1, 2) が繰り返し生成されています。また、奇数と偶数が交互に現れていることもわかります。実をいうと、線形合同法には大きな欠点があり、32 bit 整数の上位ビットはランダムになりますが、下位ビットはランダムではありません。単純に剰余を求めると下位ビットだけを使うことになり、生成される乱数はランダムではなく規則的なものになってしまうのです。
+</p>
+<p> そこで、下位 16 ビットを捨てることにします。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 1 から n までの乱数を生成する
+
+(define (make-number n)
+    (+ (modulo (quotient (irand) #x10000) n) 1))
+</pre>
+<p> (quotient (irand) #x10000) で上位 16 ビットの値を取り出します。そして、その値と n の剰余を modulo で求めてから 1 を加算します。これで、1 以上 n 以下の乱数になります。*seed* = 1, n = 8 で試してみると、次のようになります。
+</p>
+
+<pre class="fig">
+2 2 2 4 4 5 4 8 8 8 1 4 7 5 3 5 ...
+</pre>
+<p> make-number-bad のように、規則的な数列にはなりません。*seed* = 1, n = 100 で乱数を生成すると、次のようになります。
+</p>
+<pre class="fig">
+2 58 10 96 72 17 64 92 16 76 65 44 67 25 95 13 ...
+</pre>
+<p> 今回は単純なゲームなので、このような簡単な方法で十分でしょう。なお、実数の乱数を生成する random を使って、1 から 100 までの乱数を作ることもできます。興味のある方はプログラムを作ってみてください。
+</p>
+
+<h4>●データの入力</h4>
+<p> これで、コンピュータは自分で数字を決めることができます。今度は、私達が数字をコンピュータに入力して、正解なのかそれとも正解よりも大きいのか小さいのか、判断してもらわなくてはなりません。まず最初に、数字を入力する方法から説明しましょう。今回はオーソドックスにキーボードから数字を入力します。Scheme には数値、リスト、文字列、シンボルなど S 式を入力する関数 read が用意されています。次の例を見てください。
+</p>
+
+<pre>
+gosh&gt; (read)
+100           &lt;== キーボードからの入力
+100           &lt;== 関数 read の返り値
+gosh&gt; (read)
+(1 2 3 4 5)
+(1 2 3 4 5)
+gosh&gt; (read)
+"abcdef"
+"abcdef"
+gosh&gt; (read)
+abc
+abc
+</pre>
+
+<p> read は Scheme の文法にしたがって入力データを S 式に変換します。最初の入力 100 は整数型データとして変換されます。次の (1 2 3 4 5) はリストですね。"abcdef" は文字列として扱われます。最後の abc はシンボルに変換されます。それから、私達が S 式が入力するまで、read はずっと待っています。入力の最後にはリターンキーを押すことをお忘れなく。
+</p>
+
+<p> ところで、read は入力待ちであることを示すプロンプトを出さないので、このままではちょっと不親切ですね。いま入力待ちであることを示すメッセージを出した方がいいでしょう。また、数当てゲームの場合、入力されたデータが整数値であって、その値が 1 から 100 の範囲であることを確認するべきです。そして、不適切なデータが入力された場合は、再入力できるようにした方が親切なプログラムになります。この処理を図に表すと次のようになります。
+</p>
+<pre class="fig">
+                                        │
+┌──────────────────→┤
+│                                      ↓
+│                             ┌────────┐
+│                             │メッセージを出力│
+│                             └────────┘
+│                                      ↓
+│                              ┌───────┐
+│                              │  データ入力  │
+│                              └───────┘
+│                                      ↓
+│  ┌──────────┐ #f ┌───────┐
+├←│エラーメッセージ出力│←─│  整数値か？  │
+│  └──────────┘    └───────┘
+│                                      │#t
+│                                      ↓
+│  ┌──────────┐ #f ┌───────┐
+└←│エラーメッセージ出力│←─│範囲は正常か？│
+    └──────────┘    └───────┘
+                                        │#t
+                                        ↓
+                                   データを返す
+
+            図 : データ入力の流れ図
+</pre>
+<p> それでは、データを入力する関数を作りましょう。関数名は input-number とします。図を見ればおわかりのように、正常なデータが入力されるまで、処理を何回でも繰り返す必要があります。このような処理は再帰定義を使うと簡単にプログラムできます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 数字の入力
+
+(define (input-number)
+    (display "please input integer (1 - 100)\n&gt; ")
+    (let ((data (read)))
+        (cond ((not (integer? data))
+               (display data)
+               (display "is not integer\n")
+               (input-number))
+              ((&lt;= 1 data 100) data)
+              (else
+               (display "range error\n")
+               (input-number)))))
+</pre>
+<p> 最初に、数値を入力するようにメッセージを出力します。次に、let で局所変数 data を定義します。data を初期化するところで read が評価され、キーボードから入力されたデータが data に代入されます。そのあとで入力データのチェック処理を行います。
+</p>
+
+<p> データチェックには cond を使います。最初の条件部で、data が整数かチェックします。integer? は引数が整数型データなら #t を返す述語でしたね。その返り値を not で反転すれば、data が整数値でないときに条件部が成立することになります。display でエラーメッセージを画面に表示してから input-number を再帰呼び出しします。これで入力処理を繰り返すことができます。とても簡単ですね。
+</p>
+
+<p> data が整数型データであれば、次の条件部で値をチェックします。data が 1 から 100 の間に収まっていれば、条件部が成立しますね。この場合は正常なデータなので data を返します。data の値が cond の返り値になり、それが input-number の返り値になります。このように、input-number を再帰呼び出ししなければ繰り返しから脱出することができます。
+</p>
+<p> 値が範囲内におさまっていない場合は、cond の else 節が実行されます。この場合は、エラーメッセージを出力して、input-number を再帰呼び出ししするだけです。
+</p>
+
+<p> input-number が完成したら、正常に動作するか確認しましょう。次の例を見てください。
+</p>
+<pre>
+gosh&gt; (input-number)
+please input number (1 - 100)
+&gt; a
+a is not integer
+please input number (1 - 100)
+&gt; 1.234
+1.234 is not integer
+please input number (1 - 100)
+&gt; "abcd"
+"abcd" is not integer
+please input number (1 - 100)
+&gt; 0
+range error
+please input number (1 - 100)
+&gt; 101
+range error
+please input number (1 - 100)
+&gt; 100
+100
+</pre>
+
+<p> 作成した関数を簡単にテストできるのが Scheme (Lisp) の長所です。テストするときは、エラーとなる条件に注意して行いましょう。input-number では、整数型データ以外はエラーとなる、0 や 101 は範囲エラーになるが、1 や 100 ならば正常なデータとして返すといったことを確認します。
+</p>
+
+<h4>●ゲーム本体の作成</h4>
+<p> これで入力処理は完成しました。次は、入力データと正解を比較するゲーム本体の処理を作ります。処理内容を図に示すと、次のようになります。
+</p>
+<pre class="fig">
+                                ↓
+                          ┌─────┐
+                          │count ← 0│
+                          └─────┘
+                                ├←────┐
+                                ↓          │
+    ┌───────┐ #f ┌─────┐    │
+┌─│メッセージ出力│←─│count &lt; 7 │    │
+│  └───────┘    └─────┘    │
+│                              ↓ #t       │
+│                        ┌─────┐    │
+│                        │ 入力処理 │    │
+│                        └─────┘    │
+│                              ↓          │
+│  ┌───────┐ #t ┌─────┐    │
+│  │メッセージ出力│←─│ 正解か？ │    │
+│  └───────┘    └─────┘    │
+│          ↓                  ↓#f        │
+│          │            ┌─────┐    │
+│          │            │ 比較処理 │    │
+│          │            └─────┘    │
+│          │                  ↓          │
+│          │            ┌─────┐    │
+│          │            │count 1 up│    │
+│          │            └─────┘    │
+↓          ↓                  └─────┘
+└─────┴────────┐
+                              ↓
+
+            図 : 数当てゲームの処理
+</pre>
+<p> 数当てゲームは 7 回以内に正解を当てなければいけません。回数の管理も再帰呼び出しを使うと簡単です。数を当てたならば繰り返しから脱出すればいいわけです。これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 数当てゲーム
+
+(define (game answer)
+    (let loop ((count 1))
+        (if (&lt; 7 count)
+            (display "GameOver\n")
+            (let ((data (input-number)))
+                (cond ((= data answer)
+                       (display "Congratulation\n"))
+                      ((&lt; data answer)
+                       (display "Number is greater than ")
+                       (display data)
+                       (newline)
+                       (loop (+ count 1)))
+                      (else
+                       (display "Numbere is less than ")
+                       (display data)
+                       (newline)
+                       (loop (+ count 1))))))))
+</pre>
+
+<p> 関数 game はコンピュータが決めた数値を引数 answer に受け取ります。回数は名前付き let で管理します。単純な繰り返しなので名前は loop としました。7 回で数字を当てることができなかった場合は display でメッセージを表示します。この後、display の返り値がそのまま返されるので、繰り返しから脱出することができます。
+</p>
+
+<p> 次に、入力データを受け取ります。input-number と同様に、データを局所変数 data にセットします。あとは、cond で answer と data を比較します。data と answer が等しい場合は正解です。メッセージを出力して繰り返しから脱出します。
+</p>
+
+<p> 次は、data が answer よりも小さい場合です。メッセージを出力して loop を再帰呼び出しします。このとき、count を +1 することをお忘れなく。newline は改行を行う関数です。data が answer よりも大きい場合は else 節が実行されます。メッセージを表示して loop を再帰呼び出しするだけです。
+</p>
+
+<p> 最後に、ゲームを実行する関数 play を作ります。
+</p>
+
+<pre class="list">
+リスト : ゲームの実行
+
+(define (play)
+    (srand (sys-time))
+    (let loop ((answer (make-number 100)))
+        (game answer)
+        (display "Try Again? (y or n)\n&gt; ")
+        (if (eq? 'y (read))
+            (loop (make-number 100)))))
+</pre>
+<p> まず、現在時刻でシードを初期化してから、ループに突入します。loop の引数には make-number で決めた数値を渡します。これを関数 game に渡してゲームを始めます。ゲームが終了したら、もう一度ゲームを行うかたずねます。ここで y が入力されたら、loop を再帰呼び出しして再びゲームを始めます。
+</p>
+
+<p> y が入力されると、read は入力データをシンボル y に変換して返します。シンボル同士を比較する場合には、述語 eq? を使います。
+</p>
+
+<h4>●等値関係を調べる述語</h4>
+<p> eq? は 2 つの引数がまったく同じであるか調べる述語です。数値が等しいか調べる述語に = がありますが、eq? は 2 つのデータが存在するメモリアドレスを比較します。
+</p>
+
+<p> Scheme (Lisp) の場合、データはすべてメモリ領域の中に格納されています。したがって、同じメモリアドレスであれば同一のデータであることがわかります。同じ名前のシンボルは、Scheme 処理系の中でひとつしか存在しないので、eq? を使えば同じシンボルか判断できるのです。ところが、ほかのデータ型の場合は違います。たとえば、数値や文字列が同じ値でも eq? は #t を返さない場合があります。次の例を見てください。
+</p>
+
+<pre>
+gosh&gt; (eq? 'a 'a)
+#t
+gosh&gt; (eq? 1.0 1.0)
+#f
+gosh&gt; (eq? "abc" "abc")
+#f
+</pre>
+
+<p> Scheme (Lisp) は数や文字列のデータを作る場合、同じ値でも違うメモリ領域に実体を割り当てる場合があるため、同じ値を eq? で比較しても #t にならないことがあるのです。これはリストの場合も同様です。
+</p>
+
+<pre>
+gosh&gt; (eq? '(a b c) '(a b c))
+#f
+</pre>
+
+<p> リストの要素であるシンボルは同じなのですが、リストを構成するコンスセルのアドレスが違うのです。少々難しい話になってしまいましたね。理屈はともかく、シンボルを比較するときには eq? を使うことを覚えておいてください。
+</p>
+
+<p> このほかにも、Scheme には S 式が同じ値か調べる述語 eqv? と equal? があります。eq?, eqv?, equal? の違いは、おおざっぱに言うと次のようになります。
+</p>
+<ul>
+  <li>eq? は同一のオブジェクト (つまりメモリアドレスが等しい) 場合に真を返す。
+  <li>eqv? は eq? を満たしている、あるいは、同じ型で同じ値の数値や、同じ値の文字であれば真を返す。
+  <li>equal? は eqv? を満たしている、あるいは、要素が equal? を満たすリストやベクタ、内容が等しい文字列であれば真を返す。
+</ul>
+<p> 等しいと判定される範囲が eq? &lt; eqv? &lt; equal? と広がっていきます。厳密な定義は Scheme の仕様書 R5RS または Gauche のリファレンスをお読みください。
+</p>
+
+<p> eqv? と equal? の簡単な例を示します。
+</p>
+<pre class="item">
+(eqv? 'a 'a)             =&gt; #t
+(eqv? 'a 'b)             =&gt; #f
+(eqv? 6.0 6.0)           =&gt; #t
+(eqv? 6 6.0)             =&gt; #f
+(eqv? '(a 1 2) '(a 1 2)) =&gt; #f
+(eqv? "abcdef" "abcdef") =&gt; #f
+
+(equal? 'a 'a)               =&gt; #t
+(equal? 'a 'b)               =&gt; #f
+(equal? 6.0 6.0)             =&gt; #t
+(equal? 6 6.0)               =&gt; #f
+(equal? '(a 1 2) '(a 1 2))   =&gt; #t
+(equal? '(a 1 2) '(a 1 2.0)) =&gt; #f
+(equal? "abcdef" "abcdef")   =&gt; #t
+(equal? "ABCDEF" "abcdef")   =&gt; #f
+</pre>
+<h4>●ゲームの実行</h4>
+<p> これでゲームは完成しました。完成したプログラムは、ファイル kazu.scm に保存したとします。ファイルの最後に (play) を追加してください。このようにすると、Gauche は kazu.scm を読み込んだら play を直ぐに実行します。プロンプト gosh&gt; が出てから (play) と打ち込む必要はありません。play が終了したら Gauche も終了します。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+
+<pre>
+C&gt;gosh kazu.scm
+please input integer (1 - 100)
+&gt; 50
+Numbere is less than 50
+please input integer (1 - 100)
+&gt; 25
+Number is greater than 25
+please input integer (1 - 100)
+&gt; 38
+Numbere is less than 38
+please input integer (1 - 100)
+&gt; 32
+Number is greater than 32
+please input integer (1 - 100)
+&gt; 35
+Number is greater than 35
+please input integer (1 - 100)
+&gt; 36
+Congratulation
+Try Again? (y or n)
+n
+
+C&gt;
+</pre>
+
+<p> 上の例では 6 回で当てることができました。実はこのゲーム、どんな数字でも 7 回以内に必ず当てることができる必勝法があります。上の実行例は、この必勝方法を使っています。
+</p>
+
+<p> この方法は「二分探索」と呼ばれていて、全体を半分に分けて調べていきます。数当てゲームの場合、最初は 1 と 100 の中間である 50 を入力します。「もっと小さい数」であれば、答は 1 から 50 の間にあることがわかります。次は、1 と 50 の中間である 25 を入力します。「もっと大きな数」であれば、答は 25 から 50 の間にあることがわかります。
+</p>
+
+<p> このように、中央の値を入力していくことで、100 個の候補が 50 個に減り、50 個の候補が 25 に減っていくのです。そして、最後に候補がひとつに絞られ、答が見つかります。実際に 100 を 2 で割ったいくと、次のようになります。
+</p>
+
+<pre class="item">
+50, 25, 12.5, 6.25, 3.125, 1.5625, 0.78125 ...
+</pre>
+
+<p> このように、7 回目 <sup><a href="abcscm05.html#note1">[*1]</a></sup> で候補の数が 1 以下になる、つまり答が見つかることがわかります。もっとも、2 つに分けた中央値が答になることもあります。その場合は 7 回よりも少ない回数で答が見つかります。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 対数を使えば簡単に計算できます。log<SUB>2</SUB> 100 = 6.64 となるので最低 7 回であることがわかります。
+</div>
+<h4>●まとめ</h4>
+<p> 今回はここまでです。簡単に復習しておきましょう。
+</p>
+<ol>
+  <li>コンピュータで適当な数値を選ぶ場合は乱数を使う。
+  <li>線形合同法は乱数を生成する簡単なアルゴリズムである。
+  <li>線形合同法で生成される乱数 (整数) は、上位ビットはランダムになるが下位ビットはランダムではない。
+  <li>sys-time は現在の時間を整数値で返す。
+  <li>sys-ctime は時間を表す整数値を日付文字列に直す。
+  <li>read は S 式を読み込む。
+  <li>2 つの S 式が等しいか調べる述語には eq?, eqv?, equal? がある。
+</ol>
+<p> 次回は、もうちょっと複雑な「数当て」ゲームを作りましょう。お楽しみに。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+;
+; kazu.scm : 数当てゲーム
+;
+;            Copyright (C) 2007 Makoto Hiroi
+;
+
+;
+; 線形合同法による擬似乱数の生成
+;
+; 種 (seed)
+(define *seed* 1)
+
+; シードの設定
+(define (srand x)
+    (set! *seed* x))
+
+; 整数の一様乱数
+(define (irand)
+    (set! *seed* (modulo (+ (* 69069 *seed*) 1) #x100000000))
+    *seed*)
+
+; 実数の一様乱数
+(define (random)
+    (* (/ 1.0 #x100000000) (irand)))
+
+;
+; 数当てゲーム
+;
+
+; 1 から 100 までの乱数を生成
+(define (make-number n)
+    (+ (modulo (quotient (irand) #x10000) n) 1))
+
+; 数字の入力
+(define (input-number)
+    (display "please input integer (1 - 100)\n&gt; ")
+    (let ((data (read)))
+        (cond ((not (integer? data))
+               (display data)
+               (display "is not integer\n")
+               (input-number))
+              ((&lt;= 1 data 100) data)
+              (else
+               (display "range error\n")
+               (input-number)))))
+
+; 数当てゲーム
+(define (game answer)
+    (let loop ((count 1))
+        (if (&lt; 7 count)
+            (display "GameOver\n")
+            (let ((data (input-number)))
+                (cond ((= data answer)
+                       (display "Congratulation\n"))
+                      ((&lt; data answer)
+                       (display "Number is greater than ")
+                       (display data)
+                       (newline)
+                       (loop (+ count 1)))
+                      (else
+                       (display "Numbere is less than ")
+                       (display data)
+                       (newline)
+                       (loop (+ count 1))))))))
+
+; ゲームの実行
+(define (play)
+    (srand (sys-time))
+    (let loop ((answer (make-number 100)))
+        (game answer)
+        (display "Try Again? (y or n)\n&gt; ")
+        (if (eq? 'y (read))
+            (loop (make-number 100)))))
+
+; 実行
+(play)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm04.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm06.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

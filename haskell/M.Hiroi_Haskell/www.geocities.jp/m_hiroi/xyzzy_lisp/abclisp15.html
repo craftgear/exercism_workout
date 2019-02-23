@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門</title>
+  <meta name="description" content="xyzzy,xyzzy Lisp,Common Lisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881766</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>xyzzy Lisp Programming</h1>
+<h2>Common Lisp 入門</h2>
+<div class="small">
+[ <a href="abclisp14.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp16.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap28">続・幅優先探索とスライドパズル</h3>
+<p> 前回は幅優先探索で「6 パズル」を解きました。(1 5 2 6 3 4 0) は 11 手で解くことができましたが、5040 通りの配置の中では、これよりも短い手数で解けるものもあるでしょうし、もっと長い手数がかかるものもあるでしょう。そこで、今度は単純に解くのではなく、パズルが完成するまでにいちばん手数がかかる配置を求めることにします。つまり、最短手数で解いてもいちばん長い手数となる、いちばん難しい配置を求めます。
+</p>
+
+<h4>●最長手数の求め方</h4>
+<p> 最長手数の求め方ですが、5040 通りの配置の最短手数がすべてわかれば、最長の手数となる配置を求めることができます。しかしながら、この方法では時間がとてもかかりそうです。そこで、完成形から始めていちばん長い手数の局面を生成することにします。
+</p>
+<p> まず、完成形から駒を動かして 1 手で到達する局面をすべて作ります。次に、これらの局面から駒を動かして新しい局面を作れば、完成形から 2 手で到達する局面となります。このように、手数を 1 手ずつ伸ばしていき、新しい局面が生成できなくなった時点での手数が求める最長手数となります。この処理は幅優先探索を使えばぴったりです。ただし、初期状態からの探索しかできないので、同一局面のチェックが線形探索のままでは時間がかかる、ということは覚悟してください。
+</p>
+<p> このプログラムの目的は、いちばん長い手数となる配置を求めることなので、その手順を表示することは行いません。このため、ひとつ前の局面番号を格納するベクタ *prev* は定義しません。その代わり、その局面までの手数を格納するベクタ *move* を用意します。ひとつ前の局面の手数を *move* から求め、それに 1 を足せば現在の局面の手数となります。
+</p>
+<p> それから、もうひとつプログラムの欠点を修正します。6 パズルや 15 パズルの場合、同じ駒を続けて動かすと、駒を元の場所に戻すことになってしまいます。これは元の局面に戻ることなので、わざわざ同一局面のチェックを行う必要はありません。前回のプログラムではこのチェックを行っていないため、無駄な探索処理が行われているのです。同じ駒を続けて動かさないようにすれば、実行速度はもう少し速くなるでしょう。この処理は移動した駒をベクタ *piece* に格納しておいて、駒を動かすときに 1 手前と同じ駒かチェックすれば簡単に実現できます。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+List 1 : 6 パズルの最長手数を求める(1)
+
+(defun solve-max ()
+  (let ((rear 1) (front 0))
+    ; 初期化
+    (setf (aref *state* 0) '(1 2 3 4 5 6 0)
+          (aref *move*  0) 0
+          (aref *space* 0) 6
+          (aref *piece* 0) 0)
+    (while (&lt; front rear)
+      (let ((space (aref *space* front))
+            (board (aref *state* front))
+            (prev  (aref *piece* front)) piece new-board)
+        (dolist (pos (aref *adjacent* space))
+          (setq piece (nth pos board))
+          ; 動かす駒のチェック
+          (when (/= piece prev)
+            (setq new-board (move-piece piece board))
+            (unless (find new-board *state* :end rear :test #'equal)
+              ; キューに書き込む
+              (setf (aref *state* rear) new-board
+                    (aref *space* rear) pos
+                    (aref *move*  rear) (1+ (aref *move* front))
+                    (aref *piece* rear) piece)
+              (incf rear)))))
+      (incf front))
+    ; 解の表示
+    (print-answer-max (1- rear))))
+</pre>
+
+<p> 関数 solve-max には最終状態をチェックする処理がないことに注意してください。生成できる局面がなくなるまで、つまりキューにデータがなくなるまで処理を繰り返します。
+</p>
+<p> それから、同じ駒を続けて動かさないようにチェックします。1 手前に移動した駒を prev にセットし、これから移動する駒 piece と比較します。違う駒であれば、move-piece で piece を移動します。キューに書き込むときは、移動した駒 piece をベクタ *piece* に追加することをお忘れなく。
+</p>
+<p> 最後に print-answer-max で最長手数とその配置を出力します。この関数は簡単なので説明は省略します。<a href="abclisp15.html#solve_max_list">プログラムリスト</a> をお読みくださいませ。
+</p>
+<p>これでプログラムは完成です。さっそく実行してみましょう。
+</p>
+<pre>
+(solve-max)
+
+最長手数 15 手
+(4 6 5 1 3 2 0) 
+(4 3 5 0 6 2 1) 
+(0 6 5 4 3 2 1) 
+(4 6 2 0 3 5 1) 
+(4 3 2 1 6 5 0) 
+(0 3 2 4 6 5 1) 
+(4 6 0 5 3 2 1) 
+(0 6 4 5 3 1 2) 
+(0 6 3 4 5 1 2) 
+(4 0 5 6 3 2 1) 
+(0 4 6 5 3 2 1) 
+(4 6 5 0 2 3 1) 
+(0 4 5 6 1 2 3) 
+(0 5 4 6 3 2 1) 
+(6 0 3 4 5 2 1) 
+(5 2 0 4 3 6 1) 
+(0 2 5 4 1 6 3) 
+(0 5 6 4 2 3 1) 
+(0 3 1 4 6 2 5) 
+(1 6 2 4 3 5 0) 
+(3 6 1 4 0 2 5) 
+(0 1 2 4 3 5 6) 
+(1 3 5 4 6 2 0) 
+(2 1 5 4 3 0 6) 
+</pre>
+
+<p> 最長手数は 15 手で、その配置は全部で 24 通りになりました。そのうちのひとつを図に示すと次のようになります。
+</p>
+
+<pre class="fig">
+        ４------６
+      ／  ＼  ／  ＼
+    ５------１------３    
+      ＼  ／  ＼  ／ 
+        ２------０
+
+図 1 : いちばん難しい配置の例
+</pre>
+
+<p> ちなみに、生成した全局面は 5040 個になりました。しがたって、6 パズルでは数字をランダムに配置しても、必ず完成形に到達できることがわかります。実行時間ですが、M.Hiroi のオンボロマシン (Pentium 166 MHz) では約 53 秒 と時間がかかります。生成した局面は 5040 個もあるのですから、データの比較は相当の回数になります。実行時間の短縮には、同一局面のチェックに高速な探索アルゴリズムを使う必要があります。
+</p>
+
+<h4>●ハッシュ法による高速化</h4>
+<p> それでは同一局面のチェックにハッシュ法を使ってみましょう。ハッシュ法のプログラムは、拙作の <a href="abclisp09.html#yori14">ちょっと寄り道「ハッシュ法」</a> で作成したプログラムとほとんど同じです。ハッシュ法の詳しい説明は、そちらをお読みくださいませ。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 2 : 6 パズルの最長手数を求める(2)
+
+(defun solve-max1 ()
+  (let ((rear 1) (front 0))
+    ; 初期化
+    (setf (aref *state* 0) '(1 2 3 4 5 6 0)
+          (aref *move*  0) 0
+          (aref *space* 0) 6
+          (aref *piece* 0) 0)
+    (init-hash)
+    (insert-hash '(1 2 3 4 5 6 0))
+
+    (while (&lt; front rear)
+      (let ((space (aref *space* front))
+            (board (aref *state* front))
+            (prev  (aref *piece* front)) piece new-board)
+        (dolist (pos (aref *adjacent* space))
+          (setq piece (nth pos board))
+          ; 動かす駒のチェック
+          (when (/= prev piece)
+            (setq new-board (move-piece piece board))
+            ; ハッシュ法による同一局面のチェック
+            (when (insert-hash new-board)
+              (setf (aref *state* rear) new-board
+                    (aref *space* rear) pos
+                    (aref *move*  rear) (1+ (aref *move* front))
+                    (aref *piece* rear) piece)
+              (incf rear)))))
+      (incf front))
+    (print-answer-max (1- rear))))
+</pre>
+
+<p> キューの初期化といっしょにハッシュ表の初期化を関数 init-hash で行い、初期状態を関数 insert-hash でハッシュ表に登録します。insert-hash は、ハッシュ表にデータが見つからない場合はデータを登録して真を返し、データを見つけた場合は nil を返します。init-hash と insert-hash の詳細は <a href="abclisp15.html#solve_max_list">プログラムリスト</a> をお読みくださいませ。
+</p>
+<p> あとは、同一局面のチェックで insert-hash を呼び出して、new-board が新しい局面であればキューに登録します。これでプログラムは完成です。
+</p>
+<p> さっそく実行してみたところ、実行時間は 6.2 秒 (Pentium 166 MHz) まで短縮されました。約 9 倍弱の高速化ですね。ハッシュ法の効果は十分に出ていると思います。ところで、今回のプログラムはハッシュ表の大きさを 1009 としましたが、実行速度はハッシュ表の大きさやハッシュ関数によって大きく変化します。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="solve_max_list">●プログラムリスト</h4>
+<pre class="list">
+;
+; six_max.l : 「6 パズル」の最長手数を求める
+;
+;             Copyright (C) 2002 Makoto Hiroi
+;
+
+; キューの定義
+(defvar *state* (make-array 5040))      ; 局面を格納する
+(defvar *space* (make-array 5040))      ; 空き場所の位置
+(defvar *move*  (make-array 5040))      ; 手数
+(defvar *piece* (make-array 5040))      ; 動かした駒
+
+
+; 隣接リスト
+(defvar *adjacent* #((1 2 3)       ; 0
+                     (0 3 4)       ; 1
+                     (0 3 5)       ; 2
+                     (0 1 2 4 5 6) ; 3
+                     (1 3 6)       ; 4
+                     (2 3 6)       ; 5
+                     (3 4 5)))     ; 6
+
+
+; 駒を動かす（リストはコピーされる）
+(defun move-piece (piece board)
+  (cond ((null board) nil)
+        ((= piece (car board))
+         (cons 0 (move-piece piece (cdr board))))
+        ((= 0 (car board))
+         (cons piece (move-piece piece (cdr board))))
+        (t (cons (car board) (move-piece piece (cdr board))))))
+
+
+; 最長手数の局面を表示
+(defun print-answer-max (pos)
+  (let ((max-move (aref *move* pos)))
+    (format t "~%最長手数 ~D 手" max-move)
+    (while (= max-move (aref *move* pos))
+      (print (aref *state* pos))
+      (decf pos))))
+
+
+; 最長手数の局面を求める
+(defun solve-max ()
+  (let ((rear 1) (front 0))
+    ; 初期化
+    (setf (aref *state* 0) '(1 2 3 4 5 6 0)
+          (aref *move*  0) 0
+          (aref *space* 0) 6
+          (aref *piece* 0) 0)
+    ;
+    (while (&lt; front rear)
+      (let ((space (aref *space* front))
+            (board (aref *state* front))
+            (prev  (aref *piece* front)) piece new-board)
+        (dolist (pos (aref *adjacent* space))
+          (setq piece (nth pos board))
+          ; 動かす駒のチェック
+          (when (/= piece prev)
+            (setq new-board (move-piece piece board))
+            (unless (find new-board *state* :end rear :test #'equal)
+              ; キューに書き込む
+              (setf (aref *state* rear) new-board
+                    (aref *space* rear) pos
+                    (aref *move*  rear) (1+ (aref *move* front))
+                    (aref *piece* rear) piece)
+              (incf rear)))))
+      (incf front))
+    ; 解の表示
+    (print-answer-max (1- rear))))
+
+;
+; ***** ハッシュ法 *****
+;
+
+; 初期化 (1009 は素数)
+(defun init-hash ()
+  (setq *myhash* (make-array 1009)))
+
+; ハッシュ値の計算
+(defun hash-value (state)
+  (let ((value 0))
+    (dolist (x state (mod value 1009))
+      (setq value (+ (* value 10) x)))))
+
+; ハッシュ表に挿入
+(defun insert-hash (state)
+  (let ((value (hash-value state)))
+    (unless (find state (aref *myhash* value) :test #'equal)
+      ; 挿入する
+      (push state (aref *myhash* value)))))
+
+
+; 最長手数の局面を求める
+(defun solve-max1 ()
+  (let ((rear 1) (front 0))
+    ; 初期化
+    (setf (aref *state* 0) '(1 2 3 4 5 6 0)
+          (aref *move*  0) 0
+          (aref *space* 0) 6
+          (aref *piece* 0) 0)
+    (init-hash)
+    (insert-hash '(1 2 3 4 5 6 0))
+    ;
+    (while (&lt; front rear)
+      (let ((space (aref *space* front))
+            (board (aref *state* front))
+            (prev  (aref *piece* front)) piece new-board)
+        (dolist (pos (aref *adjacent* space))
+          (setq piece (nth pos board))
+          ; 動かす駒のチェック
+          (when (/= prev piece)
+            (setq new-board (move-piece piece board))
+            ; ハッシュ法による同一局面のチェック
+            (when (insert-hash new-board)
+              (setf (aref *state* rear) new-board
+                    (aref *space* rear) pos
+                    (aref *move*  rear) (1+ (aref *move* front))
+                    (aref *piece* rear) piece)
+              (incf rear)))))
+      (incf front))
+    (print-answer-max (1- rear))))
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori22">ちょっと寄り道</h3>
+<h4>■反復深化と下限値枝刈り法</h4>
+<p> 次は反復深化で「6 パズル」を解いてみましょう。反復深化で問題を解く場合、短い手数で解ける簡単な問題であれば、とくに工夫しなくても高速に解くことができます。ところが、複雑な問題を反復深化で解く場合、枝刈りを工夫しないと高速に解くことはできません。そこで、6 パズルを例題にして、反復深化の常套手段である<B>下限値枝刈り法</B>を説明します。
+</p>
+
+<h4>■反復深化で 6 パズルを解く</h4>
+<p> まず最初に、単純な反復深化で 6 パズルを解いてみましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 3 : 反復深化による 6 パズルの解法
+
+(defun solve-id (n limit board goal space history)
+  (if (= limit n)
+    (when (equal board goal)
+      (print (reverse history))
+      (throw 'find-answer t))
+    (dolist (pos (aref *adjacent* space))
+      (let ((piece (nth pos board)))
+        (unless (eql piece (car history))
+          (solve-id (1+ n) limit (move-piece piece board) goal pos (cons piece history)))))))
+</pre>
+
+<p> 関数 solve-id は引数が多くてちょっと複雑ですが、内容はそれほど難しくありません。引数 n が手数、limit が反復深化の上限値、board が現在の盤面（局面）、goal がゴールの局面、space が空き場所の位置、history が動かした駒の履歴を表します。
+</p>
+<p> 手数 n が limit に達したら、ゴールに到達したかチェックします。そうであれば、history を reverse で逆順にして移動手順を表示します。移動手順は動かした駒の種類 (1 - 6) を表示するだけです。興味のある方は、この移動手順から局面を再現するプログラムを作ってみてください。そのあと、throw で solve-id の呼び出し元へ大域脱出します。つまり、解をひとつ見つけた時点で探索を終了します。
+</p>
+<p> 手数 n が limit よりも小さければ、駒を移動して新しい局面を生成します。反復深化では深さが制限されているため、同一局面のチェックを行わなくてもプログラムは正常に動作します。そのかわり、無駄な探索はどうしても避けることができません。6 パズルや 15 パズルの場合、1 手前に動かした駒を再度動かすと 2 手前の局面に戻ってしまいます。完全ではありませんが、このチェックを入れるだけでもかなりの無駄を省くことができます。
+</p>
+<p> このプログラムは移動した駒を history に格納しているので、駒 piece が 1 手前の駒 (car history) と同じ場合は動かさないようにチェックしています。history の初期値は空リスト (nil) なので、データの比較には eql を使っていることに注意してください。
+</p>
+<p> 最後に、上限値を 1 手ずつ増やすプログラムを作ります。
+</p>
+
+<pre class="list">
+List 4 : 上限値を増やして探索を行う
+
+(defun six-puzzle (start goal)
+  (catch 'find-answer
+    (dotimes (x 15)
+      (format t "~%----- ~D 手の探索 -----" (1+ x))
+      (solve-id 0 (1+ x) start goal (position 0 start) nil))))
+</pre>
+
+<p> 簡単なプログラムなので説明は不要ですね。それでは実行してみましょう。xyzzy Lisp の *scratch* で関数 six-puzzle を評価しました。
+</p>
+<pre>
+(six-puzzle '(4 6 5 1 3 2 0) '(1 2 3 4 5 6 0))
+
+----- 1 手の探索 -----
+----- 2 手の探索 -----
+----- 3 手の探索 -----
+----- 4 手の探索 -----
+----- 5 手の探索 -----
+----- 6 手の探索 -----
+----- 7 手の探索 -----
+----- 8 手の探索 -----
+----- 9 手の探索 -----
+----- 10 手の探索 -----
+----- 11 手の探索 -----
+----- 12 手の探索 -----
+----- 13 手の探索 -----
+----- 14 手の探索 -----
+----- 15 手の探索 -----
+(1 3 1 2 5 3 6 1 2 5 6 4 1 2 5) 
+</pre>
+<p> 15 手で解くことができました。初期状態 (4 6 5 1 3 2 0) は前回求めた最長手数の局面です。実行時間は M.Hiroi のオンボロマシン (Pentium 166 MHz) で約 15 分もかかりました。やっぱり単純な反復深化では遅いですね。それでは下限値枝刈り法を使ってみましょう。
+</p>
+
+<h4>■下限値枝刈り法</h4>
+<p> 下限値枝刈り法は難しいアルゴリズムではありません。たとえば、5 手進めた局面を考えてみます。探索の上限値が 10 手とすると、あと 5 手だけ動かすことができますね。このとき、パズルを解くのに 6 手以上かかることがわかれば、ここで探索を打ち切ることができます。
+</p>
+<p> このように、必要となる最低限の手数が明確にわかる場合、この値を<b>下限値 (Lower Bound)</b> と呼びます。この下限値を求めることができれば、「今の移動手数＋下限値」が探索手数を超えた時点で枝刈りすることが可能になります。これが下限値枝刈り法の基本的な考え方です。
+</p>
+<p> 下限値を求める方法はいろいろありますが、今回は各駒が正しい位置へ移動するまでの手数を下限値として利用することにしましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+     4(1)───6(2)                  １───２
+   ／    ＼   ／   ＼              ／  ＼  ／  ＼
+ 5(2)───1(1)───3(2) ──→ ３───４───５ 
+   ＼    ／   ＼   ／              ＼  ／  ＼  ／
+     2(2)───  ０                  ６───０ 
+
+(1)初期状態(下限値 10 手)             (2)完成形
+
+                図 2 : 下限値の求め方
+</pre>
+<p> たとえば、右上にある 6 の駒を左下の正しい位置へ移動するには、最低でも 2 手必要です。もちろん、ほかの駒との関連で、それ以上の手数が必要になる場合もあるでしょうが、2 手より少なくなることは絶対にありません。同じように、各駒について最低限必要な手数を求めることができます。そして、その合計値はパズルを解くのに最低限必要な手数、つまり下限値として利用することができます。ちなみに、図 2 の初期状態の下限値は 10 手になります。
+</p>
+
+<h4>■下限値枝刈り法のプログラム</h4>
+<p> 下限値の求め方ですが、駒を動かすたびに各駒の手数を計算していたのでは時間がかかりそうです。6 パズルの場合、1 回にひとつの駒しか移動しないので、初期状態の下限値を求めておいて、動かした駒の差分だけを計算することにします。
+</p>
+<pre class="list">
+List 5 : 移動手数
+
+(defvar *distance*
+        #2A((0 0 0 0 0 0 0)    ; 0 dummy 
+            (0 1 1 1 2 2 2)    ; 1
+            (1 0 2 1 1 2 2)    ; 2
+            (1 2 0 1 2 1 2)    ; 3
+            (1 1 1 0 1 1 1)    ; 4
+            (2 1 2 1 0 2 1)    ; 5
+            (2 2 1 1 2 0 1)))  ; 6
+</pre>
+<p> List 5 を見てください。各駒の移動手数を 2 次元配列 *distance* に定義します。駒の移動手数は (aref *distance* 駒 位置) で求めます。駒 piece を空き場所 space に動かす場合、下限値は次のように計算することができます。
+</p>
+
+<pre class="list">
+(setq new-low (+ low (- (aref *distance* piece space)
+                        (aref *distance* piece pos))))
+</pre>
+<p> pos は駒の位置を表し、low が下限値を表します。位置 pos と space での移動手数の差分を計算すれば、新しい下限値 new-low を求めることができます。
+</p>
+<p> 次に、下限値枝刈り法を行う関数 solve-id-low を作ります。
+</p>
+<pre class="list">
+List 6 : 下限値枝刈り法による反復深化
+
+(defun solve-id-low (n limit board goal space history low)
+  (if (= limit n)
+    (when (equal board goal)
+      (print (reverse history))
+      (throw 'find-answer t))
+    (dolist (pos (aref *adjacent* space))
+      (let ((piece (nth pos board)) new-low)
+        (unless (eql piece (car history))
+          ; 下限値の計算
+          (setq new-low (+ low (- (aref *distance* piece space)
+                                  (aref *distance* piece pos))))
+          ; 下限値のチェック
+          (if (&lt;= (+ new-low n) limit)
+            (solve-id-low (1+ n) limit (move-piece piece board)
+                          goal pos (cons piece history) new-low)))))))
+</pre>
+<p> 関数 solve-id-low の引数 low は局面 board の下限値を表します。駒 piece を動かしたときの下限値 new-low を計算し、new-low + n が上限値 limit よりも大きくなったならば探索を打ち切ります。limit 以下であれば、solve-id-low を再帰呼び出しして探索を続行します。あとは solve-id と同じです。
+</p>
+<p> 最後に、solve-id-low を呼び出す関数 six-puzzle-low を作ります。
+</p>
+
+<pre class="list">
+List 7 : 上限値を増やして探索を行う
+
+(defun six-puzzle-low (start goal)
+  (catch 'find-answer
+    (let ((low (calc-distance start)))
+      (do ((x low (1+ x)))
+          ((&gt; x 15))
+        (format t "~%----- ~D 手の探索 -----" x)
+        (solve-id-low 0 x start goal (position 0 start) nil low)))))
+</pre>
+
+<p> 関数 calc-distance は与えられた局面 board の下限値を求めます。簡単なプログラムなので詳細は <a href="abclisp15.html#solve_id_list">プログラムリスト</a> お読みくださいませ。求めた下限値は low にセットします。下限値がわかるのですから、上限値 limit は 1 手からではなく low から始めます。
+</p>
+<p> これでプログラムは完成です。さっそく実行してみましょう。
+</p>
+<pre>
+(six-puzzle-low '(4 6 5 1 3 2 0) '(1 2 3 4 5 6 0))
+
+----- 10 手の探索 -----
+----- 11 手の探索 -----
+----- 12 手の探索 -----
+----- 13 手の探索 -----
+----- 14 手の探索 -----
+----- 15 手の探索 -----
+(1 3 1 2 5 3 6 1 2 5 6 4 1 2 5) 
+</pre>
+<p> 実行時間は Pentium 166 MHz で約 0.83 秒でした。単純な反復深化と比べて 1000 倍以上の高速化に M.Hiroi も驚いてしまいました。6 パズルの場合、下限値枝刈り法の効果は極めて高いようです。
+</p>
+<hr>
+<h4 id="solve_id_list">■プログラムリスト</h4>
+<pre class="list">
+;
+; six_id.l : 「6 パズル」反復深化による解法
+;
+;            Copyright (C) 2002 Makoto Hiroi
+;
+
+; 隣接リスト
+(defvar *adjacent* #((1 2 3)       ; 0
+                     (0 3 4)       ; 1
+                     (0 3 5)       ; 2
+                     (0 1 2 4 5 6) ; 3
+                     (1 3 6)       ; 4
+                     (2 3 6)       ; 5
+                     (3 4 5)))     ; 6
+
+; 移動手数
+(defvar *distance* #2A((0 0 0 0 0 0 0)    ; 0 dummy 
+                       (0 1 1 1 2 2 2)    ; 1
+                       (1 0 2 1 1 2 2)    ; 2
+                       (1 2 0 1 2 1 2)    ; 3
+                       (1 1 1 0 1 1 1)    ; 4
+                       (2 1 2 1 0 2 1)    ; 5
+                       (2 2 1 1 2 0 1)))  ; 6
+
+
+; 駒を動かす（リストはコピーされる）
+(defun move-piece (piece board)
+  (cond ((null board) nil)
+        ((= piece (car board))
+         (cons 0 (move-piece piece (cdr board))))
+        ((= 0 (car board))
+         (cons piece (move-piece piece (cdr board))))
+        (t (cons (car board) (move-piece piece (cdr board))))))
+
+
+; 単純な反復深化
+(defun solve-id (n limit board goal space history)
+  (if (= limit n)
+      (when (equal board goal)
+        (print (reverse history))
+        (throw 'find-answer t))
+    (dolist (pos (aref *adjacent* space))
+      (let ((piece (nth pos board)))
+        (unless (eql piece (car history))
+          (solve-id (1+ n) limit (move-piece piece board) goal pos (cons piece history)))))))
+
+(defun six-puzzle (start goal)
+  (catch 'find-answer
+    (dotimes (x 15)
+      (format t "~%----- ~D 手の探索 -----" (1+ x))
+      (solve-id 0 (1+ x) start goal (position 0 start) nil))))
+
+
+; 下限値の計算
+(defun calc-distance (board)
+  (let ((value 0))
+    (dotimes (x 7 value)
+      (incf value (aref *distance* (pop board) x)))))
+
+
+; 下限値枝刈り法
+(defun solve-id-low (n limit board goal space history low)
+  (if (= limit n)
+      (when (equal board goal)
+        (print (reverse history))
+        (throw 'find-answer t))
+    (dolist (pos (aref *adjacent* space))
+      (let ((piece (nth pos board)) new-low)
+        (unless (eql piece (car history))
+          ; 下限値の計算
+          (setq new-low (+ low (- (aref *distance* piece space)
+                                  (aref *distance* piece pos))))
+          ; 下限値のチェック
+          (if (&lt;= (+ new-low n) limit)
+              (solve-id-low (1+ n) limit (move-piece piece board)
+                            goal pos (cons piece history) new-low)))))))
+
+(defun six-puzzle-low (start goal)
+  (catch 'find-answer
+    (let ((low (calc-distance start)))
+      (do ((x low (1+ x)))
+          ((&gt; x 15))
+        (format t "~%----- ~D 手の探索 -----" x)
+        (solve-id-low 0 x start goal (position 0 start) nil low)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abclisp14.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp16.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

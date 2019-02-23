@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Perl/Tk プログラミング入門</title>
+  <meta name="description" content="Perl/Tk,Perl/Tk入門,GUI,プログラミング">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881765</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Perl/Tk memo</h1>
+<h2>お気楽 Perl/Tk プログラミング入門</h2>
+<div class="small">
+[ <a href="perltk07.html">PrevPage</a> | <a href="index.html">Perl/Tk</a> | <a href="perltk09.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chapter20">テキストウィジェット：タグの例題（フォント、サイズ、色の変更）</h3>
+<p> 今回はもう少し複雑な例題として、マウスで色やフォントを設定するプログラムを作りましょう。テキストの表示は今までのプログラムと同じですが、行番号を表示する機能は省いています。変更する文字列の指定は、テキストウィジェットの標準動作であるマウスをドラッグすることで行います。文字列を選択した状態で、マウスを 'Control + クリック' することで、メニューで設定されているフォント、サイズ、色に変更します。
+</p>
+
+<h4>●メニューの設定</h4>
+<p> 最初にメニューを設定します。
+</p>
+
+<pre class="list">
+リスト : メニューの設定 (1)
+
+$m = $top-&gt;Menu( -type =&gt; 'menubar' );
+$top-&gt;configure( -menu =&gt; $m );
+
+$m1 = $m-&gt;cascade( -label =&gt; 'File',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m2 = $m-&gt;cascade( -label =&gt; 'Font',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m3 = $m-&gt;cascade( -label =&gt; 'Size',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m4 = $m-&gt;cascade( -label =&gt; 'Color', -under =&gt; 0, -tearoff =&gt; 0 );
+$m5 = $m-&gt;command( -label =&gt; 'Clear', -under =&gt; 0, -command =&gt; \&amp;clear_tag );
+</pre>
+
+<p> Font, Size, Color はそれぞれフォント、サイズ、色を指定するメニューです。Clear はタグを削除して文字列を元に戻すためのメニューです。文字列を元に戻す場合は、マウスではなく挿入カーソルで指定します。挿入カーソルの位置にあるタグを取得して、それを削除することで文字列の表示を元に戻します。
+</p>
+
+<p> 次はフォント、サイズ、色を設定するメニューです。
+</p>
+
+<pre class="list">
+リスト : メニューの設定 (2)
+
+# Font の設定
+foreach $i ('ＭＳ 明朝', 'ＭＳ ゴシック'){
+  $m2-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$font, -value =&gt; $i);
+}
+
+# Size の設定
+foreach $i (10, 16, 24, 48){
+  $m3-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$size, -value =&gt; $i);
+}
+
+# Color の設定
+foreach $i ('black', 'red', 'blue', 'green', 'yellow'){
+  $m4-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$color, -value =&gt; $i);
+}
+</pre>
+
+<p> チェックボタンを使ってフォント、サイズ、色を設定します。例題ということで、指定できるフォントは 2 種類としました。M.Hiroi が使っている Perl/Tk では、フォント選択用の専用ダイアログは用意されていません。実用的なツールを作る場合、個別のメニューで指定するよりも、専用のダイアログを作成した方がよいでしょう。まあ、そのうちに標準でサポートされるようになるかもしれません。それから、メニューで使用するグローバル変数の初期化をお忘れなく。
+</p>
+
+<h4>●タグの定義と設定</h4>
+<p> 次は使用するタグを定義します。
+</p>
+
+<pre class="list">
+リスト : タグの定義
+
+foreach $f ('ＭＳ 明朝', 'ＭＳ ゴシック'){
+  foreach $s (10, 16, 24, 48){
+    $t0-&gt;tagConfigure( "$f $s", -font =&gt; [$f, $s] );
+  }
+}
+
+foreach $c ('black', 'red', 'blue', 'green', 'yellow'){
+  $t0-&gt;tagConfigure( $c, -foreground =&gt; $c );
+}
+</pre>
+
+<p> フォントとサイズはオプション -font でいっしょに設定されるので、タグ名は「フォント名＋サイズ」とします。フォントの指定には無名の配列を使います。カラーを指定するタグも簡単ですね。
+</p>
+
+<p> 次に、マウスが 'Control + クリック' されたときのバインディングを設定します。ドラッグで範囲が指定された場合、その文字列には <b>sel</b> というタグが設定されます。この文字列に対して、フォントと色を指定するタグを設定します。
+</p>
+
+<p> タグの設定には tagAdd メソッドを使います。
+</p>
+<pre class="item">
+$text-&gt;tagAdd( tagname, index1, index2 );
+</pre>
+<p> 開始位置 index1 から終了位置 index2 までの文字列にタグ tagname を設定します。終了位置を省略すると、開始位置にある文字にタグが設定されます。
+</p>
+
+<p> タグの検索には、いくつかのメソッドが用意されています。
+</p>
+<ul>
+  <li><b>$text-&gt;tagNames( index );</b><br>
+指定した位置 index に設定されているタグをリストで返す。位置が省略された場合は、テキストウィジェット全体に設定されているタグを返す。
+  <li><b>$text-&gt;tagRanges( tagname );</b><br>
+指定したタグ tagname の開始位置と終了位置をリストで返す。タグが複数の文字列に設定されている場合は、それらをすべて返す。
+  <li><b>$text-&gt;tagNextrange( tagname, index1, index2 );<br>
+         $text-&gt;tagPrevrange( tagname, index1, index2 );</b><br>
+指定した位置より後ろ (nextrange) または前 (prevrange) で指定したタグを検索し、その開始位置と終了位置をリストで返す。
+</ul>
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : タグの設定
+
+# バインドの設定
+$t0-&gt;bind( "&lt;Control-Button-1&gt;", \&amp;change_prop );
+
+# 属性の変更
+sub change_prop {
+  my @r = $t0-&gt;tagRanges( 'sel' );
+  if( @r &gt; 0 ){
+    $t0-&gt;tagAdd( "$font $size", $r[0], $r[1] );
+    $t0-&gt;tagAdd( $color, $r[0], $r[1] );
+  }
+}
+</pre>
+
+<p> 変数 $t0 にはテキストウィジェットのオブジェクトが格納されています。'Control + クリック' を表すイベントは &lt;Control-Button-1&gt; になります。ドラッグで選択した文字列の範囲は $t0-&gt;tagRanges( 'sel' ) で求めることができます。結果はリストで返されるので、それを配列 @r に格納します。もしも空の配列であれば、範囲は指定されていません。あとは、配列 @r から開始位置と終了位置を取り出して、フォント用タグとカラー用タグを tagAdd メソッドで設定します。
+</p>
+
+<img src="img/tag02.png" alt="文字列の選択"> ドラッグで文字列を選択
+<br><br>
+<img src="img/tag03.png" alt="サイズと色を変更"> MS 明朝 16, green に変更
+
+<h4>●タグのクリア</h4>
+<p> 最後にタグをクリアするコマンドを作ります。
+</p>
+
+<pre class="list">
+リスト : タグのクリア
+
+sub clear_tag {
+  foreach $n ( $t0-&gt;tagNames( 'insert' ) ){
+    my @r = $t0-&gt;tagPrevrange( $n, 'insert' );
+    $t0-&gt;tagRemove( $n, $r[0], $r[1] );
+  }
+}
+</pre>
+
+<p> 挿入カーソルの位置には insert というマークが設定されています。位置の指定にはマークも使えるので、$t0-&gt;tagNames( 'insert' ) で文字列に設定されているタグを求めることができます。この結果はリストに格納されて返されるので、foreach でひとつずつ取り出してタグをクリアします。タグの開始位置と終了位置は tagPrevrange メソッドで求めることができます。カーソル位置に設定されているタグを削除するのですから、それより前にあるタグの開始位置を検索します。
+</p>
+
+<p> タグの削除には 2 つのメソッドがあります
+</p>
+<pre class="item">
+$text-&gt;tagDelete( tagname, ... );
+$text-&gt;tagRemove( tagname, index1, index2 );
+</pre>
+<p> tagDelete メソッドは指定したタグ tagname をテキストウィジェットからすべて削除します。また、tagDelete には複数のタグを指定することができます。これに対し、tagRemove メソッドは指定した位置や範囲にあるタグ tagname を削除します。このプログラムでは、tagRemove で指定した範囲内のタグを削除すればいいでしょう。<p> これでプログラムは完成です。とても簡単に作ることができました。実際にプログラムを動かしてみてください。テキストウィジェットの能力の高さを実感できると思います。
+</p>
+
+<img src="img/tag04.png" alt="文字列にカーソルを合わせる"> 文字列にカーソルを合わせる
+<br><br>
+<img src="img/tag05.png" alt="元の文字列"> メニュー clear を選択すると元に戻る
+
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+リスト : Text Viewer（表示属性変更バージョン）
+
+use Tk;
+use Tk::FileSelect;
+
+# グローバル変数
+$font = 'ＭＳ ゴシック';
+$size = 10;
+$color = 'black';
+
+# 属性の変更
+sub change_prop {
+  my @r = $t0-&gt;tagRanges( 'sel' );
+  if( @r &gt; 0 ){
+    $t0-&gt;tagAdd( "$font $size", $r[0], $r[1] );
+    $t0-&gt;tagAdd( $color, $r[0], $r[1] );
+  }
+}
+
+# タグのクリア
+sub clear_tag {
+  foreach $n ( $t0-&gt;tagNames( 'insert' ) ){
+    my @r = $t0-&gt;tagPrevrange( $n, 'insert' );
+    $t0-&gt;tagRemove( $n, $r[0], $r[1] );
+  }
+}
+
+# ファイルを選んで表示する
+sub load_file {
+  my $filename = $fs-&gt;Show();
+  if( $filename ){
+    # 前のドキュメントを消去
+    $t0-&gt;delete( '1.0', 'end' );
+    # ファイルのリード
+    open IN, "$filename" or die "Can't open $filename\n";
+    while( <IN> ){
+      $t0-&gt;insert( 'end', $_ );
+    }
+    close( IN );
+    $t0-&gt;focusForce();
+  }
+  &amp;change_number if $number_flag; 
+}
+
+# メインウィンドウ
+$top = MainWindow-&gt;new();
+$top-&gt;optionAdd( '*font' =&gt; 'Terminal 10' );
+$top-&gt;title( 'Text Viewer' );
+
+# メニューの設定
+$m = $top-&gt;Menu( -type =&gt; 'menubar' );
+$top-&gt;configure( -menu =&gt; $m );
+
+$m1 = $m-&gt;cascade( -label =&gt; 'File',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m2 = $m-&gt;cascade( -label =&gt; 'Font',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m3 = $m-&gt;cascade( -label =&gt; 'Size',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m4 = $m-&gt;cascade( -label =&gt; 'Color', -under =&gt; 0, -tearoff =&gt; 0 );
+$m5 = $m-&gt;command( -label =&gt; 'Clear', -under =&gt; 0, -command =&gt; \&amp;clear_tag );
+
+$m1-&gt;command( -label =&gt; 'Open', -under =&gt; 0, -command =&gt; \&amp;load_file );
+$m1-&gt;separator;
+$m1-&gt;command( -label =&gt; 'Exit', -under =&gt; 0, -command =&gt; \&amp;exit );
+
+# Font の設定
+foreach $i ('ＭＳ 明朝', 'ＭＳ ゴシック'){
+  $m2-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$font, -value =&gt; $i);
+}
+
+# Size の設定
+foreach $i (10, 16, 24, 48){
+  $m3-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$size, -value =&gt; $i);
+}
+
+# Color の設定
+foreach $i ('black', 'red', 'blue', 'green', 'yellow'){
+  $m4-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$color, -value =&gt; $i);
+}
+
+# テキストウィジェット
+$t0 = $top-&gt;Scrolled( 'Text', -scrollbars =&gt; 'se', -wrap =&gt; 'none',
+                      -font =&gt; ['ＭＳ ゴシック', 10] )-&gt;pack( -expand =&gt; 1, -fill =&gt; 'both');
+
+# タグの設定
+foreach $f ('ＭＳ 明朝', 'ＭＳ ゴシック'){
+  foreach $s (10, 16, 24, 48){
+    $t0-&gt;tagConfigure( "$f $s", -font =&gt; [$f, $s] );
+  }
+}
+
+foreach $c ('black', 'red', 'blue', 'green', 'yellow'){
+  $t0-&gt;tagConfigure( $c, -foreground =&gt; $c );
+}
+
+# バインドの設定
+$t0-&gt;bind( "&lt;Control-Button-1&gt;", \&amp;change_prop );
+
+# ファイルセレクト
+$fs = $top-&gt;FileSelect( -directory =&gt; 'C:/usr/', -filter =&gt; '*\.(txt|pl)');
+
+MainLoop();
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chapter21">テキストウィジェット：ウィジェットの表示</h3>
+<h4>●埋め込みウィンドウ</h4>
+<p> テキストウィジェットはキャンバスウィジェットと同様に、テキストだけではなくほかのウィジェットも表示することができます。これを <b>埋め込みウィンドウ</b> といいます。埋め込みウィンドウ用のメソッドを次に示します。
+</p>
+<ul>
+  <li><b>$text-&gt;windowCreate( index, option =&gt; value, ... );</b><br>
+オプション -window で指定したウィジェットを表示する。
+  <li><b>$text-&gt;windowNames;</b><br>
+テキストウィジェットに表示されているほかのウィジェットをリストで返す。
+  <li><b>$text-&gt;windowConfigure( index, option =&gt; value );</b><br>
+      <b>$text-&gt;windowCget( index, option );</b><br>
+位置 index にあるウィジェットのオプションの設定 (windowConfigure) と値の取得 (windowCget) を行う。
+</ul>
+
+<p> windowCreate メソッド で使用するオプションを表に示します。
+</p>
+<table border=1>
+<caption>表：windowCreate メソッドのオプション</caption>
+<tbody>
+  <tr><td>-window</td><td>ウィジェット名</td></tr>
+  <tr><td>-create</td><td>ウィジェットを生成するコマンドを指定（-window を指定しない場合のみ有効）</td></tr>
+  <tr><td>-align</td><td>上下方向の揃え指定 (baseline, top, bottom, center) </td></tr>
+  <tr><td>-stretch</td><td>上下方向の引き延ばし</td></tr>
+  <tr><td>-padx,-pady</td><td>スペースの指定</td></tr>
+</tbody>
+</table>
+
+<h4>●プログラムの改造</h4>
+<p> それでは、テキストにイメージを挿入できるように、前回作成したプログラムを改造してみましょう。ラベルにイメージを貼り付けて、そのラベルをテキストウィジェットに埋め込みます。画像ファイルはメニュー Image で選択し、カーソル位置にその画像を挿入します。
+</p>
+
+<p> メニュー Image の設定は簡単です。次の 1 行を追加するだけです。
+</p>
+<pre class="list">
+$m6 = $m-&gt;command( -label =&gt; 'Image', -under =&gt; 0, -command =&gt; \&amp;insert_image );
+</pre>
+
+<p>ラベル（画像）を挿入する関数 insert_image は次のようになります。
+</p>
+
+<pre class="list">
+リスト：ラベル（画像）の挿入
+
+sub insert_image {
+  my $image_name = $fs_image-&gt;Show();
+  if( $image_name ){
+    my $image = $top-&gt;Photo( -file =&gt; $image_name );
+    my $label = $top-&gt;Label( -image =&gt; $image, -relief =&gt; 'raised', -borderwidth =&gt; 4 );
+    $t0-&gt;windowCreate( 'insert', -window =&gt; $label, -align =&gt; 'baseline' );
+  }
+}
+
+# ファイルセレクト
+$fs_file  = $top-&gt;FileSelect( -directory =&gt; 'C:/usr/', -filter =&gt; '*\.(txt|pl)');
+$fs_image = $top-&gt;FileSelect( -directory =&gt; 'C:/usr/', -filter =&gt; '*\.(gif|ppm)');
+</pre>
+
+<p> ファイル選択用のダイアログのほかに、画像選択用のダイアログを用意します。$fs_file がファイル選択用ダイアログで、$fs_image が画像選択用ダイアログです。Photo メソッドでイメージを生成して、それを Label メソッドでラベルに貼り付けます。そして、そのラベルを windowCreate メソッドでテキストウィジェットに表示します。表示位置はマーク insert で指定できるので簡単です。
+</p>
+
+<p> ウィジェットを挿入したあとで、テキストを編集することはもちろん可能です。ウィジェットの前に文字を挿入すればウィジェットは後ろへ移動しますし、文字を削除すれば前の方へ移動します。挿入したウィジェットは、文字と同じ操作で削除することができます。
+</p>
+
+<img src="img/text04.png" alt="テキストウィジェット"> テキストを表示
+<br><br>
+<img src="img/text05.png" alt="画像挿入"> Tcl/Tk Logo を挿入
+<br><br><img src="img/text06.png" alt="テキスト編集"> テキストの編集
+
+<h4>●埋め込み画像</h4>
+<p> ちなみに、テキストウィジェットに画像を表示するだけならば、画像専用のメソッドを使った方が簡単です。これを <b>埋め込み画像</b> といいます。埋め込み画像用のメソッドを次に示します。
+</p>
+<ul>
+  <li><b>$text-&gt;imageCreate( index, option =&gt; value, ... );</b><br>
+オプション -image で指定した画像を表示する。
+  <li><b>$text-&gt;imageNames;</b><br>
+テキストウィジェットに表示されている画像をリストで返す。
+  <li><b>$text-&gt;imageConfigure( index, option =&gt; value );</b><br>
+      <b>$text-&gt;imageCget( index, option );</b><br>
+位置 index にある画像のオプションの設定 (imageConfigure) と値の取得 (imageCget) を行う。
+</ul>
+
+<p> imageCreate メソッド で使用するオプションを表に示します。
+</p>
+
+<table border=1>
+<caption>表：imageCreate メソッドのオプション</caption>
+<tbody>
+  <tr><td>-image</td><td>表示する画像</td></tr>
+  <tr><td>-name</td><td>画像を参照するための名前を付ける</td></tr>
+  <tr><td>-align</td><td>上下方向の揃え指定(baseline, top, bottom, center)</td></tr>
+  <tr><td>-padx,-pady</td><td>スペースの指定</td></tr>
+</tbody>
+</table>
+
+<p> 画像を挿入する関数 insert_image は、次のようになります。
+</p>
+
+<pre class="list">
+リスト : 画像の挿入
+
+sub insert_image {
+  my $image_name = $fs_image-&gt;Show();
+  if( $image_name ){
+    my $image = $top-&gt;Photo( -file =&gt; $image_name );
+    $t0-&gt;imageCreate( 'insert', -image =&gt; $label, -align =&gt; 'baseline' );
+  }
+}
+</pre>
+
+<p> Photo メソッドでイメージを生成して、それを imageCreate メソッドでテキストウィジェットに表示します。このように、ラベルウィジェットを生成しない分だけプログラムは簡単になります。
+</p>
+
+<p>  ところで、このままでは作成したテキストをセーブすることができません。テキストのほかに、タグやウィジェットなどの情報を別ファイルに書き出せば、設定したフォント、色、画像を保存することができます。これは、dump メソッドを使うことで実現できます。dump メソッドはウィジェット内の情報を出力するので、それを別ファイルに書き出せばいいわけです。
+</p>
+<p> まあ、どうせ保存するならば HTML 形式に変換した方がよいかもしれません。今回は dump コマンドの説明は割愛しますが、興味のある方はヘルプを参照して、セーブ機能を追加してみてください。
+</p>
+
+<img src="img/text07.png" alt="画像挿入"> Tcl/Tk Logo を挿入
+
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+リスト：Text Viewer（画像表示バージョン）
+
+use Tk;
+use Tk::FileSelect;
+
+# グローバル変数
+$font = 'ＭＳ ゴシック';
+$size = 10;
+$color = 'black';
+
+# 属性の変更
+sub change_prop {
+  my @r = $t0-&gt;tagRanges( 'sel' );
+  if( @r &gt; 0 ){
+    $t0-&gt;tagAdd( "$font $size", $r[0], $r[1] );
+    $t0-&gt;tagAdd( $color, $r[0], $r[1] );
+  }
+}
+
+# タグのクリア
+sub clear_tag {
+  foreach $n ( $t0-&gt;tagNames( 'insert' ) ){
+    my @r = $t0-&gt;tagPrevrange( $n, 'insert' );
+    $t0-&gt;tagRemove( $n, $r[0], $r[1] );
+  }
+}
+
+# ファイルを選んで表示する
+sub load_file {
+  my $filename = $fs_file-&gt;Show();
+  if( $filename ){
+    # 前のドキュメントを消去
+    $t0-&gt;delete( '1.0', 'end' );
+    # ファイルのリード
+    open IN, "$filename" or die "Can't open $filename\n";
+    while( <IN> ){
+      $t0-&gt;insert( 'end', $_ );
+    }
+    close( IN );
+    $t0-&gt;focusForce();
+  }
+  &amp;change_number if $number_flag; 
+}
+
+# 画像を選んで挿入する
+sub insert_image {
+  my $image_name = $fs_image-&gt;Show();
+  if( $image_name ){
+    my $image = $top-&gt;Photo( -file =&gt; $image_name );
+    my $label = $top-&gt;Label( -image =&gt; $image, -relief =&gt; 'raised', -borderwidth =&gt; 4 );
+    $t0-&gt;windowCreate( 'insert', -window =&gt; $label, -align =&gt; 'baseline' );
+  }
+}
+
+# メインウィンドウ
+$top = MainWindow-&gt;new();
+$top-&gt;optionAdd( '*font' =&gt; 'Terminal 10' );
+$top-&gt;title( 'Text Viewer' );
+
+# メニューの設定
+$m = $top-&gt;Menu( -type =&gt; 'menubar' );
+$top-&gt;configure( -menu =&gt; $m );
+
+$m1 = $m-&gt;cascade( -label =&gt; 'File',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m2 = $m-&gt;cascade( -label =&gt; 'Font',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m3 = $m-&gt;cascade( -label =&gt; 'Size',  -under =&gt; 0, -tearoff =&gt; 0 );
+$m4 = $m-&gt;cascade( -label =&gt; 'Color', -under =&gt; 0, -tearoff =&gt; 0 );
+$m5 = $m-&gt;command( -label =&gt; 'Clear', -under =&gt; 0, -command =&gt; \&amp;clear_tag );
+$m6 = $m-&gt;command( -label =&gt; 'Image', -under =&gt; 0, -command =&gt; \&amp;insert_image );
+
+$m1-&gt;command( -label =&gt; 'Open', -under =&gt; 0, -command =&gt; \&amp;load_file );
+$m1-&gt;separator;
+$m1-&gt;command( -label =&gt; 'Exit', -under =&gt; 0, -command =&gt; \&amp;exit );
+
+foreach $i ('ＭＳ 明朝', 'ＭＳ ゴシック'){
+  $m2-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$font, -value =&gt; $i);
+}
+
+foreach $i (10, 16, 24, 48){
+  $m3-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$size, -value =&gt; $i);
+}
+
+foreach $i ('black', 'red', 'blue', 'green', 'yellow'){
+  $m4-&gt;radiobutton(-label =&gt; $i, -variable =&gt; \$color, -value =&gt; $i);
+}
+
+# テキストウィジェット
+$t0 = $top-&gt;Scrolled( 'Text', -scrollbars =&gt; 'se', -wrap =&gt; 'none',
+                      -font =&gt; ['ＭＳ ゴシック', 10] )-&gt;pack( -expand =&gt; 1, -fill =&gt; 'both');
+
+# タグの設定
+foreach $f ('ＭＳ 明朝', 'ＭＳ ゴシック'){
+  foreach $s (10, 16, 24, 48){
+    $t0-&gt;tagConfigure( "$f $s", -font =&gt; [$f, $s] );
+  }
+}
+
+foreach $c ('black', 'red', 'blue', 'green', 'yellow'){
+  $t0-&gt;tagConfigure( $c, -foreground =&gt; $c );
+}
+
+# バインドの設定
+$t0-&gt;bind( "&lt;Control-Button-1&gt;", \&amp;change_prop );
+
+# ファイルセレクト
+$fs_file  = $top-&gt;FileSelect( -directory =&gt; 'C:/usr/', -filter =&gt; '*\.(txt|pl)');
+$fs_image = $top-&gt;FileSelect( -directory =&gt; 'C:/usr/', -filter =&gt; '*\.(gif|ppm)');
+
+MainLoop();
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2001-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="perltk07.html">PrevPage</a> | <a href="index.html">Perl/Tk</a> | <a href="perltk09.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

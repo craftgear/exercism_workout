@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881784</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm48.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm50.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>コルーチン (2)</h3>
+<p> 今回はコルーチンの応用例として、簡単な「並行プログラミング」に挑戦してみましょう。並行プログラミングといっても、複数のプログラム (関数) を擬似的に並行に動かすだけなので、大げさに考えないでくださいね。ノンプリエンプティブなマルチプロセス (マルチタスク) の基本的な動作は、コルーチンを使って簡単に実装することができます。
+</p>
+
+<h4>●並行プログラミングとは？</h4>
+<p> 「並行 (concurrent) プログラミング」は複数のプログラムを並行に実行しますが、このとき複数の CPU で同時に動かす場合と、ひとつの CPU で複数のプログラムを動かす場合があります。一般的には、前者を「並列 (parallel) プログラミング」といい、複数のハードウェアを並列に実行することによる処理速度の向上が主な目的となります。
+</p>
+
+<p> 後者の場合、一定時間毎に実行するプログラムを切り替えることで、複数のプログラムを並列に実行しているかのように見せることができます。この処理を「時分割 (time sharing) 」もしくは「タイム・スライス (time slice) 」といいます。一般に、タイム・スライスは OS でサポートされている機能です。OS が実行するプログラムのことを「プロセス (process) 」または「タスク (task) 」といいます。本稿ではプロセスとタスクは同じものとして扱います。
+</p>
+
+<p> 並列的に動作するプログラムをひとつのプロセスだけで作るのはけっこう大変です。そこで、プロセス内では逐次的な処理にとどめ、複数のプロセス間で情報交換を行うことにより、全体で並列的な動作を実現することを考えます。このほうが自然にプログラムを記述できる場合があるのです。これが後者の主な目的となります。
+</p>
+
+<p> プロセスは互いに独立したプログラムですが、OS にはプロセス間でデータをやり取りする機能 (プロセス間通信) が用意されています。たとえば、UNIX ライクな OS では「パイプ (pipe) 」を使って複数のプログラム (コマンド) を連結することができます。この場合、パイプを通してデータがプログラムに送られ、各プログラムは並行に動作することになります。入出力処理で待たされるコマンドがあったとしても、その間に他のコマンドが実行されるので、各コマンドを逐次的に実行するよりも、効率的に処理することが可能です。
+</p>
+
+<p> 最近では、ひとつのプログラムの中で独立した複数の処理を記述できるようになりました。この機能を「スレッド (thread) 」とか「マルチスレッド」いいます。スレッドは「縫い糸」という意味ですが、プログラムでは「制御の流れ」という意味で使われています。並列的な動作をプログラムする場合、逐次的な処理をひとつのスレッドに割り当て、複数のスレッドを並行に動作させることにより、全体で並列的な動作を実現するわけです。
+</p>
+
+<p> また、スレッドは同じプロセス内に存在するので、メモリ空間を共有することができます。これを「共有メモリ」といいます。スレッド間の通信は共有メモリを使って簡単に行うことができますが、プリエンプティブなスレッドの場合、共有メモリのアクセス時に発生する「競合」が問題になります。このため、マルチスレッドをサポートしているプログラミング言語では、競合を回避するための仕組みが用意されています。
+</p>
+
+<p> 今回作成するプログラムはコルーチンを利用したノンプリエンプティブなものなので、競合について考慮する必要はありません。ただし、複数のプロセス間で「通信 communication) 」を行うので、待ち合わせが必要になることがあります。この処理を「同期 (synchronization) 」といいます。並行プログラミングの場合、通信と同期という 2 つの処理が重要になります。
+</p>
+
+<h4>●簡単なマルチプロセスの作成</h4>
+<p> それではプログラムを作りましょう。プロセスは引数なしの関数で表します。一般に、プロセスには優先順位 (プライオリティ) がありますが、今回はプログラムを簡単にするため、すべてのプロセスは同じ優先順位とします。この場合、コルーチンをそのままプロセスとして扱うと簡単です。
+</p>
+<p> 最初に、メインプロセスをひとつ用意し、そこでコルーチンを生成して呼び出します。中断したコルーチンはキューに格納しておけばいいでしょう。つまり、キューからコルーチンを取り出して実行を再開し、中断したら再びキューに追加すればいいわけです。コルーチンの実行が終了した場合、そのコルーチンはキューに追加しません。これで生成したプロセスを擬似的にですが並行に実行することができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 簡単なマルチプロセス
+
+(use util.queue)
+(use srfi-1)
+
+; 中断中のプロセスを格納するキュー
+(define *proc* (make-queue))
+
+; プロセスの生成
+(define (fork fn)
+  (enqueue! *proc* (coroutine-create (lambda () (fn) #f))))
+
+; メインプロセス
+(define (main-process . args)
+  ; プロセスの登録
+  (for-each (lambda (fn) (fork fn)) args)
+  ; 実行
+  (let loop ()
+    (let ((p (dequeue! *proc* #f)))
+      (when p
+        (and (coroutine-resume p #f)
+             (enqueue! *proc* p))
+        (loop)))))
+
+; 待機
+(define (wait pred)
+  (coroutine-yield #t)
+  (if (not (pred)) (wait pred)))
+
+; 実行権を放棄するだけ
+(define (yield)
+  (coroutine-yield #t))
+</pre>
+<p> 大域変数 *proc* には中断したプロセスを格納するキューをセットします。プロセスの生成は関数 fork で行います。引数 fn は引数なしの関数とします。プロセスの終了は #f で表すことにします。ラムダ式の中で fn を評価して、最後に #f を返します。あとは coroutine-create でコルーチンを生成し、それを enqueue! でキューに追加します。
+</p>
+<p> メインプロセスの実行は関数 main-process で行います。引数はプロセスの実体を表す関数です。最初に引数 args から for-each で関数をひとつずつ取り出し、それを fork に渡してプロセスを生成します。あとはキューからプロセスを順番に取り出して変数 p にセットし、coroutine-resume でプロセス p の実行を再開します。返り値が真の場合、プロセス p はまだ終了していないので、p をキューに追加します。返り値が偽の場合はキューに追加しません。
+</p>
+<p> 関数 wait は述語 pred が真を返すまでプロセスを待機させます。まず coroutine-yield を評価して main-process に戻ります。これで他のプロセスに実行権を渡すことができます。プロセスが再開されると、述語 pred を評価して、偽の場合は wait を再帰呼び出してプロセスを待機状態にします。関数 yield はプロセスの実行権を他のプロセスに渡すだけです。
+</p>
+
+<h4>●簡単な実行例</h4>
+<p> それでは簡単な例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+(define (test0 name n)
+  (when (positive? n)
+    (format #t "~A ~D~%" name n)
+    (yield)
+    (test0 name (- n 1))))
+</pre>
+<p> test0 は name を n 回表示します。name と n を表示したあと、yield で実行権を放棄します。これで他のプロセスが実行されるので、複数のプロセスを並行に動作させることができます。実行例を示します。
+</p>
+<pre>
+gosh&gt; (main-process (lambda () (test0 'foo 7)) (lambda () (test0 'bar 5)))
+foo 7
+bar 5
+foo 6
+bar 4
+foo 5
+bar 3
+foo 4
+bar 2
+foo 3
+bar 1
+foo 2
+foo 1
+#&lt;undef&gt;
+gosh&gt; (main-process (lambda () (test0 'foo 5)) (lambda () (test0 'bar 4))
+(lambda () (test0 'baz 3)))
+foo 5
+bar 4
+baz 3
+foo 4
+bar 3
+baz 2
+foo 3
+bar 2
+baz 1
+foo 2
+bar 1
+foo 1
+#&lt;undef&gt;
+</pre>
+<p> このように、他のプロセスと通信を行わない場合、プログラムはとても簡単になります。
+</p>
+<p> また、次に示すような擬似的なタイマーを作ることもできます。
+</p>
+<pre class="list">
+リスト : タイマーもどき
+
+(define (make-timer n)
+  (lambda () (negative? (dec! n))))
+</pre>
+<p> make-timer はクロージャを返します。クロージャは評価するたびに引数 n の値を -1 します。n が負になったら真を返します。wait と make-timer を組み合わせると、処理を n 回スキップする、つまり時間待ちと同様の効果を得ることができます。
+</p>
+
+<p> 簡単な例を示します。
+</p>
+<pre class="list">
+リスト : 簡単なテスト (2)
+
+(define (test01 name n m)
+  (when (positive? n)
+    (format #t "~A ~D~%" name n)
+    (wait (make-timer m))
+    (test01 name (- n 1) m)))
+</pre>
+<p> (wait (make-timer m)) で時間待ちを行います。たとえば、m に 0 を指定すると時間待ちは行われませんが、1 を指定すると処理を 1 回スキップすることになります。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+gosh&gt; (main-process (lambda () (test01 'foo 10 0)) (lambda () (test01 'bar 5 1)))
+foo 10
+bar 5
+foo 9
+foo 8
+bar 4
+foo 7
+foo 6
+bar 3
+foo 5
+foo 4
+bar 2
+foo 3
+foo 2
+bar 1
+foo 1
+#&lt;undef&gt;
+</pre>
+<p> bar を表示する処理は 1 回待たされるので、foo と bar の表示は 2 対 1 の割合になります。
+</p>
+
+<h4>●キューによる同期処理</h4>
+<p> 次はプロセス間で通信を行う場合を考えてみましょう。この場合、いろいろな方法が考えられますが、今回は簡単な例としてキューを使ってみましょう。キューはベクタを使って実装します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : キュー (ベクタによる実装)
+
+; キューの生成
+(define (make-vec-queue size)
+  (list 0 0 0 (make-vector size)))
+
+; 操作関数の定義
+(define (get-buff q) (cadddr q))
+(define (vec-queue-size q) (vector-length (get-buff q)))
+
+(define (get-front q) (car q))
+(define (inc-front! q)
+  (inc! (car q))
+  (if (= (get-front q) (vec-queue-size q))
+      (set-car! q 0)))
+
+(define (get-rear q) (cadr q))
+(define (inc-rear! q)
+  (inc! (cadr q))
+  (if (= (get-rear q) (vec-queue-size q))
+      (set-car! (cdr q) 0)))
+
+(define (get-count q) (caddr q))
+(define (inc-count! q) (inc! (caddr q)))
+(define (dec-count! q) (dec! (caddr q)))
+
+; キューは空か？
+(define (vec-queue-empty? q) (zero? (get-count q)))
+
+; キューは満杯か？
+(define (vec-queue-full? q)
+  (= (get-count q) (vec-queue-size q)))
+
+; データの追加
+(define (vec-enqueue! q x)
+  (wait (lambda () (not (vec-queue-full? q))))
+  (vector-set! (get-buff q) (get-rear q) x)
+  (inc-count! q)
+  (inc-rear! q))
+
+; データを取り出す
+(define (vec-dequeue! q)
+  (wait (lambda () (not (vec-queue-empty? q))))
+  (begin0
+    (vector-ref (get-buff q) (get-front q))
+    (dec-count! q)
+    (inc-front! q)))
+</pre>
+
+<p> ベクタによるキューの実装は拙作のページ <a href="scheme.html#abcobj">オブジェクト指向編</a> <a href="abcobj08.html">インスタンスの初期化</a> で詳しく説明しています。今回はクラスを使わないで、必要なデータをリストに格納しています。ポイントはキューにデータを追加する vec-enqueue! とデータを取り出す vec-dequeue! で待ち合わせを行うところです。
+</p>
+<p> vec-enqueue! では、キューが満杯のときに wait で待ち合わせを行います。逆に vec-dequeue! の場合、キューが空のときに wait で待ち合わせを行います。これによって、プロセス間での同期処理が可能になります。また、キューの大きさが少ない場合でも、データを書き込むプロセスと読み出すプロセスが並行に動作することで、キューの大きさ以上のデータを受け渡すことができます。
+</p>
+
+<p> それでは簡単な実行例を示します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : キューの実行例
+
+; キュー
+(define *queue* #f)
+
+; データを送る
+(define (send-color color n)
+  (when (positive? n)
+    (vec-enqueue! *queue* color)
+    (send-color color (- n 1))))
+
+; データを受け取る
+(define (receive-color n)
+  (when (positive? n)
+    (display (vec-dequeue! *queue*))
+    (display " ")
+    (receive-color (- n 1))))
+
+; テスト
+(define (test-color)
+  (set! *queue* (make-vec-queue 10))
+  (main-process
+    (lambda () (send-color 'red 8))
+    (lambda () (send-color 'blue 8))
+    (lambda () (send-color 'yellow 8))
+    (lambda () (receive-color 24))))
+</pre>
+<p> make-vec-queue でキューを生成して大域変数 *queue* に格納します。キューの大きさは 10 とします。send-color はデータ (color) を n 個キューに書き込みます。receive-color は n 個のデータをキューから取り出して表示します。test-color では、キューに書き込むプロセスを 3 つ生成し、取り出すプロセスを 1 つ生成します。データを書き込む総数は 8 * 3 = 24 個なので、取り出すデータ数も 24 個とします。
+</p>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+gosh&gt; (test-color)
+red blue yellow red blue yellow red blue yellow red blue yellow red blue red red
+ red blue blue blue yellow yellow yellow yellow #&lt;undef&gt;
+</pre>
+<p> 24 個のデータすべて表示されています。キューが満杯になると、receive-color でデータを取り出さない限り、データを書き込むことはできません。このため、receive-color のあとに評価されるプロセスが優先されることになり、red が続けて書き込まれ、そのあとに blue が、最後に yellow がキューに書き込まれることになります。send-color に (wait (make-timer 1)) を追加すると、receive-color のプロセスのほうが多く評価されることになるため、red, blue, yellow の順番でデータが取り出されるようになります。
+</p>
+<h4>●哲学者の食事</h4>
+<p> 最後に、「哲学者の食事」という並行プログラミングでは有名な問題を解いてみましょう。
+</p>
+<DIV class="question">
+<B>[哲学者の食事]</B><BR>
+<p> 5 人の哲学者が丸いテーブルに座っています．テーブルの中央にはスパゲッティが盛られた大皿があり、哲学者の間には 5 本のフォークが置かれています。哲学者は思索することとスパゲッティを食べることを繰り返します。食事のときには 2 本のフォークを持たなければなりません。食事が終わると 2 本のフォークを元の位置に戻します。
+</p>
+</DIV>
+<p> 詳しい説明は <a href="http://ja.wikipedia.org/wiki/%E9%A3%9F%E4%BA%8B%E3%81%99%E3%82%8B%E5%93%B2%E5%AD%A6%E8%80%85%E3%81%AE%E5%95%8F%E9%A1%8C">食事する哲学者の問題 -- Wikipedia</a> をお読みください。
+</p>
+
+<p> それではプログラムを作りましょう。最初にフォークを操作する関数を定義します。
+</p>
+<pre class="list">
+リスト : フォークを操作する関数
+
+; フォークの有無を表すベクタ
+(define *forks* #f)
+
+; フォークがあるか
+(define (fork? person side)
+  (vector-ref
+    *forks*
+    (if (eq? side 'right)
+        person
+      (modulo (+ person 1) 5))))
+
+; フォークの書き換え
+(define (fork-set! person side val)
+  (vector-set!
+    *forks*
+    (if (eq? side 'right)
+        person
+      (modulo (+ person 1) 5))
+    val))
+
+; フォークを取る
+(define (get-fork person side)
+  (wait (lambda () (fork? person side)))
+  (fork-set! person side #f))
+
+; フォークを置く
+(define (put-fork person side)
+  (fork-set! person side #t)
+  (yield))
+</pre>
+<p> フォークの有無は真偽値で表して、それをベクタに格納します。ベクタは大域変数 *forks* にセットします。n 番目の哲学者の場合、右側のフォークがベクタの n 番目の要素、左側のフォークが n + 1 番目の要素になります。関数 fork? は n 番目の哲学者の side にフォークがあるとき真を返します。fork-set! は n 番目の哲学者の side 側にあるフォークの値をval で書き換えます。
+</p>
+<p> get-fork はフォークを取る関数です。wait で fork? が真を返すまで待ちます。そのあとで、fork-set! で対応するフォークの値を #f に書き換えます。put-fork はフォークを元に戻す関数です。fork-set! でフォークの値を #t に書き換え、yiled を評価して他のプロセスに実行権を渡します。
+</p>
+<p> 今回はノンプリエンプティブなコルーチンを使用しているので、*fork* をアクセスするときに競合は発生しません。プリエンプティブなマルチスレッドを使用する場合、共有メモリにアクセスするときは競合について考慮する必要があります。ご注意ください。
+</p>
+<p> 次は哲学者の動作をプログラムします。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 哲学者の動作
+
+(define (person0 n)
+  (let loop ((m 0))
+    (cond ((= m 2)
+           (format #t "Philosopher~D is sleeping~%" n))
+          (else
+           (format #t "Philosopher~D is thinking~%" n)
+           (get-fork n 'right)
+           (get-fork n 'left)
+           (format #t "Philosopher~D is eating~%" n)
+           (yield)
+           (put-fork n 'right)
+           (put-fork n 'left)
+           (loop (+ m 1))))))
+</pre>
+<p> 関数 person0 の引数 n は哲学者の番号を表します。name-led の変数 m は食事をした回数です。2 回食事をしたら処理を終了します。食事をする場合、最初に get-fork で右側のフォークを取り、次に左側のフォークを取ります。食事を終えたら put-fork で右側のフォークを置き、次に左側のフォークを置きます。
+</p>
+<p> このように、マルチプロセスを使うと簡単にプログラムできますが、実は並行プログラミング特有の大きな問題点があるのです。これはプログラムを実行してみるとわかります。
+</p>
+<h4>●実行結果 (1)</h4>
+<p> プログラムの実行は関数 test2 で行います。
+</p>
+<pre class="list">
+リスト : 実行
+
+(define (test2 person)
+  (set! *forks* (make-vector 5 #t))
+  (main-process
+    (lambda () (person 0))
+    (lambda () (person 1))
+    (lambda () (person 2))
+    (lambda () (person 3))
+    (lambda () (person 4))))
+</pre>
+<p> 最初に #t で初期化したベクタを *frok* にセットします。そして、main-process に 5 人の哲学者を表すプロセスを渡して評価します。実行結果は次のようになります。
+</p>
+<pre>
+gosh&gt; (test2 person0)
+Philosopher0 is thinking
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+
+</pre>
+<p> このように、すべてのプロセスが待ち状態となり進むことができなくなります。これを「デッドロック (deadlock) 」といいます。この場合、0 番目の哲学者の右側のフォークは、4 番目の哲学者の左側のフォークになります。各哲学者が右側のフォークを取り、左側のフォークが置かれるのを待つときにデッドロックとなるわけです。
+</p>
+
+<h4>●デッドロックの防止</h4>
+<p> デッドロックを防止する簡単な方法は、右側のフォークを取っても左側のフォークを取れないときは、右側のフォークを元に戻すことです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : デッドロックの防止 (1)
+
+(define (person1 n)
+  (let loop ((m 0))
+    (cond ((= m 2)
+           (format #t "Philosopher~D is sleeping~%" n))
+          (else
+           (format #t "Philosopher~D is thinking~%" n)
+           (get-fork n 'right)
+           (cond ((fork? n 'left)
+                  (fork-set! n 'left #f)
+                  (format #t "Philosopher~D is eating~%" n)
+                  (yield)
+                  (put-fork n 'right)
+                  (put-fork n 'left)
+                  (loop (+ m 1)))
+                 (else
+                  (put-fork n 'right)
+                  (loop m)))))))
+</pre>
+<p> 右側のフォークを取ったあと、fork? で左側のフォークをチェックします。フォークがある場合は、fork-set! で値を #t に書き換えます。これでフォークを取って食事をすることができます。get-fork を使うと他のプロセスに実行権が移るため、フォークの状態が変わる可能性があります。左側のフォークがない場合は put-fork で右側のフォークを元に戻します。
+</p>
+<h4>●実行結果 (2)</h4>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+gosh&gt; (test2 person1)
+Philosopher0 is thinking
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher0 is eating
+Philosopher2 is eating
+Philosopher4 is thinking
+Philosopher1 is eating
+Philosopher3 is eating
+Philosopher0 is thinking
+Philosopher2 is thinking
+Philosopher0 is eating
+Philosopher2 is eating
+Philosopher1 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher1 is eating
+Philosopher3 is eating
+Philosopher0 is sleeping
+Philosopher2 is sleeping
+Philosopher4 is eating
+Philosopher1 is sleeping
+Philosopher3 is sleeping
+Philosopher4 is thinking
+Philosopher4 is eating
+Philosopher4 is sleeping
+#&lt;undef&gt;
+</pre>
+<p> このように、デッドロックしないで実行することができます。
+</p>
+<h4>●デッドロックの防止 (2)</h4>
+<p> もうひとつ簡単な方法を紹介しましょう。奇数番目の哲学者は、まず左側のフォークを取り上げてから右側のフォークを取り、偶数番目の哲学者は、今までのように右側のフォークを取り上げてから左側のフォークを取ります。こんな簡単な方法で動作するのは不思議なように思います。たとえば、哲学者が 2 人の場合を考えてみてください。
+</p>
+<p> 哲学者 0 の右側のフォークを A、左側のフォークを B とします。哲学者 1 からみると、B が右側のフォークで、A が左側のフォークになります。デッドロックは、哲学者 0 が A を取り、哲学者 1 が B を取ったときに発生します。ここで、哲学者 1 が左側のフォーク A から取るようにします。先に哲学者 0 が A を取った場合、哲学者 1 は A があくまで待つことになるので、哲学者 0 はフォーク B を取って食事をすることができます。哲学者 1 が先にフォーク A を取った場合も同じです。これでデッドロックを防止することができます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : デッドロックの防止 (2)
+
+(define (person2 n)
+  (let loop ((m 0))
+    (cond ((= m 2)
+           (format #t "Philosopher~D is sleeping~%" n))
+          (else
+           (format #t "Philosopher~D is thinking~%" n)
+           (cond ((even? n)
+                  (get-fork n 'right)
+                  (get-fork n 'left))
+                 (else
+                  (get-fork n 'left)
+                  (get-fork n 'right)))
+           (format #t "Philosopher~D is eating~%" n)
+           (yield)
+           (put-fork n 'right)
+           (put-fork n 'left)
+           (loop (+ m 1))))))
+</pre>
+<p> cond で n が偶数の場合は右側から、奇数の場合は左側のフォークから取るように処理を分けるだけです。
+</p>
+<h4>●実行結果 (3)</h4>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+gosh&gt; (test2 person2)
+Philosopher0 is thinking
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher0 is eating
+Philosopher3 is eating
+Philosopher1 is eating
+Philosopher0 is thinking
+Philosopher3 is thinking
+Philosopher4 is eating
+Philosopher1 is thinking
+Philosopher2 is eating
+Philosopher4 is thinking
+Philosopher0 is eating
+Philosopher3 is eating
+Philosopher2 is thinking
+Philosopher1 is eating
+Philosopher0 is sleeping
+Philosopher3 is sleeping
+Philosopher4 is eating
+Philosopher1 is sleeping
+Philosopher2 is eating
+Philosopher4 is sleeping
+Philosopher2 is sleeping
+#&lt;undef&gt;
+</pre>
+<p> 正常に動作していますね。興味のある方はいろいろ試してみてください。
+</p>
+<h4>●参考文献, URL</h4>
+<ol>
+  <li>Paul Graham (著)，野田 開 (訳), 『On Lisp』, <a href="http://www.komaba.utmc.or.jp/~flatline/">Web 版</a>
+  <li>Timothy Buddy (著), 吉田雄二 (監修), 長谷川明生・大田義勝 (訳), 『Little Smalltake 入門』, アスキー出版, 1989
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』, アジソンウェスレイ, 1995
+</ol>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+;
+; process.scm : コルーチンを使ったマルチプロセス
+;
+;               Copyright (C) 2011 Makoto Hiroi
+;
+
+;;;
+;;; 継続によるコルーチンの実装
+;;;
+
+; コルーチンの継続を格納
+(define *coroutine* 'root)
+
+; コルーチンの初期化
+(define (coroutine-initialize)
+  (set! *coroutine* 'root))
+
+; コルーチンの生成
+(define (coroutine-create proc)
+  (list 'coroutine #f (lambda (x) (*coroutine* #f (proc)))))
+
+; 実行を中断して値を返す
+(define (coroutine-yield x)
+  (call/cc
+    (lambda (cont)
+      (*coroutine* cont x))))
+
+; 実行を再開する
+(define (coroutine-resume co x)
+  (cond ((not (eq? (car co) 'coroutine))
+         (error "no coroutine"))
+          ((cadr co)
+         (error "double resume"))
+        ((not (caddr co))
+         (error "dead coroutine called"))
+        (else
+         (call-with-values
+           (lambda ()
+             (call/cc
+               (lambda (cont)
+                 (set-car! (cdr co) *coroutine*)
+                 (set! *coroutine* cont)
+                 ((caddr co) x))))
+           (lambda (cont val)
+             (set! *coroutine* (cadr co))
+             (set-car! (cdr co) #f)
+             (set-car! (cddr co) cont)
+             val)))))
+
+;;;
+;;; 簡単なマルチプロセス
+;;;
+
+(use util.queue)
+(use srfi-1)
+
+; 中断中のプロセスを格納するキュー
+(define *proc* (make-queue))
+
+; プロセスの生成
+(define (fork fn)
+  (enqueue! *proc* (coroutine-create (lambda () (fn) #f))))
+
+; メインプロセス
+(define (main-process . args)
+  ; プロセスの登録
+  (for-each (lambda (fn) (fork fn)) args)
+  ; 実行
+  (let loop ()
+    (let ((p (dequeue! *proc* #f)))
+      (when p
+        (and (coroutine-resume p #f)
+             (enqueue! *proc* p))
+        (loop)))))
+
+; 待機
+(define (wait pred)
+  (coroutine-yield #t)
+  (if (not (pred)) (wait pred)))
+
+; 実行権を放棄するだけ
+(define (yield)
+  (coroutine-yield #t))
+
+; タイマーもどき
+(define (make-timer n)
+  (lambda () (negative? (dec! n))))
+
+; 簡単なテスト
+(define (test0 name n)
+  (when (positive? n)
+    (format #t "~A ~D~%" name n)
+    (yield)
+    (test0 name (- n 1))))
+
+;;;
+;;; キュー
+;;;
+(define (make-vec-queue size)
+  ; (front rear count buff)
+  (list 0 0 0 (make-vector size)))
+
+(define (get-buff q) (cadddr q))
+(define (vec-queue-size q) (vector-length (get-buff q)))
+
+(define (get-front q) (car q))
+(define (inc-front! q)
+  (inc! (car q))
+  (if (= (get-front q) (vec-queue-size q))
+      (set-car! q 0)))
+
+(define (get-rear q) (cadr q))
+(define (inc-rear! q)
+  (inc! (cadr q))
+  (if (= (get-rear q) (vec-queue-size q))
+      (set-car! (cdr q) 0)))
+
+(define (get-count q) (caddr q))
+(define (inc-count! q) (inc! (caddr q)))
+(define (dec-count! q) (dec! (caddr q)))
+
+(define (vec-queue-empty? q) (zero? (get-count q)))
+
+(define (vec-queue-full? q)
+  (= (get-count q) (vec-queue-size q)))
+
+(define (vec-enqueue! q x)
+  (wait (lambda () (not (vec-queue-full? q))))
+  (vector-set! (get-buff q) (get-rear q) x)
+  (inc-count! q)
+  (inc-rear! q))
+
+(define (vec-dequeue! q)
+  (wait (lambda () (not (vec-queue-empty? q))))
+  (begin0
+    (vector-ref (get-buff q) (get-front q))
+    (dec-count! q)
+    (inc-front! q)))
+
+;
+; キューによる同期処理
+;
+(define *queue* #f)
+
+(define (send-color color n)
+  (when (positive? n)
+    (vec-enqueue! *queue* color)
+    ; (wait (make-timer 1))
+    (send-color color (- n 1))))
+
+(define (receive-color n)
+  (when (positive? n)
+    (display (vec-dequeue! *queue*))
+    (display " ")
+    (receive-color (- n 1))))
+
+(define (test-color)
+  (set! *queue* (make-vec-queue 10))
+  (main-process
+    (lambda () (send-color 'red 8))
+    (lambda () (send-color 'blue 8))
+    (lambda () (send-color 'yellow 8))
+    (lambda () (receive-color 24))))
+
+;;;
+;;; 哲学者の食事問題
+;;;
+
+(define *forks* #f)
+
+; フォークがあるか
+(define (fork? person side)
+  (vector-ref
+    *forks*
+    (if (eq? side 'right)
+        person
+      (modulo (+ person 1) 5))))
+
+; フォークの書き換え
+(define (fork-set! person side val)
+  (vector-set!
+    *forks*
+    (if (eq? side 'right)
+        person
+      (modulo (+ person 1) 5))
+    val))
+
+; フォークを取る
+(define (get-fork person side)
+  (wait (lambda () (fork? person side)))
+  (fork-set! person side #f))
+
+; フォークを置く
+(define (put-fork person side)
+  (fork-set! person side #t)
+  (yield))
+
+; デッドロックする
+(define (person0 n)
+  (let loop ((m 0))
+    (cond ((= m 2)
+           (format #t "Philosopher~D is sleeping~%" n))
+          (else
+           (format #t "Philosopher~D is thinking~%" n)
+           (get-fork n 'right)
+           (get-fork n 'left)
+           (format #t "Philosopher~D is eating~%" n)
+           (yield)
+           (put-fork n 'right)
+           (put-fork n 'left)
+           (loop (+ m 1))))))
+
+; デッドロックの防止 (1)
+(define (person1 n)
+  (let loop ((m 0))
+    (cond ((= m 2)
+           (format #t "Philosopher~D is sleeping~%" n))
+          (else
+           (format #t "Philosopher~D is thinking~%" n)
+           (get-fork n 'right)
+           (cond ((fork? n 'left)
+                  (fork-set! n 'left #f)
+                  (format #t "Philosopher~D is eating~%" n)
+                  (yield)
+                  (put-fork n 'right)
+                  (put-fork n 'left)
+                  (loop (+ m 1)))
+                 (else
+                  (put-fork n 'right)
+                  (loop m)))))))
+
+; デッドロックの防止 (2)
+(define (person2 n)
+  (let loop ((m 0))
+    (cond ((= m 2)
+           (format #t "Philosopher~D is sleeping~%" n))
+          (else
+           (format #t "Philosopher~D is thinking~%" n)
+           (cond ((even? n)
+                  (get-fork n 'right)
+                  (get-fork n 'left))
+                 (else
+                  (get-fork n 'left)
+                  (get-fork n 'right)))
+           (format #t "Philosopher~D is eating~%" n)
+           (yield)
+           (put-fork n 'right)
+           (put-fork n 'left)
+           (loop (+ m 1))))))
+
+;
+(define (test2 person)
+  (set! *forks* (make-vector 5 #t))
+  (main-process
+    (lambda () (person 0))
+    (lambda () (person 1))
+    (lambda () (person 2))
+    (lambda () (person 3))
+    (lambda () (person 4))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm48.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm50.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

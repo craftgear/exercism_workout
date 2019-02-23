@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Prolog プログラミング入門</title>
+  <meta name="description" content="Prolog,Prolog入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881780</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>お気楽 Prolog プログラミング入門</h2>
+<div class="small">
+[ <a href="prolog09.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog11.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap31">二分探索木</h3>
+<p> あるデータの中から特定のデータを探す場合、データ数が少なければ力任せに探索しても何とかなりますが、データ数が多くなると探索に時間がかかるようになります。このような場合、あらかじめデータを整理整頓しておくことで、特定のデータを高速に見つけることができるようになります。
+</p>
+<p> この代表的なアルゴリズムが<b>ハッシュ法</b>と<b>二分探索木</b>です。今回は、二分探索木を Prolog で実装してみましょう。最初に<b>木構造 (tree structer)</b> を簡単に説明します。
+</p>
+<h4>●木構造</h4>
+<p> 木は節 (ノード) と呼ばれる要素に対して、階層的な関係 (親子関係) を表したデータ構造です。身近な例では、ディレクトリ (フォルダ) の階層構造が木にあたります。ディレクトリにルートディレクトリがあるように、木にも<b>根 (ルート) </b>と呼ばれる節が存在します。次の図を見てください。
+</p>
+<pre class="fig">
+           (root)
+             Ａ    ────────  レベル０ 
+           ／｜＼                ↑
+         ／  ｜  ＼
+       Ｂ    Ｃ    Ｄ            木  レベル１ 
+     ／｜＼        ｜＼          の
+   ／  ｜  ＼      ｜  ＼        高
+ Ｅ    Ｆ    Ｇ    Ｈ    Ｉ      さ  レベル２ 
+           ／  ＼
+         ／      ＼              ↓
+       Ｊ          Ｋ    ─────  レベル３ 
+
+        図：一般的な木構造の一例
+</pre>
+
+<p> 木を図示する場合、階層関係がはっきりわかるように、根を上にして、同じ階層にある節を並べて書きます。根からレベル 0、レベル 1 と階層を数えていき、最下層の節までの階層数を<b>木の高さ</b>といいます。木は、ある節から下の部分を切り出したものも、木としての性質を持っています。これを<b>部分木</b>といいます。
+</p>
+<p> 木は、ある節からほかの節に至る経路を考えることができます。たとえば、A から J には、A - B - G - J という経路がありますね。これは、ディレクトリやファイルを指定するときのパスと同じです。ある節から根の方向にさかのぼるとき、途中で通っていく節を<b>先祖</b>といい、直接繋がっている節を<b>親</b>といます。これは、逆から見ると<b>子孫</b>と<b>子</b>という関係になります。子を持たない節をとくに<b>葉</b>と呼ぶことがあります。上図でいうと、G は J, K の親で、J は G の子になります。J と K は子を持っていないので葉となります。
+</p>
+<h4>●二分木</h4>
+<p> 子は、<b>左 &lt; 右</b>の順番で節に格納するのが一般的です。これを<b>順序木</b>といいます。また、順番が無い木を<b>無順序木</b>と呼びます。そして、節が持っている子の数を<b>次数</b>といいます。上図の場合、A は 3 つの子 B, C, D を持っているので、A の次数は 3 となります。そして、すべての節の次数を N に揃えた順序木を<b> N 分木</b>と呼びます。とくに、次数が 2 の<b>二分木</b>は、プログラムでよく使われるデータ構造です。
+</p>
+<pre class="fig">
+                     (root)
+                       18
+                     ／  ＼
+                   ／      ＼
+                 ／          ＼
+               ／              ＼
+             ／                  ＼
+           14                      22
+         ／  ＼                  ／  ＼
+       ／      ＼              ／      ＼
+     12          16          20          24
+   ／  ＼      ／  ＼      ／  ＼      ／  ＼
+ 11      13  15      17  19      21  23      25 
+
+                図：二分木の一例
+</pre>
+
+<p> 上図に二分木の例を示します。二分木では、節にひとつのデータを格納します。そして、その節の左側の子には小さいデータ、右側の子には大きいデータが配置されるように木を構成します。
+</p>
+<p> 二分木はデータの探索・挿入を高速に行うことができるデータ構造です。たとえば、上図の二分木から 19 を探してみましょう。まず、root の 18 と比較します。18 &lt; 19 ですから、右側の子をたどり 22 と比較します。今度は 19 &lt; 22 なので左側の子をたどります。次は 20 と比較し 19 &lt; 20  なので左側の子をたどり、ここで 19 を見つけることができます。
+</p>
+<p> 二分木の探索は二分探索と同じ原理です。左右どちらかの子をたどるたびに、探索するデータ数は半分になります。したがって、データ数を N とすると、線形探索では平均で N / 2 回の比較が必要になりますが、二分木を使うと log<SUb>2</SUb> N 程度の回数で収まります。たとえば、データが 100 個ある場合、線形探索では平均で 50 回データを比較しなければいけないのに、二分木では高々 7 回の比較で済むわけです。
+</p>
+<p> ただし、これは左右の部分木のバランスがとれている理想的な状態での話です。バランスが崩れると二分木の性能は劣化し、最悪の場合は線形探索と同じになってしまいます。そこで、左右のバランスを一定の範囲に収める<b>平衡木</b>が考案されていますが、今回は木構造の例題として単純な二分木を取り上げます。
+</p>
+<h4>●データ構造</h4>
+<p> Prolog の場合、二分木はリストを使って表すことができます。リストの先頭がデータで、次が左側の子、最後に右側の子を格納します。子がない場合は void を格納することにすると、図の二分木は次のように表すことができます。
+</p>
+<pre class="fig">
+[18,
+     [14,
+          [12,
+               [11, void, void].
+               [13  void, void] ],
+          [16,
+               [15, void, void],
+               [17, void, void] ] ],
+     [22,
+          [20,
+               [19, void, void],
+               [21, void, void] ],
+          [24,
+               [23, void, void],
+               [25, void, void] ] ] ]
+
+  図：二分木をリストで表した場合
+</pre>
+
+<p> このように、リストを使えば二分木でも多分木でも作れるのですが、このリストを見ただけでは、それが二分木を表していると理解するのは困難です。そこで、<a href="prolog03.html">データ型と型述語</a> で簡単に説明した<b>複合項</b>を使って二分木を表すことにしましょう。
+</p>
+<p> 複合項の基本的な形式は、次のようになります。
+</p>
+<pre class="item">
+func(arg1, arg2, ... argN)
+</pre>
+<p> func を<b>ファンクタ (functor,関数子)</b> といいます。複合項は、ファンクタと引数の個数 (アリティ,arity) で定められます。述語と同じ形式になっているところが、ちょっとややこしいところです。述語は物事の関係を表し、複合項はデータ構造を表していることに注意してください。二分木の節 (node) を複合項で表すと、次のようになります。
+</p>
+<pre class="item">
+node(Data, Left, Rigth)
+</pre>
+<p> Data にデータが入り、Left には左側の子、Right には右側の子が入ります。簡単な二分木とその複合項を図に表すと、次のようになります。
+</p>
+<pre class="fig">
+    12 
+  ／  ＼    =&gt; node(12, node(11, void, void), node(13, void, void))
+11      13
+
+                図：二分木
+</pre>
+
+<h4>●データの探索</h4>
+<p> 二分木からデータを探すことは、とても簡単にプログラムできます。
+</p>
+<pre class="list">
+リスト：探索
+
+search_tree(Data, node(Data, _, _)).
+search_tree(Data, node(Value, Left, _)) :- Data &lt; Value, search_tree(Data, Left).
+search_tree(Data, node(Value, _, Right)) :- Data &gt; Value, search_tree(Data, Right).
+</pre>
+<p> 最初の規則がデータを見つけた場合です。次の規則で、Data が Value よりも小さければ左の部分木をたどり、最後の規則で Data が Value よりも大きければ右の木をたどります。二分木の定義そのままのプログラムですね。
+</p>
+<h4>●データの挿入</h4>
+<p> データの挿入も簡単です。述語 insert_tree(Data, Tree, NewTree) は、二分木 Tree にデータ Data を挿入し、新しい二分木 NewTree を生成します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：データの挿入
+
+insert_tree(Data, void, node(Data, void, void)).
+insert_tree(Data, node(Value, Left, Right), node(Value, New, Right)) :-
+    Data =&lt; Value, insert_tree(Data, Left, New).
+insert_tree(Data, node(Value, Left, Right), node(Value, Left, New)) :-
+    Data &gt; Value, insert_tree(Data, Right, New).
+</pre>
+
+<p> 最初の規則が、空の木にデータを挿入する場合です。次の規則で、Data が節の値 Value よりも小さければ、左の部分木に Data を挿入します。New がデータを挿入した部分木を表しています。これを左の部分木に置き換えればいいわけです。最後が、右側の部分木にデータを挿入する規則です。
+</p>
+<p> とても簡単ですね。これで、再帰を使って二分木をたどり、節 (node) の子がない場所 (void) へデータを挿入することができます。
+</p>
+<p> このプログラムには問題点が 2 つあります。ひとつは、同じデータでも二分木に挿入する点です。これでは困る場合、同じデータが見つかったならばデータを挿入しないように、次の規則を追加すればいいでしょう。
+</p>
+<pre class="list">
+insert_tree(Data, node(Data, Left, Right), node(Data, Left, Right)).
+</pre>
+<p> 同じデータを見つけたら、同じ木を返すだけです。それから、2 番目の規則で =&lt; を &lt; に修正してください。
+</p>
+<p> もうひとつの問題点は、データを挿入するたびに新しい二分木を生成することです。データ数が多くなって二分木が大きくなると、効率がとても悪くなります。この問題は、Prolog らしく自由変数を使って解決することができます。これはあとで説明します。
+</p>
+<h4>●データの表示</h4>
+<p> 今度は、データを表示する述語 print_tree を作ります。ところで、木のすべての節を規則的な順序で回ることを<b>巡回 (traverse) </b>といいます。この中で重要なのが次の方法です。
+</p>
+<ol>
+  <li><b>行きがけ順</b><br>
+     まず節のデータを出力し、その後、左の子、右の子の順番で出力。
+  <li><b>帰りがけ順</b><br>
+     左の子、右の子を出力してから、節のデータを出力。
+  <li><b>通りがけ順</b><br>
+     左の子を出力してから、節のデータを出力し、最後に右の子を出力。
+</ol>
+<p>名前の由来は、節のデータを出力するタイミングからきています。節に最初に到達したときに出力するのが「行きがけ」、左右の子を出力して戻ってきたときに出力するのが「帰りがけ」、左の子を出力して戻ってきたときに、右の子を出力する前に節のデータを出力するのが「通りがけ」です。
+</p>
+<p> 二分探索木の場合、通りがけ順でデータを出力すると、ソートした出力結果を得ることができます。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：データの表示
+
+print_tree(void).
+print_tree(node(Value, Left, Right)) :-
+    print_tree(Left), write(Value), nl, print_tree(Right).
+</pre>
+<p> 通りがけ順の定義そのままのプログラムです。最初の規則が、再帰の停止条件となります。次の規則で、まず左側の部分木をたどってから、節のデータ value を表示して、右側の部分木をたどります。
+</p>
+<h4>●簡単な実行例</h4>
+<p> それでは、実際に二分木を作ってみましょう。まず、数値を二分木に挿入するプログラムを作ります。
+</p>
+<pre class="list">
+リスト：テスト
+
+test(0, Tree, Tree).
+test(N, Tree, Result) :-
+    M is random(1000),
+    insert_tree(M, Tree, New),
+    N1 is N - 1,
+    test(N1, New, Result).
+</pre>
+<p> test は数値を二分木に N 個挿入します。数値は random <sup><a href="prolog10.html#note">[*1]</a></sup> を使ってランダムに選びます。実行結果は次のようになります。
+</p>
+<pre>
+?- test(10, void, Tree), print_tree(Tree).
+0
+8
+74
+245
+389
+480
+512
+681
+714
+736
+
+Tree = node(・・・・・省略・・・・・)
+
+Yes
+</pre>
+<p> test には空の木 void を渡し、数値を挿入した二分木は Tree で受け取ります。あとは、print_tree で二分木のデータを表示します。きちんと、ソートされて出力されていますね。
+</p>
+<div class="note">
+-- <a name="note">note</a> --------<br>
+[*1] 乱数を生成する述語は、たいていの Prolog 処理系で定義されていると思います。random が使えない場合でも、ほかの述語 (たとえば rand とか) ならあるかもしれません。使用されている Prolog のマニュアルをお読みくださいませ。
+</div>
+<h4>●自由変数を使う方法</h4>
+<p> 次は、新しい木を作成しないでデータを挿入する方法を説明します。これは Prolog らしく自由変数を使います。今までは空の木を void で表していましたが、これを自由変数で表すのです。この自由変数と節 (node) をマッチングさせることで、データを挿入することができます。
+</p>
+<p> 「同じデータを二分木に挿入しない」のであれば、プログラムはとても簡単になります。
+</p>
+<pre class="list">
+リスト：データの挿入（その２）
+
+insert_tree1(Data, node(Data, _, _)).
+
+insert_tree1(Data, node(Value, Left, _)) :- Data &lt; Value, insert_tree1(Data, Left).
+
+insert_tree1(Data, node(Value, _, Right)) :- Data &gt; Value, insert_tree1(Data, Right).
+</pre>
+<p> 最初の規則がポイントです。まず、同じデータを見つけたとき、この規則が成功します。これで同じデータは二分木に挿入されません。次に、空の木 (自由変数) のときですが、自由変数と節 node がマッチングするので、これも成功となります。これで、データ Data が二分木に挿入されます。このとき、node 内の左右の部分木は自由変数であることに注意してください。
+</p>
+<p> 同じデータを二分木に挿入する場合は、同じデータを見つけても部分木をたどるように修正します。次のプログラムを見てください。
+</p>
+<pre class="list">
+リスト：データの挿入（その３）
+
+insert_tree1(Data, Tree) :- var(Tree), Tree = node(Data, _, _).
+
+insert_tree1(Data, node(Value, Left, _)) :- Data =&lt; Value, insert_tree1(Data, Left).
+
+insert_tree1(Data, node(Value, _, Right)) :- Data &gt; Value, insert_tree1(Data, Right).
+</pre>
+
+<p> 最初の規則で、部分木 Tree が空の木か述語 var を使ってチェックします。そうであれば、Tree に節 node をマッチングさせてデータ Data を挿入します。そして、2 番目の規則で同じデータを見つけた場合は、左の部分木をたどるようにします。これで、同じデータを二分木に挿入することができます。
+</p>
+<p> それから、insert_tree1 はデータを挿入したあとでバックトラックすると、エラーが発生するので注意してください。これは、1, 2 番目の規則にカットを使うことで修正することができます。
+</p>
+<p> 次はデータの探索です。Prolog の場合、自由変数はどんなデータでもマッチングするので、空の木を判定する規則が必要になります。そうしないと、探索するデータを挿入してしまうのです。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：データの探索（その２）
+
+search_tree1(_, Tree) :- var(Tree), !, fail.
+
+search_tree1(Data, node(Data, _, _)).
+
+search_tree1(Data, node(Value, Left, _)) :- Data &lt; Value, search_tree1(Data, Left).
+
+search_tree1(Data, node(Value, _, Right)) :- Data &gt; Value, search_tree1(Data, Right).
+</pre>
+
+<p> 最初の規則で、述語 var を使って Tree が空の木かチェックします。そうであれば、これ以上調べる部分木はないので fail で失敗します。このとき、カットを使って後ろの規則の実行を禁止していることに注意してください。後ろの規則は「データの挿入（その２）」と同じです。最初の規則により、空の木でないことが確かめられているので、データが挿入されるのではなく探索だけが行われます。
+</p>
+<p> データを表示する関数はとても簡単です。
+</p>
+<pre class="list">
+リスト：データの表示（その２）
+
+print_tree1(Tree) :- var(Tree).
+print_tree1(node(Value, Left, Right)):-
+    print_tree1(Left), write(Value), nl, print_tree1(Right).
+</pre>
+
+<p> 最初の規則で、Tree が自由変数であれば空の木なので再帰を停止します。プログラムの違いはたったこれだけです。
+</p>
+<h4>●簡単な実行例（その２）</h4>
+<p> それでは、実際に二分木を作ってみましょう。まず、数値を二分木に挿入するプログラムを作ります。
+</p>
+<pre class="list">
+リスト：テスト
+
+test(0, Tree).
+test(N, Tree) :-
+    M is random(1000),
+    insert_tree1(M, Tree),
+    N1 is N - 1,
+    test(N1, Tree).
+</pre>
+<p> test は数値を二分木に N 個挿入します。数値は random を使ってランダムに選びます。実行結果は次のようになります。
+</p>
+<pre>
+?- test(10, Tree), print_tree1(Tree).
+145
+175
+229
+306
+317
+428
+439
+654
+868
+962
+
+Tree = node(・・・・・省略・・・・・)
+
+Yes
+</pre>
+<p> test には空の木として自由変数 Tree を渡します。ここにデータが挿入された二分木が作成されます。あとは、print_tree1 で二分木のデータを表示します。正しく動作していますね。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="prolog09.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog11.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

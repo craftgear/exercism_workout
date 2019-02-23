@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scala プログラミング入門</title>
+  <meta name="description" content="Scala,Scala入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881777</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scala Programming</h1>
+<h2>お気楽 Scala プログラミング入門</h2>
+<div class="small">
+[ <a href="scala10.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala12.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>二分探索木</h3>
+<p> 今回も簡単なデータ構造の例題として「二分探索木 (binary search tree) 」を取り上げます。Scala には二分木 (平衡木) を使ったライブラリ (TreeSet, TreeMap など) が用意されているので、わざわざ二分木を自作する必要はないのですが、Scala のお勉強ということで、あえてシンプルな二分木を実際に作ってみましょう。
+</p>
+
+<p> あるデータの中から特定のデータを探す場合、データ数が少なければ力任せに探索してもなんとかなりますが、データ数が多くなると探索に時間がかかるようになります。このような場合、あらかじめデータを整理整頓しておくことで、特定のデータを高速に見つけることができるようになります。この代表的なアルゴリズムが「ハッシュ法」と「二分探索木」です。
+</p>
+
+<p> 二分探索木はその名が示すように「木構造」の一種です。まずは木構造から説明しましょう。二分木を理解されている方は読み飛ばしてもらってかまいません。
+</p>
+<p> <a href="scala11.html#next">次へ</a>
+</p>
+<h4>●木構造</h4>
+<p> 「木構造 (tree structer) 」は「木 (tree) 」とも呼ばれるデータ構造で、「節 (ノード) 」と呼ばれる要素に対して、階層的な関係を表したものです。身近な例では、ディレクトリの階層構造が木にあたります。ディレクトリに「ルートディレクトリ」があるように、木にも「根 (ルート) 」と呼ばれる節が存在します。
+</p>
+
+<pre class="fig">
+          (root)
+            Ａ    ────────  レベル０  
+          ／｜＼                ↑
+        ／  ｜  ＼
+      Ｂ    Ｃ    Ｄ            木  レベル１
+    ／｜＼        ｜＼          の
+  ／  ｜  ＼      ｜  ＼        高
+Ｅ    Ｆ    Ｇ    Ｈ    Ｉ      さ  レベル２
+          ／  ＼
+        ／      ＼              ↓
+      Ｊ          Ｋ    ─────  レベル３
+
+        図 : 一般的な木構造の一例
+</pre>
+<p> 木を図示する場合、階層関係がはっきりわかるように、根を上にして、同じ階層にある節を並べて書きます。根からレベル 0、レベル 1 と階層を数えていき、最下層の節までの階層数を「木の高さ」といいます。木は、ある節から下の部分を切り出したものも、木としての性質を持っています。これを「部分木」といいます。
+</p>
+
+<p> 木は、ある節からほかの節に至る「経路」を考えることができます。たとえば、A から J には、A - B - G - J という経路がありますね。これは、ディレクトリやファイルを指定するときのパスと同じです。
+</p>
+
+<p> ある節から根の方向にさかのぼるとき、途中で通っていく節を「先祖」といい、直接繋がっている節を「親」といます。これは、逆から見ると「子孫」と「子」という関係になります。子を持たない節をとくに「葉」と呼ぶことがあります。上図でいうと、G は J と K の親で、J は G の子になります。J は子を持っていないので葉となります。
+</p>
+
+<p> 子は、「左 &lt; 右」の順番で節に格納するのが一般的です。これを「順序木」といいます。また、順番がない木を「無順序木」と呼びます。節が持っている子の数を「次数」といいます。上図の場合、A は 3 つの子 B, C, D を持っているので、A の次数は 3 となります。すべての節の次数を n に揃えた順序木を「 n 分木」と呼びます。
+</p>
+
+<h4>●二分木</h4>
+<p> とくに、次数が 2 の二分木は、プログラムでよく使われるデータ構造です。
+</p>
+
+<pre class="fig">
+                    (root)
+                      18
+                    ／  ＼
+                  ／      ＼
+                ／          ＼
+              ／              ＼
+            ／                  ＼
+          14                      22
+        ／  ＼                  ／  ＼
+      ／      ＼              ／      ＼
+    12          16          20          24
+  ／  ＼      ／  ＼      ／  ＼      ／  ＼
+11      13  15      17  19      21  23      25
+
+             図 : 二分木の一例
+</pre>
+<p> 上図に二分木の例を示します。二分木では、節にひとつのデータを格納します。そして、その節の左側の子には小さいデータを、右側の子には大きいデータが配置されるように木を構成します。
+</p>
+
+<p> この二分木をデータの探索に使うアルゴリズムが「二分探索木」です。二分探索木はデータの探索・挿入を高速に行うことができます。たとえば、上図の木から 19 を探してみましょう。まず root の 18 と比較します。18 &lt; 19 ですから、右側の子をたどり 22 と比較します。今度は 19 &lt; 22 なので左側の子をたどります。次は 20 と比較し 19 &lt; 20 なので左側の子をたどり、ここで 19 を見つけることができます。
+</p>
+
+<p> 二分探索木の探索は「二分探索 (binary search) 」と同じ原理です。左右どちらかの子をたどるたびに、探索するデータ数は半分になります。上図の場合でも、探索するデータ数が 15, 7, 3, 1 となり、最後に見つけることができました。
+</p>
+
+<p> データ数を N とすると、単純な線形探索では平均で N / 2 回の比較が必要になりますが、二分探索木を使うと log <SUB>2</SUB> N 程度の回数で収まります。たとえば、データが 100個ある場合、線形探索では 50 回データを比較しなければいけないのに、二分探索木では 7 回程度の比較で済むわけです。ただし、これは左右の部分木のバランスがとれている理想的な状態での話です。バランスが崩れると二分探索木の性能は劣化し、最悪の場合は線形探索と同じになってしまいます。
+</p>
+
+<p> そこで、左右のバランスを一定の範囲に収める「平衡木」が考案されています。有名なところでは AVL 木、赤黒木 (red-black tree)、2-3 木、B 木、B* 木などがあります。拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> では、AVL 木、赤黒木、2-3 木など平衡木のアルゴリズムを詳しく説明しています。興味のある方はお読みください。今回は Scala のお勉強ということで、シンプルな二分探索木をプログラムすることにします。なお、本稿では二分探索木のことを単に「二分木」と書くことにします。
+</p>
+
+<h4 id="next">●節の定義</h4>
+<p> それでは、プログラムを作りましょう。最初に mutable (可変) な二分木を作り、そのあとで immutable (不変) な二分木を作ります。今回はプログラムを簡単にするため、格納するデータは Int に限定します。もちろん、リストのように多相型の二分木を作ることも可能です。それは「多相クラス」を説明したあとでチャレンジしてみましょう。
+</p>
+<p> まず最初に、節を表すクラスを定義します。
+</p>
+<pre class="list">
+リスト : 節の定義
+
+package mytree
+
+class Node(var item: Int, var left: Node = null, var right: Node = null)
+
+// 二分木
+class Tree {
+  private var root: Node = null
+  //
+  // メソッドの定義 (省略)
+  //
+}
+</pre>
+
+<p> プログラムはパッケージ mytree に記述します。クラス Node は連結リストのセルと違い、節を参照する変数が 2 つ必要になります。left が左側の子、right が右側の子を表します。子を持たない場合は、連結リストと同様に null をセットすることにします。連結リストのように、節を箱で表すと下図のようになります。
+</p>
+<pre class="fig">
+ 変数 root
+   ┌─┐    
+   │  ┼──┐
+   └─┘    │
+             ↓
+           ┌─┬─┬─┐
+           │18│・│・│
+           └─┴┼┴┼┘
+                 │  │
+   ┌──────┘  └─┐
+   ↓                    ↓
+ ┌─┬─┬─┐        ┌─┬─┬─┐
+ │14│／│／│        │22│／│／│
+ └─┴─┴─┘        └─┴─┴─┘
+
+      ┌─┬─┬─┐
+  節：│Ｄ│Ｌ│Ｒ│
+      └─┴─┴─┘
+  Ｄ：data, Ｌ：left, Ｒ：right, ／：null
+
+           図 : 二分木の構造
+</pre>
+
+<p> 連結リストと同様に、ルートへの参照を変数 root に格納しておけば、この変数を使って二分木にアクセスすることができます。また、節が一つもない空の木は、変数 root に null をセットすれば表すことができます。なお、null のかわりに終端を表す節を用意する方法もあります。
+</p>
+<p> 実際には、二分木を表すクラス Tree を作り、木の根は Tree のフィールド変数 root にセットします。二分木の操作関数は private なメソッドとして定義し、Tree の public なメソッドから、それらの操作メソッドを呼び出すことになります。
+</p>
+
+<h4>●データの探索</h4>
+<p> それでは、データを探索する関数 searchNode から作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの探索
+
+  private def searchNode(x: Int, node: Node): Boolean =
+    if (node == null) false
+    else if (x == node.item) true
+    else if (x &lt; node.item) searchNode(x, node.left)
+    else searchNode(x, node.right)
+</pre>
+<p> メソッド searchNode には節 node と探索するデータ x を渡します。node に格納されている item と x を比較し、値が等しければ true を返します。x が小さいのであれば左側の子をたどり、そうでなければ右側の子をたどります。たどるべき木がなくなれば node の値は null になるので false を返します。二分探索木の動作をそのままプログラムしているだけなので、難しいところはないと思います。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データを挿入する関数 insertNode を作ります。このメソッドは木を引数として受け取り、データを挿入した新しい木を返します。たとえば、変数 root に木が格納されている場合、データを挿入するときは次のように呼び出します。
+</p>
+<pre class="list">
+root = insert(root, x)
+</pre>
+<p> この処理は再帰定義を使うと簡単にプログラムできます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : データの挿入
+
+  private def insertNode(x: Int, node: Node): Node =
+    if (node == null)
+      new Node(x)
+    else {
+      if (x &lt; node.item) node.left = insertNode(x, node.left)
+      else if (x &gt; node.item) node.right = insertNode(x, node.right)
+      node
+    }
+</pre>
+<p> 最初に節 node が null かチェックします。そうであれば木は空なので、新しい節を new Node(x) で生成して返します。たとえば、変数 root が null の場合、すなわち空の木であれば、新しい節が生成されて root にセットされます。
+</p>
+
+<p> そうでなければ、x と node.item を比較します。x が小さい場合は、左部分木に x を挿入します。ここで insertNode を再帰呼び出しします。そして、その返り値を node.left にセットして node を返します。
+</p>
+
+<p> たとえば、node.left が null の場合、再帰呼び出しの返り値は新しい節なので、それが node.left にセットされ、木にデータが挿入されたことになります。そして、新しいデータが挿入された木 (node) を返せばいいわけです。x が node.item よりも大きければ、同様に右部分木にデータを挿入します。
+</p>
+
+<p> x と等しいデータが見つかった場合は、新しいデータを挿入する必要はないので、何も行わずに node を返します。けっきょく、子を格納している節には、同じ子が再度セットされることになります。無駄なように思われるかもしれませんが、その分だけ簡単にプログラムを作ることができます。
+</p>
+
+<h4>●データの削除</h4>
+<p> 次はデータを削除する処理を作りましょう。これは今までと違って少々面倒です。削除するデータが「葉」の場合は、それを削除するだけなので簡単ですが、木の途中のデータを削除する場合は、二分木の構成を崩さないように注意しないといけません。最初に、葉を削除する場合を説明します。下図を見てください。
+</p>
+<pre class="fig">
+          14                            14
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          16
+  ／  ＼      ／  ＼            ／  ＼      ／  ＼
+11      13  15      17        11      13  null    17
+                                          ↑
+    15 を削除する                        削除
+
+             図 : データの削除（葉の場合）
+</pre>
+<p> 15 を削除する場合を考えてみましょう。15 は「葉」にあたるので、それを削除するだけで大丈夫です。親の left に null を代入するだけです。
+</p>
+<p> 次に、子が一つある場合を考えてみましょう。
+</p>
+<pre class="fig">
+          14                            14
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          15
+  ／  ＼      ／                ／  ＼
+11      13  15                11      13
+
+    16 を削除する
+
+          図 : データの削除（子が一つの場合）
+</pre>
+<p> 16 を削除する場合、その子である 15 と置き換えれば二分探索木の構成は保たれます。これも簡単ですね。問題は、子が二つある節を削除する場合です。
+</p>
+<pre class="fig">
+          14                            15  &lt;- 最小値と置き換え
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          16
+  ／  ＼      ／  ＼            ／  ＼      ／  ＼
+11      13  15      17        11      13  null    17
+                                          ↑
+    14 を削除する                        削除
+
+          図 : データの削除（子が二つの場合）
+</pre>
+<p> この場合、削除するデータの右部分木の中から最小値のデータ <SUP><a href="scala11.html#note1">[*1]</a></SUP> を探し、それと削除するデータと置き換えれば「右部分木 &lt; 節 &lt; 左部分木」の構成を崩さなくてすみます。上図で、14 を削除することを考えてみましょう。右部分木の中で 15 が最小値なので、それと 14 を置き換えます。そして、15 を格納していた節は削除します。節が最小値を格納している場合、その節の左側の子は存在しないので、その節を削除することは簡単です。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 逆に、左部分木の中から最大値を探し、それと削除するデータを置き換えてもかまいません。
+</div>
+<h4>●最小値と最大値</h4>
+<p> まず、木の中から最小値を探す関数と、最小値の節を削除する関数を作成しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 最小値の探索と削除
+
+  // 最小値
+  private def searchMinNode(node: Node): Int =
+    if (node.left == null) node.item
+    else searchMinNode(node.left)
+
+  // 最小値を削除
+  private def deleteMinNode(node: Node): Node =
+    if (node.left == null) node.right
+    else {
+      node.left = deleteMinNode(node.left)
+      node
+    }
+</pre>
+
+<p> 最小値は簡単に求めることができます。左側の子を順番にたどっていき、左側の子がない節に行き着いたとき、その節のデータが最小値になります。searchMinNode は、最小値を求めてそれを返します。最初に、node.left の値をチェックします。もし、null であれば左側の子がないので、その節のデータが最小値です。node.item を返します。そうでなければ、searchMinNode を再帰呼び出しして左側の子をたどります。
+</p>
+<p> 関数 deleteMinNode は最小値を格納している節を削除します。node.left が null の節を探すのは searchMinNode と同じです。見つけたら、もう一つの子 node.right を返します。これで、親の左部分木が書き換えられ、最小値を持つ節が削除されます。葉の場合であれば node.right は null なので、単純に削除されることになります。
+</p>
+<p> 左側の子があれば deleteMinNode を再帰呼び出しして、その左部分木の中から最小値を探し出して削除します。そして、その返り値を node.left にセットしてから node を返します。
+</p>
+
+<p> 同様に、右側の子をたどっていき、右側の子がない節に行き着いたとき、その節のデータが最大値になります。最大値を求めるメソッド searchMinNode と最大値を削除するメソッド deleteMinNode は次のようになります。
+</p>
+<pre class="list">
+リスト : 最大値の探索と削除
+
+  // 最大値
+  private def searchMaxNode(node: Node): Int =
+    if (node.right == null) node.item
+    else searchMaxNode(node.right)
+
+  // 最大値を削除
+  private def deleteMaxNode(node: Node): Node =
+    if (node.right == null) node.left
+    else {
+      node.right = deleteMaxNode(node.right)
+      node
+    }
+</pre>
+
+<h4>●データ削除のプログラム</h4>
+<p> それでは、データを削除する関数 deleteNode を作ります。まず削除するデータを探索して、見つけたら子の有無に合わせた削除処理を行います。
+</p>
+
+<pre class="list">
+リスト : 削除
+
+  private def deleteNode(x: Int, node: Node): Node = {
+    if (node != null) {
+      if (node.item == x) {
+        if (node.left == null) return node.right
+        if (node.right == null) return node.left
+        node.item = searchMinNode(node.right)
+        node.right = deleteMinNode(node.right)
+      } else if (x &lt; node.item) node.left = deleteNode(x, node.left)
+      else node.right = deleteNode(x, node.right)
+    }
+    node
+  }
+</pre>
+<p> まず、node が null ならば木は空なので、何もしないで node を返します。削除するデータが見つからない場合や空の木を与えた場合がこれに相当します。次に、削除するデータ x と node.item を比較します。等しい場合はその節を削除します。node.left が null の場合は node.right を返し、node.right が null の場合は node.left を返します。
+</p>
+<p> 子が 2 つある場合は、右部分木の最小値を関数 searchMinNode で求め、node.item の値を書き換えます。そして、関数 deleteMinNode で最小値を格納していた節を削除します。これで、削除するデータを最小値で置き換え、不要になった節を二分木から削除することができます。x と node.item が等しくない場合は、左右の部分木をたどって削除するデータを探索します。この処理は今までと同じです。最後に node を返します。
+</p>
+
+<h4>●巡回 (traverse)</h4>
+<p> 次は、二分木の全データにアクセスする関数を作りましょう。二分木はデータの大小関係を使って構成されているので、ある順番で節をすべて出力すると、それはソートした結果と同じになります。「木」のすべての節を規則的な順序で回ることを「巡回 (traverse) 」といいいます。このなかで、次の 3 つの方法が重要です。
+</p>
+<ol>
+ <li>行きがけ順<br>
+    まず節のデータを出力、その後左の子、右の子の順番で出力する。
+ <li>帰りがけ順<br>
+    左の子、右の子と出力してから、節のデータを出力する。
+ <li>通りがけ順<br>
+    左の子を出力、次に節のデータを出力、最後に右の子を出力する。
+</ol>
+
+<p> 名前の由来は、節のデータを出力するタイミングからきています。節に最初に到達したときに出力する方法が「行きがけ」、子を出力してその節に戻ってきたときに出力する方法が「帰りがけ」、子を出力する途中でその節に戻ってきたときに出力する方法が「通りがけ」です。
+</p>
+<p> 二分木は「左の子 &lt; 節のデータ &lt; 右の子」という関係が成り立つので、通りがけ順に出力すれば、ソートされた出力結果を得ることができます。この処理も、再帰定義を使えば簡単に実現できます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 木の巡回
+
+  private def foreachNode(f: Int =&gt; Unit, node: Node): Unit = {
+    if (node != null) {
+      foreachNode(f, node.left)
+      f(node.item)
+      foreachNode(f, node.right)
+    }
+  }
+</pre>
+<p> 関数 foreachNode は高階関数で、通りがけ順で木を巡回し、データ node.item に関数 f を適用します。node が null でなければ、再帰呼び出しで左部分木を巡回してから f(node.item) を実行し、そのあとで右部分木を巡回します。
+</p>
+
+<h4>●二分木の畳み込み</h4>
+<p> 次は、二分木を畳み込む関数 foldlNode と foldrNode を作りましょう。
+</p>
+
+<pre class="list">
+リスト : 畳み込み
+
+  private def foldlNode[A](f: (A, Int) =&gt; A, a: A, node: Node): A =
+    if (node == null) a
+    else foldlNode(f, f(foldlNode(f, a, node.left), node.item), node.right)
+
+  private def foldrNode[A](f: (Int, A) =&gt; A, a: A, node: Node): A =
+    if (node == null) a
+    else foldrNode(f, f(node.item, foldrNode(f, a, node.right)), node.left)
+</pre>
+<p> 今回は通りがけ順で畳み込みを行うことにします。foldlNode は左部分木から、foldrNode は右部分木から順番にたどります。木が null の場合は引数 a をそのまま返します。そうでなければ関数を再帰呼び出します。関数 f を適用するとき、foldlNode であれば左部分木を畳み込みした結果と node.item を渡します。foldrNode は node.item と右部分木を畳み込みした結果を渡します。これで二分木を畳み込むことができます。
+</p>
+
+<h4>●pulic メソッドの作成</h4>
+<p> 最後に Tree のパブリックメソッドを作ります。
+</p>
+
+<pre class="list">
+リスト : Tree の public メソッド
+
+  def search(x: Int): Boolean = searchNode(x, root)
+
+  def insert(x: Int): Unit = root = insertNode(x, root)
+
+  def delete(x: Int): Unit = root = deleteNode(x, root)
+
+  def searchMin(): Int = 
+    if (root == null) throw new Exception("Tree.searchMin: Empty Tree")
+    else searchMinNode(root)
+
+  def searchMax(): Int =
+    if (root == null) throw new Exception("Tree.searchMin: Empty Tree")
+    else searchMaxNode(root)
+
+  def deleteMin(): Unit = if (root != null) deleteMinNode(root)
+
+  def deleteMax(): Unit = if (root != null) deleteMaxNode(root)
+
+  def foldl[A](f: (A, Int) =&gt; A, a: A): A = foldlNode(f, a, root)
+
+  def foldr[A](f: (Int, A) =&gt; A, a: A): A = foldrNode(f, a, root)
+
+  def foreach(f: Int =&gt; Unit): Unit = foreachNode(f, root)
+
+  def toList(): List[Int] =
+    foldrNode((x: Int, a: List[Int]) =&gt; x::a, Nil, root)
+
+  def isEmpty(): Boolean = root == null
+
+  def clear(): Unit = root = null
+
+  override def toString: String = {
+    var xs = toList()
+    var s = "Tree("
+    while (xs != Nil) {
+      s += xs.head
+      if (xs.tail != Nil) s += ", "
+      xs = xs.tail
+    }
+    s += ")"
+    s
+  }
+</pre>
+<p> 基本的には、メソッドの処理に対応する private メソッドを呼び出すだけです。このほかに、二分木をリストに変換するメソッド toList, 木が空の場合は true を返す isEmpty、木を空にするメソッド clear を定義します。
+</p>
+<p> 最後にメソッド toString をオーバーライドします。二分木 Tree は Tree(item1, item2, ... ) と表示することにします。toList で二分木をリストに変換し、while ループでリストの要素を順番にたどり、xs.head を文字列に変換して変数 s に追加していきます。要素がまだある場合は ", " を s に追加します。最後に ")" を追加して s を返します。
+</p>
+
+
+<h4>●実行例</h4>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+scala&gt; import mytree._
+import mytree._
+
+scala&gt; val a = new Tree
+a: mytree.Tree = Tree()
+
+scala&gt; a.isEmpty
+res0: Boolean = true
+
+scala&gt; for (i &lt;- List(5,7,3,1,9,2,8,4,6)) a.insert(i)
+
+scala&gt; a
+res2: mytree.Tree = Tree(1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; for (i &lt;- 0 to 10) println(a.search(i))
+false
+true
+true
+true
+true
+true
+true
+true
+true
+true
+false
+
+scala&gt; a.searchMin
+res4: Int = 1
+
+scala&gt; a.searchMax
+res5: Int = 9
+
+scala&gt; a.deleteMin
+
+scala&gt; a
+res7: mytree.Tree = Tree(2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; a.deleteMax
+
+scala&gt; a
+res9: mytree.Tree = Tree(2, 3, 4, 5, 6, 7, 8)
+
+scala&gt; a.foldl((_:Int) + (_:Int), 0)
+res10: Int = 35
+
+scala&gt; a.foldr((_:Int) + (_:Int), 0)
+res11: Int = 35
+
+scala&gt; for (i &lt;- 2 to 8) a.delete(i)
+
+scala&gt; a.isEmpty
+res13: Boolean = true
+
+scala&gt; a
+res14: mytree.Tree = Tree()
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●不変 (immutable) な二分木</h4>
+<p> 次は immutable な二分木を作りましょう。この場合、空の木にもメソッドを適用したいので、節の終端を null で表すことはできません。そこで、空の木を表すシングルトンオブジェクト imEmpty を定義します。節はクラス imNode で表し、imEmpty と imNode のスーパークラスとして抽象クラス imTree を定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : immutable な二分木
+
+// 抽象クラス
+abstract class imTree {
+  def isEmpty: Boolean
+  def item(): Int
+  def left(): imTree
+  def right(): imTree
+  //
+  // メソッドの定義 (省略)
+  //
+}
+
+// 節
+case class imNode(item: Int, left: imTree, right: imTree) extends imTree {
+  def isEmpty: Boolean = false
+}
+
+// 空の木
+case object imEmpty extends imTree {
+  def isEmpty: Boolean = true
+  def item() = throw new Exception("item: Empty Tree")
+  def left() = throw new Exception("left: Empty Tree")
+  def right() = throw new Exception("right: Empty Tree")
+}
+</pre>
+<p> 抽象クラス imTree は抽象メソッド isEmpty, item, left, right を持っていて、これらのメソッドを使って、具体的な操作メソッドを定義します。isEmpty は空の木 (imEmpty) ならば真を返します。item は節の要素を返します。left は左の子を、right は右の子を返します。節の生成はコンストラクタ imNode で行います。imTree はトレイト (trait) で定義してもかまいません。
+</p>
+
+<p> imNode は case class で定義します。isEmpty は簡単ですね。Scala の場合、フィールド変数 item, left, right のアクセスは、同名のメソッドが自動的に定義されるので、私たちが定義する必要はありません。imEmpty は case object で定義します。isEmpty は true を返し、item, left, right はエラーを送出します。
+</p>
+
+<h4>●メソッドの定義</h4>
+<p> 次はメソッドを定義します。データの挿入と探索は簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : データの挿入と探索
+
+  // 探索
+  def search(x: Int): Boolean =
+    if (isEmpty) false
+    else if (item == x) true
+    else if (x &lt; item) left.search(x)
+    else right.search(x)
+
+  // 挿入
+  def insert(x: Int): imTree =
+    if (isEmpty) imNode(x, this, this)
+    else if (item == x) this
+    else if (x &lt; item) imNode(item, left.insert(x), right)
+    else imNode(item, left, right.insert(x))
+
+  // 最小値
+  def searchMin(): Int =
+    if (isEmpty) throw new Exception("imTree.searchMin: Empty Tree")
+    else if (left.isEmpty) item
+    else left.searchMin
+
+  // 最大値
+  def searchMax(): Int =
+    if (isEmpty) throw new Exception("imTree.searchMin: Empty Tree")
+    else if (right.isEmpty) item
+    else right.searchMax
+</pre>
+<p> どのメソッドも、抽象メソッドを使って二分木の操作を行います。アルゴリズムは mutable の二分木と同じです。ただし、immutable な二分木は節を書き換えることができないので、データを挿入するメソッド insert では、たどってきた節を新しい節に置き換えていることに注意してください。たとえば、左の子をたどる場合、返り値は新しい節 imNode(item, left.insert(x), right) になります。
+</p>
+
+<p> 次はデータを削除するメソッドを作ります。
+</p>
+
+<pre class="list">
+リスト : データの削除
+
+  // 最小値の削除
+  def deleteMin(): imTree =
+    if (isEmpty) this
+    else if (left.isEmpty) right
+    else imNode(item, left.deleteMin, right)
+
+  // 最大値の削除
+  def deleteMax(): imTree =
+    if (isEmpty) this
+    else if (right.isEmpty) left
+    else imNode(item, left, right.deleteMax)
+
+  // 削除
+  def delete(x: Int): imTree =
+    if (isEmpty) this
+    else if (item == x) {
+      if (left.isEmpty) return right
+      if (right.isEmpty) return left
+      return imNode(right.searchMin, left, right.deleteMin)
+    } else if (x &lt; item) imNode(item, left.delete(x), right)
+    else imNode(item, left, right.delete(x))
+</pre>
+<p> データ削除のアルゴリズムは mutable な二分木と同じです。ただし、データの挿入と同様に、節を書き換えることができないので、たどってきた節を新しい節に置き換えていることに注意してください。たとえば、delete で x と等しい節を見つけた場合、返り値は新しい節 imNode(右部分木の最小値, 左の子, 最小値を削除した新しい右部分木) となります。
+</p>
+<p> 最後に高階関数を作ります。
+</p>
+<pre class="list">
+リスト : 高階関数
+
+  // 畳み込み
+  def foldl[A](f: (A, Int) =&gt; A, a: A): A =
+    if (isEmpty) a
+    else right.foldl(f, f(left.foldl(f, a), item))
+
+  def foldr[A](f: (Int, A) =&gt; A, a: A): A =
+    if (isEmpty) a
+    else left.foldr(f, f(item, right.foldr(f, a)))
+
+  // 巡回
+  def foreach(f: Int =&gt; Unit): Unit = {
+    if (!isEmpty) {
+      left.foreach(f)
+      f(item)
+      right.foreach(f)
+    }
+  }
+
+  // リストに変換する
+  def toList(): List[Int] =
+    if (isEmpty) Nil
+    else left.toList ::: (item :: right.toList)
+</pre>
+<p> どのメソッドも難しいところはないと思います。
+</p>
+
+<h4>●実行例 (2)</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+scala&gt; import mytree._
+import mytree._
+
+scala&gt; val a: imTree = imEmpty.insert(5).insert(1).insert(9).insert(3).insert(7)
+
+a: mytree.imTree = imNode(5,imNode(1,imEmpty,imNode(3,imEmpty,imEmpty)),imNode(9,imNode(7,imEmpty,imEmpty),imEmpty))
+
+scala&gt; for (i &lt;- 1 to 9) println(a.search(i))
+true
+false
+true
+false
+true
+false
+true
+false
+true
+
+scala&gt; a.searchMin
+res1: Int = 1
+
+scala&gt; a.searchMax
+res2: Int = 9
+
+scala&gt; a.deleteMin
+res3: mytree.imTree = imNode(5,imNode(3,imEmpty,imEmpty),imNode(9,imNode(7,imEmpty,imEmpty),imEmpty))
+
+scala&gt; a.deleteMax
+res4: mytree.imTree = imNode(5,imNode(1,imEmpty,imNode(3,imEmpty,imEmpty)),imNode(7,imEmpty,imEmpty))
+
+scala&gt; a.delete(5)
+res5: mytree.imTree = imNode(7,imNode(1,imEmpty,imNode(3,imEmpty,imEmpty)),imNode(9,imEmpty,imEmpty))
+
+scala&gt; a.delete(5).delete(9)
+res6: mytree.imTree = imNode(7,imNode(1,imEmpty,imNode(3,imEmpty,imEmpty)),imEmpty)
+
+scala&gt; a.delete(5).delete(9).delete(1)
+res7: mytree.imTree = imNode(7,imNode(3,imEmpty,imEmpty),imEmpty)
+
+scala&gt; a.delete(5).delete(9).delete(1).delete(7)
+res8: mytree.imTree = imNode(3,imEmpty,imEmpty)
+
+scala&gt; a.delete(5).delete(9).delete(1).delete(7).delete(3)
+res9: mytree.imTree = imEmpty
+
+scala&gt; a.delete(5).delete(9).delete(1).delete(7).delete(3).isEmpty
+res10: Boolean = true
+
+scala&gt; a.foldl((_:Int) + (_:Int), 0)
+res11: Int = 25
+
+scala&gt; a.foldr((_:Int) + (_:Int), 0)
+res12: Int = 25
+
+scala&gt; a.toList
+res13: List[Int] = List(1, 3, 5, 7, 9)
+
+scala&gt; a.foreach(println)
+1
+3
+5
+7
+9
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// Tree.scala : 二分探索木
+//
+//              Copyright (C) 2014 Makoto Hiroi
+//
+package mytree
+
+//
+// mutable な二分木
+//
+
+// 節
+class Node(var item: Int, var left: Node = null, var right: Node = null)
+
+// 二分木
+class Tree {
+  private var root: Node = null
+
+  // 探索
+  private def searchNode(x: Int, node: Node): Boolean =
+    if (node == null) false
+    else if (x == node.item) true
+    else if (x &lt; node.item) searchNode(x, node.left)
+    else searchNode(x, node.right)
+
+  // 挿入
+  private def insertNode(x: Int, node: Node): Node =
+    if (node == null)
+      new Node(x)
+    else {
+      if (x &lt; node.item) node.left = insertNode(x, node.left)
+      else if (x &gt; node.item) node.right = insertNode(x, node.right)
+      node
+    }
+
+  // 最小値
+  private def searchMinNode(node: Node): Int =
+    if (node.left == null) node.item
+    else searchMinNode(node.left)
+
+  // 最大値
+  private def searchMaxNode(node: Node): Int =
+    if (node.right == null) node.item
+    else searchMaxNode(node.right)
+
+  // 最小値を削除
+  private def deleteMinNode(node: Node): Node =
+    if (node.left == null) node.right
+    else {
+      node.left = deleteMinNode(node.left)
+      node
+    }
+
+  // 最大値を削除
+  private def deleteMaxNode(node: Node): Node =
+    if (node.right == null) node.left
+    else {
+      node.right = deleteMaxNode(node.right)
+      node
+    }
+
+  // 削除
+  private def deleteNode(x: Int, node: Node): Node = {
+    if (node != null) {
+	  if (node.item == x) {
+        if (node.left == null) return node.right
+        if (node.right == null) return node.left
+        node.item = searchMinNode(node.right)
+        node.right = deleteMinNode(node.right)
+      } else if (x &lt; node.item) node.left = deleteNode(x, node.left)
+      else node.right = deleteNode(x, node.right)
+    }
+    node
+  }
+
+  // 畳み込み
+  private def foldlNode[A](f: (A, Int) =&gt; A, a: A, node: Node): A =
+    if (node == null) a
+    else foldlNode(f, f(foldlNode(f, a, node.left), node.item), node.right)
+
+  private def foldrNode[A](f: (Int, A) =&gt; A, a: A, node: Node): A =
+    if (node == null) a
+    else foldrNode(f, f(node.item, foldrNode(f, a, node.right)), node.left)
+
+  // 巡回
+  private def foreachNode(f: Int =&gt; Unit, node: Node): Unit = {
+    if (node != null) {
+      foreachNode(f, node.left)
+      f(node.item)
+      foreachNode(f, node.right)
+    }
+  }
+
+  // public メソッド
+  def search(x: Int): Boolean = searchNode(x, root)
+
+  def insert(x: Int): Unit = root = insertNode(x, root)
+
+  def delete(x: Int): Unit = root = deleteNode(x, root)
+
+  def searchMin(): Int = 
+    if (root == null) throw new Exception("Tree.searchMin: Empty Tree")
+    else searchMinNode(root)
+
+  def searchMax(): Int =
+    if (root == null) throw new Exception("Tree.searchMin: Empty Tree")
+    else searchMaxNode(root)
+
+  def deleteMin(): Unit = if (root != null) deleteMinNode(root)
+
+  def deleteMax(): Unit = if (root != null) deleteMaxNode(root)
+
+  def foldl[A](f: (A, Int) =&gt; A, a: A): A = foldlNode(f, a, root)
+
+  def foldr[A](f: (Int, A) =&gt; A, a: A): A = foldrNode(f, a, root)
+
+  def foreach(f: Int =&gt; Unit): Unit = foreachNode(f, root)
+
+  def toList(): List[Int] =
+    foldrNode((x: Int, a: List[Int]) =&gt; x::a, Nil, root)
+
+  def isEmpty(): Boolean = root == null
+
+  def clear(): Unit = root = null
+
+  override def toString: String = {
+    var xs = toList()
+    var s = "Tree("
+    while (xs != Nil) {
+      s += xs.head
+      if (xs.tail != Nil) s += ", "
+      xs = xs.tail
+    }
+    s += ")"
+    s
+  }
+}
+
+//
+// immutable な二分木
+//
+
+// 抽象クラス
+abstract class imTree {
+  def isEmpty: Boolean
+  def item(): Int
+  def left(): imTree
+  def right(): imTree
+
+  // 探索
+  def search(x: Int): Boolean =
+    if (isEmpty) false
+    else if (item == x) true
+    else if (x &lt; item) left.search(x)
+    else right.search(x)
+
+  // 挿入
+  def insert(x: Int): imTree =
+    if (isEmpty) imNode(x, this, this)
+    else if (item == x) this
+    else if (x &lt; item) imNode(item, left.insert(x), right)
+    else imNode(item, left, right.insert(x))
+
+  // 最小値
+  def searchMin(): Int =
+    if (isEmpty) throw new Exception("imTree.searchMin: Empty Tree")
+    else if (left.isEmpty) item
+    else left.searchMin
+
+  // 最大値
+  def searchMax(): Int =
+    if (isEmpty) throw new Exception("imTree.searchMin: Empty Tree")
+    else if (right.isEmpty) item
+    else right.searchMax
+
+  // 最小値の削除
+  def deleteMin(): imTree =
+    if (isEmpty) this
+    else if (left.isEmpty) right
+    else imNode(item, left.deleteMin, right)
+
+  // 最大値の削除
+  def deleteMax(): imTree =
+    if (isEmpty) this
+    else if (right.isEmpty) left
+    else imNode(item, left, right.deleteMax)
+
+  // 削除
+  def delete(x: Int): imTree =
+    if (isEmpty) this
+    else if (item == x) {
+      if (left.isEmpty) return right
+      if (right.isEmpty) return left
+      return imNode(right.searchMin, left, right.deleteMin)
+    } else if (x &lt; item) imNode(item, left.delete(x), right)
+    else imNode(item, left, right.delete(x))
+
+  // 畳み込み
+  def foldl[A](f: (A, Int) =&gt; A, a: A): A =
+    if (isEmpty) a
+    else right.foldl(f, f(left.foldl(f, a), item))
+
+  def foldr[A](f: (Int, A) =&gt; A, a: A): A =
+    if (isEmpty) a
+    else left.foldr(f, f(item, right.foldr(f, a)))
+
+  // 巡回
+  def foreach(f: Int =&gt; Unit): Unit = {
+    if (!isEmpty) {
+      left.foreach(f)
+      f(item)
+      right.foreach(f)
+    }
+  }
+
+  // リストに変換する
+  def toList(): List[Int] =
+    if (isEmpty) Nil
+    else left.toList ::: (item :: right.toList)
+}
+
+// 節
+case class imNode(item: Int, left: imTree, right: imTree) extends imTree {
+  def isEmpty: Boolean = false
+}
+
+// 空の木
+case object imEmpty extends imTree {
+  def isEmpty: Boolean = true
+  def item() = throw new Exception("item: Empty Tree")
+  def left() = throw new Exception("left: Empty Tree")
+  def right() = throw new Exception("right: Empty Tree")
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b> Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="scala10.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala12.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

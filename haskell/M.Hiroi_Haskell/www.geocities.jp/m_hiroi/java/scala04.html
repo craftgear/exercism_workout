@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scala プログラミング入門</title>
+  <meta name="description" content="Scala,Scala入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881777</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scala Programming</h1>
+<h2>お気楽 Scala プログラミング入門</h2>
+<div class="small">
+[ <a href="scala03.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala05.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>リスト</h3>
+<p> 今回は「リスト (List) 」というデータ構造を説明します。Scala のリストは「連結リスト (Linked List) 」のことです。リストを扱うプログラミング言語といえば Lisp が有名です。SML/NJ, OCaml, Haskell などの関数型言語や論理型言語の Prolog も、組み込みのデータ構造として連結リストをサポートしています。連結リストは単純なデータ構造ですが、他のデータ構造を実装するときに用いられることがあります。連結リストは基本的で重要なデータ構造の一つなのです。
+</p>
+
+<h4>●リストの構造</h4>
+<p> リストの構造を図で表すと次のようになります。
+</p>
+<pre class="fig">
+┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+│・│・┼─→│・│・┼─→│・│・┼─→ Nil (空リスト)
+└┼┴─┘    └┼┴─┘    └┼┴─┘
+  ↓            ↓            ↓
+  １            ２            ３
+
+        図 : リスト内部の構造
+</pre>
+
+<p> リストは貨物列車にたとえるとわかりやすいでしょう。車両に相当するものを「コンスセル (cons cell) 」といいます。貨物列車には多数の車両が接続されて運行されるように、リストは複数のコンスセルを接続して構成されます。1 つのコンスセルには、貨物（データ）を格納する場所と、連結器に相当する場所があります。
+</p>
+
+<p> 上図では、コンスセルを箱で表しています。コンスセルの左側がデータを格納する場所で、右側が次のコンスセルと連結しています。この例では、3 つのコンスセルが接続されています。それから、最後尾のコンスセルには、リストの終わりを示す特別なデータが格納されます。Scala の場合、要素が一つもないリスト (空リスト) を表すデータ Nil でリストの終端を表します。
+</p>
+
+<h4>●リストの生成と参照</h4>
+<p> Scala のリストは、List(要素1, 要素2, ...) で生成します。次の例を見てください。
+</p>
+<pre>
+scala&gt; val a = List(1,2,3,4,5)
+a: List[Int] = List(1, 2, 3, 4, 5)
+
+scala&gt; a(0)
+res0: Int = 1
+
+scala&gt; a(4)
+res1: Int = 5
+
+scala&gt; a(0) = 10
+&lt;console&gt;:9: error: value update is not a member of List[Int]
+              a(0) = 10
+              ^
+
+scala&gt; val b = List("foo", "bar", "baz")
+b: List[String] = List(foo, bar, baz)
+
+scala&gt; val c = List(1.1, 2.1, 3.1)
+c: List[Double] = List(1.1, 2.1, 3.1)
+
+scala&gt; val d = List(List(1,2,3), List(4,5,6), List(7,8,9))
+d: List[List[Int]] = List(List(1, 2, 3), List(4, 5, 6), List(7, 8, 9))
+
+scala&gt; val e = List(1 + 2, 3 * 4, 5 - 6)
+e: List[Int] = List(3, 12, -1)
+</pre>
+<p> リストの型は List[型] で表します。変数 a のリストは要素が Int なので型は List[Int] になります。List(1) や List(2, 3) も型は List[Int] になります。リストは配列と同様にカッコ ( ) で要素にアクセスすることができます。添字は配列と同様に 0 から数え始めます。a(n) で n 番目の要素を取り出すことができますが、Scala のリストは immutable なデータ構造なので、a(n) = 10 のように値を書き換えることはできません。
+</p>
+<p> リストに格納された要素の個数を「リストの長さ」といいます。リストの型はリストの長さとは関係なく、格納する要素の型によって決まります。変数 b のリストは要素が文字列なので型は List[String] になります。
+</p>
+<p> リストは入れ子にすることができます。変数 d のリストは List(1, 2, 3), List(4, 5, 6), List(7, 8, 9) という List[Int] を格納しています。この場合、型は List[List[Int]] になります。このリストに List(List(7)) を入れることはできません。List(List(7)) の型は List[List[Int]] になるので、要素の型 List[Int] とは異なるからです。また、最後の例のように丸カッコの中に式を書くと、それを評価した値がリストの要素になります。
+</p>
+
+<h4>●リストの合成と分解</h4>
+<p> リストはメソッド head, tail を使って分解し、演算子 :: (コンス演算子) で合成することができます。また、演算子 ::: でリストを連結することができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; val a = List(1,2,3,4)
+a: List[Int] = List(1, 2, 3, 4)
+
+scala&gt; a.head
+res0: Int = 1
+
+scala&gt; a.tail
+res1: List[Int] = List(2, 3, 4)
+
+scala&gt; 0 :: a
+res2: List[Int] = List(0, 1, 2, 3, 4)
+
+scala&gt; List(1, 2, 3) ::: List(4, 5, 6)
+res3: List[Int] = List(1, 2, 3, 4, 5, 6)
+</pre>
+<p> Scala の場合、リストの操作はメソッドで行います。メソッドの呼び出しは リスト + ドット ( . ) + メソッド名(引数, ...) で行います。引数がない場合はカッコを省略することができます。a.head は Lisp の関数 car と同じで、リスト a の先頭要素を取り出します。List(1, 2, 3, 4) の先頭要素は 1 なので、a.head は 1 を返します。
+</p>
+<p> a.tail は Lisp の関数 cdr と同じで、リスト a から先頭要素を取り除いたリストを返します。a.tail は List(1, 2, 3, 4) から 1 を取り除いた List(2, 3, 4) を返します。演算子 :: は Lisp の関数 cons と同じで、リストの先頭にデータを付け加えます。演算子 ::: は Lisp の関数 append と同じで、2 つのリストをつないだ新しいリストを返します。このとき、左辺のリストはコピーされることに注意してください。
+</p>
+
+<p> head, tail, コンス演算子の関係を図に表すと次のようになります。
+</p>
+
+<pre class="fig">
+                      ┌──┐
+                ┌─→│head│→ １  ────┐
+                │    └──┘               ↓
+                │                        ┌──┐
+ List(1,2,3,4)─┤                        │：：│→ List(1,2,3,4)
+                │                        └──┘
+                │    ┌──┐               ↑
+                └─→│tail│→List(2,3,4)─┘
+                      └──┘
+
+                    図 : リストの分解と合成
+</pre>
+
+<p> この関係はリストを操作する関数を作る場合の基本になります。
+</p>
+
+<p> 要素のないリストを「空リスト」といい、Scala では Nil で表します。次の例を見てください。
+</p>
+<pre>
+scala&gt; Nil
+res4: scala.collection.immutable.Nil.type = List()
+
+scala&gt; List(1).tail
+res5: List[Int] = List()
+
+scala&gt; List("foo").tail
+res6: List[String] = List()
+</pre>
+<p> Scala の場合、Nil はシングルトンオブジェクトとして定義されていて、どのようなリストの型にもあてはまります。REPL では List() と表示されます。要素が一つしかないリストに tail を適用すると空リストになります。次の例は List[Int] に tail を適用したので、List() の型を List[Int] と表示しました。3 番目の例のように、List[String] の空リスト List() は List[String] と表示されます。
+</p>
+
+<p> コンス演算子を続ける場合は結合規則に注意してください。次の例を見てください。
+</p>
+<pre class="item">
+1::2::3::Nil =&gt; (1::(2::(3::[]))) =&gt; List(1, 2, 3)
+</pre>
+<p> このように、コンス演算子は四則演算とは違って「右結合」になります。また、コンス演算子の右辺はリストでなければいけません。1::2 はエラーになります。実際のプログラムでは、head や tail でリストを分解するよりも「パターンマッチング」を使った方が簡単です。リストのパターンマッチングはあとで詳しく説明します。
+</p>
+
+<h4>●再帰定義によるリスト操作</h4>
+<p> リストを操作する関数は再帰定義を使うと簡単に作ることができます。実は、リスト操作と再帰定義はとても相性が良いのです。まずは、リストの長さを求める関数 length を作りましょう。 Sacla には length という同等の機能を持つメソッドが用意されていますが、再帰定義を使えば私たちでも簡単に作ることができます。
+</p>
+
+<p> まず、いちばん簡単な場合を考えます。引数が空リストであれば 0 を返せばいいですね。あとは、リストが空リストになるように分解していけばいいのです。つまり、リスト xs の長さを求めるには、リスト xs に tail を適用したリストの長さがわかればいい、と考えるのです。それに 1 を足せば、リストの長さを求めることができます。これをプログラムすると、次のようになります。
+</p>
+
+<pre>
+scala&gt; def length[A](xs: List[A]): Int = if (xs == Nil) 0 else 1 + length(xs.tail)
+length: [A](xs: List[A])Int
+
+scala&gt; length(List(1, 2, 3, 4, 5))
+res0: Int = 5
+
+scala&gt; length(Nil)
+res1: Int = 0
+</pre>
+
+<p> 引数 xs が空リストであれば 0 を返します。そうでなければ、引数 xs に関数 tail を適用して length を再帰呼び出しします。リストに tail を繰り返し適用していくと最後は空リストになります。ここで再帰呼び出しが止まって 0 を返します。そうすると、1 + length(...) によって length の返り値に 1 を足した値を返していきます。すなわち tail した回数だけ 1 が足されるわけです。
+</p>
+
+<p> length の場合、任意の型 A を格納するリストを引数に取り、int を返すことが示されています。つまり、引数が List[Int] でも List[String] でも、リストであればその長さを返すことができます。このように、length は多相型関数として定義されます。Scala のメソッド head, tail, length も多相型です。
+</p>
+<pre>
+scala&gt; val a = List(1, 2, 3, 4, 5)
+a: List[Int] = List(1, 2, 3, 4, 5)
+
+scala&gt; val b = List("foo", "bar", "baz")
+b: List[String] = List(foo, bar, baz)
+
+scala&gt; a.head
+res0: Int = 1
+
+scala&gt; b.head
+res1: String = foo
+
+scala&gt; a.tail
+res2: List[Int] = List(2, 3, 4, 5)
+
+scala&gt; b.tail
+res3: List[String] = List(bar, baz)
+
+scala&gt; a.length
+res4: Int = 5
+
+scala&gt; b.length
+res5: Int = 3
+</pre>
+<p> なお、length を末尾再帰で書き直すと次のようになります。
+</p>
+<pre class="list">
+リスト : 末尾再帰版
+
+def length[A](xs: List[A], a: Int = 0): Int =
+  if (xs == Nil) a else length(xs.tail, a + 1)
+</pre>
+<p> 累積変数 a をデフォルト引数にすると簡単です。xs が空リストでなければ length を再帰呼び出しして、累積変数 a の値を +1 します。これでリストの長さを求めることができます。
+</p>
+
+<h4>●リストの連結</h4>
+<p> 次はリストを連結する演算子 ::: と同じ動作をする関数 append を作ってみましょう。引数としてリスト xs と ys を渡し、それを連結したリストを返します。処理手順ですが、簡単な場合から考えていきましょう。まず、リスト xs が空リストならば、リスト ys を返すだけでいいですね。次に、リスト xs に要素が 1 つしかない場合を考えてみます。これは、リスト xs に head を適用して要素を取り出し、それをコンス演算子でリスト ys の先頭に追加すればいいでしょう。
+</p>
+<p> それでは、リスト xs に要素が複数ある場合を考えてください。リスト xs を head と tail で分解します。そして、xs.tail と ys を連結したリストを求め、そのリストの先頭に xs.head  を追加すれば xs と ys を連結することができます。xs.tail  と ys の連結は再帰呼び出しで実現することができます。これを図に示すと次のようになります。
+</p>
+
+<pre class="fig">
+┌────────────────────────────┐ 
+│append( [1, 2], [3, 4] )                                │
+├────────────────────────────┤
+│ [ 1,  2 ]                                              │
+│  ┬  ───tail─┐                                    │
+│ head             ↓                                    │
+│  │    ┌──────────────────────┐│
+│  │    │append( [2], [3, 4] )                       ││
+│  │    ├──────────────────────┤│
+│  │    │ [  2     ]                                 ││
+│  │    │    ┬  ─ tail─┐                         ││
+│  │    │    head         ↓                         ││
+│  │    │    │  ┌────────────────┐││
+│  │    │    │  │append( [],  [3, 4] ) =&gt; [3, 4] │││
+│  │    │    │  └────────────────┘││
+│  │    │    │            │                        ││
+│  │    │    └→  ::  ←─┘                        ││
+│  │    │       [2, 3, 4]                            ││
+│  │    └─────┼────────────────┘│
+│  └──→  ::  ←─┘                                  │
+└──────┼─────────────────────┘
+              ↓
+          [1, 2, 3, 4]
+
+                図 : append の動作
+</pre>
+
+
+<p> これをプログラムすると次のようになります。
+</p>
+
+<pre>
+scala&gt; def append[A](xs: List[A], ys: List[A]): List[A] =
+     | if (xs == Nil) ys else xs.head :: append(xs.tail, ys)
+append: [A](xs: List[A], ys: List[A])List[A]
+
+scala&gt; append(List(1, 2, 3), List(4, 5, 6))
+res0: List[Int] = List(1, 2, 3, 4, 5, 6)
+
+scala&gt; append(Nil, List(4, 5, 6))
+res1: List[Int] = List(4, 5, 6)
+
+scala&gt; append(List(1, 2, 3), Nil)
+res2: List[Int] = List(1, 2, 3)
+</pre>
+
+<p> 引数 xs が空リストであればリスト ys をそのまま返します。これが再帰呼び出しの停止条件になります。そうでなければ、xs.tail を append に渡して再帰呼び出しします。そして、その返り値と xs.head をコンス演算子で接続します。これでリストを連結することができます。なお、append も多相型関数になります。
+</p>
+
+<h4>●リストの反転</h4>
+<p> 今度はリストの要素を反転する関数 reverse を作ってみましょう。Scala には reverse という同等の機能を持つメソッドが用意されていますが、私達でも簡単に作ることができます。reverse は引数のリスト xs を head と tail で分解し、xs.head を反転させてから xs.head を最後尾に追加することで実現できます。次の図を見てください。
+</p>
+
+<pre class="fig">
+[1, 2, 3]                                    [3, 2] ::: [1] =&gt; [3, 2, 1]  
+      ↓                                     ↑
+   [2, 3]                     [3] ::: [2] =&gt; [3, 2]
+      ↓                      ↑
+      [3]     [ ] ::: [3] =&gt; [3]
+      ↓      ↑
+      [ ] ──┘
+
+                図 : reverse の動作
+</pre>
+
+<p> これをプログラムすると、次のようになります。
+</p>
+
+<pre>
+scala&gt; def reverse[A](xs: List[A]): List[A] =
+     | if (xs == Nil) Nil else reverse(xs.tail) ::: List(xs.head)
+reverse: [A](xs: List[A])List[A]
+
+scala&gt; reverse(List(1,2,3,4,5))
+res0: List[Int] = List(5, 4, 3, 2, 1)
+
+scala&gt; reverse(List("a", "b", "c", "d"))
+res1: List[String] = List(d, c, b, a)
+</pre>
+
+<p> 引数 xs が空リストの場合は Nil を返します。そうでなければ、reverse を再帰呼び出しして xs.tail を反転し、演算子 ::: で反転したリストの最後尾に先頭の要素を追加します。reverse も多相型関数になります。
+</p>
+<p> なお、このプログラムはリストを連結する ::: 演算子を使っているので効率的ではありません。末尾再帰で書き直すと次のようになります。
+</p>
+<pre class="list">
+リスト : 末尾再帰版
+
+def reverse[A](xs: List[A], a: List[A] = Nil): List[A] =
+  if (xs == Nil) a else reverse(xs.tail, xs.head :: a)
+</pre>
+<p> 累積変数 a をデフォルト引数 (初期値 Nil) にすると簡単です。リスト xs の先頭要素を取り出し、コンス演算子で累積変数 a の先頭に追加していけば、xs の逆順のリストを得ることができます。
+</p>
+
+<h4>●リストの探索</h4>
+<p> 最後に、リストからデータを探索する関数 member を作ってみましょう。Scala にはリストを線形探索するメソッドがいくつか用意されていますが、ここでは Common Lisp の関数 member と同等の動作をする関数を作ります。member はリストの中にデータがなければ空リストを返します。データを見つけた場合は、その要素を含む残りのリストを返します。つまり、返り値のリストの先頭要素が見つけたデータになります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre>
+scala&gt; def member[A](x: A, xs: List[A]): List[A] = {
+     | if (xs == Nil) Nil
+     | else if (xs.head == x) xs
+     | else member(x, xs.tail)
+     | }
+member: [A](x: A, xs: List[A])List[A]
+
+scala&gt; val a = List(1,2,3,4,5)
+a: List[Int] = List(1, 2, 3, 4, 5)
+
+scala&gt; member(1, a)
+res0: List[Int] = List(1, 2, 3, 4, 5)
+
+scala&gt; member(3, a)
+res1: List[Int] = List(3, 4, 5)
+
+scala&gt; member(5, a)
+res2: List[Int] = List(5)
+
+scala&gt; member(0, a)
+res3: List[Int] = List()
+</pre>
+
+
+<p> 関数 member はリスト xs の中から x と等しい要素を探します。これは member を再帰呼び出ししてリストを分解し、リストの先頭要素をチェックしていくことで実現できます。xs が空リストの場合は x を見つけることができなかったので Nil を返します。これが再帰の停止条件になります。次に、リスト xs の先頭の要素 xs.head が x と等しいかチェックします。等しい場合は、リスト xs をそのまま返します。そうでなければ、member を再帰呼び出しして次の要素を調べます。
+</p>
+
+<p> データが見つからない場合、空リストが返されますが、その型は引数のリストと同じ型になることに注意してください。Scala の関数は、異なるデータ型を返すことができません。たとえば、見つけた場合はその要素を返し、見つからない場合は false を返す、ということはできないのです。見つけた要素を返したい場合は Option という型を使うと簡単です。
+</p>
+
+<h4>●Option</h4>
+<p> Option はクラスです。Scala のクラスは型パラメータを使って多相的なデータ構造を定義することができます。これを「多相クラス (polymorphic class) 」といいます。Option は多相クラスで、サブクラスに Some と None が定義されています。Some はデータを格納するクラスで、None はデータがないことを表すクラスです。次の例を見てください。
+</p>
+<pre>
+scala&gt; val a: Option[Int] = Some(10)
+a: Option[Int] = Some(10)
+
+scala&gt; val b: Option[Int] = None
+b: Option[Int] = None
+
+scala&gt; a.get
+res0: Int = 10
+
+scala&gt; b.get
+java.util.NoSuchElementException: None.get
+  ... 省略 ...
+
+scala&gt; a.getOrElse(Int.MinValue)
+res1: Int = 10
+
+scala&gt; b.getOrElse(Int.MinValue)
+res2: Int = -2147483648
+
+scala&gt; a.isEmpty
+res3: Boolean = false
+
+scala&gt; a.nonEmpty
+res4: Boolean = true
+
+scala&gt; b.isEmpty
+res5: Boolean = true
+
+scala&gt; b.nonEmpty
+res6: Boolean = false
+</pre>
+<p> Scala は Java と同様にサブクラスのインスタンスをスーパークラスの変数に代入することができます。Some からデータを取り出すにはメソッド get を使います。None.get とするとエラーになります。メソッド getOrEles を使うと、None のときに指定した値を返すことができます。b.getOrEles(Int.MinValue) とすると、b は None なので Int の最小値が返ってきます。
+</p>
+<p> このほかに、Some と None をチェックする isEmpty, nonEmpty というメソッドがあります。実際には、次に説明するパターンマッチングを使うと、Some と None のチェックや Some からデータを取得することも簡単に行うことができます。
+</p>
+<p> Option を使って member を書き直すと次のようになります。
+</p>
+<pre>
+scala&gt; def member[A](x: A, xs: List[A]): Option[A] = {
+     | if (xs == Nil) None
+     | else if (xs.head == x) Some(x)
+     | else member(x, xs.tail)
+     | }
+member: [A](x: A, xs: List[A])Option[A]
+
+scala&gt; member(1, List(1,2,3,4,5))
+res0: Option[Int] = Some(1)
+
+scala&gt; member(5, List(1,2,3,4,5))
+res1: Option[Int] = Some(5)
+
+scala&gt; member(10, List(1,2,3,4,5))
+res2: Option[Int] = None
+</pre>
+
+<p> なお、Scala には member と同じ機能を持つメソッド find が用意されています。また、配列と同様に、メソッド contains, indexOf, count はリストでも使用することができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; val a = List(1,2,3,4,5,6,7,8)
+a: List[Int] = List(1, 2, 3, 4, 5, 6, 7, 8)
+
+scala&gt; a contains 1
+res0: Boolean = true
+
+scala&gt; a contains 8
+res1: Boolean = true
+
+scala&gt; a contains 10
+res2: Boolean = false
+
+scala&gt; a indexOf 2
+res3: Int = 1
+
+scala&gt; a indexOf 7
+res4: Int = 6
+
+scala&gt; a indexOf 0
+res5: Int = -1
+
+scala&gt; a count (x =&gt; x % 2 == 0)
+res6: Int = 4
+
+scala&gt; a find (x =&gt; x % 2 == 0)
+res7: Option[Int] = Some(2)
+
+scala&gt; a find (x =&gt; x == 0)
+res8: Option[Int] = None
+</pre>
+
+<h4>●タプル (Tuple)</h4>
+<p> Scala はオブジェクト指向言語なので、クラスを使って新しい型を定義することができますが、「タプル (Tuple) 」を使うともっと簡単に新しい型を定義することができます。タプルは関数型言語でよく使われるデータ構造で、複数のデータや式をカンマ ( , ) で区切り、カッコ ( ) で囲んで表します。次の例を見てください。
+</p>
+<pre>
+scala&gt; val a = (1, 2)
+a: (Int, Int) = (1,2)
+
+scala&gt; val b = (10, 20.5)
+b: (Int, Double) = (10,20.5)
+
+scala&gt; val c = (1, 2.5, "foo")
+c: (Int, Double, String) = (1,2.5,foo)
+
+scala&gt; val d = (1 + 2, 3 * 4)
+d: (Int, Int) = (3,12)
+</pre>
+<p> 変数 a のタプル (1, 2) は整数を 2 つ持っていて、型は (Int, Int) になります。変数 b のタプル (10, 20.5) は整数と実数なので (Int, Double) になります。変数 c のタプル (1, 2.5, "foo") は (Int, Double, String) になります。また、最後の例のようにカッコの中に式を書くと、それを評価した値が組の要素になります。なお、タプルは immutable なデータ構造です。配列と違って値を書き換えることはできません。
+</p>
+
+<p> タプルは入れ子にしてもかまいません。次の例を見てください。
+</p>
+<pre>
+scala&gt; val a = ((1, 2), 3)
+a: ((Int, Int), Int) = ((1,2),3)
+
+scala&gt; val b = (1, (2, 3))
+b: (Int, (Int, Int)) = (1,(2,3))
+</pre>
+<p> 変数 a のタプルは、第 1 要素が (Int, Int) のタプルで、第 2 要素が Int です。これを ((Int, Int), Int) と表します。変数 b の組は、第 1 要素が Int で第 2 要素が (Int, Int) のタプルになります。これを (Int, (Int, Int)) と表します。どちらのタプルも 3 つの整数が含まれていますが、型は異なることに注意してください。
+</p>
+
+<p> タプルの要素はメソッド _1, _2, _3, ... で取り出すことができます。数字が添字を表します。配列と違ってタプルの添字は 1 からはじまることに注意してください。簡単な例を示します。
+</p>
+<pre>
+scala&gt; val c = (10, 20, 30, 40, 50)
+c: (Int, Int, Int, Int, Int) = (10,20,30,40,50)
+
+scala&gt; c._1
+res0: Int = 10
+
+scala&gt; c._2
+res1: Int = 20
+
+scala&gt; c._3
+res2: Int = 30
+
+scala&gt; c._4
+res3: Int = 40
+
+scala&gt; c._5
+res4: Int = 50
+</pre>
+
+<p> 実際には次回で説明するパターンマッチングを使ったほうが簡単です。
+</p>
+
+<p> タプルを使えば複数の値を返す関数も簡単に作ることができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def foo(x: Int, y: Int): (Int, Int) = {
+     | if (x == y) (0, 0)
+     | else if (x &lt; y) (-1, y - x)
+     | else (1, x - y)
+     | }
+foo: (x: Int, y: Int)(Int, Int)
+
+scala&gt; foo(10, 20)
+res5: (Int, Int) = (-1,10)
+
+scala&gt; foo(20, 10)
+res6: (Int, Int) = (1,10)
+
+scala&gt; foo(20, 20)
+res7: (Int, Int) = (0,0)
+</pre>
+<p> 関数 foo は引数 x と y の差分の絶対値を計算し、符号とその値を返します。x == y ならば (0, 0) を返します。x &lt; y ならば (-1, y - x) を返し、x &gt; y ならば (1, x - y) を返します。このように、タプルを使って複数の値を返すことができます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">パターンマッチング</h3>
+<p> Scala は「パターンマッチング (pattern matching) 」を使って条件分岐を行うことができます。また、リストもパターンマッチングで分解することができます。これらの機能は論理型言語 Prolog のパターンマッチングと大変よく似ています。パターンマッチングは Scala だけではなく、SML/NJ, OCaml, Haskell など関数型言語の特徴のひとつで、とても便利で強力な機能です。
+</p>
+
+<h4>●val や var でのパターンマッチング</h4>
+<p> Scala の場合、val や var で変数を宣言するとき、パターンマッチングを使うことができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; val (a, b) = (1, 2)
+a: Int = 1
+b: Int = 2
+
+scala&gt; val (c, d) = ((1, 2), 3)
+c: (Int, Int) = (1,2)
+d: Int = 3
+
+scala&gt; val ((e, f), g) = ((1, 2), 3)
+e: Int = 1
+f: Int = 2
+g: Int = 3
+</pre>
+<p> 右辺 (a, b) がパターンを表します。要素が 2 つ並んでいるので、2 要素のタプルを表すパターンになります。パターン (a, b) と左辺の (1, 2) を照合して、変数部分に対応する要素を取り出して変数にセットします。次の例のように、(c, d) と ((1, 2), 3) を照合すると、c は (1, 2) になり、d は 3 になります。
+</p>
+
+<p> パターンは入れ子にしてもかまいません。((e, f), g) と ((1, 2), 3) を照合すると、e = 1, f = 2, g = 3 となります。このように、パターンを使ってタプルの要素を取り出すことができます。ただし、型が違うと照合に失敗してエラーになるので注意してください。
+</p>
+
+<p> リストもパターンマッチングを使って要素を取り出すことができます。リストのパターンはコンス演算子 :: を使って表します。次の例を見てください。
+</p>
+<pre>
+scala&gt; val x::xs = List(1, 2, 3, 4, 5)
+x: Int = 1
+xs: List[Int] = List(2, 3, 4, 5)
+
+scala&gt; val y::ys = List(1)
+y: Int = 1
+ys: List[Int] = List()
+
+scala&gt; val z::zs = ys
+scala.MatchError: List() (of class scala.collection.immutable.Nil$)
+  ... 省略 ...
+</pre>
+<p> x::xs がパターンを表します。このパターンはリストとマッチングして、先頭の要素が x に、先頭要素を取り除いた残りのリストが xs に束縛されます。リストの要素が 1 つしかない場合、y::ys は y が 1 とマッチングして、ys は空リストとマッチングします。また、z::zs は空リスト ys とはマッチングしません。マッチングエラーが送出されます。このように、関数 head や tail を使わなくてもリストを分解することができます。
+</p>
+
+<h4>●match 式</h4>
+<p> match 式を使うと、パターンマッチングで条件分岐を行うことができます。match 式の構文を示します。
+</p>
+<pre class="item">
+式0 match {
+    case pattern_1 =&gt; 式1
+    case pattern_2 =&gt; 式2
+      ...
+    case pattern_n =&gt; 式n
+}
+</pre>
+<p> case で区切られた部分をマッチング節 (matching clause) といいます。match 式は式 0 の評価結果とパターンを照合し、マッチングする節を選択して実行します。たとえば、式 0 の結果と pattern_1 がマッチングした場合、式 1 を評価してその結果が match 式の返り値になります。マッチングしない場合は次のパターンを調べます。マッチングするパターンが見つからない場合はエラーになります。
+</p>
+<p> なお、一度マッチング節が選択された場合、それ以降の節は選択されません。また、式 1 から式 n の結果は同じ型でなければいけません。ご注意ください。
+</p>
+<p> 簡単な例を示しましょう。match 式を使って階乗を求める関数 fact を定義すると次のようになります。
+</p>
+
+<pre>
+scala&gt; def fact(n: Int): BigInt = n match {
+     | case 0 =&gt; 1
+     | case m =&gt; m * fact(m - 1)
+     | }
+fact: (n: Int)BigInt
+
+scala&gt; fact(10)
+res0: BigInt = 3628800
+
+scala&gt; fact(20)
+res1: BigInt = 2432902008176640000
+</pre>
+
+<p> パターンが定数の場合、同じ値とマッチングします。最初の定義はパターンが 0 なので、引数 n が 0 の場合にマッチングします。パターンが変数の場合はどんな値とでもマッチングします。そして、変数はその値に初期化されます。したがって、n が 0 以外の場合は 2 番目のパターンと一致し、変数 m の値は n になります。ここで再帰呼び出しが行われます。なお、変数の有効範囲はそのマッチング節の中だけになります。
+</p>
+<p> 変数 m は n と同じ値なので、パターンにワイルドカード ( _ ) を使って次のように定義してもかまいません。
+</p>
+<pre class="item">
+case _ =&gt; n * fact(n - 1)
+</pre>
+<p> このように、if を使わなくてもパターンマッチングでプログラムを作ることができます。
+</p>
+
+<p> パターンマッチングを使うときは、マッチング節を定義する順番に気をつけてください。fact の場合、最初にパターン m や _ を定義すると、引数が 0 の場合でもマッチングするので、パターン 0 のマッチング節が実行されることはありません。特定のパターンから定義するように注意してください。
+</p>
+
+<h4>●リストのパターンマッチング</h4>
+<p> 次はリストのパターンマッチングについて、もう少し詳しく説明しましょう。たとえば、パターンを使って関数 append を定義すると次のようになります。
+</p>
+
+<pre>
+scala&gt; def append[A](xs: List[A], ys: List[A]): List[A] = xs match {
+     | case Nil =&gt; ys
+     | case z::zs =&gt; z :: append(zs, ys)
+     | }
+append: [A](xs: List[A], ys: List[A])List[A]
+
+scala&gt; append(List(1,2,3), List(4,5,6))
+res0: List[Int] = List(1, 2, 3, 4, 5, 6)
+
+scala&gt; append(Nil, List(1,2,3))
+res1: List[Int] = List(1, 2, 3)
+</pre>
+<p> 最初のパターンは、xs が空リストのときにマッチングします。2 番目のパターンはリスト xs を先頭要素 z と残りのリスト zs に分解します。このように、match 式を使うとリストを簡単に分解することができます。
+</p>
+<p> リストを表すパターンは x::xs だけではありません。よく使われるパターンを次に示します。
+</p>
+<pre class="item">
+(1) x::Nil      要素が 1 つのリストとマッチング
+(2) x::y::Nil   要素が 2 つのリストとマッチング
+(3) x::xs       要素が 1 つ以上あるリストとマッチング
+(4) x1::x2::xs  要素が 2 つ以上あるリストとマッチング
+(5) x1::x1::xs  エラー
+</pre>
+<p> (5) のように、パターンの中に同名の変数を使うことはできません。この場合、x1::x2::xs とマッチングさせてから x1 と x2 が等しいかチェックします。このような場合、パターンの後ろで if を使うと便利です。if の構文を示します。
+</p>
+<pre class="item">
+case パターン if (条件式) =&gt; 式
+</pre>
+<p> このようなマッチング節を「ガード付き節」といいます。パターンとの照合に成功して、かつ if の条件式が真を返す場合に限り式が評価されます。たとえば、if を使って (5) を実現すると次のようになります。
+</p>
+<pre class="item">
+case x1::x2::xs if (x1 == x2) =&gt; 式1
+case x1::x2::xs if (x1 &lt; x2) =&gt; 式2
+case x1::x2::xs =&gt; 式3
+</pre>
+<p> パターンとの照合に成功して、x1 == x2 の場合は式 1 が評価されます。x1 &lt; x2 の場合は式 2 が評価され、それ以外の場合は式 3 が評価されます。
+</p>
+<p> また、もっと複雑なリストもパターンで表すことができます。
+</p>
+<pre class="item">
+(1) (x, y)::xs  要素がタプルのリストとマッチング
+    ex) List((1, 2), (3, 4), (5, 6)) =&gt; x = 1, y = 2, xs = List((3, 4), (5, 6))
+
+(2) (x::xs)::ys 要素がリストのリスト ('a list list) とマッチング
+    ex) List(List(1, 2, 3), List(4, 5), List(6)) =&gt; x = 1, xs = List(2, 3), ys = List(List(4, 5), List(6))
+</pre>
+<p> ご参考までに、関数 length, reverse, member をパターンマッチングを使って書き直してみましょう。
+</p>
+<pre class="list">
+リスト : パターンマッチングの使用例
+
+object sample0402 {
+  def length[A](xs: List[A]): Int =
+    xs match {
+      case Nil =&gt; 0
+      case _::ys =&gt; 1 + length(ys)
+    }
+
+  def reverse[A](xs: List[A]): List[A] =
+    xs match {
+      case Nil =&gt; Nil
+      case y::ys =&gt; reverse(ys) ::: List(y)
+    }
+
+  def member[A](x: A, xs: List[A]): Option[A] =
+    xs match {
+      case Nil =&gt; None
+      case y::ys if (x == y) =&gt; Some(y)
+      case y::ys =&gt; member(x, ys)
+    }
+}
+</pre>
+<pre>
+scala&gt; :load sample0402.scala
+Loading sample0402.scala...
+defined object sample0402
+
+scala&gt; import sample0402._
+import sample0402._
+
+scala&gt; length(List(1,2,3,4,5))
+res0: Int = 5
+
+scala&gt; reverse(List(1,2,3,4,5))
+res1: List[Int] = List(5, 4, 3, 2, 1)
+
+scala&gt; member(3, List(1,2,3,4,5))
+res2: Option[Int] = Some(3)
+</pre>
+
+<h4>●Option のパターンマッチング</h4>
+<p> Option もパターンマッチングすることができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def foo(a: Option[String]): String = a match {
+     | case None =&gt; "oops!"
+     | case Some(mes) =&gt; mes
+     | }
+foo: (a: Option[String])String
+
+scala&gt; foo(None)
+res0: String = oops!
+
+scala&gt; foo(Some("hello"))
+res1: String = hello
+</pre>
+<p> パターンマッチングで Some と None を区別するだけではなく、Some(mes) のように変数 mes を指定すると、Some の値を mes に取り出すことができます。
+</p>
+
+<h4>●連想リスト</h4>
+<p> それでは簡単な例題として、「連想リスト (association list : a-list) 」を作ってみましょう。連想リストは Lisp でよく用いられるデータ構造で、Scala ではキーとデータのタプルを要素とするリストで実現できます。データ型で記述すると List[(A, B)] になり、A がキーで B がデータに対応するデータになります。次の図を見てください。
+</p>
+<pre class="fig">
+
+                     ┌────┬────┬────┬──→ データ 
+                     │        │        │        │
+ 連想リスト =&gt; [("a", 1), ("b", 2), ("c", 3), ("d", 4)]
+                 │        │        │        │
+                 └────┴────┴────┴──→ キー
+
+                        図 : 連想リストの構造
+</pre>
+<p> 上図の場合、文字列 "a", "b", "c", "d" がキーで、整数 1, 2, 3, 4 がデータとなります。一般に、キーには文字列を用いることが多く、データは何でもかまいません。
+</p>
+
+<p> それでは連想リストを操作する関数を作りましょう。関数名は Common Lisp から拝借しました。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 連想リスト
+
+object sample0403 {
+
+  def acons[A, B](x: A, y: B, xs: List[(A, B)]): List[(A, B)] = (x, y) :: xs
+
+  def pairlis[A, B](xs: List[A], ys: List[B]): List[(A, B)] =
+    (xs, ys) match {
+      case (Nil, _) | (_, Nil) =&gt; Nil
+      case (x::xs1, y::ys1) =&gt; (x, y)::pairlis(xs1, ys1)
+    }
+
+  def assoc[A, B](key: A, xs: List[(A, B)]): Option[B] =
+    xs match {
+      case Nil =&gt; None
+      case (y, v)::ys if (y == key) =&gt; Some(v)
+      case _::ys =&gt; assoc(key, ys)
+    }
+}
+</pre>
+<p> 関数 acons はキー x とデータ y と連想リスト xs を受け取り、xs の先頭に x と y を追加します。これは簡単ですね。関数 pairlis は 2 つのリストを受け取り、第 1 引数のリストの要素がキー、第 2 引数のリストの要素がデータとなる連想リストを生成します。引数のリストの長さが違う場合は短い方に合わせます。
+</p>
+
+<p> pairlis の match が照合する式の値はタプルになるので、パターンにはタプルを使います。最初の節の | は OR の意味で、左右どちらかのパターンがマッチすれば、その節が選択されます。つまり、xs または ys のどちらかが空リストであれば Nil を返します。
+</p>
+
+<p> 関数 assoc は指定したキーと等しいデータを探します。見つけた場合、値を Some に格納して返します。見つからない場合は None を返します。このように、パターンマッチングとガード節を使うと簡単にプログラムを作ることができます。
+</p>
+
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre>
+Loading sample0403.scala...
+defined object sample0403
+
+scala&gt; import sample0403._
+import sample0403._
+
+scala&gt; val alist = pairlis(List("foo", "bar", "baz"), List(1,2,3))
+alist: List[(String, Int)] = List((foo,1), (bar,2), (baz,3))
+
+scala&gt; assoc("foo", alist)
+res0: Option[Int] = Some(1)
+
+scala&gt; assoc("bar", alist)
+res1: Option[Int] = Some(2)
+
+scala&gt; assoc("baz", alist)
+res2: Option[Int] = Some(3)
+
+scala&gt; assoc("oops", alist)
+res3: Option[Int] = None
+
+scala&gt; val alist1 = acons("oops", 4, alist)
+alist1: List[(String, Int)] = List((oops,4), (foo,1), (bar,2), (baz,3))
+
+scala&gt; assoc("oops", alist1)
+res4: Option[Int] = Some(4)
+</pre>
+<h4>●挿入ソート</h4>
+<p> もう一つ簡単な例題としてリストをソートする関数を作ってみましょう。ソート (sort) は、ある規則に従ってデータを順番に並べ換える操作のことです。たとえば、データが整数であれば大きい順に並べる、もしくは小さい順に並べます。Scala のライブラリにはリストをソートする関数がありますが、私達でも簡単に作ることができます。今回は「挿入ソート (insert sort) 」を取り上げます。
+</p>
+
+<p> 挿入ソートの考え方はとても簡単です。ソート済みのリストに新しいデータを挿入していくことでソートを行います。たとえば、List(2, 4, 6) に 5 を挿入する場合、リストの要素 n と 5 を順番に比較して、5 &lt; n を満たす位置に 5 を挿入すればいいわけです。この場合は、4 と 6 の間に 5 を挿入すればいいですね。
+</p>
+
+<p> ソートするリストは tail で分解していくと空リストになります。これをソート済みのリストと考えて、ここにデータを挿入していきます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 挿入ソート
+
+object sample0404 {
+  def insertSort(xs: List[Int]): List[Int] = {
+    def insertElement(x: Int, xs: List[Int]): List[Int] =
+      xs match {
+        case Nil =&gt; List(x)
+        case y::ys =&gt; if (x &lt; y) x::y::ys else y::insertElement(x, ys)
+      }
+    xs match {
+      case Nil =&gt; Nil
+      case y::ys =&gt; insertElement(y, insertSort(ys))
+    }
+  }
+}
+</pre>
+<p> 関数 insertSort は引数のリスト xs を再帰呼び出しで分解します。insertSort を再帰呼び出ししてリスト ys をソートし、そのリストに先頭要素 y を関数 insertElement で挿入します。
+</p>
+
+<p> 局所関数 insertElement は再帰呼び出しでリストをたどり、データ x を挿入する位置を探します。引数のリストが空リストであれば、x が一番大きなデータです。List(x) を返します。これで、リストの最後尾に x を挿入することができます。次の節でリストを分解して、x が先頭の要素 y よりも小さい場合は、その位置に x を挿入します。そうでなければ、insertElement を再帰呼び出しします。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+scala&gt; :load sample0404.scala
+Loading sample0404.scala...
+defined object sample0404
+
+scala&gt; import sample0404._
+import sample0404._
+
+scala&gt; insertSort(List(5,6,4,7,3,8,2,9,1,0))
+res0: List[Int] = List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; insertSort(List(9,8,7,6,5,4,3,2,1,0))
+res1: List[Int] = List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; insertSort(List(0,1,2,3,4,5,6,7,8,9))
+res2: List[Int] = List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+</pre>
+<p> 挿入ソートはデータ数が多くなると実行時間がかかります。データ数を N とすると、実行時間は N の 2 乗に比例します。挿入ソートは簡単ですが遅いアルゴリズムなのです。
+</p>
+
+<p> なお、次のように比較関数 (引数 lt) を渡すと多相型関数として定義することができます。
+</p>
+<pre class="list">
+リスト : 挿入ソート (多相型)
+
+  def insertSort[A](lt: (A, A) =&gt; Boolean, xs: List[A]): List[A] = {
+    def insertElement(x: A, xs: List[A]): List[A] =
+      xs match {
+        case Nil =&gt; List(x)
+        case y::ys =&gt; if (lt(x, y)) x::y::ys else y::insertElement(x, ys)
+      }
+    xs match {
+      case Nil =&gt; Nil
+      case y::ys =&gt; insertElement(y, insertSort(lt, ys))
+    }
+  }
+</pre>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; insertSort((x:Int,y:Int) =&gt; x &lt; y, List(5, 4, 3, 2, 1))
+res0: List[Int] = List(1, 2, 3, 4, 5)
+
+scala&gt; insertSort((x:Double,y:Double) =&gt; x &lt; y, List(5.5, 4.4, 3.3, 2.2, 1.1))
+res1: List[Double] = List(1.1, 2.2, 3.3, 4.4, 5.5)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b> Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="scala03.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala05.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

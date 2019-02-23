@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp,入門,番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881769</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb42.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | NextPage ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>funarg 問題</h3>
+<p> 今回は拙作のページ <a href="clispb12.html">Common Lisp で作る micro Scheme</a> で取り上げた「funarg 問題 (Function Argument Problem) 」についてもう少し詳しく説明します。
+</p>
+<p> なお、説明の都合上、処理系には xyzzy Lisp (CLtL1) を使っています。ANSI Common Lisp では動作しないプログラムがあります。あしからずご了承ください。ご指摘いただいた <a href="http://www.reddit.com/r/lisp_ja/comments/38n9ou/mhirois_home_page_common_lisp_%E5%85%A5%E9%96%80_%E7%95%AA%E5%A4%96%E7%B7%A8/">g000001 さん</a> に深く感謝いたします。(追記 2015/06/06)
+</p>
+
+<h4>●funarg 問題とは？</h4>
+<p> Common Lisp は関数を変数に代入したり、高階関数に渡したり、関数の返り値として関数を返すこともできます。一般に、プログラミング言語において数値など基本的なデータと同じように扱うことができるデータを「一等値」とか「第一級オブジェクト (first class object) 」といいます。特に、一等値として扱うことができる関数のことを「第一級関数 (first-class function) 」といいます。funarg 問題は関数を一等値として扱うときに生じる問題です。
+</p>
+<p> たとえば、次のリストを見てください。
+</p>
+<pre class="list">
+リスト : リストの要素を n 倍する
+
+(defun times-element (n xs)
+  (mapcar #'(lambda (x) (* x n)) xs))
+</pre>
+<pre class="list">
+リスト : 引数に n を加算する関数を返す
+
+(defun make-adder (n)
+  #'(lambda (x) (+ n x)))
+</pre>
+<p> times-element と make-adder のラムダ式には変数 n が使われています。ラムダ式の中で変数 n は定義されていません。このような変数を「自由変数」といいます。Common Lisp は「レキシカルスコープ」なので、自由変数の解釈はプログラムの文脈から決定することができます。この場合、times-element と make-adder の引数 n を参照することになります。
+</p>
+<p> ところが、昔の Lisp は「ダイナミックスコープ」なので、自由変数の解釈は関数を実行する順番に左右され、プログラムの文脈だけでは決定することができません。このように、自由変数の取り扱いが曖昧になると、funarg 問題が発生します。
+</p>
+
+<h4>●function と quote の違い</h4>
+<p> 高階関数に関数を渡すとき、Common Lisp では function 特殊形式 (#') を使います。大昔の Lisp は #' がなくて、quote ( ' ) で関数を渡していました。<del>Common Lisp は昔の仕様を引き継いでいて、</del> <sup><a href="clispb46.html#note1">[*1]</a></sup> ANSI Common Lisp 以前の Lisp や xyzzy Lisp の場合、クォートでも関数を渡すことができます。次の例を見てください (xyzzy Lisp での実行例です)。
+</p>
+<pre>
+(mapcar '(lambda (x) (* x x)) '(1 2 3 4))
+=&gt; (1 4 9 16)
+(mapcar '+ '(1 2 3) '(4 5 6))
+=&gt; (5 7 9)
+</pre>
+<p> ただし、クォートで関数を渡す場合、次のようなプログラムは動作しません。
+</p>
+<pre>
+(defun times-element (n xs)
+  (mapcar '(lambda (x) (* n x)) xs))
+=&gt; times-element
+(times-element 10 '(1 2 3 4))
+=&gt; 変数が定義されていません: n
+</pre>
+<p> ラムダ式内の変数 n は自由変数です。Ｃ言語のように、局所関数や匿名関数がない言語であれば、自由変数を大域変数として処理すればいいでしょう。ところが、関数型言語では関数を高階関数に渡すことができますし、返り値として関数を返すこともできます。自由変数を大域変数として処理すると困ってしまいます。
+</p>
+<p> 関数を返す場合も同様です。
+</p>
+<pre>
+(defun make-adder (n)
+  '(lambda (x) (* n x)))
+=&gt; make-adder
+(setq a (make-adder 10))
+=&gt; (lambda (x) (* n x))
+(funcall a 1)
+=&gt; 変数が定義されていません: n
+</pre>
+<p> このように Common Lisp の場合、クォートを使って関数を渡したり返り値として返すと、レキシカルスコープが働かないので、外側の関数の引数やレキシカル変数にアクセスすることはできません。
+</p>
+<div class="note">
+-- note (2015/06/06) --------<br>
+<a name="note1">[*1]</a> ANSI Common Lisp の場合、'(lambda ...) を関数として渡すことはできません。CLISP での実行例を示します。<br>
+<pre>
+&gt; (mapcar '(lambda (x) (* x x)) '(1 2 3 4 5))
+
+*** - FUNCALL: argument (LAMBDA (X) (* X X)) is not a function.
+      To get a function in the current environment, write (FUNCTION ...).
+      To get a function in the global environment, write (COERCE '... 'FUNCTION).
+
+&gt; (mapcar '+ '(1 2 3) '(4 5 6))
+(5 7 9)
+</pre>
+</div>
+<h4>●ダイナミックスコープで動作する場合</h4>
+<p> ところが、昔の Lisp は変数を「ダイナミックスコープ」で管理しているので、times-element は動作するのです。Common Lisp の場合、defvar で宣言された変数はダイナミックスコープで管理されます。次の例を見てください (xyzzy Lisp での実行例です)。
+</p>
+<pre>
+(defun times-element (n xs)
+  (mapcar '(lambda (x) (* n x)) xs))
+=&gt; times-element
+(defvar n)
+=&gt; n
+(times-element 10 '(1 2 3 4))
+=&gt; (10 20 30 40)
+</pre>
+<p> ダイナミックスコープの場合、呼び出された関数から呼び出し元の関数で定義された局所変数にアクセスすることができます。ラムダ式は times-element -&gt; mapcar の順番に呼び出されているので、times-element の引数 n の値を参照することができるわけです。
+</p>
+<h4>●ダイナミックスコープでも動作しない場合</h4>
+<p> この例では動作しましたが、ダイナミックスコープでは動作しない場合もあります。たとえば、mapcar の定義で変数 n が使われていると、ダイナミックスコープでは times-element の引数 n を隠蔽してしまうので、プログラムは正常に動作しません。次の例を見てください (xyzzy Lisp での実行例です)。
+</p>
+<pre>
+(defun my-mapcar (n xs)
+  (if (null xs)
+      'nil
+    (cons (funcall n (car xs)) (my-mapcar n (cdr xs)))))
+=&gt; my-mapcar
+
+(my-mapcar '(lambda (x) (* x x)) '(1 2 3 4))
+=&gt; (1 4 9 16)
+
+(defun times-element (n xs)
+  (my-mapcar '(lambda (x) (* n x)) xs))
+=&gt; times-element
+
+(times-element 10 '(1 2 3 4))
+=&gt; 不正なデータ型です: (lambda (x) (* n x)): number
+</pre>
+<p> ダイナミックスコープは一本の連想リストで変数を管理していると考えてください。これを「環境 (environment) 」と呼ぶことにしましょう。関数呼び出しは times-element -&gt; my-mapcar -&gt; ラムダ式 の順番で行われます。times-element を呼び出すとき、引数 n と xs が環境に追加されます。
+</p>
+<pre class="item">
+環境 : ((n . 10) (xs 1 2 3 4))
+</pre>
+<p> 次に、my-mapcar を呼び出しますが、このとき引数 n と xs が環境に追加されます。
+</p>
+<pre class="item">
+環境 : ((n lambda (x) (* n x)) (xs 1 2 3 4) (n . 10) (xs 1 2 3 4))
+</pre>
+<p> 最後にラムダ式を評価しますが、このとき引数 x が環境に追加されます。
+</p>
+<pre class="item">
+環境 : ((x . 1) (n lambda (x) (* n x)) (xs 1 2 3 4) (n . 10) (xs 1 2 3 4))
+</pre>
+<p> ダイナミックスコープで変数を参照するとき、環境を先頭から線形探索します。ラムダ式の本体は (* n x) ですね。環境を線形探索して最初に見つかる値は、n が (lambda (x) (* n x)) で、x が 1 になります。n は数値ではないのでエラーが発生します。また、make-adder もダイナミックスコープでは動作しません。返されたラムダ式を評価するとき、make-adder の評価は終わっているので、環境に引数 n の情報は残っていないのです。
+</p>
+<p> このように、関数を定義するときの環境と実行するときの環境が異なると、プログラムが正常に動作しない場合があるのです。これが Lisp における funarg 問題のひとつです。
+</p>
+<h4>●クロージャの導入</h4>
+<p> このような funarg 問題を解決するため、昔の Lisp (LISP 1.5, 1962 年) で導入されたのが function 式 (#') です。<a href="clispb46.html#cite">参考文献 2</a> によると、function 式を評価すると次のような funarg 形式が返されるそうです。
+</p>
+<pre class="item">
+(funarg &lt;lambda 式&gt; &lt;環境&gt;)
+</pre>
+<p> funarg 形式は実行する関数本体 (ラムダ式) と、function 式を評価したときの環境を格納したものです。その後、これを「クロージャ (closure) 」と呼ぶようになりました。ただし、LISP 1.5 はダイナミックスコープなので、クロージャに格納される環境はダイナミックスコープのままであることに注意してください。
+</p>
+<p> 実をいうと、昔の Lisp にはもう一つ問題があって、小出さんの <a href="http://blog.livedoor.jp/s-koide/archives/2256592.html">セマンティックウェブ・ダイアリー</a> によると、<cite>『昔の Lisp は現在なら動的変数と呼ばれるものであり，そのために非常にわざとらしくプログラムすると，Lisp をコンパイルしないで実行した場合とコンパイルして実行した結果が異なるコードを書くことができて，これをFUNARG問題という名前で呼んでいた』</cite> とのことです。
+</p>
+<p> これはインタプリタとコンパイラで異なるスコープ規則を使っていたためです。コンパイラはダイナミックスコープでも作成できますが、性能を上げるにはレキシカルスコープのほうが有利だからです。<a href="http://ja.wikipedia.org/wiki/Common_Lisp#.E3.82.B9.E3.82.B3.E3.83.BC.E3.83.97">Common Lisp - Wikipedia</a> によると、<cite>『ZetaLisp や Franz Lisp といった Common Lisp の設計に寄与した LISP系のシステムの多くは、インタプリタ内では動的スコープを、コンパイラ内では構文スコープを使っていた。』</cite> とのことです。
+</p>
+<p> funarg 問題を解決するには、スコープ規則をレキシカルスコープにそろえる必要がありました。そして、クロージャを使うとインタプリタでも簡単にレキシカルスコープを実装することができます。レキシカルスコープを採用した最初の Lisp 処理系が Scheme です。Scheme は関数 (局所変数やラムダ式も含む) をクロージャとして統一して扱うことで、第一級関数とレキシカルスコープを実現しています。ちなみに、拙作のページ <a href="clispb12.html">Common Lisp で作る micro Scheme</a> と <a href="../func/abcscm30.html">Scheme で作る micro Scheme</a> で作成した処理系もクロージャを使ってレキシカルスコープを実現しています。
+</p>
+<p> このへんの事情は次のページが参考になると思います。
+</p>
+<ol>
+  <li><a href="http://practical-scheme.net/wiliki/wiliki.cgi?Scheme%3A%E5%88%9D%E5%BF%83%E8%80%85%E3%81%AE%E8%B3%AA%E5%95%8F%E7%AE%B1%3Alog00#H-yely1td4ixwj">なぜSchemeはstatic scopeで設計されているのでしょうか</a>, (Shiro さんのコメント)
+  <li><a href="http://d.hatena.ne.jp/tociyuki/20130217/1361121598">[メモ]LISP 1.5 での FUNARG 導入から第一級オブジェクトとしてのクロージャの発見まで</a>, (水谷さん)
+  <li><a href="http://www23.atwiki.jp/selflearn/pages/34.html">A Definition of Closures - クロージャの定義</a>, (原著) Neal Gafter さん, (訳) <a href="http://www23.atwiki.jp/selflearn/pages/46.html">selflearnウィキ さん</a>
+</ol>
+
+<p> その後、レキシカルスコープは Common Lisp にも採用されました。Common Lisp は function (#') を使うかぎり funarg 問題は発生しません。<a href="clispb46.html#cite">参考文献 3</a> (CLtL2) 99 ページより引用します。
+</p>
+<p><CITE>『function fn<br>
+function の値は常に fn の関数解釈である。fn はあたかも関数呼び出しの関数の位置に現れているかのように解釈される。特に fn がシンボルであれば、そのシンボルに関する関数定義が返される。symbol-funcion を参照せよ。もし fn がラムダ式であれば、レキシカルクロージャが返される。つまり、関数として呼び出されると、適切にレキシカルスコープの規則に従っているようにラムダ式の本体を実行する。』</CITE>
+</p>
+<h4>●クロージャは環境を保持する</h4>
+<p> もう少し具体的に説明しましょう。クロージャはそのときに有効なレキシカル変数とその値も取り出して保存します。ここでは、レキシカル変数は環境に格納されていると考えてください。次の例を見てください。
+</p>
+<pre class="fig">
+ (defun foo (a)            ───────
+   (let ((b 20))           ─────  ↑
+                                 ↑    │a
+     ・・１・・                  │b   │
+                                 │    │    (foo 10) を評価した場合
+     (mapcar #'(lambda (c) ──  │    │ => #&lt;lexical-closure:...&gt; 
+                           ↑c   │    │      Ｓ式 (lambda (c) ..... ) 
+       ・・２・・          ↓    ↓    │      環境 ((b . 20) (a . 10))
+             ) b))         ─────  │
+                                       │
+    ・・３・・                         ↓
+             )             ───────
+
+                    図 : function の評価とクロージャ
+</pre>
+<p> (foo 10) を評価することを考えてみましょう。トップレベルで関数を定義するとき、レキシカル変数は定義されていないので、環境は空リストになります。関数を定義するときもクロージャが生成され、そのときの環境が保持されると考えてもらってもかまいません。関数を評価するときは、クロージャに保持されている環境の下で行います。
+</p>
+<p> (foo 10) を評価するとき、最初に実引数が評価されてその結果が仮引数に束縛されます。これが環境に追加されます。
+</p>
+<pre class="item">
+環境 : ((a . 10))
+</pre>
+<p> 次に let を評価すると、定義されているレキシカル変数が環境に追加されます。
+</p>
+<pre class="item">
+環境 : ((b . 20) (a . 10))
+</pre>
+<p> 次に mapcar を評価します。mapcar はトップレベルで定義された関数とすると、mapcar を評価するときの環境は空リストになります。次に実引数が評価されて、仮引数と値が環境に追加されます。このとき、function 特殊形式 (#') が評価されてクロージャが生成され、そのときの環境がクロージャに保存されます。たとえば、mapcar の仮引数名を fn と xs とすると、環境は次のようになります。
+</p>
+<pre class="item">
+環境 : ((fn . #&lt;lexical-closure &lt;ラムダ式&gt; ((b . 20) (a. 10))&gt;) (xs ...))
+</pre>
+<p> クロージャに保持された環境には foo の引数 a と let と定義したレキシカル変数 b が格納されます。
+</p>
+<p> 次に、mapcar の中で関数 fn を評価します。fn はクロージャなので、保持されている環境の下でラムダ式を評価します。まず引数の値がセットされますね。たとえば、c に 30 がセットされたとしましょう。すると、クロージャに保持されている環境に (c . 30) が追加されます。
+</p>
+<pre class="item">
+環境 : ((c . 30) (b . 20) (a . 10))
+</pre>
+<p> ラムダ式の本体はこの環境で評価されるため、ラムダ式の引数 c 以外の自由変数、つまり foo の引数や let で定義されたレキシカル変数にアクセスすることができるわけです。また、mapcar で生成された環境とは別であることにも注意してください。ダイナミックスコープのように、mapcar で定義された変数が foo の引数や変数を隠蔽することはありません。これでレキシカルスコープを実現することができます。
+</p>
+<h4>●クロージャを使用するときの注意点</h4>
+<p> このように、クロージャが保持するのは「環境」なので、変数の値を書き換えることができるプログラミング言語でクロージャを使うときには注意が必要です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 繰り返しで複数の関数を生成
+
+(defun make-func ()
+  (do ((func nil)
+       (i 0 (1+ i)))
+      ((&gt;= i 5) func)
+    (push #'(lambda () (print i)) func)))
+</pre>
+<p> make-func はラムダ式でクロージャを 5 つ生成し、それをリストに格納して返します。ラムダ式の中はレキシカル変数 i を表示します。期待する結果は 4 3 2 1 0 と表示されることです。ところが、実行結果は次のようになりました。
+</p>
+<pre>
+(setq xs (make-func))
+(#&lt;lexical-closure: (anonymous)&gt; #&lt;lexical-closure: (anonymous)&gt; #&lt;lexical-closure: (anonymous)&gt;
+ #&lt;lexical-closure: (anonymous)&gt; #&lt;lexical-closure: (anonymous)&gt;)
+(dolist (f xs) (funcall f))
+
+5 
+5 
+5 
+5 
+5 
+nil
+</pre>
+<p> 関数 make-func を評価するとき、その環境にレキシカル変数 func と i が追加されます。生成する 5 つのクロージャはこの環境を保持することになります。つまり、make-func と生成するクロージャは環境を共有しているのです。make-func で変数の i の値を書き換えると、当然ですがクロージャで保持している i の値も変わります。したがって、どのクロージャでも変数 i の値は make-func が書き換えた 5 になるのです。
+</p>
+<p> この場合、再帰呼び出しを使うとうまくいきます。
+</p>
+<pre class="list">
+リスト : 再帰呼び出しで複数の関数を生成
+
+(defun make-func1 (i &amp;optional (func nil))
+  (if (&gt;= i 5)
+      func
+    (make-func1 (1+ i) (cons #'(lambda () (print i)) func))))
+</pre>
+<p> 関数 make-func1 を再帰呼び出しするたびに新しい環境が生成され、そこに引数 i が追加されます。クロージャはこの環境を保持するので、個々のクロージャに保存される環境は別のものになり、参照する変数 i の値は make-func1 を呼び出したときの値になります。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+(setq ys (make-func1 0))
+(#&lt;lexical-closure: (anonymous)&gt; #&lt;lexical-closure: (anonymous)&gt; #&lt;lexical-closure: (anonymous)&gt;
+ #&lt;lexical-closure: (anonymous)&gt; #&lt;lexical-closure: (anonymous)&gt;)
+(dolist (f ys) (funcall f))
+
+4 
+3 
+2 
+1 
+0 
+nil
+</pre>
+<p> 正常に動作していますね。なお、Common Lisp の do は tagbody と go を使った繰り返しに変換されますが、Scheme の do は末尾再帰に変換されます。したがって、Scheme ではこのようなプログラムも do で動作することに注意してください。
+<p> Gauche で実行例を示します。
+</p>
+<pre class="list">
+リスト : Scheme の do での動作
+
+(define (make-func)
+  (do ((func '())
+       (i 0 (+ i 1)))
+      ((>= i 5) func)
+    (push! func (lambda () (print i)))))
+</pre>
+<pre>
+gosh&gt; (define f (make-func))
+f
+gosh&gt; (dolist (x f) (x))
+4
+3
+2
+1
+0
+()
+</pre>
+<p> なお、SML/NJ, OCaml, Haskell などの関数型言語は、関数の引数や変数の値を書き換えることができません。手続き型言語は代入により変数の値を書き換えることができますが、純粋な関数型言語に代入操作はありません。当然ですが、クロージャに保存された変数の値も書き換えることはできません。ご注意くださいませ。
+</p>
+<h4 id="cite">●参考文献・URL</h4>
+<ol>
+  <li>黒川利明, 『LISP 入門』, 培風館, 1982
+  <li>小西弘一, 清水剛, 『ＣプログラムブックⅢ』, アスキー, 1986
+  <li>Guy L. Steele Jr. (著), 井田昌之 (翻訳監修), 『COMMON LISP 第 2 版』, 共立出版, 1991
+</ol>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb42.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | NextPage ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

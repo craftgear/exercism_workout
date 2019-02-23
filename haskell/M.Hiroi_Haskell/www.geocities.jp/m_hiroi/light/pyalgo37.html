@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / レンジコーダ (range coder)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881795</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>レンジコーダ (range coder) [2]</h2>
+<div class="small">
+[ <a href="pyalgo36.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo38.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> レンジコーダの続きです。今回は「桁上がりのないレンジコーダ」と「<a href="pyalgo37.html#arc">適応型レンジコーダ</a>」を取り上げます。
+</p>
+
+<h4>●桁上がりのないレンジコーダ</h4>
+<p> 前回説明しましたが、レンジコーダ (Range Coder) は 1998 年に Michael Schindler が発表した方法で、「高性能、高速、特許フリー」の方法として注目を集めるようになりました。レンジコーダは原理的には算術符号と同じ方法で、記号の出現確率だけを利用して記号を符号化します。圧縮性能は算術符号に比べるとわずかに劣化しますが、実現方法はとても簡単で実行速度も高速です。
+</p>
+
+<p> Michael Schindler のレンジコーダは計算の途中で「桁上がり」が発生しますが、ロシアの Dmitry Subbotin が発表した「桁上げのないレンジコーダ」は、その名のごとく桁上がりが発生しません。現在、レンジコーダは主にこの 2 種類の形式が存在するようです。
+</p>
+
+<p> 今回は桁上がりのないレンジコーダを説明します。そして、実際にファイルを圧縮してみましょう。
+</p>
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。最初に、レンジコーダを表すクラスを定義します。
+</p>
+<pre class="list">
+リスト : 桁上がりのないレンジコーダ
+
+# 定数
+ENCODE = "encode"
+DECODE = "decode"
+MAX_RANGE = 0xffffffff   # 修正 (2007/10/06)
+MIN_RANGE = 0x10000
+MASK      = 0xffffffff
+MASK1     = 0xff000000
+SHIFT     = 24
+
+# 桁上がりのないレンジコーダ
+class RangeCoder:
+    def __init__(self, file, mode):
+        self.file = file
+        self.range = MAX_RANGE
+        self.low = 0
+        if mode == DECODE:
+            # 4 byte read
+            self.code = getc(self.file)
+            self.code = (self.code &lt;&lt; 8) + getc(self.file)
+            self.code = (self.code &lt;&lt; 8) + getc(self.file)
+            self.code = (self.code &lt;&lt; 8) + getc(self.file)
+        elif mode != ENCODE:
+            raise "RangeCoder mode error"
+</pre>
+
+<p> インスタンス変数 range と low は前回と同じく幅と下限値を表します。桁上がりは発生しないので、バッファ buff と cnt は不要になります。インスタンス変数 code は復号のときに使います。code はファイルから 4 バイト読み込んで初期化します。code の説明は復号のプログラムを作るときに行います。
+</p>
+
+<div class="note">
+-- <a name="update"><b>[修正]</b> (2007/10/06)</a> --------<br>
+大きさ 1 のファイルを符号化すると、ずっと 0 を出力し続ける不具合がありました。MIN_RANGE の初期値 (0x100000000) を 0xffffffff に修正してください。評価結果 (圧縮率など) に変化はありません。プログラムを修正するとともにお詫び申しあげます。
+</div>
+
+<p> 次は出現頻度表を表すクラス Freq を定義します。
+</p>
+<pre class="list">
+リスト : 出現頻度表
+
+class Freq:
+    def __init__(self, count):
+        size = len(count)
+        self.size = size
+        m = sum(count)
+        # 正規化
+        if m &gt;= MIN_RANGE:
+            self.count = [0] * size
+            n = 0
+            while m &gt;= MIN_RANGE:
+                m &gt;&gt;= 1
+                n += 1
+            for x in xrange(size):
+                if count[x] != 0:
+                    self.count[x] = (count[x] &gt;&gt; n) | 1
+        else:
+            self.count = count[:]
+        self.count_sum = [0] * (size + 1)
+        # 累積度数表
+        for x in xrange(size):
+            self.count_sum[x + 1] = self.count_sum[x] + self.count[x]
+</pre>
+
+<p> 桁上がりのないレンジコーダの場合、MIN_RANGE を大きな値にすると圧縮率が劣化することがあります。実際に前回と同じ値 (0x1000000) で試してみたところ、圧縮率は悪くなりました。そこで、今回は MIN_RANGE を 0x10000 に設定します。このため、出現頻度表の合計が MIN_RANGE 未満になるように count の値を調整します。
+</p>
+<p> 最初に、count の合計値を求め変数 m にセットします。m が MIN_RANGE 未満になるまで m を右へシフトしていき、その回数を変数 n にセットします。あとは count の各要素を n ビット右へシフトするだけです。このとき、出現頻度が 0 にならないように最下位ビットを 1 にしています。合計値が MIN_RANGE (0x10000) 未満になるので、記号の出現頻度も 2 バイトに収まります。
+</p>
+
+<h4>●符号化のプログラム</h4>
+<p> 次は記号を符号化するメソッド encode を作ります。
+</p>
+<pre class="list">
+リスト : 符号化
+
+    def encode(self, rc, c):
+        temp = rc.range / self.count_sum[self.size]
+        rc.low += self.count_sum[c] * temp
+        rc.range = self.count[c] * temp
+        rc.encode_normalize()
+</pre>
+
+<p> encode は Freq のメソッドで、前回のプログラムと同じです。桁上がりのないレンジコーダの場合、range と low の値を更新 (正規化) する処理がポイントになります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 符号化の正規化
+
+    def encode_normalize(self):
+        # range のチェック処理 1
+        while self.low &amp; MASK1 == (self.low + self.range) &amp; MASK1:
+            putc(self.file, self.low &gt;&gt; SHIFT)
+            self.low = (self.low &lt;&lt; 8) &amp; MASK
+            self.range &lt;&lt;= 8
+        # range のチェック処理 2
+        while self.range &lt; MIN_RANGE:
+            self.range = (MIN_RANGE - (self.low &amp; (MIN_RANGE - 1))) &lt;&lt; 8
+            putc(self.file, self.low &gt;&gt; SHIFT)
+            self.low = (self.low &lt;&lt; 8) &amp; MASK
+</pre>
+<p> range をチェックする処理 1 と 2 が、「桁上がりのないレンジコーダ」を理解するポイントです。処理 1 では、low の上位 8 ビットの値と low + range の上位 8 ビットの値が同じかチェックしています。range の幅が狭くなると、low に range を加算しても上位 8 ビットの値は low と同じになります。たとえば、low の値が 0x10000000 で range の値が 0x100000 の場合を考えてみましょう。
+</p>
+<pre class="fig">
+low         = 0x10000000
+range       = 0x00100000
+------------------------
+low + range = 0x10100000
+</pre>
+<p> このように、 low + range の上位 8 ビットは low と同じ 0x10 になります。つまり、この処理は range の値が小さくなったかチェックしているのです。そうであれば、range と low の値を 256 倍して low の上位 8 ビットを符号語として出力します。これは今までのレンジコーダと同じ処理です。
+</p>
+
+<p> ところで、range の値が小さくなっても、low + range と low の上位 8 ビットの値が異なる場合があります。たとえば、low の値が 0x10ffa000 で range が 0xc000 の場合を考えてみます。
+</p>
+<pre class="fig">
+low         = 0x10ffa000
+range       = 0x0000c000
+------------------------
+low + range = 0x11006000
+</pre>
+<p> low の上位 8 ビットは 0x10 ですが、low + range の上位 8 ビットは 0x11 になります。ここで単純に low と range の値を 256 倍してみましょう。すると、low = 0xffa00000 と range = 0xc00000 になりますね。次に記号 c を読み込んだとき、low の増分が 0x600000 以上になると桁上がりが発生することになります。
+</p>
+<pre class="fig">
+low = low + range * count_sum[c] / count_sum[size]
+
+  0x_ffa00000
++ 0x_00600000
+--------------
+  0x100000000  桁上がり！
+</pre>
+<p> つまり、low + range と low の上位 8 ビットの値が異なり、なおかつ range の幅が小さい場合は、桁上がりの可能性があるわけです。処理 1 で単純に range と定数値を比較しないのは、桁上がりの可能性をチェックするためなのです。この場合、処理 2 で range の値を修正します。
+</p>
+
+<p> 処理 2 では、range が MIN_RANGE (0x10000) より小さければ、桁上がりの可能性があるので range の値を修正します。たとえば、low の値が 0x10ffa000 の場合、range の値が 0x6000 以下であれば桁上がりは発生しません。この値は low の下位 16 ビットを取り出して、それを MIN_RANGE から引き算すれば求めることができます。次の式を見てください。
+</p>
+<pre class="fig">
+  0x10000 - (0x10ffa0000 &amp; (0x10000 - 1))
+= 0x10000 - (0x10ffa0000 &amp; 0xffff)
+= 0x10000 - 0xa000
+= 0x6000
+</pre>
+<p> あとは、range と low の値を 256 倍して low の上位 8 ビットを符号語として出力します。
+</p>
+
+<p> M.Hiroi は「桁上がりのないレンジコーダ」を <a href="pyalgo37.html#cite">参考文献 2</a> で知りましたが、このような簡単な方法で桁上がりを回避できることに大変驚きました。その反面、ずいぶん強引な方法だな、とも思いました。これで本当に復号できるのか疑問に思われる方もいるでしょう。実際、復号は今までのレンジコーダと違って、ちょっとだけ工夫が必要になります。
+</p>
+
+<h4>●復号のプログラム</h4>
+<p> 次は復号を行う Freq のメソッド decode を作ります。
+</p>
+<pre class="list">
+リスト : 復号
+
+    def decode(self, rc):
+        # 記号の探索
+        def search_code(value):
+            i = 0
+            j = self.size - 1
+            while i &lt; j:
+                k = (i + j) / 2
+                if self.count_sum[k + 1] &lt;= value:
+                    i = k + 1
+                else:
+                    j = k
+            return i
+        #
+        temp = rc.range / self.count_sum[self.size]
+        c = search_code((rc.code - rc.low) / temp)
+        rc.low += temp * self.count_sum[c]
+        rc.range = temp * self.count[c]
+        rc.decode_normalize()
+        return c
+</pre>
+<p> 前回説明したレンジコーダの場合、ファイルから読み込んだ符号語は low に加算して、幅 range を狭めたら low の値を減算し、その値を使って復号しました。ところが、桁上がりのないレンジコーダの場合、range と low の両方の値を使って range を拡大するタイミングを決めています。したがって、復号の処理でも low を符号化と同じ値に再現できないと、符号語を正しく復号することはできません。
+</p>
+
+<p> そこで、low の値は符号化と同じように計算して、その値を保持することにします。符号語を表す値は変数 code に保持します。最初に low は 0 に初期化し、code はファイルから 4 バイト読み込んで初期化します。この処理は RangeCoder のメソッド __init__ で行っています。
+</p>
+
+<p> ここで、記号を表す値は code - low で求めることができる、ということに注意してください。ここがこのプログラムのポイントです。low の値は符号化と同様に増加していくので、code - low の値は減少していきます。この値が今までのレンジコーダの low に対応するわけです。search_code で記号を探索するときは (code - low) /temp を渡していることに注意してください。
+</p>
+
+<p> そして、符号化と同じタイミングで range を拡大すれば、low の値は符号化と同様に再現することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 復号の正規化
+
+    def decode_normalize(self):
+        # range のチェック処理 1
+        while self.low &amp; MASK1 == (self.low + self.range) &amp; MASK1:
+            self.code = ((self.code &lt;&lt; 8) &amp; MASK) + getc(self.file)
+            self.low = (self.low &lt;&lt; 8) &amp; MASK
+            self.range &lt;&lt;= 8
+        # range のチェック処理 2
+        while self.range &lt; MIN_RANGE:
+            self.range = (MIN_RANGE - (self.low &amp; (MIN_RANGE - 1))) &lt;&lt; 8
+            self.code = ((self.code &lt;&lt; 8) &amp; MASK) + getc(self.file)
+            self.low = (self.low &lt;&lt; 8) &amp; MASK
+</pre>
+
+<p> 復号で range と low の値を更新する場合、range のチェック条件は符号化と同じです。low と range の更新処理も符号化と同じですが、code の値を更新する処理を追加します。この処理は code を 256 倍してファイルから 1 バイト読み込んで加算するだけです。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛いたします。詳細は下記プログラムリストをお読みください。
+</p>
+<ul>
+  <li><a href="pyalgo37.html#list1">プログラムリスト１ (RangeCoder)</a>
+  <li><a href="pyalgo37.html#list2">プログラムリスト２ (Freq, main)</a>
+</ul>
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+      表 : 桁上がりのないレンジコーダの結果
+
+  ファイル名      サイズ  RangeCoder 符号化  復号    下限値
+  ----------------------------------------------------------
+  alice29.txt    152,089     87,412   2.04   3.29    86,837
+  asyoulik.txt   125,179     75,820   1.70   2.73    75,235
+  cp.html         24,603     16,606   0.34   0.54    16,082
+  fields.c        11,150      7,501   0.15   0.24     6,980
+  grammar.lsp      3,721      2,674   0.05   0.08     2,155
+  kennedy.xls  1,029,744    461,022  13.02  20.75   459,971
+  lcet10.txt     426,754    249,796   5.74   9.23   249,071
+  plrabn12.txt   481,861    273,709   6.45  10.42   272,936
+  ptt5           513,216     78,346   5.61   9.23    77,636
+  sum             38,240     26,005   0.54   0.84    25,473
+  xargs.1          4,227      3,108   0.06   0.10     2,589
+  ----------------------------------------------------------
+  合計         2,810,784  1,281,999  35.70  57.45 1,274,965
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> 圧縮率は、桁上がりがあるレンジコーダよりも少し悪くなる場合もありますが、それでも圧縮の限界に近い値となりました。桁上がりのないレンジコーダでも、高い性能を実現していることがわかります。実行時間ですが、桁上がりのあるレンジコーダと比べると、符号化は少し速くなりましたが、逆に復号は少し遅くなりました。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4 id="arc">●適応型レンジコーダ</h4>
+<p> 今まで説明したハフマン符号やレンジコーダは「静的符号化 (static coding) 」といい、あらかじめ記号の出現確率を調べておいて、それに基づいて入力記号列を符号化していく方法です。この方法では、ハフマン符号がもっとも有名でしょう。
+</p>
+
+<p> これに対し「動的符号化 (dynamic coding) 」は、入力記号列の符号化を行いながら記号の出現確率を変化させる方法で、「適応型符号化 (adaptive coding) 」とも呼ばれています。最初は、どの記号も同じ確率で出現すると仮定して、記号列を読み込みながら記号の出現確率を修正し、その時点での出現確率に基づいて記号の符号化を行います。なお、辞書法の LZ 符号も動的符号化の一つです。
+</p>
+
+<p> 動的符号化の特徴は入力記号列の性質（出現確率）の変化に適応できることですが、このほかにも長所があります。静的符号化の場合、復号するときに符号化で用いた記号の出現確率が必要になります。このため、レンジコーダのプログラムでは、記号の出現頻度表を出力ファイルの先頭に付加しています。ところが、動的符号化では復号しながら記号の出現確率を求めることができるので、出現頻度表をファイルに付加する必要はありません。
+</p>
+
+<p> また、静的符号化でファイルを圧縮する場合、記号の出現頻度を求めるときにファイルからデータを読み込み、符号化を行うときに再度ファイルからデータを読み込む必要があります。このようにデータの入力が 2 回必要な圧縮アルゴリズムを「2 パスの圧縮アルゴリズム」といいます。動的符号化は 1 パスで済むので、オンラインでのデータ圧縮にも対応することができます。
+</p>
+
+<p> このように、動的符号化には有利な点があるため、ハフマン符号を動的符号化に対応させた「適応型ハフマン符号」が考案されています。しかしながら、適応型ハフマン符号は実装方法が難しく、処理速度も遅いという欠点があります。これに対し、「適応型算術符号（レンジコーダ）」は簡単な方法で実装することができ、適応型レンジコーダは処理速度もそれほど遅くありません。とても優れた実装方法なのです。
+</p>
+
+<p> 今回は適応型レンジコーダを説明して、実際にファイルを圧縮してみましょう。また、拙作のページ <a href="../clisp/index.html">Common Lisp 入門：番外編</a> では、<a href="../clisp/clispb01.html#chap02">Lisp で適応型算術符号</a> のプログラムを作成しています。学習用のプログラムなので実用性はありませんが、Lisp に興味のある方は読んでみてください。
+</p>
+
+<h4>●出現頻度表の初期化と更新</h4>
+<p> 適応型レンジコーダの場合、出現頻度表をファイルに付加する必要がないため、記号の出現頻度を 2 バイトに丸める必要はありません。これは大きな利点です。あとは、累積度数の合計値が幅 range の最小値 MIN_RANGE より大きくならないように、出現頻度表を調整するだけです。この処理は、累積度数の合計値が MIN_RANGE に達したときに、各記号の出現頻度を半分にすることで実現できます。
+</p>
+
+<p> それではプログラムを作りましょう。今回は桁上がりのあるレンジコーダを使います。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 出現頻度表
+
+class Freq:
+    def __init__(self, size):
+        self.size = size
+        self.count = [1] * size
+        self.sum = size
+
+    # 出現頻度表の更新
+    def update(self, c):
+        self.count[c] += 1
+        self.sum += 1
+        if self.sum &gt;= MIN_RANGE:
+            n = 0
+            for x in xrange(self.size):
+                self.count[x] = (self.count[x] &gt;&gt; 1) | 1
+                n += self.count[x]
+            self.sum = n
+</pre>
+<p> Freq のインスタンス変数 count が記号の出現頻度表、size が出現する記号の種類、sum が count の合計値です。前回のように累積度数表を用意すると、その更新処理に時間がかかるようになります。そこで、記号の累積度数は計算で求めることにします。ただし、この処理に時間がかかると、適応型レンジコーダの実行速度は遅くなります。まずは簡単な方法でプログラムを作成し、実行速度が遅い場合は他の方法を試してみましょう。
+</p>
+<p> 適応型符号化の場合、最初はどの記号も同じ確率で出現すると仮定するのが一般的なので、出現する可能性がある記号はすべて count の要素を 1 に初期化します。そして、count の合計値 sum に size をセットします。
+</p>
+
+<p> メソッド update は記号 c の出現頻度を更新します。count[c] を +1 するとともに sum の値も +1 します。そして、sum が MIN_RANGE 以上になったならば、各記号の出現頻度を 1 / 2 に更新します。このとき、出現頻度の値が 0 にならないように注意してください。プログラムでは最下位ビットを無条件で 1 にしています。
+</p>
+
+<h4>●適応型レンジコーダの符号化</h4>
+<p> 次は符号化を行うメソッド encode を作ります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 記号の符号化
+
+    # 記号の累積度数を求める
+    def cumul(self, c):
+        n = 0
+        for x in xrange(c): n += self.count[x]
+        return n
+
+    # 符号化
+    def encode(self, rc, c):
+        temp = rc.range / self.sum
+        rc.low += self.cumul(c) * temp
+        rc.range = self.count[c] * temp
+        rc.encode_normalize()
+        self.update(c)
+</pre>
+<p> 記号 c の累積度数はメソッド cumul で求めます。ここでは 0 から c までの記号数を加算して求めています。あとの処理は前回のプログラムとほぼ同じです。最後にメソッド update を呼び出して出現頻度表を更新します。
+</p>
+
+<p> 最後に適応型レンジコーダで符号化を行う関数 encode を作ります。
+</p>
+<pre class="list">
+リスト : 適応型レンジコーダによる符号化
+
+def encode(fin, fout):
+    rc = RangeCoder(fout, ENCODE)
+    freq = Freq(256)
+    for x in read_file(fin):
+        freq.encode(rc, x)
+    rc.finish()
+</pre>
+<p> Freq と RangeCoder のオブジェクトを生成して、変数 freq と rc にセットします。適応型符号化なので、ファイルを 2 回リードする必要はありません。read_file で記号を読み込み、freq.encode で記号を符号化するだけです。
+</p>
+<h4>●適応型レンジコーダの復号</h4>
+<p> 次は復号を行うメソッド decode を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 記号の復号
+
+    def decode(self, rc):
+        # 記号の探索
+        def search_code(value):
+            n = 0
+            for c in xrange(self.size):
+                if value &lt; n + self.count[c]: return c, n
+                n += self.count[c]
+        #
+        temp = rc.range / self.sum
+        c, num = search_code(rc.low / temp)
+        rc.low -= temp * num
+        rc.range = temp * self.count[c]
+        rc.decode_normalize()
+        self.update(c)
+        return c
+</pre>
+
+<p> 累積度数表がないので、記号の探索を行う関数 search_code で二分探索は使えません。今回は単純な線形探索で記号を求めています。この処理は時間がかかるので、復号は相当に遅くなることが予想されます。あとは、前回のプログラムとほぼ同じですが、符号化と同じくメソッド update を呼び出して、記号の出現頻度表を更新することを忘れないでください。
+</p>
+
+<p> 最後に、適応型レンジコーダで復号を行う関数 decode を作ります。
+</p>
+<pre class="list">
+リスト : 適応型レンジコーダによる復号
+
+def decode(fin, fout, size):
+    freq = Freq(256)
+    rc = RangeCoder(fin, DECODE)
+    for _ in xrange(size):
+        putc(fout, freq.decode(rc))
+</pre>
+
+<p> この処理は簡単です。Freq と RangeCoder のオブジェクトを生成して、変数 freq と rc にセットします。あとは size 個の記号を freq.decode で復号するだけです。
+</p>
+
+<p> なお、今回は記号の種類を 256 (0 - 255) としましたが、終端記号 (256 : END) を含めて 257 種類とする方法もあります。この場合は、元のファイルサイズをファイルに付加する必要はありません。符号化のときは最後に END を符号化し、復号のときは END を復号した時点で処理を終了するようにします。興味のある方は試してみてください。
+</p>
+<ul>
+  <li><a href="pyalgo37.html#list3">プログラムリスト３</a>
+</ul>
+<h4>●評価結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。結果は次にようになりました。
+</p>
+<pre>
+      表 : 適応型レンジコーダの結果
+           () は ファイルサイズと出現頻度表を除いた値
+
+  ファイル名      サイズ      ARC    符号化  復号    下限値
+  ----------------------------------------------------------
+  alice29.txt    152,089     87,147   5.74  12.67    86,837
+  asyoulik.txt   125,179     75,533   4.85  10.49    75,235
+  cp.html         24,603     16,299   0.98   2.05    16,082
+  fields.c        11,150      7,164   0.41   0.81     6,980
+  grammar.lsp      3,721      2,305   0.14   0.28     2,155
+  kennedy.xls  1,029,744    460,734  19.77  30.35   459,971
+  lcet10.txt     426,754    249,491  16.61  36.63   249,071
+  plrabn12.txt   481,861    273,392  18.56  41.08   272,936
+  ptt5           513,216     78,090   8.48  14.38    77,636
+  sum             38,240     25,638   1.21   2.29    25,473
+  xargs.1          4,227      2,743   0.18   0.36     2,589
+  ----------------------------------------------------------
+  合計         2,810,784  1,278,536  76.93 151.39 1,274,965
+
+# 符号化と復号の単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.4.2
+</pre>
+<p> 適応型レンジコーダの圧縮率は、静的なレンジコーダと同様に圧縮の限界に近い値になりました。出現頻度表を付加しない分だけ、多くのファイルで静的なレンジコーダよりも高い圧縮率になりましたが、小さなファイルは逆に圧縮率が悪くなるようです。
+</p>
+
+<p> 適応型符号化の場合、出現しない記号が多数あると、圧縮率が少し悪くなるという欠点があります。たとえば、記号が 0 と 1 しかないデータを符号化してみましょう。適応型レンジコーダでは記号 0 - 255 の出現頻度を 1 に初期化しています。このため、記号数が少ないうちは記号 2 - 255 の出現頻度の影響が大きくなり、圧縮率はどうしても悪くなってしまいます。
+</p>
+<p> ようするに、記号をたくさん読み込まないと、その出現頻度表の確率はあてにならないというわけです。したがって、小さなファイルの圧縮率は静的なレンジコーダよりも悪くなる場合が多いようです。逆に、大きなファイルであれば、静的なレンジコーダと同様に高い圧縮率を達成することができます。
+</p>
+
+<p> 実行時間ですが、符号化と復号ともに静的なレンジコーダよりも相当に遅くなりました。やっぱり、適応型レンジコーダは時間がかかりますね。とくに復号は平均して 3 倍程度の時間がかかっています。復号は記号の探索に線形探索を使っているので、時間がかかるのは想定内の結果といえるでしょう。
+</p>
+
+<p> なお、実行時間の結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>植松友彦, 『文書データ圧縮アルゴリズム入門』, ＣＱ出版社, 1994
+  <li>奥村晴彦, 『データ圧縮の基礎から応用まで』, C MAGAZINE 2002 年 7 月号, ソフトバンク
+  <li>広井誠, 『高性能圧縮ツール bsrc の理論と実装（後編）』, Interface 2004 年 1 月号, ＣＱ出版社
+  <li>広井誠, 『PPM によるファイルの圧縮（前編）』, Interface 2005 年 3 月号, ＣＱ出版社
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# rangecoder1.py : 桁上がりのないレンジコーダ (Range Coder)
+#
+#                  Copyright (C) 2007 Makoto Hiroi
+#
+
+# 定数
+ENCODE = "encode"
+DECODE = "decode"
+MAX_RANGE = 0xffffffff   # 修正 (2007/10/06)
+MIN_RANGE = 0x10000
+MASK      = 0xffffffff
+MASK1     = 0xff000000
+SHIFT     = 24
+
+# バイト単位の入出力
+def getc(f):
+    c = f.read(1)
+    if c == '': return None
+    return ord(c)
+
+def putc(f, x):
+    f.write(chr(x &amp; 0xff))
+
+# 桁上がりのないレンジコーダ
+class RangeCoder:
+    def __init__(self, file, mode):
+        self.file = file
+        self.range = MAX_RANGE
+        self.low = 0
+        if mode == DECODE:
+            # 4 byte read
+            self.code = getc(self.file)
+            self.code = (self.code &lt;&lt; 8) + getc(self.file)
+            self.code = (self.code &lt;&lt; 8) + getc(self.file)
+            self.code = (self.code &lt;&lt; 8) + getc(self.file)
+        elif mode != ENCODE:
+            raise "RangeCoder mode error"
+
+    # 符号化の正規化
+    def encode_normalize(self):
+        while self.low &amp; MASK1 == (self.low + self.range) &amp; MASK1:
+            putc(self.file, self.low &gt;&gt; SHIFT)
+            self.low = (self.low &lt;&lt; 8) &amp; MASK
+            self.range &lt;&lt;= 8
+        while self.range &lt; MIN_RANGE:
+            self.range = (MIN_RANGE - (self.low &amp; (MIN_RANGE - 1))) &lt;&lt; 8
+            putc(self.file, self.low &gt;&gt; SHIFT)
+            self.low = (self.low &lt;&lt; 8) &amp; MASK
+
+    # 復号の正規化
+    def decode_normalize(self):
+        while self.low &amp; MASK1 == (self.low + self.range) &amp; MASK1:
+            self.code = ((self.code &lt;&lt; 8) &amp; MASK) + getc(self.file)
+            self.low = (self.low &lt;&lt; 8) &amp; MASK
+            self.range &lt;&lt;= 8
+        while self.range &lt; MIN_RANGE:
+            self.range = (MIN_RANGE - (self.low &amp; (MIN_RANGE - 1))) &lt;&lt; 8
+            self.code = ((self.code &lt;&lt; 8) &amp; MASK) + getc(self.file)
+            self.low = (self.low &lt;&lt; 8) &amp; MASK
+
+    # 終了
+    def finish(self):
+        putc(self.file, (self.low &gt;&gt; 24) &amp; 0xff)
+        putc(self.file, (self.low &gt;&gt; 16) &amp; 0xff)
+        putc(self.file, (self.low &gt;&gt; 8) &amp; 0xff)
+        putc(self.file, self.low &amp; 0xff)
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# rc0.py : 静的なレンジコーダ
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+
+# 桁上がりのないレンジコーダ
+from rangecoder1 import *
+
+# 出現頻度表
+class Freq:
+    def __init__(self, count):
+        size = len(count)
+        self.size = size
+        m = sum(count)
+        # 正規化
+        if m &gt;= MIN_RANGE:
+            self.count = [0] * size
+            n = 0
+            while m &gt;= MIN_RANGE:
+                m &gt;&gt;= 1
+                n += 1
+            for x in xrange(size):
+                if count[x] != 0:
+                    self.count[x] = (count[x] &gt;&gt; n) | 1
+        else:
+            self.count = count[:]
+        self.count_sum = [0] * (size + 1)
+        # 累積度数表
+        for x in xrange(size):
+            self.count_sum[x + 1] = self.count_sum[x] + self.count[x]
+
+    # 出現頻度表の出力
+    def write_count_table(self, fout):
+        for x in self.count:
+            putc(fout, x &gt;&gt; 8)
+            putc(fout, x &amp; 0xff)
+    
+    # 符号化
+    def encode(self, rc, c):
+        temp = rc.range / self.count_sum[self.size]
+        rc.low += self.count_sum[c] * temp
+        rc.range = self.count[c] * temp
+        rc.encode_normalize()
+
+    # 復号
+    def decode(self, rc):
+        # 記号の探索
+        def search_code(value):
+            i = 0
+            j = self.size - 1
+            while i &lt; j:
+                k = (i + j) / 2
+                if self.count_sum[k + 1] &lt;= value:
+                    i = k + 1
+                else:
+                    j = k
+            return i
+        #
+        temp = rc.range / self.count_sum[self.size]
+        c = search_code((rc.code - rc.low) / temp)
+        rc.low += temp * self.count_sum[c]
+        rc.range = temp * self.count[c]
+        rc.decode_normalize()
+        return c
+
+#
+def read_file(fin):
+    while True:
+        c = getc(fin)
+        if c is None: break
+        yield c
+
+# レンジコーダによる符号化
+def encode(fin, fout):
+    count = [0] * 256
+    for x in read_file(fin):
+        count[x] += 1
+    rc = RangeCoder(fout, ENCODE)
+    freq = Freq(count)
+    freq.write_count_table(fout)
+    fin.seek(0)
+    for x in read_file(fin):
+        freq.encode(rc, x)
+    rc.finish()
+
+# 出現頻度表の読み込み
+def read_count_table(fin):
+    count = [0] * 256
+    for x in xrange(256):
+        count[x] = (getc(fin) &lt;&lt; 8) + getc(fin)
+    return count
+
+# レンジコーダによる復号
+def decode(fin, fout, size):
+    freq = Freq(read_count_table(fin))
+    rc = RangeCoder(fin, DECODE)
+    for _ in xrange(size):
+        putc(fout, freq.decode(rc))
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    putc(outfile, (size &gt;&gt; 24) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 16) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 8) &amp; 0xff)
+    putc(outfile, size &amp; 0xff)
+    if size &gt; 0: encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    size = 0
+    for _ in xrange(4):
+        size = (size &lt;&lt; 8) + getc(infile)
+    if size &gt; 0: decode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+# coding: utf-8
+#
+# rc1.py : 適応型レンジコーダ
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt, os.path
+from rangecoder import *
+
+# 出現頻度表
+class Freq:
+    def __init__(self, size):
+        self.size = size
+        self.count = [1] * size
+        self.sum = size
+
+    # 出現頻度表の更新
+    def update(self, c):
+        self.count[c] += 1
+        self.sum += 1
+        if self.sum &gt;= MIN_RANGE:
+            n = 0
+            for x in xrange(self.size):
+                self.count[x] = (self.count[x] &gt;&gt; 1) | 1
+                n += self.count[x]
+            self.sum = n
+
+    # 記号の累積度数を求める
+    def cumul(self, c):
+        n = 0
+        for x in xrange(c): n += self.count[x]
+        return n
+
+    # 符号化
+    def encode(self, rc, c):
+        temp = rc.range / self.sum
+        rc.low += self.cumul(c) * temp
+        rc.range = self.count[c] * temp
+        rc.encode_normalize()
+        self.update(c)
+
+    # 復号
+    def decode(self, rc):
+        # 記号の探索
+        def search_code(value):
+            n = 0
+            for c in xrange(self.size):
+                if value &lt; n + self.count[c]: return c, n
+                n += self.count[c]
+        #
+        temp = rc.range / self.sum
+        c, num = search_code(rc.low / temp)
+        rc.low -= temp * num
+        rc.range = temp * self.count[c]
+        rc.decode_normalize()
+        self.update(c)
+        return c
+
+# ファイルの読み込み
+def read_file(fin):
+    while True:
+        c = getc(fin)
+        if c is None: break
+        yield c
+
+# レンジコーダによる符号化
+def encode(fin, fout):
+    rc = RangeCoder(fout, ENCODE)
+    freq = Freq(256)
+    for x in read_file(fin):
+        freq.encode(rc, x)
+    rc.finish()
+
+# レンジコーダによる復号
+def decode(fin, fout, size):
+    freq = Freq(256)
+    rc = RangeCoder(fin, DECODE)
+    for _ in xrange(size):
+        putc(fout, freq.decode(rc))
+
+# 符号化
+def encode_file(name1, name2):
+    size = os.path.getsize(name1)
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    putc(outfile, (size &gt;&gt; 24) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 16) &amp; 0xff)
+    putc(outfile, (size &gt;&gt; 8) &amp; 0xff)
+    putc(outfile, size &amp; 0xff)
+    if size &gt; 0: encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    size = 0
+    for _ in xrange(4):
+        size = (size &lt;&lt; 8) + getc(infile)
+    if size &gt; 0: decode(infile, outfile, size)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo36.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo38.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

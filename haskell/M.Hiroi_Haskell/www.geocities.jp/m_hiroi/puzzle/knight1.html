@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 騎士の交換</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881774</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>騎士の交換</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p> 騎士（ナイト）はチェスの駒のひとつで、下図に示すように将棋の桂馬の動きを前後左右にとることができます。今回は黒騎士 ● と白騎士 ○ の位置を交換するパズルです。それでは問題です。
+</p>
+<div class="question">
+<b>[問題]</b> 騎士の交換
+<p>下図の START から GOAL までの最短手順を求めてください。
+</p>
+<pre class="fig">
+    ┌─┬─┬─┬─┬─┐
+    │  │◎│  │◎│  │
+    ├─┼─┼─┼─┼─┤    ┌─┬─┬─┐    ┌─┬─┬─┐ 
+    │◎│  │  │  │◎│    │●│●│●│    │○│○│○│ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤    ├─┼─┼─┤ 
+    │  │  │Ｋ│  │  │    │  │  │  │    │  │  │  │ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤ =&gt; ├─┼─┼─┤ 
+    │◎│  │  │  │◎│    │  │  │  │    │  │  │  │ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤    ├─┼─┼─┤ 
+    │  │◎│  │◎│  │    │○│○│○│    │●│●│●│ 
+    └─┴─┴─┴─┴─┘    └─┴─┴─┘    └─┴─┴─┘ 
+
+ ◎：ナイト (K) が動ける位置    ＳＴＡＲＴ         ＧＯＡＬ
+
+                            図：騎士の交換
+</pre>
+</div>
+<p> 今回は最短手順を「反復深化＋下限値枝刈り法」と「幅優先探索」で求めてみましょう。使用するプログラミング言語はＣ言語です。実をいうと、最初は単純な反復深化で十分だろうとプログラムを作ったのですが、いつまでたっても答えが出ないので「下限値枝刈り法」を使うことにしました。
+</p>
+<hr>
+<h4>●反復深化＋下限値枝刈り法</h4>
+<p> それではプログラムを作りましょう。次の図を見てください。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐
+  │０│１│２│     ０──７──２     ●──７──●  
+  ├─┼─┼─┤     │          │     │          │  
+  │３│４│５│     ５──10──３     ５──○──３  
+  ├─┼─┼─┤     │          │     │          │  
+  │６│７│８│     ６──１──８     ６──●──８  
+  ├─┼─┼─┤     │          │     │          │  
+  │９│10│11│     11──４──９     ○──４──○  
+  └─┴─┴─┘
+
+   （Ａ）盤面      （Ｂ）騎士の移動    （Ｃ）ＳＴＡＲＴ
+
+                     図：騎士の移動
+</pre>
+<p> 図 (A) のように、盤面の各マスに番号を付けて表します。すると、騎士の移動は図 (B) のようなグラフで表すことができます。START の局面は図 (C) のようになるので、黒騎士と白騎士を交換できることは簡単にわかりますが、最短手数となる移動手順を求めるのが今回の問題です。
+</p>
+
+<p> 下限値の求め方ですが、騎士をゴール地点 (黒騎士は 9, 10, 11, 白騎士は 0, 1, 2) へ動かすのに必要な最小手数を利用することにします。たとえば、位置 5 にある黒騎士を 9 へ動かすには 4 手必要ですが、10 へ動かすことにすると 1 手ですみます。この場合、位置 5 にある黒騎士の移動手数は最小値の 1 とします。このように、各位置ごとに最小の移動手数を求めます。これを図に示すと次のようになります。
+</p>
+
+<pre class="fig">
+ ┌─┬─┬─┐  ┌─┬─┬─┐ 
+ │２│２│２│  │０│０│０│ 
+ ├─┼─┼─┤  ├─┼─┼─┤ 
+ │１│１│１│  │１│３│１│ 
+ ├─┼─┼─┤  ├─┼─┼─┤ 
+ │１│３│１│  │１│１│１│ 
+ ├─┼─┼─┤  ├─┼─┼─┤ 
+ │０│０│０│  │２│２│２│ 
+ └─┴─┴─┘  └─┴─┴─┘ 
+
+  (1) 黒騎士      (2) 白騎士 
+
+      図：騎士の移動手数表
+</pre>
+
+<p> この表から黒騎士と白騎士の移動手数の合計値を求め、それを「下限値」とします。START の局面では、黒騎士と白騎士の移動手数はそれぞれ 6 なので、下限値は 12 となります。ところで、実際には騎士を 12 手で交換することはできません。たとえば、0 と 2 にある黒騎士の移動手数は 2 手ですが、どちらも 10 へ移動する場合の手数です。どちらかの騎士が 10 へ移動すれば、ほかの騎士の移動手数は 2 手よりも長くなります。このように、この方法では下限値の精度が低くなるのですが、そのかわりプログラムは簡単になります。
+</p>
+
+<p> それではプログラムを作りましょう。最初にグローバル変数を定義します。
+</p>
+
+<pre class="list">
+リスト：隣接リストの定義
+
+/* マクロ定義 */
+#define TRUE  1
+#define FALSE 0
+#define SIZE  12
+#define B     1
+#define W     2
+#define MOVE  20
+
+/* 隣接リスト */
+const char adjacent[SIZE][4] = {
+  5,  7, -1, -1,  /* 0 */
+  6,  8, -1, -1,  /* 1 */
+  3,  7, -1, -1,  /* 2 */
+  2,  8, 10, -1,  /* 3 */
+  9, 11, -1, -1,  /* 4 */
+  0,  6, 10, -1,  /* 5 */
+  1,  5, 11, -1,  /* 6 */
+  0,  2, -1, -1,  /* 7 */
+  1,  3,  9, -1,  /* 8 */
+  4,  8, -1, -1,  /* 9 */
+  3,  5, -1, -1,  /* 10 */
+  4,  6, -1, -1,  /* 11 */
+};
+</pre>
+<pre class="list">
+リスト：移動手数表の定義
+
+/* 移動手数表 */
+int move_black[SIZE] = {
+  2, 2, 2, 1, 1, 1, 1, 3, 1, 0, 0, 0,
+};
+
+int move_white[SIZE] = {
+  0, 0, 0, 1, 3, 1, 1, 1, 1, 2, 2, 2,
+};
+
+/* ゴール */
+char final_state[SIZE] = {
+  W, W, W, 0, 0, 0, 0, 0, 0, B, B, B,
+};
+
+/* 盤面 */
+char board[SIZE] = {
+  B, B, B, 0, 0, 0, 0, 0, 0, W, W, W,
+};
+
+/* 動かした位置 */
+char pos_to[MOVE];
+char pos_from[MOVE];
+</pre>
+<p> 隣接リストは adjacent で定義します。移動手数表は、黒騎士が move_black で白騎士が move_white としました。盤面を表す配列が board で、黒騎士が B (1)、白騎士が W (2)、空き場所が 0 となります。移動手順は騎士を動かした位置で表し、配列 pos_from と pos_to に格納します。たとえば、最初に 0 の位置にある騎士を 5 の位置へ移動した場合は、pos_from[0] に 0 をセットし、pos_to[0] には 5 をセットします。
+</p>
+
+<p> 次は、下限値枝刈り法による反復深化を行う関数 search_id を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：騎士の交換（反復深化＋下限値枝刈り法）
+
+void search_id( int limit, int n, int lower )
+{
+  if( limit == n ){
+    if( !memcmp( board, final_state, SIZE ) ){
+      print_answer( n );
+      exit( 0 );
+    }
+  } else {
+    int i, from, to, new_lower;
+    for( from = 0; from &lt; SIZE; from++ ){
+      if( board[from] ){
+        /* 動かすナイトがある */
+        for( i = 0; (to = adjacent[from][i]) != -1; i++ ){
+          if( !board[to] ){
+            /* 移動先が空いている */
+            /* 下限値の計算 */
+            if( board[from] == B ){
+              new_lower = lower - mvoe_black[from] + move_black[to];
+            } else {
+              new_lower = lower - move_white[from] + move_white[to];
+            }
+            if( n + new_lower &lt; limit ){
+              /* ナイトの移動 */
+              board[to] = board[from];
+              board[from] = 0;
+              pos_from[n] = from;
+              pos_to[n]   = to;
+              search_id( limit, n + 1, new_lower );
+              /* 元に戻す */
+              board[from] = board[to];
+              board[to] = 0;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+</pre>
+
+<p> 引数 limit が上限値、n が手数、lower が下限値を表します。今回は移動手順をひとつ見つけたら exit でプログラムを終了します。騎士を動かしたら差分を計算して、新しい下限値 new_lower を求めます。そして、new_lower + n が上限値 limit 以上になったならば枝刈りを行います。limit より小さければ search_id を再帰呼び出しします。
+</p>
+
+<p> これでプログラムは完成です。最短手数は 16 手で手順は次のようになります。
+</p>
+<pre class="fig">
+ 1 1 1
+ 0 0 0
+ 0 0 0
+ 2 2 2
+[START]
+
+ 0 1 1    0 1 0    0 1 0    0 1 0    0 1 2    0 1 2    0 1 2    0 1 2
+ 0 0 1    1 0 1    0 0 1    2 0 1    0 0 1    0 0 0    1 0 0    1 0 0
+ 0 0 0    0 0 0    0 0 1    0 0 1    0 0 1    0 0 1    0 0 0    0 0 2
+ 2 2 2    2 2 2    2 2 2    2 0 2    2 0 2    2 1 2    2 1 2    0 1 2
+
+ 0 -&gt; 5   2 -&gt; 3   3 -&gt; 8   10 -&gt; 3  3 -&gt; 2   5 -&gt; 10  8 -&gt; 3   9 -&gt; 8
+
+ 0 1 2    0 1 2    0 0 2    2 0 2    2 0 2    2 2 2    2 2 2    1 1 1
+ 1 0 0    1 0 2    1 0 2    1 0 0    1 0 0    1 0 0    0 0 0    0 0 0
+ 2 0 2    0 0 2    1 0 2    1 0 2    0 0 2    0 0 0    0 0 1    0 0 0
+ 0 1 0    0 1 0    0 1 0    0 1 0    0 1 1    0 1 1    0 1 1    2 2 2
+                                                                   [GOAL]
+ 11 -&gt; 6  6 -&gt; 5   1 -&gt; 6   5 -&gt; 0   6 -&gt; 11  8 -&gt; 1   3 -&gt; 8   8 -&gt; 9
+</pre>
+<p> 実行時間は M.Hiroi のオンボロマシン (Pentium 166 MHz) で約 56 秒でした。簡単に解けると思っていたのですが、けっこう時間がかかりますね。次回は<a href="knight1.html#breadth">「幅優先探索」</a>で解いてみましょう。お楽しみに。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+/*
+ *  knight_id.c : ナイトの交換（反復深化＋下限値枝刈り法による解法）
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  12
+#define B     1
+#define W     2
+#define MOVE  20
+
+/* 隣接リスト */
+const char adjacent[SIZE][4] = {
+  5,  7, -1, -1,  /* 0 */
+  6,  8, -1, -1,  /* 1 */
+  3,  7, -1, -1,  /* 2 */
+  2,  8, 10, -1,  /* 3 */
+  9, 11, -1, -1,  /* 4 */
+  0,  6, 10, -1,  /* 5 */
+  1,  5, 11, -1,  /* 6 */
+  0,  2, -1, -1,  /* 7 */
+  1,  3,  9, -1,  /* 8 */
+  4,  8, -1, -1,  /* 9 */
+  3,  5, -1, -1,  /* 10 */
+  4,  6, -1, -1,  /* 11 */
+};
+
+/* 移動手数表 */
+int move_black[SIZE] = {
+  2, 2, 2, 1, 1, 1, 1, 3, 1, 0, 0, 0,
+};
+
+int move_white[SIZE] = {
+  0, 0, 0, 1, 3, 1, 1, 1, 1, 2, 2, 2,
+};
+
+/* ゴール */
+char final_state[SIZE] = {
+  W, W, W, 0, 0, 0, 0, 0, 0, B, B, B,
+};
+
+/* 盤面 */
+char board[SIZE] = {
+  B, B, B, 0, 0, 0, 0, 0, 0, W, W, W,
+};
+
+/* 動かした位置 */
+char pos_to[MOVE];
+char pos_from[MOVE];
+
+int start;
+
+/* 答えを表示 */
+void print_answer( int n )
+{
+  int i;
+  for( i = 0; i &lt; n; i++ ){
+    printf("(%d -&gt; %d)", pos_from[i], pos_to[i] );
+  }
+  printf("\n");
+  printf("時間 %d\n", clock() - start );
+}
+
+/* 反復深化による解法 */
+void search_id( int limit, int n, int lower )
+{
+  if( limit == n ){
+    if( !memcmp( board, final_state, SIZE ) ){
+      print_answer( n );
+      exit( 0 );
+    }
+  } else {
+    int i, from, to, new_lower;
+    for( from = 0; from &lt; SIZE; from++ ){
+      if( board[from] ){
+        /* 動かすナイトがある */
+        for( i = 0; (to = adjacent[from][i]) != -1; i++ ){
+          if( !board[to] ){
+            /* 移動先が空いている */
+            /* 下限値の計算 */
+            if( board[from] == B ){
+              new_lower = lower - move_black[from] + move_black[to];
+            } else {
+              new_lower = lower - move_white[from] + move_white[to];
+            }
+            if( n + new_lower &lt; limit ){
+              /* ナイトの移動 */
+              board[to] = board[from];
+              board[from] = 0;
+              pos_from[n] = from;
+              pos_to[n]   = to;
+              search_id( limit, n + 1, new_lower );
+              /* 元に戻す */
+              board[from] = board[to];
+              board[to] = 0;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+int main()
+{
+  int limit;
+  start = clock();
+  for( limit = 12; limit &lt; MOVE; limit++ ){
+    printf("***** limit = %d *****\n", limit );
+    search_id( limit, 0, 12 );
+  }
+  return 0;
+}
+</pre>
+<hr>
+<h3 id="breadth">幅優先探索で解く</h3>
+<p> 今回はオーソドックスに幅優先探索でパズル「騎士の交換」を解いてみましょう。幅優先探索でパズルを解く場合、同一局面の検索処理が重要になります。このパズルは 12 マスに 3 個の黒騎士を置き、残りの 9 マスに白騎士を置くわけですから、局面の総数は次のようになります。
+</p>
+<pre class="item">
+<sub>12</sub>Ｃ<sub>3</sub> * <sub>9</sub>Ｃ<sub>3</sub> = 220 * 84 = 18480 通り
+</pre>
+<p> それほど多くありませんね。とりあえず、同一局面のチェックには単純な線形探索を使いましょう。そして、探索は START と GOAL の両方向から行うことにします。プログラムは簡単なので説明は割愛させていただきます。プログラムリストを読んでくださいね。幅優先探索は拙作の <a href="puzdoc03.html">パズルでプログラミング 第 2 回 幅優先探索と 15 パズル</a> で詳しく説明しています。よろしければ参考にしてください。
+</p>
+
+<p> 実行時間は M.Hiroi のオンボロマシン (Pentium 166 MHz) で約 40 秒かかりました。「反復深化＋下限値枝刈り法」よりも速くなりましたが、単純な線形探索ではやっぱり時間がかかりますね。興味のある方は「二分探索木」や「ハッシュ法」を使ってみてください。次回は START から始めて <a href="knight1.html#max">最長手数となる局面</a> を求めてみましょう。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+/*
+ *  knight.c : ナイトの交換（幅優先探索）
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  12
+#define FORWARD  0
+#define BACKWARD 1 
+
+/* 最大の状態数 12C3 * 9C3 = 18480 */
+#define MAX_STATE 18480
+
+/* 隣接リスト */
+const char adjacent[SIZE][4] = {
+  5,  7, -1, -1,  /* 0 */
+  6,  8, -1, -1,  /* 1 */
+  3,  7, -1, -1,  /* 2 */
+  2,  8, 10, -1,  /* 3 */
+  9, 11, -1, -1,  /* 4 */
+  0,  6, 10, -1,  /* 5 */
+  1,  5, 11, -1,  /* 6 */
+  0,  2, -1, -1,  /* 7 */
+  1,  3,  9, -1,  /* 8 */
+  4,  8, -1, -1,  /* 9 */
+  3,  5, -1, -1,  /* 10 */
+  4,  6, -1, -1,  /* 11 */
+};
+
+/* キュー */
+char  state[MAX_STATE + 1][SIZE];      /* +1 はワーク領域 */
+short prev_state[MAX_STATE];
+char  direction[MAX_STATE];
+
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 1, 1, 0, 0, 0, 0, 0, 0, 2, 2, 2,
+};
+
+/* 最終状態 */
+char final_state[SIZE] = {
+  2, 2, 2, 0, 0, 0, 0, 0, 0, 1, 1, 1,
+};
+
+/* 同じ状態があるか（線形探索） */
+int check_same_state( int n )
+{
+  int i;
+  for( i = n - 1; i &gt;= 0; i-- ){
+    if( !memcmp( state[i], state[n], SIZE ) ) return i;
+  }
+  return -1;
+}
+
+/* 結果を出力 */
+void print_answer_forward( int n )
+{
+  int i;
+  if( n &gt; 1 ) print_answer_forward( prev_state[n] );
+  for( i = 0; i &lt; SIZE; i++ ){
+    printf("%d ", state[n][i] );
+  }
+  printf("\n");
+}
+
+void print_answer_backward( int n )
+{
+  do {
+    int i;
+    n = prev_state[n];
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[n][i] );
+    }
+    printf("\n");
+  } while( prev_state[n] != -1 );
+}
+
+void print_answer( int i, int j )
+{
+  if( direction[i] == FORWARD ){
+    print_answer_forward( i );
+    print_answer_backward( j );
+  } else {
+    print_answer_forward( j );
+    print_answer_backward( i );
+  }
+}
+
+/* 探索 */
+void search( void )
+{
+  int front = 0, rear = 2;
+  /* 初期化 */
+  memcpy( state[0], init_state, SIZE );
+  prev_state[0] = -1;
+  direction[0] = FORWARD;
+  memcpy( state[1], final_state, SIZE );
+  prev_state[1] = -1;
+  direction[1] = BACKWARD;
+
+  while( front &lt; rear ){
+    int i, j, k, n;
+    for( i = 0; i &lt; SIZE; i++ ){
+      if( state[front][i] ){
+        /* 動かすナイトがある */
+        for( j = 0; (n = adjacent[i][j]) != -1; j++ ){
+          if( !state[front][n] ){
+            /* 移動先が空いている */
+            memcpy( state[rear], state[front], SIZE ); /* 状態をコピー */
+            /* 移動 */
+            state[rear][n] = state[rear][i];
+            state[rear][i] = 0;
+            prev_state[rear] = front;
+            direction[rear] = direction[front];
+            /* 検索する */
+            if( (k = check_same_state( rear )) &gt;= 0 ){
+              if( direction[k] != direction[rear] ){
+                /* 前後からの検索が一致 */
+                print_answer( k, rear );
+                printf("状態数 %d 個\n", rear );
+                return;
+              }
+            } else {
+              /* 登録 */
+              rear++;
+            }
+          }
+        }
+      }
+    }
+    front++;
+  }
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("時間 %d \n",end - start );
+  return 0;
+}
+</pre>
+<hr>
+<h3 id="max">最長手数の局面</h3>
+<p> 今度は最長手数となる局面を求めてみましょう。まず、START から騎士を動かして 1 手で到達する局面をすべて作ります。次に、これらの局面から騎士を動かして新しい局面を作れば、完成形から 2 手で到達する局面となります。このように、手数を 1 手ずつ延ばしていき、新しい局面が生成できなくなった時点での手数が求める最長手数となります。
+</p>
+
+<p> この処理は幅優先探索を使えばぴったりです。ただし、同一局面のチェックが線形探索のままでは時間がかかるので、ここでは二分探索木を使うことにします。二分探索木は拙作の <a href="puzdoc05.html">パズルでプログラミング 第 3 回 二分探索木とハッシュ法</a> で詳しく説明しています。よろしければ参考にしてください。また、このプログラムの目的は、いちばん難しい手順となる配置を求めることなので、手順を表示することは行いません。詳細はプログラムリストをお読みくださいませ。
+</p>
+<p> 結果は次のようになりました。
+</p>
+
+<pre class="fig">
+ ┌─┬─┬─┐    ┌─┬─┬─┐ ┌─┬─┬─┐ ┌─┬─┬─┐ 
+ │●│●│●│    │○│  │○│ │○│  │  │ │  │  │○│ 
+ ├─┼─┼─┤    ├─┼─┼─┤ ├─┼─┼─┤ ├─┼─┼─┤ 
+ │  │  │  │    │  │●│  │ │  │●│○│ │○│●│  │ 
+ ├─┼─┼─┤ ==&gt;├─┼─┼─┤ ├─┼─┼─┤ ├─┼─┼─┤ 
+ │  │  │  │    │  │○│  │ │●│○│  │ │  │○│●│ 
+ ├─┼─┼─┤    ├─┼─┼─┤ ├─┼─┼─┤ ├─┼─┼─┤ 
+ │○│○│○│    │●│  │●│ │  │  │●│ │●│  │  │ 
+ └─┴─┴─┘    └─┴─┴─┘ └─┴─┴─┘ └─┴─┴─┘ 
+
+   ＳＴＡＲＴ          （Ａ）         （Ｂ）         （Ｃ）
+
+                    図：最長手数 (22手) の局面
+</pre>
+<p> 最長手数は 22 手で局面は 3 通りありました。上図の (B) と (C) は左右対称なので、対称解を除くと 2 通りになります。実行時間は M.Hiroi のオンボロマシン (Pentium 166 MHz) で約 2.5 秒でした。二分探索木の効果は十分に出ていますね。ちなみに、生成した全局面は 18480 個になりました。しがたって、このパズルでは騎士をランダムに配置しても、必ず START の局面に到達できることがわかります。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+/*
+ * knight_max.c : 「ナイトの交換」最長手数を求める
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  12
+#define NIL   (-1)
+
+/* 最大の状態数 12C3 * 9C3 = 18480 */
+#define MAX_STATE 18480
+
+/* 節 */
+typedef struct node {
+  char board[SIZE];
+  int  right;
+  int  left;
+} NODE;
+
+/* 隣接リスト */
+const char adjacent[SIZE][4] = {
+  5,  7, -1, -1,  /* 0 */
+  6,  8, -1, -1,  /* 1 */
+  3,  7, -1, -1,  /* 2 */
+  2,  8, 10, -1,  /* 3 */
+  9, 11, -1, -1,  /* 4 */
+  0,  6, 10, -1,  /* 5 */
+  1,  5, 11, -1,  /* 6 */
+  0,  2, -1, -1,  /* 7 */
+  1,  3,  9, -1,  /* 8 */
+  4,  8, -1, -1,  /* 9 */
+  3,  5, -1, -1,  /* 10 */
+  4,  6, -1, -1,  /* 11 */
+};
+
+/* キュー */
+NODE  state[MAX_STATE + 1];      /* +1 はワーク領域 */
+char  move[MAX_STATE];
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 1, 1, 0, 0, 0, 0, 0, 0, 2, 2, 2,
+};
+
+/* データの挿入（二分探索木） */
+int insert_tree( int i )
+{
+  int r, n = 0, *np = &amp;n;
+  while( *np != NIL ){
+    r = memcmp( state[i].board, state[*np].board, SIZE );
+    if( r == 0 ){
+      return *np;      /* 登録済み */
+    } else if( r &lt; 0 ){
+      np = &amp;(state[*np].left);
+    } else {
+      np = &amp;(state[*np].right);
+    }
+  }
+  /* 登録する */
+  *np = i;
+  state[i].left = NIL;
+  state[i].right = NIL;
+  return NIL;
+}
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int m = move[n - 1], c = 0, i;
+  while( move[--n] == m ){
+    c++;
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[n].board[i] );
+    }
+    printf("\n");
+  }
+  printf("最長手数 %d 手、総数 %d 個\n", m, c );
+}
+
+/* 探索 */
+void search( void )
+{
+  int front = 0, rear = 1;
+  /* 初期化 */
+  memcpy( state[0].board, init_state, SIZE );
+  state[0].left  = NIL;
+  state[0].right = NIL;
+  move[0] = 0;
+
+  while( front &lt; rear ){
+    int i, j, k, n;
+    for( i = 0; i &lt; SIZE; i++ ){
+      if( state[front].board[i] ){
+        /* 動かすナイトがある */
+        for( j = 0; (n = adjacent[i][j]) != -1; j++ ){
+          if( !state[front].board[n] ){
+            /* 移動先が空いている */
+            memcpy( state[rear].board, state[front].board, SIZE ); /* 状態をコピー */
+            /* 移動 */
+            state[rear].board[n] = state[rear].board[i];
+            state[rear].board[i] = 0;
+            /* 検索する */
+            if( insert_tree( rear ) == NIL ){
+              /* 登録 */
+              move[rear] = move[front] + 1;
+              rear++;
+            }
+          }
+        }
+      }
+    }
+    front++;
+  }
+  printf("総数 %d\n", rear );
+  print_answer( rear );
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("時間 %d \n",end - start );
+  return 0;
+}
+
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2002,2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

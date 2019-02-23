@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Python プログラミング入門</title>
+  <meta name="description" content="Python,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881792</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lightweight Language</h1>
+<h2>お気楽 Python プログラミング入門</h2>
+<h3>第 4 回 正規表現とジェネレータ</h3>
+<div class="small">
+[ <a href="python03.html">PrevPage</a> | <a href="index.html#python_abc">Python</a> | <a href="python05.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">はじめに</h3>
+<p> 前回は再帰定義を中心に、高階関数、関数のネスト、クロージャなど関数の機能を詳しく説明しました。今回は Python の強力な文字列処理の中心である正規表現 (regular expression) とジェネレータ (generator) を取り上げます。
+</p>
+<p> 正規表現は「文字列のパターンを示した式」のことです。以前は一部のエディタやツール <sup><a href="python04.html#note1">[*1]</a></sup> で利用されていた正規表現ですが、今ではほとんどのスクリプト言語で正規表現を使うことができるようになりました。
+</p>
+<p> たとえば、テキストファイルから文字列を探す場合、Windows のコマンド FIND では、"abcd"とか "Python" などの文字列を検索することはできますが、3 桁以上の数字を見つけるといったことはできません。このような場合でも、正規表現を使うと簡単に検索パターンを指定することができます。
+</p>
+<p> また、Python は正規表現だけではなく、文字列を操作するときに便利なモジュール string が用意されています。最初に、string を使った文字列操作から説明します。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 有名なところでは grep, sed, awk などがあります。
+</div>
+
+<h4 id="chap02">●文字列の検索</h4>
+<p> それでは、文字列の検索を行うメソッドから説明しましょう。表 1 を見てください。
+</p>
+<table border=1>
+<caption>表 1 : 文字列の検索メソッド</caption>
+<thead>
+  <tr><th>操作</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>S.find(sub) / S.rfind(sub)</td><td>部分文字列 sub の位置を返す。見つからない場合は -1 を返す。</td></tr>
+  <tr><td>S.index(sub) / S.rindex(sub)</td><td>部分文字列 sub の位置を返す。見つからない場合は ValueError を送出する。</td></tr>
+  <tr><td>S.count(sub)</td><td>部分文字列 sub の出現回数を返す。</td></tr>
+</tbody>
+</table>
+<p> S は文字列を表します。find() と index() は文字列 S の前（左側）から部分文字列 sub を検索し、最初に見つけた位置を返します。rfind() と rindex() は文字列 S の後ろ（右側）から部分文字列を検索します。
+</p>
+<p> 部分文字列が見つからなかった場合、find() は -1 を返しますが、index() はエラーになります。例外はエラーのことで、ValueError は値が見つからない場合に発生するエラーです。例外処理は第 6 回で詳しく説明します。
+</p>
+<p> count() は部分文字列の出現回数を数えて返します。どのメソッドも引数に start, end を指定することができます。start は検索開始位置で、end が終了位置です。指定方法はスライス操作 (図 1) と同じです。
+</p>
+<pre class="fig">
+          範  囲
+      │←───→│
+      │          │
+  ａｂｃｄｅｆｇｈｉｊｋ
+      ↑            ↑
+      │            │
+     start (2)      end (9)
+
+図 1 : スライス操作の範囲指定
+</pre>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; a = 'foo bar baz foo bar baz'
+&gt;&gt;&gt; a.find('bar')
+4
+&gt;&gt;&gt; a.rfind('bar')
+16
+&gt;&gt;&gt; a.find('abc')
+-1
+&gt;&gt;&gt; a.count('foo')
+2
+</pre>
+
+<h4 id="chap03">●文字の除去</h4>
+<p> 文字列から余分な文字を取り除くには表 2 のメソッドを使います。
+</p>
+<table border=1>
+<caption>表 2 : 文字の除去</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>S.strip()  </td><td>先頭と末尾の文字を取り除く</td></tr>
+  <tr><td>S.rstrip() </td><td>末尾の文字を取り除く</td></tr>
+  <tr><td>S.lstrip() </td><td>先頭の文字を取り除く</td></tr>
+</tbody>
+</table>
+<p> 引数に文字列 str を指定すると、str に含まれる文字を削除します。引数を省略した場合は空白文字を削除します。簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; a = ' hello, world \n'
+&gt;&gt;&gt; a.strip()
+'hello, world'
+&gt;&gt;&gt; a.lstrip()
+'hello, world \n'
+&gt;&gt;&gt; a.rstrip()
+' hello, world'
+&gt;&gt;&gt; a.rstrip('\n')
+' hello, world '
+</pre>
+<p> 行末の改行文字は rstrip('\n') で削除することができます。引数を省略すると、改行文字の前の空白文字も削除するので注意してください。
+</p>
+
+<h4 id="chap04">●文字列の分解と結合</h4>
+<p> 文字列の分解はメソッド split() を、文字列の結合は関数 join() を使います (表 3)。
+</p>
+<table border=1>
+<caption>表 3 : 文字列の分解と結合</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>S.split() </td><td>文字列に含まれる単語をリストに格納して返す</td></tr>
+  <tr><td>join(ls)  </td><td>リストに格納されている文字列を連結して返す</td></tr>
+</tbody>
+</table>
+<p> split() は引数を省略すると、空白文字で単語を切り出してリストに格納して返します。引数に文字列を指定すると、それが単語の区切りになり、さらにその後ろに単語を切り出す回数を指定することができます。split() は文字列の先頭から単語を切り出しますが、末尾から単語を切り出していく rsplit() もあります。
+</p>
+<p> join() はメソッドではなく関数です。リストのあとの引数を省略すると、文字列の間に空白を 1 文字入れて連結します。引数に文字列を指定すると、その文字列を挿入して連結します。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; a = 'foo bar baz'
+&gt;&gt;&gt; b = a.split()
+&gt;&gt;&gt; b
+['foo', 'bar', 'baz']
+&gt;&gt;&gt; a.split(' ', 1)
+['foo', 'bar baz']
+
+&gt;&gt;&gt; string.join(b)
+'foo bar baz'
+&gt;&gt;&gt; string.join(b, '\t')
+'foo\tbar\tbaz'
+</pre>
+<p> split() で単語を切り出す回数を指定すると、切り出した単語と残りの文字列をリストに格納して返します。split() を使うと、英単語の語数を数える wordcount (wc) は簡単に作ることができます。リスト 1 を見てください。
+</p>
+<pre class="list">
+リスト 1 : 英単語の語数を数える
+
+import sys, string
+
+c = 0
+for x in sys.stdin:
+    c += len(x.split())
+print c
+</pre>
+<p> 標準入力 sys.stdin から 1 行ずつ読み込み、それを split() で単語に分解します。すると、リストの長さが単語の数になるので、関数 len() で長さを求めて c に加算します。これで英単語の語数を数えることができます。
+</p>
+
+<h4 id="chap05">●文字列の置換</h4>
+<p> 文字列の置換はメソッド replace(old, new [,num]) を使います。replace() は文字列 old を見つけたら、それを文字列 new に置き換えます。引数 num は置換回数を指定します。省略すると、すべての old を new に置き換えます。簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; a = 'foo bar baz foo bar baz'
+&gt;&gt;&gt; a.replace('foo', 'FOO')
+'FOO bar baz FOO bar baz'
+&gt;&gt;&gt; a.replace('bar', 'BAZ', 1)
+'foo BAR baz foo bar baz'
+</pre>
+<p> 文字単位で置換を行いたい場合は、関数 maketrans() とメソッド translate() を使います。maketrans(from, to) は変換テーブルを作成します。from と to は文字列で、from[n] の文字は to[n] の文字に置換されます。たとえば from が 'xyz' で to が 'XYZ' とすると、x, y, z はそれぞれ X, Y, Z に置換するような変換テーブルを返します。translate() には maketrans() で作成した変換テーブルを渡します。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; a = string.maketrans('xyz', 'XYZ')
+&gt;&gt;&gt; b = 'a b c x y z'
+&gt;&gt;&gt; b.translate(a)
+'a b c X Y Z'
+</pre>
+<p> 英大文字と英小文字の変換はメソッド lower() と upper() を使います。簡単な例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; a = 'a b c X Y Z'
+&gt;&gt;&gt; a.lower()
+'a b c x y z'
+&gt;&gt;&gt; a.upper()
+'A B C X Y Z'
+</pre>
+<p> このほかにも string モジュールには便利なメソッドが用意されています。詳細は Python のマニュアルをお読みください。
+</p>
+
+<h4 id="chap06">●正規表現の基礎知識</h4>
+<p> 次は正規表現の基本について詳しく説明します。正規表現はある文字に特別な意味を持たせます。これを「メタ文字」といいます。このメタ文字を組み合わせることで、複雑な条件を表すことができます。Python で使う基本的なメタ文字を表 4 に示します。
+</p>
+<table border=1>
+<caption>表 4 : 正規表現で使用する基本的なメタ文字</caption>
+<thead>
+  <tr><th>メタ文字</th><th>意味</th></tr>
+</thead>
+<tbody>
+  <tr><td> |  </td><td>この前後にある正規表現のどちらかと一致する</td></tr>
+  <tr><td> *  </td><td>直前の正規表現の 0 回以上の繰り返しに一致する</td></tr>
+  <tr><td> +  </td><td>直前の正規表現の 1 回以上の繰り返しに一致する</td></tr>
+  <tr><td> ?  </td><td>直前の正規表現に 0 回もしくは１回一致する</td></tr>
+  <tr><td> {m,n}  </td><td>直前の正規表現の m 回以上 n 回以下の繰り返し</td></tr>
+  <tr><td> *? </td><td>直前の正規表現の 0 回以上の繰り返しに一致する（最短一致）</td></tr>
+  <tr><td> +? </td><td>直前の正規表現の 1 回以上の繰り返しに一致する（最短一致）</td></tr>
+  <tr><td> ?? </td><td>直前の正規表現に 0 回もしくは１回一致する（最短一致）</td></tr>
+  <tr><td> {m,n}? </td><td>直前の正規表現の m 回以上 n 回以下の繰り返し（最短一致）</td></tr>
+  <tr><td> [ ] </td><td>[ ] 内に指定した文字のどれかと一致する</td></tr>
+  <tr><td> [^ ] </td><td>[ ] 内に指定した文字でない場合に一致する</td></tr>
+  <tr><td> .  </td><td>任意の１文字と一致する</td></tr>
+  <tr><td> ^  </td><td>行頭と一致する</td></tr>
+  <tr><td> $  </td><td>行末と一致する</td></tr>
+  <tr><td> ( ) </td><td>正規表現をグループにまとめる</td></tr>
+  <tr><td> \   </td><td>メタ文字を打ち消す</td></tr>
+  <tr><td> \A  </td><td>文字列の先頭と一致</td></tr>
+  <tr><td> \b  </td><td>単語境界と一致 (\w と \W の間の空文字列と一致)</td></tr>
+  <tr><td> \B  </td><td>\B 以外と一致</td></tr>
+  <tr><td> \d  </td><td>数字と一致 ([0-9] と同じ)</td></tr>
+  <tr><td> \D  </td><td>\d 以外と一致</td></tr>
+  <tr><td> \s  </td><td>空白文字と一致 ([ \t\n\r\f] と同じ)</td></tr>
+  <tr><td> \S  </td><td>\s 以外と一致</td></tr>
+  <tr><td> \w  </td><td>英数字とアンダースコア _ に一致 ([_a-zA-Z0-9] と同じ)</td></tr>
+  <tr><td> \W </td><td> \w 以外と一致</td></tr>
+  <tr><td> \Z </td><td> 文字列の末尾と一致</td></tr>
+</tbody>
+</table>
+<p> Python のメタ文字は、このほかに後方参照や拡張表記があります。これらのメタ文字はあとで説明します。
+</p>
+
+<h4 id="chap07">●文字の指定</h4>
+<p> それでは、具体的に説明していきましょう。まず大前提として、メタ文字以外の文字はそれ自身の正規表現です。つまり、abc という正規表現は文字列 abc と一致します。それから、メタ文字を通常の文字として使いたい場合は、メタ文字の前にバックスラッシュ（円記号） \ を付けます。
+</p>
+<p> メタ文字 . はどんな文字にも一致します。
+</p>
+<pre class="item">
+a.c   =&gt; aac, abc, aAc
+a..c  =&gt; aaac, abcc
+</pre>
+<p> 次は文字クラス [ ] です。[ ] 中の文字のどれかと一致します。
+</p>
+<pre class="item">
+a[ABC]c    =&gt; aAc, aBc, aCc
+a[AB][CD]c =&gt; aACc, aADc, aBCc, aBDc
+</pre>
+<p> 文字クラスはハイフン (-) を使って文字の範囲を表すことができます。- を含めたい場合は [ ] の中で先頭か最後に - を指定します。
+</p>
+<pre class="item">
+[a-zA-Z]    =&gt; アルファベットと一致
+[a-zA-Z_]   =&gt; \w と同じ
+[0-9]       =&gt; 数字と一致 (\d と同じ)
+[-a], [a-]  =&gt; a, - と一致
+</pre>
+<p> 数字の正規表現は \d を使うことができます。英字文字列の正規表現は、アンダースコア ( _ ) を含んでもよければ \w を使うことができます。
+</p>
+<p> 文字クラスの先頭に ^ を付けると、指定した文字以外の文字と一致します。^ は先頭に付けたときに有効で、それ以外の位置では通常の文字として扱われます。
+</p>
+<pre class="item">
+[^a-zA-Z]  =&gt; アルファベット以外の文字と一致
+[^a-zA-Z_] =&gt; \W と同じ
+[^0-9]     =&gt; 数字以外の文字と一致 (\D と同じ)
+[^a-]      =&gt; a, - 以外の文字と一致
+</pre>
+<p> アルファベットとアンダースコア以外の文字と一致する正規表現は \W を使うことができます。数字以外の文字と一致する正規表現は \D を使うことができます。
+</p>
+
+<h4 id="chap08">●繰り返し</h4>
+<p> メタ文字 * と + と ? は繰り返しを指定します。* は直前の正規表現の 0 回以上の繰り返しと一致します。0 回以上とは空文字列にも一致するということです。
+</p>
+<pre class="item">
+a*b =&gt; b  （a がない場合にも一致する）
+       ab aab aaaab aaaaab など
+</pre>
+<p> + は直前の正規表現の 1 回以上の繰り返しと一致します。* と違って空文字列とは一致しません。
+</p>
+<pre class="item">
+a+b =&gt; ab aab aaaab aaaaab など（b とは一致しない）
+</pre>
+<p> ? は空文字列もしくは直前の正規表現と一致します。
+</p>
+<pre class="item">
+a?b =&gt; b ab
+</pre>
+<p> 文字クラスと繰り返しを組み合わせることで、いろいろな文字列を表現することができます。
+</p>
+<pre class="item">
+[a-zA-Z]+   =&gt; 英文字列と一致
+a[a-zA-Z]*  =&gt; a で始まる英文字列と一致 (a １文字とも一致)
+a[a-zA-Z]+  =&gt; a で始まる英文字列と一致 (a １文字には一致しない)
+[0-9]+      =&gt; 数字列と一致 (\d+ と同じ)
+</pre>
+<p> {m,n} は繰り返しの回数を指定します。
+</p>
+<pre class="item">
+\d{3,6}  =&gt; 3 桁以上 6 桁以下の数字と一致
+\d{3,}   =&gt; 3 桁以上の数字と一致
+\d{3}    =&gt; 3 桁の数字と一致
+\d{0,}   =&gt; \d* と同じ
+\d{1,}   =&gt; \d+ と同じ
+\d{0,1}  =&gt; \d? と同じ
+</pre>
+<p> このように正規表現を使えば 3 桁以上の数字も簡単に指定することができます。
+</p>
+
+<h4 id="chap09">●最長一致と最短一致</h4>
+<p> ところで、*, +, ?, {m,n} の繰り返しは「欲張りマッチ」といって、文字列のもっとも左側（先頭に近い方）からもっとも長い部分文字列と一致します。これを「最左最長一致」と呼びます。伝統的な正規表現は最左最長一致の繰り返ししかありません。ところが、これでは困る場合があるのです。
+</p>
+<p> たとえば、&lt; と &gt; の間にある文字列とマッチングさせようとして、&lt;.*&gt; という正規表現を書きました。この場合、&lt;abc&gt; と一致しますが、&lt;abc&gt;012&lt;def&gt; にも一致してしまいます。最初に現れる &lt; &gt; と必ず一致させたい場合は、繰り返しの後ろに ? を付けます。これを「最左最短一致」といいます。この場合は &lt;.*?&gt; と指定すると、最初の &lt;abc&gt; に一致します。
+</p>
+
+<h4 id="chap10">●グループ</h4>
+<p> 繰り返しは他のメタ文字よりも優先順位が高いことに注意して下さい。たとえば、ab* は ab の繰り返しではなく、b の繰り返しになります。ab の繰り返しを実現するには ( ) を使って、正規表現をひとつのグループにまとめます。
+</p>
+<pre class="item">
+(ab)+   =&gt; ab abab ababab abababab など
+(ab)*c  =&gt; c abc ababc abababc ababababc など
+</pre>
+<p> なお、グループのカッコは一致した部分文字列を覚えておくためにも使われます。これは後方参照のところで説明します。
+</p>
+
+<h4 id="chap11">●位置の指定</h4>
+<p> $ と ^ は位置を指定するメタ文字です。^ は行頭を指定し $ は行末を指定します。^ は文字クラス内とは別の意味になるので注意してください。
+</p>
+<pre class="item">
+^abcd    =&gt; 行頭の abcd と一致する
+^[a-z]+  =&gt; 行頭にある英文字列と一致する
+abcd$    =&gt; 行末にある abcd と一致する
+[a-z]+$  =&gt; 行末にある英文字列と一致する
+</pre>
+<p> 複数の行を一つの文字列にまとめる場合、文字列の中に複数の行頭や行末が存在することになります。\A は文字列全体の先頭と一致し、\Z は文字列全体の行末と一致します。\b は単語の境界と一致します。
+</p>
+<pre class="item">
+\babc\b  =&gt; abc という単語と一致
+            ABabcCD という文字列中の abc とは不一致
+</pre>
+
+<h4 id="chap12">●選択</h4>
+<p> | は選択を表すメタ文字で、前後どちらかの正規表現と一致します。
+</p>
+<pre class="item">
+ab|cd     =&gt; ab または cd
+(a|b)c    =&gt; ac または bc
+(ab|cd)e  =&gt; abe または cde
+</pre>
+<p> 選択は他のメタ文字よりも優先順位が低いことに注意して下さい。ab|cd は (ab)|(cd) であり、a(b|c)d ではありません。
+</p>
+
+<h4 id="chap13">●正規表現の使い方</h4>
+<p> さて、正規表現の説明だけでは退屈なので、実際に Python で試してみましょう。Python で正規表現で利用する場合はモジュール re をインポートしてください。正規表現を使って文字列とマッチングを行う関数には match() と search() があります。
+</p>
+<pre class="item">
+match(pattern, string [, flag])
+search(pattern, string [, flag])
+</pre>
+<p> 引数 pattern に正規表現を指定し、引数 string に文字列を指定します。flag は正規表現の動作を指定します。たとえば、英大文字小文字を区別しないで検索したい場合は、re モジュールで定義されている IGNORECASE または I を指定します。flag は省略することができます。
+</p>
+<p> search() は文字列の中から正規表現と一致する部分列を検索しますが、match() は文字列の先頭から正規表現とマッチングするか調べるだけです。したがって、先頭文字が正規表現と一致しなければ、match() はマッチング失敗となります。
+</p>
+<p> match() と search() は、マッチングに成功した場合は「マッチオブジェクト (Match Object) 」を返します。失敗した場合は None を返します。Match Obect の主なメソッドを表 5 に示します。
+</p>
+<table border=1>
+<caption>表 5 : Match Object の主なメソッド</caption>
+<thead>
+  <tr><th>名前</th><th> 機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>group() </td><td>正規表現と一致した文字列を返す</td></tr>
+  <tr><td>start() </td><td>一致した文字列の開始位置を返す</td></tr>
+  <tr><td>end()   </td><td>一致した文字列の終了位置を返す</td></tr>
+  <tr><td>span()  </td><td>一致した文字列の位置をタプル (s, e) で返す</td></tr>
+</tbody>
+</table>
+<p> それでは、簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; import re
+&gt;&gt;&gt; a = re.search(r'\d+', 'abcd0123efgh')
+&gt;&gt;&gt; a
+&lt;_sre.SRE_Match object at ...&gt;
+&gt;&gt;&gt; a.group()
+'0123'
+&gt;&gt;&gt; a.start(), a.end()
+(4, 8)
+&gt;&gt;&gt; a.span()
+(4, 8)
+&gt;&gt;&gt; b = re.match(r'\d+', 'abcd0123efgh')
+&gt;&gt;&gt; print b
+None
+</pre>
+<p> Python の文字列はエスケープ記号 (バックスラッシュまたは円記号) が有効なため、正規表現のメタ文字として使うにはエスケープ記号を二重に書かなければいけません。たとえば、\d は \\d と書く必要があります。これでは面倒なので、エスケープ記号を無効にする raw string で正規表現 \d+ を指定します。
+</p>
+<p> search() で 'abcd0123efgh' を \d+ で検索すると、'0123' とマッチングします。変数 a には Match Object がセットされ、a.group() で一致した文字列 '0123' を取り出すことができます。また、m.start(), m.end(), m.span() で一致した文字列の位置を求めることができます。数字は文字列の先頭にないので、match() はマッチング失敗となります。
+</p>
+
+<h4 id="chap14">●正規表現のコンパイル</h4>
+<p> 正規表現は小さなプログラミング言語と同じで、正規表現のままではマッチングに時間がかかります。re モジュールは正規表現をコンパイルすることで、高速なマッチングを実現しています。関数 match() や search() は正規表現をコンパイルしてから文字列とマッチングを行いますが、同じ正規表現を何度も使う場合はあらかじめ正規表現をコンパイルしておくと便利です。正規表現のコンパイルには関数 compile() を使います。
+</p>
+<pre class="item">
+compile(pattern [,flag])
+</pre>
+<p> compile() は正規表現 pattern をコンパイルして「正規表現オブジェクト (Regex Object) 」を返します。flag は正規表現の動作を指定します（省略可）。そして、Regex Object 用のメソッド match() と search() を使って文字列とのマッチングを行います。
+</p>
+<pre class="item">
+match(string [,pos = 0] [,endpos])
+search(string [,pos = 0] [,endpos])
+</pre>
+<p> メソッド match() と search() は引数 pos と endpos で部分文字列を指定することができます。マッチングが成功した場合は、Match Object を返します。失敗した場合は None を返します。簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; p = re.compile(r'\d+')
+&gt;&gt;&gt; p
+&lt;_sre.SRE_Pattern object at ...&gt;
+&gt;&gt;&gt; a = p.search('abcd0123defg')
+&gt;&gt;&gt; a.group()
+'0123'
+&gt;&gt;&gt; b = p.match('abcd0123defg')
+&gt;&gt;&gt; print b
+None
+&gt;&gt;&gt; b = p.match('abcd0123defg', 4)
+&gt;&gt;&gt; b.group()
+'0123'
+</pre>
+<p> compile() で正規表現 \d+ をコンパイルして Regex Object を変数 p にセットします。search() で検索すると '0123' とマッチングしますが、match() ではマッチング失敗となります。ここで、match() に部分文字列の開始位置に 4 を指定すると、マッチングは成功します。
+</p>
+
+<h4 id="chap15">●文字列検索ツールの作成</h4>
+<p> 正規表現を使うと、指定した文字列をファイルから検索するgrep のようなツールは簡単に作成することができます。リスト 2 を見てください。
+</p>
+<pre class="list">
+リスト 2 : 文字列の検索
+
+import sys, re
+
+p = re.compile(sys.argv[1])
+f = open(sys.argv[2])
+n = 1
+for x in f:
+    if p.search(x): print '%d: %s' % (n, x),
+    n += 1
+f.close()
+</pre>
+<p> このプログラムは次のように起動します。
+</p>
+<pre>
+C&gt;python grep.py pattern file
+</pre>
+<p> まず、モジュール sys の変数 argv から正規表現 pattern を取り出して compile() に渡してコンパイルします。次に、ファイル名 file を取り出して、open() でファイルをオープンします。あとは、for x in f: でファイルから 1 行ずつ読み込み、search() で正規表現とマッチングするか調べます。一致した場合は行番号と文字列を表示します。
+</p>
+
+<h4 id="chap16">●コマンドラインオプションの解析</h4>
+<p> ところで、compile() の flag で IGNORECASE または I を指定すると、英大文字小文字を区別しないで検索することができます。grep.py を使うとき、この動作をコマンドラインからオプションで指定できると便利です。モジュール getopt にはオプションを解析する関数 getopt() が用意されています。
+</p>
+<pre class="item">
+getopt(args, options [,long_options])
+</pre>
+<p> getopt() はコマンドラインオプションを解析して、オプションを格納したリストと、それ以外の引数を格納したリストを返します。
+</p>
+<p> getopt() は '-' で始まる文字列をオプションの指定とみなし、その後ろの英文字がオプションになります。オプションで使用する英文字は引数 options で設定します。簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; import getopt
+&gt;&gt;&gt; a = ['-a', '-bc', 'foo', '-d']
+&gt;&gt;&gt; opts, args = getopt(a, 'abcd')
+&gt;&gt;&gt; opts
+[('-a', ''), ('-b', ''), ('-c', '')]
+&gt;&gt;&gt; args
+['foo', '-d']
+</pre>
+<p> options に 'abcd' を指定すると、-a, -b, -c, -d がオプションになります。'-' の後ろに複数のオプションを続けて指定することができ、'-bc' は -b と -c を指定したことと同じになります。オプションではない要素を見つけた場合、それ以降の要素は解析せずにリストに格納して返します。したがって、'foo' の後ろの '-d' はオプションリスト opts には格納されません。
+</p>
+<p> オプションリスト opts の要素はタプル (option, value) になります。オプションには引数を指定することができ、オプションの指定で英字の後ろにコロン ( : ) を付けます。引数がない場合、value は空文字列 '' になります。次の例を見てください。
+</p>
+<pre>
+&gt;&gt;&gt; a = ['-a', '-b foo', '-cbar', 'baz']
+&gt;&gt;&gt; opts, args = getopt(a, 'ab:c:')
+&gt;&gt;&gt; opts
+[('-a', ''), ('-b', 'foo'), ('-c', 'bar')]
+&gt;&gt;&gt; args
+['baz']
+</pre>
+<p> getopt() の引数 options の指定で、b と c の後ろに ; を付けているので、-b と -c の後ろに引数を指定することができます。引数は '-b foo' のように、オプションとの間に空白を入れてもかまいません。解析するリストが ['-b', 'foo'] の場合でも、'-b' の後ろの要素 'foo' が -b の引数になります。
+</p>
+<p> getopt() は引数 log_options で長形式のオプションを指定することができます。説明は割愛しますので、詳細は Python のマニュアルをお読みください。
+</p>
+<p> それでは getopt() を使って grep.py を改良してみましょう。リスト 3 を見てください。
+</p>
+<pre class="list">
+リスト 3 : 文字列の検索（改良版）
+
+#
+# grep.py 
+#
+import sys, re, getopt
+
+iflag = False
+pattern = None
+opts, args = getopt.getopt(sys.argv[1:], 'iIe:E:')
+
+# オプションのチェック
+for x, y in opts:
+    if x == '-I' or x == '-i':
+        iflag = re.I
+    else:
+        pattern = y
+
+# パターンとファイル名のチェック
+if not pattern:
+    print 'no pattern'
+    sys.exit(1)
+if args:
+    f = open(args[0])
+else:
+    f = sys.stdin
+
+# 検索の実行
+p = re.compile(pattern, iflag)
+n = 1
+for x in f:
+    if p.search( x ): print '%d: %s' % (n, x),
+    n += 1
+f.close()
+</pre>
+<p> オプション -i, -I で英大文字小文字を区別しないで検索します。検索文字列はオプション -e, -E で指定します。この場合は引数が必要になるので、e と E の後ろにはコロン ( : ) を付けます。
+</p>
+<p> getopt() にコマンドライン sys.argv[1:] を渡してオプションを解析したら、for ループでオプションをチェックします。-i, -I が指定されていたら、変数 iflag に re.I をセットします。そうでなければ、-e, -E が指定されているので引数 y を変数 pattern にセットします。
+</p>
+<p> 次に、文字列 pattern が指定されているか if 文でチェックします。指定がなければ print 文で 'no pattern' と表示して sys.exit() で終了します。exit() は Python の実行を終了する関数です。args が空リストの場合はファイル名が指定されていません。この場合は標準入力 (sys.stdin) からデータを読み込みます。これでファイルがリダイレクトされていも対応することができます。
+</p>
+<p> あとは、compile() の引数に pattern と iflag を渡して正規表現をコンパイルすれば、オプションの指定どおりに文字列を検索することができます。
+</p>
+
+<h4 id="chap17">●後方参照</h4>
+<p> Python では、カッコ () で正規表現をグループにまとめることができました。このほかに、もうひとつ機能があります。カッコはその中の正規表現と一致した文字列を覚えていて、あとからそれを使うことができるのです。これを「後方参照」といいます。正規表現の中では、\num (num: 数字) でカッコと一致した文字列を参照することができます。いちばん左側にある ( が \1 に対応し、次の ( が \2、その次の ( が \3 というように、順番に数字がつけられます。カッコの数に制限はありません。簡単な例を示しましょう。
+</p>
+<pre class="item">
+r'(\w+)\s+\1'
+</pre>
+<p> これは同じ単語が続けて出現する場合、たとえば 'abc abc' のような文字列と一致します。まず (\w+) と abc が一致します。このとき、abc が記憶されます。次に、\s+ と空白文字が一致し、\1 と abc がマッチングされます。\1 は最初のカッコですから、その値は abc です。したがって、"abc abc" と一致するのです。では、次の正規表現と一致する文字列はどうでしょうか。
+</p>
+<pre class="item">
+r'(\w+)\s+(\w+)\s+\2\s+\1'
+</pre>
+<p> かなり複雑になりましたが、これは "abc def def abc" のような文字列と一致します。\2 と \1 の位置に注意してください。これを逆に \1\s+\2 とすれば、"abc def abc def" と一致することになります。
+</p>
+<p> カッコで記憶した文字列は、メソッド group() で取り出すことができます。group() の引数に番号を指定すると、番号に対応するグループの文字列を取り出すことができます。簡単な例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; p = re.compile(r'(\w+)\s+(\w+)\s+\2\s+\1')
+&gt;&gt;&gt; p.search('abc def def abc')
+&gt;&gt;&gt; p.group()
+'abc def def abc'
+&gt;&gt;&gt; p.group(1)
+'abc'
+&gt;&gt;&gt; p.group(2)
+'def'
+&gt;&gt;&gt; p.group(1, 2)
+('abc', 'def')
+&gt;&gt;&gt; p.groups()
+('abc', 'def')
+</pre>
+<p> group(1) は最初のカッコで一致した文字列 'abc' を取り出し、group(2) は 2 番目のカッコで一致した文字列 'def' を取り出します。group は複数のグループ番号を指定することができ、各グループで一致した文字列をタプルに格納して返します。すべてのグループで一致した文字列を求める場合は、メソッド groups() を使うと便利です。
+</p>
+<p> たとえば、スラッシュで区切られた日付から年月日と取り出してみましょう。次の例を見てください。
+</p>
+<pre>
+&gt;&gt;&gt; p = re.compile(r'(\d+)/(\d+)/(\d+)')
+&gt;&gt;&gt; a = p.search('2006/02/24')
+&gt;&gt;&gt; year, month, day = a.groups()
+&gt;&gt;&gt; year
+'2006'
+&gt;&gt;&gt; month
+'02'
+&gt;&gt;&gt; day
+'24'
+</pre>
+<p> このように、各グループで一致した文字列を取り出して、変数にセットすることができます。
+</p>
+
+<h4 id="chap18">●拡張記法</h4>
+<p> Python の正規表現は拡張記法をサポートしています。拡張記法は (?...) で表します。? の後ろに続く文字で機能が決まります。拡張記法の正規表現を表 6 に示します。
+</p>
+
+<table border=1>
+<caption>表 6 : 正規表現の拡張記法</caption>
+<thead>
+  <tr><th>表記法</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>(?:...) </td><td>正規表現をグループにまとめる（後方参照無し）</td></tr>
+  <tr><td>(?=...) </td><td>正規表現による位置指定（文字列を消費しない）</td></tr>
+  <tr><td>(?!...) </td><td>正規表現の否定による位置指定（文字列を消費しない）</td></tr>
+  <tr><td>(?P&lt;name&gt;...)</td><td>グループに名前 name を付ける</td></tr>
+  <tr><td>(?P=name) </td><td>グループ name の後方参照</td></tr>
+  <tr><td>(?#...)   </td><td>コメント</td></tr>
+</tbody>
+</table>
+<p> (?:...) は正規表現をグループ化しますが、一致した文字列は記憶しません。したがって、文字列を取り出したり後方参照に使うことはできません。
+</p>
+<pre>
+&gt;&gt;&gt; p = re.compile(r'(\w+)\s+(?:\w+)\s+(\w+)')
+&gt;&gt;&gt; a = p.search('abc def ghi')
+&gt;&gt;&gt; a.group(1)
+'abc'
+&gt;&gt;&gt; a.group(2)
+'ghi'
+&gt;&gt;&gt; a.groups()
+('abc', 'ghi')
+</pre>
+<p> 最初の (\w+) と最後の (\w+) は一致した文字列を記憶しますが、中の (?:\w+) は一致した文字列を記憶しません。メソッド group() で文字列を取り出すと、1 番目が 'abc' になり 2 番目が 'ghi' になります。
+</p>
+<p> (?P&lt;name&gt;...) はグループに名前 name を付けます。カッコ内の正規表現に一致した文字列は、(?P=name) で後方参照することができます。もちろん、メソッド group() で取り出すこともできます。
+</p>
+<pre>
+&gt;&gt;&gt; p = re.compile(r'(?P&lt;word&gt;\w+)\s+(?P=word)')
+&gt;&gt;&gt; a = p.search('abc abc')
+&gt;&gt;&gt; a.group('word')
+'abc'
+&gt;&gt;&gt; a.group(1)
+'abc'
+</pre>
+<p> グループを番号で覚えるよりも名前を付けたほうがわかりやすくなります。また、グループ番号でもアクセスすることができます。
+</p>
+<p> (?=...) は位置を正規表現で指定します。その位置でカッコ内の正規表現と一致すれば、(?=...) のマッチングは成功になります。逆に、(?!...) の場合は、その位置でカッコ内の正規表現と一致しないときに、(?!...) のマッチングは成功します。
+</p>
+<pre>
+&gt;&gt;&gt; p = re.compile(r'foo\s+(?=bar)')
+&gt;&gt;&gt; a = p.search('foo bar')
+&gt;&gt;&gt; a.group()
+'foo '
+&gt;&gt;&gt; q = re.compile(r'foo\s+(?!bar)')
+&gt;&gt;&gt; b = p.search('foo baz')
+&gt;&gt;&gt; b.group()
+'foo '
+</pre>
+<p> どちらの正規表現も位置を指定するだけなので、カッコ内の正規表現と一致しても、マッチングの位置を前へ進めることはありません。この後ろに正規表現があれば、その位置からマッチングを開始します。
+</p>
+<p> また、(?=...) や (?!...) とマッチングした文字列は、正規表現と一致した文字列の中には含まれません。たとえば、foo\s+(?=bar) は 'foo bar' と一致しますが、group() で一致した文字列を取り出すと 'foo ' になります。
+</p>
+
+<h4 id="chap19">●findall() と split()</h4>
+<p> 文字列の中で正規表現と一致した部分文字列をすべて求めたい場合は、findall() を使うと便利です。findall() は重複しない一致部分文字列をリストに格納して返します。簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; pat = re.compile(r'\w+')
+&gt;&gt;&gt; pat.findall('foo bar baz')
+['foo', 'bar', 'baz']
+
+&gt;&gt;&gt; pat = re.compile(r'(\w+)\s+(\d+)')
+&gt;&gt;&gt; pat.findall('foo 10 bar 20 baz 30')
+[('foo', 10), ('bar', 20), ('baz', 30)]
+</pre>
+<p> グループがある場合は、グループと一致した部分文字列をリストに格納して返します。グループが複数ある場合は、各グループの一致文字列をタプルに格納します。
+</p>
+<p> split() は string モジュールにもありますが、re モジュールの split() は単語の区切りを正規表現で指定します。簡単な例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; pat = re.compile('\W+')
+&gt;&gt;&gt; pat.split('foo bar baz')
+['foo', 'bar', 'baz']
+
+&gt;&gt;&gt; pat = re.compile('(\W+)')
+&gt;&gt;&gt; pat.split('foo bar baz')
+['foo', ' ', 'bar', ' ', 'baz']
+&gt;&gt;&gt; pat.split('foo bar baz', 1)
+['foo', ' ', 'bar baz']
+</pre>
+<p> split() は正規表現にグループがあると、そのグループに一致した部分文字列をリストに追加します。また、split() は引数に単語を切り出す回数を指定することができます。
+</p>
+
+<h4 id="chap20">●文字列の置換</h4>
+<p> 次は文字列の置換を行う関数とメソッドを説明しましょう。
+</p>
+<pre class="item">
+function : sub(pattern, replace, string [,count])
+method   : sub(replace, string [,count])
+</pre>
+<p> 関数 sub() は文字列 string の中から pattern を探し、見つかれば一致した部分を replace に置き換えた文字列を返します。引数 count は文字列を置換する回数を指定します。デフォルトは 0 で、pattern と一致した文字列をすべて置換します。メソッド sub() は Regex Object の正規表現に一致する文字列を replace に置き換えます。なお、引数 replace には後方参照を使うことができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; p = re.compile('abc')
+&gt;&gt;&gt; p.sub('123', 'abc def abc ghi')
+'123 def 123 ghi'
+&gt;&gt;&gt; p.sub('123', 'abc def abc ghi', 1)
+'123 def abc ghi'
+</pre>
+<p> abc を 123 に置換します。count を指定しないとすべての abc を 123 に置換しますが、count に 1 を指定すると最初の abc だけを 123  に置換します。
+</p>
+<p> 後方参照を使うと、一致した文字列を置換文字列に取り込むことができます。次の例を見てください。
+</p>
+<pre>
+&gt;&gt;&gt; p = re.compile(r'(b\w+)')
+&gt;&gt;&gt; p.sub(r'[\1]', 'foo bar foo baz')
+'foo [bar] foo [baz]'
+</pre>
+<p> b で始まる英単語をカッコで記憶しておきます。そして、置換文字列に後方参照 \1 を使うと、検索で記憶した文字列を置換文字列の中に含めることができます。したがって、r'[\1]' は検索した文字列を角カッコ [ ] で囲むように置換されます。
+</p>
+
+<h4 id="chap21">●文字列置換ツールの作成</h4>
+<p> sub() を使うと文字列の置換ツールも簡単に作成することができます。リスト 4 を見てください。
+</p>
+<pre class="list">
+リスト 4 : 文字列置換ツール
+
+#
+# gres.py
+#
+import re, sys, getopt
+
+pattern = None
+rep_pat = None
+opts, args = getopt.getopt(sys.argv[1:], 'e:E:r:R:')
+
+# オプションのチェック
+for x, y in opts:
+    if x == '-E' or x == '-e':
+        pattern = y
+    else:
+        rep_pat = y
+
+# パターンとファイル名のチェック
+if not pattern:
+    print 'No Pattern'
+    sys.exit(1)
+if not rep_pat:
+    print 'No Replace Pattern'
+    sys.exit(1)
+if args:
+    f = open(args[0])
+else:
+    f = sys.stdin
+
+# 置換の実行
+p = re.compile(pattern)
+for x in f:
+    a = p.sub(rep_pat, x)
+    sys.stdout.write(a)
+f.close()
+</pre>
+<p> このプログラムは、次のように実行します。
+</p>
+<pre>
+C&gt;python gres.pl -e検索文字列 -r置換文字列 ファイル名
+</pre>
+<p> オプション -e から正規表現を取り出して compile() でコンパイルします。置換文字列はオプション -r から取り出して変数 rep_pat にセットします。そして、args をチェックしてファイル名が指定されていれば open() でファイルをオープンします。そうでなければ標準入力からデータを読み込みます。あとは、ファイルから 1 行ずつ読み込み、メソッド sub() で文字列を置換するだけです。
+</p>
+
+<h4 id="chap22">●関数で置換文字列を生成する</h4>
+<p> ところで、sub() の引数 replace には関数を指定することができます。そうすると、正規表現と一致した部分を関数が返した文字列に置き換えます。次の例を見てください。
+</p>
+<pre>
+&gt;&gt;&gt; def foo(match):
+        n = int(match.group())
+        return str(n * 2)
+
+&gt;&gt;&gt; p = re.compile('\d+')
+&gt;&gt;&gt; p.sub(foo, 'abcd1234efgh')
+'abcd2468efgh'
+</pre>
+<p> \d+ とマッチするのは 1234 です。ここで、関数 foo() が呼び出されます。引数 match には Match Object が渡されるので、match.group() で文字列を取り出して関数 int() で数値に変換します。そして、その値を 2 倍してから関数 str() で文字列に変換して返します。したがって、sub() の返り値は 1234 の部分を 2 倍した 'abcd2468efgh' になります。
+</p>
+
+<h4 id="chap23">●キーワードクロスリファレンスの作成</h4>
+<p> 今度は、クロスリファレンスを作成するプログラムを作ってみましょう。クロスリファレンスとは、プログラムで使用された変数や関数の名前と、それが現れる行番号をすべて書き出した一覧表のことです。今回作成するプログラムは変数名や関数名ではなく、正規表現と一致する文字列をキーワードとし、それが現れる行番号を出力することにします。 
+</p>
+<p> キーワードは文字コード順に整列して出力した方が見やすいので、出現したキーワードと行番号を覚えておいて、ファイルを読み終わってから結果をまとめで出力することにします。この場合、キーワードの探索処理によってプログラムの実行時間が大きく左右されます。
+</p>
+<p> コンピュータの世界では、昔からデータを高速に探索するアルゴリズムが研究されています。基本的なところでは「二分探索木」や「ハッシュ法」があります。キーワードをリストに格納して線形探索すると時間がかかるので、このプログラムではディクショナリを使うことにします。
+</p>
+<p> ただし、ディクショナリのキーをメソッド keys() で取り出すとき、文字コード順に取り出されるわけではありません。したがって、データを文字コード順に表示したい場合は、データをソートしないといけません。Python にはリストの要素をソートするメソッド sort() が用意されています。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; d = {'abc':10, 'def':20, 'ghi':30}
+&gt;&gt;&gt; a = d.keys()
+&gt;&gt;&gt; a
+['abc', 'ghi', 'def']
+&gt;&gt;&gt; a.sort()
+['abc', 'def', 'ghi']
+</pre>
+<p> sort() はリストを破壊的に修正することに注意してください。sort() はリストに格納されている文字列を文字コード順に並べます。このとき、英大小文字は区別されます。英大小文字を区別せずにソートすることもできますが、データを比較する関数を sort() に渡す必要があります。詳細は Python のマニュアルをお読みください。
+</p>
+<p> それでは、クロスリファレンスのプログラムをリスト 5 に示します。
+</p>
+<pre class="list">
+リスト 5 : クロスリファレンスの作成
+
+#
+# cref.py : キーワードクロスリファレンスの作成
+#
+import re, sys, types, getopt
+    
+# グローバル変数
+iflag = False
+pattern = None
+dic = {}
+
+# コマンドラインの解析
+opts, args = getopt.getopt(sys.argv[1:], 'iIe:E:')
+for x, y in opts:
+    if x == '-I' or x == '-i':
+        iflag = re.I
+    else:
+        pattern = y
+if not pattern:
+    print 'no pattern'
+    sys.exit(1)
+
+# 行番号のセット
+def set_line(key, n):
+    if key in dic:
+        line = dic[key]
+        if line[-1] != n:
+            line.append(n)
+    else:
+        dic[key] = [n]
+
+# キーワードの探索
+def get_keyword():
+    p = re.compile(pattern, iflag)
+    if args:
+        f = open(args[0])
+    else:
+        f = sys.stdin
+    n = 1
+    for x in f:
+        for key in p.findall(x):
+            if type(key) == types.TupleType:
+                for key1 in key:
+                    set_line(key1, n)
+            else:
+                set_line(key, n)
+        n += 1
+    f.close()
+
+# クロスリファレンスの出力
+def print_cref():
+    key_list = dic.keys()
+    key_list.sort()
+    for key in key_list:
+        count = 0
+        sys.stdout.write('%s\n' % key)
+        for n in dic[key]:
+            sys.stdout.write('%8d' % n)
+            count += 1
+            if count == 8:
+                sys.stdout.write('\n')
+                count = 0
+        sys.stdout.write('\n')
+
+# 実行
+get_keyword()
+print_cref()
+</pre>
+<p> 少し長いリストですが、関数 get_keyword() が探索処理で、関数 print_cref() が出力処理です。コマンドラインの解析処理は文字列の検索ツール grep.py と同じです。変数 dic には空の辞書 { } をセットします。
+</p>
+<p> get_keyword() は、正規表現をコンパイルしてファイルをリードオープンします。この処理は grep.py とほとんど同じです。変数 n は行番号を表します。
+</p>
+<p> 次に、ファイルから 1 行読み込み、findall() でキーワードを切り出します。正規表現にグループが含まれている場合、返り値のリストにはタプルが格納されています。このため、関数 type() でデータ型をチェックして処理を振り分けます。
+</p>
+<p> 関数 type(object) は引数 object のデータ型を type オブジェクトで返します。type オブジェクトはモジュール types に定義されています。主なデータ型の type オブジェクトを表 7 に示します。
+</p>
+<table border=1>
+<caption>表 7 : type オブジェクト</caption>
+<thead>
+  <tr><th>変数名</th><th>データ型</th></tr>
+</thead>
+<tbody>
+  <tr><td>BooleanType </td><td>True, False</td></tr>
+  <tr><td>IntType     </td><td>整数</td></tr>
+  <tr><td>LongType    </td><td>多倍長整数</td></tr>
+  <tr><td>FloatType   </td><td>浮動小数点数</td></tr>
+  <tr><td>ComplexType </td><td>複素数</td></tr>
+  <tr><td>StringType  </td><td>文字列</td></tr>
+  <tr><td>TupleType   </td><td>タプル</td></tr>
+  <tr><td>ListType    </td><td>リスト</td></tr>
+  <tr><td>DictType    </td><td>ディクショナリ</td></tr>
+  <tr><td>FunctionType</td><td>ユーザー定義の関数</td></tr>
+  <tr><td>FileType    </td><td>ファイルオブジェクト</td></tr>
+</tbody>
+</table>
+<p> type(key) の値が TypeTuple と等しければ key はタプルです。for 文でタプルからキーを一つずつ取り出して、関数 set_line() で行番号をセットします。key がタプルでなければそのまま set_line() に渡します。
+</p>
+<p> 関数 set_line() はキーワード key を辞書 dic に登録し、そこに行番号をセットします。行番号はリストに格納します。このとき、同じ行番号がないことを確認します。これは、リストの最後のデータと行番号 n を比較するだけです。リストを変数 line に格納し、line[-1] と n が等しくなければ、append() で n を lines の最後尾に追加します。key が見つからない場合は、dic[key] = [n] でリスト [n] を辞書に登録します。
+</p>
+<p> 関数 print_cref() は辞書に登録されているキーワードと行番号を表示します。最初に dic.keys() で辞書に登録されているキーを求めて変数 key_list にセットし、それを sort() でソートします。そして、for 文でキーを一つずつ取り出し、辞書から行番号を取り出して表示します。変数 count は、出力した行番号を数えるカウンタとして使います。8 個表示したら改行します。
+</p>
+<p> これでプログラムは完成です。それでは実行してみましょう。図 2 に示すファイル test.dat で、\w+ をキーワードにしたクロスリファレンスを作成します。実行結果を図 3 に示します。
+</p>
+<pre class="fig">
+    abc def ghi jkl
+    def ghi jkl mno
+    ghi jkl mno pqr
+    jkl mno pqr stu
+    mno pqr stu vwx
+
+図 2 : test.dat の内容
+</pre>
+<pre class="fig">
+C&gt;python cref.py -e\w+ test.dat
+abc
+       1
+def
+       1       2
+ghi
+       1       2       3
+jkl
+       1       2       3       4
+mno
+       2       3       4       5
+pqr
+       3       4       5
+stu
+       4       5
+vwx
+       5
+
+図 3 : cref.py の実行結果
+</pre>
+<p> 正規表現で表せるパターンであれば、そのクロスリファレンスを cref.py で作成することができます。このように、正規表現を使うと文字列を処理するプログラムを簡単に作ることができます。
+</p>
+
+<h4 id="chap24">●イテレータとジェネレータ</h4>
+<p> 次は「ジェネレータ」について説明します。Python にはイテレータ (iterator) という、コレクションから要素を順番に取り出す機能があります。実をいうと、 for 文で要素を順番に取り出せるのは背後でイテレータが働いているからです。
+</p>
+<p> イテレータは関数 iter() でイテレータオブジェクトを取得し、メソッド next() で要素を順番に取り出します。次の例を見てください。
+</p>
+<pre>
+&gt;&gt;&gt; a = [1, 2, 3]
+&gt;&gt;&gt; b = iter(a)
+&gt;&gt;&gt; b
+&lt;listiterator object at ...&gt;
+&gt;&gt;&gt; b.next()
+1
+&gt;&gt;&gt; b.next()
+2
+&gt;&gt;&gt; b.next()
+3
+&gt;&gt;&gt; b.next()
+Traceback (most recent call last):
+  File "&lt;stdin&gt;", Line 1, in ?
+StopIteration
+</pre>
+<p> next() は要素がなくなったら例外 StopIteration を送出します。例外はエラー処理のことですが、Python の例外はエラー処理以外にも使うことができます。
+</p>
+<p> イテレータはコレクションの要素を順番に取り出すだけですが、ジェネレータ (generator) を使うと値を一つずつ順番に生成することができます。リスト 6 を見てください。
+</p>
+<pre class="list">
+リスト 6 : ジェネレータ
+
+def generator(start, end, step):
+    n = start
+    while n &lt; end:
+        yield n
+        n += step
+</pre>
+<p> ジェネレータの定義は関数とほとんど同じです。違いは yield 文でデータを返すところです。ジェネレータはイテレータオブジェクトと next() が自動的に生成され、next() を呼び出すたびに yield 文で指定したデータが返されます。また、関数の実行が終了すると、自動的に例外 StopIteration が送出されます。
+</p>
+<p> 関数 generator() は start から end 未満の数値を step きざみで生成します。同じことは range() でもできますが、リストを生成しないぶんだけ generator() の方が効率的です。簡単な実行例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; for x in generator(0, 10, 2):
+        print x,
+
+0 2 4 6 8
+</pre>
+
+<p> このように、ジェネレータはイテレータのかわりに使うことができます。
+</p>
+
+<h4 id="chap25">●ジェネレータ関数の再帰定義</h4>
+<p> ジェネレータの長所は、関数の実行を一時停止するとき、そのときの状態（ローカル変数の値など）を自動的に保存するところです。このため、再帰定義を使った関数でも、簡単にジェネレータを作成することができます。
+</p>
+<p> 簡単な例として、ジェネレータを使って順列を生成するプログラムを作りましょう。再帰定義でジェネレータ関数を作成する場合、関数内でジェネレータを生成し、その値を使って新しい値を yield 文で返すようにします。
+</p>
+<p> たとえば、要素が n 個の順列を生成する場合、n - 1 個の順列を生成するジェネレータを生成し、そこに要素を一つ加えて n 個の順列を生成すると考えます。リスト 7 を見てください。
+</p>
+<pre class="list">
+リスト 7 : 順列の生成
+
+def gen_perm(nums, n = 0):
+    if n == len(nums):
+        yield []
+    else:
+        for x in gen_perm(nums, n + 1):
+            for y in nums:
+                if y not in x:
+                    yield x + [y]
+</pre>
+<p> ジェネレータ gen_perm() の引数 nums は要素を格納したリストで、n は選択した要素の個数を表します。n が nums の要素数と等しい場合は、すべての要素を選択したので yield 文で空リスト [ ] を返します。そうでなければ、gen_perm() を再帰呼び出しして生成される値を for 文で受け取ります。そして、その値 x に要素 y を追加したリストを yield で返します。これで順列を生成することができます。
+</p>
+<p> 簡単な実行例を示します
+</p>
+<pre>
+&gt;&gt;&gt; for x in gen_perm([1, 2, 3]):
+        print x
+
+[1, 2, 3]
+[1, 3, 2]
+[2, 1, 3]
+[2, 1, 3]
+[3, 1, 2]
+[3, 2, 1]
+</pre>
+<p> このように、ジェネレータを使って順列を一つずつ生成することができます。
+</p>
+
+<h4 id="chap26">●ジェネレータ表現</h4>
+<p> いままでは関数と yield 文を使ってジェネレータを作りましたが、Python 2.4 で導入された「ジェネレータ表現 (generator expressions) 」を使うと簡単にジェネレータを利用することができます。
+</p>
+<p> ジェネレータ表現はリストの内包表現とほとんど同じですが、丸カッコ () で囲むところが異なります。図 4 に基本的な構文を示します。
+</p>
+<pre class="fig">
+(式 for 変数, ... in コレクション)
+
+    図 4 : ジェネレータ表現
+</pre>
+<p> この後ろに for 文または if 分を続けることができるのもリストの内包表現と同じです。簡単な例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; a = [1, 2, 3]
+&gt;&gt;&gt; b = (x * x for x in a)
+&gt;&gt;&gt; b
+&lt;generator object at ...&gt;
+&gt;&gt;&gt; for x in b:
+        print x,
+
+1
+4
+9
+</pre>
+<p> リストの内包表現はリストを生成しますが、ジェネレータ表現はリストを生成しません。リストを生成する必要がない場合、たとえばコレクションを生成するときはジェネレータ表現の方が効率的です。次の例を見てください。
+</p>
+<pre>
+&gt;&gt;&gt; a = tuple(x * x for x in range(5))
+&gt;&gt;&gt; a
+(0, 1, 4, 9, 16)
+&gt;&gt;&gt; key = ['foo', 'bar', 'baz']
+&gt;&gt;&gt; value = [10, 20, 30]
+&gt;&gt;&gt; b = dict((key[x], value[x]) for x in range(len(key)))
+&gt;&gt;&gt; b
+{'baz': 30, 'foo': 10, 'bar': 20}
+&gt;&gt;&gt; c = set(x * x for x in range(5))
+&gt;&gt;&gt; c
+set([0, 1, 4, 16, 9])
+</pre>
+<p> このように Python では、コレクションを生成する関数の引数にジェネレータを渡すことができます。このほかにも、イテレータを引数に受け取る関数でジェネレータを使うことができます。
+</p>
+
+<h4 id="chap27">●おわりに</h4>
+<p> 正規表現を使った文字列処理とジェネレータについて詳しく説明しました。Python の正規表現は強力な機能なので、うまく使いこなすと複雑な文字列処理でも簡単にプログラムを作ることができます。次回は Python のオブジェクト指向機能について説明します。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2006 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="python03.html">PrevPage</a> | <a href="index.html#python_abc">Python</a> | <a href="python05.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

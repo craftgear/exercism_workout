@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門</title>
+  <meta name="description" content="xyzzy,xyzzy Lisp,Common Lisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881765</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>xyzzy Lisp Programming</h1>
+<h2>Common Lisp 入門</h2>
+<div class="small">
+[ <a href="abclisp03.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp05.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap07">繰り返し</h3>
+<p> Common Lisp には、簡単で便利な繰り返し機能がいくつか用意されています。まず最初に、指定した回数だけ処理を繰り返す dotimes から説明しましょう。
+</p>
+
+<h4>●dotimes</h4>
+<p> dotimes はマクロで、構文は次のようになります。
+</p>
+<pre class="item">
+(dotimes (var limit result) Ｓ式 ...)
+</pre>
+<p> dotimes は limit で指定した回数だけ、与えられた S 式を繰り返し評価します。dotimes は最初に limit を評価します。このとき、その評価結果は 0 以上の整数値でなければいけません。評価結果を n とすると、0 から n - 1 までの整数が順番に変数 var に代入され S 式を評価します。var はレキシカル変数として扱われ、dotimes が評価されている間だけ有効です。最後に result が評価され、その値が dotimes の返り値となります。result が省略された場合は nil を返します。次の例を見てください。
+</p>
+<pre>
+(dotimes (x 5) (print x))
+0
+1
+2
+3
+4 nil
+</pre>
+<p>  この処理はレキシカル変数 x の値を print で表示するだけですが、繰り返すたびに x の値が 1 つずつ増えていくことがわかります。最後の nil は dotimes の返り値です。これを図に表すと次のようになります。
+</p>
+
+<pre class="fig">
+               ↓
+         ┌─────┐
+         │  x ← 0  │
+         └─────┘
+               ├←────┐ 
+               ↓          │
+      No ┌─────┐    │
+ ┌───│  x &lt; 10  │    │
+ │      └─────┘    │
+ │            ↓Yes       │
+ │      ┌─────┐    │
+ │      │(print x) │    │
+ │      └─────┘    │
+ │            ↓          │
+ │      ┌─────┐    │
+ │      │x ← x + 1│    │
+ │      └─────┘    │
+ │            └─────┘
+ └──────┐
+               ↓
+
+    図 1 : dotimes の処理
+</pre>
+
+<p> それでは簡単な例を見てみましょう。階乗の計算を dotimes でプログラムします。
+</p>
+
+<pre class="list">
+List 1 : dotimes の例
+
+(defun fact (x)
+  (let ((result 1))
+    (dotimes (n x result)
+      (setq result (* result (1+ n))))))
+</pre>
+<p> 関数 let でレキシカル変数 result を定義し、その値を 1 に初期化します。次に、dotimes で 1 から x まで result と乗算することで階乗を計算します。ただし、dotimes は 0 から始まるので、1+ で n の値に 1 を加えていることに注意してください。関数 * を評価しただけでは result の値は変わらないので、setq を使って乗算の結果を result に代入します。
+</p>
+
+<h4>●dolist</h4>
+<p> 次は、dolist を説明しましょう。dolist もマクロで、構文も dotimes とたいへんよく似ています。
+</p>
+<pre class="item">
+(dolist (var init-form result) Ｓ式 ... )
+</pre>
+
+<p> dolist は名前が示すように、リストに関係があります。最初に init-form を評価します。このとき、評価結果はリストでなければいけません。リスト以外の場合はエラーとなります。dolist は、このリストの要素を順番に変数 var に代入して S 式を評価します。リストの要素がなくなったら result を評価し、その値が dolist の返り値になります。次の例を見てください。
+</p>
+<pre>
+(dolist (x '(0 1 2 3 4)) (print x))
+0
+1
+2
+3
+4 nil
+</pre>
+
+<p> この処理はレキシカル変数 x の値を print で表示するだけですが、繰り返しのたびにリストの要素が x に代入されていることがわかります。最後の nil は dolist の返り値です。これを図に表すと次のようになります。
+</p>
+
+<pre class="fig">
+               ↓
+               ├←────┐ 
+      No ┌─────┐    │
+ ┌───│要素がある│    │
+ │      └─────┘    │
+ │            ↓Yes       │
+ │    ┌───────┐  │
+ │    │ x ← 次の要素│  │
+ │    └───────┘  │
+ │            ↓          │
+ │      ┌─────┐    │
+ │      │(print x) │    │
+ │      └─────┘    │
+ │            └─────┘
+ └──────┐
+               ↓
+
+    図 2 : dolist の処理
+</pre>
+
+<p> dolist の簡単な例として、リストの要素を数えるプログラムを作ります。
+</p>
+
+<pre class="list">
+List 2 : 要素の個数を求める(dolist 版)
+
+(defun my-length (x)
+    (let ((result 0))
+        (dolist (y x result)
+            (setq result (1+ result)))))
+</pre>
+
+<p> 最初に result を 0 で初期化しておきます。dolist はリスト x の要素の数だけ繰り返すので、その回数分だけ result に 1 を加算すればいいわけです。加算の処理は 1+ を使わずに (incf result) としてもいいでしょう。
+</p>
+
+<h4>●while</h4>
+<p> もっと単純な繰り返し while <sup><a href="abclisp04.html#note">[*1]</a></sup> を説明しましょう。while はマクロで、条件が真の間 S 式を繰り返し評価します。構文は次のようになります。
+</p>
+<pre class="item">
+(while 条件部 Ｓ式 ... )
+</pre>
+<p> while の処理を図に示すと次のようになります。
+</p>
+<pre class="fig">
+               ↓
+               ├←─────┐ 
+       偽┌─────┐      │
+ ┌───│  条件部  │      │
+ │      └─────┘      │
+ │            ↓真          │
+ │      ┌─────┐      │
+ │      │  Ｓ  式  │      │
+ │      └─────┘      │
+ │            ・            │
+ │            ・            │
+ │            ・            │
+ │      ┌─────┐      │
+ │      │  Ｓ  式  │      │
+ │      └─────┘      │
+ │            └──────┘
+ └──────┐
+               ↓
+
+    図 3 : while の処理
+</pre>
+
+<p> 図を見ればおわかりのように while はいたって単純ですが、条件部が偽にならないと「無限ループ」に陥ってしまうので注意してください。簡単な例を示しましょう。
+</p>
+<pre class="list">
+List 3 : while の例
+
+(defun fact (x)
+  (let ((result 1) (i 2))
+    (while (&lt;= i x)                 ; 条件部
+      (setq result (* result i)     ; 繰り返す S 式 
+            i      (1+ i)))
+    result))
+</pre>
+
+<p> while を使って階乗の計算を定義しました。setq は複数の変数に値をセットすることができます。このとき、変数の代入は逐次的に行われます。次の例を見てください。
+</p>
+<pre>
+(setq a 1 b a)
+=&gt; 1
+a
+=&gt; 1
+b
+=&gt; 1
+</pre>
+
+<p> このように、最初に代入した変数 a の値を、次の代入で使うことができます。setq は最後に代入した値を返します。while は nil を返すので、ループを抜けたあとで計算結果 result の値を fact の返り値として返します。
+</p>
+<div class="note">
+<a name="note">-- note (2005/02/19) --------</a><br>
+[*1] xyzzy Lisp の場合、while はマクロとして定義されていますが、Common Lisp では定義されていません。ほかの Common Lisp 処理系、たとえば CLISP で while を使いたい場合は、ループ機能の while を使うか、自分で while をマクロ定義してください。
+</div>
+<h4>●loop</h4>
+<p> loop は最も単純な繰り返しです。loop はマクロで、与えられた S 式をずっと繰り返し評価します。これは while の条件部が常に真に評価される場合と同じで、ようするに「無限ループ」になります。したがって、繰り返しを止めるなんらかの方法が必要です。これには return を使います。
+</p>
+<p> return はマクロで、引数をひとつ与えることができます。繰り返しの中で return が評価されると、繰り返しはそこで中断されます。そして、与えられた引数を評価し、その評価結果が繰り返しの返り値となります。引数が省略された場合は nil が返り値となります。次の図に示すように、return は条件分岐と組み合わせて使います。
+</p>
+
+<pre class="fig">
+                       ↓
+                       ├←─────┐ 
+ ┌──────if───────┐    │
+ │          Yes ┌─────┐│    │
+ │      ┌───│  条件部  ││    │
+ │      │      └─────┘│    │
+ │      ↓            ↓No    │    │
+ │┌─────┐┌─────┐│    │
+ ││  return  ││  else節  ││    │
+ │└─────┘└─────┘│    │
+ │      ↓                    │    │
+ └───┼──────────┘    │
+         │            ↓            │
+         │      ┌─────┐      │
+         │      │  Ｓ  式  │      │
+         │      └─────┘      │
+         │            └──────┘
+         └──────┐
+                       ↓
+                  loop より脱出
+
+  図 4 : loop による繰り返しの処理
+</pre>
+
+<p> ほかのプログラミング言語、たとえばＣ言語や Perl では、return は関数の返り値を返すために使用されます。ところが、Lisp  の場合はループから抜け出すために return を使います。Ｃ言語や Perl を使ったことがある方は、この違いに注意してください。
+</p>
+<p> それでは、loop と return を使って階乗の計算を定義してみましょう。
+</p>
+
+<pre class="list">
+List 4 : loop と return の例
+
+(defun fact (x)
+  (let ((result 1) (i 2))
+    (loop
+      (if (&gt; i x) (return result))  ; loop から脱出 
+      (setq result (* result i)
+            i      (1+ i)))))
+</pre>
+
+<p> 変数 i が x より大きくなったら、return  でループから脱出します。このとき、return の引数 result が評価されて、階乗の計算結果が loop の返り値となり、それが関数 fact の返り値となります。
+</p>
+<p> return は今まで紹介した dotimes, dolist, while や、次に説明する do からも脱出することができます。いずれの場合も return の評価結果が繰り返しの返り値となります。
+</p>
+
+<h4>●do</h4>
+<p> 最後に、より柔軟性のある繰り返しを提供する do を説明します。do の構文は少々複雑です。
+</p>
+<pre class="item">
+(do ((var [init-form [step-form]]) ...) (end-test [result]) Ｓ式 ... )
+</pre>
+
+<ol>
+  <li> 変数 var を init-form の評価結果に初期化します。init-form がない場合は nil に初期化されます。
+  <li> end-test を評価し、結果が真であれば繰り返しを終了します。ここで result を評価し、その結果が do の返り値となります。result がない場合は nil を返します。
+  <li> 本体の S 式を順番に評価します。
+  <li> 変数 var の値を step-form の評価結果に更新します。step-form がない場合は何もしません。
+  <li> 2 から 4 までを繰り返します。
+</ol>
+
+<p> 変数 var はレキシカル変数として扱われます。do の処理を図に表すと次のようになります。
+</p>
+
+<pre class="fig">
+                 ↓
+        ┌────────┐
+        │var ← init-form│
+        └────────┘
+ ┌──────→┤
+ │              ↓
+ │     ┌────────┐ 真 ┌────────┐ 
+ │     │ end-test を評価│─→│resultを評価する│ 
+ │     └────────┘    └────────┘ 
+ │              ↓偽
+ │      ┌───────┐
+ │      │Ｓ式を評価する│
+ │      └───────┘
+ │              ↓
+ │     ┌────────┐
+ │     │var ← step-form│
+ │     └────────┘
+ └───────┘
+
+            図 5 : do の処理
+</pre>
+
+<p> do はＣ言語や Perl の for 文とよく似ています (実際は FORTRAN の do  ループの影響を受けたと思われます)。ただし、Ｃ言語や Perl では、end-test が真の間は繰り返しを続けるのですが、Lisp の do は end-test が真になると繰り返しを終了します。繰り返しを続ける条件が逆になっているので注意して下さい。
+</p>
+<p> それでは簡単な使用例を示しましょう。
+</p>
+
+<pre class="list">
+List 5 : do の使用例 (修正 2009/07/18)
+
+(defun fact (x)
+  (do ((n 2 (1+ n)) (result 1))     ; 変数の定義
+      ((&lt; x n) result)              ; end-test と result 
+      (setq result (* result n))))  ; 繰り返す S 式
+</pre>
+
+<p> do を使って階乗を計算します。n と result がレキシカル変数です。変数 n は 2 に初期化されます。そして、繰り返すたびに step-form の (1+ n) が評価され、n の値がひとつ増加します。result は 1 に初期化されますが、step-form は省略されています。(&lt; x n) が終了条件で、result の評価結果が do の返り値になります。
+</p>
+<div class="note">
+-- <b>[修正]</b> (2009/07/18) --------<br>
+修正前の関数 fact は引数 x が 0 だと無限ループになります。修正前のリストを示します。
+<pre class="list">
+List 5 : do の使用例 (修正前)
+
+(defun fact (x)
+  (do ((n x (1- n)) (result 1))     ; 変数の定義
+      ((= n 1) result)              ; end-test と result 
+      (setq result (* result n))))  ; 繰り返す S 式
+</pre>
+修正するとともにお詫び申しあげます。
+</div>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori01">ちょっと寄り道</h3>
+<h4 id="prime">■素数を求める</h4>
+<p> ここでちょっと寄り道をして、素数を求めるプログラムを作ってみましょう。いちばん簡単な方法は、奇数 3, 5, 7, 9, ... をそれまでに見つかった素数で割ってみることです。見つかった素数はリストに格納しておけばいいでしょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 6 : 素数を求める
+
+; 素数のチェック
+(defun prime-p (n prime-list)
+  (dolist (m prime-list t)
+    (if (zerop (mod n m)) (return))))
+
+; 素数のリストを返す
+(defun prime (n)
+  (do ((prime-list '(2)) (m 3 (+ m 2)))
+      ((&lt; n m) prime-list)
+    (if (prime-p m prime-list)
+        (setq prime-list (append prime-list (list m))))))
+</pre>
+<p> 素数を判定する prime-p は簡単です。引数 prime-list は素数のリストです。ここから素数を順番に取り出して、割り切れるか調べればいいわけです。この処理には dolist を使えばいいですね。関数 mod は剰余を返します。この結果が 0 であれば割り切れたので、n は素数ではありません。return でループを脱出して nil を返します。dolist が最後まで終了すれば n は素数です。dolist で t を返します。
+</p>
+<p> 素数のリストを返す prime も簡単です。素数のリストを格納する prime-list は (2) に初期化します。あとは、m が素数か prime-p でチェックし、素数であれば prime-list の最後尾に追加します。リストの先頭にデータを追加することは簡単ですが、最後尾に追加するのはちょっと面倒です。list で m をリストに格納し、それを append で prime-list と結合します。最後に、do が終了したら prime-list を返します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+(prime 100)
+=&gt; (2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+</pre>
+<p> 100 以下の素数は全部で 25 個あります。
+</p>
+<p> ところで、この方法はかなり遅いです。n が素数か判別するため、n より小さい素数で割り切れるか調べていますが、実は √n より小さい素数を調べるだけでいいのです。さっそくプログラムを改造しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+List 7 : 素数を求める（改良版）
+
+; 素数のチェック
+(defun prime-p (n k prime-list)
+  (dolist (m prime-list)
+    (cond ((zerop (mod n m)) (return))
+          ((&lt; k m) (return t)))))
+
+; 素数のリストを返す
+(defun prime (n)
+  (do ((prime-list '(2))
+       (m 3 (+ m 2)))
+      ((&lt; n m) prime-list)
+    (if (prime-p m (sqrt m) prime-list)
+        (setq prime-list (append prime-list (list m))))))
+</pre>
+<p> prime-p の引数 k には、調べる範囲の上限値がセットされます。prime-list から取り出した素数が k より大きくなったならば、m は素数であることがわかります。return で dolist を脱出して t を返します。prime では、prime-p を呼び出すときに上限値を計算します。sqrt は平方根を求める関数です。
+</p>
+<p> それでは、どの程度の差がつくのか、M.Hiroi のオンボロマシン (Pentium 166 MHz) で試してみました。(prime 10000) の実行時間を計測します。
+</p>
+<p> xyzzy Lisp の場合、プログラムはコマンド byte-compile-file でバイトコンパイルしてください。ファイル名を prime.l としましょう。M-x byte-compile-file と入力するとファイル名を聞いてくるので、prime.l と入力します。コンパイルが正常に終了すると prime.lc というファイルが出力されます。プログラムのロードはコマンド load-file で行います。
+</p>
+<p> 時間の計測ですが、xyzzy Lisp では get-internal-real-time を使うといいでしょう。*scratch* で次のプログラムを実行しました。
+</p>
+<pre class="list">
+(progn
+  (setq a (get-internal-real-time))
+  (prime 10000)
+  (print (- (get-internal-real-time) a)))
+</pre>
+<p> 結果は、最初のプログラムが 9.3 秒、改良版が 1.7 秒でした。ちなみに、10000 以下の素数は全部で 1229 個あります。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap08">逐次実行</h3>
+<p> 繰り返しではありませんが、S 式を順番に実行する関数を紹介しましょう。
+</p>
+
+<h4>●progn</h4>
+<p> progn は与えられた S 式を順番に実行し、いちばん最後に評価した値を返します。簡単な例を示しましょう。
+</p>
+<pre>
+(progn (setq a 1) (setq b 2) (setq c 3))
+=&gt; 3
+</pre>
+<p> progn は defun, let, dotimes などで、複数の S 式を評価する場合と同じです。このため、progn を単独で使うことはほとんどありませんが、if と組み合わせて使うとたいへん便利です。次の図を見てください。
+</p>
+
+<pre class="fig">
+ (if <条件節>
+     (progn Ｓ式Ａ Ｓ式Ｂ ... )    ; then 節 
+     (progn Ｓ式ａ Ｓ式ｂ ... ))   ; else 節 
+
+    図 6 : if と progn の組み合わせ
+</pre>
+
+<p> if の then 節や else 節は複数の S 式を受け付けません。このような場合、progn を使えば複数の S 式を評価することができます。
+</p>
+
+<h4>●prog1 と prog2</h4>
+<p> prog1 は最初に評価した S 式の値が返り値となります。prog2 は 2 番目に評価した S 式の値が返り値となります。簡単な例を示しましょう。
+</p>
+<pre>
+(prog1 (setq a 1) (setq b 2) (setq c 3))
+=&gt; 1
+(prog2 (setq a 1) (setq b 2) (setq c 3))
+=&gt; 2
+</pre>
+<p> prog1 や prog2 は、変数の値を取り出しておいてから、変数の値を更新する処理などで役に立ちます。簡単な例題として、<B>スタック (stack)</B> というデータ構造を操作する関数を作ってみましょう。
+</p>
+
+<h4>●スタック</h4>
+<p> 最初にスタックについて説明します。スタックの例として、バネ付きのトレイを取り上げます。
+</p>
+
+<pre class="fig">
+    |-----|     |[ A ]|     |[ B ]|     |[ A ]|     |-----| 
+    |  |  |     |-----|     |[ A ]|     |-----|     |  |  |
+    |  |  |     |  |  |     |-----|     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    +-----+     +-----+     +-----+     +-----+     +-----+  
+ (1) 空の状態  (2) PUSH    (3) PUSH    (4) POP     (5) POP
+                   A           B           B           A
+
+                    図 7 : スタックの動作例
+</pre>
+
+<p> 初めはトレイが入っていない空の状態です。ここにトレイを上から入れると、重さによってバネを圧縮し、次のトレイを追加できるようになります。もうひとつトレイを乗せると、さらにバネを圧縮し次のトレイを追加できるようになります。バネが限界まで圧縮されると、トレイは追加できません。トレイを取り出す場合は、上にあるトレイから取り出していきます。ひとつ取り出すと、その分バネが伸びて下にあるトレイが上に出てくるので、次のトレイを取り出すことができます。
+</p>
+<p> このトレイをデータと考えてください。データ A をスタックに追加し(2)、次にデータ B を追加します(3)。データを取り出す場合、後から入れたデータ B が先に取り出され(4)、その次にデータ A が取り出されて、スタックが空になります(5)。このように、スタックは後から入れたデータが先に取り出されるので、<b>後入れ先出し (Last-In First-Out : LIFO)</b> と呼ばれます。スタックにデータを追加する操作を<b>プッシュ (PUSH)</b> といい、スタックからデータを取り出す操作を<b>ポップ (POP)</b> といいます。
+</p>
+<p> スタックはリストを使うと簡単に実現することができます。たとえば、スペシャル変数 *stack* にスタックを保持することにします。プッシュはリストの先頭にデータを追加していくことで実現できます。これは cons を使えば簡単ですね。データをプッシュする push-stack は、次のようになります。
+</p>
+
+<pre class="list">
+List 8 : プッシュ
+
+(defun push-stack (data)
+  (setq *stack* (cons data *stack*)))
+</pre>
+
+<p> それでは、実際に試してみましょう。
+</p>
+<pre>
+(setq *stack* nil)
+=&gt; nil
+(push-stack 10)
+=&gt; (10)
+(push-stack 100)
+=&gt; (100 10)
+</pre>
+
+<p> 最初スタックにはデータがありませんから、*stack* は nil で初期化しておきます。push-stack を実行するたびに、スタック *stack* にデータが追加されていきます。
+</p>
+<p> 次は、データをポップする pop-stack を作ります。ポップはリストの先頭にあるデータを取り出す操作です。データを取り出すには car を使えばいいですね。取り出したデータは *stack* から削除します。これには cdr を使えばいいでしょう。ポイントは、car でデータを取り出したあとで *stack* を更新し、取り出したデータを関数の返り値とするところです。このとき、prog1 がとても役に立つのです。次のリストを見てください。
+</p>
+
+<pre class="list">
+List 9 : ポップ
+
+(defun pop-stack ()
+  (prog1 (car *stack*)
+         (setq *stack* (cdr *stack*))))
+</pre>
+
+<p> 最初に car を使ってデータを読み、cdr で残りの要素を変数 *stack* にセットします。これで先頭の要素を取り除くことができました。prog1 を使っているので、car で読み出したデータを返すことができるのです。progn では cdr の値を返してしまうので、取り出したデータを返すことができません。それでは、実際に試してみましょう。
+</p>
+<pre>
+(pop-stack)
+=&gt; 100
+*stack*
+=&gt; (10)
+(pop-stack)
+=&gt; 10
+*stack*
+=&gt; nil
+</pre>
+<p> 確かにスタック *stack* からデータが削除され、そのデータが関数の返り値になっています。
+</p>
+
+<h4>●push と pop</h4>
+<p> スタックを操作する関数 push-stack と pop-stack を作りましたが、Common Lisp にはスタックを操作するマクロ push と pop が用意されています。
+</p>
+<pre class="item">
+push item place
+pop place
+</pre>
+<p> push は変数 place に格納されているリストの先頭に item を追加し、その結果を返します。place の内容は書き換えられることに注意してください。つまり、push は次の S 式と同じ働きをするわけです。
+</p>
+<pre class="item">
+(push item place) ≡ (setq place (cons item place))
+</pre>
+<p> pop は変数 place に格納されているリストの先頭要素を返します。そして、先頭要素を取り除いたリストを place  にセットします。簡単な使用例を示しましょう。
+</p>
+<pre>
+(setq z '(a b c d))
+=&gt; (a b c d)
+(push 'x z)
+=&gt; (x a b c d)
+z
+=&gt; (x a b c d)
+
+(pop z)
+=&gt; x
+z
+=&gt; (a b c d)
+(pop z)
+=&gt; a
+z
+=&gt; (b c d)
+</pre>
+<p> スタックの動作は単純ですが、とても役に立つ重要なデータ構造です。ぜひ覚えておいてください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori02">ちょっと寄り道</h3>
+<h4 id="comb">■ 組み合わせの数</h4>
+<p> 今度は、組み合わせの数を求めるプログラムを作ってみましょう。ここでは組み合わせの数 <sub>n</sub>Ｃ<sub>r</sub> を (n, r) と表記します。(n, r) を求めるには、次の公式を使えば簡単です。
+</p>
+<pre class="item">
+(n,r) = n * (n-1) * (n-2) * ... * (n-r+1) / (1 * 2 * 3 * ... * r)
+</pre>
+<p> 皆さんお馴染みの公式ですね。ところが、整数値の範囲が限られているプログラミング言語では、この公式を使うと乗算で<B>桁あふれ</B>を起こす恐れがあります。xyzzy Lisp は多倍長演算をサポートしているので、桁あふれを心配する必要はありません。
+</p>
+<p> この公式をそのままプログラムすることもできますが、次の式を使うともっと簡単にプログラムできます。
+</p>
+<pre class="item">
+(n,r) = (n,r-1) * (n-r+1) / r
+(n,0) = (n,n) = 1
+</pre>
+<p> この式は (n, r) と (n, r-1) の関係を表しています。あとは階乗と同じように、再帰定義を使って簡単にプログラムできます。次のリストを見てください。
+</p>
+
+<pre class="list">
+List 10 : 組み合わせの数を求める
+
+(defun ncr (n r)
+  (if (or (= n r) (zerop r))
+      1
+      (/ (* (ncr n (1- r)) (1+ (- n r))) r)))
+</pre>
+
+<p> とても簡単ですね。ところで、整数値の範囲が限られているプログラミング言語では、この方法でも桁あふれする場合があるので注意してください。
+</p>
+<p> それでは、関数 ncr を使って<B>パスカルの三角形</B>を作ってみましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+                 １                                 0Ｃ0
+               ／  ＼                              ／  ＼
+             １      １                         1Ｃ0    1Ｃ1
+           ／  ＼  ／  ＼                      ／  ＼  ／  ＼
+         １      ２      １                 2Ｃ0    2Ｃ1    2Ｃ2
+       ／  ＼  ／  ＼  ／  ＼              ／  ＼  ／  ＼  ／  ＼
+     １      ３      ３      １         3Ｃ0    3Ｃ1    3Ｃ2    3Ｃ3
+   ／  ＼  ／  ＼  ／  ＼  ／  ＼      ／  ＼  ／  ＼  ／  ＼  ／  ＼
+ １      ４      ６      ４      １ 4Ｃ0    4Ｃ1    4Ｃ2    4Ｃ3    4Ｃ4 
+
+                        図 8 : パスカルの三角形
+</pre>
+<p> パスカルの三角形は、左側の図のように両側がすべて 1 で、内側の数はその左上と右上の和になっています。これは (a + b)<sup>n</sup> を展開したときの各項の係数を表しています。そして、その値は右側の図のように組み合わせの数 <sub>n</sub>Ｃ<sub>r</sub> に対応しています。
+</p>
+<p> きれいな三角形にはなりませんが、簡単なプログラムを示します。
+</p>
+
+<pre class="list">
+List 11 : パスカルの三角形
+
+(defun pascal (n)
+  (dotimes (i (1+ n))
+    (dotimes (j (1+ i))
+      (format t "  ~3D" (ncr i j)))
+    (terpri)))
+</pre>
+<p> dotimes で二重ループを構成します。format の ~3D は、整数値を 3 桁で出力する指定子です。terpri は標準出力へ改行を出力します。実行結果は次のようになります。
+</p>
+<pre>
+(pascal 10)
+    1
+    1    1
+    1    2    1
+    1    3    3    1
+    1    4    6    4    1
+    1    5   10   10    5    1
+    1    6   15   20   15    6    1
+    1    7   21   35   35   21    7    1
+    1    8   28   56   70   56   28    8    1
+    1    9   36   84  126  126   84   36    9    1
+    1   10   45  120  210  252  210  120   45   10    1
+nil
+</pre>
+<p> 図 8 のように、きれいな三角形を出力するプログラムは、皆さんにお任せいたします。また、関数 ncr を使わないでパスカルの三角形を出力するプログラムを作ってみるのも面白いでしょう。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2005 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abclisp03.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp05.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

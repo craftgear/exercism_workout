@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>続・お気楽 Java プログラミング入門</title>
+  <meta name="description" content="Java,Java入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881776</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Java Programming</h1>
+<h2>続・お気楽 Java プログラミング入門</h2>
+<div class="small">
+[ <a href="abcjava20.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava22.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>連結リストとキュー</h3>
+<p> 今回は簡単な例題として「キュー (queue)」という基本的なデータ構造を取り上げます。キューは配列や連結リストを使って簡単に実装することができます。今回は連結リストを使うことにしましょう。なお、Java の標準ライブラリには Queue というインターフェースが用意されているので、私たちがキューを自作する必要はありませんが、Java とデータ構造のお勉強ということで、あえてプログラムを作ってみましょう。
+</p>
+<h4>●キューとは？</h4>
+<p> キューは「待ち行列」といわれるデータ構造です。たとえばチケットを買う場合、カウンタの前に並んで順番を待たなくてはいけません。キューはカウンタの前に並ぶ行列と考えてください。列の先頭にいる人から順番にチケットを買うことができますが、あとから来た人は列の後ろに並ばなくてはいけません。列の先頭まで進むと、チケットを購入することができます。これを図に表すと次のようになります。
+</p>
+<pre class="fig">
+ out                            in
+    ──────────────
+&lt;=  A  B  C  D  E  .  .  .  Z    &lt;=
+    ──────────────
+
+       図 : キューの動作
+</pre>
+<p> このように、キューはデータを取り出すときは列の先頭から行い、データを追加するときは列の後ろへ行います。このため、キューは「先入れ先出し (FIFO : first-in, first-out)」とも呼ばれます。
+</p>
+<pre class="fig">
+            先頭                                          最後尾
+ 変数      ┌─┬─┐    ┌─┬─┐    ┌─┬─┐        ┌─┬─┐
+ queue ─→│・│・┼─→│・│・┼─→│・│・┼・・・→│・│／│  
+           └┼┴─┘    └┼┴─┘    └┼┴─┘        └┼┴─┘
+             ↓            ↓            ↓                ↓
+             ａ            ｂ            ｃ                ｚ
+
+                        図 : キューの構造
+</pre>
+<p> リストを使ってキューを実装する場合、上図のようにキューの先頭とリストの先頭を対応させます。すると、キューからデータを取り出すには、リストの先頭からデータを取り出すだけですみます。これはとても簡単ですね。ただし、キューにデータを入れるには、リストの最後尾にデータを追加することになるため、ちょっとした工夫が必要になります。
+</p>
+<p> たとえば、データの追加に append() を使うと、データを追加するたびにリスト (キュー) がコピーされてしまいます。このため、キューに格納されているデータが多くなると実行時間がかかるようになります。そこで、append() の代わりに最後尾のセルを破壊的に修正して、新しいデータを追加することを考えてみます。この場合、リストのコピーは回避できますが、最後尾のセルは先頭から順番にセルをたどっていかないと到達できないので、データが多くなるとやっぱり時間がかかってしまいます。
+</p>
+<p> そこで、最後尾のセルを格納する変数を用意することにします。こうすると、先頭からセルをたどらなくても、最後尾にデータを追加することができます。次の図を見てください。
+<pre class="fig">
+tail ─→ null
+head ─→ null
+
+(1) キューが空の状態
+
+tail ─────────────────────┐
+                                               ↓
+         ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+head ─→│・│・┼→│・│・┼→│・│・┼→│・│・┼→ null
+         └┼┴─┘  └┼┴─┘  └┼┴─┘  └┼┴─┘
+           ↓          ↓          ↓          ↓
+          data1       data2       data3       data4
+
+(2) キューにデータがある場合
+
+                     図 : キューの構造
+</pre>
+<p> この変数を head と tail としましょう。キューにデータがない場合は、(1) のように head と tail は null になっています。データがある場合は、(2) のように head は先頭のセルを参照し、tail は最後尾のセルを参照しています。これで、データの追加を効率的に行うことができます。
+</p>
+<h4>●クラス Queue&ltE&gt; の仕様</h4>
+<p> それではプログラムを作りましょう。最初にクラスの仕様を下表に示します。
+<table border=1>
+<caption>表 : Queue&lt;E&gt; のメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>new Queue()</td><td>空のキューを生成する</td></tr>
+  <tr><td>boolean add(E x)</td><td>キューに x を追加する</td></tr>
+  <tr><td>E remove() </td><td>キューから先頭要素を削除して返す</td></tr>
+  <tr><td>E element() </td><td>キューの先頭要素を参照する</td></tr>
+  <tr><td>boolean isEmpty() </td><td>キューが空ならば true を返す</td></tr>
+  <tr><td>int size() </td><td>キューの要素数を求める</td></tr>
+  <tr><td>void clear() </td><td>キューを空にする</td></tr>
+</tbody>
+</table>
+<p> クラス名は Queue とします。データの追加は add() で、先頭要素の削除は remove() で、先頭要素の参照は element() で行います。これらのメソッドの名前と仕様は Java のインターフェース Queue にあわせました。なお、データの追加を enqueue, 削除を dequeue と呼ぶ場合も多いです。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。最初にクラスを定義します。
+</p>
+<pre class="list">
+リスト : クラス Queue の定義
+
+class Queue&lt;E&gt; {
+  // 内部クラス
+  private class Cell {
+    E item;
+    Cell next;
+    Cell(E x, Cell xs) {
+      item = x;
+      next = xs;
+    }
+  }
+
+  // フィールド変数
+  Cell head, tail;
+  int cnt;
+  public Queue() {
+    head = tail = null;
+    cnt = 0;
+  }
+
+  // メソッドの定義
+  ・・・省略・・・
+
+}
+</pre>
+<p> クラス Queue の中でセルを表すクラス Cell を定義します。Cell のメソッドはコンストラクタだけで、フィールド変数 item と next の値を初期化します。今回はアクセスメソッドを定義せずに、キューのメソッドから直接アクセスすることにします。Queue のコンストラクタでは、要素数を表す変数 cnt とセルを参照する変数 head, tail を初期化します。
+</p>
+<p> 次はデータを追加するメソッド add() を作ります。
+</p>
+<pre class="list">
+リスト : データの追加
+
+  public boolean add(E x) {
+    Cell xs = new Cell(x, null);
+    if (cnt == 0)
+      head = xs;
+    else
+      tail.next = xs;
+    tail = xs;
+    cnt++;
+    return true;
+  }
+</pre>
+<p> 最初にデータ x を格納したセル xs を生成します。キューが空の場合は、head に xs をセットします。そうでなければ、最後尾のセル tail の next に xs を追加します。あとは、tail を xs に書き換えて、cnt の値を + 1 します。
+</p>
+<p> 次は次は先頭要素を削除するメソッド remove() を作ります。
+</p>
+<pre class="list">
+リスト : 先頭要素の削除
+
+  public E remove() {
+    if (cnt == 0) 
+      throw new NoSuchElementException("Queue.remove()");
+    E x = head.item;
+    head = head.next;
+    if(--cnt == 0) tail = null;
+    return x;
+  }
+</pre>
+<p> キューが空の場合は throw でエラーを送出します。そうでなければ、先頭のセル head の要素を変数 x にセットし、このセルをリストから削除します。この処理は head の値を次のセル (head.next) に書き換えるだけです。cnt の値を -1 してデータがなくなった場合は tail の値を null に書き換えます。最後に、return で x を返します。
+</p>
+
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="abcjava21.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●簡単なテスト</h4>
+<p> それでは実際に実行してみましょう。次に示す簡単なテストを行ってみました。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+public class queue1 {
+  public static void main(String[] args) {
+    Queue&lt;Integer&gt; q = new Queue&lt;&gt;();
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+    for (int i = 1; i &lt;= 8; i++) q.add(i);
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+    while (!q.isEmpty()) {
+      System.out.print(q.element() + " ");
+      System.out.print(q.remove() + " ");
+    }
+    System.out.println("");
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+  }
+}
+</pre>
+<pre>
+C&gt;java queue1
+true
+0
+false
+8
+1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8
+true
+0
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●循環リスト</h4>
+<p> 連結リストは要素を一列に並べたデータ構造ですが、最後尾のセルと先頭のセルを連結することで要素をリング状に並べることができます。これを「循環リスト (circular list)」 といいます。次の図を見てください。
+</p>
+<pre class="fig">
+         Cell の next を直接 Cell A に書き換える
+                              └─────┐
+         Cell A                           ↓
+         item next     item next     item next
+        ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+変数─→│・│・┼─→│・│・┼─→│・│／│
+        └┼┴─┘    └┼┴─┘    └┼┴─┘
+          ↓            ↓            ↓
+          １            ２            ３
+
+          ┌───────────────┐
+          ↓                              │
+        ┌─┬─┐    ┌─┬─┐    ┌─┬┼┐
+変数─→│・│・┼─→│・│・┼─→│・│・│
+        └┼┴─┘    └┼┴─┘    └┼┴─┘
+          ↓            ↓            ↓
+          １            ２            ３
+
+                 図 : 循環リスト
+</pre>
+<p> 上図の連結リスト (1 2 3) は null で終端されています。この連結リストで、最後尾のセルの next を先頭のセル A に書き換えると、循環リストを作ることができます。循環リストは環状に並んだデータを表すのに便利なデータ構造です。
+</p>
+
+<h4>●循環リストによるキューの実装</h4>
+<p> 循環リストの場合、最後尾のセルを参照する変数 tail を用意するだけでキューを実現することができます。下図を見てください。
+</p>
+<pre class="fig">
+tail  ─→ null
+
+(1) キューが空の状態
+
+
+tail  ───┐
+            ↓
+          ┌─┬─┐
+    ┌─→│・│・┼─┐
+    │    └┼┴─┘  │
+    │      ↓        │
+    │     data1      │
+    │                │
+    └────────┘
+
+(2) キューにデータが一つある場合
+
+
+tail  ─────────────────────┐
+                                                ↓
+          ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+    ┌─→│・│・┼→│・│・┼→│・│・┼→│・│・┼─┐
+    │    └┼┴─┘  └┼┴─┘  └┼┴─┘  └┼┴─┘  │
+    │      ↓          ↓          ↓          ↓        │
+    │     data1       data2       data3       data4      │
+    │                                                    │
+    └──────────────────────────┘
+
+(3) キューに複数のデータがある場合
+
+             図 : 循環リストによるキューの構造
+</pre>
+<p> 循環リストの場合、最後尾のセルの次のセルが先頭になります。(3) を見てください。循環リストの場合、tail が参照する最後尾のセルの next は null ではありません。next が参照するセルがキューの先頭になるのです。データが一つしかない場合、(2) のように tail が参照するセルの next は自分自身を参照しています。つまり、このセルが先頭であり最後尾でもあるわけです。キューにデータがない場合、tail の値は (1) のように null になります。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは、プログラムを作りましょう。最初にクラスを定義します。
+</p>
+<pre class="list">
+リスト : 循環リストによるキューの実装
+
+class Queue&lt;E&gt; {
+  // 内部クラス
+  private class Cell {
+    E item;
+    Cell next;
+    Cell(E x, Cell xs) {
+      item = x;
+      next = xs;
+    }
+  }
+
+  // フィールド変数
+  Cell tail;
+  int cnt;
+  public Queue() {
+    tail = null;
+    cnt = 0;
+  }
+
+  // メソッドの定義
+  ・・・省略・・・
+
+}
+</pre>
+<p> Queue の中でセルを表すクラス Cell を定義するのは前と同じです。Queue のコンストラクタでは、要素数を表す変数 cnt と最後尾のセルを参照する変数 tail を初期化します。
+</p>
+
+<p> 次はデータを追加するメソッド add() を作ります。
+</p>
+<pre class="list">
+リスト : データの追加
+
+  public boolean add(E x) {
+    if (cnt == 0) {
+      tail = new Cell(x, null);
+      tail.next = tail;
+    } else {
+      Cell xs = new Cell(x, tail.next);
+      tail.next = xs;
+      tail = xs;
+    }
+    cnt++;
+    return true;
+  }
+
+</pre>
+<p> キューが空の場合は、コンストラクタでセルを生成して tail にセットします。そして、tail.next の値を自分自身の値 tail に書き換えます。これで循環リストになります。データがある場合は、セル tail の後ろに新しいセル xs を挿入します。そして、tail の値を xs に書き換えれば、xs が最後尾のセルになります。
+</p>
+<p> 次は先頭要素を削除するメソッド remove() を作ります。
+</p>
+<pre class="list">
+リスト : 先頭要素の削除
+
+  public E remove() {
+    if (cnt == 0)
+      throw new NoSuchElementException("Queue.remove()");
+    Cell xs = tail.next;
+    tail.next = xs.next;
+    cnt--;
+    if (cnt == 0) tail = null;
+    return xs.item;
+  }
+</pre>
+<p> キューが空の場合は throw でエラーを送出します。そうでなければ、先頭のセル tail.next を変数 xs にセットし、このセルを循環リストから削除します。この処理は tail.next の値を xs の次のセル (xs.next) に書き換えるだけです。cnt の値を -1 してデータがなくなった場合は tail の値を null にします。最後に、return で xs.item の値を返します。
+</p>
+
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="abcjava21.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+
+<h4>●immutable なキュー</h4>
+<p> 次は immutable な連結リスト (ImList) を使って immutable なキューを作ってみましょう。今回は関数型言語 (SML/NJ など) でよく使われている方法を紹介します。次の図を見てください。
+</p>
+
+<pre class="fig">
+           先頭                        
+ 変数     ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ head ─→│０│・┼─→│１│・┼─→│２│／│  
+          └─┴─┘    └─┴─┘    └─┴─┘
+           最後尾                  
+          ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ tail ─→│５│・┼─→│４│・┼─→│３│／│  
+          └─┴─┘    └─┴─┘    └─┴─┘
+
+        図 : キューの構造
+</pre>
+
+<p> 上図は 2 つのリストでキューを表しています。データを取り出すときは head のリストを、データを追加するときは tail のリストを使います。head と tail で一つのキューを構成し、head のリストはデータを逆順で格納することになります。ようするに、head が先頭で tail が最後尾になるわけです。上図のキューを一つのリストで表すと (0, 1, 2, 3, 4, 5) になります。
+</p>
+<p> したがって、head が空リストでも tail にデータがあれば、キューは空ではありません。tail のリストを逆順にして head にセットし、tail を空リストにします。これで head からデータを取り出すことができます。キューが空の状態は head と tail が両方とも空リストの場合です。
+</p>
+<h4>●immtable なキューの仕様</h4>
+<p> 下表に immutable な Queue の仕様を示します。
+</p>
+<table border=1>
+<caption>表 : immutable な Queue&lt;E&gt; のメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>Queue&lt;E&gt; Queue.queue()</td><td>空のキューを生成する</td></tr>
+  <tr><td>Queue&lt;E&gt; Queue.queue(ImList&lt;E&gt; xs)</td><td>連結リスト xs の要素でキューを初期化する</td></tr>
+  <tr><td>Queue&lt;E&gt; add(E x)</td><td>キューにデータを追加する</td></tr>
+  <tr><td>E first() </td><td>キューの先頭要素を参照する</td></tr>
+  <tr><td>Queue&lt;E&gt; rest() </td><td>キューの先頭要素を削除する</td></tr>
+  <tr><td>Pair&lt;E, Queue&lt;E&gt;&gt; pop() </td><td>先頭要素とそれを削除したキューを返す</td></tr>
+  <tr><td>boolean isEmpty() </td><td>キューが空ならば True を返す</td></tr>
+  <tr><td>int length() </td><td>キューの要素の個数を求める</td></tr>
+</tbody>
+</table>
+<p> メソッド名は immutable な連結リスト ImList にあわせました。データの追加は add() で、先頭データの参照は first() で、先頭データの削除は rest() で行います。first() と rest() を同時に行うのが pop() です。
+</p>
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。最初にクラスを定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : immutable なキューの定義
+
+package immutable;
+
+import immutable.*;
+
+// immutable なキュー
+public final class Queue&lt;E&gt; {
+  private final ImList&lt;E&gt; head;
+  private final ImList&lt;E&gt; tail;
+  private Queue(ImList&lt;E&gt; xs, ImList&lt;E&gt; ys) {
+    head = xs;
+    tail = ys;
+  }
+
+  // メソッドの定義
+  ・・・省略・・・
+}
+</pre>
+<p> クラス Queue はパッケージ immutable に定義します。フィールド変数は head と tail の 2 つです。クラスとそのフィールド変数は final であることに注意してください。
+</p>
+<p> 次はデータを追加するメソッド add() を作りましょう。
+</p>
+<pre class="list">
+リスト : データの追加
+  
+  public Queue&lt;E&gt; add(E x) {
+    return new Queue&lt;E&gt;(head, ImList.cons(x, tail));
+  }
+</pre>
+<p> add() は簡単です。tail の先頭にデータ x を追加した Queue を生成して返すだけです。
+</p>
+
+<p> 次は先頭データを参照するメソッド first() と取り除くメソッド rest() を作ります。
+</p>
+<pre class="list">
+リスト : 先頭データの参照と削除
+
+  // 先頭データの参照
+  public E first() {
+    if (!head.isEmpty())
+      return head.first();
+    else if (!tail.isEmpty())
+      return tail.last();
+    else
+      throw new NoSuchElementException("Queue.first()");
+  }
+
+  // 先頭データの削除
+  public Queue&lt;E&gt; rest() {
+    if (!head.isEmpty())
+      return new Queue&lt;E&gt;(head.rest(), tail);
+    else if (!tail.isEmpty())
+      return new Queue&lt;E&gt;(tail.reverse().rest(), ImList.nil());
+    else
+      throw new NoSuchElementException("Queue.rest()");
+  }
+</pre>
+<p> キューが空の場合、first() と rest() はエラーを送出します。head が空リストでない場合、first() は head.item を返します。rest() は head.rest() と tail を格納したキューを生成して返します。head が空リストの場合、first() は tail の最後の要素を last() で求めて返します。rest() は tail.reverse() で tail のリストを反転し、先頭要素を rest() で削除します。あとは、そのリストと空リストを格納したキューを生成して返します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="abcjava21.html#list3">プログラムリスト３</a> をお読みください。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+import immutable.*;
+
+public class queue3 {
+  public static void main(String[] args) {
+    Queue&lt;Integer&gt; q = Queue.queue(ImList.iota(1, 5));
+    System.out.println(q.isEmpty());
+    System.out.println(q.length());
+    q = ImList.iota(6, 10).foldLeft((a, x) -&gt; a.add(x), q);
+    System.out.println(q.length());
+    while (!q.isEmpty()) {
+      System.out.print(q.first() + " ");
+      q = q.rest();
+    }
+    System.out.println("");
+    System.out.println(q.isEmpty());
+    System.out.println(q.length());
+  }
+}
+</pre>
+<p> immutable なキューなので、キューを格納している変数の値を書き換えていることに注意してください。実行結果を示します。
+</p>
+<pre>
+false
+5
+10
+1 2 3 4 5 6 7 8 9 10
+true
+0
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+//
+// queue1.java : 連結リストによるキューの実装
+//
+//               Copyright (C) 2016 Makoto Hiroi
+//
+import java.util.*;
+
+class Queue&lt;E&gt; {
+  // 内部クラス
+  private class Cell {
+    E item;
+    Cell next;
+    Cell(E x, Cell xs) {
+      item = x;
+      next = xs;
+    }
+  }
+
+  // フィールド変数
+  Cell head, tail;
+  int cnt;
+  public Queue() {
+    head = tail = null;
+    cnt = 0;
+  }
+
+  // 追加
+  public boolean add(E x) {
+    Cell xs = new Cell(x, null);
+    if (cnt == 0)
+      head = xs;
+    else
+      tail.next = xs;
+    tail = xs;
+    cnt++;
+    return true;
+  }
+
+  // 削除
+  public E remove() {
+    if (cnt == 0) 
+      throw new NoSuchElementException("Queue.remove()");
+    E x = head.item;
+    head = head.next;
+    if(--cnt == 0) tail = null;
+    return x;
+  }
+
+  // 参照
+  public E element() {
+    if (cnt == 0) 
+      throw new NoSuchElementException("Queue.element()");
+    return head.item;
+  }
+
+  // 空にする
+  public void clear() {
+    head = tail = null;
+    cnt = 0;
+  }
+  
+  // 空か？
+  public boolean isEmpty() { return cnt == 0; }
+
+  // 要素数
+  public int size() { return cnt; }
+}
+
+public class queue1 {
+  public static void main(String[] args) {
+    Queue&lt;Integer&gt; q = new Queue&lt;&gt;();
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+    for (int i = 1; i &lt;= 8; i++) q.add(i);
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+    while (!q.isEmpty()) {
+      System.out.print(q.element() + " ");
+      System.out.print(q.remove() + " ");
+    }
+    System.out.println("");
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+  }
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+//
+// queue2.java : 循環リストによるキューの実装
+//
+//               Copyright (C) 2016 Makoto Hiroi
+//
+import java.util.*;
+
+class Queue&lt;E&gt; {
+  // 内部クラス
+  private class Cell {
+    E item;
+    Cell next;
+    Cell(E x, Cell xs) {
+      item = x;
+      next = xs;
+    }
+  }
+
+  // フィールド変数
+  Cell tail;
+  int cnt;
+  public Queue() {
+    tail = null;
+    cnt = 0;
+  }
+
+  // 追加
+  public boolean add(E x) {
+    if (cnt == 0) {
+      tail = new Cell(x, null);
+      tail.next = tail;
+    } else {
+      Cell xs = new Cell(x, tail.next);
+      tail.next = xs;
+      tail = xs;
+    }
+    cnt++;
+    return true;
+  }
+
+  // 削除
+  public E remove() {
+    if (cnt == 0)
+      throw new NoSuchElementException("Queue.remove()");
+    Cell xs = tail.next;
+    tail.next = xs.next;
+    cnt--;
+    if (cnt == 0) tail = null;
+    return xs.item;
+  }
+
+  // 参照
+  public E element() {
+    if (cnt == 0)
+      throw new NoSuchElementException("Queue.element()");
+    return tail.next.item;
+  }
+
+  // 要素の個数
+  public int size() { return cnt; }
+
+  // 空か？
+  public boolean isEmpty() {
+    return cnt == 0;
+  }
+
+  // 空にする
+  public void clear() {
+    tail = null;
+    cnt = 0;
+  }
+}
+
+public class queue2 {
+  public static void main(String[] args) {
+    Queue&lt;Integer&gt; q = new Queue&lt;&gt;();
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+    for (int i = 1; i &lt;= 8; i++) q.add(i);
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+    while (!q.isEmpty()) {
+      System.out.print(q.element() + " ");
+      System.out.print(q.remove() + " ");
+    }
+    System.out.println("");
+    System.out.println(q.isEmpty());
+    System.out.println(q.size());
+  }
+}
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+//
+// Queue.java : immutable なキュー
+//
+//              Copyright (C) 2016 Makoto Hiroi
+//
+package immutable;
+
+import java.util.*;
+import immutable.*;
+
+// immutable なキュー
+public final class Queue&lt;E&gt; {
+  private final ImList&lt;E&gt; head;
+  private final ImList&lt;E&gt; tail;
+  private Queue(ImList&lt;E&gt; xs, ImList&lt;E&gt; ys) {
+    head = xs;
+    tail = ys;
+  }
+
+  // 生成
+  public static &lt;E&gt; Queue&lt;E&gt; queue() {
+    return new Queue&lt;E&gt;(ImList.nil(), ImList.nil());
+  }
+
+  public static &lt;E&gt; Queue&lt;E&gt; queue(ImList&lt;E&gt; xs) {
+    return new Queue&lt;E&gt;(xs, ImList.nil());
+  }
+  
+  // キューは空か？
+  public boolean isEmpty() {
+    return head.isEmpty() &amp;&amp; tail.isEmpty();
+  }
+  
+  // 挿入
+  public Queue&lt;E&gt; add(E x) {
+    return new Queue&lt;E&gt;(head, ImList.cons(x, tail));
+  }
+
+  // 参照
+  public E first() {
+    if (!head.isEmpty())
+      return head.first();
+    else if (!tail.isEmpty())
+      return tail.last();
+    else
+      throw new NoSuchElementException("Queue.first()");
+  }
+
+  // 削除
+  public Queue&lt;E&gt; rest() {
+    if (!head.isEmpty())
+      return new Queue&lt;E&gt;(head.rest(), tail);
+    else if (!tail.isEmpty())
+      return new Queue&lt;E&gt;(tail.reverse().rest(), ImList.nil());
+    else
+      throw new NoSuchElementException("Queue.rest()");
+  }
+
+  // first() + rest()
+  public Pair&lt;E, Queue&lt;E&gt;&gt; pop() {
+    if (!head.isEmpty()) {
+      return Pair.pair(head.first(), new Queue&lt;E&gt;(head.rest(), tail));
+    } else if (!tail.isEmpty()) {
+      ImList&lt;E&gt; xs = tail.reverse();
+      return Pair.pair(xs.first(), new Queue&lt;E&gt;(xs.rest(), ImList.nil()));
+    } else {
+      throw new NoSuchElementException("Queue.pop()");
+    }
+  }
+  
+  // 要素の個数
+  public int length(){
+    return head.length() + tail.length();
+  }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcjava20.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava22.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

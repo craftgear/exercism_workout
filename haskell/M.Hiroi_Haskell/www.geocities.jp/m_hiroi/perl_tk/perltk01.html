@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Perl/Tk プログラミング入門</title>
+  <meta name="description" content="Perl/Tk,Perl/Tk入門,GUI,プログラミング">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881764</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Perl/Tk memo</h1>
+<h2>お気楽 Perl/Tk プログラミング入門</h2>
+<div class="small">
+[ PrevPage | <a href="index.html">Perl/Tk</a> | <a href="perltk02.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chapter1">Perl/Tk の基礎知識(1)</h3>
+<h4>●イベント駆動方式</h4>
+<p> GUI アプリケーションの場合、ユーザーからの入力やシステムの状態変化など、ある出来事をきっかけにプログラムが実行されます。この出来事を <b>イベント (event)</b> といい、イベントをきっかけにしてプログラムが起動されることを <b>イベントドリブン (eventdriven : イベント駆動)</b> といいます。イベントドリブン型のアプリケーションは、一般に次のようなメインルーチンを持っています。
+</p>
+<ol>
+  <li> 初期化
+  <li> イベントを取得する
+  <li> イベントの種類に応じて処理を振り分ける
+  <li> 2 に戻る
+</ol>
+<p> 2 から 4 を <b>イベントループ</b> と呼び、アプリケーションはユーザーからの入力などのイベントを待ちます。そして、3 の処理に対応する機能が <b>バインディング (binding)</b> です。バインディングは、ウィンドウでイベントが発生したときに、それに応じて定義したプログラムを実行します。このプログラムを <b>イベントハンドラ</b> とか <b>コールバック関数</b> と呼びます。
+</p>
+<p> GUI アプリケーションとしての最低限の機能は Perl/Tk が面倒を見てくれるので、私達はアプリケーション固有の処理をプログラミングするだけで済みます。
+</p>
+
+<h4>●Perl/Tk で必要な手順</h4>
+<p> Perl/Tk で GUI アプリケーションを作る場合、次のような手順が必要になります。
+</p>
+
+<ol>
+  <li>トップレベルのウィンドウ（メインウィンドウ）を作る。
+  <li>ウィジェットを設定してウィンドウに配置する。
+  <li>イベントループを開始してユーザーからの要求（イベント）を処理する。
+</ol>
+<p> このほかに、必要に応じてコールバック関数を作成します。Tcl/Tk の場合、1 と 3 の処理はプログラムする必要はありませんが、Perl/Tk では自分でプログラムを記述します。それでは実際にプログラムを作ってみましょう。ボタンをひとつ表示します。
+</p>
+
+<pre class="list">
+リスト : ボタンの表示
+
+use Tk;
+
+$top = MainWindow-&gt;new();
+$button = $top-&gt;Button( -text =&gt; 'Perl/Tk button 1' );
+$button-&gt;pack();
+
+MainLoop();
+</pre>
+
+<p> まず use Tk でモジュール Tk.pm をロードします。次に、MainWindow-&gt;new() でメインウィンドウを作成します。Tk.pm はオブジェクト指向で作られています。矢印 <b>-&gt;</b> はメソッドを呼び出す構文で、クラス MainWindow のメソッド new を呼び出しています。一般に、new はクラスのインスタンス（オブジェクト）を生成するメソッドです。この場合、MainWindow のインスタンスを生成し、このインスタンスが画面上のメインウィンドウに対応します。
+</p>
+<p> 次にボタンを作ります。Tk では GUI 用の部品のことを <b>ウィジェット (widget)</b> と呼びます。Tk にはたくさんのウィジェットが用意されていて、それをウィンドウに配置することで簡単に GUI アプリケーションを作成することができます。
+</p>
+<p> メインウィンドウにボタンを配置するには、$top-&gt;Button() のように Button メソッドを呼び出します。ウィジェットを生成するメソッドは new ではなく、ウィジェットを表すクラス名がメソッドに対応しています。引数 text =&gt; 'Perl/Tk button 1' は、ボタンに表示されるテキストを指定します。ウィジェットを生成するメソッドは、そのウィジェットに対応するインスタンスを返します。
+</p>
+<p> この段階では、ボタンはまだ配置されていません。ボタンの配置はメソッド pack で行います。Tk の場合、ウィジェットの配置は <b>ジオメトリマネージャ</b> が行います。3 種類のマネージャがあって、pack はそのうちのひとつです。$button-&gt;pack() が実行されると、ウィンドウにボタンが配置されます。最後に MainLoop を呼び出して、イベントループを開始します。
+</p>
+
+<p> 簡単なプログラムですが、Perl/Tk で GUI アプリケーションを作る場合の基本的な構造を表しています。あとは、イベントに対応するコールバック関数を作ります。この例題では、ボタンを表示しただけですが、押したときの動作をプログラムすることができます。
+</p>
+
+<h4>●ウィジェットの種類</h4>
+<p> Tk に用意されている主なウィジェットを表に示します。
+</p>
+<table border=1>
+<caption>表 : Tk に用意されている主なウィジェット</caption>
+<thead>
+  <tr><th>ウィジェット名</th><th>クラス名</th><th>概要</th>
+<thead>
+<tbody>
+  <tr><td>フレーム</td><td>Frame</td><td>ウィジェットを格納する枠組みを作る</td>
+  <tr><td>ラベル</td><td>Label</td><td>文字列やイメージを表示する</td>
+  <tr><td>メッセージ</td><td>Message</td><td>複数行の文字列を表示する</td>
+  <tr><td>ボタン</td><td>Button</td><td>ボタンを作る</td>
+  <tr><td>ラジオボタン</td><td>Radiobutton</td><td>ラジオボタンを作る</td>
+  <tr><td>チェックボタン</td><td>Checkbutton</td><td>チェックボタンを作る</td>
+  <tr><td>リストボックス</td><td>Listbox</td><td>リストボックスを作る</td>
+  <tr><td>スクロールバー</td><td>Scrollbar</td><td>スクロールバーを作る</td>
+  <tr><td>スケール</td><td>Scale</td><td>スケールを作る</td>
+  <tr><td>エントリー</td><td>Entry</td><td>1 行の文字列の入力と編集</td>
+  <tr><td>メニュー</td><td>Menu</td><td>メニューを作る</td>
+  <tr><td>メニューボタン</td><td>Menubutton</td><td>メニューボタンを作る</td>
+  <tr><td>ビットマップ</td><td>Bitmap</td><td>ビットマップを作る</td>
+  <tr><td>キャンバス</td><td>Canvas</td><td>キャンバスを作る</td>
+  <tr><td>テキスト</td><td>Text</td><td>テキストの入力と編集</td>
+</tbody>
+</table>
+
+<p> なかにはあまり見かけないものもありますが、大部分は Windows でもお馴染みのウィジェットだと思います。このほかにも、Perl/Tk 独自のウィジェットがあります。
+</p>
+<p> ウィジェットは次の形式で生成します。
+</p>
+<pre class="item">
+$widget = $parrent-&gt;widgetClass( option =&gt; value, .... );
+</pre>
+<p> これで $parrent に配置するウィジェットが生成されます。$parrent にはメインウィンドウやほかのウィジェットのインスタンス、widgetClass には生成するウィジェットのクラス名を指定します。返り値は生成したウィジェットのインスタンスです。メインウィンドウもウィジェットのひとつですが、MainWindow-&gt;new() で生成します。
+</p>
+<p> ボタンの例題のように、ウィジェットにはユーザーがデータを設定することができます。これを <b>オプション</b> といいます。PerlTk では <b>プロパティ</b> と呼ぶ場合もありますが、このドキュメントでは Tcl/Tk と同様にオプションと呼ぶことにします。最初に、ほとんどのウィジェットで共通するオプションを説明します。
+</p>
+<table border=1>
+<caption>表 : ほとんどのウィジェットで共通のオプション</caption>
+<tbody>
+  <tr><td>-foreground (-fg)   </td><td>文字や線を描くのに使用する色を指定</td>
+  <tr><td>-background (-bg)   </td><td>背景色の指定</td>
+  <tr><td>-text              </td><td>ウィジェット内に表示されるテキスト</td>
+  <tr><td>-textvariable      </td><td>テキストを格納する変数</td>
+  <tr><td>-image             </td><td>ウィジェット内に表示されるイメージ</td>
+  <tr><td>-bitmap            </td><td>ウィジェット内に表示されるビットマップ</td>
+  <tr><td>-borderwidth (-bd) </td><td>ウィジェットの枠の幅</td>
+  <tr><td>-relief            </td><td>ウィジェットの枠のスタイル</td>
+  <tr><td>-height            </td><td>ウィジェットの高さ</td>
+  <tr><td>-width             </td><td>ウィジェットの幅</td>
+  <tr><td>-anchor            </td><td>ウィジェットや表示されるデータの位置を指定</td>
+</tbody>
+</table>
+
+<p> ウィジェットの幅と高さは、テキストを表示するウィジェットでは文字数、それ以外のウィジェットはピクセル単位となります。オプションは <b>option =&gt; value</b> の形式で指定します。
+</p>
+<h4>●configure と cget メソッド</h4>
+<p> オプションはウィジェットを生成するときに指定しますが、あとからオプションの値を変更することもできます。これには configure メソッドを使います。また、オプションの値を参照するには cget メソッドを使います。
+</p>
+
+<pre class="item">
+$widget-&gt;configure( option =&gt; value, ..... );
+$widget-&gt;cget( option );
+</pre>
+
+<p> configure と cget は全てのウィジェットで共通に使用することができます。Perl/Tk では、このようなウィジェットを操作するメソッドが多数用意されています。ちなみに、Tcl/Tk ではウィジェットを操作するメソッドのことを、「ウィジェットコマンド」と呼びます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chapter2">Perl/Tk の基礎知識(2)</h3>
+<h4>●ボタンとラベル</h4>
+<p> 最初は簡単に扱えるボタン ( Button ) とラベル ( Label ) から始めましょう。ラベルはウィンドウに文字列を表示するウィジェットです。まず、テキストを表示するウィジェットでよく使用されるオプションを示します。
+</p>
+<table border=1>
+<caption>表：テキスト表示のオプション</caption>
+<tbody>
+  <tr><td>-font</td><td>使用するフォント</td></tr>
+  <tr><td>-underline</td><td>下線つき表示する文字位置</td></tr>
+  <tr><td>-padx</td><td>水平方向の詰めもの</td></tr>
+  <tr><td>-pady</td><td>垂直方向の詰めもの</td></tr>
+</tbody>
+</table>
+
+<p> ボタンにはもうひとつ重要なオプションがあります。
+</p>
+<pre class="item">
+-command    押したときに実行する関数を指定
+</pre>                     
+<p> たとえば、-command に Perl/Tk を終了する関数 exit を指定すると、そのボタンを押すとアプリケーションが終了することになります。このような関数を <b>コールバック関数</b> と呼びます。コールバック関数は、<b>関数へのリファレンス</b> または <b>無名の配列</b> で指定します。たとえば、前回の例題でボタンを押したら終了する場合は、次のように指定します。
+</p>
+<pre class="item">
+$button = $top-&gt;Button( -text =&gt; 'Perl/Tk button 1', -command =&gt; \&amp;exit );
+</pre>
+<p> 無名の配列を使う場合、最初の要素が関数へのリファレンス、あとの要素はその関数に渡される引数となります。たとえば、関数 foo( 10, 20 ) を呼び出したい場合は次のようになります。
+</p>
+<pre class="item">
+-command =&gt; [ \&amp;foo, 10, 20 ]
+</pre>
+<p> あとから例題として出てきますが、押したボタンを識別するのに、この方法がよく使われます。
+</p>
+
+<p> それから、コールバック関数にメソッドを登録する場合は、次のように行います。
+</p>
+<pre class="item">
+[ 'methodname', $object, args, ..... ]
+</pre>
+<p> 最初にメソッド名 methodname、その次に呼び出すメソッドのインスタンス（オブジェクト）、最後に引数を指定します。
+</p>
+<pre class="item">
+$object-&gt;methodname( args, ..... );
+</pre>
+<p> これで、通常のメソッドを呼び出す形式と同じようにメソッドが呼び出されます。
+</p>
+<h4>●ジオメトリマネージャ</h4>
+<p> ボタンを作ったら、それをウィンドウに配置しないといけません。Tk ではジオメトリマネージャ (Geometry Manager) がウィジェットの配置を担当し、3 種類のマネージャが用意されています。
+</p>
+<ul>
+  <li><b>Placer</b><br>
+place コマンドはウィジェットを指定した座標に配置します。
+  <li><b>Packer</b><br>
+pack コマンドはウィンドウにウィジェットを詰め込みます。ウィジェットの数や大きさによって、ウィンドウの大きさも変化します。
+  <li><b>Gridder</b><br>
+grid コマンドはウィジェットを格子状に配置します。このコマンドもウィジェットの数や大きさによって、ウィンドウの大きさも変化します。
+</ul>
+<p> いちばんよく使われるマネージャが Packer です。Placer はウィジェットの位置を座標で指定するため、並べて表示する場合には設定が少々面倒です。たいていの場合は Packer で用が足りるので、Placer を使う機会はあまりないでしょう。電卓やマインスイーパーのように、ボタンを格子状に配置する場合は Gridder が便利です。
+</p>
+
+<h4>●ラベルの作成</h4>
+<p> それでは簡単な例題として、押したボタンの番号をラベルに表示するプログラムを作ります。最初にラベルを定義します。
+</p>
+
+<pre class="list">
+リスト：ラベルの定義
+
+use Tk;
+
+$top = MainWindow-&gt;new();
+
+$buffer = "";    # ラベル用の変数
+$l = $top-&gt;Label( -textvariable =&gt; \$buffer );
+$l-&gt;pack();
+</pre>
+
+<p> オプション -textvariable で変数 $buffer を指定します。変数の指定にはリファレンスを使います。これにより、変数 $buffer に格納されている文字列がラベルに表示されます。これはとても便利な機能で、変数の値を書き換えるだけで表示を変更することができます。
+</p>
+<p> ところで、ラベルのインスタンスを変数 $l にセットし、それから pack を呼び出していますね。この部分は、次のようにプログラムすることができます。
+</p>
+<pre class="item">
+$top-&gt;Label( ..... )-&gt;pack();
+</pre>
+<p> あとからウィジェットのメソッドを呼び出さないのであれば、返り値のインスタンスを受け取る必要はありません。つまり、すべてのオプションをウィジェットの生成時に設定すれば、あとは MainLoop を呼び出すだけでいいのです。これからは必要な場合にのみ、ウィジェットのインスタンスを保持することにします。
+</p>
+<h4>●ボタンの作成</h4>
+<p> 次はボタンを作ります。複数のボタンを作る場合、それに対応するコールバック関数を同じ数だけ作るのでは面倒です。そこで、コールバック関数はひとつだけ作成し、それにボタンの番号を渡すことにします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ボタンの定義
+
+# コールバック関数
+sub push_button {
+    my $n = shift;
+    $buffer = "button $n pressed";
+}
+
+# ボタンの生成
+foreach $n (1, 2, 3, 4) {
+    $top-&gt;Button( -text =&gt; "button $n",
+                  -command =&gt; [\&amp;push_button, $n] )-&gt;pack();
+}
+
+MainLoop();
+</pre>
+<p> コールバック関数は push_button とし、押されたボタンの番号を引数として渡します。ボタンは 4 つ作成して番号で区別します。ここで、-text の値は変数置換によってボタンの番号が設定され、-command の値も、無名の配列にはボタンの番号がセットされることに注意してください。つまり、番号 1 のボタンを押した場合、呼び出される関数は &amp;push_button( 1 ) になるのです。これでどのボタンが押されたか知ることができます。
+</p>
+
+<p>それでは実行してみてください。
+</p>
+<img src="img/button1.png" ALT="ボタンの画面"> button 1 を押した動作
+
+<p>ボタンが縦に 4 つ表示されましたね。そして、ボタンを押すといちばん上に文字列が表示されます。つまり、ボタンを押すという動作によってプログラムが実行されたのです。
+</p>
+<h4>●Pack マネージャ</h4>
+<p> 次は、pack について説明しましょう。pack はウィジェットを上から順に詰め込み、ウィンドウに配置するパッケージマネージャです。例題ではボタンの幅がウィンドウより小さいですが、これをいっぱいに広げるには -fill オプションを使います。方向は x, y で指定します。両方向に広げるには both を指定します。実際に -fill を 追加して確かめてください。
+</p>
+<img src="img/button2.png" ALT="ボタンの画面"> -fill =&gt; both を指定し、button 2 を押した動作
+
+<p> 詰め込む方向を変えるにはオプション -side を使います。指定できる値は top, bottom, left, right の 4 つです。ウィジェットによって詰め込む方向を変えてもかまいません。ボタンを配置する pack に -side left を追加して実行してみましょう。一番上にラベルが配置され、その下にボタンが 4 つ左から順番に並べられます。
+</p>
+
+<img src="img/button3.png" ALT="ボタンの画面"> -side =&gt; left を指定し、button 3 を押した動作
+
+<p> このとき、ラベルはウィンドウの中央に表示されます。これを左側に寄せるには -anchor オプションを設定します。指定が省略された場合は中央となります。指定方法は次の記号を使います。
+</p>
+<pre class="fig">
+   nw --- n --- ne   
+   |             |
+   w      c      e
+   |             |
+   sw --- s --- se
+
+図：-anchor の指定方法
+</pre>
+
+<p> 記号はそれぞれ e (East), w (West), s (South), n (North), c (Center) を表します。ラベルを pack するときに、オプション -anchor =&gt; w を指定すると左寄せに表示します。
+</p>
+
+<img src="img/button4.png" ALT="ボタンの画面"> -anchor =&gt; w を指定し、button 4 を押した動作
+
+<p>このほかにも、 pack にはいろいろなオプションやメソッドが用意されています。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chapter3">色とスケール</h3>
+<h4>●色の指定</h4>
+<p> 今回は、テキストやボタンに色をつけてみましょう。Tk の場合、色の指定は名前または数値で行います。名前は red, green, blue のように指定します。色の名前は大文字小文字の区別をしません。red と RED は同じ色を表します。数値の場合は、赤、緑、青の三原色を 16 進数で指定します。指定方法には、次の 4 通りの形式があります。
+</p>
+<ol>
+  <li>#RGB
+  <li>#RRGGBB
+  <li>#RRRGGGBBB
+  <li>#RRRRGGGGBBBB
+</ol>
+<p> 色の指定は # から始まり、R, G, B はそれぞれ赤、緑、青の強度を表す数値です。それぞれの色を表す桁数は同じでなければいけません。1. では、R, G, B が 16 段階なので 4096 色の指定ができます。2. は 256 段階なので、約 1600 万色の指定ができます。3. 4. はほとんど使われることはないでしょう。実際の表示は使用しているハードウェアの環境に依存します。
+</p>
+<h4>●scaleウィジェット(スライダ)</h4>
+<p> それでは、R, G, B の値で色がどのように変化するか、サンプルプログラムを作って確かめてみましょう。数値の入力はキーボードから行ってもいいのですが、ここではスケール (scale) というウィジェットを使いましょう。スケールは整数値を表示し、スライダをドラッグするかスケールをクリックすることで、その値を更新することができます。スケールで使用する主なオプションを表に示します。
+</p>
+<table border=1>
+<caption>表 : Scale の主なオプション</caption>
+<tbody>
+  <tr><td>-label</td><td>スケールのラベル</td></tr>
+  <tr><td>-from</td><td>スケールの最小値</td></tr>
+  <tr><td>-to</td><td>スケールの最大値</td></tr>
+  <tr><td>-orient</td><td>スケールの方向</td></tr>
+  <tr><td>-showvalue</td><td>値を表示するか</td></tr>
+  <tr><td>-variable</td><td>スケールの値を格納する変数</td></tr>
+  <tr><td>-command</td><td>値が変化したときに実行するコマンド</td></tr>
+  <tr><td>-resolution</td><td>解像度</td></tr>
+</tbody>
+</table>
+
+<p> -label はスケールの隣に表示する文字列を指定し、-form と -to で値の範囲を指定します。-orient はスケールの方向を指定するもので、horizontal または h を指定すると水平になり、vertical または v で垂直になります。デフォルトでは垂直に設定されます。
+</p>
+<p> -showvalue は現在の値を表示するかを設定します。-variable はスケールの値を格納する変数を指定します。スケールの値はメソッドで求めることもできますが、グローバル変数を設定した方が簡単です。
+</p>
+<p> -command は、スケールの値が変更されたときに実行する関数を指定します。このとき、スケールの値が引数として関数に渡されます。たとえば、関数 foo を指定した場合、呼び出されるときは foo( 128 ) となります。
+</p>
+このほかにも、ウィジェットの大きさを設定するオプションがあります。
+<p> スケールには configure や cget のほかに、次に示すメソッドが用意されています。
+</p>
+<ul>
+  <li><b>coords( value )</b><br>
+指定した値 (value) に対応するグライダの座標を返す。
+  <li><b>get( x, y )</b><br>
+指定した座標に対応するスケールの値を返す。座標を省略した場合は現在値を返す。
+  <li><b>set( value )</b><br>
+スケールの値を value に変更する。
+  <li><b>identify( x, y )</b><br>
+指定した座標にスライダがあれば文字列 slider を返す。スライダより上（左）にあれば trough1 を返し、下（右）にあれば trough2 を返す。
+</ul>
+<p> get と set 以外のメソッドは使う機会はあまりないでしょう。
+</p>
+<h4>●スケールの使用例</h4>
+<p> それでは、ボタンの背景色を変化させるプログラムを作ります。
+</p>
+
+<pre class="list">
+リスト : スケールの使用例
+
+use Tk;
+
+# スケールの値を格納する変数
+$red = 0;
+$blue = 0;
+$green = 0;
+
+# ボタンの背景色を変更
+sub change_color {
+    my $color = sprintf("#%02x%02x%02x", $red, $green, $blue );
+    $button-&gt;configure( -bg =&gt; $color );
+}
+
+# メインウィンドウ
+$top = MainWindow-&gt;new();
+
+# ボタン
+$button = $top-&gt;Button( -text =&gt; "button", -bg =&gt; '#000' );
+$button-&gt;pack( -fill =&gt; 'both' );
+
+# スケール
+$top-&gt;Scale(-label =&gt; red,
+            -orient =&gt; h,
+            -from =&gt; 0,
+            -to =&gt; 255,
+            -variable =&gt; \$red,
+            -command =&gt; \&amp;change_color )-&gt;pack( -fill =&gt; both );
+
+$top-&gt;Scale(-label =&gt; blue,
+            -orient =&gt; h,
+            -from =&gt; 0,
+            -to =&gt; 255,
+            -variable =&gt; \$blue,
+            -command =&gt; \&amp;change_color )-&gt;pack( -fill =&gt; both );
+
+$top-&gt;Scale(-label =&gt; green,
+            -orient =&gt; h,
+            -from =&gt; 0,
+            -to =&gt; 255,
+            -variable =&gt; \$green,
+            -command =&gt; \&amp;change_color )-&gt;pack( -fill =&gt; both );
+
+MainLoop();
+</pre>
+
+<p> スケールの値はそれぞれ red, blue, green というグローバル変数に格納します。変数の値は 0 に初期化しておきます。ボタンのインスタンスは背景色を変更するときに必要になるので、グローバル変数 $button に格納しておきます。値が変化したときに実行する関数が change_color です。
+</p>
+<p> 関数 sprintf を使って red, green, blue の値をカラーコードに変換します。数値を 2 桁にそろえるため書式は %02x としています。その後、ボタンの背景色を configure メソッドで変更します。これで、スライダの動きによってボタンの色を変化させることができます。
+</p>
+<img SRC="img/color.png" ALT="スライダの画面"> スライダで RGB を指定する
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2001-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ PrevPage | <a href="index.html">Perl/Tk</a> | <a href="perltk02.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

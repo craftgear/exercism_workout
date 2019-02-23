@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881790</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell22.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell24.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">ヒープ (2)</h3>
+<p> ヒープの続きです。今回は Leftist Heap と Skew Heap について説明します。
+</p>
+
+<h4>●Leftist Heap とは？</h4>
+<p> <a href="haskell23.html#cite">参考 URL 1, 2</a> によると、Leftist Heap は次の条件を満たす二分木とのことです。
+</p>
+<ol>
+  <li> 親 &lt;= 子 を満たす。左右の子に条件はない。
+  <li> 最も右側の子 (終端) までの経路長を求める関数を rank とすると、rank(右部分木) &lt;= rank(左部分木) を満たす。
+</ol>
+<p> 1 はヒープの条件です。2 の条件を満たすことにより、節の個数を N とすると Leftist Heap の rank(ルート) は log<sub>2</sub> (N + 1) 以下になります。Leftist Heap は二つのヒープを併合する処理 merge を使って操作しますが、右部分木に対して merge を行うことで、merge は O(log N) に比例する時間で行うことができます。
+</p>
+<p> Leftist Heap の簡単な例を示します。次の図を見てください。
+</p>
+<pre class="fig">
+                      Ａ２
+                    ／  ＼
+                  ／      ＼
+                ／          ＼
+              ／              ＼
+            ／                  ＼
+          Ｂ２                    Ｃ１
+        ／  ＼                  ／
+      ／      ＼              ／
+    Ｄ２        Ｅ１        Ｆ１
+  ／  ＼      ／
+Ｇ      Ｈ  Ｉ
+１      １  １
+
+         図 : Leftist Heap の一例
+</pre>
+<p> アルファベットは節を、数字は rank の返り値を表します。これ以降 rank の返り値のことを単に rank と書くことにします。終端は省略しています。節 F, G, H, I は、左右の子が終端なので、rank は右の終端までの経路長 1 となります。D の場合、右側の子をたどると D - H - 終端 になるので、rank は 2 になります。E と C は右の子が終端なので rank は 1 になります。A と B の rank は右の子 C と E の rank を +1 した値 (2) になります。終端の rank を 0 とすると、どの部分木を見ても rank(right) &lt;= rank(left) になっていて、Leftist Heap の条件 2 を満たしていることがわかります。
+</p>
+
+<h4>●Leftist Heap のマージ</h4>
+<p> Leftist Heap の基本的な操作は二つのヒープを併合する merge です。たとえば、データをヒープ A に追加する場合、要素が一つのヒープ B を作り、A と B を併合することで行います。最小値を削除する処理も、ルートの左右の部分木を併合することで行うことができます。
+</p>
+<p> たとえば、要素が一つのヒープを併合する場合を考えて見ましょう。次の図を見てください。
+</p>
+<pre class="fig">
+     (Ａ)     (Ｂ)
+      ４　　　 ７
+    ／  ＼   ／  ＼
+
+(1) ルートの節を比較して小さいほうが新しいルートになる
+
+       (Ａ)
+        ４
+      ／  ＼
+    R=0     ７ R=1
+          ／  ＼
+
+(2) A の右部分木と B を併合する (空のヒープと B を併合する)
+
+
+          (Ａ)
+           ４
+         ／  ＼
+   R=1 ７     R=0
+     ／  ＼
+
+(3) rank の条件を満たすため A の左右の部分木を交換する
+</pre>
+<p> ルートの値を比較すると A のほうが小さいので、A のルートが新しいヒープのルートになります (1)。次に、A の右部分木と B を併合します。A の右部分木は空の木なので、B を A の右部分木に挿入します (2)。ここで、節 4 の左右の部分木の rank を比較すると、右部分木のほうが大きくなるので、左右の部分木を交換します (3)。これで併合が完了します。
+</p>
+
+<p> もう少し複雑な例を示しましょう。次の図を見てください。
+</p>
+<pre class="fig">
+         (Ａ)            (Ｂ)
+          ４　　　        ５
+        ／  ＼          ／  ＼
+      ６      ８      ７      ９
+    ／  ＼  ／  ＼  ／  ＼  ／  ＼
+
+(1) ルートの値を比較して小さいほうが新しいルートになる
+
+           (Ａ)            (Ｃ)
+            ４　　　        ８
+          ／  ＼          ／  ＼
+        ／      ＼
+      ６          ５
+    ／  ＼      ／  ＼  
+              ７      ９
+            ／  ＼  ／  ＼
+
+(2) A の右部分木と B を併合する
+    5 と 8 を比較して B が A の右部分木になる
+
+           (Ａ)            (Ｄ)
+            ４　　　        ９
+          ／  ＼          ／  ＼
+        ／      ＼
+      ６          ５
+    ／  ＼      ／  ＼  
+              ７      ８
+            ／  ＼  ／  ＼
+
+
+(3) 5 の右部分木と C を併合する
+    C が 5 の右部分木になる
+
+           (Ａ)
+            ４
+          ／  ＼
+        ／      ＼
+      ６          ５
+    ／  ＼      ／  ＼  
+              ７      ８
+                    ／  ＼
+                  R=0     ９ R=1
+                        ／  ＼
+
+(4) 8 の右部分木と D を併合する (空のヒープとの併合)
+
+           (Ａ)
+            ４
+          ／  ＼
+        ／      ＼
+      ６ R=1      ５ R=2
+    ／  ＼      ／  ＼  
+              ７ R=1  ８ R=1
+                    ／  ＼
+                  ９ R=1  R=0
+                ／  ＼
+
+(5) 節 8 の左右の部分木を交換する
+    節 5 の左右の部分木は交換しなくてよい
+
+             (Ａ)
+              ４
+            ／  ＼
+          ／      ＼
+        ５ R=2      ６ R=1
+      ／  ＼      ／  ＼
+    ７      ８
+          ／  ＼
+        ９
+      ／  ＼
+
+
+(6) 節 4 の左右の部分木を交換する
+</pre>
+<p> A と B のルートを比較して、A のほうが小さいので、A が新しいヒープのルートになります (1)。次に、A の右部分木と B を併合します。この場合、B のルートの値が小さいので、A の右部分木は B に変更します (2)。次に、節 5 の右部分木と C を併合します。この場合、C のルートの値が小さいので、節 5 の右部分木は C になります (3)。次に、節 8 の右部分木 (空の木) と D を併合します (4)。
+</p>
+<p> (4) の状態で、節 8 の左右の部分木の rank をチェックすると、右部分木の rank が大きいので、左右の部分木を交換します (5)。次に、節 5 の左右の部分木の rank をチェックしますが、左右の部分木の rank は等しいので交換する必要はありません (5)。最後に、節 4 の左右の部分木の rank をチェックします。右部分木の rank が大きいので左右の部分木を交換します。これでヒープの併合が完了します。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましましょう。まず最初にヒープを表すデータ型を定義します。
+</p>
+<pre class="list">
+リスト : データ構造の定義
+
+data Heap a = Empty | Heap Int a (Heap a) (Heap a) deriving Show
+</pre>
+<p> データ型は Heap a としました。データ構築子 Empty は空の木を表します。データ構築子 Heap の第 1 引数が rank を、第 2 引数の a が格納するデータを表します。第 3, 4 引数が左右の部分木になります。
+</p>
+<p> 次に、ヒープを操作する関数の仕様を示します。
+</p>
+<ul>
+  <li> empty :: Heap a<br>空のヒープ
+  <li> singleton :: a -&gt; Heap a<br>要素が一つのヒープを生成する
+  <li> merge :: Ord a =&gt; Heap a -&gt; Heap a -&gt; Heap a<br>二つのヒープを併合する
+  <li> fromList :: Ord a =&gt; [a] -&gt; Heap a<br>リストからヒープを生成する
+  <li> toList :: Ord a =&gt; Heap a -&gt; [a]<br>ヒープをリストに変換する
+  <li> insert :: Ord a =&gt; Heap a -&gt; a -&gt; Heap a<br>ヒープにデータを追加する
+  <li> deleteMin :: Ord a =&gt; Heap a -&gt; (a, Heap a)<br>ヒープから最小値を取り出す
+  <li> findMin :: Ord a =&gt; Heap a -&gt; a<br>ヒープの最小値を求める
+  <li> isEmpty :: Heap a -&gt; Bool<br>ヒープが空ならば True を返す
+</ul>
+<p> この中で関数 merge が Leftist Heap を操作する中心的な役割を果たします。merge のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : ヒープの併合
+
+merge :: Ord a =&gt; Heap a -&gt; Heap a -&gt; Heap a
+merge h     Empty = h
+merge Empty h     = h
+merge h1@(Heap _ x left1 right1) h2@(Heap _ y left2 right2)
+  | x &lt; y     = makeHeap x left1 (merge right1 h2)
+  | otherwise = makeHeap y left2 (merge right2 h1)
+
+rank :: Heap a -&gt; Int
+rank Empty          = 0
+rank (Heap r _ _ _) = r
+
+makeHeap :: a -&gt; Heap a -&gt; Heap a -&gt; Heap a
+makeHeap x a b =
+  if ra &gt;= rb then Heap (rb + 1) x a b else Heap (ra + 1) x b a
+  where rb = rank b
+        ra = rank a
+</pre>
+<p> 空のヒープ Empty と他のヒープ h を併合すると h になります。これが再帰呼び出しの停止条件になります。次に、二つのヒープ h1, h2 の値 x, y を比較します。x が小さい場合、h1 の右部分木 right1 と h2 を merge で併合します。そうでなければ、h2 の右部分木 right2 と h1 を併合します。
+</p>
+<p> 関数 makeHeap はヒープに格納する要素 x と、左右の部分木 a, b を受け取り、それらを Heap に格納して返します。このとき、関数 rank を使って a と b の rank を求め、rank が短いほうを右部分木に設定します。自分自身の rank は右部分木の rank に 1 を加算した値になります。関数 rank は引数が Empty であれば 0 を、Heap であれば第 1 引数の値を返します。
+</p>
+<p> ヒープの操作関数は merge を使うと簡単に定義できます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ヒープの操作関数
+
+-- データの追加
+insert :: Ord a =&gt; a -&gt; Heap a -&gt; Heap a
+insert h x = merge (singleton x) h
+
+-- ヒープから最小値を取り出す
+deleteMin :: Ord a =&gt; Heap a -&gt; (a, Heap a)
+deleteMin Empty = error "Empty Heap"
+deleteMin (Heap _ x a b) = (x, merge a b)
+
+-- リストからヒープを作る
+fromList :: Ord a =&gt; [a] -&gt; Heap a
+fromList = foldl insert Empty
+
+-- ヒープをリストに変換
+toList :: Ord a =&gt; Heap a -&gt; [a]
+toList h
+  | isEmpty h = []
+  | otherwise = let (x, h') = deleteMin h
+                in x : toList h'
+</pre>
+<p> 関数 insert は sinleton x で要素が一つのヒープを生成し、それと引数 h のヒープを merge で併合します。関数deleteMin はルートの値 x と左右の部分木を併合したヒープをタプルに格納して返します。関数 fromList は foldl でリストの要素を取り出し insert でヒープに挿入していくだけです。関数 toList は deleteMin で最小値を取り出し、toList を再帰呼び出しした結果のリストに x を追加するだけです。
+</p>
+<p> fromList と toList を組み合わせることでリストをソートすることができます。ヒープを使ったソートアルゴリズムを「ヒープソート」といいます。データ数を N とすると、ヒープソートは N * log<sub>2</sub> N に比例する時間でデータをソートすることができます。これはあとで試してみましょう。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="haskell23.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; let a = singleton 1
+*Main&gt; a
+Heap 1 1 Empty Empty
+*Main&gt; let b = insert a 2
+*Main&gt; b
+Heap 1 1 (Heap 1 2 Empty Empty) Empty
+*Main&gt; let c = insert b 3
+*Main&gt; c
+Heap 2 1 (Heap 1 2 Empty Empty) (Heap 1 3 Empty Empty)
+*Main&gt; let d = insert c 4
+*Main&gt; d
+Heap 2 1 (Heap 1 2 Empty Empty) (Heap 1 3 (Heap 1 4 Empty Empty) Empty)
+*Main&gt; let e = insert d 5
+*Main&gt; e
+Heap 2 1 (Heap 2 3 (Heap 1 4 Empty Empty) (Heap 1 5 Empty Empty)) (Heap 1 2 Empty Empty)
+*Main&gt; let (v1, a1) = deleteMin e
+*Main&gt; v1
+1
+*Main&gt; a1
+Heap 1 2 (Heap 2 3 (Heap 1 4 Empty Empty) (Heap 1 5 Empty Empty)) Empty
+*Main&gt; let (v2, a2) = deleteMin a1
+*Main&gt; v2
+2
+*Main&gt; a2
+Heap 2 3 (Heap 1 4 Empty Empty) (Heap 1 5 Empty Empty)
+*Main&gt; let (v3, a3) = deleteMin a2
+*Main&gt; v3
+3
+*Main&gt; a3
+Heap 1 4 (Heap 1 5 Empty Empty) Empty
+*Main&gt; let (v4, a4) = deleteMin a3
+*Main&gt; v4
+4
+*Main&gt; a4
+Heap 1 5 Empty Empty
+*Main&gt; let (v5, a5) = deleteMin a4
+*Main&gt; v5
+5
+*Main&gt; a5
+Empty
+
+*Main&gt; let a = fromList [5,6,4,7,3,8,2,9,1,0]
+*Main&gt; a
+Heap 1 0 (Heap 1 1 (Heap 2 2 (Heap 2 3 (Heap 2 4 (Heap 1 5 (Heap 1 6 Empty Empty)
+ Empty) (Heap 1 7 Empty Empty)) (Heap 1 8 Empty Empty)) (Heap 1 9 Empty Empty))
+ Empty) Empty
+*Main&gt; toList a
+[0,1,2,3,4,5,6,7,8,9]
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●Skew Heap とは？</h4>
+<p> 次は Skew Heap というヒープを説明します。Leftist Heap は節に rank の情報を付加して、rank が条件を満たすように木を修正しました。これに対し、1986 年に Sleater 氏と Tarjan 氏が提案した Skew Heap はちょっと変わっています。
+</p>
+
+<p> Skew Heap は二つのヒープを併合する場合、Leftist Heap と同様に右部分木と他のヒープを併合します。このとき、左右の部分木を無条件に交換します。Leftist Heap のように、節に rank の情報を付加する必要はありません。
+</p>
+
+<p> ただし、Leftist Heap のように rank が一定の範囲内に収まる保障はありません。データを挿入または削除する順番によっては、二分木のバランスが大きく崩れることがあるのです。もしそうなったとしても、その後のアクセスによって、Skew Heap はバランスを回復することが可能です。
+</p>
+
+<p> Skew Heap はデータ数を N とすると、データの挿入または削除するときの平均実行時間が log<sub>2</sub> N に比例するという面白い性質があります。ようするに、一回あたり長い時間がかかる処理があったとしても、全体で平均してみると O(log N) になるデータ構造というわけです。
+</p>
+
+<p> このように、Skew Heap は一時的に二分木のバランスが崩れることがあっても、トータルとして考えると木のバランスを保つように動作します。このため、Skew Heap は「自己調整ヒープ」と呼ばれています。
+</p>
+
+<p> 今回は Skew Heap を簡単に説明して、実際にプログラムを作ってみましょう。Skew Heap の詳細は Sleater 氏と Tarjan 氏の論文 <a href="http://www.cs.cmu.edu/~sleator/papers/Adjusting-Heaps.htm">"Self adjusting Heaps"</a> や Chris Okasaki 氏の <a href="http://www.palgrave.com/pdfs/0333992857.pdf">Fun with binary heap trees (PDF)</a> をお読みください。
+</p>
+
+<h4>●Skew Heap のマージ</h4>
+<p> Skew Heap の基本的な操作も二つのヒープを併合する merge です。たとえば、要素が一つのヒープを併合する場合を考えて見ましょう。次の図を見てください。
+</p>
+<pre class="fig">
+     (Ａ)     (Ｂ)
+      ４　　　 ７
+    ／  ＼   ／  ＼
+
+(1) ルートの節を比較して小さいほうが新しいルートになる
+
+       (Ａ)
+        ４
+      ／  ＼
+            ７
+          ／  ＼
+
+(2) A の右部分木と B を併合する (空のヒープと B を併合する)
+
+
+          (Ａ)
+           ４
+         ／  ＼
+       ７
+     ／  ＼
+
+(3) 左右の部分木を交換する
+</pre>
+<p> ルートの値を比較すると A のほうが小さいので、A のルートが新しいヒープのルートになります (1)。次に、A の右部分木と B を併合します。A の右部分木は空の木なので、B を A の右部分木に挿入します (2)。最後に、左右の部分木を交換します (3)。これで併合が完了します。
+</p>
+
+<p> もう少し複雑な例を示しましょう。次の図を見てください。
+</p>
+<pre class="fig">
+       (Ａ)            (Ｂ)
+        ４　　　        ５
+      ／  ＼          ／  ＼
+    ６      ８      ７      ９
+  ／  ＼  ／  ＼  ／  ＼  ／  ＼
+
+(1) ルートの値を比較して小さいほうが新しいルートになる
+
+         (Ａ)            (Ｃ)
+          ４　　　        ８
+        ／  ＼          ／  ＼
+      ／      ＼
+    ６          ５
+  ／  ＼      ／  ＼  
+            ７      ９
+          ／  ＼  ／  ＼
+
+(2) A の右部分木と B を併合する
+    5 と 8 を比較して B が A の右部分木になる
+
+         (Ａ)            (Ｄ)
+          ４　　　        ９
+        ／  ＼          ／  ＼
+      ／      ＼
+    ６          ５
+  ／  ＼      ／  ＼  
+            ７      ８
+          ／  ＼  ／  ＼
+
+
+(3) 5 の右部分木と C を併合する
+    C が 5 の右部分木になる
+
+         (Ａ)
+          ４
+        ／  ＼
+      ／      ＼
+    ６          ５
+  ／  ＼      ／  ＼  
+            ７      ８
+                  ／  ＼
+                        ９
+                      ／  ＼
+
+(4) 8 の右部分木と D を併合する (空のヒープとの併合)
+
+         (Ａ)
+          ４
+        ／  ＼
+      ／      ＼
+    ６          ５
+  ／  ＼      ／  ＼
+            ７      ８
+                  ／  ＼
+                ９
+              ／  ＼
+
+(5) 節 8 の左右の部分木を交換する
+
+
+         (Ａ)
+          ４
+        ／  ＼
+      ／      ＼
+    ６          ５
+  ／  ＼      ／  ＼
+            ８      ７
+          ／  ＼
+        ９
+      ／  ＼
+
+(6) 節 5 の左右の部分木を交換する
+
+                   (Ａ)
+                    ４
+                  ／  ＼
+                ／      ＼
+              ５ 　       ６
+            ／  ＼      ／  ＼
+          ８      ７
+        ／  ＼
+      ９
+    ／  ＼
+
+(7) 節 4 の左右の部分木を交換する
+</pre>
+<p> (1) から (4) までの操作は Leftist Heap と同じです。(5) から (7) の操作で、左右の部分木を無条件に交換します。Skew Heap の場合、rank をチェックする処理が不要なので、プログラムは Leftist Heap よりも簡単になります。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましましょう。まず最初にヒープを表すデータ型を定義します。
+</p>
+<pre class="list">
+リスト : データ構造の定義
+
+data Heap a = Empty | Heap a (Heap a) (Heap a) deriving Show
+</pre>
+<p> データ型は Heap a としました。データ構築子 Empty は空の木を表します。データ構築子 Heap の第 1 引数の a が格納するデータを表します。第 2, 3 引数が左右の部分木になります。
+</p>
+<p> 次に、ヒープを操作する関数の仕様を示します。これらの関数は Leftist Heap と同じです。
+</p>
+<ul>
+  <li> empty :: Heap a<br>空のヒープ
+  <li> singleton :: a -&gt; Heap a<br>要素が一つのヒープを生成する
+  <li> merge :: Ord a =&gt; Heap a -&gt; Heap a -&gt; Heap a<br>二つのヒープを併合する
+  <li> fromList :: Ord a =&gt; [a] -&gt; Heap a<br>リストからヒープを生成する
+  <li> toList :: Ord a =&gt; Heap a -&gt; [a]<br>ヒープをリストに変換する
+  <li> insert :: Ord a =&gt; Heap a -&gt; a -&gt; Heap a<br>ヒープにデータを追加する
+  <li> deleteMin :: Ord a =&gt; Heap a -&gt; (a, Heap a)<br>ヒープから最小値を取り出す
+  <li> findMin :: Ord a =&gt; Heap a -&gt; a<br>ヒープの最小値を求める
+  <li> isEmpty :: Heap a -&gt; Bool<br>ヒープが空ならば True を返す
+</ul>
+<p> 関数 merge のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : ヒープの併合
+
+-- 二つのヒープを併合する
+merge :: Ord a =&gt; Heap a -&gt; Heap a -&gt; Heap a
+merge h     Empty = h
+merge Empty h     = h
+merge h1@(Heap x left1 right1) h2@(Heap y left2 right2) 
+  | x &lt; y     = Heap x (merge right1 h2) left1
+  | otherwise = Heap y (merge right2 h1) left2
+</pre>
+<p> 空のヒープ Empty と他のヒープ h を併合すると h になります。これが再帰呼び出しの停止条件になります。次に、二つのヒープ h1, h2 の値 x, y を比較します。x が小さい場合、h1 の右部分木 right1 と h2 を merge で併合します。そうでなければ、h2 の右部分木 right2 と h1 を併合します。そして、併合した結果を左部分木に、左部分木 left1 または left2 を右部分木に設定します。
+</p>
+
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="haskell23.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+
+<h4>●実行例</h4>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; let a = singleton 0
+*Main&gt; a
+Heap 0 Empty Empty
+*Main&gt; let b = insert a 1
+*Main&gt; b
+Heap 0 (Heap 1 Empty Empty) Empty
+*Main&gt; let c = insert b 2
+*Main&gt; c
+Heap 0 (Heap 2 Empty Empty) (Heap 1 Empty Empty)
+*Main&gt; let d = insert c 3
+*Main&gt; d
+Heap 0 (Heap 1 (Heap 3 Empty Empty) Empty) (Heap 2 Empty Empty)
+*Main&gt; let e = insert d 4
+*Main&gt; e
+Heap 0 (Heap 2 (Heap 4 Empty Empty) Empty) (Heap 1 (Heap 3 Empty Empty) Empty)
+
+*Main&gt; let (v1, a1) = deleteMin e
+*Main&gt; v1
+0
+*Main&gt; a1
+Heap 1 (Heap 2 (Heap 4 Empty Empty) Empty) (Heap 3 Empty Empty)
+*Main&gt; let (v2, a2) = deleteMin a1
+*Main&gt; v2
+1
+*Main&gt; a2
+Heap 2 (Heap 3 Empty Empty) (Heap 4 Empty Empty)
+*Main&gt; let (v3, a3) = deleteMin a2
+*Main&gt; v3
+2
+*Main&gt; a3
+Heap 3 (Heap 4 Empty Empty) Empty
+*Main&gt; let (v4, a4) = deleteMin a3
+*Main&gt; v4
+3
+*Main&gt; a4
+Heap 4 Empty Empty
+*Main&gt; let (v5, a5) = deleteMin a4
+*Main&gt; v5
+4
+*Main&gt; a5
+Empty
+
+*Main&gt; let a = fromList [5,6,4,7,3,8,2,9,1,0]
+*Main&gt; a
+Heap 0 (Heap 1 (Heap 2 (Heap 9 Empty Empty) (Heap 3 (Heap 8 Empty Empty) (Heap 4
+ (Heap 7 Empty Empty) (Heap 5 (Heap 6 Empty Empty) Empty)))) Empty) Empty
+*Main&gt; toList a
+[0,1,2,3,4,5,6,7,8,9]
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●リストのソート</h4>
+<p> それでは、Leftist Heap と Skew Heap を使ってリストをソートするプログラムを作ってみましょう。比較のために、挿入ソート、クイックソート、マージソートも試してみましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : リストのソート
+
+import System.Random
+import qualified Heap1 as H1
+import qualified Heap2 as H2
+
+-- 挿入ソート
+insert_element :: Ord a =&gt; (a, [a]) -&gt; [a]
+insert_element (x, []) = [x]
+insert_element (x, xs@(y:ys))
+  | x &lt;= y    = x:xs
+  | otherwise = y : insert_element (x, ys)
+
+insert_sort :: Ord a =&gt; [a] -&gt; [a]
+insert_sort []     = []
+insert_sort (x:xs) = insert_element(x, insert_sort xs)
+
+-- クイックソート
+quick_sort :: Ord a =&gt; [a] -&gt; [a]
+quick_sort [] = []
+quick_sort (x:xs) = quick_sort [y | y &lt;- xs, y &lt; x]
+                 ++ [x]
+                 ++ quick_sort [y | y &lt;- xs, y &gt;= x]
+
+-- リストのマージ
+merge_list :: Ord a =&gt; [a] -&gt; [a] -&gt; [a]
+merge_list [] ys = ys
+merge_list xs [] = xs
+merge_list a@(x:xs) b@(y:ys)
+  | x &lt;= y    = x : merge_list xs b
+  | otherwise = y : merge_list a ys
+
+-- マージソート
+merge_sort :: Ord a =&gt; Int -&gt; [a] -&gt; [a]
+merge_sort _ []      = []
+merge_sort 1 (x:_)   = [x]
+merge_sort 2 (x:y:_) = if x &gt; y then [y, x] else [x, y]
+merge_sort n xs      =
+  merge_list (merge_sort m xs) (merge_sort (n - m) (drop m xs))
+    where m = div n 2
+
+-- ヒープソート
+-- Leftist Heap
+heap_sort1 :: Ord a =&gt; [a] -&gt; [a]
+heap_sort1 xs = H1.toList $ H1.fromList xs
+
+-- Skew Heap
+heap_sort2 :: Ord a =&gt; [a] -&gt; [a]
+heap_sort2 xs = H2.toList $ H2.fromList xs
+</pre>
+<p> 乱数を生成するため、モジュール System.Random をインポートします。乱数の使い方は次回以降に詳しく説明する予定です。heap_sort1 は Leftist Heap を使ったソートで、heap_sort2 は Skew Heap を使ったソートです。
+</p>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+*Main&gt; :set +s
+*Main&gt; let a = take 10000 (randoms (mkStdGen 11) :: [Int])
+*Main&gt; take 10 a
+[-1807975507,545074951,-1015194702,-1622477312,-502893664,1176339218,-389023779,-2131253277,1286507251,-1190640000]
+(0.02 secs, 524300 bytes)
+*Main&gt; last a
+-1537121365
+(0.02 secs, 2097964 bytes)
+*Main&gt; last $ insert_sort a
+2147429930
+(19.72 secs, 3789684476 bytes)
+*Main&gt; last $ quick_sort a
+2147429930
+(0.20 secs, 19674268 bytes)
+*Main&gt; last $ merge_sort 10000 a
+2147429930
+(0.14 secs, 15499404 bytes)
+*Main&gt; last $ heap_sort1 a
+2147429930
+(0.58 secs, 68189484 bytes)
+*Main&gt; last $ heap_sort2 a
+2147429930
+(0.27 secs, 29101920 bytes)
+</pre>
+<pre>
+表 : 実行結果 (データ数 10000, 単位 : 秒)
+
+         : 乱数 : 昇順 : 降順 : 山型
+  -----------------------------------
+  insert : 19.7 : 0.03 : 40.5 : 20.5
+  quick  : 0.20 : 45.1 : 58.6 : 22.2
+  merge  : 0.15 : 0.11 : 0.11 : 0.11
+  Leftist: 0.59 : 0.70 : 0.11 : 0.64
+  Skew   : 0.25 : 0.28 : 0.08 : 0.27
+
+乱数 : take 10000 (randoms (mkStdGen 11) :: [Int])
+昇順 : [1..10000]
+降順 : [10000,9999..1]
+山型 : [1..5000] ++ [5000,4999..1]
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, GHCi, version 7.4.1
+</pre>
+<p> 挿入ソートは昇順のデータに対しては極めて高速にソートすることができます。今回のクイックソートは、枢軸にリストの先頭要素を選んでいるため、乱数以外のデータはとても遅くなります。マージソートはリストのソートに適していて、どのようなデータに対しても高速にソートすることができます。
+</p>
+<p> Leftist Heap と Skew Heap を使ったヒープソートは、クイックソートやマージソートにはかないませんが、どのようなデータに対しても十分な性能を発揮するようです。とくに、降順のデータはどちらも高速ですね。Leftist Heap と Skew Heap を比べると、降順のデータ以外では Skew Heap のほうが 2 倍以上高速になりました。処理が単純な分だけ Skew Heap のほうが高速に動作するようです。
+</p>
+<p> なお、これらの結果はインタプリタ ghci 上で実行した場合です。GHC でコンパイルすると、異なる結果になるかもしれません。興味のある方は試してみてください。
+</p>
+
+<h4>●クイックソートの改良</h4>
+<p> クイックソートの実行時間は、データ数を N とすると平均して N * log<sub>2</sub> N に比例します。ところが、枢軸の選び方によっては、最悪で N の 2 乗に比例するところまで劣化します。このため、クイックソートをプログラムする場合、枢軸の選び方を工夫するのが一般的です。
+</p>
+<p> たとえば、データの中からいくつかの要素を選び、その中で中央の値を持つ要素を枢軸に選びます。たくさんの要素を選ぶとそれだけ最悪の枢軸を選ぶ危険性は減少しますが、中央値を選ぶのに時間がかかってしまいます。実際には、3 つから 5 つの要素を選んで、その中で中央値を枢軸とする場合が多いようです。
+</p>
+<p> リストをクイックソートする場合、後ろにあるデータほどアクセスするのに時間がかかるので、この改良方法は不向きですが、今回はあえてこの方法を試してみましょう。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : クイックソートの改良
+
+-- リストを三分割する
+partition3 :: Ord a =&gt; a -&gt; [a] -&gt; ([a],[a],[a])
+partition3 _ [] = ([],[],[])
+partition3 x (y:ys) =
+  if x == y then (a, y:b, c)
+  else if x &lt; y then (a, b, y:c)
+  else (y:a, b, c)
+  where (a, b, c) = partition3 x ys
+
+-- 中央値を選ぶ
+median3 :: Ord a =&gt; Int -&gt; [a] -&gt; a
+median3 n xs =
+  if a &lt; b
+    then if b &lt; c then b
+         else if a &lt; c then c else a
+    else if a &lt; c then a
+         else if b &lt; c then c else b
+  where m = n `div` 2
+        a = head xs
+        b = xs !! m
+        c = xs !! (m + m `div` 2)
+
+quick_sort' :: Ord a =&gt; [a] -&gt; [a]
+quick_sort' [] = []
+quick_sort' xs =
+  if n &lt; 32 then insert_sort xs
+  else quick_sort' a ++ b ++ quick_sort' c
+  where n = length xs
+        (a, b, c) = partition3 (median3 n xs) xs
+</pre>
+<p> 関数 partition3 はリストを枢軸 x より小さいもの、x と等しいもの、x より大きいものの 3 つに分割します。median3 はリストの先頭の要素、真ん中にある要素、3 / 4 の位置にある要素を取り出し、その中央値を返します。
+</p>
+<p> なお、要素の選び方を、先頭、中央、最後尾とすると、山型のデータで実行速度が極端に遅くなります。もちろん、今回の選び方でも最悪のケースが存在します。たとえば、データを [1..5000] ++ [1,3..4999] ++ [4999,4997..1] としてインタプリタ ghci で実行するとスタックオーバーフローします。要素数が少ないリストからソートするとスタックオーバーフローを防ぐことができますが、今回はやっていません。
+</p>
+<p> quick_sort' は、要素数が少なくなったらクイックソートから挿入ソートへ切り替えます。データ数が少ない場合は、クイックソートよりも単純なソートアルゴリズムの方が高速です。
+</p>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+表 : 実行結果 (データ数 10000, 単位 : 秒)
+
+         : 乱数 : 昇順 : 降順 : 山型
+  -----------------------------------
+  merge  : 0.15 : 0.11 : 0.11 : 0.11
+  quick  : 0.20 : 45.1 : 58.6 : 22.2
+  quick' : 0.39 : 0.31 : 0.34 : 0.33
+
+乱数 : take 10000 (randoms (mkStdGen 11) :: [Int])
+昇順 : [1..10000]
+降順 : [10000,9999..1]
+山型 : [1..5000] ++ [5000,4999..1]
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, GHCi, version 7.4.1
+</pre>
+<p> 乱数の場合、単純なクイックソートよりも遅くなりましたが、他のデータは高速にソートすることができました。しかしながら、マージソートより遅くなるので、やっぱりクイックソートはリストに不向きなアルゴリズムだと思います。配列のように O(1) で要素にアクセスできるデータ構造でなければ、クイックソートはその真価を発揮することができないのでしょう。配列のソートは次回以降に取り上げる予定です。
+</p>
+
+<h4>●クイックソートの改良 (2)</h4>
+<p> もう一つ、クイックソートの改良方法を紹介しましょう。それは再帰呼び出しが深くなったら違うソートアルゴリズムに切り替える方法です。<a href="haskell23.html#cite">参考 URL 4</a> によると、<CITE>『イントロソート（英: introsort）は、David Musser が1997年に設計したソートアルゴリズムである。最初はクイックソートを行い、再帰のレベルがソートされた要素数（の対数）を超えるとヒープソートに切り替える。』</CITE> とのことです。
+</p>
+
+<p> 配列をソートする場合、ヒープソートの実行速度はクイックソートやマージソートよりも遅くなります。ところが、マージソートが作業用のメモリ領域を必要とするのに対し、ヒープソートは作業用のメモリ領域を必要としない、という長所があります。大きな配列をソートする場合、ヒープソートに切り替えたほうが都合がよいわけです。
+</p>
+<p> Haskell でリストをクイックソートする場合、ヒープソート以外のソートに切り替えてもかまいませんが、今回は heap_sort2 に切り替えることにしましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : イントロソート (超簡易版)
+
+log2 :: Int -&gt; Int
+log2 1 = 0
+log2 n = 1 + log2 (n `div` 2)
+
+intro_sort :: Ord a =&gt; [a] -&gt; [a]
+intro_sort xs = sort (2 * (log2 (length xs))) xs
+  where sort _ [] = []
+        sort d ls@(x:xs) =
+          if d == 0 then heap_sort2 ls
+          else sort (d - 1) [y | y &lt;- xs, y &lt; x]
+               ++ [x]
+               ++ sort (d - 1) [y | y &lt;- xs, y &gt;= x]
+</pre>
+<p> ヒープソートに切り替えるタイミングですが、今回は単純に再帰呼び出しの深さが 2 * log<sub>2</sub>N (N : データ数) を超えたときとします。それ以外のクイックソートは単純な quick_sort と同じで、リストの先頭要素を枢軸として選びます。
+</p>
+
+<p> 実行結果は次のようになりました。
+</p>
+<pre>
+表 : 実行結果 (データ数 10000, 単位 : 秒)
+
+         : 乱数 : 昇順 : 降順 : 山型 : 山型'
+  -------------------------------------------
+  merge  : 0.15 : 0.11 : 0.11 : 0.11 : 0.11
+  quick  : 0.20 : 45.1 : 58.6 : 22.2 : 22.1
+  quick' : 0.39 : 0.31 : 0.34 : 0.33 : ----
+  intro  : 0.23 : 0.50 : 0.31 : 0.49 : 0.51
+
+乱数  : take 10000 (randoms (mkStdGen 11) :: [Int])
+昇順  : [1..10000]
+降順  : [10000,9999..1]
+山型  : [1..5000] ++ [5000,4999..1]
+山型' : [1..5000] ++ [1,3..4999] ++ [4999,4997..1]
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, GHCi, version 7.4.1
+</pre>
+<p> 今回の intro_sort は再帰呼び出しの深さでヒープソートに切り替える単純なものですが、それでも効果は十分にあるようです。quick_sort' ではスタックオーバーフローしたデータでも高速にソートすることができました。
+</p>
+
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li> <a href="http://en.wikipedia.org/wiki/Leftist_tree">Leftist tree - Wikipedia</a> (英)
+  <li> <a href="http://cs.wellesley.edu/~cs231/fall01/leftist.pdf">Leftist Heaps - Wellesley College</a> (PDF,英)
+  <li> <a href="http://en.wikipedia.org/wiki/Skew_heap">Skew heap - Wikipedia</a> (英)
+  <li><a href="http://ja.wikipedia.org/wiki/%E3%82%A4%E3%83%B3%E3%83%88%E3%83%AD%E3%82%BD%E3%83%BC%E3%83%88">イントロソート - Wikipedia</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+--
+-- Heap1.hs : ヒープ (leftist heap)
+--
+--           Copyright (C) 2013 Makoto Hiroi
+--
+module Heap1 where
+
+-- データ構造の定義
+data Heap a = Empty | Heap Int a (Heap a) (Heap a) deriving Show
+
+-- 空のヒープ
+empty = Empty
+
+-- 要素が一つのヒープを作る
+singleton :: a -&gt; Heap a
+singleton x = Heap 1 x Empty Empty
+
+-- ヒープの併合
+merge :: Ord a =&gt; Heap a -&gt; Heap a -&gt; Heap a
+merge h     Empty = h
+merge Empty h     = h
+merge h1@(Heap _ x left1 right1) h2@(Heap _ y left2 right2)
+  | x &lt; y     = makeHeap x left1 (merge right1 h2)
+  | otherwise = makeHeap y left2 (merge right2 h1)
+
+rank :: Heap a -&gt; Int
+rank Empty          = 0
+rank (Heap r _ _ _) = r
+
+makeHeap :: a -&gt; Heap a -&gt; Heap a -&gt; Heap a
+makeHeap x a b =
+  if ra &gt;= rb then Heap (rb + 1) x a b else Heap (ra + 1) x b a
+  where rb = rank b
+        ra = rank a
+
+-- データの追加
+insert :: Ord a =&gt; a -&gt; Heap a -&gt; Heap a
+insert h x = merge (singleton x) h
+
+-- リストからヒープを作る
+fromList :: Ord a =&gt; [a] -&gt; Heap a
+fromList = foldl insert Empty
+
+-- ヒープをリストに変換
+toList :: Ord a =&gt; Heap a -&gt; [a]
+toList h
+  | isEmpty h = []
+  | otherwise = let (x, h') = deleteMin h
+                in x : toList h'
+
+-- ヒープから最小値を取り出す
+deleteMin :: Ord a =&gt; Heap a -&gt; (a, Heap a)
+deleteMin Empty = error "Empty Heap"
+deleteMin (Heap _ x a b) = (x, merge a b)
+
+-- ヒープの最小値を求める
+findMin :: Heap a -&gt; a
+findMin Empty = error "Empty Heap"
+findMin (Heap _ x _ _) = x
+
+-- ヒープは空か
+isEmpty :: Heap a -&gt; Bool
+isEmpty Empty = True
+isEmpty _     = False
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+--
+-- Heap2.hs : ヒープ (Skew Heap)
+--
+--            Copyright (C) 2013 Makoto Hiroi
+--
+module Heap2 where
+
+-- データ型の定義
+data Heap a = Empty | Heap a (Heap a) (Heap a) deriving Show
+
+-- 空のヒープ
+empty = Empty
+
+-- 要素が一つのヒープを生成する
+singleton :: a -&gt; Heap a
+singleton x = Heap x Empty Empty
+
+-- 二つのヒープを併合する
+merge :: Ord a =&gt; Heap a -&gt; Heap a -&gt; Heap a
+merge h     Empty = h
+merge Empty h     = h
+merge h1@(Heap x left1 right1) h2@(Heap y left2 right2) 
+  | x &lt; y     = Heap x (merge right1 h2) left1
+  | otherwise = Heap y (merge right2 h1) left2
+
+-- データの挿入
+insert :: Ord a =&gt; Heap a -&gt; a -&gt; Heap a
+insert h x = merge (singleton x) h
+
+-- リストからヒープを作る
+fromList :: Ord a =&gt; [a] -&gt; Heap a
+fromList = foldl insert Empty
+
+-- ヒープをリストに変換する
+toList :: Ord a =&gt; Heap a -&gt; [a]
+toList h
+  | isEmpty h = []
+  | otherwise = let (x, h') = deleteMin h
+                in x : toList h'
+
+-- ヒープから最小値を取り出す
+deleteMin :: Ord a =&gt; Heap a -&gt; (a, Heap a)
+deleteMin Empty = error "Empty Heap"
+deleteMin (Heap x left right) = (x, merge left right)
+
+-- ヒープの最小値を求める
+findMin :: Heap a -&gt; a
+findMin Empty = error "Empty Heap"
+findMin (Heap x _ _) = x
+
+-- ヒープは空か
+isEmpty :: Heap a -&gt; Bool
+isEmpty Empty = True
+isEmpty _     = False
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell22.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell24.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 TypeScript 超入門</title>
+  <meta name="description" content="TypeScript,JavaScript,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881857</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>お気楽 TypeScript 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="typescript.html">TypeScript</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>簡単なプログラム</h3>
+<h4 id="chap15">●連結リスト (mutable)</h4>
+<p> 片方向の「連結リスト (singly-linked list)」です。詳しい説明は拙作のページ <a href="index.html#python_algo">Algorithms with Python</a> <a href="pyalgo02.html">連結リスト</a> をお読みください。なお、連結リストは要素数を N とすると、要素のアクセスは O(N) に比例する時間がかかります。配列のようにランダムアクセスする用途には向きません。ご注意くださいませ。
+</p>
+<table border=1>
+<caption>表 : 連結リストのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>new LinekdList&lt;T&gt;()</td><td>コンストラクタ</td></tr>
+  <tr><td>lenght: number</td><td>要素数を格納するプロパティ</td></tr>
+  <tr><td>add(n: number, x: T): T</td><td>リストの n 番目に x を挿入する</td></tr>
+  <tr><td>get(n: number): T</td><td>リストの n 番目の要素を返す</td></tr>
+  <tr><td>set(n: number, x: T): T</td><td>リストの n 番目の要素を x に書き換える</td></tr>
+  <tr><td>delete(n: number): T</td><td>リストの n 番目の要素を削除する</td></tr>
+  <tr><td>toArray(): Array&lt;T&gt;</td><td>リストを配列に変換する</td></tr>
+  <tr><td>toString(): string</td><td>リストを文字列に変換する</td></tr>
+  <tr><td>isEmpty(): boolean</td><td>リストが空ならば true を返す</td></tr>
+  <tr><td>clear(): void</td><td>リストを空にする</td></tr>
+  <tr><td>*[Symbol.iterator](): IterableIterator&lt;T&gt;</td><td>ジェネレータ</td></tr>
+</tbody>
+</table>
+
+<pre class="list">
+リスト : 連結リスト (mutable)
+
+// コンスセルの終端は null 
+// --strictNullChecks を指定してもコンパイルできる
+
+// 共用型
+type XCell&lt;T&gt; = null | Cell&lt;T&gt;;
+
+// コンスセル
+class Cell&lt;T&gt; {
+    constructor(private _item: T, private _next: XCell&lt;T&gt;) { }
+    get item(): T { return this._item; }
+    set item(x: T) { this._item = x; }
+    get next(): XCell&lt;T&gt; { return this._next; }
+    set next(x: XCell&lt;T&gt;) { this._next = x; }
+}
+
+// 連結リスト
+class LinkedList&lt;T&gt; {
+    private topCell: XCell&lt;T&gt; = null;
+    private size: number = 0;
+    constructor() { }
+
+    // 作業用メソッド
+    // n 番目のセルを求める
+    private nthCell(n: number): XCell&lt;T&gt; {
+        let xs = this.topCell;
+        while (n-- &gt; 0) {
+            if (xs === null) {
+                return null;
+            } else {
+                xs = xs.next;
+            }
+        }
+        return xs;
+    }
+
+    // 要素数を求める
+    get length(): number { return this.size; }
+
+    // n 番目の値を求める
+    get(n: number): T {
+        const xs = this.nthCell(n);
+        if (xs === null) {
+            throw new Error("LinkedList.nth out of range");
+        } else {
+            return xs.item;
+        }
+    }
+
+    // n 番目の値を更新する
+    set(n: number, x: T): T {
+        const xs = this.nthCell(n);
+        if (xs === null) {
+            throw new Error("LinkedList.update: out of range");
+        } else {
+            xs.item = x;
+            return x;
+        }
+    }
+
+    // データの挿入
+    add(n: number, x: T): T {
+        if (n == 0) {
+            this.topCell = new Cell(x, this.topCell);
+            this.size++;
+            return x;
+        } else {
+            const xs = this.nthCell(n - 1);
+            if (xs === null) {
+                throw new Error("LinkedList.insert: out of range");
+            } else {
+                xs.next = new Cell&lt;T&gt;(x, xs.next);
+                this.size++;
+                return x;
+            }
+        }
+    }
+
+    // データの削除
+    delete(n: number): T {
+        if (n == 0) {
+            if (this.topCell === null) {
+                throw new Error("LinkedList.delete: out of range");
+            } else {
+                const x = this.topCell.item;
+                this.topCell = this.topCell.next;
+                this.size--;
+                return x;
+            }
+        } else {
+            const xs = this.nthCell(n - 1);
+            if (xs === null || xs.next === null) {
+                throw new Error("LinkeList.delete: out of range");
+            } else {
+                const x = xs.next.item;
+                xs.next = xs.next.next;
+                this.size--;
+                return x;
+            }
+        }
+    }
+
+    // ジェネレータ
+    // 実行中にリストを変更したときの動作は保証しない
+    *[Symbol.iterator](): IterableIterator&lt;T&gt; {
+        let xs = this.topCell;
+        while (xs !== null) {
+            yield xs.item;
+            xs = xs.next;
+        }
+    }
+
+    // 配列に変換
+    toArray(): Array&lt;T&gt; {
+        const xs:Array&lt;T&gt; = [];
+        for (let x of this) xs.push(x);
+        return xs;
+    }
+
+    // 文字列に変換
+    toString(): string {
+        let s ="(";
+        for (let x of this) {
+            s += x.toString() + " ";
+        }
+        return s.trim() + ")";
+    }
+
+    // 空リストか？
+    isEmpty(): boolean { return this.size == 0; }
+
+    // 空にする
+    clear(): void { 
+        this.size = 0;
+        this.topCell == null;
+    }
+
+    // node.js 用
+    inspect(): string { return this.toString(); }
+}
+
+
+// 簡単なテスト
+const ls = new LinkedList&lt;number&gt;();
+console.log(ls);               // ()
+console.log(ls.isEmpty());     // true
+console.log(ls.length);        // 0
+try {
+    console.log(ls.add(1, 1));
+} catch(err) {
+    console.log(err);
+}
+console.log(ls.add(0, 1));     // 1
+console.log(ls.isEmpty());     // false
+console.log(ls.length);        // 1
+console.log(ls.get(0));        // 1
+console.log(ls.set(0, 10));    // 10
+console.log(ls);               // (10)
+try {
+    console.log(ls.delete(1));
+} catch(err) {
+    console.log(err);
+}
+console.log(ls.delete(0));     // 10
+console.log(ls.isEmpty());     // true
+
+for (let i = 0; i &lt; 8; i++) {
+    ls.add(i, i + 1);
+}
+console.log(ls);               // (1 2 3 4 5 6 7 8)
+console.log(ls.toArray());     // [1,2,3,4,5,6,7,8]
+console.log(ls.length);        // 8
+for (let i = 0; i &lt; 8; i++) {
+    ls.set(i, ls.get(i) * 10);
+}
+console.log(ls);               // (10 20 30 40 50 60 70 80)
+while (!ls.isEmpty()) {
+    console.log(ls.delete(0));
+    console.log(ls);
+    console.log(ls.length);
+}
+</pre>
+<pre>
+()
+true
+0
+Error: LinkedList.insert: out of range
+
+・・・省略・・・
+
+1
+false
+1
+1
+10
+(10)
+Error: LinkeList.delete: out of range
+
+・・・省略・・・
+
+10
+true
+(1 2 3 4 5 6 7 8)
+[ 1, 2, 3, 4, 5, 6, 7, 8 ]
+8
+(10 20 30 40 50 60 70 80)
+10
+(20 30 40 50 60 70 80)
+7
+20
+(30 40 50 60 70 80)
+6
+30
+(40 50 60 70 80)
+5
+40
+(50 60 70 80)
+4
+50
+(60 70 80)
+3
+60
+(70 80)
+2
+70
+(80)
+1
+80
+()
+0
+</pre>
+<h4 id="chap16">●連結リスト (Lisp ライク)</h4>
+<p> Lisp ライクな連結リストです。クラス Nil が空リスト、クラス Cons&lt;T&gt; がコンスセルを表します。そして、連結リスト List&lt;T&gt; を type で次のように定義しています。
+</p>
+<pre class="item">
+type List&lt;T&gt; = Nil | Cons&lt;T&gt;;
+</pre>
+<p> リストの操作関数は一部を除いてジェネリック関数として定義しています。たとえば、length は Nil と Cons&lt;T&gt; のプロパティとして定義していますが、Cons&lt;T&gt; のほうはリストの長さを求める関数を呼び出しているので、リストが長くなると時間がかかることに注意してください。
+</p>
+<table border=1>
+<caption>表 : 連結リストの操作関数</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>Nil.empty(): Nil</td><td>Nil のオブジェクト (シングルトン) を返す</td></tr>
+  <tr><td>lenght: number</td><td>要素数を格納するプロパティ</td></tr>
+  <tr><td>cons&lt;T&gt;(x: T, xs: List&lt;T&gt;): List&lt;T&gt;</td><td>コンスセルの生成</td></tr>
+  <tr><td>list&lt;T&gt;(...args: T[]): List&lt;T&gt;</td><td>引数 args を格納したリストを生成する</td></tr>
+  <tr><td>nth(n: number, xs: List&lt;T&gt;): T</td><td>リストの n 番目の要素を返す</td></tr>
+  <tr><td>reverse&lt;T&gt;(xs: List&lt;T&gt;): List&lt;T&gt;</td><td>リストを反転する</td></tr>
+  <tr><td>nreverse&lt;T&gt;(xs: List&lt;T&gt;): List&lt;T&gt;</td><td>リストを破壊的に反転する</td></tr>
+  <tr><td>append&lt;T&gt;(xs: List&lt;T&gt;, ys: List&lt;T&gt;): List&lt;T&gt;</td><td>リストを連結する</td></tr>
+  <tr><td>map&lt;T, U&gt;(func: (x: T) =&gt; U, xs: List&lt;T&gt;): List&lt;U&gt;</td><td>マッピング</td></tr>
+  <tr><td>filter&lt;T&gt;(pred: (x: T) =&gt; boolean, xs: List&lt;T&gt;): List&lt;T&gt;</td><td>フィルター</td></tr>
+  <tr><td>reduce&lt;T, U&gt;(func: (acc: U, x: T) =&gt; U), a: U, xs: List&lt;T&gt;): U</td><td>畳み込み</td></tr>
+  <tr><td>forEach&lt;T&gt;(func: (x: T) =&gt; void, xs: List&lt;T&gt;): void</td><td>リストの巡回</td></tr>
+  <tr><td>member&lt;T&gt;(x: T, xs: List&lt;T&gt;): List&lt;T&gt;</td><td>リスト xs から x を探す</td></tr>
+  <tr><td>indexOf&lt;T&gt;(x: T, xs: List&lt;T&gt;): number</td><td>x と等しい要素の位置を求める</td></tr>
+  <tr><td>count&lt;T&gt;(x: T, xs: List&lt;T&gt;): number</td><td>x と等しい要素の個数を求める</td></tr>
+  <tr><td>iterList&lt;T&gt;(xs: List&lt;T&gt;): IterableIterator&lt;T&gt;</td><td>ジェネレータ</td></tr>
+  <tr><td>xs.isEmpty(): boolean</td><td>リスト xs が空ならば true を返す</td></tr>
+</tbody>
+</table>
+
+<pre class="list">
+リスト : 連結リスト (Lisp ライク)
+
+// 空リスト (シングルトン)
+class Nil {
+    private static obj: Nil | null = null;
+    private constructor() { }
+    static empty(): Nil {
+        if (Nil.obj === null) {
+            Nil.obj = new Nil();
+        }
+        return Nil.obj;
+    }
+    get first(): never { throw new Error("empty list"); }
+    get rest(): never { throw new Error("empty list"); }
+    set first(x: never) { throw new Error("empty list"); }
+    set rest(x: never) { throw new Error("empty list"); }
+    get length(): number { return 0; }
+    isEmpty(): boolean { return true; }
+    toString(): string { return "()"; }
+
+    // 表示 (Node.js 用)
+    inspect(depth: number): string { return this.toString(); }
+}
+
+// 連結リスト
+type List&lt;T&gt; = Nil | Cons&lt;T&gt;;
+
+// コンスセル
+class Cons&lt;T&gt; {
+    constructor(private _first: T, private _rest: List&lt;T&gt;) { }
+    get first(): T { return this._first; }
+    get rest(): List&lt;T&gt; { return this._rest; }
+    set first(x: T) { this._first = x; }
+    set rest(x: List&lt;T&gt;) { this._rest = x; }
+    isEmpty(): boolean { return false; }
+    toString(): string {
+        let xs:List&lt;T&gt; = this, s = "(";
+        while (!xs.isEmpty()) {
+            s += xs.first.toString();
+            if (!xs.rest.isEmpty()) s += " ";
+            xs = xs.rest;
+        }
+        s += ")";
+        return s;
+    }
+
+    // 要素数を求める
+    private len(): number {
+        let c = 0;
+        for (let x of iterList(this)) c++;
+        return c;
+    }
+    get length(): number { return this.len(); }
+
+    // 表示 (Node.js 用)
+    inspect(depth: number): string { return this.toString(); }
+}
+
+// ジェネレータ
+function* iterList&lt;T&gt;(xs: List&lt;T&gt;): IterableIterator&lt;T&gt; {
+    while (!xs.isEmpty()) {
+        yield xs.first;
+        xs = xs.rest;
+    }
+}
+
+// 終端
+const nil = Nil.empty();
+
+// リストの生成
+function cons&lt;T&gt;(x: T, xs: List&lt;T&gt;): List&lt;T&gt; {
+    return new Cons(x, xs);
+}
+
+function list&lt;T&gt;(...args: T[]): List&lt;T&gt; {
+    let xs:List&lt;T&gt; = nil;
+    for (let i = args.length - 1; i &gt;= 0; i--) {
+        xs = cons(args[i], xs);
+    }
+    return xs;
+}
+
+// 反転
+function reverse&lt;T&gt;(xs: List&lt;T&gt;): List&lt;T&gt; {
+    let ys: List&lt;T&gt; = nil;
+    for (let x of iterList(xs)) ys = cons(x, ys);
+    return ys;
+}
+
+// 破壊的反転
+function nreverse&lt;T&gt;(xs: List&lt;T&gt;): List&lt;T&gt; {
+    let ys: List&lt;T&gt; = nil;
+    while (!xs.isEmpty()) {
+        const zs = xs.rest;
+        xs.rest = ys;
+        ys = xs;
+        xs = zs;
+    }
+    return ys;
+}
+
+// 連結
+function append&lt;T&gt;(xs: List&lt;T&gt;, ys: List&lt;T&gt;): List&lt;T&gt; {
+    const zs1 = reverse(xs),
+          zs2 = nreverse(zs1);
+    zs1.rest = ys;
+    return zs2; 
+}
+
+
+// 参照
+function nth&lt;T&gt;(n: number, xs: List&lt;T&gt;): T {
+    for (let x of iterList(xs)) {
+        if (n-- == 0) return x;
+    }
+    throw new Error("nth: out of range");
+}
+
+// マッピング
+function map&lt;T, U&gt;(func: (x: T) =&gt; U, xs: List&lt;T&gt;): List&lt;U&gt; {
+    let ys: List&lt;U&gt; = nil;
+    for (let x of iterList(xs)) {
+        ys = cons(func(xs.first), ys);
+    }
+    return nreverse(ys);
+}
+
+// フィルター
+function filter&lt;T&gt;(pred: (x: T) =&gt; boolean, xs: List&lt;T&gt;): List&lt;T&gt; {
+    let ys: List&lt;T&gt; = nil;
+    for (let x of iterList(xs)) {
+        if (pred(x)) ys = cons(x, ys);
+    }
+    return nreverse(ys);
+}
+
+// 畳み込み
+function reduce&lt;T, U&gt;(func: (acc: U, x: T) =&gt; U, a: U, xs: List&lt;T&gt;): U {
+    for (let x of iterList(xs)) a = func(a, x);
+    return a;
+}
+
+// 巡回
+function forEach&lt;T&gt;(func: (x: T) =&gt; void, xs: List&lt;T&gt;): void {
+    for (let x of iterList(xs)) func(x);
+}
+
+// 探索
+function member&lt;T&gt;(x: T, xs: List&lt;T&gt;): List&lt;T&gt; {
+    while (!xs.isEmpty()) {
+        if (xs.first == x) break;
+        xs = xs.rest;
+    }
+    return xs;
+}
+
+function indexOf&lt;T&gt;(x: T, xs: List&lt;T&gt;): number {
+    let i = 0;
+    for (let y of iterList(xs)) {
+        if (x == y) return i;
+        i++;
+    }
+    return -1;
+}
+
+function count&lt;T&gt;(x: T, xs: List&lt;T&gt;): number {
+    let c = 0;
+    for (let y of iterList(xs)) {
+        if (x == y) c++;
+    }
+    return c;
+}
+
+// 簡単なテスト
+console.log(nil);
+console.log(nil.length);
+const is0 = cons&lt;number&gt;(0, nil);
+console.log(is0);
+const is1 = list(1,2,3,4,5);
+console.log(is1);
+console.log(is1.length);
+for (let i = 0; i &lt; 5; i++) console.log(nth(i, is1));
+console.log(reverse(is1));
+const is2 = append(is1, list(6,7,8,9,10));
+console.log(is2);
+console.log(map(x =&gt; x * x, is2));
+console.log(filter(x =&gt; x % 2 == 0, is2));
+console.log(reduce((a, x) =&gt; a + x, 0, is2));
+forEach(console.log, is2);
+console.log(member(1, is2));
+console.log(member(10, is2));
+console.log(member(11, is2));
+console.log(indexOf(1, is2));
+console.log(indexOf(10, is2));
+console.log(indexOf(11, is2));
+const is3 = list(1,1,2,1,2,3,1,2,3,4);
+for (let i = 0; i &lt; 5; i++) console.log(count(i, is3));
+</pre>
+<pre>
+()
+0
+(0)
+(1 2 3 4 5)
+5
+1
+2
+3
+4
+5
+(5 4 3 2 1)
+(1 2 3 4 5 6 7 8 9 10)
+(1 1 1 1 1 1 1 1 1 1)
+(2 4 6 8 10)
+55
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+(1 2 3 4 5 6 7 8 9 10)
+(10)
+()
+0
+9
+-1
+0
+4
+3
+2
+1
+</pre>
+<h4 id="chap16a">●抽象クラスを使った連結リスト</h4>
+<p> ご参考までに抽象クラスを使った連結リストの実装を示します。TypeScript (ver 2.3.2) の場合、static なフィールドやメソッドはクラスの型パラメータを参照することができません。このため、空リストを返す emtpy() やリストを生成する cons(), list() はジェネリック関数として定義しています。
+</p>
+<p> 他のプログラミング言語、たとえば Java や C# の場合、これらの関数は static メソッドとして定義することが可能です。興味のある方は拙作のページ <a href="../java/abcjava16.html#chap02">続・お気楽Java プログラミング入門: immutable な連結リスト</a> や <a href="../csharp/csharp03.html#chap17">C# 超入門: immutable な連結リスト</a> をお読みくださいませ。
+</p>
+<pre class="list">
+リスト : 抽象クラス List&lt;T&gt; を使った Lisp ライクな連結リスト
+
+// 抽象クラス
+abstract class List&lt;T&gt; {
+    abstract get first(): T;
+    abstract get rest(): List&lt;T&gt;;
+    abstract set first(x: T);
+    abstract set rest(x: List&lt;T&gt;);
+    abstract isEmpty(): boolean;
+
+    //
+    // メソッドの定義
+    //
+
+    // 長さ
+    private len(): number {
+        let k = 0;
+        for (let x of this) k++;
+        return k;
+    }
+    get length(): number { return this.len(); }
+
+    // ジェネレータ
+    *[Symbol.iterator](): IterableIterator&lt;T&gt; {
+        let xs: List&lt;T&gt; = this;
+        while (!xs.isEmpty()) {
+            yield xs.first;
+            xs = xs.rest;
+        }
+    }
+
+    // 参照
+    nth(n: number): T {
+        for (let x of this) {
+            if (n-- == 0) return x;
+        }
+        throw new Error("List: out of range");
+    }
+
+    // 反転
+    reverse(): List&lt;T&gt; {
+        let ys = empty&lt;T&gt;();
+        for (let x of this) ys = cons(x, ys);
+        return ys;
+    }
+
+    // 破壊的反転
+    nreverse(): List&lt;T&gt; {
+        let xs: List&lt;T&gt; = this, ys = empty&lt;T&gt;();
+        while (!xs.isEmpty()) {
+            const zs = xs.rest;
+            xs.rest = ys;
+            ys = xs;
+            xs = zs;
+        }
+        return ys;
+    }
+
+    // 連結
+    append(zs: List&lt;T&gt;): List&lt;T&gt; {
+        const xs: List&lt;T&gt; = this.reverse(),
+              ys = xs.nreverse();
+        xs.rest = zs;
+        return ys;
+    }
+
+    // マッピング
+    map&lt;U&gt;(func: (x: T) =&gt; U): List&lt;U&gt; {
+        let ys = empty&lt;U&gt;();
+        for (let x of this) ys = cons(func(x), ys);
+        return ys.nreverse();
+    }
+
+    // フィルター
+    filter(pred: (x: T) =&gt; boolean): List&lt;T&gt; {
+        let ys = empty&lt;T&gt;();
+        for (let x of this) {
+            if (pred(x)) ys = cons(x, ys);
+        }
+        return ys.nreverse();
+    }
+
+    // 畳み込み
+    reduce&lt;U&gt;(func: (acc: U, x: T) =&gt; U, a: U): U {
+        for (let x of this) a = func(a, x);
+        return a;
+    }
+
+    // 巡回
+    forEach(func: (x: T) =&gt; void): void {
+        for (let x of this) func(x);
+    }
+
+    //
+    // 探索
+    //
+    member(x: T): List&lt;T&gt; {
+        let xs: List&lt;T&gt; = this;
+        while (!xs.isEmpty()) {
+            if (xs.first == x) break;
+            xs = xs.rest;
+        }
+        return xs;
+    }
+
+    indexOf(x: T): number {
+        let i = 0;
+        for (let y of this) {
+            if (y == x) return i;
+            i++;
+        } 
+        return -1;
+    }
+    
+    count(x: T): number {
+        let c = 0;
+        for (let y of this) {
+            if (x == y) c++;
+        }
+        return c;
+    }
+    
+    // 文字列
+    toString(): string {
+        let s = "(";
+        for (let x of this) s += x.toString() + " ";
+        return s.trim() + ")";
+    }
+
+    // 表示
+    inspect(): string { return this.toString(); }
+}
+
+// コンスセル
+class Cons&lt;T&gt; extends List&lt;T&gt; {
+    constructor(private _first: T, private _rest: List&lt;T&gt;) { super(); }
+    get first(): T { return this._first; }
+    set first(x: T) { this._first = x; }
+    get rest(): List&lt;T&gt; { return this._rest; }
+    set rest(x: List&lt;T&gt;) { this._rest = x; }
+    isEmpty(): boolean { return false; }
+}
+
+// 空リスト (シングルトン)
+class Nil extends List&lt;nerver&gt; {
+    private static obj: Nil | null = null; 
+    private constructor() { super(); }
+    get first(): never { throw new Error("empty List"); }
+    set first(x: never) { throw new Error("empty List"); }
+    get rest(): never { throw new Error("empty List"); }
+    set rest(x: never) { throw new Error("empty List"); }
+    isEmpty(): boolean { return true; }
+
+    static make(): Nil {
+        if (Nil.obj == null) {
+            Nil.obj = new Nil();
+        }
+        return Nil.obj;
+    }
+}
+
+// 空リスト
+function empty&lt;T&gt;(): List&lt;T&gt; { return Nil.make(); }
+
+// リストの生成
+function cons&lt;T&gt;(x: T, xs: List&lt;T&gt;): List&lt;T&gt; { return new Cons(x, xs); }
+
+function list&lt;T&gt;(...args: T[]): List&lt;T&gt; {
+    let xs: List&lt;T&gt; = empty&lt;T&gt;();
+    for (let i = args.length - 1; i &gt;= 0; i--) {
+        xs = new Cons(args[i], xs);
+    }
+    return xs;
+}
+
+// 簡単なテスト
+const nil = empty&lt;number&gt;();
+console.log(nil);
+console.log(nil.length);
+const is0 = cons&lt;number&gt;(0, nil);
+console.log(is0);
+const is1 = list(1,2,3,4,5);
+console.log(is1);
+console.log(is1.length);
+for (let i = 0; i &lt; 5; i++) console.log(is1.nth(i));
+console.log(is1.reverse());
+const is2 = is1.append(list(6,7,8,9,10));
+console.log(is2);
+console.log(is2.map(x =&gt; x * x));
+console.log(is2.filter(x =&gt; x % 2 == 0));
+console.log(is2.reduce((a, x) =&gt; a + x, 0));
+is2.forEach(console.log);
+console.log(is2.member(1));
+console.log(is2.member(10));
+console.log(is2.member(11));
+console.log(is2.indexOf(1));
+console.log(is2.indexOf(10));
+console.log(is2.indexOf(11));
+const is3 = list(1,1,2,1,2,3,1,2,3,4);
+for (let i = 0; i &lt; 5; i++) console.log(is3.count(i));
+</pre>
+<h4 id="chap17">●二分木 (mutable)</h4>
+<p> mutable な二分木です。二分木の説明は拙作のページ <a href="index.html#python_algo">Algorithms with Python</a> <a href="pyalgo03.html">二分木とヒープ</a> をお読みください。
+</p>
+<table border=1>
+<caption>表 : 二分木 Tree&lt;T&gt; のメソッド</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>new Tree&lt;T&gt;()</td><td>コンストラクタ</td></tr>
+  <tr><td>has(x: T): boolean</td><td>二分木から x を探す</td></tr>
+  <tr><td>add(x: T): void</td><td>二分木に x を追加する</td></tr>
+  <tr><td>delete(x: T): void</td><td>二分木から x を削除する</td></tr>
+  <tr><td>isEmpty(): boolean</td><td>二分木が空ならば true を返す</td></tr>
+  <tr><td>clear(): void</td><td>二分木を空にする</td></tr>
+  <tr><td>toString(): string</td><td>文字列に変換する</td></tr>
+  <tr><td>*[Symbol.inspect](): IterableIterator&lt;T&gt;</td><td>ジェネレータ</td></tr>
+</tbody>
+</table>
+<pre class="list">
+リスト : 二分木 (mutable)
+
+// 節
+type XNode&lt;T&gt; = null | TNode&lt;T&gt;;
+
+class TNode&lt;T&gt; {
+    constructor(private _item: T, private _left: XNode&lt;T&gt;, private _right: XNode&lt;T&gt;) { }
+    get item(): T { return this._item; }
+    set item(x: T) { this._item = x; }
+    get left(): XNode&lt;T&gt; { return this._left; }
+    set left(x: XNode&lt;T&gt;) { this._left = x; }
+    get right(): XNode&lt;T&gt; { return this._right; }
+    set right(x: XNode&lt;T&gt;) { this._right = x; }
+}
+
+// 作業用関数
+// 本来ならばモジュールなどに格納して外部には公開しない
+
+// 探索
+function search&lt;T&gt;(x: T, xs: XNode&lt;T&gt;): boolean {
+    while (xs != null) {
+        if (xs.item == x) return true;
+        if (xs.item &gt; x) {
+            xs = xs.left;
+        } else {
+            xs = xs.right;
+        }
+    }
+    return false;
+}
+
+// 挿入
+function insert&lt;T&gt;(x: T, xs: XNode&lt;T&gt;): XNode&lt;T&gt; {
+    if (xs == null) {
+        return new TNode(x, null, null);
+    } else if (xs.item &gt; x) {
+        xs.left = insert(x, xs.left);
+    } else if (xs.item &lt; x) {
+        xs.right = insert(x, xs.right);
+    }
+    return xs;
+}
+
+// 最小値の探索
+function searchMin&lt;T&gt;(xs: TNode&lt;T&gt;): T {
+    while (xs.left != null) xs = xs.left;
+    return xs.item;
+}
+
+// 最小値の節を削除
+function removeMin&lt;T&gt;(xs: TNode&lt;T&gt;): XNode&lt;T&gt; {
+    if (xs.left == null) return xs.right;
+    xs.left = removeMin(xs.left);
+    return xs;
+}
+
+// 削除
+function remove&lt;T&gt;(x: T, xs: XNode&lt;T&gt;): XNode&lt;T&gt; {
+    if (xs == null) return xs;
+    if (xs.item == x) {
+        if (xs.left == null) return xs.right;
+        if (xs.right == null) return xs.left;
+        xs.item = searchMin(xs.right);
+        xs.right = removeMin(xs.right);
+    } else if (xs.item &gt; x) {
+        xs.left = remove(x, xs.left);
+    } else {
+        xs.right = remove(x, xs.right);
+    }
+    return xs;
+}
+
+// 巡回
+function* traverse&lt;T&gt;(xs: XNode&lt;T&gt;): IterableIterator&lt;T&gt; {
+    if (xs != null) {
+        yield* traverse(xs.left);
+        yield xs.item;
+        yield* traverse(xs.right);
+    }
+}
+
+// 単純な二分木 (公開用クラス)
+class Tree&lt;T&gt; {
+    constructor(private _root: XNode&lt;T&gt; = null) { }
+    get root(): XNode&lt;T&gt; { return this._root; }
+    set root(x: XNode&lt;T&gt;) { this._root = x; }
+
+    has(x: T): boolean { return search&lt;T&gt;(x, this.root); }
+    add(x: T): void {
+        this.root = insert(x, this.root);
+    }
+    delete(x: T): void {
+        this.root = remove(x, this.root);
+    }
+
+    // 空の木か？
+    isEmpty(): boolean { return this.root == null; }
+
+    // 空にする
+    clear(): void { this.root = null; }
+
+    // ジェネレータ
+    *[Symbol.iterator](): IterableIterator&lt;T&gt; { yield* traverse(this.root); }
+
+    // 文字列
+    toString(): string {
+        let s = "(";
+        for (let x of this) {
+            s += x.toString() + " ";
+        }
+        return s.trim() + ")";
+    }
+
+    inspect(): string {
+        return this.toString();
+    }
+}
+
+// 簡単なテスト
+const tree = new Tree&lt;number&gt;();
+console.log(tree.isEmpty());
+for (let x of [5,3,7,2,4,6,8,1,9]) {
+    tree.add(x);
+}
+console.log(tree);
+console.log(tree.isEmpty());
+for (let x = 0; x &lt;= 10; x++) console.log(tree.has(x));
+for (let x = 0; x &lt;= 10; x++) {
+    tree.delete(x);
+    console.log(tree)
+}
+console.log(tree.isEmpty());
+</pre>
+<pre>
+true
+(1 2 3 4 5 6 7 8 9)
+false
+false
+true
+true
+true
+true
+true
+true
+true
+true
+true
+false
+(1 2 3 4 5 6 7 8 9)
+(2 3 4 5 6 7 8 9)
+(3 4 5 6 7 8 9)
+(4 5 6 7 8 9)
+(5 6 7 8 9)
+(6 7 8 9)
+(7 8 9)
+(8 9)
+(9)
+()
+()
+true   
+</pre>
+<h4 id="chap18">●二分木 (immutable)</h4>
+<p> immutable な二分木です。クラス TNil が空の木 (終端)、クラス ImNode&lt;T&gt; が節を表します。そして、二分木 ImTree&lt;T&gt; を type で次のように定義しています。
+</p>
+<pre class="item">
+type ImTree&lt;T&gt; = TNil | ImNode&lt;T&gt;;
+</pre>
+<p> 二分木の操作関数は一部を除いてジェネリック関数として定義しています。
+</p>
+<table border=1>
+<caption>表 : 二分木 ImTree&lt;T&gt; の操作関数</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>TNil.empty(): TNil</td><td>空の木を返す</td></tr>
+  <tr><td>hasTree&lt;T&gt;(x: T, xs: ImTree&lt;T&gt;): boolean</td><td>二分木 xs から x を探す</td></tr>
+  <tr><td>addTree&lt;T&gt;(x: T, xs: ImTree&lt;T&gt;): ImTree&lt;T&gt;</td><td>二分木 xs に x を追加する</td></tr>
+  <tr><td>deleteTree&lt;T&gt;(x: T, xs: ImTree&lt;T&gt;): ImTree&lt;T&gt;</td><td>二分木 xs から x を削除する</td></tr>
+  <tr><td>forEachTree&lt;T&gt;((x: T) =&gt; void, xs: ImTree&lt;T&gt;): void</td><td>二分木を巡回する</td></tr>
+  <tr><td>iterTree&lt;T&gt;(xs: ImTree&lt;T&gt;): IterableIterator&lt;T&gt;</td><td>ジェネレータ</td></tr>
+  <tr><td>xs.isEmpty(): boolean</td><td>二分木 xs が空ならば true を返す</td></tr>
+  <tr><td>xs.toString(): string</td><td>二分木 xs を文字列に変換する</td></tr>
+</tbody>
+</table>
+<pre class="list">
+リスト : 二分木 (immutable)
+
+// 終端 (シングルトン)
+class TNil {
+    private static obj: TNil | null = null;
+    private constructor() { }
+    get item(): never { throw new Error("empty tree"); }
+    get left(): never { throw new Error("empty tree"); }
+    get right(): never { throw new Error("empty tree"); }
+    isEmpty(): boolean { return true; }
+    toString(): string { return "()"; }
+    inspect(): string { return this.toString(); }
+
+    // 空の木 (終端)
+    static empty(): TNil {
+        if (TNil.obj === null) {
+            TNil.obj = new TNil();
+        }
+        return TNil.obj;
+    }
+}
+
+// 終端の作成
+const tNil = TNil.empty();
+
+// 二分木
+type ImTree&lt;T&gt; = TNil | ImNode&lt;T&gt;;
+
+// 節
+class ImNode&lt;T&gt; {
+    constructor(private _item: T, private _left: ImTree&lt;T&gt;, private _right: ImTree&lt;T&gt;) { }
+    get item(): T { return this._item; }
+    get left(): ImTree&lt;T&gt; { return this._left; }
+    get right(): ImTree&lt;T&gt; { return this._right; }
+    isEmpty(): boolean { return false; }
+    toString(): string {
+        let s = "(";
+        for (let x of iterTree(this)) {
+            s += x.toString() + " ";
+        }
+        return s.trim() + ")";
+    }
+    inspect(): string { return this.toString(); }
+}
+
+// ジェネレータ
+function* iterTree&lt;T&gt;(xs: ImTree&lt;T&gt;): IterableIterator&lt;T&gt; {
+    if (!xs.isEmpty()) {
+        yield* iterTree(xs.left);
+        yield xs.item;
+        yield* iterTree(xs.right);
+    }
+}
+
+// 探索
+function hasTree&lt;T&gt;(x: T, xs: ImTree&lt;T&gt;): boolean {
+    while (!xs.isEmpty()) {
+        if (xs.item == x) return true;
+        if (xs.item &gt; x) {
+            xs = xs.left;
+        } else {
+            xs = xs.right;
+        }
+    }
+    return false;
+}
+
+// 挿入
+function addTree&lt;T&gt;(x: T, xs: ImTree&lt;T&gt;): ImTree&lt;T&gt; {
+    if (xs.isEmpty()) return new ImNode&lt;T&gt;(x, tNil, tNil);
+    if (xs.item &gt; x) {
+        return new ImNode&lt;T&gt;(xs.item, addTree(x, xs.left), xs.right);
+    } else if (xs.item &lt; x) {
+        return new ImNode&lt;T&gt;(xs.item, xs.left, addTree(x, xs.right));
+    }
+    return xs;
+}
+
+// 最小値の探索
+function searchMinTree&lt;T&gt;(xs: ImTree&lt;T&gt;): T {
+    while (!xs.left.isEmpty()) xs = xs.left;
+    return xs.item;
+}
+
+// 最小値の節を削除
+function deleteMinTree&lt;T&gt;(xs: ImTree&lt;T&gt;): ImTree&lt;T&gt; {
+    if (xs.left.isEmpty()) return xs.right;
+    return new ImNode(xs.item, deleteMinTree(xs.left), xs.right);
+}
+
+// 削除
+function deleteTree&lt;T&gt;(x: T, xs: ImTree&lt;T&gt;): ImTree&lt;T&gt; {
+    if (xs.isEmpty()) return xs;
+    if (xs.item == x) {
+        if (xs.left.isEmpty()) return xs.right;
+        if (xs.right.isEmpty()) return xs.left;
+        return new ImNode(searchMinTree(xs.right), xs.left, deleteMinTree(xs.right));
+    } else if (xs.item &gt; x) {
+        return new ImNode&lt;T&gt;(xs.item, deleteTree(x, xs.left), xs.right);
+    } else {
+        return new ImNode&lt;T&gt;(xs.item, xs.left, deleteTree(x, xs.right));
+    }
+}
+
+// 高階関数
+function forEachTree&lt;T&gt;(func: (x: T) =&gt; void, xs: ImTree&lt;T&gt;): void {
+    if (!xs.isEmpty()) {
+        forEachTree(func, xs.left);
+        func(xs.item);
+        forEachTree(func, xs.right);
+    }
+}
+
+// 簡単なテスト
+let imTree: ImTree&lt;number&gt; = tNil;
+console.log(imTree);
+console.log(imTree.isEmpty());
+for (let x of [5,2,8,1,3,6,9,4,7]) {
+    imTree = addTree(x, imTree);
+}
+console.log(imTree);
+forEachTree(console.log, imTree);
+for (let x = 0; x &lt;= 10; x++) console.log(hasTree(x, imTree));
+for (let x = 0; x &lt;= 10; x++) {
+    imTree = deleteTree(x, imTree);
+    console.log(imTree);
+}
+console.log(imTree.isEmpty());
+</pre>
+<pre>
+()
+true
+(1 2 3 4 5 6 7 8 9)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+false
+true
+true
+true
+true
+true
+true
+true
+true
+true
+false
+(1 2 3 4 5 6 7 8 9)
+(2 3 4 5 6 7 8 9)
+(3 4 5 6 7 8 9)
+(4 5 6 7 8 9)
+(5 6 7 8 9)
+(6 7 8 9)
+(7 8 9)
+(8 9)
+(9)
+()
+()
+true
+</pre>
+<h4>●抽象クラスを使った二分木</h4>
+<p> ご参考までに抽象クラスを使った二分木の実装を示します。
+</p>
+<pre class="list">
+リスト : 抽象クラスを使った二分木の実装
+
+// 抽象クラス
+abstract class ImTree&lt;T&gt; {
+    abstract get item(): T;
+    abstract get left(): ImTree&lt;T&gt;;
+    abstract get right(): ImTree&lt;T&gt;;
+    abstract isEmpty(): boolean;
+
+    //
+    // メソッド
+    //
+    
+    // 探索
+    has(x: T): boolean {
+        let xs: ImTree&lt;T&gt; = this;
+        while (!xs.isEmpty()) {
+            if (xs.item == x) return true;
+            if (xs.item &gt; x) {
+                xs = xs.left;
+            } else {
+                xs = xs.right;
+            }
+        }
+        return false;
+    }
+
+    // 挿入
+    add(x: T): ImTree&lt;T&gt; {
+        let xs: ImTree&lt;T&gt; = this;
+        if (xs.isEmpty()) {
+            return new TNode(x, TNil.empty(), TNil.empty());
+        }
+        if (xs.item == x) return xs;
+        if (xs.item &gt; x) {
+            return new TNode(xs.item, xs.left.add(x), xs.right);
+        } else {
+            return new TNode(xs.item, xs.left, xs.right.add(x));
+        }
+    }
+
+    // 最小値を探す
+    searchMin(): T {
+        let xs: ImTree&lt;T&gt; = this;
+        if (xs.isEmpty()) throw new Error("empty tree");
+        while (!xs.left.isEmpty()) xs = xs.left;
+        return xs.item;
+    }
+
+    // 最小値を削除
+    deleteMin(): ImTree&lt;T&gt; {
+        let xs: ImTree&lt;T&gt; = this;
+        if (xs.isEmpty()) throw new Error("empty tree");
+        if (xs.left.isEmpty()) {
+            return xs.right;
+        }
+        return new TNode(xs.item, xs.left.deleteMin(), xs.right);
+    }
+
+    // 削除
+    delete(x: T): ImTree&lt;T&gt; {
+        let xs: ImTree&lt;T&gt; = this;
+        if (xs.isEmpty()) return xs;
+        if (xs.item == x) {
+            if (xs.left.isEmpty()) return xs.right;
+            if (xs.right.isEmpty()) return xs.left;
+            return new TNode(xs.right.searchMin(), xs.left, xs.right.deleteMin());
+        } else if (xs.item &gt; x) {
+            return new TNode(xs.item, xs.left.delete(x), xs.right);
+        } else {
+            return new TNode(xs.item, xs.left, xs.right.deleteMin());
+        }
+    }
+
+    // 巡回
+    forEach(func: (x: T) =&gt; void): void {
+        if (!this.isEmpty()) {
+            this.left.forEach(func);
+            func(this.item);
+            this.right.forEach(func);
+        }
+    }
+
+    // ジェネレータ
+    *[Symbol.iterator](): IterableIterator&lt;T&gt; {
+        if (!this.isEmpty()) {
+            yield* (this.left)[Symbol.iterator]();
+            yield this.item;
+            yield* (this.right)[Symbol.iterator]();
+        }
+    }
+
+    // 文字列
+    toString(): string {
+        let s = "(";
+        for (let x of this) {
+            s += x.toString() + " ";
+        }
+        return s.trim() + ")";
+    }
+
+    // node.js 用
+    inspect(): string { return this.toString(); }
+}
+
+// 空の木 (シングルトン)
+class TNil extends ImTree&lt;nerver&gt; {
+    private static obj: TNil | null = null;
+    private constructor() { super(); }
+    get item(): never { throw new Error("empty tree"); }
+    get left(): never { throw new Error("empty tree"); }
+    get right(): never { throw new Error("empty tree"); }
+    isEmpty(): boolean { return true; }
+
+    static empty(): TNil {
+        if (TNil.obj === null) {
+            TNil.obj = new TNil();
+        }
+        return TNil.obj;
+    }
+}
+
+// 節
+class TNode&lt;T&gt; extends ImTree&lt;T&gt; {
+    constructor(private _item: T, private _left: ImTree&lt;T&gt;, private _right: ImTree&lt;T&gt;) {
+        super();
+    }
+    get item(): T { return this._item; }
+    get left(): ImTree&lt;T&gt; { return this._left; }
+    get right(): ImTree&lt;T&gt; { return this._right; }
+    isEmpty(): boolean { return false; }
+}
+
+// 簡単なテスト
+let imTree: ImTree&lt;number&gt; = TNil.empty();
+console.log(imTree);
+console.log(imTree.isEmpty());
+for (let x of [5,2,8,1,3,6,9,4,7]) {
+    imTree = imTree.add(x);
+}
+console.log(imTree);
+imTree.forEach(console.log);
+for (let x of imTree) console.log(x);
+for (let x = 0; x &lt;= 10; x++) console.log(imTree.has(x));
+for (let x = 0; x &lt;= 10; x++) {
+    imTree = imTree.delete(x);
+    console.log(imTree);
+}
+console.log(imTree.isEmpty());
+</pre>
+<pre>
+()
+true
+(1 2 3 4 5 6 7 8 9)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+1
+2
+3
+4
+5
+6
+7
+8
+9
+false
+true
+true
+true
+true
+true
+true
+true
+true
+true
+false
+(1 2 3 4 5 6 7 8 9)
+(2 3 4 5 6 7 8 9)
+(3 4 5 6 7 8 9)
+(4 5 6 7 8 9)
+(5 6 7 8 9)
+(6 7 8 9)
+(7 8 9)
+(8 9)
+(9)
+()
+()
+true
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+</section>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="typescript.html">TypeScript</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

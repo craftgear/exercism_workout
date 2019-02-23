@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Lua プログラミング超入門</title>
+  <meta name="description" content="Lua,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881802</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lua Programming</h1>
+<h2>お気楽 Lua プログラミング超入門</h2>
+<div class="small">
+[ <a href="lua02.html">PrevPage</a> | <a href="lua.html">L u a</a> | <a href="lua04.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap06">高階関数</h3>
+<p> Lua はスクリプト言語ですが、関数型言語の機能も備えています。Lua は関数を変数に代入したり、引数として渡すことができます。また、値として関数を返すこともできるので、関数を作る関数を定義することも簡単にできます。
+</p>
+
+<p> 関数を引数として受け取る関数を「汎関数 (functional) 」とか「高階関数 (higher order function) 」と呼びます。Lua は高階関数を簡単に定義することができます。今回はよく使われる高階関数として、マッピング、フィルター、畳み込み (縮約) について説明します。 
+</p>
+<h4>●マッピング</h4>
+<p> まず最初に、引数の関数 fn に配列の要素を渡して呼び出し、その結果を配列に格納して返す関数を作ってみましょう。このような操作を「マッピング（写像）」といいます。なお、関数に引数を与えて呼び出すことを、関数型言語では「適用」といいます。本稿でも関数呼び出しの意味で適用を使うことにします。プログラムをリスト 1 に示します。
+</p>
+<pre class="list">
+リスト 1 : マッピング
+
+function map(fn, ary)
+  local a = {}
+  for i = 1, #ary do
+    table.insert(a, fn(ary[i]))
+  end
+  return a
+end
+</pre>
+<p> 受け取った関数を呼び出す場合、Lua では特別なことを行う必要はありません。引数 fn を fn(ary[i]) のように関数として使うと、Lua は fn の値を関数として呼び出します。関数を渡す場合も簡単です。関数が定義されている変数を渡すだけでいいのです。
+</p>
+
+<p> それでは実行例を示しましょう。
+</p>
+
+<pre>
+&gt; a = {1,2,3,4,5}
+&gt; function square(x) return x * x end
+&gt; map(square, a)
+{1,4,9,16,25}
+</pre>
+
+<p> 引数を 2 乗する関数 square を定義します。この関数を map に渡すと、要素を 2 乗した新しい配列を返します。このように、Lua は高階関数を簡単に定義することができます。
+</p>
+
+<h4>●フィルター</h4>
+<p> フィルター (filter) は配列の要素に関数を適用し、関数が真を返す要素を配列に格納して返す関数です。関数型言語では、真または偽を返す関数のことを「述語 (predicate) 」といいます。ここでは簡単な例題として、述語が真を返す要素を削除する関数 remove_if を作ってみましょう。関数名は Common Lisp から拝借しました。
+</p>
+
+<pre class="list">
+リスト 2 : 要素の削除
+
+function remove_if(fn, ary)
+  local a = {}
+  for i = 1, #ary do
+    if not fn(ary[i]) then
+      table.insert(a, ary[i])
+    end
+  end
+  return a
+end
+</pre>
+
+<p> map と同様に remove_if も簡単です。fn(ary[i]) が真ならば x を配列 a に加えません。偽ならば ary[i] を配列に加えるだけです。簡単な実行例を示します。
+</p>
+<pre>
+&gt; function evenp(x) return x % 2 == 0 end
+&gt; function oddp(x) return x % 2 ~= 0 end
+&gt; remove_if(evenp, {1,2,3,4,5,6})
+{1,3,5}
+&gt; remove_if(oddp, {1,2,3,4,5,6})
+{2,4,6}
+</pre>
+<p> 最初の例では偶数の要素が削除されます。次の例では奇数の要素が削除されます。
+</p>
+
+<p> もちろん、フィルターも簡単に定義することができます。remove_if とは逆に、述語が真を返すとき要素を配列に追加し、偽を返すときは配列に加えません。
+</p>
+
+<pre class="list">
+リスト 3 : フィルター
+
+function filter(fn, ary)
+  local a = {}
+  for i = 1, #ary do
+    if fn(ary[i]) then
+      table.insert(a, ary[i])
+    end
+  end
+  return a
+end
+</pre>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+
+<pre>
+&gt; filter(evenp, {1,2,3,4,5,6})
+{2,4,6}
+&gt; filter(oddp, {1,2,3,4,5,6})
+{1,3,5}
+</pre>
+<h4>●畳み込み</h4>
+<p> 2 つの引数を取る関数 f と配列を引数に受け取る関数 fold を考えます。fold は配列の各要素に対して関数 f を図 1 のように適用します。
+</p>
+
+<pre class="fig">
+(1) {a1, a2, a3, a4, a5}
+    =&gt; f( f( f( f( a1, a2 ), a3 ), a4 ), a5 )
+
+(2) {a1, a2, a3, a4, a5}
+    =&gt; f( a1, f( a2, f( a3, f( a4, a5 ) ) ) )
+
+        図 1 : 関数 fold の動作
+</pre>
+
+<p> 関数 f を適用する順番で 2 通りの方法があります。図 1 (1) は配列の先頭から f を適用し、図 1 (2) は配列の後ろから f を適用します。たとえば、関数 f が単純な加算関数とすると、fold の結果はどちらの場合も配列の要素の和になります。
+</p>
+
+<pre class="item">
+f(x, y) = x + y の場合
+fold() =&gt; a1 + a2 + a3 + a4 + a5
+</pre>
+
+<p> このように、fold は配列のすべての要素を関数 f を用いて結合します。このような操作を「縮約」とか「畳み込み」といいます。また、fold の引数に初期値 g を指定することがあります。この場合、fold は図 2 に示す動作になります。
+</p>
+
+<pre class="fig">
+(1) [a1, a2, a3, a4, a5]
+    =&gt; f( f( f( f( f( g, a1 ), a2 ), a3 ), a4 ), a5 )
+
+(2) [a1, a2, a3, a4, a5]
+    =&gt; f( a1, f( a2, f( a3, f( a4, f( a5, g ) ) ) ) )
+
+        図 2 : fold の動作 (2)
+</pre>
+
+<p> ここでは簡単な例題として、図 2 (1) の動作を行う関数 fold_left と、図 2 (2) の動作を行う関数 fold_right を作ってみましょう。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 4 : 畳み込み
+
+function fold_left(fn, init, ary)
+  local a = init
+  for i = 1, #ary do
+    a = fn(a, ary[i])
+  end
+  return a
+end
+
+function fold_right(fn, init, ary)
+  local a = init
+  for i = #ary, 1, -1 do
+    a = fn(ary[i], a)
+  end
+  return a
+end
+</pre>
+<p> fold_left, fold_right の引数 fn が適用する関数、init が初期値、ary が配列です。最初にローカル変数 a を init で初期化します。fold_left はfor ループで ary の要素を先頭から一つずつ取り出し、fn(a, ary[i]) を実行します。fold_left は変数 a の値を fn の返り値に更新することで、図 2 (1) の動作を実現しています。
+</p>
+
+<p> たとえば、ary が {1, 2, 3} で init が 0 とします。最初は fn(0, 1) が実行され、その返り値が a にセットされます。次は fn(a, 2) が実行されますが、これは fn(fn(0, 1), 2) と同じことです。そして、その結果が a にセットされます。最後に fn(a, 3) が実行されますが、これは fn(fn(fn(0, 1), 2), 3) となり、図 2 (1) と同じ動作になります。
+</p>
+
+<p> fold_left の場合、配列の要素が関数 fn の第 2 引数になり、第 1 引数にはこれまでの処理結果が渡されます。これに対し、fold_right の場合は逆になり、関数 fn の第 1 引数に配列の要素が渡されて、これまでの処理結果は第 2 引数に渡されます。これで図 2 (2) の動作を実現することができます。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; function add(x, y) return x + y end
+&gt; fold_left(add, 0, {1,2,3,4,5,6})
+21
+&gt; fold_right(add, 0, {1,2,3,4,5,6})
+21
+</pre>
+
+<p> fold_left, fold_right に関数 add を渡すと、配列の要素の合計値を求めることができます。畳み込みは 2 引数の関数と組み合わせると、いろいろな処理を実現することができます。
+</p>
+
+<h4>●匿名関数</h4>
+<p> 高階関数を使うようになると、数を 2 乗する square のような小さな関数をいちいち定義するのが面倒になります。とくに、その高階関数でしか使わないのであれば、なおさらそう思うでしょう。Lua には Lisp のラムダ式 (lambda) のような「匿名関数 (anonymous function) 」という名前のない関数が用意されています。
+</p>
+<p> 匿名関数は次のように定義します。
+</p>
+<pre class="item">
+function(仮引数, ...) 処理A; ...; 処理Z end
+</pre>
+<p> 匿名関数は Lisp / Scheme のラムダ式と同様に、関数 (クロージャ) を生成して返します。Lua は匿名関数をそのまま実行することができますし、関数の引数に匿名関数を渡すこともできます。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; (function(x) return x * x end)(10)
+100
+&gt; map(function(x) return x * x end, {1,2,3,4,5})
+{1,4,9,16,25}
+</pre>
+
+<p> map 関数を使う場合、わざわざ square を定義しなくてもいいので簡単です。このように、匿名関数は高階関数と組み合わせて使うと便利です。
+</p>
+
+<p> また、function による関数定義は、匿名関数を使って次のように書き直すことができます。
+</p>
+<pre class="list">
+リスト 5 : function による関数定義
+
+function square(x)
+  return x * x
+end
+</pre>
+<pre class="list">
+リスト 6 : 匿名関数による関数定義
+
+square = function(x) return x * x end
+</pre>
+<p> 匿名関数の実行例を示します。
+</p>
+<pre>
+&gt; square = function(x) return x * x end
+&gt; square
+function: 003CE1F8
+&gt; square(10)
+100
+</pre>
+<p> このように、匿名関数で関数オブジェクトを生成し、その値を変数 square にセットすれば、square(10) のように関数として呼び出すことができます。これは Scheme の関数定義とよく似ています。
+</p>
+<h4>●レキシカルスコープ</h4>
+<p> ここで、もう少し詳しくローカル変数の規則を見てみましょう。変数 x を表示する関数 foo を定義します。
+</p>
+<pre>
+&gt; function foo() print(x) end
+&gt; x = 10
+&gt; x
+10
+&gt; foo()
+10
+</pre>
+
+<p> foo には変数 x を定義していないので、foo を実行した場合グローバル変数の値を探しにいきます。それでは foo1 という関数から foo を呼び出す場合を考えてみましょう。foo1 には引数 (ローカル変数) x を定義します。この場合、foo はどちらの値を表示するのでしょうか。実際に試してみましょう。
+</p>
+
+<pre>
+&gt; function foo1(x) foo() end
+&gt; foo1(100)
+10
+</pre>
+
+<p> グローバル変数の値を表示しました。このように、foo1 で定義されているローカル変数 x は、foo からアクセスすることはできません。図 3 を見てください。
+</p>
+<pre class="fig">
+ ┌─────── Lua system ───────┐
+ │                                        │
+ │        グローバル変数  x ←────┐  │
+ │                                    │  │
+ │  ┌→┌─ 関数 foo ──────┐  │  │
+ │  │  │          ┌──────┼─┘  │
+ │  │  │     print x            │      │
+ │  │  └────────────┘      │
+ │  │  ┌─ 関数 foo1: x ────┐      │
+ │  │  │                        │      │
+ │  └─┼─ foo()                │      │
+ │      └────────────┘      │
+ │                                        │
+ └────────────────────┘
+
+           図 3 : レキシカルスコープ
+</pre>
+<p> 図 3 では、変数の有効範囲を枠で表しています。foo1 で定義したローカル変数 x は、関数 foo1 の枠の中でのみ有効です。もしも、この枠で変数が見つからない場合は、ひとつ外側の枠を調べます。この場合、関数定義の枠しかないので、ここで変数が見つからない場合はグローバル変数を調べます。
+</p>
+
+<p> foo は関数定義の枠しかありません。そこに変数 x が定義されていないので、グローバル変数を調べることになります。このように、foo から foo1 の枠を超えて変数 x にアクセスすることはできないのです。これをレキシカルスコープといいます。レキシカルには文脈上いう意味があり、変数が定義されている範囲内 (枠内) でないと、その変数にアクセスすることはできません。
+</p>
+
+<h4>●匿名関数とローカル変数</h4>
+<p> それでは、匿名関数の場合はどうでしょうか。リスト 7 を見てください。
+</p>
+<pre class="list">
+リスト 7 : リストの要素を n 倍する
+
+function times_element(n, ary)
+  return map(function(x) return x * n end, ary)
+end
+</pre>
+<pre>
+&gt; times_element(10, {1,2,3,4,5})
+{10,20,30,40,50}
+</pre>
+<p> 匿名関数の仮引数は x だけですから、変数 n はグローバル変数をアクセスすると思われるかもしれません。ところが、変数 n は関数 times_element の引数 n をアクセスするのです。図 4 を見てください。
+</p>
+<pre class="fig">
+┌─────── Lua system ──────┐
+│                                      │
+│    ┌─ times_element : n l  ─┐    │
+│    │                  ↑      │    │
+│    │                  └─┐  │    │
+│    │  ┌ function : x ─┐│  │    │
+│    │  │            ↑  ││  │    │
+│    │  │      ┌──┘  ││  │    │
+│    │  │      x * n     ││  │    │
+│    │  │          └──┼┘  │    │
+│    │  └────────┘    │    │
+│    └─────────────┘    │
+│                                      │
+└───────────────────┘
+
+        図 4 : 匿名関数の変数
+</pre>
+<p> ポイントは匿名関数が関数 times_element 内で定義されているところです。変数 n は関数の引数として定義されていて、その有効範囲は関数の終わりまでです。匿名関数はその範囲内に定義されているため、変数 n にアクセスすることができるのです。つまり、関数内で定義された匿名関数は、そのとき有効なローカル変数にもアクセスすることができるわけです。
+</p>
+
+<p> もうひとつ簡単な例題を示しましょう。指定した文字 c が先頭にある文字列を、リストから削除する関数を作ってみましょう。最初に実行例を示します。
+</p>
+
+<pre>
+&gt; remove_string('a', {'abc', 'def', 'agh', 'ijk'})
+{'def','ijk'}
+</pre>
+
+<p> 配列に格納された文字列の中で、a から始まる文字列を削除します。この処理は remove_if と匿名関数を使うと簡単に定義できます。
+</p>
+<pre class="list">
+リスト 8 : 先頭文字が c の文字列を削除
+
+function remove_string(c, ary)
+  return remove_if(function(x) return c == string.sub(x,1,1) end, ary)
+end
+</pre>
+<p> sub は文字列 x から部分文字列を取り出す関数です。文字列の操作関数はハッシュ string にまとめられています。詳細は Lua のリファレンスをお読みください。匿名関数の中で remove_string の引数 c をアクセスできるので、このような定義が可能になります。
+</p>
+
+<h4>●関数のネスト</h4>
+<p> JavaScript は関数の中で別の関数を定義することができます。つまり、関数のネスト（入れ子）ができるわけです。入れ子の関数は局所的な関数として扱われるので、定義された関数の中でのみ有効です。他の関数から呼び出すことはできません。また、入れ子の関数は、匿名関数のように定義された関数のローカル変数にアクセスすることができます。
+</p>
+
+<p> 簡単な例として、入れ子の関数を使ってリスト 7 の times_element を書き直してみましょう。リスト 9 を見てください。
+</p>
+<pre class="list">
+リスト 9 : リストの要素を n 倍する (2)
+
+function times_element(n, ary)
+  local function _times(x) return x * n end
+  return map(_times, ary)
+end
+</pre>
+<p> 入れ子関数の定義は local を指定するだけで、あとは今までの関数定義と同じです。関数定義の中で、別の関数が定義されているだけです。関数 _times は times_element 内で定義されているので、_times から times_element の引数 n を参照することができます。
+</p>
+
+<p> ちなみに、リスト 9 の処理は匿名関数を使って次のように書き換えることもできます。
+</p>
+<pre class="list">
+リスト 10 : リストの要素を n 倍する (3)
+
+function times_element(n, ary)
+  local _times = function(x) return x * n end
+  return map(_times, ary)
+end
+</pre>
+<p> ただし、再帰定義の場合は注意が必要です。最初に、local でローカル変数を定義し、そのあとでその変数に匿名関数を代入します。
+</p>
+<pre class="list">
+local func
+func = function(x) ...; return func() end
+</pre>
+<p> local func = 式 とした場合、ローカル変数 func が生成されるのは式を評価したあとになるので、式の中で func を再帰呼び出しすることはできません。ご注意ください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap07">クロージャ</h3>
+<p> 今回は関数型言語で用いられているテクニックを紹介します。Lisp などの関数型言語では、関数を生成する関数を簡単に作ることができます。このとき使われる機能がクロージャ (closure) です。クロージャは評価する関数と参照可能なローカル変数をまとめたものです。クロージャは関数のように実行することができますが、クロージャを生成するときに参照可能なローカル変数を保存するところが異なります。なお、参照可能なローカル変数の集合を環境と呼ぶことがあります。
+</p>
+
+<h4>●クロージャの生成</h4>
+<p> Lua でクロージャを生成するには匿名関数を使うか、局所的な関数を定義して、その関数を返します。たとえば、「引数を n 倍する関数」を生成する関数は、匿名関数を使うと次のようになります。
+</p>
+
+<pre>
+&gt; function foo(n) return function(x) return x * n end end
+&gt; foo10 = foo(10)
+&gt; foo10(1)
+10
+&gt; foo10(2)
+20
+&gt; foo5 = foo(5)
+&gt; foo5(10)
+50
+&gt; foo5(20)
+100
+</pre>
+
+<p> 関数 foo は引数を n 倍する関数を生成します。変数 foo10 に foo(10) の返り値をセットします。すると、foo10 は引数を 10 倍する関数として使うことができます。同様に、変数 foo5 に foo(5) の返り値をセットすると、foo5 は引数を 5 倍する関数になります。
+</p>
+
+<p> 匿名関数で関数を生成するとき、評価する関数のほかに、そのとき参照可能なローカル変数、つまり「環境」もいっしょに保存されます。この場合、参照可能なローカル変数は foo の引数 n です。そして、クロージャを実行するときは、保存されているローカル変数を参照することができるのです。
+</p>
+
+<p> foo(10) を実行して匿名関数を生成するとき、定義されているローカル変数は n で、その値は 10 です。この値がクロージャに保存されているので、foo10 の関数は引数を 10 倍した結果を返します。foo(5) を評価すると n の値は 5 で、それがクロージャに保存されているので、foo5 の関数は引数を 5 倍した結果を返すのです。
+</p>
+
+<p> また、局所的な関数を定義して、その関数を返してもクロージャを生成することができます。リスト 11 を見てください。
+</p>
+<pre class="list">
+リスト 11 : マップ関数のカリー化
+
+function map(func)
+  local function _map(ary)
+    local result = {}
+    for i = 1, #ary do
+      table.insert(result, func(ary[i]))
+    end
+    return result
+  end
+  return _map
+end
+</pre>
+<p> 関数 map は引数 func に関数を受け取り、その関数を呼び出すマップ関数を返します。局所関数 _map はクロージャとして機能するので、map の引数 func にアクセスすることができます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; map2 = map(function(x) return x * x end)
+&gt; map2({1,2,3,4,5})
+{1,4,9,16,25}
+&gt; map(function(x) return x * x end)({1,2,3,4,5})
+{1,4,9,16,25}
+</pre>
+<p> 最初の例は map で生成した関数を変数 map2 にセットし、それから map2 を関数呼び出しします。次の例は、map の返り値を直接関数呼び出ししています。カッコが多くなりますが、2 引数の map と同じように呼び出すことができます。これでも配列の要素を 2 乗することができます。
+</p>
+
+<p> 2 番目の例は、最初の引数を受け取って新しい関数を生成して返し、その関数に次の引数を適用して値を求めるという動作になります。このように、関数の引数が一つでも、「関数を返す関数」を使うことで、複数の引数を処理することができます。このような関数をカリー化関数 (curried function) といいます。
+</p>
+
+<p> 関数型言語には、カリー化関数をサポートしているプログラミング言語、たとえば Haskell や ML (SML/NJ, Ocaml) などがあります。これらのプログラミング言語では、高階関数はカリー化関数として定義されています。また、関数を合成して新しい関数を作ることも簡単にできます。
+</p>
+
+<h4>●ジェネレータ</h4>
+<p> クロージャの応用例としてジェネレータ (generator) というプログラムを紹介しましょう。ジェネレータは呼び出されるたびに新しい値を生成していきます。たとえば、Lua の関数 math.random は実行するたびに乱数を返します。つまり、random は乱数列を発生するジェネレータと考えることができます。
+</p>
+
+<p> 簡単な例題として、奇数列 ( 1, 3, 5, ..... ) を発生するジェネレータを作ってみます。関数名は gen_odd_number としましょう。グローバル変数を使うと、次のようになります。
+</p>
+<pre>
+&gt; function gen_odd_num() prev_num = prev_num + 2; return prev_num end
+&gt; prev_num = -1
+&gt; gen_odd_num()
+1
+&gt; gen_odd_num()
+3
+&gt; gen_odd_num()
+5
+&gt; gen_odd_num()
+7
+&gt; gen_odd_num()
+9
+</pre>
+<p> グローバル変数 prev_num は、gen_odd_num が返した値を記憶します。新しい値は、この prev_num に 2 を足せばいいのです。
+</p>
+
+<p> このように、グローバル変数を使うと簡単にジェネレータを作ることができますが問題点もあります。それは、複数のジェネレータが必要になる場合です。単純に考えると、必要な数だけグローバル変数と関数を用意すればいいのですが、数が増えるとグローバル変数や関数を定義するだけでも大変な作業になります。
+</p>
+
+<p> ところがクロージャを使うと、もっとスマートにジェネレータを用意できます。まず、ジェネレータを作る関数を定義します。
+</p>
+<pre class="list">
+リスト 12 : ジェネレータを作る関数
+
+function make_gen_odd_num()
+  local prev_num = -1
+  return function()
+    prev_num = prev_num + 2
+    return prev_num
+  end
+end
+</pre>
+
+<p> 関数 make_gen_odd_num はクロージャを返します。そして、このクロージャがジェネレータの役割を果たすのです。それでは、実際に実行してみましょう。
+</p>
+<pre>
+&gt; a = make_gen_odd_num()
+&gt; a()
+1
+&gt; a()
+3
+&gt; a()
+5
+&gt; a()
+7
+&gt; b = make_gen_odd_num()
+&gt; b()
+1
+&gt; b()
+3
+&gt; b()
+5
+</pre>
+
+<p> make_gen_odd_num で作成したクロージャを変数 a にセットして実行します。実行するたびに 1, 3, 5 と奇数列を生成していますね。次に新しいクロージャを変数 b にセットします。このクロージャを実行すると、新しい奇数列を生成します。確かにジェネレータとして動作しています。
+</p>
+
+<p> このプログラムのポイントは、ローカル変数 prev_num です。クロージャで保存される環境は変数 prev_num です。この値は make_gen_odd_num が実行されたときに -1 で初期化されています。クロージャにはこの値が保存されます。次は a にセットしたクロージャを実行します。匿名関数はクロージャに保存されたローカル変数にアクセスするので、prev_num += 2 の値は 1 になり、クロージャに保持されている prev_num の値は 1 に更新されます。
+</p>
+
+<p> 環境はクロージャによって異なります。a のクロージャが評価されると、そのクロージャの環境が更新されるのであって、ほかのクロージャに影響を与えることはありません。したがって、ジェネレータが発生する奇数列が、ほかのジェネレータに影響を与えることはないのです。あとは必要な数だけジェネレータを make_gen_odd_num で作り、そのクロージャを変数もしくは配列に格納しておけばいいわけです。 
+</p>
+
+<h4>●たらいまわし関数</h4>
+<p> 最後に、再帰を使った面白い関数を紹介しましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 13 : たらいまわし関数
+
+function tarai(x, y, z)
+  if x &lt;= y then
+    return y
+  else
+    return tarai(tarai(x - 1, y, z), tarai(y - 1, z, x), tarai(z - 1, x, y))
+  end
+end
+
+function tak(x, y, z)
+  if x &lt;= y then
+    return z
+  else
+    return tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y))
+  end
+end
+</pre>
+
+<p> tarai や tak は「たらいまわし関数」といって、再帰的に定義されている関数です。これらの関数は Lisp などでベンチマークとして利用されることがあります。オリジナルプログラムは Web サイト <a href="http://www.nue.org/nue/index.html">ぬえ 鵺 NUE</a> の TAK Function をお読みください。
+</p>
+
+<p> tarai は通称「竹内関数」と呼ばれていて、日本の代表的な Lisper である竹内郁雄氏によって考案されたそうです。そして、tak は tarai のバリエーションで、John Macarthy 氏によって作成されたそうです。たらいまわし関数がベンチマークで使われることは M.Hiroi も知っていましたが、このような由緒ある関数だとは思ってもいませんでした。
+</p>
+
+<p> それでは、たらいまわし関数を Lua で実行してみましょう。実行時間を求めるため関数 os.clock を使います。実行環境は Windows XP, celeron 1.40 GHz です。結果は次のようになりました。
+</p>
+<pre class="item">
+tarai(12, 6, 0) : 3.19 秒
+tak(18, 9, 0)   : 3.94 秒
+</pre>
+<p> Lua の実行速度は Perl, Python, Ruby などのスクリプト言語の中ではかなり速いほうです。
+</p>
+
+<h4>●メモ化による高速化</h4>
+<p> たらいまわし関数が遅いのは、同じ値を何度も計算しているためです。この場合、表 (table) を使って処理を高速化することができます。同じ値を何度も計算することがないように、計算した値は表に格納しておいて、2 回目以降は表から計算結果を求めるようにします。このような手法を「表計算法」とか「メモ化」といいます。
+</p>
+
+<p> Lua は関数型言語の機能を備えているので、関数を「メモ化」するメモ化関数を作成することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 14 : メモ化関数
+
+function memoize(func)
+  local tbl = {}
+  local function _memo_func(...)
+    local key = table.concat({...}, ',')
+    if not tbl[key] then
+      tbl[key] = func(...)
+    end
+    return tbl[key]
+  end
+  return _memo_func
+end
+</pre>
+
+<p> 関数 memoize は関数 func を引数に受け取り、それをメモ化した関数を返します。memoize は局所関数 _memo_func を返すので、その中で memoize の引数 func やローカル変数 tbl にアクセスすることができます。
+</p>
+
+<p> 変数 tbl はハッシュとして使います。キーは引数で、値が func の返り値になります。キーを生成するため、{...} で可変引数式を配列に変換し、関数 table.concat で文字列に変換します。要素は第 2 引数の文字 ( , ) で連結されます。tbl[key] が偽の場合は func を呼び出して値を求め、それを tbl にセットします。あとは tbl[key] の値を返すだけです。
+</p>
+
+<p> 関数 memoize の使い方は簡単です。次の例を見てください。
+</p>
+<pre class="list">
+リスト 15 : メモ化関数の使い方
+
+tarai = memoize(tarai)
+tak = memoize(tak)
+</pre>
+
+<p> とても簡単ですね。それでは実際に実行してみましょう。実行環境は Windows XP, celeron 1.40 GHz, jrunscript です。
+</p>
+<pre class="item">
+tarai(192, 96, 0) : 1.39 秒
+tak(192, 96, 0)   : 4.45 秒
+</pre>
+<p> このように、引数の値を増やしても高速に実行することができます。メモ化の効果は十分に出ていると思います。また、同じ計算を再度実行すると、メモ化の働きにより値をすぐに求めることができます。
+</p>
+
+<h4>●遅延評価による高速化</h4>
+<p> 関数 tarai は「遅延評価」を行う処理系、たとえば関数型言語の Haskell では高速に実行することができます。また、Scheme でも delay と force を使って遅延評価を行うことができます。
+</p>
+<p> tarai のプログラムを見てください。x &lt;= y のときに y を返しますが、このとき引数 z の値は必要ありませんね。引数 z の値は x &gt; y のときに計算するようにすれば、無駄な計算を省略することができます。なお、関数 tak は x &lt;= y のときに z を返しているため、遅延評価で高速化することはできません。ご注意くださいませ。
+</p>
+
+<p> 完全ではありませんが、Lua でもクロージャを使って遅延評価を行うことができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 16 : クロージャによる遅延評価
+
+function tarai_lazy(x, y, z)
+  if x &lt;= y then
+    return y
+  else
+    local zz = z()
+    return tarai_lazy(tarai_lazy(x - 1, y,  function() return zz end),
+                      tarai_lazy(y - 1, zz, function() return x end),
+                      function()
+                        return tarai_lazy(zz - 1, x, function() return y end)
+                      end)
+  end
+end
+</pre>
+<p> 遅延評価したい処理をクロージャに包んで引数 z に渡します。そして、x &gt; y のときに引数 z を評価します。すると、クロージャ内の処理が実行されて z の値を求めることができます。たとえば、function() return 0 end を z に渡す場合、z() とすると返り値は 0 になります。function() return x end を渡せば、x に格納されている値が返されます。function() return tarai( ... ) end を渡せば、関数 tarai が実行されてその値が返されるわけです。
+</p>
+
+<p> それでは、実際に実行してみましょう。
+</p>
+<pre class="item">
+tarai(192, 96, function() return 0 end) : 0.047 秒
+</pre>
+<p> このように、たらいまわし関数は遅延評価でも高速化することができます。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="lua02.html">PrevPage</a> | <a href="lua.html">L u a</a> | <a href="lua04.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

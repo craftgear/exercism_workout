@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 「ライン・パズル」の解法</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881774</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>「ライン・パズル」の解法</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p> 「ライン・パズル」は、「15 パズル」や「箱入り娘」などで有名なスライディングブロックパズルのひとつです。このパズルは円を四等分した模様のピースを 16 枚使います。今回は <a href="../java/index.html">Java DE Puzzle</a> の <a href="../java/linepuz.html">ライン・パズル</a> で出題した問題 1, 2, 3 の最短手数を求めてみましょう。
+</p>
+<p> ライン・パズルの場合、最初に動かすことができるピースは盤面右上のピースしかありません。また、最後は最初に動かしたピースを元に戻して模様が完成することになります。そこで、右上のピースを動かした状態から始めて、そのピースを戻す直前までの手順を求めることにします。したがって、求まる手数は実際の手数よりも 2 手だけ少なくなります。
+</p>
+
+<p> 四等分したピースは、左上を A, 右上を B, 左下を C, 右下を D と名前を付けましょう。A, C, D のピースが 4 つあり、B のピースが 3 つで残りが空き場所ですから、局面の総数は次のようになります。
+</p>
+<pre class="item">
+<sub>16</sub>Ｃ<sub>4</sub> * <sub>12</sub>Ｃ<sub>4</sub> * <sub>8</sub>Ｃ<sub>4</sub> * 4 = 1820 * 495 * 70 * 4 = 252,252,000
+</pre>
+<p> 幅優先探索で解くには大きすぎる数なので、今回は反復深化を使って解くことにします。
+</p>
+<hr>
+<h4>●単純な反復深化</h4>
+<p> まずは、下限値枝刈り法を使わないでプログラムを作ります。いつものように、空いている場所を S (0) で表し、ほかの駒を A (1) から D (4) までの数字で表すことにします。そうすると、スタートとゴール (問題１) は次のように表すことができます。
+</p>
+
+<pre class="list">
+リスト：グローバル変数の定義
+
+/* スタート */
+char init_state[SIZE] = {
+  A, B, A, S,
+  C, D, C, D,
+  A, B, A, B,
+  C, D, C, D,
+};
+
+/* ゴール：問題１ */
+char final_state1[SIZE] = {
+  A, B, A, S,
+  C, A, B, D,
+  A, C, D, B,
+  C, D, C, D,
+};
+
+char board[SIZE];                /* 盤面 */
+char move_position[MAX_MOVE];    /* 動かした位置 */
+char moveto_position[MAX_MOVE];  /* 移動先の位置 */
+int  count;                      /* 発見した解の個数 */
+</pre>
+
+<p> このほかにも、必要なグローバル変数を定義します。盤面は 1 次元配列 board で表します。ライン・パズルは同じ駒が複数あるので、移動手順は動かす駒の位置で表すことにします。動かした駒の位置は配列 move_position に格納します。それから、同じ駒を続けて動かすと元の局面に戻ってしまい、無駄な探索を行うことになります。これをチェックするために、移動先の位置を配列 moveto_position に格納しておきます。
+</p>
+
+<p> 次は、反復深化で解を探索するプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：反復深化による探索
+
+void solve( int limit, int move, int space )
+{
+  if( move == limit ){
+    if( !memcmp( board, final_state1, SIZE ) ){
+      count++;
+      print_answer( move );  /* 発見 */
+    }
+  } else {
+    int i, j;
+    for( i = 0; (j = adjacent[space][i]) != -1; i++ ){
+      int p = board[j];
+      if( moveto_position[move] == j ) continue;
+      /* 移動する */
+      board[space] = p;
+      board[j] = 0;
+      move_position[move + 1] = j;
+      moveto_position[move + 1] = space;
+      /* 再帰呼び出し */
+      solve( limit, move + 1, j );
+      /* 元に戻す */
+      board[space] = 0;
+      board[j] = p;
+    }
+  }
+}
+</pre>
+
+<p> 関数 solve の引数 limit が反復深化の上限値、move が手数、space が空き場所の位置を表します。move が limit と等しくなったら、ゴールに到達したかチェックします。そうでなければ、駒を動かして次の局面を生成します。
+</p>
+<p> 駒を動かす場合、同じ駒を続けて動かさないように moveto_position をチェックします。このチェックを入れないと、実行速度はかなり遅くなるので注意してください。配列 adjacent はお馴染みの「隣接リスト」を表しています。あとは、とくに難しいところはないでしょう。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。プログラムは、いつものオンボロマシン (Pentium 166 MHz) で実行しました。
+</p>
+<pre>
+問題１
+***** 1 手目を探索中 *****
+  ・・・ 省略 ・・・
+***** 16 手目を探索中 *****
+2 1 5 9 10 6 5 1 2 6 5 9 10 6 2 3
+2 6 10 9 5 6 2 1 5 6 10 9 5 1 2 3
+7 6 5 9 10 6 7 11 10 6 5 9 10 11 7 3
+7 11 10 9 5 6 10 11 7 6 10 9 5 6 7 3
+個数 4, 時間 540 (msec)
+
+問題２
+***** 1 手目を探索中 *****
+  ・・・ 省略 ・・・
+***** 12 手目を探索中 *****
+7 11 10 9 5 6 7 11 10 6 7 3
+個数 1, 時間 78 (msec)
+</pre>
+<p> 問題 1 は 16 + 2 = 18 手、問題 2 は 12 + 2 = 14 手で解くことができました。しかしながら、問題 3 はいつまでたっても終わらないので、26 手まで探索したところで中断してしまいました。単純な反復深化では、20 手程度の探索が限界だと思います。そこで、「下限値枝刈り法」を使ってプログラムの高速化に挑戦してみましょう。
+</p>
+<p><a href="linepuz.html#update">次へ</a>
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+/*
+ * linepuz.c : ラインパズルの解法
+ *
+ *             Copyright (C) 2001 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+/* 定数の定義 */
+#define TRUE       1
+#define FALSE      0
+#define SIZE      16
+#define MAX_MOVE 100
+
+/* 種別の定義 */
+#define S 0
+#define A 1
+#define B 2
+#define C 3
+#define D 4
+
+
+/* 隣接リスト */
+const char adjacent[SIZE][5] = {
+   1,  4, -1, -1, -1,  /* 0 */
+   0,  2,  5, -1, -1,  /* 1 */
+   1,  3,  6, -1, -1,  /* 2 */
+   2,  7, -1, -1, -1,  /* 3 */
+   0,  5,  8, -1, -1,  /* 4 */
+   1,  4,  6,  9, -1,  /* 5 */
+   2,  5,  7, 10, -1,  /* 6 */
+   3,  6, 11, -1, -1,  /* 7 */
+   4,  9, 12, -1, -1,  /* 8 */
+   5,  8, 10, 13, -1,  /* 9 */
+   6,  9, 11, 14, -1,  /* 10 */
+   7, 10, 15, -1, -1,  /* 11 */
+   8, 13, -1, -1, -1,  /* 12 */
+   9, 12, 14, -1, -1,  /* 13 */
+  10, 13, 15, -1, -1,  /* 14 */
+  11, 14, -1, -1, -1,  /* 15 */
+};
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  A, B, A, S,
+  C, D, C, D,
+  A, B, A, B,
+  C, D, C, D,
+};
+
+/* 問題１ */
+char final_state1[SIZE] = {
+  A, B, A, S,
+  C, A, B, D,
+  A, C, D, B,
+  C, D, C, D,
+};
+
+/* 問題２ */
+char final_state2[SIZE] = {
+  A, B, A, S,
+  C, C, A, D,
+  A, D, B, B,
+  C, D, C, D,
+};
+
+/* 問題３ */
+char final_state3[SIZE] = {
+  A, C, A, S,
+  C, D, C, A,
+  D, B, A, B,
+  C, D, B, D,
+};
+
+int  count;        /* 発見した解の個数 */
+char board[SIZE];  /* 盤面 */
+
+/* 動かした位置, 移動先の位置 */
+char move_position[MAX_MOVE];
+char moveto_position[MAX_MOVE];
+
+
+/* 初期化 */
+void init( void )
+{
+  memcpy( board, init_state, SIZE );
+  move_position[0] = -1;
+  moveto_position[0] = -1;
+}
+
+/* 手順を表示 */
+void print_answer( int m )
+{
+  int i;
+  for( i = 1; i &lt;= m; i++ ){
+    printf("%d ", move_position[i] );
+  }
+  printf("\n");
+}
+
+/* 反復深化による探索 */
+void solve( int limit, int move, int space )
+{
+  if( move == limit ){
+    if( !memcmp( board, final_state1, SIZE ) ){
+      count++;
+      print_answer( move );  /* 発見 */
+    }
+  } else {
+    int i, j;
+    for( i = 0; (j = adjacent[space][i]) != -1; i++ ){
+      int p = board[j];
+      if( moveto_position[move] == j ) continue;
+      /* 移動する */
+      board[space] = p;
+      board[j] = 0;
+      move_position[move + 1] = j;
+      moveto_position[move + 1] = space;
+      /* 再帰呼び出し */
+      solve( limit, move + 1, j );
+      /* 元に戻す */
+      board[space] = 0;
+      board[j] = p;
+    }
+  }
+}
+
+int main()
+{
+  int start, end, limit;
+  start = clock();
+  init();
+  for( limit = 1; limit &lt; MAX_MOVE; limit++ ){
+    printf("***** %d 手目を探索中 *****\n", limit );
+    solve( limit, 0, 3 );
+    if( count &gt; 0 ) break;
+  }
+  end = clock();
+  printf("個数 %d, 時間 %d \n", count, end - start );
+  return 0;
+}
+</pre>
+<HR>
+<h3 id="update">下限値枝刈り法による高速化</h3>
+<p> さて、下限値を求める方法ですが、これにはいろいろな方法が考えられます。今回は、各駒が正しい位置へ移動するまでの手数を下限値として利用することにします。たとえば、「8 パズル」の場合は次のように求めることができます。
+</p>
+
+<pre class="fig">
+┌─┬─┬─┐    ┌──┬──┬──┐ 
+│１│２│３│    │8(3)│6(2)│7(4)│ 
+├─┼─┼─┤    ├──┼──┼──┤ 
+│４│５│６│    │2(2)│5(0)│4(2)│ 
+├─┼─┼─┤    ├──┼──┼──┤ 
+│７│８│  │    │3(4)│    │1(4)│ 
+└─┴─┴─┘    └──┴──┴──┘ 
+                   (n) : n は移動手数
+
+(1) 完成形    (2) 初期状態：合計 21 手
+
+    図：「8 パズル」下限値の求め方
+</pre>
+<p> 右下にある 1 の駒を左上の正しい位置に移動するには、最低でも 4 手必要です。もちろん、ほかの駒との関連で、それ以上の手数が必要になる場合もあるでしょうが、4 手より少なくなることは絶対にありません。同じように、各駒について最低限必要な手数を求めることができます。そして、その合計値はパズルを解くのに最低限必要な手数となります。これを下限値として利用することができます。
+</p>
+
+<p> 同じ駒が複数ある「ライン・パズル」の場合、この方法をそのまま適用することはできません。そこで、下限値の精度は低くなりますが、目標の位置にいちばん近い駒の移動手数を使うことにします。次の図を見てください。
+</p>
+
+<pre class="fig">
+┌─┬─┬─┬─┐  ┌─┬─┬─┬─┐  
+│Ａ│Ｃ│Ａ│Ｓ│  │A1│Ｂ│A2│Ｓ│
+├─┼─┼─┼─┤  ├─┼─┼─┼─┤
+│Ｃ│Ｄ│Ｃ│Ａ│  │Ｃ│Ｄ│Ｃ│Ｄ│
+├─┼─┼─┼─┤  ├─┼─┼─┼─┤
+│Ｄ│Ｂ│Ａ│Ｂ│  │A4│Ｂ│A3│Ｂ│
+├─┼─┼─┼─┤  ├─┼─┼─┼─┤
+│Ｃ│Ｄ│Ｂ│Ｄ│  │Ｃ│Ｄ│Ｃ│Ｄ│
+└─┴─┴─┴─┘  └─┴─┴─┴─┘
+
+   (1) 完成形          (2) 初期状態
+
+図：「ライン・パズル」下限値の求め方
+</pre>
+<p> 駒 A に注目してください。完成形と初期状態を比べると、A1, A2, A3 の駒は正しい位置にあるので、移動手数は 0 でいいですね。A4 の移動手数ですが、残りひとつの位置へ移動するまでの手数ではなく、A4 にいちばん近い位置へ移動する手数を求めます。この場合、A1 か A3 の駒がある位置がいちばん近いので、移動手数は 2 となります。このように、駒が重複する場合もあるため下限値の精度は低下しますが、いちばん近い位置までの移動手数を求めるだけなのでプログラムは簡単になります。
+</p>
+
+<p> 下限値の求め方ですが、駒を動かすたびに各駒の手数を計算していたのでは時間がかかります。「ライン・パズル」の場合、1 回にひとつの駒しか移動しないので、初期状態の下限値を求めておいて、動かした駒の差分だけを計算すればいいでしょう。また、駒の移動手数はいちいち計算するのではなく、あらかじめ計算した結果を配列に格納しておいた方が良いでしょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：移動手数表の作成
+
+/* 移動手数表 */
+int distance[5][16];
+
+/* 移動手数表を作る */
+void make_distance( void )
+{
+  int i, j, k, m, n;
+  int x[4], y[4];
+  for( i = 1; i &lt; 5; i++ ){
+    /* 座標セット */
+    for( k = j = 0; j &lt; SIZE; j++ ){
+      if( final_state[j] == i ){
+        x[k] = j % 4;
+        y[k] = j / 4;
+        if( ++k == 4 ) break;
+      }
+    }
+    /* 距離をセット */
+    for( j = 0; j &lt; SIZE; j++ ){
+      int x1 = j % 4;
+      int y1 = j / 4;
+      if( final_state[j] == i ){
+        m = 0;
+      } else {
+        for( m = SIZE, n = 0; n &lt; k; n++ ){
+          int d = (x1 &gt; x[n] ? x1 - x[n] : x[n] - x1) +
+            (y1 &gt; y[n] ? y1 - y[n] : y[n] - y1);
+          if( d &lt; m ) m = d;
+        }
+      }
+      distance[i][j] = m;
+    }
+  }
+}
+</pre>
+
+<p> 移動手数は配列 distance に格納します。distance[0] はダミーです。最初に、正しい駒の位置を座標 x, y に変換して配列に格納します。あとは、正しい位置までの移動手数を求め、最短手数を distance にセットするだけです。とくに難しいところはないので、詳細はプログラムを読んでくださいね。
+</p>
+
+<p> 次は、下限値枝刈り法のプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：下限値枝刈り法
+
+void solve_low( int limit, int move, int space, int low )
+{
+  if( move == limit ){
+    if( !memcmp( board, final_state, SIZE ) ){
+      /* 見つけたよ */
+      count++;
+      print_answer( move );
+    }
+  } else {
+    int i, j, new_low;
+    for( i = 0; (j = adjacent[space][i]) != -1; i++ ){
+      int p = board[j];
+      if( moveto_position[move] == j ) continue;
+      /* 移動する */
+      board[space] = p;
+      board[j] = 0;
+      move_position[move + 1] = j;
+      moveto_position[move + 1] = space;
+      new_low = low - distance[p][j] + distance[p][space];
+
+      /* 下限値による枝刈り */
+      if( new_low + move <= limit ){
+        solve_low( limit, move + 1, j, new_low );
+      }
+      /* 元に戻す */
+      board[space] = 0;
+      board[j] = p;
+    }
+  }
+}
+</pre>
+
+<p> 関数 solve_low の引数 limit が反復深化の上限値、move が手数、space が空き場所、low が下限値を表します。駒を動かしたら差分を計算して、新しい下限値 new_low を求ます。そして、new_low + move が上限値 limit を越えたら枝刈りを行います。limit 以下であれば solve_low を再帰呼び出しします。追加する処理はこれだけで、あとは反復深化のプログラムと同じです。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。プログラムは、いつものオンボロマシン (Pentium 166 MHz) で実行しました。
+</p>
+<pre>
+問題 3
+***** 8 手目を探索中 *****
+   ・・・・省略・・・・
+***** 30 手目を探索中 *****
+2 1 0 4 8 12 13 9 5 6 2 1 0 4 5 6 7 11 10 14 13 12 8 9 5 6 10 11 7 3 
+2 6 7 11 10 6 5 1 0 4 8 12 13 14 10 9 5 6 2 1 0 4 8 12 13 14 10 11 7 3 
+2 6 10 9 8 12 13 14 10 9 5 4 8 12 13 9 5 1 2 6 7 11 10 9 5 6 10 11 7 3 
+個数 3, 時間 3636 (msec)
+</pre>
+<p> 問題 3 は 30 + 2 = 32 手で解くことができました。実行時間は約 4 秒でした。いいかげんな下限値でしたが、その効果は絶大ですね。M.Hiroi もちょっと驚きました。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+/*
+ * linepuz.c : ラインパズルの解法（下限値枝刈り法）
+ *
+ *             Copyright (C) 2001 Makoto Hiroi
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+/* 定数の定義 */
+#define TRUE       1
+#define FALSE      0
+#define SIZE      16
+#define MAX_MOVE 100
+
+/* 種別の定義 */
+#define S 0
+#define A 1
+#define B 2
+#define C 3
+#define D 4
+
+
+/* 隣接リスト */
+const char adjacent[SIZE][5] = {
+   1,  4, -1, -1, -1,  /* 0 */
+   0,  2,  5, -1, -1,  /* 1 */
+   1,  3,  6, -1, -1,  /* 2 */
+   2,  7, -1, -1, -1,  /* 3 */
+   0,  5,  8, -1, -1,  /* 4 */
+   1,  4,  6,  9, -1,  /* 5 */
+   2,  5,  7, 10, -1,  /* 6 */
+   3,  6, 11, -1, -1,  /* 7 */
+   4,  9, 12, -1, -1,  /* 8 */
+   5,  8, 10, 13, -1,  /* 9 */
+   6,  9, 11, 14, -1,  /* 10 */
+   7, 10, 15, -1, -1,  /* 11 */
+   8, 13, -1, -1, -1,  /* 12 */
+   9, 12, 14, -1, -1,  /* 13 */
+  10, 13, 15, -1, -1,  /* 14 */
+  11, 14, -1, -1, -1,  /* 15 */
+};
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  A, B, A, S,
+  C, D, C, D,
+  A, B, A, B,
+  C, D, C, D,
+};
+
+/* 問題１ */
+char final_state1[SIZE] = {
+  A, B, A, S,
+  C, A, B, D,
+  A, C, D, B,
+  C, D, C, D,
+};
+
+/* 問題２ */
+char final_state2[SIZE] = {
+  A, B, A, S,
+  C, C, A, D,
+  A, D, B, B,
+  C, D, C, D,
+};
+
+/* 問題３ */
+char final_state[SIZE] = {
+  A, C, A, S,
+  C, D, C, A,
+  D, B, A, B,
+  C, D, B, D,
+};
+
+int count;         /* 発見した解の個数 */
+char board[SIZE];  /* 盤面 */
+
+/* 動かした位置, 移動先の位置 */
+char move_position[MAX_MOVE];
+char moveto_position[MAX_MOVE];
+
+/*
+ * 移動手数表
+ *
+ */
+int distance[5][16];
+
+void make_distance( void )
+{
+  int i, j, k, m, n;
+  int x[4], y[4];
+  for( i = 1; i &lt; 5; i++ ){
+    /* 座標セット */
+    for( k = j = 0; j &lt; SIZE; j++ ){
+      if( final_state[j] == i ){
+        x[k] = j % 4;
+        y[k] = j / 4;
+        if( ++k == 4 ) break;
+      }
+    }
+    /* 距離をセット */
+    for( j = 0; j &lt; SIZE; j++ ){
+      int x1 = j % 4;
+      int y1 = j / 4;
+      if( final_state[j] == i ){
+        m = 0;
+      } else {
+        for( m = SIZE, n = 0; n &lt; k; n++ ){
+          int d = (x1 &gt; x[n] ? x1 - x[n] : x[n] - x1) +
+            (y1 &gt; y[n] ? y1 - y[n] : y[n] - y1);
+          if( d &lt; m ) m = d;
+        }
+      }
+      distance[i][j] = m;
+    }
+  }
+}
+
+/* 下限値を求める */
+int calc_lower_value( const char *board )
+{
+  int i, j, d = 0;
+  for( i = 0; i &lt; SIZE; i++ ){
+    j = board[i];
+    if( j &gt; 0 ) d += distance[j][i];
+  }
+  return d;
+}
+
+
+/* 初期化 */
+int init( void )
+{
+  memcpy( board, init_state, SIZE );
+  move_position[0] = -1;
+  moveto_position[0] = -1;
+  make_distance();
+  return calc_lower_value( init_state );
+}
+
+/* 手順を表示 */
+void print_answer( int m )
+{
+  int i;
+  for( i = 1; i &lt;= m; i++ ){
+    printf("%d ", move_position[i] );
+  }
+  printf("\n");
+}
+
+/* 下限値枝刈り法 */
+void solve_low( int limit, int move, int space, int low )
+{
+  if( move == limit ){
+    if( !memcmp( board, final_state, SIZE ) ){
+      /* 見つけたよ */
+      count++;
+      print_answer( move );
+    }
+  } else {
+    int i, j, new_low;
+    for( i = 0; (j = adjacent[space][i]) != -1; i++ ){
+      int p = board[j];
+      if( moveto_position[move] == j ) continue;
+      /* 移動する */
+      board[space] = p;
+      board[j] = 0;
+      move_position[move + 1] = j;
+      moveto_position[move + 1] = space;
+      new_low = low - distance[p][j] + distance[p][space];
+
+      /* 下限値による枝刈り */
+      if( new_low + move &lt;= limit ){
+        solve_low( limit, move + 1, j, new_low );
+      }
+      /* 元に戻す */
+      board[space] = 0;
+      board[j] = p;
+    }
+  }
+}
+
+int main()
+{
+  int start, end, low, limit;
+  start = clock();
+  low = init();
+  for( limit = low; limit &lt; MAX_MOVE; limit++ ){
+    printf("***** %d 手目を探索中 *****\n", limit );
+    solve_low( limit, 0, 3, low );
+    if( count &gt; 0 ) break;
+  }
+  end = clock();
+  printf("個数 %d, 時間 %d \n", count, end - start );
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

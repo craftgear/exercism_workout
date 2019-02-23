@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scala プログラミング入門</title>
+  <meta name="description" content="Scala,Scala入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881778</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scala Programming</h1>
+<h2>お気楽 Scala プログラミング入門</h2>
+<div class="small">
+[ <a href="scala23.html">PrevPage</a> | <a href="scala.html">Scala</a> | NextPage ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>自分型アノテーションと構造的部分型</h3>
+<p> 今回は「自分型アノテーション」と「構造的部分型」について説明します。
+</p>
+
+<h4>●自分型アノテーションとは？</h4>
+<p> 自分型アノテーションは、オブジェクトで自分自身を表すキーワード this に別名を付ける機能のことで、基本コンストラクタの先頭で定義することができます。
+</p>
+<pre class="item">
+名前 =&gt;
+</pre>
+<p> 定義には =&gt; を使います。左辺に名前を指定し、右辺には何も書きません。名前は何でもいいのですが、self を使うことが多いようです。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; class Foo {
+     | self =&gt;
+     | val x = 1
+     | def display { println(this); println(self) }
+     | }
+defined class Foo
+
+scala&gt; val a = new Foo
+a: Foo = Foo@1d7b5a3
+
+scala&gt; a.display
+$line3.$read$$iw$$iw$Foo@1d7b5a3
+$line3.$read$$iw$$iw$Foo@1d7b5a3
+</pre>
+<p> このように、self は this と同じインスタンス (自分自身) を表していることがわかります。
+</p>
+
+<h4>●型の指定</h4>
+<p> 自分型アノテーションでは、名前のあとに自分以外の別の「型」を指定することができます。
+</p>
+<pre class="item">
+名前: 型1 [with 型2 ...] =&gt;
+</pre>
+<p> 自分型アノテーションで型 (トレイト) を指定すると、それを継承したことと同じ扱いになります。ただし、インスタンスを生成するときに、指定したトレイトを Mix-In する必要があります。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; trait Foo {
+     | def foo() { println("foo") }
+     | }
+defined trait Foo
+
+scala&gt; class Bar {
+     | self: Foo =&gt;
+     | def bar() { println("bar") }
+     | }
+defined class Bar
+
+scala&gt; val a = new Bar with Foo
+a: Bar with Foo = $anon$1@669da8
+
+scala&gt; a.foo
+foo
+
+scala&gt; a.bar
+bar
+</pre>
+<p> クラス Bar の自分型アノテーションでトレイト Foo を指定します。Bar のインスタンスを new で生成するときは、with Foo で Foo を Mix-in してください。これで Foo のメソッド foo を呼び出すことができます。ただし、キーワード super を使って継承したトレイトのメソッドを呼び出すことはできません。ご注意ください。
+</p>
+<p> 型は Bar with Foo になりますが、型が Foo や Bar の変数にもインスタンスを格納することができます。
+</p>
+<pre>
+scala&gt; val b: Foo = a
+b: Foo = $anon$1@669da8
+
+scala&gt; val c: Bar = a
+c: Bar = $anon$1@669da8
+scala&gt; b.bar
+<console>:12: error: value bar is not a member of Foo
+              b.bar
+                ^
+
+scala&gt; c.bar
+bar
+
+scala&gt; c.foo
+<console>:12: error: value foo is not a member of Bar
+              c.foo
+                ^
+</pre>
+<p> インスタンスを Foo の変数に格納すると、Foo のメソッドしか呼び出すことができません。逆に、Bar の変数に格納すると、呼び出すことができるのは Bar のメソッドだけになります。
+</p>
+
+<h4>●実装の切り替え</h4>
+<p> 自分型アノテーションを使うと、実装 (機能) を切り替えることが簡単にできるようになります。次の例を見てください。
+</p>
+<pre>
+scala&gt; trait Foo {
+     | def foo(): Unit
+     | }
+defined trait Foo
+
+scala&gt; trait Foo1 extends Foo {
+     | def foo(){ println("Foo1!") }
+     | }
+defined trait Foo1
+
+scala&gt; trait Foo2 extends Foo {
+     | def foo(){ println("Foo2!") }
+     | }
+defined trait Foo2
+
+scala&gt; class Bar {
+     | self: Foo =&gt;
+     | def bar(){ println("bar!") }
+     | }
+defined class Bar
+</pre>
+<p> Foo は抽象トレイトで、抽象メソッド foo を持っています。トレイト Foo1, Foo2 は Foo を継承して、メソッド foo を具象化しています。クラス Bar では自分型アノテーションに型 Foo を指定することで、Foo1 と Foo2 のどちらでも Mix-in することができます。つまり、メソッド foo の機能をインスタンスの生成時に切り替えることができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+scala&gt; val a = new Bar with Foo1
+a: Bar with Foo1 = $anon$1@1005828
+
+scala&gt; val b = new Bar with Foo2
+b: Bar with Foo2 = $anon$1@e3540e
+
+scala&gt; a.foo
+Foo1!
+
+scala&gt; b.foo
+Foo2!
+
+scala&gt; a.bar
+bar!
+
+scala&gt; b.bar
+bar!
+</pre>
+<p> 変数 a のインスタンスは Foo1 を Mix-in しているので、foo を呼び出すと Foo1! と表示されます。変数 b は Foo2 を Mix-in しているので、foo は Foo2 と表示されます。このように、Mix-in するトレイトを変更するだけで、簡単に実装を切り替えることができます。
+</p>
+<p> また、次のように仮想メソッド foo の実装を定義すれば、Foo を Mix-in することもできます。
+</p>
+<pre>
+scala&gt; val c = new Bar with Foo { def foo(){ println("Foo!") } }
+c: Bar with Foo = $anon$1@f22f9d
+
+scala&gt; c.foo
+Foo!
+
+scala&gt; c.bar
+bar!
+</pre>
+
+<p> <a href="scala24.html#cite">参考文献 1</a> によると、<CITE>『自分型アノテーションを使うことで、DI（依存性の注入）機能をソースファイルだけで実現できます。』</CITE> とのことです。
+</p>
+<p> また、依存性の注入は <a href="scala24.html#cite">参考文献 2</a> によると、<CITE>『コンポーネント間の依存関係をプログラムのソースコードから排除し、外部の設定ファイルなどで注入できるようにするソフトウェアパターンである。英語の頭文字からDIと略される。』</CITE> とのことです。
+</p>
+<p> M.Hiroi は勉強不足でまだよく理解できていないのですが、Foo という仕様 (抽象トレイト) を使ってプログラムを記述し、あとから実装 (Foo1 や Foo2) を Mix-in する方法は、クラス Bar の独立性を高め、他のクラスとの結合度を低くすることができるように思いました。興味のある方はいろいろ調べてみてください。
+</p>
+
+<h4>●構造的部分型とは？</h4>
+<p> Scala の <a href="scala15.html#chap02">無名クラス</a> は、class 文でクラスを定義しなくてもインスタンスを生成することができました。無名クラスは { ... } の中でフィールド変数やメソッドを定義します。new でインスタンスを生成するとき、{ ... } で定義したフィールド変数やメソッドの型がインスタンスの型に現れます。次の例を見てください。
+</p>
+<pre>
+scala&gt; val a = new { val x = 1; def getX: Int = x }
+a: AnyRef{val x: Int; def getX: Int} = $anon$1@fdd820
+</pre>
+<p> ここで表示される型に注目してください。{ ... } の中にフィールド変数やメソッドの型が列挙されていますね。これがオブジェクトの型を表しています。本稿では、これを「シグネチャ (signature) 」と呼ぶことにします。シグネチャはオブジェクトの仕様を記述するものと考えてください。
+</p>
+
+<p> Scala の場合、変数や引数の型にシグネチャを指定することができます。また、type でシグネチャに名前を付けることもできます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; def foo(a: {def getX(): Int}): Int = a.getX()
+warning: (省略)
+foo: (f: AnyRef{def getX(): Int})Int
+</pre>
+<p> 関数 foo の引数 a の型は {def getX(): Int} です。メソッド getX を持つオブジェクトであれば、関数 foo の引数に渡すことができます。実際に、次に示す 3 つのオブジェクトを渡してみましょう。
+</p>
+<pre class="item">
+(1) new {def getX(): Int = 10}
+(2) new {def getX(): Int = 10; def getY():Int = 20}
+(3) new {def getX(): Int = 10; def getY():Int = 20; def getZ(): Int = 30}
+</pre>
+<pre>
+scala&gt; foo(new {def getX(): Int = 10})
+res0: Int = 10
+
+scala&gt; foo(new {def getX(): Int = 10; def getY():Int = 20})
+res1: Int = 10
+
+scala&gt; foo(new {def getX(): Int = 10; def getY():Int = 20; def getZ(): Int = 30})
+res2: Int = 10
+</pre>
+<p> どのオブジェクトの型もメソッド getX があるので、関数 foo の引数として渡すことができます。Scala の場合、(2) と (3) は (1) の「部分型 (subtyping) 」になります。
+</p>
+データ型を集合とみなした場合、部分型はある型の部分集合を表していると考えることができます。
+<p> 関数 foo の場合、引数 a の型は (1) の任意の部分型を表していると考えてください。したがって、(2), (3) のように (1) の部分型のオブジェクトであれば、関数 foo を呼び出すことができるわけです。
+</p>
+
+<p> 一般的なオブジェクト指向では、クラスを「継承」することによって部分型が発生します。継承を宣言することで部分型を生成する方法を「名前的部分型 (nomincal subtyping) 」といいます。Scala の場合は継承に関係なく部分型を生成することができます。これを「構造的部分型 (structural subtyping) 」といいます。
+</p>
+
+<p> なお、Scala は静的な型チェックを行うので、getX を持たないオブジェクトを foo に渡すと、コンパイルでエラーとなります。
+</p>
+<pre>
+scala&gt; foo(new {def getY(): Int = 20});
+&lt;console&gt;:9: error: type mismatch;
+ found   : AnyRef{def getY(): Int}
+ required: AnyRef{def getX(): Int}
+              foo(new {def getY(): Int = 20});
+                  ^
+</pre>
+<h4>●ダック・タイピング</h4>
+<p> Python や Ruby など動的な型付けを行うプログラミング言語では、同じインターフェースが備わっているオブジェクトは同じデータ型とみなす、という手法 (考え方) があります。これを「ダック・タイピング」といい、よく用いられる手法のようです。ご参考までに、Ruby のプログラムを示します。
+</p>
+<pre class="list">
+リスト : ダック・タイピング (Ruby)
+
+class Foo
+  def initialize
+    @a = 10
+  end
+  def get_a
+    @a
+  end
+  def set_a(x)
+    @a = x
+  end
+end
+
+class Bar
+  def initialize
+    @a = 20
+  end
+  def get_a
+    @a
+  end
+  def set_a(x)
+    @a = x
+  end
+end
+
+def foo(x)
+  print x.get_a
+end
+
+#
+# 実行
+#
+foo(Foo.new)   # 10 と表示する
+foo(Bar.new)   # 20 と表示する
+</pre>
+<p> クラス Foo と Bar は異なるクラスで継承関係もありません。この場合、Ruby は異なるデータ型と判断します。しかし、どちらのクラスにもメソッド get_a が定義されているので、関数 foo にインスタンスを渡して get_a を呼び出すことができます。動的なプログラミング言語では、このような「ダック・タイピング」を簡単に行うことができます。
+</p>
+
+<p> Scala は静的に強く型付けされる言語ですが、構造的部分型によりダック・タイピングのようなプログラミングスタイルも可能になっています。もちろん、コンパイル時に静的な型チェックが行われるので、エラーを検出することもできます。
+</p>
+<p> Scala のプログラムは次のようになります。
+</p>
+<pre>
+scala&gt; class Foo {
+     | var a = 10
+     | def getA(): Int = a
+     | def setA(x: Int): Unit = a = x
+     | }
+defined class Foo
+
+scala&gt; class Bar {
+     | var a = 20
+     | def getA(): Int = a
+     | def setA(x: Int): Unit = a = x
+     | }
+defined class Bar
+
+scala&gt; def foo(x: {def getA(): Int}) { println(x.getA) }
+warning: (省略)
+foo: (x: AnyRef{def getA(): Int})Unit
+
+scala&gt; foo(new Foo)
+10
+
+scala&gt; foo(new Bar)
+20
+</pre>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li> <a href="http://www.atmarkit.co.jp/ait/articles/1210/04/news129_3.html">スケーラブルで関数型でオブジェクト指向なScala入門（11）</a>
+  <li> <a href="http://ja.wikipedia.org/wiki/%E4%BE%9D%E5%AD%98%E6%80%A7%E3%81%AE%E6%B3%A8%E5%85%A5">依存性の注入 - Wikipedia</a>
+</ol>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">ヒープ</h3>
+<p> 「ヒープ (heap) 」は「半順序木 (partial ordered tree) 」と呼ばれる木構造の一種で、普通は二分木を使った二分ヒープのことを指します。ヒープを利用すると、最小値をすぐに見つけることができ、新しくデータを挿入する場合も、高々要素の個数 (n) の対数 (log<sub>2</sub> n) に比例する程度の時間で済みます。
+</p>
+
+<p> ヒープは配列を使って簡単に実装することができます。また、二分木を使ったヒープの実装では Leftist Heap と Skew Heap というアルゴリズムがあります。配列の操作は副作用を伴うので、immutable なヒープが必要な場合は Leftist Heap や Skew Heap を使った方が良いでしょう。今回は配列によるヒープの実装を説明し、Leftist Heap と Skew Heap は次回以降に説明することにします。
+</p>
+
+<h4>●配列によるヒープの実装</h4>
+<p> 一般的な二分木では、親よりも左側の子のほうが小さく、親よりも右側の子が大きい、という関係を満たすように作ります。「半順序木」の場合、親は子より小さいか等しい、という関係を満たすように作ります。このとき、葉はすべて同じ高さになるか、そうでなければ、葉は左から右へ順番に埋めていきます。このような二分木は配列で表すことができます。ヒープの場合、木の根を配列の添字 0 とすると、0 番目には必ず最小値のデータが格納されます。
+</p>
+<p> 下図にヒープと配列の関係を示します。
+</p>
+<pre class="fig">
+            0  1  2  3  4  5  6
+    TABLE [10 20 30 40 50 60 70]
+
+         (root)
+           10 (0)
+         ／   ＼            親の添字を k とすると
+       ／       ＼          その子は 2*k+1, 2*k+2 になる。
+     20 (1)       30 (2)    子の添字を k とすると
+   ／  ＼       ／  ＼      その親は (k - 1) / 2 になる。
+ 40     50   60      70     親の値 &lt;= 子の値 の関係を満たす。
+ (3)    (4)  (5)     (6)
+
+    図 : ヒープと配列の対応関係
+</pre>
+
+<h4>●ヒープの構築 (1)</h4>
+<p> ヒープは、次の手順で作ることができます。
+</p>
+<pre class="fig">
+TABLE [＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     最初は空
+
+      [80 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     最初のデータをセット
+
+      [80 10 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     次のデータをセットし親と比較
+       親 子                              親の位置 0 = (1 - 1)/2
+
+      [10 80 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     順序が違っていたら交換
+
+      [10 80 60 ＊ ＊ ＊ ＊ ＊ ＊ ＊]     データをセットし比較
+       親    子                           親の位置 0 = (2 - 1)/2
+
+      [10 80 60 20 ＊ ＊ ＊ ＊ ＊ ＊]     データをセットし比較
+          親    子                        親の位置 1 = (3 - 1)/2
+
+      [10 20 60 80 ＊ ＊ ＊ ＊ ＊ ＊]     交換する
+
+      ・・・・データがなくなるまで繰り返す・・・・
+
+                図 : ヒープの構築 (1)
+</pre>
+<p> まず、データを最後尾に追加します。そして、このデータがヒープの条件を満たしているかチェックします。もしも、条件を満たしていなければ、親と子を入れ換えて、次の親をチェックします。これを木のルート方向 (添字 0 の方向) に向かって繰り返します。条件を満たすか、木のルート (添字 0) まで到達すれば、処理を終了します。これをデータの個数だけ繰り返します。
+</p>
+<p> このアルゴリズムを Scala でプログラムすると、次のようになります。
+</p>
+<pre class="list">
+リスト : ヒープの構築 (1)
+
+import scala.collection.mutable.{ArrayBuffer}
+
+class Heap[A &lt;% Ordered[A]] {
+  private val buff = new ArrayBuffer[A]
+
+  private def upheap(n: Int) {
+    if (n &gt; 0) {
+      val p = (n - 1) / 2
+      if (buff(p) &gt; buff(n)) {
+        val tmp = buff(p)
+        buff(p) = buff(n)
+        buff(n) = tmp
+        upheap(p)
+      }
+    }
+  }
+
+  //
+  // メソッドの定義 (省略)
+  //
+}
+</pre>
+
+<p> 配列は ArrayBuffer を使います。関数 upheap はヒープを満たすように n 番目の要素をルート方向に向かって移動させます。0 から n - 1 番目までの要素はヒープの条件を満たしているとします。n が 0 の場合、ルートまでたどったので処理を終了します。n の親を p とすると、p は (n - 1) / 2 で求めることができます。そして、親 p が子 n よりも大きい場合、ヒープの条件を満たさないので p 番目と n 番目の要素を交換し、upheap を再帰呼び出しして次の親子関係をチェックします。そうでなければ、ヒープの条件を満たしているので処理を終了します。
+</p>
+
+<p> 実際にヒープを構築する場合は、配列の最後尾にデータを追加して、upheap を呼び出せばいいわけです。また、n 個のデータが格納されている配列でも、upheap を n - 1 回呼び出せばヒープを構築することができます。ただし、これはそれほど速い方法ではありません。もう少し高速な方法はあとで説明することにしましょう。
+</p>
+
+<h4>●ヒープの再構築</h4>
+<p> 次は、最小値を取り出したあとで新しいデータを追加し、ヒープを再構築する手順を説明します。
+</p>
+<pre class="fig">
+TABLE [10 20 30 40 50 60 70 80 90 100]    ヒープを満たしている
+
+      [＊ 20 30 40 50 60 70 80 90 100]    最小値を取り出す
+
+      [66 20 30 40 50 60 70 80 90 100]    新しい値をセット
+
+      [66 20 30 40 50 60 70 80 90 100]    小さい子と比較する
+       ^  ^                               (2*0+1) &lt; (2*0+2)
+       親 子 子
+
+      [20 66 30 40 50 60 70 80 90 100]    交換して次の子と比較
+          ^     ^                         (2*1+1) &lt; (2*1+2)
+          親    子 子
+
+      [20 40 30 66 50 60 70 80 90 100]    交換して次の子と比較
+                ^        ^                (2*3+1) &lt; (2*3+2)
+                親       子 子            親が小さいから終了
+
+                図 : ヒープの再構築
+</pre>
+<p> 最初に、ヒープの最小値である添字 0 の位置にあるデータを取り出します。次に、その位置に新しいデータをセットし、ヒープの条件を満たしているかチェックします。ヒープの構築とは逆に、葉の方向 (添字の大きい方向) に向かってチェックしていきます。
+</p>
+<p> まず、2 つの子の中で小さい方の子を選び、それと挿入したデータを比較します。もしも、ヒープの条件を満たしていなければ、親と子を交換し、その次の子供と比較します。これを、条件を満たすか、子供がなくなるまで繰り返します。
+</p>
+<p> このアルゴリズムを Scala でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : ヒープの再構築
+
+  private def downheap(n: Int) {
+    var c = 2 * n + 1
+    if (c &lt; buff.size) {
+      if (c + 1 &lt; buff.size) {
+        if (buff(c) &gt; buff(c + 1)) c += 1
+      }
+      if (buff(n) &gt; buff(c)) {
+        val tmp = buff(n)
+        buff(n) = buff(c)
+        buff(c) = tmp
+        downheap(c)
+      }
+    }
+  }
+</pre>
+<p> 関数 downheap はヒープを満たすように n 番目の要素を葉の方向へ移動させます。n + 1 番目から最後までの要素はヒープを満たしているとします。最初に、n の子 c を求めます。これが buff.size よりも大きければ処理を終了します。そして、もう一つの子 (c + 1) がある場合は、小さい方の子を選択します。
+</p>
+<p> 次に、子 c と親 n を比較し、親が大きい場合は親と子を交換します。それから、downheap を再帰呼び出しして次の親子関係をチェックします。親が子以下の場合はヒープの条件を満たしているので処理を終了します。
+</p>
+
+<p> 最小値を取り出したあと新しいデータを挿入しない場合は、新しいデータの代わりに配列 buff の最後尾のデータを buff の 0 番目にセットしてヒープを再構築します。上図の例でいえば、100 を buff[0] にセットして、ヒープを再構築すればいいわけです。この場合、ヒープに格納されているデータの個数は一つ減ることになります。
+</p>
+
+<h4>●ヒープの構築 (2)</h4>
+<p> ところで、n 個のデータをヒープに構築する場合、n - 1 回 upheap を呼び出さなければいけません。ところが、すべてのデータを配列に格納したあと、ヒープを構築するうまい方法があります。次の図を見てください。
+</p>
+<pre class="fig">
+TABLE [100 90 80 70 60|50 40 30 20 10]    後ろ半分が葉に相当
+
+      [100 90 80 70|60 50 40 30 20 10]    60 を挿入する
+                    ^
+      [100 90 80 70|60 50 40 30 20 10]    子供と比較する
+                    ^              ^       (2*4+1), (2*4+2)
+                    親             子
+
+      [100 90 80 70|10 50 40 30 20 60]    交換する
+
+      ・・・ 70 80 90 を順番に挿入し修正する ・・・
+
+      [100|10 40 20 60 50 80 30 70 90]    90 を挿入し修正した
+
+      [100 10 40 20 60 50 80 30 70 90]    100 を挿入、比較
+        ^  ^  ^                           (2*0+1), (2*0+2)
+        親 子 子
+
+      [10 100 40 20 60 50 80 30 70 90]    小さい子と交換し比較
+           ^     ^  ^                     (2*1+1), (2*1+2)
+           親    子 子
+
+      [10 20 40 100 60 50 80 30 70 90]    小さい子と交換し比較
+                 ^           ^  ^         (2*3+1), (2*3+2)
+                 親          子 子
+
+      [10 20 40 30 60 50 80 100 70 90]    交換して終了
+
+                図 : ヒープの構築 (2)
+</pre>
+<p> 配列を前半と後半の 2 つに分けると、後半部分はこれより下にはデータが繋がっていない葉の部分になります。つまり、後半部分の要素は互いに関係がなく、前半部分の枝にあたる要素と関係しているだけでなのです。したがって、後半部分だけを見れば、それはヒープを満たしていると考えることができます。
+</p>
+
+<p> あとは、前半部分の要素に対して、葉の方向に向かってヒープの関係を満たすよう修正していけば、配列全体がヒープを満たすことになります。この処理は関数 downheap を使うと次のように簡単にプログラムできます。
+</p>
+<pre class="list">
+リスト : 列を受け取るコンストラクタ
+
+  def this(xs: Seq[A]) {
+    this()
+    buff ++= xs
+    for (i &lt;- buff.size / 2 - 1 to 0 by -1) downheap(i)
+  }
+</pre>
+<p> 後ろからヒープを再構築していくと考えるとわかりやすいでしょう。この方法の場合、要素 n の配列に対して、n / 2 個の要素の修正を行えばよいので、最初に説明したヒープの構築方法よりも速くなります。
+</p>
+
+<h4>●優先度つき待ち行列</h4>
+<p> それでは、ヒープを使って「優先度つき待ち行列 (priority queue) 」を作ってみましょう。一般に、キューは先入れ先出し (FIFO : first-in, first-out) のデータ構造です。キューからデータを取り出すときは、先に挿入されたデータから取り出されます。これに対し、優先度つき待ち行列は、データに優先度をつけておいて、優先度の高いデータから取り出していきます。
+</p>
+<p> なお、Scala には scala.collection.mutable に PriorityQueue というコレクションが用意されています。わざわざプライオリティキューを作る必要はないのですが、今回は Scala のお勉強ということで、あえてプログラムを作ってみましょう。
+</p>
+
+<p> 優先度つき待ち行列は、優先度を基準にヒープを構築することで実現できます。最初に作成するメソッドを示します。
+</p>
+<table border=1>
+<caption>表 : Heap のメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>push(x: A): Unit</td><td>データを追加する</td></tr>
+  <tr><td>pop(): A </td><td>最小値のデータを取り出す</td></tr>
+  <tr><td>peek(): A </td><td>最小値のデータを求める</td></tr>
+  <tr><td>isEmpty(): Boolean </td><td>キューが空ならば True を返す</td></tr>
+  <tr><td>size(): Int </td><td>ヒープの要素数を返す</td></tr>
+</tbody>
+</table>
+<p> メソッド名は enqueue, dequeue としてもよかったのですが、このプログラムでは push, pop としました。なお、データを追加する関数を insert とし、最小値を取り出す関数を deleteMin とする場合もあるようです。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 優先度つき待ち行列
+
+  // 要素の追加
+  def push(x: A) {
+    buff += x
+    upheap(buff.size - 1)
+  }
+
+  // 最小値の削除
+  def pop(): A = {
+    if (isEmpty) throw new Exception("Heap is Empty")
+    val x = buff(0)
+    buff(0) = buff(buff.size - 1)
+    buff trimEnd 1
+    downheap(0)
+    x
+  }
+
+  // 最小値の参照
+  def peek(): A = {
+    if (isEmpty) throw new Exception("Heap is Empty")
+    buff(0)
+  }
+
+  // ヒープは空か？
+  def isEmpty(): Boolean = buff.size == 0
+
+  // 要素数
+  def size(): Int = buff.size
+</pre>
+
+<p> メソッド push は簡単です。演算子 += で buff の最後尾にデータを追加して upheap を呼び出すだけです。最後尾の添字は buff.size - 1 になります。メソッド pop はメソッド isEmpty を呼び出してヒープにデータがあるかチェックします。ヒープが空の場合はエラーを送出します。そうでなければ、buff(0) の要素を取り出して変数 x にセットします。次に、最後尾のデータ buff(buff.size - 1) を buff(0) にセットして、メソッド trimEnd で末尾のデータを削除します。そして、downheap でヒープを再構築してから変数 x を返します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛いたします。詳細は <a href="scala24.html#list1">プログラムリスト</a> をお読みください。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+scala&gt; val a = new Heap[Int]
+a: Heap[Int] = Heap@1ef09c0
+
+scala&gt; for (i &lt;- List(5,6,4,7,3,8,2,9,1,0)) a.push(i)
+
+scala&gt; while (!a.isEmpty) println(a.pop)
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+scala&gt; val b = new Heap[Int](List(9,8,7,6,5,4,3,2,1))
+b: Heap[Int] = Heap@57e5d6
+
+scala&gt; b.size
+res4: Int = 9
+
+scala&gt; b.isEmpty
+res5: Boolean = false
+
+scala&gt; while (!b.isEmpty) println(b.pop)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+scala&gt; b.isEmpty
+res7: Boolean = true
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●PriorityQueue の使い方</h4>
+<p> 最後に、Scala に用意されている PriorityQueue の使い方を簡単に説明します。
+</p>
+<pre>
+scala&gt; import scala.collection.mutable.{PriorityQueue}
+import scala.collection.mutable.PriorityQueue
+
+scala&gt; val a = new PriorityQueue[Int]
+a: scala.collection.mutable.PriorityQueue[Int] = PriorityQueue()
+
+scala&gt; for (i &lt;- List(5,6,4,3,7,8,2,9,1,0)) a.enqueue(i)
+
+scala&gt; a.isEmpty
+res1: Boolean = false
+
+scala&gt; a.size
+res2: Int = 10
+
+scala&gt; while (!a.isEmpty) println(a.dequeue)
+9
+8
+7
+6
+5
+4
+3
+2
+1
+0
+
+scala&gt; a += 1
+res4: a.type = PriorityQueue(1)
+
+scala&gt; a += (2,3,4,5)
+res5: a.type = PriorityQueue(5, 4, 2, 1, 3)
+
+scala&gt; a.head
+res6: Int = 5
+</pre>
+<p> データの追加は enqueue か演算子 +=, データの取り出しは dequeue で行います。+= は複数のデータをまとめて追加することができます。先頭データの参照は head で行います。PriorityQueue の場合、デフォルトの設定では大きな値から順番 (降順) に取り出されることに注意してください。
+</p>
+<p> データを小さい値から順番に取り出したい場合は、PriorityQueue の第 2 引数に Ordering を渡してください。この場合、メソッド reverse を使うと簡単です。Ordering[Int].reverse または Ordering.Int.reverse と指定します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; val b = new PriorityQueue[Int]()(Ordering.Int.reverse)
+b: scala.collection.mutable.PriorityQueue[Int] = PriorityQueue()
+
+scala&gt; for (i &lt;- List(5,6,4,7,3,8,2,9,1,0)) b += i
+
+scala&gt; while (!b.isEmpty) println(b.dequeue)
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// heap.scala : 配列を使ったヒープの実装
+//
+//              Copyright (C) 2014 Makoto Hiroi
+//
+
+import scala.collection.mutable.{ArrayBuffer}
+
+class Heap[A &lt;% Ordered[A]] {
+  private val buff = new ArrayBuffer[A]
+
+  // Seq を引数に受け取るコンストラクタ
+  def this(xs: Seq[A]) {
+    this()
+    buff ++= xs
+    for (i &lt;- buff.size / 2 - 1 to 0 by -1) downheap(i)
+  }
+
+  // ヒープの構築
+  private def upheap(n: Int) {
+    if (n &gt; 0) {
+      val p = (n - 1) / 2
+      if (buff(p) &gt; buff(n)) {
+        val tmp = buff(p)
+        buff(p) = buff(n)
+        buff(n) = tmp
+        upheap(p)
+      }
+    }
+  }
+
+  // ヒープの再構築
+  private def downheap(n: Int) {
+    var c = 2 * n + 1
+    if (c &lt; buff.size) {
+      if (c + 1 &lt; buff.size) {
+        if (buff(c) &gt; buff(c + 1)) c += 1
+      }
+      if (buff(n) &gt; buff(c)) {
+        val tmp = buff(n)
+        buff(n) = buff(c)
+        buff(c) = tmp
+        downheap(c)
+      }
+    }
+  }
+
+  // 要素の追加
+  def push(x: A) {
+    buff += x
+    upheap(buff.size - 1)
+  }
+
+  // 最小値の削除
+  def pop(): A = {
+    if (isEmpty) throw new Exception("Heap is Empty")
+    val x = buff(0)
+    buff(0) = buff(buff.size - 1)
+    buff trimEnd 1
+    downheap(0)
+    x
+  }
+
+  // 最小値の参照
+  def peek(): A = {
+    if (isEmpty) throw new Exception("Heap is Empty")
+    buff(0)
+  }
+  // ヒープは空か？
+  def isEmpty(): Boolean = buff.size == 0
+
+  // 要素数
+  def size(): Int = buff.size
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b> Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="scala23.html">PrevPage</a> | <a href="scala.html">Scala</a> | NextPage ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

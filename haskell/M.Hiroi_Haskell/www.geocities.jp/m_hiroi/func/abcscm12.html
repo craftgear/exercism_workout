@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881784</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ PrevPage | <a href="scheme.html#puzzle">Scheme</a> | <a href="abcscm18.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>パズルの解法 (その１)</h3>
+<p> 今回は「パズル」を題材にプログラムを作ってみましょう。どのプログラミング言語でもそうですが、上達の秘訣は実際にプログラムを作って動作を確認してみることです。ところが、いざとなると「さて何を作ろうか」と困ってしまう方もいるのではないでしょうか。
+</p>
+<p> このようなときにぴったりな題材が「パズルの解法」です。なんといっても、実際にパズルが解けたときの喜びはとても大きく、プログラムを作る意欲をかきたててくれます。そこで、今回はバックトラック法を使って簡単なパズルを解いてみましょう。
+</p>
+
+<h4>●8 クイーン</h4>
+<p> 最初に簡単な例題として、「8 クイーン」を取り上げます。これはコンピュータに解かせるパズルの中でもとくに有名な問題です。8 クイーンは、8 行 8 列のチェスの升目に、8 個のクイーンを互いの利き筋が重ならないように配置する問題です。クイーンは将棋の飛車と角をあわせた駒で、縦横斜めに任意に動くことができます。解答の一例を次に示します。
+</p>
+<pre class="fig">
+             列
+       0 1 2 3 4 5 6 7
+     *-----------------*
+   0 | Q . . . . . . . |
+   1 | . . . . Q . . . |
+   2 | . . . . . . . Q |
+行 3 | . . . . . Q . . |
+   4 | . . Q . . . . . |
+   5 | . . . . . . Q . |
+   6 | . Q . . . . . . |
+   7 | . . . Q . . . . |
+     *-----------------*
+
+  図 : 8 クイーンの解答例
+</pre>
+<p> 8 クイーンを解くには、基本的にはすべての置き方を試してみるしかありません。最初のクイーンは、盤上の好きなところへ置くことができるので、64 通りの置き方があります。次のクイーンは 63 通り、その次は 62 通りあります。したがって、置き方の総数は 64 から 57 までを掛け算した 178,462,987,637,760 通りあることがわかります。これはとても大きな数ですね。
+</p>
+<p> ところが、解答例を見ればおわかりのように、同じ行と列に 2 つ以上のクイーンを置くことはできません。上図の解答例をリストを使って表すと、 次のようになります。
+</p>
+<pre class="fig">
+   0 1 2 3 4 5 6 7      &lt;--- 列の位置
+ ------------------
+  (0 6 4 7 1 3 5 2)     &lt;--- 要素が行の位置を表す
+
+        図 : 8 クイーンの表現方法
+</pre>
+<p> 列をリストの位置に、行番号を要素に対応させれば、各要素には 0 から 7 までの数字が重複しないで入ることになります。すなわち、0 から 7 までの順列の総数である 8! = 40320 通りの置き方を調べればよいことになります。数がぐっと減りましたね。パズルを解く場合は、そのパズル固有の性質をうまく使って、調べなければならない置き方の総数を減らすように工夫することが大切です。
+</p>
+<p> 順列を生成するプログラムは簡単です。あとは、その順列が 8 クイーンの条件を満たしているかチェックすればいいわけです。このように、正解の可能性があるデータを作り、それが条件を満たしているかテストするという方法を「生成検定法 (generate and test) 」といいます。可能性のあるデータをもれなく作るのにバックトラック法は最適です。ただし、生成するデータ数が多くなると、実行時間がとてもかかるという弱点もあるので注意してください。
+</p>
+
+<h4>●斜めの利き筋のチェック</h4>
+<p> それでは、プログラムを作りましょう。前回作成した順列のプログラムのように、生成した順列をいちいち reverse で反転するのは面倒なので、プログラムに合わせて列の位置を逆に考えます。つまり、先頭の要素が第 7 列となり、7 番目の要素が 0 列目の位置を表すことにします。
+</p>
+<p> あとは、斜めの利き筋をチェックするだけです。次の図を見てください。
+</p>
+<pre class="fig">
+  右斜め上の利き筋          左斜め上の利き筋
+   0 1 2 3 4 5 6 7         0 1 2 3 4 5 6 7
+*-----------------*        *-----------------*
+|／／／／／／／／ | 8   -1 |＼＼＼＼＼＼＼＼ |
+|／／／／／／／／ | 9   -2 |＼＼＼＼＼＼＼＼ |
+|／／／／／／／／ | 10  -3 |＼＼＼＼＼＼＼＼ |
+|／／／／／／／／ | 11  -4 |＼＼＼＼＼＼＼＼ |
+|／／／／／／／／ | 12  -5 |＼＼＼＼＼＼＼＼ |
+|／／／／／／／／ | 13  -6 |＼＼＼＼＼＼＼＼ |
+|／／／／／／／／ | 14  -7 |＼＼＼＼＼＼＼＼ |
+|／／／／／／／／ |        |＼＼＼＼＼＼＼＼ |
+*-----------------*        *-----------------*
+
+ x + y = constant           x - y = constant
+ 例                         例
+ (2 0) (1 1) (0 2) =&gt; 2     (5 0) (6 1) (7 1) =&gt; 5
+
+                   図 : 斜めの利き筋
+</pre>
+<p> 斜めの利き筋は、行と列の位置を足す、または行から列を引くと一定の値になる、ということを利用すれば簡単にチェックできます。実際のチェックは次のように行えばいいでしょう。
+</p>
+<pre class="fig">
+  列：7  6  5  4  3  2  1  0       (行,列) で位置を表す
+  ---------------------------
+  │
+再│ (2  5  3  1  7  4  6  0)  (2,7) と他クイーンをチェック
+  ↓  ^ ~~~~~~~~~~~~~~~~~~~~
+帰│
+  │    (5  3  1  7  4  6  0)  (5,6) と他クイーンをチェック
+呼↓     ^ ~~~~~~~~~~~~~~~~~
+  │
+び│       (3  1  7  4  6  0)  (3,5) と他クイーンをチェック
+  ↓        ^ ~~~~~~~~~~~~~~
+出│
+  │          (1  7  4  6  0)  (1,4) と他クイーンをチェック
+し↓           ^ ~~~~~~~~~~~
+
+          図 : 斜めの利き筋のチェック
+</pre>
+<p> 上図を見てください。まず、7 列 (リストの先頭要素) のクイーンとほかのクイーンが衝突していないかチェックします。次に、6 列目のクイーンとほかのクイーンをチェックします。このとき、7 列目とのクイーンはチェック済みなので、0 から 5 列目までのクイーンをチェックします。この処理は再帰を使うと簡単に実現できます。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : クイーンは安全か
+
+(define (safe? line board)
+    (cond ((null? board) #t)
+          ((conflict? (length board) line board) #f)
+          (else
+           (safe? (car board) (cdr board)))))
+</pre>
+
+<p> 述語 safe? は、クイーン同士が衝突していたら #f を返し、そうでなければ #t を返します。引数 line にはリストの先頭要素を、board には残りのリストを渡します。つまり、line はクイーンが位置する行を表し、board の長さが列を表すことになります。
+</p>
+<p> cond の最初の節で、board が空リストであればクイーンをすべてチェックしたので #t を返します。次の節で、述語 conflict? を呼び出してクイーンが衝突しているか調べます。衝突している場合、conflict? は #t を返すので、その場合は #f を返します。そうでなければ、safe? を再帰呼び出しして残りのクイーンをチェックします。
+</p>
+
+<p> 次は述語 conflict? を作りましょう。
+</p>
+
+<pre class="list">
+リスト : クイーンは衝突しているか
+
+(define (conflict? column line board)
+    (let loop ((x (- column 1)) (ls board))
+        (cond ((null? ls) #f)
+              ((or (= (- column line) (- x (car ls)))
+                   (= (+ column line) (+ x (car ls))))
+               #t)
+              (else
+               (loop (- x 1) (cdr ls))))))
+</pre>
+
+<p> 引数 column と line がクイーンの列と行の位置を表します。これと board 内にあるクイーンが衝突しているかテストします。名前付き let の引数 x が board にあるクイーンの列を表します。board には column - 1 から 0 番目のクイーンが格納されています。conflict? はリストの先頭から順番にチェックするので、x は column - 1 に初期化しておきます。
+</p>
+<p> cond の最初の節で、ls が空リストの場合、クイーンは衝突していないので #f を返します。その次の節で、column, line, x, (car ls) を使って利き筋をチェックします。同じ利き筋であれば #t を返します。そうでなければ、loop を再帰呼び出しして次のクイーンをチェックします。このとき、x の値をひとつ減らすことをお忘れなく。
+</p>
+
+<h4>●8 クイーンの解法</h4>
+<p> ここまで作ればあとは簡単です。8 クイーンを解くプログラムは、次のようになります。
+</p>
+
+<pre class="list">
+リスト : 単純に順列を生成する方法
+
+(define (queen ls board)
+    (cond ((null? ls)
+           (if (safe? (car board) (cdr board))
+               (print-board board)))
+          (else
+           (for-each
+               (lambda (n)
+                   (queen (remove (lambda (x) (= x n)) ls)
+                          (cons n board)))
+               ls))))
+</pre>
+
+<p> 関数 queen は順列を生成するプログラム perm とほとんど同じです。cond の最初の節で、順列を作ったあとにクイーンの衝突チェックを述語 safe? で行っています。衝突していない場合、関数 print-board を呼び出して盤面を表示します。print-board の説明は割愛しますので、詳細は <a href="abcscm12.html#list1">プログラムリスト１</a> をお読みください。8 クイーンの場合、解は全部で 92 通りあります。
+</p>
+
+<h4>●プログラムの高速化</h4>
+<p> ところで、このプログラムは順列を生成してからクイーンの衝突チェックを行っているため、あまり効率的ではありません。最近のパソコンであれば、8 クイーンはこのプログラムでも短時間で解くことができますが、クイーンの個数を増やすと実行時間がかかるようになります。実際に試してみると、実行時間は次のようになりました。
+</p>
+<pre class="fig">
+表 : 8 クイーンの実行時間 (秒)
+
+ 個数 |   8  |   9  |  10
+------+------+------+-------
+queen | 0.73 | 6.66 | 67.34 
+
+実行環境 : Windows XP, celeron 1.40 GHz, Gauche 0.8.12
+</pre>
+<p> クイーンの個数をひとつ増やしただけでも、実行時間はとても遅くなります。なぜかというと、失敗することがわかっている順列も生成しているからです。
+</p>
+<p> たとえば、最初 (0, 0) の位置にクイーンを置くと、次のクイーンは (1, 1) の位置に置くことはできません。したがって、(X X X X X X 1 0) という配置はすべて失敗することがわかるわけですが、順列を発生させてからチェックする方法では、このような無駄を省くことができません。そこで、クイーンの配置を決めるたびに衝突のチェックを行うことにします。これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 8 クイーンの解法 (高速版)
+
+(define (queen-fast ls board)
+    (if (null? ls)
+        (print-board board)
+        (for-each
+            (lambda (n)
+                (if (not (conflict? (length board) n board))
+                    (queen-fast
+                        (remove (lambda (x) (= x n)) ls)
+                        (cons n board))))
+            ls)))
+</pre>
+
+<p> for-each に渡すラムダ式の中で、追加したクイーンが board 内のクイーンと衝突していないか述語 conflict? でチェックしています。for-each の中にチェックを入れることで、無駄な順列を生成しないようにするわけです。このようにすると関数 safe? も必要ありません。実行時間は次のようになりました。
+</p>
+
+<pre class="fig">
+    表 : 8 クイーンの実行時間
+
+   個数    |   8  |   9  |  10
+-----------+------+------+-------
+queen      | 0.73 | 6.66 | 67.34 
+queen-fast | 0.03 | 0.14 |  0.53 
+
+実行環境 : Windows XP, celeron 1.40 GHz, Gauche 0.8.12
+</pre>
+
+<p> 実行時間は大幅に短縮されました。このように、できるだけ早い段階でチェックを入れることで、無駄なデータをカットすることを「枝刈り」と呼びます。バックトラック法を使ってパズルを解く場合、この枝刈りのよしあしによって実行時間が大きく左右されます。
+</p>
+<p> ただし、枝刈りのやり方は問題によって大きく変わります。「斜めの利き筋をチェックする」という枝刈りは、8 クイーン固有の性質を使ったやり方であり、これをそのまま他のパズルに使うことはできません。パズル固有の性質をよく調べて、適切な枝刈りを考えることが重要なのです。
+</p>
+<p> パズル自体はコンピュータに解かせるのですが、枝刈りの条件は私達が考えるわけですね。これも「パズルの解法」のおもしろさのひとつといえるでしょう。解を求めるだけではなく、いかに効率の良い条件を見つけて実行時間を短縮するか、ということでも楽しむことができるわけです。
+</p>
+
+<p> なお、n 行 n 列の盤面でクイーンの配置を求める問題を "N Queens Problem" といいます。クイーンの個数が増えると queen-fast でも遅くなるので、もっと高速な方法が必要になります。興味のある方は拙作のページ <a href="http://www.geocities.jp/m_hiroi/puzzle/scheme.html">Puzzle De Programming</a> <a href="../puzzle/nqueens.html">N Queens Problem</a> をお読みください。
+</p>
+<h4>●マスターマインド</h4>
+<p> パズルではありませんが、簡単な例題として「マスターマインド」を解くプログラムを作りましょう。マスターマインドは <a href="abcscm06.html">数当てゲーム [2]</a> で作成した、0 から 9 までの重複しない 4 つの数字からなる隠しコードを当てるゲームでした。数字は合っているが位置が間違っている個数を cows で表し、数字も位置も合っている個数を bulls で表します。bulls が 4 になると正解です。
+</p>
+<pre class="fig">
+     (6 2 8 1) : 正解
+---------------------------------
+1.   (0 1 2 3) : cows 2 : bulls 0
+2.   (1 0 4 5) : cows 1 : bulls 0
+3.   (2 3 5 6) : cows 2 : bulls 0
+4.   (3 2 7 4) : cows 0 : bulls 1
+5.   (3 6 0 8) : cows 2 : bulls 0
+6.   (6 2 8 1) : cows 0 : bulls 4
+
+  図 : マスターマインドの動作例
+</pre>
+<p> 今回は、私達が出した問題をコンピュータに答えてもらうことにします。それはちょっと難しいのではないか、と思った人もいるかもしれませんね。ところが、とても簡単な方法があるのです。このゲームでは、10 個の数字の中から 4 個選ぶわけですから、全体では 10 * 9 * 8 * 7 = 5040 通りのコードしかありません。コードを生成する処理は順列と同じですから、簡単にプログラムできます。
+</p>
+
+<h4>●推測アルゴリズム</h4>
+<p> 次に、この中から正解を見つける方法ですが、質問したコードとその結果を覚えておいて、それと矛盾しないコードを作るようにします。具体的には、4 つの数字の順列を生成し、それが今まで質問したコードと矛盾しないことを確かめます。これは生成検定法と同じですね。
+</p>
+<p> 矛盾しているかチェックする方法も簡単で、以前に質問したコードと比較して、bulls と cows が等しいときは矛盾していません。たとえば、次の例を考えてみてください。
+</p>
+<pre class="fig">
+(6 2 8 1) が正解の場合
+
+(0 1 2 3) =&gt; bulls = 0, cows = 2
+
+           (0 1 2 3)  と比較する
+     --------------------------------------------------------
+           (0 X X X)  0 から始まるコードは bulls = 1
+                      になるので矛盾する。
+           ・・・・
+
+           (1 0 3 4)  cows = 3, bulls = 0 になるので矛盾する
+
+           ・・・・
+
+           (1 0 4 5)  cows = 2, bulls = 0 で矛盾しない。
+     --------------------------------------------------------
+
+(1 0 4 5) =&gt; bulls = 0, cows = 1
+
+次は、(0 1 2 3) と (1 0 4 5) に矛盾しない数字を選ぶ
+
+        図 : マスターマインドの推測アルゴリズム
+</pre>
+<p> (0 1 2 3) で bulls が 0 ですから、その位置にその数字は当てはまりません。したがって、(0 X X X) というコードは (0 1 2 3) と比較すると bulls が 1 となるので、矛盾していることがわかります。
+</p>
+<p> 次に (1 0 3 4) というコードを考えてみます。(0 1 2 3) の結果は cows が 2 ですから、その中で合っている数字は 2 つしかないわけです。ところが、(1 0 3 4) と (0 1 2 3) と比較すると cows が 3 になります。当たっている数字が 2 つしかないのに、同じ数字を 3 つ使うのでは矛盾していることになりますね。
+</p>
+<p> 次に (1 0 4 5) というコードと比較すると、bulls が 0 で cows が 2 となります。これは矛盾していないので、このコードを質問することにします。その結果が bulls = 0, cows = 1 となり、今度は (0 1 2 3) と (1 0 4 5) に矛盾しないコードを選択するのです。
+</p>
+<h4>●プログラムの作成</h4>
+<p> それでは、プログラムを作っていきましょう。まず、質問したコードとその結果を記憶する大域変数を定義します。
+</p>
+<pre class="list">
+リスト : 大域変数の定義
+
+(define *query* '())        ; ( ((0 1 2 3) bulls cows) ... )
+</pre>
+
+<p> 質問したコードとその結果はリストにまとめて格納します。最初が質問したコードで、次が bulls の個数、最後が cows の個数とします。これを一組のデータとしてリストに格納して、大域変数 *query* にセットします。
+</p>
+
+<p> マスターマインドを解くプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : マスターマインドの解法
+
+(define (solve answer ls a)
+    (if (= (length a) 4)
+        (let ((code (reverse a)))
+            (if (check-query? code)
+                ; 矛盾しない
+                (ask-question answer code)
+                ; 矛盾する
+                #t))
+        ; 再帰する
+        (let loop ((ls1 ls))
+            (cond ((null? ls1) #t)
+                  ((solve answer
+                          (remove (lambda (x) (= x (car ls1))) ls)
+                          (cons (car ls1) a))
+                   (loop (cdr ls1)))
+                  (else #f)))))
+</pre>
+
+<p> 関数 solve の処理内容は、順列を生成するプログラム perm とほとんど同じです。引数 answer が正解のコード、ls が数字を格納するリスト、a が選んだ数字を格納するリストです。10 個の中から 4 つの数字を選ぶわけですから、引数 a の長さが 4 になればコードは完成です。完成したコード code が、今まで質問したコードと矛盾していないか述語 check-query? で確かめます。#t を返す場合は、関数 ask-question を呼び出して質問します。
+</p>
+<p> 関数 solve は正解を見つけたら処理を終了するため #f を返すことにします。そうでなければ #t を返して処理を続行します。このため、solve を再帰呼び出しするとき、for-each を使わずに名前付き let で繰り返しを行っています。solve の返り値が #f の場合、loop を再帰呼び出しせずに #f を返します。これで処理を終了することができます。
+</p>
+
+<p> 次は、述語 check-query? を作ります。
+</p>
+
+<pre class="list">
+リスト : 今まで質問したコードと矛盾していないか
+
+; bulls と cows をチェックする
+(define (check-code? code1 code2 bulls cows)
+    (and (= (count-bulls code1 code2) bulls)
+         (= (- (count-same-number code1 code2) bulls) cows)))
+
+; *query* のコードをチェックする
+(define (check-query? code)
+    (let loop ((ls *query*))
+        (cond ((null? ls) #t)
+              ((apply check-code? code (car ls))
+               (loop (cdr ls)))
+              (else #f))))
+</pre>
+
+<p> check-query? は名前付き let を使って *query* に格納されたデータをチェックしていきます。すべてのデータで矛盾がなければ #t を返します。bulls と cows の比較は述語 check-code? で行います。check-query? を呼び出すときは apply を使うと簡単です。関数 count-bulls と count-same-number を使って bulls と cows を求めて、質問したときの bulls と cows に矛盾しないかチェックします。
+</p>
+
+<p> check-code? が #f を返す場合、check-query? も #f を返します。そうでなければ、次のデータを調べます。すべてのデータで矛盾がない場合は #t を返します。
+</p>
+
+<p> 次は質問を行う関数 ask-question を作ります。
+</p>
+
+<pre class="list">
+リスト : 質問する
+
+(define (ask-question answer code)
+    (let* ((bulls (count-bulls code answer))
+           (cows (- (count-same-number code answer) bulls)))
+        ; 記憶する
+        (set! *query*
+              (cons (list code bulls cows) *query*))
+        ; 表示する
+        (format #t "~D : ~A, bulls ~D, cows ~D~%"
+                   (length *query*) code bulls cows)
+        (cond ((= bulls 4)
+               (format #t "Good Job!")
+               #f)
+              (else #t))))
+</pre>
+
+<p> まず最初に、answer と code を比較して bulls と cows を求めます。そして、list で code と結果をリストにまとめて、*query* の先頭に追加します。次に、結果を format で画面に表示します。最後に、bulls が 4 の場合は解を求めたのでメッセージを表示して #f を返します。そうでなければ #t を返します。
+</p>
+
+<h4>●何回で当たるか</h4>
+<p> これでプログラムは完成です。それでは実行例を示しましょう。
+</p>
+<pre>
+gosh&gt; (solve '(9 8 7 6) '(0 1 2 3 4 5 6 7 8 9) '())
+1 : (0 1 2 3), bulls 0, cows 0
+2 : (4 5 6 7), bulls 0, cows 2
+3 : (5 4 8 9), bulls 0, cows 2
+4 : (6 7 9 8), bulls 0, cows 4
+5 : (8 9 7 6), bulls 2, cows 2
+6 : (9 8 7 6), bulls 4, cows 0
+Good Job!
+
+gosh&gt; (solve '(9 4 3 1) '(0 1 2 3 4 5 6 7 8 9) '())
+1 : (0 1 2 3), bulls 0, cows 2
+2 : (1 0 4 5), bulls 0, cows 2
+3 : (2 3 5 4), bulls 0, cows 2
+4 : (3 4 0 6), bulls 1, cows 1
+5 : (3 5 6 1), bulls 1, cows 1
+6 : (6 5 0 2), bulls 0, cows 0
+7 : (7 4 3 1), bulls 3, cows 0
+8 : (8 4 3 1), bulls 3, cows 0
+9 : (9 4 3 1), bulls 4, cows 0
+Good Job!
+</pre>
+
+<p> 肝心の質問回数ですが、5, 6 回で当たる場合が多いようです。実際に、5040 個のコードをすべて試してみたところ、平均は 5.56 回になりました。これは <a href="abcscm12.html#cite">参考文献 1</a> の結果と同じです。質問回数の最大値は 9 回で、そのときのコードは (9 4 3 1), (9 2 4 1), (5 2 9 3), (9 2 0 4), (9 2 1 4) でした。
+</p>
+<p> なお、参考文献 1 には平均質問回数がこれよりも少なくなる方法が紹介されています。単純な数当てゲームだと思っていましたが、その奥はけっこう深いようです。興味のある方はいろいろ試してみてください。
+</p>
+<div class="note">
+-- <a name="cite">参考文献</a> --------<br>
+1. 田中哲郎 「数当てゲーム (MOO, マスターマインド) 」, 松原仁、竹内郁雄 編 『bit 別冊 ゲームプログラミング』 pp150 - 157, 共立出版, 1997
+</div>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; queen.scm : 8 Queen の解法
+;
+;             Copyright (C) 2008 Makoto Hiroi
+;
+(use srfi-1)
+
+; 盤面の表示
+(define (print-board board)
+    ;
+    (define (print-line q size)
+        (display "| ")
+        (let loop ((x 0))
+            (when (&lt; x size)
+                (if (= x q)
+                    (display "Q ")
+                    (display ". "))
+                (loop (+ x 1))))
+        (display "|\n"))
+    ;
+    (define (print-waku size)
+        (display "*-")
+        (let loop ((x 0))
+            (when (&lt; x size)
+                (display "--")
+                (loop (+ x 1))))
+        (display "*\n"))
+    ;
+    (let ((size (length board)))
+        (print-waku size)
+        (let loop ((ls board))
+            (when (pair? ls)
+                (print-line (car ls) size)
+                (loop (cdr ls))))
+        (print-waku size)
+        (newline)))
+
+; 衝突しているか
+(define (conflict? column line board)
+    (let loop ((x (- column 1)) (ls board))
+        (cond ((null? ls) #f)
+              ((or (= (- column line) (- x (car ls)))
+                   (= (+ column line) (+ x (car ls))))
+               #t)
+              (else
+               (loop (- x 1) (cdr ls))))))
+
+; 安全か
+(define (safe? line board)
+    (cond ((null? board) #t)
+          ((conflict? (length board) line board) #f)
+          (else
+           (safe? (car board) (cdr board)))))
+
+; 8 Queen の解法
+(define (queen ls board)
+    (cond ((null? ls)
+           (if (safe? (car board) (cdr board))
+               (print-board board)))
+          (else
+           (for-each
+               (lambda (n)
+                   (queen (remove (lambda (x) (= x n)) ls) (cons n board)))
+               ls))))
+
+; 高速版
+(define (queen-fast ls board)
+    (if (null? ls)
+        (print-board board)
+        (for-each
+            (lambda (n)
+                (if (not (conflict? (length board) n board))
+                    (queen-fast
+                        (remove (lambda (x) (= x n)) ls)
+                        (cons n board))))
+            ls)))
+
+; 実行
+(queen-fast '(0 1 2 3 4 5 6 7) '())
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+;
+; master1.scm : マスターマインドを解く
+;
+;              Copyright (C) 2008 Makoto Hiroi
+;
+(use srfi-1)
+
+; 質問したコードを記憶する
+; ((code bulls cows) ...)
+(define *query* '())
+
+; bulls を求める
+(define (count-bulls answer data)
+    (cond ((null? answer) 0)
+          ((= (car answer) (car data))
+           (+ 1 (count-bulls (cdr answer) (cdr data))))
+          (else
+           (count-bulls (cdr answer) (cdr data)))))
+
+; 同じ数字を数える
+(define (count-same-number answer data)
+    (cond ((null? answer) 0)
+          ((member (car answer) data)
+           (+ 1 (count-same-number (cdr answer) data)))
+          (else
+           (count-same-number (cdr answer) data))))
+
+; bulls と cows をチェックする
+(define (check-code? code1 code2 bulls cows)
+    (and (= (count-bulls code1 code2) bulls)
+         (= (- (count-same-number code1 code2) bulls) cows)))
+
+; 今まで質問したコードと矛盾していないか
+(define (check-query? code)
+    (let loop ((ls *query*))
+        (cond ((null? ls) #t)
+              ((apply check-code? code (car ls))
+               (loop (cdr ls)))
+              (else #f))))
+
+; 質問する
+(define (ask-question answer code)
+    (let* ((bulls (count-bulls code answer))
+           (cows (- (count-same-number code answer) bulls)))
+        ; 記憶する
+        (set! *query*
+              (cons (list code bulls cows) *query*))
+        ; 表示する
+        (format #t "~D : ~A, bulls ~D, cows ~D~%"
+                   (length *query*) code bulls cows)
+        (cond ((= bulls 4)
+               (format #t "Good Job!")
+               #f)
+              (else #t))))
+
+; 解法
+(define (solve answer ls a)
+    (if (= (length a) 4)
+        (let ((code (reverse a)))
+            (if (check-query? code)
+                ; 矛盾しない
+                (ask-question answer code)
+                ; 矛盾する
+                #t))
+        ; 再帰する
+        (let loop ((ls1 ls))
+            (cond ((null? ls1) #t)
+                  ((solve answer
+                          (remove (lambda (x) (= x (car ls1))) ls)
+                          (cons (car ls1) a))
+                   (loop (cdr ls1)))
+                  (else #f)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ PrevPage | <a href="scheme.html#puzzle">Scheme</a> | <a href="abcscm18.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

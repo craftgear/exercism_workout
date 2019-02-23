@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Java プログラミング入門</title>
+  <meta name="description" content="Java,Java入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881776</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>お気楽 Java プログラミング入門</h1>
+<h2>第 10 回 ファイル入出力</h2>
+<div class="small">
+[ <a href="abcjava09.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava11.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 今回は Java のファイル入出力について説明します。プログラムの典型的な動作は、外部から入力されたデータを処理し、その結果を外部へ出力することです。外部とのインターフェースはいろいろありますが、基本となるのがファイル入出力です。
+</p>
+<p> Java でファイル入出力を行う場合、「ストリーム (stream)」というデータを介してファイルにアクセスします。ストリームはファイルとプログラムの間でやりとりされるデータの流れという意味で使われています。ストリームはファイルと 1 対 1 に対応していて、ファイルからデータを入力する場合は、ストリームを経由してデータが渡されます。逆に、ファイルへデータを出力するときも、ストリームを経由して行われます。
+</p>
+<p> Java の場合、パッケージ Java.io にストリームを表すクラスが複数用意されていて、用途によって適当なクラスを選びます。そして、そのクラスから生成されたオブジェクトがストリームの実体となり、データを入出力するメソッドを使ってファイルにアクセスします。
+</p>
+
+<h4>●標準入出力の使い方</h4>
+<p> 通常のファイルはストリームを生成しないとアクセスすることはできません。ただし、標準入出力は Java の起動時にストリームが自動的に生成されるので、簡単に利用することができます。一般に、キーボードからの入力を「標準入力」、画面への出力を「標準出力」といいます。標準入出力に対応するストリームはパッケージ java.lang のクラス System のフィールド変数に格納されています。表 1 に変数名とストリームのクラス名を示します。
+</p>
+
+<table border=1>
+<caption>表 1 : 標準入出力</caption>
+<thead>
+  <tr><th>変数名</th><th>ファイル</th><th>クラス名</th></tr>
+</thead>
+<tbody>
+  <tr><td>in  </td><td>標準入力</td><td>BufferedInputStream</td></tr>
+  <tr><td>out </td><td>標準出力</td><td>PrintStream</td></tr>
+  <tr><td>err </td><td>標準エラー出力</td><td>PrintStream</td></tr>
+</tbody>
+</table>
+
+<p> Java のファイル入出力ストリームは大きく分けると、バイト入力ストリーム、文字入力ストリーム、バイト出力ストリーム、文字出力ストリームの 4 種類があります。標準入力の BufferedInputStream はバッファリング機能付きのバイト入力ストリームで、標準出力と標準エラー出力の PrintStream はデータを印字するためのバイト出力ストリームです。
+</p>
+
+<p> ファイルのアクセスは標準入出力を使うと簡単です。標準入力からデータを受け取るメソッドに read() があります。read() は入力ストリームからデータを 1 バイト読み込み、それを int 型の整数値 (0 - 255) で返します。ストリームの終わりに達した場合は -1 を返します。これはＣ言語の標準ライブラリ関数 fgetc() と同じ動作です。
+</p>
+
+<p> 簡単な例題として、標準入力からデータを読み込み、それをそのまま標準出力へ書き出すプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 1 : ファイルの表示 (1)
+
+import java.io.*;
+
+public class cat0 {
+  public static void main(String[] args) {
+    try {
+      int c;
+      while ((c = System.in.read()) != -1) {
+        System.out.print((char)c);
+      }
+    } catch(IOException e) {
+      System.err.println(e);
+    }
+  }
+}
+</pre>
+<p> read() はチェック例外 IOException を送出するので、try 文で例外を受け取る処理が必要になります。while 文でストリームの終わりまでデータを読み込み、それを print() で出力します。このとき、データを (char) で文字型に変換します。これで、テキストファイルを次のようにリダイレクトすると、その内容を画面に表示することができます。
+</p>
+<pre>
+C&gt;java cat0 &lt; cat0.java
+import java.io.*;
+
+public class cat0 {
+  public static void main(String[] args){
+    try {
+      int c;
+      while((c = System.in.read()) != -1){
+        System.out.print((char)c);
+      }
+    } catch(IOException e){
+      System.err.println(e);
+    }
+  }
+}
+</pre>
+<p> 出力をリダイレクトすれば、テキストファイルをコピーすることもできます。
+</p>
+
+<h4>●文字の入力</h4>
+<p> 標準入出力を使わずにファイルにアクセスする場合、次の 3 つの操作が基本になります。
+</p>
+
+<ol>
+  <li>アクセスするファイルをオープンする。
+  <li>入出力関数（メソッド）を使ってファイルを読み書きする。
+  <li>ファイルをクローズする。
+</ol>
+
+<p> 「ファイルをオープンする」とは、アクセスするファイルを指定して、それと 1 対 1 に対応するストリームを生成することです。入出力関数は、そのストリームを経由してファイルにアクセスします。Java の場合、入出力関数はメソッドとして定義されています。ファイルのオープンはストリームを生成するコンストラクタで行います。オープンしたファイルは必ずクローズしてください。この操作を行うメソッドが close() です。ストリームをクローズするとともに、それに対応するファイルもクローズされます。
+</p>
+
+<p> ここでは、簡単に利用できる入出力ストリームを紹介しましょう。テキストファイルの入力は FileReader を使うと簡単です。FileReader のコンストラクタを表 2 に示します。
+</p>
+<table border=1>
+<caption>表 2 : FileReader のコンストラクタ</caption>
+<thead>
+  <tr><th>コンストラクタ</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>FileReader(File file)</td><td>引数に File オブジェクトを指定</td></tr>
+  <tr><td>FileReader(FileDescriptor fd)</td><td>引数に FileDescriptor オブジェクトを指定</td></tr>
+  <tr><td>FileReader(String filename)</td><td>引数にファイル名を指定</td></tr>
+</tbody>
+</table>
+<p> File はファイルやディレクトリのパス名を表すクラスです。File にはファイルやディレクトリを操作するメソッドが多数用意されています。FileDescriptor はファイル記述子を表すクラスです。ファイル記述子は、ユーザが独自に生成することはないので、説明は割愛いたします。最後のコンストラクタは文字列でアクセスするファイル名を指定します。
+</p>
+
+<p> 簡単な例として、入力ファイル名を指定できるようにリスト 1 のプログラムを改造してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 2 : ファイルの表示 (2)
+
+import java.io.*;
+
+public class cat1 {
+  public static void main(String[] args) {
+    if (args.length == 1) {
+      try {
+        FileReader in = new FileReader(args[0]);
+        int c;
+        while ((c = in.read()) != -1) {
+          System.out.print((char)c);
+        }
+        in.close();
+      } catch(IOException e) {
+        System.err.println(e);
+      }
+    } else {
+      System.err.println("usage: java cat1 filename");
+    }
+  }
+}
+</pre>
+<p> コマンドライン引数 args[0] からファイル名を取り出して、それを FileReader() に渡します。ファイルが見つからない場合は例外 FileNotFoundException が送出されますが、IOException でもキャッチすることができます。あとは read() で文字を読み込み、print() で文字を表示します。最後にメソッド close() でファイルをクローズします。
+</p>
+
+<h4>●デフォルトの文字コード</h4>
+<p> FileReader は文字単位でデータを読み込むことができます。このとき、文字コードは実行しているシステムのデフォルトのエンコーディング方式が採用されます。Windows の場合、デフォルトでは MS932 という MicroSoft 社が Shift JIS コードを拡張した文字コードになります。Java の内部では、それをユニコードに変換して文字型データとして扱います。
+</p>
+<p> たとえば、Shift JIS で "あいうえお" は 16 進数で "82a0 82a2 82a4 82a6 82a8" と表されますが、ユニコードに変換すると 16 進数で "3042 3044 3046 3048 304a" になります。read() の返り値は、このユニコードの数値になります。
+</p>
+
+<h4>●文字の出力</h4>
+<p> テキストファイルの出力は FileWriter を使うと簡単です。FileWriter のコンストラクタを表 3 に示します。
+</p>
+<table border=1>
+<caption>表 3 : FileWriter のコンストラクタ</caption>
+<thead>
+  <tr><th>コンストラクタ</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>FileWriter(File file)</td><td>引数に File オブジェクトを指定</td></tr>
+  <tr><td>FileWriter(FileDescriptor fd)</td><td>引数に FileDescriptor オブジェクトを指定</td></tr>
+  <tr><td>FileWriter(String filename)</td><td>引数にファイル名を指定</td></tr>
+</tbody>
+</table>
+<p> コンストラクタの引数は FileReader と同じですが、第 1 引数が File または String の場合、第 2 引数に boolean 型のデータを指定することができます。true が指定されると、ファイルの最後尾にデータを追加していきます。それ以外の場合、オープンしたファイルを長さ 0 に切り詰めてから、データをファイルに書き込みます。なお、FileWriter が扱う文字コードもデフォルトのエンコーディング方式になります。
+</p>
+
+<p> 文字の書き込みはメソッド write() を使うと簡単です。
+</p>
+<pre class="item">
+void write(int c)
+</pre>
+<p> 簡単な例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 3 : ファイルの表示 (3)
+
+import java.io.*;
+
+public class cat2 {
+  public static void main(String[] args) {
+    if (args.length == 2) {
+      try {
+        FileReader in = new FileReader(args[0]);
+        FileWriter out = new FileWriter(args[1]);
+        int c;
+        while ((c = in.read()) != -1) {
+          out.write(c);
+        }
+        in.close();
+        out.close();
+      } catch(IOException e) {
+        System.err.println(e);
+      }
+    } else {
+      System.err.println("usage: java cat2 input_file output_file");
+    }
+  }
+}
+</pre>
+<p> コマンドラインから入力ファイル名と出力ファイル名を取り出して、FileReader と FileWriter に渡します。あとは、入力ストリームから文字を読み込み、それをメソッド write() で出力ストリームに書き込むだけです。最後にメソッド close() でファイルをクローズします。
+</p>
+
+<h4>●行の入出力</h4>
+<p> 行単位で入出力を行う場合は BufferedReader と BufferedWriter を使うと簡単です。この 2 つのクラスは入出力のバッファリングを行うことで、テキストデータを効率よく処理することができます。コンストラクタを表 4 と表 5 に示します。
+</p>
+
+<table border=1>
+<caption>表 4 : BufferedReader のコンストラクタ</caption>
+<thead>
+  <tr><th>コンストラクタ</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>BufferedReader(Reader in)</td><td>引数に Reader オブジェクト in を指定</td></tr>
+  <tr><td>BufferedReader(Reader in, int sz)</td><td>引数に Reader オブジェクト in とバッファの大きさ sz を指定</td></tr>
+</tbody>
+</table>
+<br>
+<table border=1>
+<caption>表 5 : BufferedWriter のコンストラクタ</caption>
+<thead>
+  <tr><th>コンストラクタ</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>BufferedWriter(Writer out)</td><td>引数に Writer オブジェクト out を指定</td></tr>
+  <tr><td>BufferedWriter(Writer out, int sz)</td><td>引数に Writer オブジェクト out とバッファの大きさ sz を指定</td></tr>
+</tbody>
+</table>
+<p> Reader と Writer は文字単位で入出力を行うストリームのスーパークラスでかつ抽象クラスです。FileReader は Reader を、FileWeiter は Writer を継承しているので、そのインスタンスを BufferedReader, BufferedWriter のコンストラクタに渡すことができます。バッファの大きさはデフォルトのままで十分な大きさが確保されるので、一般的な使い方ではバッファの大きさを指定する必要はないでしょう。
+</p>
+
+<p> 行単位での入力はメソッド readLine() を使います。
+</p>
+<pre class="item">
+String readLine()
+</pre>
+<p> readLine() はストリームから 1 行読み込み、それを文字列に変換して返します。このとき、改行文字は取り除かれることに注意してください。readLine() はストリームが終わりに達すると null を返します。
+</p>
+<p> 行単位での出力はメソッド write() を使います。
+</p>
+<pre class="item">
+void write(String s, int off, int sz)
+</pre>
+<p> write() は文字列 s の off 番目から sz 個の文字を出力します。文字列をそのまま出力する場合、off には 0 を、sz には文字列の長さを指定します。文字列の長さはメソッド length() で求めることができます。Java の場合、文字列の長さはユニコードでの文字数になります。
+</p>
+
+<p> 簡単な例を示しましょう。リスト 3 のプログラムを行単位の入出力に変更します。
+</p>
+
+<pre class="list">
+リスト 4 : ファイルの表示 (4)
+
+import java.io.*;
+
+public class cat3 {
+  public static void main(String[] args) {
+    if(args.length == 2){
+      try {
+        BufferedReader in = new BufferedReader(new FileReader(args[0]));
+        BufferedWriter out = new BufferedWriter(new FileWriter(args[1]));
+        String line;
+        while ((line = in.readLine()) != null) {
+          out.write(line, 0, line.length());
+          out.newLine();
+        }
+        in.close();
+        out.close();
+      } catch(IOException e) {
+        System.err.println(e);
+      }
+    } else {
+      System.err.println("usage: java cat3 input_file output_file");
+    }
+  }
+}
+</pre>
+<p> FileReader のインスタンスを生成して BufferedReader のコンストラクタに渡します。同様に、FileWriter のインスタンスを生成して BufferedWriter のコンストラクタに渡します。あとは、ReadLine() で 1 行読み込み、それを write() で書き込みます。それから、メソッド newLine() で改行文字を書き込むことをお忘れなく。
+</p>
+
+<h4>●バイナリファイルの入出力</h4>
+<p> バイト単位で入出力を行う場合は FileInputStream と FileOutputStream を使うと簡単です。コンストラクタを表 6 と表 7 に示します。
+</p>
+
+<table border=1>
+<caption>表 6 : FileInputStream のコンストラクタ</caption>
+<thead>
+  <tr><th>コンストラクタ</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>FileInputStream(File file)</td><td>引数に File オブジェクトを指定</td></tr>
+  <tr><td>FileInputStream(FileDescriptor fd)</td><td>引数に FileDescriptor オブジェクトを指定</td></tr>
+  <tr><td>FileInputStream(String filename)</td><td>引数にファイル名を指定</td></tr>
+</tbody>
+</table>
+<br>
+<table border=1>
+<caption>表 7 : FileOutputStream のコンストラクタ</caption>
+<thead>
+  <tr><th>コンストラクタ</th><th>概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>FileOutputStream(File file)</td><td>引数に File オブジェクトを指定</td></tr>
+  <tr><td>FileOutputStream(FileDescriptor fd)</td><td>引数に FileDescriptor オブジェクトを指定</td></tr>
+  <tr><td>FileOutputStream(String filename)</td><td>引数にファイル名を指定</td></tr>
+</tbody>
+</table>
+<p> これらのコンストラクタの引数は FileReader, FileWriter と同じです。入出力を行うメソッドも read() と write() を使うことができます。
+</p>
+
+<p> 簡単な例として、ファイルをコピーするプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 5 : ファイルのコピー
+
+import java.io.*;
+
+public class copy {
+  public static void main(String[] args) {
+    if (args.length == 2) {
+      try {
+        FileInputStream in = new FileInputStream(args[0]);
+        FileOutputStream out = new FileOutputStream(args[1]);
+        int c;
+        while ((c = in.read()) != -1) {
+          out.write(c);
+        }
+        in.close();
+        out.close();
+      } catch(IOException e) {
+        System.err.println(e);
+      }
+    } else {
+      System.err.println("usage: java copy input_file output_file");
+    }
+  }
+}
+</pre>
+<p> コマンドラインから入力ファイル名と出力ファイル名を取り出して、FileInputStream と FileOutputStream に渡します。あとは、入力ストリームから 1 バイト読み込み、それをメソッド write() で出力ストリームに書き込むだけです。
+</p>
+
+<h4>●文字エンコード方式の変更</h4>
+<p> デフォルト以外の文字エンコード方式を使いたい場合は、InputStreamReader と OutputStreamWriter を使います。文字エンコード方式は、文字セットを表すクラス Charset や文字セットのエンコーダー / デコーダーを表すクラス CharEncoder / CharDecoder で指定することができますが、文字セットを表す文字列で指定した方が簡単でしょう。この場合、コンストラクタは次のようになります。
+</p>
+<pre class="item">
+InputStreamReader(InputStream in, String charsetName)
+OutputStreamWriter(OutputStream out, String charsetName)
+</pre>
+
+<p> InputStream と OutputStream はバイト単位で入出力を行うストリームのスーパークラスでかつ抽象クラスです。FileInputStream は InputStream を、FileOutputStream は OutputStream を継承しているので、そのインスタンスを InputStreamReader, OutputStreamWriter のコンストラクタに渡すことができます。
+</p>
+<p> charsetName の指定ですが、たとえば EUC コードの場合は EUC_JP と指定します。Shift JIS コードの場合は SJIS と指定します。このほかにも多種多様な文字コードを扱うことができます。詳細は Java のマニュアルをお読みください。
+</p>
+
+<p> それでは簡単な例題として、Shift JIS コードで書かれたテキストファイルを EUC コードに変換するプログラムを作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 6 : Shift JIS コードを EUC コードに変換
+
+import java.io.*;
+
+public class sample101 {
+  public static void main(String[] args) {
+    if (args.length == 2) {
+      try {
+        InputStreamReader in = new InputStreamReader(new FileInputStream(args[0]), "SJIS");
+        OutputStreamWriter out = new OutputStreamWriter(new FileOutputStream(args[1]), "EUC_JP");
+        int c;
+        while ((c = in.read()) != -1) {
+          if(c != 0x0d) out.write(c);
+        }
+        in.close();
+        out.close();
+      } catch(IOException e) {
+        System.err.println(e);
+      }
+    } else {
+      System.err.println("usage: java sample101 input_file output_file");
+    }
+  }
+}
+</pre>
+<p> FileInputStream のインスタンスを生成して InputStreamReader のコンストラクタに渡します。文字エンコード方式は SJIS を指定します。次に、FileOutputStream のインスタンスを生成して OutputStreamWriter のコンストラクタに渡します。文字エンコード方式は EUC_JP を指定します。これで、Shift JIS コードのテキストファイルを読み込み、それを EUC コードに変換してファイルに書き込むことができます。
+</p>
+<p> ただし、一つだけ注意点があります。Windows の場合、テキストファイルの改行は CR (0x0d), LF (0x0a) で表されます。これに対し、UNIX 系の OS ではテキストファイルを主に EUC コードで記述し、改行を LF (0x0a) で表しています。改行文字を変換するため、リスト 6 では CR (0x0d) を書き込まないようにしています。
+</p>
+
+<h4>●ファイルを行単位で連結する</h4>
+<p> 最後に簡単な例題として、ファイルを行単位で連結するプログラムを作りましょう。プログラム名は join.java としました。動作例を図 1 に示します。
+</p>
+
+<pre class="fig">
+C&gt;type file1.txt
+abcd
+efgh
+ijkl
+
+C&gt;type file2.txt
+ABCD
+EFGH
+IJKL
+
+C&gt;java join file1.txt file2.txt
+abcdABCD
+efghEFGH
+ijklIJKL
+
+図 1 : 行単位でファイルを連結する
+</pre>
+
+<p> join.java は 2 つのファイル file1.txt と file2.txt の各行を連結して標準出力へ出力します。この場合、2 つのファイルを同時にオープンしなければいけませんが、近代的なプログラミング言語であれば特別なことをしなくても複数のファイルを扱うことができます。
+</p>
+
+<p> 2 つのファイルを BufferdReader でオープンし、生成された入力ストリームを別々の変数 in1, in2 にセットします。変数 in1 に readLine() を適用すれば、ファイル 1 から 1 行分データをリードすることができます。同様に、変数 in2 に readLine() を適用すれば、ファイル 2 からデータをリードできるのです。あとは、文字列を 2 つ続けて標準出力へ出力すればいいわけです。
+</p>
+
+<p> ただし、一つだけ注意点があります。それは、2 つのファイルの行数は同じとは限らないということです。つまり、どちらかのファイルが先に終了する場合があるのです。この場合は、残ったファイルをそのまま出力します。処理内容を図 2 に示します。
+</p>
+
+<pre class="fig">
+                              ↓
+                      ┌───────┐
+                      │file 1,2 open │
+                      └───────┘
+                              ├←────┐
+                              ↓          │
+      ┌─────┐ EOF┌─────┐    │
+┌←─│file2 出力│←─│file1 read│    │
+│    └─────┘    └─────┘    │
+│                            ↓          │
+│                      ┌─────┐    │
+│                      │ １行出力 │    │
+│                      └─────┘    │
+│                            ↓          │
+│    ┌─────┐ EOF┌─────┐    │
+│    │ 改行出力 │←─│file2 read│    │
+│    └─────┘    └─────┘    │
+│          ↓                ↓          │
+│    ┌─────┐    ┌─────┐    │
+├←─│file1 出力│    │ １行出力 │    │
+│    └─────┘    └─────┘    │
+│                            ↓          │
+│                      ┌─────┐    │
+│                      │ 改行出力 │    │
+│                      └─────┘    │
+│                            ↓          │
+↓                            └─────┘
+└──────────────┐
+                              ↓
+
+                図 2 : 処理の流れ
+</pre>
+
+<p> ファイル 1 が終了した場合は、ファイル 2 をそのまま出力します。ファイル 2 が終了した場合は、ファイル 1 をそのまま出力しますが、その前に出力したファイル 1 のデータが残っているので、改行を出力することをお忘れなく。
+</p>
+
+<p> それでは、プログラムを作りましょう。リスト 7 を見てください。
+</p>
+
+<pre class="list">
+リスト 7 : 行の結合
+
+import java.io.*;
+
+public class join {
+  // ファイルの内容を全て出力する
+  static void outputFile(BufferedReader in) throws IOException {
+    String line;
+    while ((line = in.readLine()) != null) {
+      System.out.println(line);
+    }
+  }
+  
+  // 1 行出力
+  static boolean outputLine(BufferedReader in) throws IOException {
+    String line = in.readLine();
+    if (line == null) return false;
+    System.out.print(line);
+    return true;
+  }
+  
+  public static void main(String[] args) {
+    if (args.length == 2) {
+      try {
+        BufferedReader in1 = new BufferedReader(new FileReader(args[0]));
+        BufferedReader in2 = new BufferedReader(new FileReader(args[1]));
+        while (true) {
+          if(!outputLine(in1)){
+            outputFile(in2);
+            break;
+          } else if (!outputLine(in2)) {
+            System.out.println();
+            outputFile(in1);
+            break;
+          } else {
+            System.out.println();
+          }
+        }
+        in1.close();
+        in2.close();
+      } catch(IOException e) {
+        System.out.println(e);
+      }
+    } else {
+      System.err.println("usage: java join file1 file2");
+    }
+  }
+}
+</pre>
+
+<p> main() でファイル argv[0] と argv[1] をオープンし、BufferedReader のオブジェクトを変数 in1 と in2 にセットします。それから、while 文で繰り返しに入ります。条件部を true にしているので、無限ループになることに注意してください。このような場合、ループを中断する処理が必要になります。
+</p>
+
+<p> 関数 outputLine() はストリーム in から 1 行読み込んで、それを標準出力へ出力します。もしも、ファイルが終了したら false を返します。print() で行を出力したら true を返します。outputLine() の返り値をチェックして、 偽であればファイルが終了したことがわかります。
+</p>
+<p> ファイル in1 が終了した場合、関数 outputFile() でファイル in2 をすべて出力します。ファイル in2 が終了した場合は、改行文字を出力してから outputFile() でファイル in1 をすべて出力します。そうでなければ、改行文字を出力して処理を続行します。最後に close() で in1 と in2 をクローズします。
+</p>
+
+<p> これでプログラムは完成です。実際に試して動作を確認してみてください。
+</p>
+</section>
+<div align="right">
+初版 2009 年 5 月 23 日<br>
+改訂 2016 年 11 月 12 日
+</div>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009-2016 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcjava09.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava11.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

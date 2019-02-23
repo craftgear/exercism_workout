@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Ruby プログラミング入門</title>
+  <meta name="description" content="Ruby,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881800</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>お気楽 Ruby プログラミング入門</h1>
+<h2>第 5 回 正規表現</h2>
+<div class="small">
+[ <a href="abcruby04.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby06.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 前回は Ruby のファイル入出力について説明しました。今回は Ruby の「正規表現 (regular expression)」について説明します。正規表現は「文字列のパターンを示した式」のことです。昔は一部のエディタやツール <sup><a href="abcruby05.html#note1">[*1]</a></sup> で利用されていた正規表現ですが、今ではほとんどのスクリプト言語で正規表現を使うことができるようになりました。また、Ruby は正規表現だけではなく、文字列を操作するときに便利なメソッドが多数用意されています。正規表現と一緒に文字列処理についても簡単に説明することにします。
+</p>
+
+<DIV class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 有名なところでは grep, sed, awk などがあります。
+</DIV>
+
+<h4>●正規表現の基礎知識</h4>
+<p> まず最初に、正規表現の基本について詳しく説明します。正規表現はある文字に特別な意味を持たせます。これを「メタ文字」といいます。このメタ文字を組み合わせることで、正規表現は複雑な条件を表すことができます。Ruby で使う基本的なメタ文字を表 1 に示します。
+</p>
+
+<table border=1>
+<caption>表 1 : 正規表現で使用する基本的なメタ文字</caption>
+<thead>
+  <tr><th>メタ文字</th><th> 意味 </th></tr>
+</thead>
+<tbody>
+  <tr><td> |     </td><td> この前後にある正規表現のどちらかと一致する</td></tr>
+  <tr><td> *     </td><td> 直前の正規表現の 0 回以上の繰り返しに一致する</td></tr>
+  <tr><td> +     </td><td> 直前の正規表現の 1 回以上の繰り返しに一致する</td></tr>
+  <tr><td> ?     </td><td> 直前の正規表現に 0 回もしくは１回一致する</td></tr>
+  <tr><td> {m,n} </td><td> 直前の正規表現の m 回以上 n 回以下の繰り返し</td></tr>
+  <tr><td> *?    </td><td> 直前の正規表現の 0 回以上の繰り返しに一致する（最短一致）</td></tr>
+  <tr><td> +?    </td><td> 直前の正規表現の 1 回以上の繰り返しに一致する（最短一致）</td></tr>
+  <tr><td> ??    </td><td> 直前の正規表現に 0 回もしくは１回一致する（最短一致）</td></tr>
+  <tr><td> {m,n}?</td><td> 直前の正規表現の m 回以上 n 回以下の繰り返し（最短一致）</td></tr>
+  <tr><td> [ ]   </td><td> [ ] 内に指定した文字のどれかと一致する</td></tr>
+  <tr><td> [^ ]  </td><td> [ ] 内に指定した文字でない場合に一致する</td></tr>
+  <tr><td> .     </td><td> 任意の１文字と一致する</td></tr>
+  <tr><td> ^     </td><td> 行頭と一致する</td></tr>
+  <tr><td> $     </td><td> 行末と一致する</td></tr>
+  <tr><td> ( )   </td><td> 正規表現をグループにまとめる</td></tr>
+  <tr><td> \     </td><td> メタ文字を打ち消す</td></tr>
+  <tr><td> \A    </td><td> 文字列の先頭と一致</td></tr>
+  <tr><td> \b    </td><td> 単語境界と一致 (\w と \W の間の空文字列と一致)</td></tr>
+  <tr><td> \B    </td><td> \B 以外と一致</td></tr>
+  <tr><td> \d    </td><td> 数字と一致 ([0-9] と同じ)</td></tr>
+  <tr><td> \D    </td><td> \d 以外と一致</td></tr>
+  <tr><td> \s    </td><td> 空白文字と一致 ([ \t\n\r\f] と同じ)</td></tr>
+  <tr><td> \S    </td><td> \s 以外と一致</td></tr>
+  <tr><td> \w    </td><td> 英数字とアンダースコア _ に一致 ([_a-zA-Z0-9] と同じ)</td></tr>
+  <tr><td> \W    </td><td> \w 以外と一致</td></tr>
+  <tr><td> \Z    </td><td> 文字列の末尾と一致</td></tr>
+</tbody>
+</table>
+
+<p> Ruby のメタ文字は、このほかに後方参照や拡張表記があります。これらのメタ文字は次回で詳しく説明します。
+</p>
+
+<h4>●文字の指定</h4>
+<p> それでは、具体的に説明していきましょう。まず大前提として、メタ文字以外の文字はそれ自身の正規表現です。つまり、abc という正規表現は文字列 abc と一致します。それから、メタ文字を通常の文字として使いたい場合は、メタ文字の前に円記号 \ (またはバックスラッシュ) を付けます。
+</p>
+
+<p> メタ文字 . はどんな文字にも一致します。
+</p>
+
+<pre class="item">
+a.c   =&gt; aac, abc, aAc
+a..c  =&gt; aaac, abcc
+</pre>
+
+<p> 次は文字クラス [ ] です。[ ] 中の文字のどれかと一致します。
+</p>
+
+<pre class="item">
+a[ABC]c    =&gt; aAc, aBc, aCc
+a[AB][CD]c =&gt; aACc, aADc, aBCc, aBDc
+</pre>
+
+<p> 文字クラスはハイフン (-) を使って文字の範囲を表すことができます。- を含めたい場合は [ ] の中で先頭か最後に - を指定します。
+</p>
+
+<pre class="item">
+[a-zA-Z]    =&gt; アルファベットと一致
+[a-zA-Z_]   =&gt; \w と同じ
+[0-9]       =&gt; 数字と一致 (\d と同じ)
+[-a], [a-]  =&gt; a, - と一致
+</pre>
+
+<p> 数字の正規表現は \d を使うことができます。英字文字列の正規表現は、アンダーライン (_) を含んでもよければ \w を使うことができます。
+</p>
+
+<p> 文字クラスの先頭に ^ を付けると、指定した文字以外の文字と一致します。^ は先頭に付けたときに有効で、それ以外の位置では通常の文字として扱われます。
+</p>
+
+<pre class="item">
+[^a-zA-Z]  =&gt; アルファベット以外の文字と一致
+[^a-zA-Z_] =&gt; \W と同じ
+[^0-9]     =&gt; 数字以外の文字と一致 (\D と同じ)
+[^a-]      =&gt; a, - 以外の文字と一致
+</pre>
+
+<p> アルファベットとアンダーライン以外の文字と一致する正規表現は \W を使うことができます。数字以外の文字と一致する正規表現は \D を使うことができます。
+</p>
+
+<h4>●繰り返し</h4>
+<p> メタ文字 * と + と ? は繰り返しを表します。* は直前の正規表現の 0 回以上の繰り返しと一致します。0 回以上とは空文字列にも一致するということです。
+</p>
+
+<pre class="item">
+a*b =&gt; b  （a がない場合にも一致する）
+       ab aab aaaab aaaaab など
+</pre>
+
+<p> + は直前の正規表現の 1 回以上の繰り返しと一致します。* と違って空文字列とは一致しません。
+</p>
+
+<pre class="item">
+a+b =&gt; ab aab aaaab aaaaab など（b とは一致しない）
+</pre>
+
+<p> ? は空文字列もしくは直前の正規表現と一致します。
+</p>
+
+<pre class="item">
+a?b =&gt; b ab
+</pre>
+
+<p> 文字クラスと繰り返しを組み合わせることで、いろいろな文字列を表現することができます。
+</p>
+
+<pre class="item">
+[a-zA-Z]+   =&gt; 英文字列と一致
+a[a-zA-Z]*  =&gt; a で始まる英文字列と一致 (a １文字とも一致)
+a[a-zA-Z]+  =&gt; a で始まる英文字列と一致 (a １文字には一致しない)
+[0-9]+      =&gt; 数字列と一致 (\d+ と同じ)
+</pre>
+
+<p> {m,n} は繰り返しの回数を指定します。
+</p>
+
+<pre class="item">
+\d{3,6}  =&gt; 3 桁以上 6 桁以下の数字と一致
+\d{3,}   =&gt; 3 桁以上の数字と一致
+\d{3}    =&gt; 3 桁の数字と一致
+\d{0,}   =&gt; \d* と同じ
+\d{1,}   =&gt; \d+ と同じ
+\d{0,1}  =&gt; \d? と同じ
+</pre>
+
+<p> このように正規表現を使えば 3 桁以上の数字も簡単に指定することができます。
+</p>
+
+<h4>●最長一致と最短一致</h4>
+<p> ところで、*, +, ?, {m,n} の繰り返しは「欲張りマッチ」といって、文字列のもっとも左側（先頭に近い方）からもっとも長い部分文字列と一致します。これを「最左最長一致」と呼びます。伝統的な正規表現は最左最長一致の繰り返ししかありません。ところが、これでは困る場合があるのです。
+</p>
+
+<p> たとえば、&lt; と &gt; の間にある文字列とマッチングさせようとして、&lt;.*&gt; という正規表現を書きました。この場合、&lt;abc&gt; と一致しますが、&lt;abc&gt;012&lt;def&gt; にも一致してしまいます。最初に現れる &lt; と &gt; を必ず一致させたい場合は、繰り返しの後ろに ? を付けます。これを「最左最短一致」といいます。この場合は &lt;.*?&gt; と指定すると、最初の &lt;abc&gt; に一致します。
+</p>
+
+<h4>●グループ</h4>
+<p> 繰り返しは他のメタ文字よりも優先順位が高いことに注意して下さい。たとえば、ab* は ab の繰り返しではなく、b の繰り返しになります。ab の繰り返しを実現するには ( ) を使って、正規表現をひとつのグループにまとめます。
+</p>
+
+<pre class="item">
+(ab)+   =&gt; ab abab ababab abababab など
+(ab)*c  =&gt; c abc ababc abababc ababababc など
+</pre>
+
+<p> なお、グループのカッコは一致した部分文字列を覚えておくためにも使われます。これは後方参照のところで説明します。
+</p>
+
+<h4>●位置の指定</h4>
+<p> $ と ^ は位置を指定するメタ文字です。^ は行頭を指定し、$ は行末を指定します。^ は文字クラス内とは別の意味になるので注意してください。
+</p>
+
+<pre class="item">
+^abcd    =&gt; 行頭の abcd と一致する
+^[a-z]+  =&gt; 行頭にある英文字列と一致する
+abcd$    =&gt; 行末にある abcd と一致する
+[a-z]+$  =&gt; 行末にある英文字列と一致する
+</pre>
+
+<p> 複数の行を一つの文字列にまとめる場合、文字列の中に複数の行頭や行末が存在することになります。\A は文字列全体の先頭と一致し、\Z は文字列全体の行末と一致します。\b は単語の境界と一致します。
+</p>
+
+<pre class="item">
+\Aabcd   =&gt; "abcd\nABCD" の abcd と一致する
+            "ABCD\nabcd" の abcd には一致しない
+ABCD\Z   =&gt; "abcd\nABCD" の ABCD と一致する
+            "ABCD\nabcd" の ABCD には一致しない
+\babc\b  =&gt; abc という単語と一致する
+            ABabcCD という文字列中の abc には一致しない
+</pre>
+
+<h4>●選択</h4>
+<p> | は選択を表すメタ文字で、前後どちらかの正規表現と一致します。
+</p>
+
+<pre class="item">
+ab|cd     =&gt; ab または cd
+(a|b)c    =&gt; ac または bc
+(ab|cd)e  =&gt; abe または cde
+</pre>
+
+<p> 選択は他のメタ文字よりも優先順位が低いことに注意して下さい。ab|cd は (ab)|(cd) であり、a(b|c)d ではありません。
+</p>
+
+<h4>●正規表現の使い方</h4>
+<p> さて、正規表現の説明だけでは退屈なので、実際に Ruby で試してみましょう。Ruby では / / で囲まれた文字列は正規表現として扱われます。
+</p>
+
+<pre class="item">
+/pattern/
+</pre>
+
+<p> / で区切られた pattern に正規表現を指定します。検索する文字列の指定がない場合、特殊変数 $_ が検索対象になります。文字列を指定する場合は演算子 =~ を使います。なお、特殊変数 $_ には gets() などでファイルから直前に読み込んだ文字列が記憶されています。
+</p>
+
+<pre class="item">
+/abcd/         # 特殊変数 $_ と abcd のマッチング
+/abcd/ =~ str  # 文字列を格納した変数 str と abcd のマッチング
+</pre>
+
+<p> 正規表現 pattern とマッチングに成功した場合、その開始位置を返します。失敗した場合は nil を返します。たとえば、ファイルの中から 3 桁以上の数字を探す場合は、リスト 3 のようにプログラムできます。
+</p>
+
+<pre class="list">
+リスト 1 : 3 桁以上の数字を探す
+
+while gets
+  print $_ if /\d{3,}/
+end
+</pre>
+
+<p> gets() は標準入力から 1 行読み込み、その値が特殊変数 $_ にセットされます。次に、$_ と /\d{3,}/ を照合します。一致すれば真を返すので、print() で $_を表示すればいいわけです。とても簡単ですね。
+</p>
+
+<h4>●文字列の検索</h4>
+<p> ところで、pattern に式展開を書くこともできます。たとえば、/#{foo}/ とすると、foo にセットされている文字列を正規表現として解釈します。
+</p>
+
+<pre class="item">
+foo = '\w+'
+/#{foo}/     # /\w+/ と同じこと
+</pre>
+
+<p> この機能を使うと、指定した文字列をファイルから検索するツール grep のようなプログラムは簡単に作ることができます。リスト 2 を見てください。
+</p>
+
+<pre class="list">
+リスト 2 : grep.rb
+
+pattern = ARGV[0]
+filename = ARGV[1]
+in_f = open filename, "r"
+while in_f.gets
+  if /#{pattern}/o
+    printf "%6d: %s", $., $_
+  end
+end
+in_f.close
+</pre>
+
+<p> このプログラムは次のように起動します。
+</p>
+
+<pre>
+$ ruby grep.rb pattern file
+</pre>
+
+<p> まず、変数 ARGV から正規表現 pattern とファイル名 filename を取り出して、変数 pattern と filename にセットします。あとは、ファイルをオープンして gets() で 1 行ずつ読み込み、正規表現 pattern と照合すればいいわけです。
+</p>
+
+<p> ここで、/ / の後ろの o に注目してください。Ruby は正規表現をあるデータ構造に変換 (コンパイル) してから文字列と照合します。/ / に変数が使われている場合、その値が変化しているかもしれないので、Ruby は文字列と照合する前に正規表現を再コンパイルします。今回のプログラムでは、pattern の値は変化しませんね。この場合、/ / に o を指定 <sup><a href="abcruby05.html#note2">[*2]</a></sup> することで、正規表現のコンパイルを 1 回だけに抑制することができます。
+</p>
+
+<p> 照合に成功すると、次に示す特殊変数に結果がセットされます。
+</p>
+
+<pre class="item">
+$&amp;  正規表現と一致した文字列
+$`  一致した文字列の前の文字列
+$'  一致した文字列の後の文字列
+$~  一致情報を記憶したオブジェクト
+</pre>
+
+<p> たとえば、/\d+/ と "abcd1234ABCD" を照合すると、各変数の値は次のようになります。
+</p>
+
+<pre class="item">
+$&amp;  =&gt;  "1234"
+$`  =&gt;  "abcd"
+$'  =&gt;  "ABCD"
+$~  =&gt;  #&lt;MatchData "1234"&gt;
+</pre>
+
+<p> 照合に失敗した場合、これらの変数には nil がセットされます。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note2">[*2]</a> 英大小文字を区別しないで検索する場合は i を指定します。
+</div>
+
+<h4>●scan() と split()</h4>
+<p> 文字列の中で正規表現と一致した部分文字列をすべて求めたい場合は、文字列のメソッド scan() を使うと便利です。scan() は重複しない一致部分文字列を配列に格納して返します。簡単な例を示しましょう。
+</p>
+
+<pre>
+irb&gt; a = "foo bar baz"
+=&gt; "foo bar baz"
+irb&gt; a.scan /\w+/
+=&gt; ["foo", "bar", "baz"]
+irb&gt; b = "foo 10 bar 20 baz 30"
+=&gt; "foo 10 bar 20 baz 30"
+irb&gt; b.scan /(\w+)\s+(\d+)/
+=&gt; [["foo", "10"], ["bar", "20"], ["baz", "30"]]
+</pre>
+
+<p> グループがある場合は、グループと一致した部分文字列を配列に格納して返します。グループが複数ある場合は、各グループの一致文字列を配列に格納します。
+</p>
+
+<p> split() は単語の区切りを正規表現で指定することができます。簡単な例を示します。
+</p>
+
+<pre>
+irb&gt; a = "foo bar baz"
+=&gt; "foo bar baz"
+irb&gt; a.split /\W+/
+=&gt; ["foo", "bar", "baz"]
+irb&gt; a.split /(\W+)/
+=&gt; ["foo", " ", "bar", " ", "baz"]
+</pre>
+
+<p> split() は正規表現にグループがあると、そのグループと一致した部分文字列を配列に追加します。また、split() は分割する個数を引数 limit で指定することができます。この場合、limit は配列に格納される要素の個数を指定することになります。簡単な例を示します。
+</p>
+
+<pre>
+irb&gt; a.split /\W+/, 1
+=&gt; ["foo bar baz"]
+irb&gt; a.split /\W+/, 2
+=&gt; ["foo",  "bar baz"]
+</pre>
+
+<p> 1 を指定すると分割は行われません。2 を指定すると、文字列をひとつ切り出して、あとの要素は残りの文字列になります。limit を省略または 0 にすると、文字列を分割したあとの配列で、末尾の空文字列が削除されます。また、limit に負の値を指定すると、分割数を無限大に設定したことと同じになります。次の例を見てください。
+</p>
+
+<pre>
+irb&gt; b = "foo bar baz "
+=&gt; "foo bar baz "
+irb&gt; b.split /\W+/
+=&gt; ["foo", "bar", "baz"]
+irb&gt; b.split /\W+/, -1
+=&gt; ["foo", "bar", "baz", ""]
+</pre>
+
+<p> baz の後ろに空白文字が付いています。これを split() で分割すると、"foo", "bar", "baz", "" になりますが、limit を省略すると最後の空文字列は削除されます。-1 を指定すると、最後の空文字列は配列に格納されます。
+</p>
+
+<h4>●クロスリファレンサ</h4>
+<p> 最後に、クロスリファレンス (cross reference) を作成するプログラムを作ってみましょう。クロスリファレンスとは、プログラムで使われている変数や関数の名前と、それが現れる行番号をすべて書き出した一覧表のことです。今回作成するプログラムは変数名や関数名ではなく、正規表現と一致する文字列をキーワードとし、それが現れる行番号を出力することにします。 
+</p>
+
+<p> キーワードは文字コード順に整列して出力した方が見やすいので、出現したキーワードと行番号を覚えておいて、結果をまとめて出力することにします。この場合、キーワードの探索処理によってプログラムの実行時間が大きく左右されます。コンピュータの世界では、昔からデータを高速に探索するアルゴリズムが研究されています。基本的なところでは「二分探索木」や「ハッシュ法」があります。キーワードを配列に格納して線形探索すると時間がかかるので、このプログラムでは Ruby のハッシュを使うことにします。
+</p>
+
+<p> ただし、ハッシュのキーをメソッド keys() で取り出すとき、文字コード順に取り出されるわけではありません。したがって、データを文字コード順に表示したい場合は、データをソートしないといけません。Ruby には配列の要素をソートするメソッド sort() が用意されています。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+
+<pre>
+irb&gt; d = {"def"=&gt;20, "abc"=&gt;10, "ghi"=&gt;30}
+=&gt; {"def"=&gt;20, "abc"=&gt;10, "ghi"=&gt;30}
+irb&gt; a = d.keys
+=&gt; ["def, "abc", "ghi"]
+irb&gt; a.sort
+=&gt; ["abc", "def", "ghi"]
+</pre>
+
+<p> sort() はソートするときに元の配列を破壊しませんが、sort!() は元の配列を破壊的に修正することに注意してください。sort() は配列に格納されている文字列を文字コード順に並べます。このとき、英大小文字は区別されます。英大小文字を区別せずにソートすることもできますが、データを比較する関数を sort() に渡す必要があります。詳細は Ruby のマニュアルをお読みください。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは、クロスリファレンスのプログラムをリスト 3 に示します。
+</p>
+
+<pre class="list">
+リスト 3 : クロスリファレンスの作成 (cref.rb)
+
+# キーワードを格納するハッシュ
+$dic = {}
+
+# 行番号のセット
+def set_line_number(key, n)
+  line = $dic[key]
+  if line
+    line.push n if line[-1] != n
+  else
+    $dic[key] = [n]
+  end
+end
+
+# キーワードの取得
+def get_keyword
+  f = open ARGV[1], "r"
+  while line = f.gets
+    for key in line.scan /#{ARGV[0]}/o
+      if key.instance_of? Array
+        for key1 in key
+          set_line_number key1, $.
+        end
+      else
+        set_line_number key, $.
+      end
+    end
+  end
+  f.close
+end
+
+# クロスリファレンスの出力
+def print_cref
+  key_list = $dic.keys
+  for key in key_list.sort
+    count = 0
+    printf "%s\n", key
+    for n in $dic[key]
+      printf "%8d", n
+      count += 1
+      if count == 8
+        print "\n"
+        count = 0
+      end
+    end
+    print "\n"
+  end
+end
+
+# 実行
+get_keyword
+print_cref
+</pre>
+
+<p> 少し長いリストですが、関数 get_keyword() が探索処理で、関数 print_cref() が出力処理です。グローバル変数 $dic にはキーワードを格納するハッシュ { } をセットします。
+</p>
+
+<p> get_keyword() は、ファイルをリードオープンして gets() で 1 行読み込み、scan() で正規表現と一致する部分文字列をすべて求めます。行番号は特殊変数 $. で求めることができます。正規表現にグループが含まれている場合、返り値は配列の配列になります。このため、メソッド instance_of?() でデータ型をチェックして処理を振り分けます。
+</p>
+
+<p> Ruby はすべてのデータをオブジェクトとして統一的に扱うことができます。Ruby の場合、オブジェクトの種類 (データ型) はクラス (class) で表されます。配列を表すクラスは Arrayです。key.instance_of?(Array) が真であれば、key は Array のオブジェクトです。key が配列の場合、for 文でキーを一つずつ取り出して、関数 set_line_number() で行番号をセットします。key が配列でなければそのまま set_line_number() に渡します。
+</p>
+
+<p> set_line_number() はキーワード key をハッシュ $dic に登録し、そこに行番号をセットします。行番号は配列に格納します。このとき、同じ行番号がないことを確認します。これは、配列の最後尾のデータと行番号 n を比較するだけです。配列を変数 line にセットし、line[-1] と n が等しくなければ、push() で n を line の最後尾に追加します。key が見つからない場合は $dic[key] = [n] で配列を辞書に登録します。
+</p>
+
+<p> 関数 print_cref() は辞書に登録されているキーワードと行番号を表示します。最初に $dic.keys() で辞書に登録されているキーを求めて変数 key_list にセットして、それを sort() でソートします。そして、for 文でキーをひとつずつ取り出し、ハッシュから行番号を取り出して出力します。変数 count は出力した行番号を数えるカウンタとして使います。8 個表示したら改行します。
+</p>
+
+<h4>●実行例</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。図 1 に示すファイル test.dat で、\w+ をキーワードにしたクロスリファレンスを作成します。実行結果を図 2 に示します。
+</p>
+
+<pre class="fig">
+abc def ghi jkl
+def ghi jkl mno
+ghi jkl mno pqr
+jkl mno pqr stu
+mno pqr stu vwx
+
+図 1 : test.dat の内容
+</pre>
+<pre class="fig">
+$ ruby cref.rb '\w+' test.dat
+abc
+       1
+def
+       1       2
+ghi
+       1       2       3
+jkl
+       1       2       3       4
+mno
+       2       3       4       5
+pqr
+       3       4       5
+stu
+       4       5
+vwx
+       5
+
+図 2 : cref.py の実行結果
+</pre>
+
+<p> 正規表現で表せるパターンであれば、そのクロスリファレンスを cref.rb で作成することができます。このように、正規表現を使うと文字列を処理するプログラムを簡単に作ることができます。
+</p>
+
+<div class="column">
+<h4>●コラム grep と正規表現</h4>
+<p> grep は UNIX 系 OS におけるコマンドで、テキストファイルから指定した正規表現と一致する行を検索して出力します。grep という名前はラインエディタ ed のコマンド g/re/p からきています。このコマンドは「ファイル全体 (Global) から正規表現 (Regular Expression) と一致する行を出力 (Print) する」という動作をします。これを OS のコマンドとして実装したのが grep です。
+</p>
+<p> grep で扱うことができる正規表現は、POSIX 1003.2 における「基本正規表現 (Basic Regular Expression) 」に相当するもので、sed で使用する正規表現もこれになります。基本正規表現は低機能なので、POSIX 1003.2 では「拡張正規表現 (Extended Reuglar Exression) 」が定められています。egrep や awk では、この拡張正規表現に相当するものが使われています。
+</p>
+<p> 現在では、多くのスクリプト言語でもっと高機能な正規表現を使うことができます。また、正規表現ライブラリも開発されているので、それをアプリケーションに組み込んで利用することもできます。Ruby はバージョン 1.9 から正規表現エンジンとして「鬼車」を、2.0 からはその改良版である「鬼雲」を使っています。また、Perl 5 互換の正規表現をＣ言語で実装したライブラリ「PCRE (Perl Compatible Regular Expressions) 」を使っているアプリケーションもあります。
+</p>
+</div>
+<h4>●おわりに</h4>
+<p> 正規表現の基本的な使い方について説明しました。正規表現は小さなプログラミング言語みたいなもので、複雑なパターンを表現できるかわりに理解するのが難しいところもあります。ですが、テキストファイルを処理するとき、正規表現ほど役に立つものはありません。Ruby の正規表現には多数の機能があって一度に全部覚えるのは至難の技です。わかるところから使ってみてください。習うより慣れろで、少しずつ覚えていきましょう。次回は正規表現の拡張機能や文字列の置換処理について説明します。
+</p>
+<h4>●参考文献</h4>
+<ol>
+  <li>Dale Dougherty, 福崎俊博(訳), 『sed &amp; awk プログラミング』, 株式会社アスキー, 1991
+</ol>
+</section>
+<hr>
+<div align="right">
+初版 2008 年 10 月 25 日<br>
+改訂 2017 年 1 月 15 日
+</div>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008-2017 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcruby04.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby06.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

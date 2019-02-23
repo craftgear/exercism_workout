@@ -1,0 +1,1281 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scala プログラミング入門</title>
+  <meta name="description" content="Scala,Scala入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881778</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scala Programming</h1>
+<h2>お気楽 Scala プログラミング入門</h2>
+<div class="small">
+[ <a href="scala14.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala16.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>多相クラス (3)</h3>
+<p> 多相クラスの続きです。今回は多相クラスで immutable なデータ構造を作ってみましょう。具体的には、<a href="scala10.html">連結リスト</a> と <a href="scala11.html">二分探索木</a> で作成したプログラムを多相的なデータ構造に改良します。
+</p>
+
+<h4>●Option の定義</h4>
+<p> Scala 初心者 (M.Hiroi も含む) にとって、型境界や変位は複雑で難しい機能なのですが、Scala のライブラリではよく使われています。まず最初に、簡単な例として Option を取り上げてみましょう。クラス名を MyOption, MySome, MyNone に変更して、実際にプログラムを作ってみます。
+</p>
+<p> MyOption は多相型の抽象クラスで表すことにすると、MySome は多相型の case クラスで MyOption を継承すればいいでしょう。次に MyNone の定義ですが、シングルトンオブジェクは多相型にはならない (型パラメータの指定はできない) ので、MyOption を継承するときの型パラメータの指定が問題になります。このような場合、Nothing という型を使います。
+</p>
+<p> Scala の型 Any はすべてのクラスのスーパークラスですが、同じように Scala にはすべてのクラスのサブクラスを表す型があり、それを Nothing といいます。Nothing に値 (インスタンス) はありません。値が無いことを表すためにも Nothing は使われます。次の例を見てください。
+</p>
+<pre>
+scala&gt; class Foo[+A]
+defined class Foo
+
+scala&gt; var a: Foo[Int] = new Foo[Int]
+a: Foo[Int] = Foo@1627d13
+
+scala&gt; a = new Foo[Nothing]
+a: Foo[Int] = Foo@1c53a33
+
+scala&gt; var b: Foo[Double] = new Foo[Double]
+b: Foo[Double] = Foo@18a29df
+
+scala&gt; b = new Foo[Nothing]
+b: Foo[Double] = Foo@a68f4f
+
+scala&gt; var c: Foo[String] = new Foo[String]
+c: Foo[String] = Foo@1cd168a
+
+scala&gt; c = new Foo[Nothing]
+c: Foo[String] = Foo@16b3f44
+</pre>
+<p> 多相クラス Foo[+A] を定義します。型パラメータを共変に指定すると、Foo[Nothing] は Foo[Int], Foo[Double], Foo[String] など、型パラメータがどんな型であっても、その変数に代入することができます。したがって、MyOption を共変で定義すると、MyOption[Nothing] は型パラメータがどんな型でも変数に代入することができます。そして、MyNone が MyOption[Nothing] を継承すれば、MyNone のスーパークラス MyOption[Noting] を代入できる変数であれば、MyNone もそこに代入することができます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre>
+scala&gt; abstract class MyOption[+A] {
+     | def get: A
+     | def isEmpty: Boolean
+     | }
+defined class MyOption
+
+scala&gt; case class MySome[A](x: A) extends MyOption[A] {
+     | def get: A = x
+     | def isEmpty: Boolean = false
+     | }
+defined class MySome
+
+scala&gt; case object MyNone extends MyOption[Nothing] {
+     | def get = throw new Exception("MyNone.get")
+     | def isEmpty: Boolean = true
+     | }
+defined object MyNone
+</pre>
+<p> MyOption は抽象クラスで型パラメータに +A を指定します。簡単な例題なので、メソッドは get と isEmpty だけにしました。MySome は case クラスで定義して、MyOption[A] を継承します。MyNone は object で定義し、MyOption[Nothing] を継承します。get はエラーを送出します。これで基本的な機能は Option と同じように動作します。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; val a: MyOption[Int] = MySome(10)
+a: MyOption[Int] = MySome(10)
+
+scala&gt; val b: MyOption[Int] = MyNone
+b: MyOption[Int] = MyNone
+
+scala&gt; val MySome(c) = a
+c: Int = 10
+
+scala&gt; a.get
+res0: Int = 10
+
+scala&gt; a.isEmpty
+res2: Boolean = false
+
+scala&gt; b.isEmpty
+res3: Boolean = true
+
+scala&gt; b.get
+java.lang.Exception: MyNone.get
+  at MyNone$.get(&lt;console&gt;:9)
+  at MyNone$.get(&lt;console&gt;:8)
+  ... 32 elided
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●不変 (immutable) で多相的な連結リスト</h4>
+<p> immutable な <a href="scala10.html">連結リスト</a> は空リスト Nils をシングルトンオブジェクトで定義しました。ということは、MyOption と同じように連結リストも共変でなければいけません。多相型の連結リストを ImList, セルを Cons, 空リストを Nils とすると、クラスの定義は次のようになります。
+</p>
+<pre class="list">
+リスト : 多相的な連結リスト (immutable)
+
+package imlist
+
+// 抽象クラス
+abstract class ImList[+A] {
+  def isEmpty(): Boolean
+  def car(): A
+  def cdr(): ImList[A]
+  //
+  // メソッドの定義 (省略)
+  //
+}
+
+// セル
+case class Cons[A](item: A, next: ImList[A]) extends ImList[A] {
+  def isEmpty(): Boolean = false
+  def car(): A = item
+  def cdr(): ImList[A] = next
+}
+
+// 空リスト
+case object Nils extends ImList[Nothing] {
+  def isEmpty(): Boolean = true
+  def car() = throw new Exception("ImList.car: Empty list")
+  def cdr() = throw new Exception("ImList.cdr: Empty list")
+}
+</pre>
+<p> ImList は抽象クラスで、型パラメータ A の変位を共変に設定します。セルを表すクラス Cons も多相クラスとし、抽象クラス ImList[A] を継承します。フィールド変数 item の型は A で、next は ItemList[A] になります。リストの終端を表すシングルトンオブジェクト Nils は ImList[Nothong] を継承します。実際の List はもっと多機能で複雑ですが、基本的な機能はこれだけで実現することができます。ちなみに、Scala の List も共変です。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; import imlist._
+import imlist._
+
+scala&gt; val a: ImList[Int] = Cons(1, Cons(2, Cons(3, Cons(4, Nils))))
+a: imlist.ImList[Int] = Cons(1,Cons(2,Cons(3,Cons(4,Nils))))
+
+scala&gt; a.car
+res0: Int = 1
+
+scala&gt; a.cdr
+res1: imlist.ImList[Int] = Cons(2,Cons(3,Cons(4,Nils)))
+
+scala&gt; a.isEmpty
+res2: Boolean = false
+
+scala&gt; a.cdr.cdr.cdr.cdr.isEmpty
+res3: Boolean = true
+</pre>
+<p> immutable な連結リストは、次のように他のデータ型も挿入することができます。
+</p>
+<pre>
+scala&gt; Cons(1.234, a)
+res4: imlist.Cons[AnyVal] = Cons(1.234,Cons(1,Cons(2,Cons(3,Cons(4,Nils)))))
+
+scala&gt; Cons("oops", a)
+res5: imlist.Cons[Any] = Cons(oops,Cons(1,Cons(2,Cons(3,Cons(4,Nils)))))
+
+scala&gt; val b :ImList[Int] = Cons("oops", a)
+&lt;console&gt;:11: error: type mismatch;
+ found   : String("oops")
+ required: Int
+       val b :ImList[Int] = Cons("oops", a)
+</pre>
+<p> このとき、新しいリストの型は元のリストの型とは異なることに注意してください。リスト a に実数 1.234 を追加すると、新しく生成されるリストの型は ImList[AnyVal] になります。AnyVal は Int, Double などいわゆる「基本型データ」のスーパークラスです。リスト a に文字列 "oops" を追加すると、新しいリストの型は ImList[Any] になります。もちろん、リスト a の型が変わることはありません。
+</p>
+<p> Scala は型推論で新しいリストの型を決定しますが、Int と Double を格納する場合、新しいリストは両者の共通のスーパークラス AnyVal のリストとするしかありません。つまり、ImList[Int] を ImList[AnyVal] に変換しているわけです。また、ImList[A] は共変なので、スーパークラスの変数にリストを代入することはできますが、サブクラスの変数に代入することはできません。ImList[Int] のリストに間違って文字列を挿入すると ImList[Any] になりますが、それを ImList[Int] の変数にセットしようとするとコンパイルエラーになります。
+</p>
+
+<h4>●メソッドの作成</h4>
+<p> 次はメソッドを作成します。基本的には要素の型 Int を型パラメータ A に、リストの型 imlist を ImList[A] に書き換えるだけですが、データを挿入するメソッド insert は注意が必要です。次のように書き換えるとエラーになります。
+</p>
+<pre class="list">
+リスト : データの挿入 (コンパイルエラー)
+
+  def insert(n: Int, x: A): ImList[A] =
+    if (n == 0) Cons(x, this)
+    else if (isEmpty) throw new Exception("ImList.insert: out of range")
+    else Cons(car, cdr.insert(n - 1, x))
+</pre>
+<pre>
+C&gt;scalac imlist.scala
+imlist.scala:20: error: covariant type A occurs in contravariant position in
+type A of value x
+  def insert(n: Int, x: A): ImList[A] =
+                     ^
+one error found
+</pre>
+<p> 引数 x の型に共変の型パラメータ A が使われているためエラーになります。この場合、A を新しい型パラメータに置き換えます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの挿入 (修正版)
+
+  def insert[B &gt;: A](n: Int, x: B): ImList[B] =
+    if (n == 0) Cons(x, this)
+    else if (isEmpty) throw new Exception("ImList.insert: out of range")
+    else Cons(car, cdr.insert(n - 1, x))
+</pre>
+<p> x の型をパラメータ B で表します。返り値の型は ImList[B] になります。このとき、型境界を指定します。挿入する要素の型によって、型 B は型 A のスーパークラスになることがありますね。つまり、下限境界 B &gt;: A を設定すればいいわけです。これでコンパイルすることができます。
+</p>
+<p> あとのプログラムの修正は簡単なので説明は割愛します。詳細は <a href="scala15.html#list1">プログラムリスト１</a> をお読みくださいませ。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+scala&gt; import imlist._
+import imlist._
+
+scala&gt; val a: ImList[Int] = Cons(1, Cons(2, Cons(3, Cons(4, Nils))))
+a: imlist.ImList[Int] = Cons(1,Cons(2,Cons(3,Cons(4,Nils))))
+
+scala&gt; a(0)
+res0: Int = 1
+
+scala&gt; a(3)
+res1: Int = 4
+
+scala&gt; a.insert(0, 0)
+res2: imlist.ImList[Int] = Cons(0,Cons(1,Cons(2,Cons(3,Cons(4,Nils)))))
+
+scala&gt; a.insert(4, 0)
+res3: imlist.ImList[Int] = Cons(1,Cons(2,Cons(3,Cons(4,Cons(0,Nils)))))
+
+scala&gt; a.insert(0, 1.234)
+res4: imlist.ImList[AnyVal] = Cons(1.234,Cons(1,Cons(2,Cons(3,Cons(4,Nils)))))
+
+scala&gt; a.insert(0, "oops")
+res5: imlist.ImList[Any] = Cons(oops,Cons(1,Cons(2,Cons(3,Cons(4,Nils)))))
+
+scala&gt; a.delete(0)
+res6: imlist.ImList[Int] = Cons(2,Cons(3,Cons(4,Nils)))
+
+scala&gt; a.delete(0).delete(2)
+res7: imlist.ImList[Int] = Cons(2,Cons(3,Nils))
+
+scala&gt; a.delete(0).delete(2).delete(1)
+res8: imlist.ImList[Int] = Cons(2,Nils)
+
+scala&gt; a.delete(0).delete(2).delete(1).delete(0)
+res9: imlist.ImList[Int] = Nils
+
+scala&gt; a.delete(0).delete(2).delete(1).delete(0).isEmpty
+res10: Boolean = true
+
+scala&gt; a.map(x =&gt; x * x)
+res11: imlist.ImList[Int] = Cons(1,Cons(4,Cons(9,Cons(16,Nils))))
+
+scala&gt; a.filter(_ % 2 == 0)
+res12: imlist.ImList[Int] = Cons(2,Cons(4,Nils))
+
+scala&gt; a.foldl(0, (_ :Int) + (_:Int))
+res13: Int = 10
+
+scala&gt; a.foldr(0, (_ :Int) + (_:Int))
+res14: Int = 10
+
+scala&gt; a.foreach(println)
+1
+2
+3
+4
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●可視境界</h4>
+<p> ここで、もうひとつ型境界の指定方法を紹介します。
+</p>
+<pre class="item">
+A &lt;% T
+</pre>
+<p> 型 A は型 T のサブクラスか、もしくは「暗黙の型変換」で A から T に変換できることが条件になります。これを「可視境界（view bound）」といいます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; class Foo
+defined class Foo
+
+scala&gt; class Bar extends Foo
+defined class Bar
+
+scala&gt; class Baz
+defined class Baz
+
+scala&gt; class Oops[A <% Foo]
+defined class Oops
+
+scala&gt; new Oops[Foo]
+res0: Oops[Foo] = Oops@c7a01b
+
+scala&gt; new Oops[Bar]
+res1: Oops[Bar] = Oops@92fab5
+
+scala&gt; new Oops[Baz]
+&lt;console&gt;:11: error: No implicit view available from Baz =&gt; Foo.
+              new Oops[Baz]
+              ^
+</pre>
+<p> クラス Foo とそのサブクラス Bar, Foo と継承関係のないクラス Baz を定義します。多相クラス Oops は可視境界 A &lt;% Foo を指定しているので、Oops{Foo] と Oops[Bar] のインスタンスを生成することができます。Baz は暗黙の型変換がないので、Oops[Baz] のインスタンスは生成できません。
+</p>
+<p> 次のように、Baz から Foo への変換関数を定義すると、Oops[Baz] のインスタンスを生成することができます。
+</p>
+<pre>
+scala&gt; implicit def bazToFoo(x: Baz): Foo = new Foo
+warning: there were 1 feature warning(s); re-run with -feature for details
+bazToFoo: (x: Baz)Foo
+
+scala&gt; new Oops[Baz]
+res3: Oops[Baz] = Oops@13b266e
+</pre>
+
+<p> もうひとつ簡単な例を示しましょう。<a href="scala05.html">高階関数 (2)</a> で作成したクイックソートを可視境界を使って多相型関数に改良してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : クイックソート (多相型)
+
+object sample1501 {
+  def quickSort[A &lt;% Ordered[A]](xs: List[A]): List[A] =
+    xs match {
+      case Nil =&gt; Nil
+      case p::ys =&gt; {
+        val a = for (y &lt;- ys if y &lt; p) yield y
+        val b = for (y &lt;- ys if y &gt;= p) yield y
+        quickSort(a) ::: List(p) ::: quickSort(b)
+      }
+    }
+}
+</pre>
+<p> ソートするリストの要素を型パラメータ A で表します。Scala の場合、Int, Double, String など、基本的なデータは Ordered への変換関数が用意されています。A に可視境界 &lt;% Ordered[A] を設定すればリストをソートすることができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; :load sample1501.scala
+Loading sample1501.scala...
+defined object sample1501
+
+scala&gt; import sample1501._
+import sample1501._
+
+scala&gt; quickSort(List(5,6,4,7,3,8,2,9,1,0))
+res4: List[Int] = List(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; quickSort(List(1.1, 2.2, 5.5, 4.4, 3.3))
+res5: List[Double] = List(1.1, 2.2, 3.3, 4.4, 5.5)
+
+scala&gt; quickSort(List("foo", "bar", "baz", "oops"))
+res6: List[String] = List(bar, baz, foo, oops)
+</pre>
+
+<h4>●不変 (immutable) で多相的な二分木</h4>
+<p> 次は、immutable な <a href="scala11.html">二分木</a> を多相型に改良しましょう。空の木 imEmpty はシングルトンオブジェクトで定義しているので、二分木を表す多相クラスも共変でなければいけません。多相型の二分木を ImTree, 節を imNode, 空の木を imEmpty とすると、クラスの定義は次のようになります。
+</p>
+<pre class="list">
+リスト : immutable な二分木 (多相型)
+
+abstract class ImTree[+A] {
+  def isEmpty: Boolean
+  def item():  A
+  def left():  ImTree[A]
+  def right(): ImTree[A]
+  //
+  // メソッドの定義 (省略)
+  //
+}
+
+case class imNode[A](item: A, left: ImTree[A], right: ImTree[A]) extends ImTree[A] {
+  def isEmpty: Boolean = false
+}
+
+case object imEmpty extends ImTree[Nothing] {
+  def isEmpty: Boolean = true
+  def item()  = throw new Exception("item: Empty Tree")
+  def left()  = throw new Exception("left: Empty Tree")
+  def right() = throw new Exception("right: Empty Tree")
+}
+</pre>
+<p> ImTree は抽象クラスで、型パラメータ A の変位を共変に設定します。節を表すクラス imNode も多相クラスとし、抽象クラス ImTree[A] を継承します。フィールド変数 item の型は A で、left と right は ImTree[A] になります。空の木を表すシングルトンオブジェクト imEmpty は ImTree[Nothong] を継承します。要素の型 A は Ordered に変換できるものとします。設定はメソッドで行います。
+</p>
+
+<h4>●メソッドの作成</h4>
+<p> 次はメソッドを作成します。基本的には要素の型 Int を型パラメータ A に、二分木の型 imTree を ImTree[A] に書き換えるだけですが、データを比較するため可視境界を設定することと、共変のパラメータ A が引数に出現する場合があるので、パラメータの書き換えが必要になります。
+</p>
+<p> メソッド search, insert, delete は次のようになります。
+</p>
+
+<pre class="list">
+リスト : 二分木の基本メソッド
+
+  def search[B &gt;: A &lt;% Ordered[B]](x: B): Boolean =
+    if (isEmpty) false
+    else if (item == x) true
+    else if (x &lt; item) left.search(x)
+    else right.search(x)
+
+  def insert[B &gt;: A &lt;% Ordered[B]](x: B): ImTree[B] =
+    if (isEmpty) imNode(x, imEmpty, imEmpty)
+    else if (item == x) this
+    else if (x &lt; item) imNode(item, left.insert(x), right)
+    else imNode(item, left, right.insert(x))
+
+  def delete[B &gt;: A &lt;% Ordered[B]](x: B): ImTree[B] =
+    if (isEmpty) this
+    else if (item == x) {
+      if (left.isEmpty) return right
+      if (right.isEmpty) return left
+      return imNode(right.searchMin, left, right.deleteMin)
+    } else if (x &lt; item) imNode(item, left.delete(x), right)
+    else imNode(item, left, right.delete(x))
+</pre>
+<p> 引数 x に型パラメータ A を指定すると、共変のパラメータが反変の位置に出現してしまいます。このため、A を型パラメータ B に置き換えて、下限境界 &gt;: A を設定します。また、型パラメータ B は比較演算子を使う必要があるので、B に可視境界 &lt;% Ordered[B] を設定します。したがって、型境界の指定は B &gt;: A &lt;% Ordered[B] になります。insert と delete の返り値の型は ImTree[B] になります。
+</p>
+
+<p> あとの修正は簡単なので説明は割愛します。詳細は <a href="scala15.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+scala&gt; import imtree._
+import imtree._
+
+scala&gt; val a:ImTree[Int] = imEmpty.insert(5).insert(1).insert(9)
+a: imtree.ImTree[Int] = imNode(5,imNode(1,imEmpty,imEmpty),imNode(9,imEmpty,imEm
+pty))
+
+scala&gt; val b:ImTree[Double] = imEmpty.insert(0.5).insert(0.1).insert(0.9)
+b: imtree.ImTree[Double] = imNode(0.5,imNode(0.1,imEmpty,imEmpty),imNode(0.9,imE
+mpty,imEmpty))
+
+scala&gt; a.search(1)
+res0: Boolean = true
+
+scala&gt; a.search(10)
+res1: Boolean = false
+
+scala&gt; b.search(0.0)
+res2: Boolean = false
+
+scala&gt; b.search(0.9)
+res3: Boolean = true
+
+scala&gt; a.delete(5)
+res4: imtree.ImTree[Int] = imNode(9,imNode(1,imEmpty,imEmpty),imEmpty)
+
+scala&gt; b.delete(0.5)
+res5: imtree.ImTree[Double] = imNode(0.9,imNode(0.1,imEmpty,imEmpty),imEmpty)
+
+scala&gt; a.foreach(println)
+1
+5
+9
+
+scala&gt; b.foreach(println)
+0.1
+0.5
+0.9
+
+scala&gt; a.foldl((_:Int) + (_:Int), 0)
+res8: Int = 15
+
+scala&gt; b.foldr((_:Double) + (_:Double), 0.0)
+res9: Double = 1.5
+</pre>
+<p> 正常に動作しているようです。興味のある方はいろいろ試してみてください。
+</p>
+
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="http://tech.cm55.com/wiki/scala">scala - tech.cm55.com</a>, <a href="http://tech.cm55.com/wiki/scala/typeSystem">Scala の型システム</a>
+  <li><a href="http://www29.atwiki.jp/tmiya/">プログラミング言語 Scala Wiki</a>, <a href="http://www29.atwiki.jp/tmiya/pages/46.html">Scala By Example 和訳 : 第 8 章 ジェネリックな型とメソッド</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+//
+// imlist.scala : immutable singly-linked list
+//
+//                Copyright (C) 2014 Makoto Hiroi
+//
+
+package imlist
+
+// 連結リスト (抽象クラス)
+abstract class ImList[+A] {
+  def isEmpty(): Boolean
+  def car(): A
+  def cdr(): ImList[A]
+
+  def apply(n: Int): A =
+    if (isEmpty) throw new Exception("ImList.apply: out of range")
+    else if (n == 0) car
+    else cdr.apply(n - 1)
+
+  def insert[B &gt;: A](n: Int, x: B): ImList[B] =
+    if (n == 0) Cons(x, this)
+    else if (isEmpty) throw new Exception("ImList.insert: out of range")
+    else Cons(car, cdr.insert(n - 1, x))
+
+  def delete(n: Int): ImList[A] =
+    if (isEmpty) throw new Exception("ImList.delete: out of range")
+    else if (n == 0) cdr
+    else Cons(car, cdr.delete(n - 1))
+
+  def length(): Int = if (isEmpty) 0 else 1 + cdr.length
+
+  def positionIf(f: A =&gt; Boolean, i: Int = 0): Int =
+    if (isEmpty) -1
+    else if (f(car)) i
+    else cdr.positionIf(f, i + 1)
+
+  def map[B](f: A =&gt; B): ImList[B] =
+    if (isEmpty) Nils
+    else Cons(f(car), cdr.map(f))
+
+  def filter(f: A =&gt; Boolean): ImList[A] =
+    if (isEmpty) this
+    else if (f(car)) Cons(car, cdr.filter(f))
+    else cdr.filter(f)
+
+  def foldl[B](a: B, f: (B, A) =&gt; B): B =
+    if (isEmpty) a
+    else cdr.foldl(f(a, car), f)
+
+  def foldr[B](a: B, f: (A, B) =&gt; B): B =
+    if (isEmpty) a
+    else f(car, cdr.foldr(a, f))
+
+  def foreach(f: A =&gt; Unit): Unit = {
+    if (!isEmpty) {
+      f(car)
+      cdr.foreach(f)
+    }
+  }
+}
+
+// セル
+case class Cons[A](item: A, next: ImList[A]) extends ImList[A] {
+  def isEmpty(): Boolean = false
+  def car(): A = item
+  def cdr(): ImList[A] = next
+}
+
+// 終端 (空リスト)
+case object Nils extends ImList[Nothing] {
+  def isEmpty(): Boolean = true
+  def car() = throw new Exception("ImList.car: Empty list")
+  def cdr() = throw new Exception("ImList.cdr: Empty list")
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+/
+// imtree.scala : immutable で多相型の二分探索木
+//
+//                Copyright (C) 2014 Makoto Hiroi
+//
+package imtree
+
+// 二分木 (抽象クラス)
+abstract class ImTree[+A] {
+  def isEmpty: Boolean
+  def item():  A
+  def left():  ImTree[A]
+  def right(): ImTree[A]
+
+  def search[B &gt;: A &lt;% Ordered[B]](x: B): Boolean =
+    if (isEmpty) false
+    else if (item == x) true
+    else if (x &lt; item) left.search(x)
+    else right.search(x)
+
+  def insert[B &gt;: A &lt;% Ordered[B]](x: B): ImTree[B] =
+    if (isEmpty) imNode(x, imEmpty, imEmpty)
+    else if (item == x) this
+    else if (x &lt; item) imNode(item, left.insert(x), right)
+    else imNode(item, left, right.insert(x))
+
+  def searchMin(): A =
+    if (isEmpty) throw new Exception("ImTree.searchMin: Empty Tree")
+    else if (left.isEmpty) item
+    else left.searchMin
+
+  def searchMax(): A =
+    if (isEmpty) throw new Exception("ImTree.searchMin: Empty Tree")
+    else if (right.isEmpty) item
+    else right.searchMax
+
+  def deleteMin(): ImTree[A] =
+    if (isEmpty) this
+    else if (left.isEmpty) right
+    else imNode(item, left.deleteMin, right)
+
+  def deleteMax(): ImTree[A] =
+    if (isEmpty) this
+    else if (right.isEmpty) left
+    else imNode(item, left, right.deleteMax)
+
+  def delete[B &gt;: A &lt;% Ordered[B]](x: B): ImTree[B] =
+    if (isEmpty) this
+    else if (item == x) {
+      if (left.isEmpty) return right
+      if (right.isEmpty) return left
+      return imNode(right.searchMin, left, right.deleteMin)
+    } else if (x &lt; item) imNode(item, left.delete(x), right)
+    else imNode(item, left, right.delete(x))
+
+  def foldl[B](f: (B, A) =&gt; B, a: B): B =
+    if (isEmpty) a
+    else right.foldl(f, f(left.foldl(f, a), item))
+
+  def foldr[B](f: (A, B) =&gt; B, a: B): B =
+    if (isEmpty) a
+    else left.foldr(f, f(item, right.foldr(f, a)))
+
+  def foreach(f: A =&gt; Unit): Unit = {
+    if (!isEmpty) {
+      left.foreach(f)
+      f(item)
+      right.foreach(f)
+    }
+  }
+
+  def toList(): List[A] =
+    if (isEmpty) Nil
+    else left.toList ::: (item :: right.toList)
+
+}
+
+// 節
+case class imNode[A](item: A, left: ImTree[A], right: ImTree[A]) extends ImTree[A] {
+  def isEmpty: Boolean = false
+}
+
+// 終端 (空の木)
+case object imEmpty extends ImTree[Nothing] {
+  def isEmpty: Boolean = true
+  def item()  = throw new Exception("item: Empty Tree")
+  def left()  = throw new Exception("left: Empty Tree")
+  def right() = throw new Exception("right: Empty Tree")
+}
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">入れ子クラスとイテレータ</h3>
+<p> 前回は多相的で immutable なデータ構造として「連結リスト」と「二分木」を作成しました。今回は「内部クラス (inner class) 」と「イテレータ (iterator) 」という機能を使って、mutable な双方向リストのプログラムを改良してみましょう。
+</p>
+
+<h4>●入れ子クラスとは？</h4>
+<p> Java では、クラスもしくはメソッドの中で定義されたクラスのことを「入れ子クラス」といいます。「ネストしたクラス」と呼ばれることもあります。Scala の場合、入れ子クラスは次に示す 3 通りのパターンがあります。
+</p>
+<OL>
+  <LI>内部クラス (inner class)
+  <LI>ローカルクラス
+  <LI>無名クラス (匿名クラス)
+</OL>
+<p> クラスやトレイトの中で定義されたクラスを「内部クラス」といいます。フィールド変数やメソッドと同様に、protected, private, 指定無し によるアクセス制御を行うことができます。なお、内部クラスという用語は入れ子クラスのことを指す場合もあるので注意してください。
+</p>
+<p> ローカルクラスはブロックの中で定義されたクラスのことで、一般的にはメソッドの中で局所的に定義されたクラスのことをいいます。申し訳ありませんが、本稿ではローカルクラスの説明は割愛させていただきます。あしからずご了承ください。
+</p>
+<p> 無名クラスは名前の無いクラスのことで、抽象クラスもしくはトレイトから通常のクラス定義をせずに直接インスタンスを生成するための機能です。無名クラスはとても強力な機能で、Scala のイテレータは無名クラスを使うと簡単に実装することができます。
+</p>
+
+<h4>●内部クラス</h4>
+<p> 内部クラスの定義は簡単です。次の例を見てください。
+</p>
+<pre>
+scala&gt; class Foo {
+     | class Bar {
+     | val x = 1
+     | }
+     | def foo(): Int = (new Bar).x
+     | }
+defined class Foo
+
+scala&gt; val a = new Foo
+a: Foo = Foo@13f69cc
+
+scala&gt; a.foo
+res0: Int = 1
+
+scala&gt; class Foo {
+     | class Bar {
+     | private val x = 1
+     | }
+     | def foo(): Int = (new Bar).x
+     | }
+&lt;console&gt;:11: error: value x in class Bar cannot be accessed in Foo.this.Bar
+       def foo(): Int = (new Bar).x
+                                  ^
+</pre>
+<p> クラス Foo の中でクラス Bar を定義しています。この Bar が内部クラスになります。内部クラスは外側のクラス (Foo) の中で使用するのであれば、通常のクラスとほとんど同じですが、Java とは違って Foo から Bar の private なフィールド変数にアクセスすることはできません。
+</p>
+
+<p> 逆に、クラス Bar からクラス Foo の private なフィールド変数にはアクセスすることができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; class Foo {
+     | private val x = 1
+     | class Bar {
+     | val y = 10
+     | val z = x
+     | }
+     | }
+defined class Foo
+
+scala&gt; val a = new Foo
+a: Foo = Foo@1993c65
+
+scala&gt; a.x
+&lt;console&gt;:10: error: value x is not a member of Foo
+              a.x
+                ^
+
+scala&gt; val b = new a.Bar
+b: a.Bar = Foo$Bar@a85c4
+
+scala&gt; b.y
+res0: Int = 10
+
+scala&gt; b.z
+res1: Int = 1
+</pre>
+<p> Foo のフィールド変数 x は private ですが、内部クラス Bar では x の値を参照することができます。Bar は Foo の中で定義されているので、Foo の private な変数やメソッドにアクセスできるのは当然のことといえます。
+</p>
+<p> Foo の外側から Bar のインスタンスを生成する場合、まず Foo のインスタンスを生成し、それを使って Bar のインスタンスを生成します。上の例では、Foo のインスタンスを生成して、変数 a にセットします。次に、new a.Bar でインスタンス a の内部クラス Bar を生成します。
+</p>
+<p> Scala の場合、new (new Foo).Bar で内部クラス Bar のインスタンスを生成することはできません。Foo のインスタンスは変数にセットして、その変数を使って Bar のインスタンスを生成します。このとき、Bar のインスタンスの型は変数名を使って a.Bar と表されます。
+</p>
+<p> Foo のインスタンスを変数 c にセットして、Bar のインスタンスを生成すると、次のようになります。
+</p>
+<pre>
+scala&gt; val c = new Foo
+c: Foo = Foo@1b365ed
+
+scala&gt; val d = new c.Bar
+d: c.Bar = Foo$Bar@22cb6a
+
+scala&gt; var b1: a.Bar = b
+b1: a.Bar = Foo$Bar@a85c4
+
+scala&gt; var b1: a.Bar = d
+&lt;console&gt;:11: error: type mismatch;
+ found   : c.Bar
+ required: a.Bar
+       var b1: a.Bar = d
+                       ^
+</pre>
+<p> 同じ内部クラスから作成されたインスタンスですが、Scala では型が異なることに注意してください。これを「パス依存型 (path-dependent types) 」と呼びます。したがって、型を b.Bar と宣言した変数 b1 に変数 b のインスタンスを代入することはできますが、変数 d のインスタンスを代入することはできません。
+</p>
+<p> パス依存型ではなく同じ型として扱いたい場合は、"外側のクラス名#内部クラス名" にキャストしてください。
+</p>
+<p> 簡単な例を示します。
+</p>
+<pre>
+scala&gt; class Foo {
+     | class Bar
+     | }
+defined class Foo
+
+scala&gt; val a = new Foo
+a: Foo = Foo@b67364
+
+scala&gt; val b = new Foo
+b: Foo = Foo@d9cf
+
+scala&gt; val c = new a.Bar
+c: a.Bar = Foo$Bar@16745d6
+
+scala&gt; val d = new b.Bar
+d: b.Bar = Foo$Bar@5290e5
+
+scala&gt; var e: Foo#Bar = c
+e: Foo#Bar = Foo$Bar@16745d6
+
+scala&gt; var e: Foo#Bar = d
+e: Foo#Bar = Foo$Bar@5290e5
+</pre>
+<p> 変数 e の型を Foo#Bar と宣言すれば、a.Bar のインスタンス c でも b.Bar のインスタンス d でも代入することができます。
+</p>
+
+<h4>●無名クラス</h4>
+<p> Scala は Java と同様に、クラスが定義されていなくてもインスタンスを生成することができます。生成されたインスタンスが属するクラスを「無名クラス」とか「匿名クラス」といいます。無名クラスの構文を示します。
+</p>
+<pre class="item">
+new { ... }
+</pre>
+<p> { } の中はクラスと同様にフィールド変数やメソッドを定義することができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; new { }
+res0: AnyRef = $anon$1@1f3bdbd
+
+scala&gt; val a = new {val x = 1; def getX():Int = x}
+a: AnyRef{val x: Int; def getX(): Int} = $anon$1@3793c7
+
+scala&gt; val b: AnyRef{ val x:Int; def getX(): Int} = a
+b: AnyRef{val x: Int; def getX(): Int} = $anon$1@3793c7
+
+scala&gt; a.x
+warning: there were 1 feature warning(s); re-run with -feature for details
+res1: Int = 1
+
+scala&gt; a.getX
+warning: there were 1 feature warning(s); re-run with -feature for details
+res2: Int = 1
+</pre>
+<p> 無名クラスはブロック { } の中でクラスを定義し、その場でインスタンスを生成します。ただし、クラス名が無いのでコンストラクタを定義することはできません。ご注意ください。無名クラスの型は AnyRef{型1; 型2; ... } で表されます。{ } の型は定義されているフィールド変数やメソッドの型になります。warning は scala.language.reflectiveCalls を import すると抑制することができます。
+</p>
+
+<h4>●抽象クラスとトレイトからインスタンスを生成する</h4>
+<p> 無名クラスを使うと、抽象クラスまたはトレイトからインスタンスを直接生成することができます。構文を次に示します。
+</p>
+<pre class="item">
+new 抽象クラス名 [with トレイト] { ... }
+new トレイト名 [with トレイト ] { ... } 
+</pre>
+<p> 無名クラスでも "with トレイト" でトレイトをいくつでも Mix-in することができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; abstract class Foo { def getX(): Int }
+defined class Foo
+
+scala&gt; val a = new Foo { def getX(): Int = 10 }
+a: Foo = $anon$1@1284218
+
+scala&gt; a.getX
+res0: Int = 10
+
+scala&gt; val b = new Foo { val x = 10; def getX(): Int = x }
+d: Foo{val x: Int} = $anon$1@26bff1
+
+scala&gt; b.getX
+res1: Int = 10
+
+scala&gt; b.x
+res2: Int = 10
+
+scala&gt; trait Bar { def getY(): Int }
+defined trait Bar
+
+scala&gt; val c = new Bar { def getY(): Int = 20 }
+c: Bar = $anon$1@57aebb
+
+scala&gt; c.getY
+res3: Int = 20
+
+scala&gt; val d = new Foo with Bar { def getX():Int = 1; def getY:Int = 2 }
+d: Foo with Bar = $anon$1@48362c
+
+scala&gt; d.getX
+res4: Int = 1
+
+scala&gt; d.getY
+res5: Int = 2
+
+scala&gt; val e = new Foo with Bar { val x = 1; val y = 2; def getX():Int = x; def getY:Int = y }
+e: Foo with Bar{val x: Int; val y: Int} = $anon$1@35172e
+
+scala&gt; e.x
+res6: Int = 1
+
+scala&gt; e.getX
+res7: Int = 1
+
+scala&gt; e.y
+res8: Int = 2
+
+scala&gt; e.getY
+res9: Int = 2
+</pre>
+<p> Foo は抽象クラスで、仮想メソッド getX があります。Foo のインスタンスを無名クラスで生成する場合、{ } の中で仮想メソッドの実体を定義します。これで Foo のインスタンスを生成して、メソッド getX を呼び出すことができます。また、無名クラスの中でフィールド変数 x を定義して、getX でその値を返すこともできます。この場合、無名クラスの型は Foo{val x: Int} になります。
+</p>
+
+<p> Bar はトレイトで、仮想メソッド getY があります。Bar のインスタンスを生成する場合も、{ } の中で getY の実体を定義します。Bar はトレイトなので、Foo に Mix-in することができます。この場合、getX と getY の実体を定義しないといけません。生成されるインスタンスの型は Foo with Bar になります。フィールド変数 x, y を定義している場合、型は Foo with Bar{val x: Int, val y: Int} になります。
+</p>
+
+<h4>●イテレータ</h4>
+<p> 「イテレータ (iterator) 」はコレクションの要素を順番にアクセスするための機能です。日本語では「反復子」と呼ばれることもあります。Scala のイテレータはトレイト (Iterator) として定義されていて、各々のコレクションには Iterator に変換するメソッド iterator が用意されています。ちなみに、for 式を使用したい場合はメソッド foreach を実装してください。イテレータだけを実装しても for 式は動作しません。ご注意くださいませ。
+</p>
+<p> Iterator は次に示す抽象メソッドを持つトレイトです。
+</p>
+<pre class="list">
+リスト : Iterator トレイト
+
+trait Iterator[+A] {
+    def hasNext: Boolean
+    def next: A
+} 
+</pre>
+<p> Iterator のメソッド hasNext はコレクションに次の要素があるとき真を返し、無ければ false を返します。メソッド next はコレクションから次の要素を取り出して返します。
+</p>
+
+<p> それでは簡単な例として、奇数列を生成するイテレータを作ってみましょう。次の例を見てください。
+</p>
+<pre>
+scala&gt; val iter = new Iterator[Int] {
+     | private var i = -1
+     | def hasNext: Boolean = true
+     | def next: Int = {i += 2; i}
+     | }
+iter: Iterator[Int] = non-empty iterator
+
+scala&gt; iter.hasNext
+res0: Boolean = true
+
+scala&gt; iter.next
+res1: Int = 1
+
+scala&gt; iter.next
+res2: Int = 3
+
+scala&gt; iter.next
+res3: Int = 5
+
+scala&gt; iter.next
+res4: Int = 7
+
+scala&gt; iter.next
+res5: Int = 9
+</pre>
+<p> Int を返すので、型は Iterator[Int] になります。private なフィールド変数 i を -1 に初期化します。hasNext は無条件に true を返し、next は i に 2 を加算して、その値を返します。あとは、iter.next を呼び出すたびに、1, 3, 5, ... と奇数列が生成されていきます。とても簡単ですね。
+</p>
+
+<h4>●双方向リストの改良</h4>
+<p> それでは入れ子クラスを用いて双方向リストのプログラムを改良してみましょう。最初にクラス Cell と ItemCell を修正します。Cell と ItemCell は双方向リストを構成する部品なので、他のクラスから利用されることはありません。このような場合、Cell と ItemCell をクラス DList[A] の中で定義することができます。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 双方向リスト
+
+package dlist
+
+class DList[A] {
+  // セル (内部クラス)
+  private class Cell(var prev: Cell = null, var next: Cell = null)
+  private class ItemCell(var item: A) extends Cell
+
+  private val head: Cell = new Cell()
+  head.prev = head
+  head.next = head
+  //
+  // メソッドの定義 (省略)
+  // 
+}
+</pre>
+<p> Cell と ItemCell は private なクラスとして宣言します。内部クラスから DList の型パラメータ A を参照できるので、多相クラスにする必要はありません。あとは、メソッドの型で Cell[A] と ItemCell[A] を Cell と ItemCell に書き換えるだけです。
+</p>
+
+<p> 次はイテレータを返すメソッド iterator を作ります。
+</p>
+
+<pre class="list">
+リスト : 双方向リストのイテレータ
+
+  def iterator(): Iterator[A] =
+    new Iterator[A] {
+      private var cp = head.next
+      def hasNext(): Boolean = cp != head
+      def next(): A = 
+        if (cp != head) {
+          cp match {
+            case that: ItemCell =&gt; {cp = cp.next; that.item}
+          }
+        } else throw new java.util.NoSuchElementException
+    }
+</pre>
+
+<p> new Iterator[A] で Iterator のインスタンスを生成して返します。フィールド変数 cp は先頭のセル head.next で初期化します。無名クラスは内部クラスと同様に、外側のクラスのインスタンス変数にアクセスすることができます。メソッド hasNext は cp が head でなければ真を返します。メソッド next はセル cp の要素 item を返します。そして、cp を次のセルへ移動します。cp が head と等しいときはすべての要素を出力したので、エラーを送出します。
+</p>
+<h4>●実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+scala&gt; val a = new DList[Int]
+a: dlist.DList[Int] = DList()
+
+scala&gt; for (i &lt;- 1 to 4) a.insert(-1, i)
+
+scala&gt; a
+res1: dlist.DList[Int] = DList(1, 2, 3, 4)
+
+scala&gt; val iter = a.iterator
+iter: Iterator[Int] = non-empty iterator
+
+scala&gt; iter.next
+res2: Int = 1
+
+scala&gt; iter.next
+res3: Int = 2
+
+scala&gt; iter.next
+res4: Int = 3
+
+scala&gt; iter.next
+res5: Int = 4
+
+scala&gt; iter.hasNext
+res6: Boolean = false
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+//
+// DList.scala : doubly-linked list
+//
+//               Copyright (C) 2014 Makoto Hiroi
+//
+package dlist
+
+//
+// mutable な双方向リスト
+//
+class DList[A] {
+  // Cell (内部クラス)
+  private class Cell(var prev: Cell = null, var next: Cell = null)
+  private class ItemCell(var item: A) extends Cell
+
+  private val head: Cell = new Cell()
+  head.prev = head
+  head.next = head
+
+  private def _nth(n: Int): Cell = {
+    val m = if (n &gt;= 0) n else n.abs - 1
+    var cp = if (n &gt;= 0) head.next else head.prev
+    var i = 0
+    while (cp != head) {
+      if (i == m) return cp
+      cp = if (n &gt;= 0) cp.next else cp.prev
+      i += 1
+    }
+    cp
+  }
+
+  def apply(n: Int): A =
+    _nth(n) match {
+      case that: ItemCell =&gt; that.item
+      case _ =&gt; throw new Exception("DList.apply: out of range")
+    }
+
+  def update(n: Int, x: A): Unit =
+    _nth(n) match {
+      case that: ItemCell =&gt; that.item = x
+      case _ =&gt; throw new Exception("DList.update: out of range")
+    }
+
+  def delete(n: Int): A =
+    _nth(n) match {
+      case that: ItemCell =&gt; {
+        that.prev.next = that.next
+        that.next.prev = that.prev
+        that.item
+      }
+      case _ =&gt; throw new Exception("DList.delete: out of range")
+    }
+
+  private def insertCell(p: Cell, q: Cell, x: A): Unit = {
+    val cp = new ItemCell(x)
+    cp.prev = p
+    cp.next = q
+    p.next = cp
+    q.prev = cp
+  }
+
+  def insert(n: Int, x: A): Unit =
+    if (n == 0) insertCell(head, head.next, x)
+    else if (n == -1) insertCell(head.prev, head, x)
+    else _nth(if (n &gt;= 0) n - 1 else n + 1) match {
+           case that: ItemCell =&gt;
+             if (n &gt;= 0) insertCell(that, that.next, x)
+             else insertCell(that.prev, that, x)
+           case _ =&gt; throw new Exception("DList.insert: out of range")
+         }
+
+  def length(): Int = {
+    var n = 0
+    var cp = head.next
+    while (cp != head) {
+      n += 1
+      cp = cp.next
+    }
+    n
+  }
+
+  def mapInto(f: A =&gt; A) {
+    var cp = head.next
+    while (cp != head) {
+      cp match {
+        case that: ItemCell =&gt; that.item = f(that.item)
+      }
+      cp = cp.next
+    }
+  }
+
+  def positionIf(f: A =&gt; Boolean): Int = {
+    var cp = head.next
+    var i = 0
+    while (cp != head) {
+      cp match {
+        case that: ItemCell =&gt; if (f(that.item)) return i
+      }
+      i += 1
+      cp = cp.next
+    }
+    -1
+  }
+
+  def deleteIf(f: A =&gt; Boolean): Int = {
+    var cp = head.next
+    var c = 0
+    while (cp != head) {
+      cp match {
+        case that: ItemCell =&gt;
+          if (f(that.item)) {
+            that.prev.next = that.next
+            that.next.prev = that.prev
+            c += 1
+          }
+      }
+      cp = cp.next
+    }
+    c
+  }
+
+  def foldl[B](a: B, f: (B, A) =&gt; B): B = {
+    var cp = head.next
+    var acc = a
+    while (cp != head) {
+      cp match {
+        case that: ItemCell =&gt; acc = f(acc, that.item)
+      }
+      cp = cp.next
+    }
+    acc
+  }
+
+  def foldr[B](a: B, f: (A, B) =&gt; B): B = {
+    var cp = head.prev
+    var acc = a
+    while (cp != head) {
+      cp match {
+        case that: ItemCell =&gt; acc = f(that.item, acc)
+      }
+      cp = cp.prev
+    }
+    acc
+  }
+
+  def foreach(f: A =&gt; Unit) {
+    var cp = head.next
+    while (cp != head) {
+      cp match {
+        case that: ItemCell =&gt; f(that.item)
+      }
+      cp = cp.next
+    }
+  }
+
+  def isEmpty(): Boolean = head == head.next
+  def clear(): Unit = {
+    head.prev = head
+    head.next = head
+  }
+
+  def iterator(): Iterator[A] =
+    new Iterator[A] {
+      private var cp = head.next
+      def hasNext(): Boolean = cp != head
+      def next(): A = 
+        if (cp != head) {
+          cp match {
+            case that: ItemCell =&gt; {cp = cp.next; that.item}
+          }
+        } else throw new java.util.NoSuchElementException
+    }
+
+  override def toString: String = {
+    var s = "DList("
+    var cp = head.next
+    while (cp != head) {
+      cp match {
+        case that: ItemCell =&gt; 
+          if (cp.next == head) s += that.item else s += that.item + ", "
+        case _ =&gt; ()
+      }
+      cp = cp.next
+    }
+    s += ")"
+    s
+  }
+}
+
+//
+// mutable なスタック
+//
+class Stack[A] {
+  private val top = new DList[A]
+
+  def push(x: A): Unit = top.insert(0, x)
+
+  def pop(): A =
+    if (top.isEmpty) throw new Exception("Stack is Empty")
+    else top.delete(0)
+
+  def front(): A =
+    if (top.isEmpty) throw new Exception("Stack is Empty")
+    else top(0)
+
+  def length(): Int = top.length
+
+  def isEmpty(): Boolean = top.isEmpty
+
+  def clear(): Unit = top.clear
+}
+
+//
+// mutable なキュー
+//
+class Queue[A] {
+  private val q = new DList[A]
+
+  def enqueue(x: A): Unit = q.insert(-1, x)
+
+  def dequeue(): A = {
+    if (q.isEmpty) throw new Exception("Queue is Empty")
+    q.delete(0)
+  }
+
+  def peek(): A = {
+    if (q.isEmpty) throw new Exception("Queue is Empty")
+    q(0)
+  }
+
+  def isEmpty(): Boolean = q.isEmpty
+
+  def length(): Int = q.length
+
+  def clear(): Unit = q.clear
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b> Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="scala14.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala16.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

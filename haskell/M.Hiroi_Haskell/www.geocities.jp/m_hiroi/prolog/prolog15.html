@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Prolog プログラミング入門</title>
+  <meta name="description" content="Prolog,Prolog入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881780</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>お気楽 Prolog プログラミング入門</h2>
+<div class="small">
+[ <a href="prolog14.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog16.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap38">高階プログラミング</h3>
+<p> 関数型言語は、関数そのものを変数に代入したり、引数として関数に渡すことができます。また、値として関数を返すことも簡単にできます。関数を引数として受け取る関数を「汎関数 (functional)」とか「高階関数 (higher order function)」と呼びます。
+</p>
+<p> Prolog の場合、拙作のページ <a href="prolog04.html#chap17">集合述語</a> で説明しましたが、findall のようにゴール (述語) を引数に受け取る述語が用意されています。また、<a href="prolog03.html#chap14">カットと否定</a> で説明した「メタ変数機構」を用いれば、引数に渡された述語を簡単に実行することができます。このほかにも、Prolog には述語を引数に受け取り、それを実行するための述語が用意されています。これらの述語は「メタ述語」とか「高階述語」と呼ばれることがあります。今回は Prolog で高階プログラミングに挑戦してみましょう。
+</p>
+<h4>●マッピング</h4>
+<p> 簡単な例題として、リストの要素どうしを足し算して、その結果をリストに格納する述語を作ってみましょう。次の例を見てください。
+</p>
+<pre class="fig">
+  [ 1,  2,  3,  4,  5]
++ [10, 20, 30, 40, 50]
+-----------------------
+  [11, 22, 33, 44, 55]
+</pre>
+
+<p> これを再帰定義でプログラミングすると、次のようになるでしょう。
+</p>
+<pre class="list">
+リスト : リストの要素を足し算する
+
+add_element([], [], []).
+add_element([X | Xs], [Y | Ys], [Z | Zs]) :- Z is X + Y, add_element(Xs, Ys, Zs).
+</pre>
+
+<p> 関数名は add_element としました。SWI-Prolog の場合、この処理は述語 maplist だけで実現することができます。まずは、実行例を見てください。
+</p>
+<pre>
+?- add_element([1, 2, 3, 4, 5], [10, 11, 12, 13, 14], X).
+X = [11, 13, 15, 17, 19].
+
+?- maplist(plus, [1, 2, 3, 4, 5], [10, 11, 12, 13, 14], X).
+X = [11, 13, 15, 17, 19].
+</pre>
+<p> plus は SWI-Prolog に用意されている述語です。簡単な実行例を示します。
+</p>
+<pre>
+?- plus(1, 2, A).
+A = 3
+
+?- plus(1, A, 3).
+A = 2
+
+?- plus(A, 2, 3).
+A = 1
+</pre>
+<p> 算術演算子と違って plus(X, Y, Z) は X + Y = Z を計算するだけではなく、Z - X = Y や Z - Y = X でも求めることができます。
+</p>
+<p> このように、Prolog は述語を引数として他の述語に渡すことができます。SWI-Prolog に用意されている述語 maplist は、渡された述語をリストの各要素に適用し、その結果をリストに格納して返します。一般に、このような操作を「マッピング (写像)」といいます。もし、各要素に対して乗算を行いたい場合は、乗算を行う述語を定義して、それを maplist に渡せばいいのです。
+</p>
+<pre>
+?- assert(mul(N, M, A) :- A is N * M).
+true.
+
+?- mul(10, 20, A).
+A = 200.
+
+?- maplist(mul, [1, 2, 3, 4, 5], [10, 11, 12, 13, 14], X).
+X = [10, 22, 36, 52, 70].
+</pre>
+
+<p> リストの要素を 2 乗したい場合は、数を 2 乗する述語 square を定義して、それを maplist に渡します。
+</p>
+<pre>
+?- assert(square(X, A) :- A is X * X).
+true
+
+?- maplist(square, [1, 2, 3, 4, 5], X).
+X = [1, 4, 9, 16, 25].
+</pre>
+<p> このように、maplist を使ってデータを簡単に変換することができますが、maplist の使い方はそれだけでありません。リストからデータを取り出すことも簡単にできます。簡単な例を示しましょう。
+</p>
+<pre>
+?- assert(head([X | _], X)).
+true.
+
+?- maplist(head, [[a, 1], [b, 2], [c, 3]], X).
+X = [a, b, c].
+
+?- assert(tail([_ | Xs], Xs)).
+true.
+
+?- maplist(tail, [[a, 1], [b, 2], [c, 3]], X).
+X = [[1], [2], [3]].
+</pre>
+<p> 述語 head はリストの先頭要素を取り出します。tail はリストの先頭要素を取り除きます。これらの述語は Lisp / Scheme の car, cdr と同じです。maplist に head を渡すと、各リストの先頭要素を格納したリストを求めることができます。maplist に tail を渡すと、各リストの先頭要素を取り除くことができます。
+</p>
+<h4>●転置行列</h4>
+<p> それでは簡単な例題として、リストのリストを「行列 (matrix)」と考えて、行と列を入れ替える述語 transpose/2 を定義してみましょう。次の図を見てください。
+</p>
+<pre class="fig">
+[[1,2,3],               [[1,4,7],
+ [4,5,6], = 転置行列 =&gt;  [2,5,8],
+ [7,8,9]]                [3,6,9]]
+</pre>
+<p> このように、行列の行と列を入れ替えた行列を「転置行列 (transposed matrix)」といいます。SWI-Prolog のライブラリ CLPFD には転置行列を求める述語 transpose が用意されていますが、maplist を使うと私たちでも簡単に定義することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 転置行列
+
+head([X | _], X).
+tail([_ | Xs], Xs).
+
+transpose(Xs, []) :- member([], Xs), !.
+transpose(Xs, [Y | Ys]) :-
+    maplist(head, Xs, Y),
+    maplist(tail, Xs, Xs1),
+    transpose(Xs1, Ys).
+</pre>
+<p> transpose の最初の節が再帰呼び出しの停止条件で、リストの要素が空リストになったか member でチェックします。次の節で maplist に head を渡して、各リストの先頭要素を格納したリスト、つまり列を表すリスト Y を作ります。そして、maplist に tail を渡して、先頭要素を取り除いたリストを格納したリスト Xs1 を作ります。この Xs1 に transpose を再帰呼び出しすれば、次の列の要素を格納したリストを作ることができます。
+</p>
+<p> 簡単な実行例を示します。
+<pre>
+?- transpose([[1,2],[3,4]], Xs).
+Xs = [[1, 3], [2, 4]].
+
+?- transpose([[1,2],[3,4],[5,6]], Xs).
+Xs = [[1, 3, 5], [2, 4, 6]].
+
+?- transpose([[1,2,3],[4,5,6],[7,8,9]], Xs).
+Xs = [[1, 4, 7], [2, 5, 8], [3, 6, 9]].
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●複合項を渡す</h4>
+<p> 高階関数には述語名だけではなく複合項を渡すこともできます。たとえば plus/3 を渡す場合、maplist/4 で二つのリストの要素を加算することができますが、plus(2) を渡すと maplist/3 でリストの要素に 2 を加算することができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+?- maplist(plus, [1,2,3], [4,5,6], Xs).
+Xs = [5, 7, 9].
+
+?- maplist(plus(2), [1,2,3], Xs).
+Xs = [3, 4, 5].
+</pre>
+<p> わざわざ述語 plus2(X, Y) :- Y is X + 2. を定義しなくてもよいので便利です。このほかに、SWI-Prolog の maplist には引数が 2 つの述語 maplist/2 があります。
+</p>
+<pre class="item">
+maplist(Pred, List)
+</pre>
+<p> maplist/2 は List の要素に述語 Pred を適用し、すべての要素が成功すれば maplist/2 も成功します。簡単な例を示しましょう。
+</p>
+<pre>
+?- maplist(=:=(2), [2,2,2,2,2]).
+true.
+
+?- maplist(=:=(2), [2,2,2,2,1]).
+false.
+
+?- maplist(=\=(2), [1,3,5,7,9]).
+true.
+
+?- maplist(=\=(2), [1,2,3,5,7,9]).
+false.
+</pre>
+<h4>●フィルター</h4>
+<p> フィルター (filter) はリストの要素に述語を適用し、述語が成功する要素をリストに格納して返します。SWI-Prolog には include/3 と exclude/3 という述語が用意されています。
+</p>
+<pre class="item">
+include(Pred, Xs, Ys)
+exclude(Pred, Xs, Ys)
+</pre>
+<p> include/3 はリスト Xs の要素を pred に渡し、それが成功する要素をリスト Ys に格納します。逆に exclude/3 は pred が失敗する要素を Ys に格納します。簡単な使用例を示します。
+</p>
+<pre>
+?- include(integer, [1,a,2,b,3,c], X).
+X = [1, 2, 3].
+
+?- include(=\=(2), [1,2,3,2,4,2,5,2,6], X).
+X = [1, 3, 4, 5, 6].
+
+?- exclude(integer, [1,a,2,b,3,c], X).
+X = [a, b, c].
+
+?- exclude(=\=(2), [1,2,3,2,4,2,5,2,6], X).
+X = [2, 2, 2, 2].
+
+?- exclude(=:=(2), [1,2,3,2,4,2,5,2,6], X).
+X = [1, 3, 4, 5, 6].
+</pre>
+<h4>●畳み込み</h4>
+<p> 2 つの引数を取る関数 f とリストを引数に受け取る関数 reduce を考えます。reduce はリストの各要素に対して関数 f を下図のように適用します。
+</p>
+<pre class="fig">
+(1) [a1, a2, a3, a4, a5]
+    =&gt; f( f( f( f( a1, a2 ), a3 ), a4 ), a5 )
+
+(2) [a1, a2, a3, a4, a5]
+    =&gt; f( a1, f( a2, f( a3, f( a4, a5 ) ) ) )
+
+        図 : 関数 reduce の動作
+</pre>
+
+<p> 関数 f を適用する順番で 2 通りの方法があります。上図 (1) はリストの先頭から f を適用し、上図 (2) はリストの後ろから f を適用します。たとえば、関数 f が単純な加算関数とすると、reduce の結果はどちらの場合もリストの要素の和になります。
+</p>
+<pre class="item">
+f(x, y) = x + y の場合
+reduce =&gt; a1 + a2 + a3 + a4 + a5
+</pre>
+
+<p> このように、reduce はリストのすべての要素を関数 f を用いて結合します。このような操作を「縮約」とか「畳み込み」といいます。また、reduce の引数に初期値 g を指定することがあります。この場合、reduce は下図に示す動作になります。
+</p>
+<pre class="fig">
+(1) [a1, a2, a3, a4, a5]
+    =&gt; f( f( f( f( f( g, a1 ), a2 ), a3 ), a4 ), a5 )
+
+(2) [a1, a2, a3, a4, a5]
+    =&gt; f( a1, f( a2, f( a3, f( a4, f( a5, g ) ) ) ) )
+
+        図 : reduce() の動作 (2)
+</pre>
+<p> SWI-Prolog には畳み込みを行う述語 foldl/4 が用意されています。
+</p>
+<pre class="item">
+foldl(Pred, Xs, A, V).
+</pre>
+<p> 引数 A が初期値で、引数 V に結果が格納されます。リスト Xs の要素は先頭から (左側から) 順番に取り出されて Pred に渡されます。なお、foldl に渡す述語 Pred は第 1 引数にリストの要素、第 2 引数に初期値 (または累積変数) が渡され、第 3 引数に結果が格納されます。上図 (1) の関数 f と引数が逆になっていることに注意してください。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+?- foldl(plus, [1,2,3,4,5], 0, X).
+X = 15.
+
+?- foldl(mul, [1,2,3,4,5], 1, X).
+X = 120.
+
+?- assert(lcm(X, Y, Z) :- Z is X * Y / gcd(X, Y)).
+true.
+
+?- lcm(3, 5, X).
+X = 15.
+
+?- lcm(10, 20, X).
+X = 20.
+
+?- foldl(lcm, [2,3,4,5,6,7,8,9,10], 1, X).
+X = 2520.
+
+?- foldl(lcm, [2,3,5,7,11,13], 1, X).
+X = 30030.
+</pre>
+<p> gcd は最大公約数を求める関数で、lcm は最小公倍数を求める述語です。foldl に lcm を渡せば、リストの要素の最小公倍数を求めることができます。
+</p>
+<p> 高階関数 scanl/4 は fold/4 と同じ動作をしますが、計算途中の累積値をリストに格納して返すところが異なります。
+</p>
+<pre class="item">
+scanl(Pred, Xs, A, Ls).
+</pre>
+<p> リスト Ls に累積値が格納されます。簡単な使用例を示します。
+</p>
+<pre>
+?- scanl(plus, [1,2,3,4,5], 0, X).
+X = [0, 1, 3, 6, 10, 15].
+
+?- scanl(mul, [1,2,3,4,5], 1, X).
+X = [1, 1, 2, 6, 24, 120].
+
+?- scanl(lcm, [2,3,5,7,11,13], 1, X).
+X = [1, 2, 6, 30, 210, 2310, 30030].
+</pre>
+<p> このほかに、SWI-Prolog には複数のリストを受け取る foldl や scanl が用意されてます。
+</p>
+<p> ところで、foldl と述語 Pred/3 を組み合わせると、いろいろな述語を実現することができます。たとえば、length と reverse の例を示します。
+</p>
+<pre>
+?- assert(inc(_, A, N) :- N is A + 1).
+true.
+
+?- foldl(inc, [a,b,c], 0, N).
+N = 3.
+
+?- foldl(inc, [a,b,c,d,e,f], 0, N).
+N = 6.
+
+?- assert(cons(X, Y, [X | Y])).
+true.
+
+?- cons(1, [], A).
+A = [1].
+
+?- foldl(cons, [1,2,3,4,5], [], X).
+X = [5, 4, 3, 2, 1].
+</pre>
+<p> 
+</p>
+<p> length の場合は、初期値を 0 にして第 1 引数の値を +1 する述語 inc を渡すことで実現できます。述語 cons は Lisp / Scheme の関数 cons と同じです。cons を foldl に渡すと、reverse と同じくリストを反転させることができます。
+</p>
+
+<h4>●リストの分割</h4>
+<p> 高階関数 partition は述語 Pred の結果でリストを分割します。
+</p>
+<pre class="item">
+partition(Pred, Xs, As, Bs)
+</pre>
+<p> partition は述語 Pred にリスト Xs の要素を渡し、成功した場合は要素をリスト As に、失敗した場合はリスト Bs に格納します。簡単な使用例を示しましょう。
+</p>
+<pre>
+?- partition(integer, [1, a, 2, b, 3, c], A, B).
+A = [1, 2, 3],
+B = [a, b, c].
+
+?- partition(integer, [1, 2, 3, 4, 5, 6], A, B).
+A = [1, 2, 3, 4, 5, 6],
+B = [].
+
+?- partition(integer, [1.0, 2.0, 3.0, 4.0, 5.0, 6.0], A, B).
+A = [],
+B = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].
+</pre>
+<p> 述語 integer を partition に渡せば、リストを整数とそれ以外の要素に分けることができます。
+</p>
+
+<h4>●call と =..</h4>
+<p> Prolog の場合、maplist のような高階述語は基本的な高階述語を使って簡単に定義することができます。述語 call は引数 Goal を呼び出し、Goal が成功すれば true になり、失敗すれば false になります。
+</p>
+<pre class="item">
+call(Goal).
+</pre>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre>
+?- call(plus(1, 2, A)).
+A = 3.
+
+?- call(plus(1, 2, 4)).
+false.
+
+?- call(A is 1 + 2).
+A = 3.
+</pre>
+<p> SWI-Prolog には call/1 だけではなく、複数の引数を受け付ける call がサポートされています。
+</p>
+<pre class="item">
+call(Goal, Arg1, ...)
+</pre>
+<p> この場合、call は Goal と引数 Arg1, ... から新しい複合項を生成して、それをゴールとして実行します。簡単な使用例を示しましょう。
+</p>
+<pre>
+?- call(plus, 1, 2, A).
+A = 3.
+
+?- call(plus(1), 2, A).
+A = 3.
+
+?- call(plus, 1, B, 10).
+B = 9.
+
+?- call(plus, C, 2, 5).
+C = 3.
+</pre>
+<p> 最初の例は、ゴール plus(1, 2, A) が生成され、それが実行されます。2 番目の例のように、第 1 引数に複合項を指定することも可能です。3 番目と 4 番目の例では、plus(1, B, 10) と plus(C, 2, 5) が実行されます。
+</p>
+<p> call/1 だけしかない処理系でも、演算子 =.. を使って同様のことを行わせることができます。=.. はユニブ (univ) といい、複合項をリストに分解したり、逆にリストから複合項を生成することができます。複合項は左辺に、リストは右辺に指定します。簡単な使用例を示しましょう。
+</p>
+<pre>
+?- G =.. [plus, 1, 2, X].
+G = plus(1, 2, X).
+
+?- plus(1, 2, X) =.. G.
+G = [plus, 1, 2, X].
+
+?- G =.. [plus, 1, 2, X], call(G).
+G = plus(1, 2, 3),
+X = 3.
+
+?- G =.. [plus, 1, 2, X], G.
+G = plus(1, 2, 3),
+X = 3.
+</pre>
+<p> =.. で複合項を組み立て、それを call に渡して実行することができます。このとき、リストの先頭要素が複合項だとエラーになります。アトム (atom) を指定してください。また、最後の例のようにメタ変数機構がある処理系では、call を使わなくても =.. で生成した複合項を実行することができます。
+</p>
+<p> さて、これだけでは call が何の役に立つのかわかりませんね。ところが call を使うことで、述語を引数として受け取る高階述語を定義することができるのです。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 高階述語の定義
+
+foo(P, X, Y, A) :- call(P, X, Y, A).
+bar(P, X, Y, A) :- G =.. [P, X, Y, A], call(G).
+</pre>
+
+<p> foo, bar ともに引数 P, X, Y, A から複合項を組み立て、call でそれを実行します。実際に試してみましょう。
+</p>
+<pre>
+?- foo(plus, 1, 2, A).
+A = 3.
+
+?- bar(plus, 1, A, 3).
+A = 2
+</pre>
+<p> とても簡単な例ですが、このように高階述語は call を使って簡単に作ることができます。
+</p>
+<h4>●apply</h4>
+<p> もうひとつ便利な高階述語を紹介しましょう。SWI-Prolog には apply という高階述語が用意されています。
+</p>
+<pre class="item">
+apply(Goal, List).
+</pre>
+<p> apply は第 2 引数がリストになるだけで、あとは call と同じです。Goal と List から複合項を生成し、それを実行します。簡単な使用例を示しましょう。
+</p>
+<pre>
+?- apply(plus, [1, 2, X]).
+X = 3.
+
+?- apply(plus(1), [2, X]).
+X = 3
+</pre>
+<p> apply は =.. と call/1 で実現することができます。基本的な定義は次のようになります。
+</p>
+<pre class="list">
+リスト : apply の定義
+
+apply(P, Ls) :- G =.. [P | Ls], call(G).
+</pre>
+<p> ただし、第 1 引数に与えることができるのは述語名 (アトム) だけです。plus(1) のような複合項を許す場合は、次のように定義します。
+</p>
+<pre class="list">
+リスト : apply の定義 (2)
+
+apply(P, Ls) :- P =.. Xs, append(Xs, Ls, Ys), G =.. Ys, call(G).
+</pre>
+<p> =.. で引数 P をリスト Xs に変換し、append で Xs と Ls を連結します。そのリスト Ls を =.. で複合項 G に変換してから call(G) で実行します。なお、これはナイーブな実装方法で、効率はあまりよくありません。SWI-Prolog はもっと効率的な方法で実装しているのかもしれません。
+</p>
+<h4>●リスト操作用の高階述語</h4>
+<p> 関数型言語の場合、リスト操作関数の多くは高階関数として定義されています。Prolog でも call や apply を使って高階述語を定義することは簡単です。ここではマッピング、フィルター、畳み込み (縮約) について説明します。
+</p>
+<h4>●マッピング</h4>
+<p> まず最初に、マッピングを行う述語を作りましょう。SWI-Prolog には maplist がありますが、私たちユーザーでも簡単に作ることができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : マッピング
+
+map1(_, [], []).
+map1(P, [X | Xs], [Y | Ys]) :- call(P, X, Y), map1(P, Xs, Ys).
+
+map2(_, [], [], []).
+map2(P, [X | Xs], [Y | Ys], [Z | Zs]) :-
+    call(P, X, Y, Z), map2(P, Xs, Ys, Zs).
+</pre>
+<p> map1 は述語とリストを引数に受け取り、map2 は述語と 2 つのリストを引数に受け取ります。プログラムはどちらも簡単で、リストから先頭要素を取り出し、それを述語 P といっしょに call に渡して実行します。call の最後の引数 (変数) に述語 P の結果が格納されるので、それをリストに追加すればいいわけです。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+?- map1(plus(1), [1, 2, 3, 4, 5], X).
+X = [2, 3, 4, 5, 6] ;
+false.
+
+?- map2(plus, [1, 2, 3, 4, 5], [6, 7, 8, 9, 10], X).
+X = [7, 9, 11, 13, 15] ;
+false.
+</pre>
+<p> ところで、基本的に Prolog の引数は可変個ではないので、マッピングで複数個のリストに対応するには、リストの中に複数のリストを入れて渡すことになります。複数のリストのうち、ひとつでも空リストになった時点でマッピングを終了する、つまり一番短いリストに合わせてマッピングを行うことにすると、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : マッピング (2)
+
+head([X | _], X).
+tail([_ | Xs], Xs).
+
+map(_, Xs, []) :- member([], Xs), !.
+map(P, Xs, [Y | Ys]) :-
+    map1(head, Xs, As),
+    append(As, [Y], As1),
+    apply(P, As1),
+    map1(tail, Xs, Xs1),
+    map(P, Xs1, Ys).
+</pre>
+
+<p> 述語 head はリストの先頭要素を取り出し、述語 tail はリストの先頭要素を取り除きます。Lisp の関数 car, cdr と同じ働きをします。述語 map の最初の規則で、リスト Xs の中に空リストがあるかチェックします。これが再帰定義の停止条件になります。これ以上バックトラックする必要がないので最後にカットを使っています。
+</p>
+<p> 2 番目の規則で、各リストの先頭要素を map1 と head で取り出し、それを述語 P といっしょに apply に渡して呼び出します。このとき、結果を受け取る変数 Y が必要になるので、append で As と [Y] を連結して新しいリスト As1 を作成します。これで apply(P, As1) を実行すれば、その結果が変数 Y の値になります。あとは map1 と tail で各リストの先頭要素を取り除き、そのリストに対して map を再帰呼び出しするだけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+?- map(plus, [[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]], X).
+X = [7, 9, 11, 13, 15] ;
+false.
+
+?- map(plus, [[1, 2, 3, 4, 5], [6, 7, 8, 9]], X).
+X = [7, 9, 11, 13] ;
+false.
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●フィルター</h4>
+<p> ここでは簡単な例題として、述語が成功する要素を削除する remove_if を作ってみましょう。名前は Common Lisp から拝借しました。
+</p>
+<pre class="list">
+リスト : 要素の削除
+
+remove_if(_, [], []).
+remove_if(P, [X | Xs], Ys) :- call(P, X), !, remove_if(P, Xs, Ys).
+remove_if(P, [X | Xs], [X | Ys]) :- remove_if(P, Xs, Ys).
+</pre>
+
+<p> マッピングと同様に remove_if も簡単です。call(P, X) が成功するならば X をリストに加えません。失敗したならば次の節が実行されて X をリストに加えます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre class="list">
+リスト : 偶数と奇数の判定
+
+even(X) :- X mod 2 =:= 0.
+odd(X) :- X mod 2 =\= 0.
+</pre>
+<pre>
+?- remove_if(odd, [1, 2, 3, 4, 5, 6], X).
+X = [2, 4, 6] ;
+false.
+
+?- remove_if(even, [1, 2, 3, 4, 5, 6], X).
+X = [1, 3, 5] ;
+false.
+</pre>
+
+<p> もちろん、フィルターも簡単に定義することができます。remove_if とは逆に、述語が成功したとき要素をリストに追加し、失敗したときはリストに加えません。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : フィルター
+
+filter(_, [], []).
+filter(P, [X | Xs], [X | Ys]) :- call(P, X), !, filter(P, Xs, Ys).
+filter(P, [_ | Xs], Ys) :- filter(P, Xs, Ys).
+</pre>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+?- filter(odd, [1, 2, 3, 4, 5, 6], X).
+X = [1, 3, 5] ;
+false.
+
+?- filter(even, [1, 2, 3, 4, 5, 6], X).
+X = [2, 4, 6] ;
+false
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●畳み込み</h4>
+<p> Prolog でも畳み込みは簡単に定義することができます。ここでは、リストの先頭 (左側) から畳み込みを行う述語 fold_left と、リストの末尾 (右側) から畳み込みを行う述語 fold_right を作ってみましょう。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 畳み込み
+
+fold_left(_, A, [], A).
+fold_left(F, A, [X | Xs], C) :-
+    call(F, A, X, B), fold_left(F, B, Xs, C).
+
+fold_right(_, A, [], A).
+fold_right(F, A, [X | Xs], C) :-
+    fold_right(F, A, Xs, B), call(F, X, B, C).
+</pre>
+
+<p> 第 1 引数 F が適用する述語、第 2 引数 A が初期値、第 3 引数がリストです。畳み込みの結果は第 4 引数に格納されます。最初の規則は再帰呼び出しの停止条件ですが、fold_left (fold_right) に空リストが与えられた場合にも対応します。この場合、畳み込みの値は初期値 A になります。次の規則でリストの要素を取り出して述語 F を呼び出します。
+</p>
+<p> たとえば、リストが [1, 2, 3] で A が 0 とします。最初は F(0, 1, B) が実行され、B が fold_left の第 2 引数に渡されます。次は F(A, 2, B) が実行されますが、これは関数形式で書けば F(F(0, 1), 2) と同じことです。そして、その結果が fold_left の第 2 引数になります。最後に F(A, 3) が実行されますが、これは F(F(F(0, 1), 2), 3) となり、畳み込みで説明した図 (1) と同じ動作になります。
+</p>
+<p> fold_left の場合、リストの要素が述語 F の第 2 引数になり、第 1 引数にはこれまでの処理結果が渡されます。これに対し、fold_right の場合は逆になり、関数 F の第 1 引数にリストの要素が渡されて、これまでの処理結果は第 2 引数に渡されます。これで畳み込みで説明した図 (2) と同じ動作になります。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+?- fold_left(plus, 0, [1, 2, 3, 4, 5], X).
+X = 15 ;
+false.
+
+?- fold_right(plus, 0, [1, 2, 3, 4, 5], X).
+X = 15 ;
+false.
+</pre>
+<p> 次に示す述語 cons と xcons を定義すると、リストのコピーや反転も簡単に作ることができます。
+</p>
+<pre class="list">
+リスト : リストの生成
+
+cons(X, Y, [X | Y]).
+xcons(X, Y, [Y | X).
+</pre>
+<pre>
+?- fold_right(cons, [], [1, 2, 3, 4, 5], A).
+A = [1, 2, 3, 4, 5] ;
+false.
+
+?- fold_left(xcons, [], [1, 2, 3, 4, 5], A).
+A = [5, 4, 3, 2, 1] ;
+false.
+</pre>
+<p> cons は X と Y を格納したリストを返します。xcons は X と Y を逆に格納して返します。fold_right に cons を適用するとリストをコピーする処理になり、fold_left に xcons を適用すると reverse と同じ動作になります。
+</p>
+<h4>●call/1 での実装</h4>
+<p> SWI-Prolog 以外の処理系でも call/1 を使ってリストを操作する高階述語を定義することができます。下記リストにプログラムを示します。なお、ここではプログラムを簡単にするため、高階述語に渡す述語は複合項ではなくアトムだけに制限しています。
+</p>
+<pre class="list">
+/*
+ * 高階述語
+ *
+ * Copyright (C) 2011 Makoto Hiroi
+ *
+ */
+head([X | _], X).
+tail([_ | Xs], Xs).
+cons(X, Y, [X | Y]).
+xcons(X, Y, [Y | X]).
+
+% マッピング
+map1(_, [], []).
+map1(P, [X | Xs], [Y | Ys]) :-
+    G =.. [P, X, Y], call(G), map1(P, Xs, Ys).
+
+map2(_, [], [], []).
+map2(P, [X | Xs], [Y | Ys], [Z | Zs]) :-
+    G =.. [P, X, Y, Z], call(G), map2(P, Xs, Ys, Zs).
+
+apply(P, Ls) :- G =.. [P | Ls], call(G).
+
+map(_, Xs, []) :- member([], Xs), !.
+map(P, Xs, [Y | Ys]) :-
+    map1(head, Xs, As),
+    append(As, [Y], As1),
+    apply(P, As1),
+    map1(tail, Xs, Xs1),
+    map(P, Xs1, Ys).
+
+% フィルター
+even(X) :- X mod 2 =:= 0.
+odd(X) :- X mod 2 =\= 0.
+
+filter(_, [], []).
+filter(P, [X | Xs], [X | Ys]) :- G =.. [P, X], call(G), !, filter(P, Xs, Ys).
+filter(P, [_ | Xs], Ys) :- filter(P, Xs, Ys).
+
+remove_if(_, [], []).
+remove_if(P, [X | Xs], Ys) :- G =.. [P, X], call(G), !, remove_if(P, Xs, Ys).
+remove_if(P, [X | Xs], [X | Ys]) :- remove_if(P, Xs, Ys).
+
+% 畳み込み
+fold_left(_, A, [], A).
+fold_left(F, A, [X | Xs], C) :-
+    G =.. [F, A, X, B], call(G), fold_left(F, B, Xs, C).
+
+fold_right(_, A, [], A).
+fold_right(F, A, [X | Xs], C) :-
+    fold_right(F, A, Xs, B), G =.. [F, X, B, C], call(G).
+</pre>
+</section>
+<hr>
+<div align="right">
+2011/09/04 初版<br>
+2016/05/29 改訂
+</div>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011, 2016 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="prolog14.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog16.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

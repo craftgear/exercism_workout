@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 接尾辞配列 (suffix array)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881799</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>接尾辞配列 (suffix array) [6]</h2>
+<div class="small">
+[ <a href="pyalgo59.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo61.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 接尾辞配列 (suffix array) 」のお話です。接尾辞配列は 1993 年に Manber と Myers により提案されたデータ構造で、主に大規模なテキストデータを高速に検索するために用いられます。同様なデータ構造に <a href="pyalgo57.html">接尾辞木 (suffix tree)</a> がありますが、その構築アルゴリズムは大変難しくて、メモリも多く使用するという欠点があります。接尾辞配列は単純な配列なので、接尾辞木よりもコンパクトです。
+</p>
+
+<p> 拙作のページ <a href="pyalgo43.html">接尾辞配列 [1]</a> <a href="pyalgo44.html">[2]</a> <a href="pyalgo45.html">[3]</a> <a href="pyalgo46.html">[4]</a> <a href="pyalgo47.html">[5]</a> では、接尾辞配列の構築アルゴリズムについて説明しました。今回は接尾辞配列の簡単な応用について説明します。たとえば、パターンの探索は二分探索を使って高速に行うことができます。また、接尾辞配列から「高さ配列」というデータを作成しておくと、接尾辞配列でも接尾辞木のような巡回が可能になり、拙作のページ <a href="pyalgo57.html">接尾辞木</a> で取り上げた部分文字列を求める問題を、接尾辞配列でも簡単に解くことができるようになります。
+</p>
+
+<p> 高さ配列の構築と接尾辞配列の巡回方法については、笠井透氏の論文 <a href="pyalgo60.html#cite">(参考文献 1)</a> に詳しく説明されています。今回はこの論文を参考にして、実際に Python でプログラムを作ってみましょう。
+</p>
+<h4>●クラス SuffixArray の定義</h4>
+<p> まず最初に接尾辞配列を表すクラス SuffixArray を定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : クラス SuffixArray の定義
+
+class SuffixArray:
+    def __init__(self, buff):
+        self.buff = buff
+        self.size = len(self.buff)
+        self.idx = range(0, self.size)
+        # 単純なソート (とても遅い)
+        self.idx.sort(lambda x, y: self.compare(x, y))
+
+    # ソート用比較メソッド
+    def compare(self, x, y):
+        n = 0
+        while True:
+            a = self.buff[x + n]
+            b = self.buff[y + n]
+            if a &lt; b : return -1
+            elif a &gt; b: return 1
+            n += 1
+</pre>
+<p> インスタンス変数 idx に接尾辞配列を格納します。今回は簡単な例題ということで、接尾辞配列の構築には Python のメソッド sort を使います。引数 buff には文字列を指定します。なお、文字列の最後尾には終端記号を必ず付け加えてください。また、文字列が長くなるとソートに時間がとてもかかるようになります。接尾辞配列の高速な構築アルゴリズムについては、拙作のページ <a href="pyalgo43.html">接尾辞配列 [1]</a> <a href="pyalgo44.html">[2]</a> <a href="pyalgo45.html">[3]</a> <a href="pyalgo46.html">[4]</a> <a href="pyalgo47.html">[5]</a> をお読みください。
+</p>
+
+<p> 接尾辞を比較するためのメソッドが compare で、sort から呼び出されます。文字列には終端記号が付加されているので、接尾辞の大小関係は必ず決定されます。
+</p>
+<h4>●パターンの探索</h4>
+<p> まずはパターンの探索を行うメソッド search_pattern から作りましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : パターンの探索
+
+    # 探索用比較関数
+    def compare_pat(self, x, pat, size):
+        for i in xrange(0, size):
+            a = pat[i]
+            b = self.buff[x + i]
+            if a &lt; b: return -1
+            elif a &gt; b: return 1
+        return 0
+
+    def search_pattern_sub(self, pat, pat_size):
+        low = 0
+        high = self.size - 1
+        while low &lt;= high:
+            mid = (low + high) / 2
+            r = self.compare_pat(self.idx[mid], pat, pat_size)
+            if r == 0:
+                return mid
+            elif r &gt; 0:
+                low = mid + 1
+            else:
+                high = mid - 1
+        return -1
+
+    # パターンの探索
+    def search_pattern(self, pat):
+        pat_size = len(pat)
+        x = self.search_pattern_sub(pat, pat_size)
+        if x &gt;= 0: return self.idx[x]
+        return False
+</pre>
+<p> 実際の処理はメソッド search_pattern_sub で行います。接尾辞配列の場合、パターンの探索は二分探索で行います。パターンと接尾辞配列の比較はメソッド compare_pat で行います。なお、パターンに接尾辞配列と同じ終端記号が含まれていると正常に動作しない場合があります。ご注意くださいませ。
+</p>
+<p> パターンを見つけた場合、search_pattern_sub は接尾辞配列 idx の位置を返します。見つからない場合は -1 を返します。search_pattern は、パターンを発見した場合は文字列での位置 idx[x] を返します。見つからない場合は False を返します。パターンの長さが m で、接尾辞配列の大きさが n とすると、実行時間は m * log<SUB>2</SUB> n に比例します。
+</p>
+
+<p> パターンの出現位置を全て求めるメソッド search_pattern_all は次のようになります。
+</p>
+<pre class="list">
+リスト : パターンの探索 (2)
+
+    def search_pattern_all(self, pat):
+        pat_size = len(pat)
+        x = self.search_pattern_sub(pat, pat_size)
+        if x &lt; 0: return []
+        s = x - 1
+        while s &gt;= 0 and self.compare_pat(self.idx[s], pat, pat_size) == 0:
+            s -= 1
+        e = x + 1
+        while e &lt; self.size and self.compare_pat(self.idx[e], pat, pat_size) == 0:
+            e += 1
+        return [self.idx[i] for i in xrange(s + 1, e)]
+</pre>
+<p> search_pattern_sub で出現位置を二分探索で求めます。あとは、パターンと一致する範囲を線形探索で求めればいいわけです。
+</p>
+<h4>●簡単な実行例</h4>
+<p> それでは簡単なテストを行ってみましょう。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+# デバッグ用
+def print_array(ary, buff):
+    for i in ary: print buff[i:]
+
+# test
+def test(buff):
+    sa = SuffixArray(buff)
+    print_array(sa.idx, buff)
+    for x in xrange(len(buff) - 1):
+        pat = buff[x:-1]
+        print pat, sa.search_pattern(pat),
+        print sa.search_pattern_all(pat)
+    print "-----"
+
+if __name__ == '__main__':
+    test("banana$")
+    test("abcabbca$")
+    test("mississippi$")
+    test("aabbaaab$")
+    test("aaaaaaaa$")
+    test("bananasbanana$")
+</pre>
+<p> print_array は接尾辞配列を表示する関数です。関数 test は、buff の接尾辞配列を作成し、接尾辞から終端記号を削除したパターンを作成して、search_pattern と search_pattern_all で探索します。実行結果は次のようになります。
+</p>
+<pre>
+$
+a$
+ana$
+anana$
+banana$
+na$
+nana$
+
+banana 0 [0]
+anana 1 [1]
+nana 2 [2]
+ana 1 [3, 1]
+na 4 [4, 2]
+a 1 [5, 3, 1]
+-----
+$
+a$
+abbca$
+abcabbca$
+bbca$
+bca$
+bcabbca$
+ca$
+cabbca$
+
+abcabbca 0 [0]
+bcabbca 1 [1]
+cabbca 2 [2]
+abbca 3 [3]
+bbca 4 [4]
+bca 1 [5, 1]
+ca 6 [6, 2]
+a 7 [7, 3, 0]
+-----
+$
+i$
+ippi$
+issippi$
+ississippi$
+mississippi$
+pi$
+ppi$
+sippi$
+sissippi$
+ssippi$
+ssissippi$
+
+mississippi 0 [0]
+ississippi 1 [1]
+ssissippi 2 [2]
+sissippi 3 [3]
+issippi 4 [4]
+ssippi 5 [5]
+sippi 6 [6]
+ippi 7 [7]
+ppi 8 [8]
+pi 9 [9]
+i 7 [10, 7, 4, 1]
+-----
+$
+aaab$
+aab$
+aabbaaab$
+ab$
+abbaaab$
+b$
+baaab$
+bbaaab$
+
+aabbaaab 0 [0]
+abbaaab 1 [1]
+bbaaab 2 [2]
+baaab 3 [3]
+aaab 4 [4]
+aab 5 [5, 0]
+ab 6 [6, 1]
+b 7 [7, 3, 2]
+-----
+$
+a$
+aa$
+aaa$
+aaaa$
+aaaaa$
+aaaaaa$
+aaaaaaa$
+aaaaaaaa$
+
+aaaaaaaa 0 [0]
+aaaaaaa 1 [1, 0]
+aaaaaa 2 [2, 1, 0]
+aaaaa 2 [3, 2, 1, 0]
+aaaa 4 [4, 3, 2, 1, 0]
+aaa 4 [5, 4, 3, 2, 1, 0]
+aa 4 [6, 5, 4, 3, 2, 1, 0]
+a 4 [7, 6, 5, 4, 3, 2, 1, 0]
+-----
+$
+a$
+ana$
+anana$
+ananasbanana$
+anasbanana$
+asbanana$
+banana$
+bananasbanana$
+na$
+nana$
+nanasbanana$
+nasbanana$
+sbanana$
+
+bananasbanana 0 [0]
+ananasbanana 1 [1]
+nanasbanana 2 [2]
+anasbanana 3 [3]
+nasbanana 4 [4]
+asbanana 5 [5]
+sbanana 6 [6]
+banana 0 [7, 0]
+anana 1 [8, 1]
+nana 9 [9, 2]
+ana 10 [10, 8, 1, 3]
+na 9 [11, 9, 2, 4]
+a 5 [12, 10, 8, 1, 3, 5]
+-----
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●高さ配列とは？</h4>
+<p> 高さ配列は接尾辞配列において隣同士の接尾辞の最長共通接頭辞 (Longest Common Prefix : LCP) の長さを格納したものです。次の図を見てください。
+</p>
+<pre class="fig">
+Sa Hgt  Suffix         Suffix Tree                Suffix
+----------------   ---------------------------------------
+6   0   $               ┌ ($)                  : $
+5   1   a$              ├ [a] ┬ ($)           : a$
+3   3   ana$            │     └ [na] ┬ ($)   : ana$
+1   0   anana$          │             └ (na$) : anana$
+0   0   banana$    root ┼ (banana$)            : banana$
+4   2   na$             └ [na] ┬ ($)          : na$
+2   -1  nana$                   └ (na$)        : nana$
+
+        図 : 接尾辞配列と高さ配列と接尾辞木
+</pre>
+<p> Sa が接尾辞配列、Hgt が高さ配列を表します。Sa[0] の接尾辞と Sa[1] の接尾辞の LCP 長は 0 になるので、Hgt[0] には 0 をセットします。次に、Sa[1] と Sa[2] の LCP 長を求めると 1 になるので、Hge[1] には 1 をセットします。このように、隣同士の接尾辞の LCP 長を求めて Hgt にセットします。Hgt の最後尾は比較する接尾辞がないので -1 をセットします。
+</p>
+
+<p> 接尾辞配列と高さ配列を組み合わせは、上図 (右) のような接尾辞木を表していると考えることができます。たとえば、Sa[1] と Sa[2] の LCP 長は 1 になるので、a$ は [a] - ($) に、ana$ は [a] - (na$) に分割されることがわかります。同様に、Sa[2] と Sa[3] の LCP 長は 3 になるので、ana$ は [ana] - ($) に、anana$ は [ana] - (na$) に分割されますが、Sa[1] と Sa[2] の関係から ana$ は [a] - [na] - ($) に、anana$ は [a] - [na] - (na$) になることがわかります。
+</p>
+
+<p> このように、高さ配列を用いると、接尾辞木の節を擬似的に表すことができます。これにより、接尾辞配列でも接尾辞木のような巡回 (traverse) が可能になります。また、<a href="pyalgo60.html#cite">参考文献 2</a> によると、接尾辞配列から接尾辞木を線形時間で作成することも可能とのことです。
+</p>
+
+<p> LCP は 1 文字ずつ比較して求めるので、接尾辞配列の大きさ N に比例する時間がかかります。したがって、ナイーブな方法で高さ配列を求めると N<sup>2</sup> に比例する時間がかかってしまいます。これに対し、笠井氏が考案されたアルゴリズムは、N に比例する時間 (線形時間) で高さ配列を求めることができます。
+</p>
+
+<h4>●逆接尾辞配列</h4>
+<p> 高さ配列を求めるとき、逆接尾辞配列というデータを使います。次の図を見てください。
+</p>
+<pre class="fig">
+index : 0 1 2 3 4 5 6
+------+---------------
+string: b a n a n a $
+
+Suffix   Sa  Rsa
+-----------------
+$        6    4
+a$       5    3
+ana$     3    6
+anana$   1    2
+banana$  0    5
+na$      4    1
+nana$    2    0
+
+ Sa[i] == j ならば Rsa[j] == i である
+
+図 : 逆接尾辞配列
+</pre>
+<p> 逆接尾辞配列 Rsa は接尾辞配列 Sa の逆配列で、接尾辞 (index) が Sa のどの位置に格納されているかを求めるために使います。接尾辞 0 (banana$) の場合、Rsa[0] は 4 なので、接尾辞 0 は Sa[4] に格納されていることがわかります。ようするに、ソートしたときの順位 (rank) を表したものが逆接尾辞配列です。したがって、逆接尾辞配列は次のように簡単に求めることができます。
+</p>
+<pre class="list">
+foreach x in xrange(0, len(Sa)): Rsa[Sa[x]] = x
+</pre>
+<h4>●高さ配列の構築アルゴリズム</h4>
+<p> 高さ配列は一番長い接尾辞から (つまり文字列の左側から) 順番に作成します。このとき、LCP 長を求める関数を lcp() とすると、次の関係が成り立ちます。
+</p>
+<pre class="item">
+h = lcp(i, Sa[Rsa[i] + 1])
+h - 1 &lt= lcp(i + 1, Sa[Rsa[i + 1] + 1])
+</pre>
+<p> i 番目の接尾辞の隣の接尾辞は Sa[Rsa[i] + 1] で求めることができます。この値を j とし、LCP 長が h だったとしましょう。すると、i + 1 番目の接尾辞と j + 1 番目の接尾辞の LCP 長は h - 1 になります。次の例を見てください。
+</p>
+<pre class="item">
+S<SUB>i</SUB>, S<SUB>i + 1</SUB>, ..., S<SUB>i + h - 1</SUB>, S<SUB>i + h</SUB>
+S<SUB>j</SUB>, S<SUB>j + 1</SUB>, ..., S<SUB>j + h - 1</SUB>, S<SUB>j + h</SUB>
+</pre>
+<p> i から i + h - 1 番目の文字と j から j + h - 1 番目の文字が一致したとします。この場合、高さ配列 Hgt[Rsa[i]] の値は h になります。次に、i + 1 番目の接尾辞の高さ配列を求めます。このとき、i + 1 番目から h - 1 個の文字が一致する接尾辞 j + 1 があることがわかっているので、LCP 長は最低でも h - 1 になるはずです。
+</p>
+<p> たとえば、banana$ の ana$ の隣の接尾辞は anana$ で、LCP 長は 3 になります。このとき、na$ と nana$ の LCP 長は 2 になります。na まで一致している接尾辞があるので、もしも 2 より短い LCP 長の接尾辞があると仮定すると、ソートしたときの大小関係が破綻してしまうのです。2 よりも長い接尾辞が存在しても、ソートしたときの大小関係は破綻しません。
+</p>
+<p> したがって、接尾辞 i + 1 の隣の接尾辞 Sa[Rsa[i + 1] + 1] の LCP 長を調べるとき、i + 1 番目から h - 1 個の文字を比較する必要はありません。それ以降の文字を比較すればよいのです。
+</p>
+
+<p> 簡単な例を示しましょう。banana$ の高さ配列を作成します。
+</p>
+
+<pre class="fig">
+初期化 : h = 0
+
+0 : banana$ --&gt; Hgt[Rsa[0]] = lcp(0, 4)
+4 : na$         Hgt[4] = h = 0
+
+1 : anana$  --&gt; Hgt[Rsa[1]] = lcp(1, 0)
+0 : banana$     Hgt[3] = h = 0
+
+2 : nana$   --&gt; Hgt[Rsa[2]] = -1
+7 : -----       Hgt[6] = -1, h = 0
+
+3 : ana$    --&gt; Hgt[Rsa[3]] = lcp(3, 1)
+1 : anana$      Hgt[2] = h = 3
+
+4 : na$     --&gt; Hgt[Rsa[4]] = h - 1 + lcp(h - 1 + 4, h - 1 + 2) = 2 + lcp(6, 4)
+2 : nana$       Hgt[5] = h = 2
+
+5 : a$      --&gt; Hgt[Rsa[5]] = h - 1 + lcp(h - 1 + 5, h - 1 + 3) = 1 + lcp(6, 4)
+3 : ana$        Hgt[1] = h = 1
+
+6 : $       --&gt; Hgt[Rsa[6]] = h - 1 + lcp(h - 1 + 6, h - 1 + 5) = 0 + lcp(6, 5)
+5 : a$          Hgt[0] = h = 0
+</pre>
+<p> まず最初に、高さ h を 0 に初期化します。そして、h が 0 の場合は単純に lcp() で LCP 長を求め、その値を高さ配列 Hgt にセットします。接尾辞 i が Sa の最後尾にある場合、Hgt[Rsa[i]] には -1 をセットします。接尾辞 i - 1 の LCP 長 h が 0 よりも大きい場合、接尾辞 i の LCP 長は次のように求めることができます。
+</p>
+<pre class="item">
+Hgt[Rsa[i]] = h - 1 + lcp(h - 1 + i, h - 1 + Sa[Rsa[i] + 1])
+</pre>
+<p> lcp() に渡す引数に h - 1 を加算して LCP 長を求め、その値に h - 1 を加算すればいいわけです。たとえば、na$ と nana$ の場合、h の値は 3 なので 2 + lcp(4 + 2, 2 + 2) = 2 + lcp(6, 4) となり、LCP 長は 2 になります。同様に、a$ と ana$ の LCP 長も簡単に求めることができます。
+</p>
+
+<p> このように、既に求まった LCP 長を用いることで、高さ配列を効率的に作成することができます。たとえば、aaaaaaaa$ の高さ配列をナイーブな方法で作成する場合、文字の比較回数は次のようになります。
+</p>
+<pre class="fig">
+0: aaaaaaaa$
+-: ---------
+
+1: aaaaaaa$
+0: aaaaaaaa$ -&gt; 8, LCP 7
+
+2: aaaaaa$
+1: aaaaaaa$ -&gt; 7, LCP 6
+
+3: aaaaa$
+2: aaaaaa$ -&gt; 6, LCP 5
+
+4: aaaa$
+3: aaaaa$ -&gt; 5, LCP 4
+
+5: aaa$
+4: aaaa$ -&gt; 4, LCP 3
+
+6: aa$
+5: aaa$ -&gt; 3, LCP 2
+
+7: a$
+6: aa$ -&gt; 2, LCP 1
+
+8: $
+7: a$ -&gt; 1, LCP 0
+------------------------
+   合計 36 回
+</pre>
+<p> この場合、終端記号を除く文字数を N とすると、文字の比較回数は N * (N + 1) / 2 になるので、実行時間は N<sup>2</sup> に比例することになります。これが最悪の場合です。今回のアルゴリズムを用いると、一つ前に求めた LCP 長 - 1 だけ文字の比較を省くことができるので、文字の比較回数は 36 - 21 = 15 回となり、最悪の場合でも 2 * N - 1 に収めることができます。このように今回のアルゴリズムを使うと、線形時間で高さ配列を構築することができます。厳密な証明は <a href="pyalgo60.html#cite">参考文献 1</a> をお読みくださいませ。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 高さ配列の作成
+
+class SuffixArray:
+    def __init__(self, buff):
+        self.buff = buff
+        self.size = len(self.buff)
+        self.idx = range(0, self.size)
+        # 単純なソート
+        self.idx.sort(lambda x, y: self.compare(x, y))
+        # 逆接尾辞配列
+        self.rank = [0] * self.size
+        for x in xrange(0, self.size):
+            self.rank[self.idx[x]] = x
+        # 高さ配列
+        self.hgt = [0] * self.size
+        self.make_hgt()
+
+    # 高さ配列の生成
+    def make_hgt(self):
+        h = 0
+        # i は buff の位置
+        for i in xrange(0, self.size):
+            # i の idx の位置を j にセット
+            j = self.rank[i]
+            if j == self.size - 1:
+                self.hgt[j] = -1
+                h = 0
+                continue
+            # idx での i の隣の位置を求める
+            k = self.idx[j + 1]
+            if h &gt; 0:
+                h = h - 1 + self.lcp(i + h - 1, k + h - 1)
+            else:
+                h = self.lcp(i, k)
+            self.hgt[j] = h
+
+    # longest common prefix
+    def lcp(self, x, y):
+        i = 0
+        while self.buff[x + i] == self.buff[y + i]: i += 1
+        return i
+</pre>
+<p> インスタンス変数 rank に逆接尾辞配列を、hgt に高さ配列をセットします。高さ配列の生成はメソッド make_hgt で行い、LCP 長はメソッド lcp で求めます。make_hgt は説明したアルゴリズムをそのままプログラムしただけなので、特に難しいところはないと思います。
+</p>
+<h4>●高さ配列を用いた接尾辞配列の巡回</h4>
+<p> 次は高さ配列を用いて接尾辞配列を巡回する方法を説明します。部分文字列の出現頻度を求める場合、部分木にある葉の総数を求める必要があるので、帰りがけ順で巡回することにします。たとえば、bananasbanana$ の接尾辞木と接尾辞配列は次のようになります。
+</p>
+
+<pre class="fig">
+     Suffix Tree                           i Sa Hgt Suffix
+-------------------------------------------------------------------
+     ┌ ($)                                0 13  0  $ 
+     ├ [a] ┬ ($)                         1 12  1  a$ 
+     │(1,1)├ [na] ┬ ($)                 2 10  3  ana$ 
+     │     │ (2,3)├ [na] ┬ ($)         3  8  5  anana$ 
+     │     │      │ (3,5)└ (sbanana$)  4  1  3  ananasbanana$ 
+     │     │      └ (sbanana$)          5  3  1  anasbanana$ 
+     │     └ (sbanana$)                  6  5  0  asbanana$ 
+root ┼ [banana] ┬ ($)                    7  7  6  banana$ 
+     │ (7,6)    └ (sbanana$)             8  0  0  bananasbanana$
+     ├ [na] ┬ ($)                        9 11  2  na$ 
+     │ (9,2)├ [na] ┬ ($)               10  9  4  nana$ 
+     │      │(10,4)└ (sbanana$)        11  2  2  nanasbanana$ 
+     │      └ (sbanana$)                12  4  0  nasbanana$ 
+     └(sbanana$)                         13  6 -1  sbanana$ 
+
+  節は (index, length) で表す
+
+        図 : bananasbanana$ の接尾辞木と接尾辞配列
+</pre>
+<p> 接尾辞配列の場合、葉は接尾辞配列を順番にアクセスするだけで巡回することができます。問題は節のアクセスです。ここで、高さ配列 Hgt を用います。i 番目の葉にアクセスするとき、Hgt[i] の値 h が 0 よりも大きければ節 (A) が存在しています。帰りがけ順に巡回する場合、節 A は子を巡回した後にアクセスしないといけません。そこで、節 A をスタックに格納することにします。このとき、節を (添字, 接頭辞長) で表します。h が 0 の場合、節は存在しないので葉を出力するだけです。
+</p>
+
+<p> 次に、i + 1 番目の葉にアクセスします。このとき、Hgt[i + 1] の値 h1 が h よりも大きい場合、その節は A の子になります。たとえば、上図 Sa[1] の場合、節 (1, 1) をスタックに積みます。次に、Sa[2] の場合、節 (2, 3) は節 (1, 1) よりも接頭辞が長いので、(1, 1) の子になります。葉 ana$ を出力して (2, 3) をスタックに積みます。同様に、Sa[3] の場合も節 (3, 5) をスタックに積みます。
+</p>
+
+<p> Hgt[i + 1] の値 h1 がスタックに格納されている節の接頭辞長 h より短い場合、その節はスタックに格納されている節の祖先になります。つまり、木のルート方向に戻ってきたことになります。この場合、スタックに格納されている節で h1 より長い節を出力します。たとえば、Sa[4] の場合、Hgt[4] の値は 3 なので、スタックから節 (3, 5) を取り出して出力します。
+</p>
+
+<p> このとき、スタックの先頭の値は (2, 3) になり、接頭辞の長さは h1 と同じ値になります。この場合は、節 (2, 3) に戻ったことに相当します。節 (2, 3) の子がまだあるかもしれないので、スタックの値はそのままにして、次の接尾辞 Sa[5] を調べます。接頭辞長は 1 になるので、節 (1, 1) に戻ったことになります。節 (2, 3) を出力して、次の接頭辞を調べます。
+</p>
+
+<p> Sa[6] の接頭辞長は 0 なので、ここでルートまで戻ったことになります。スタックに格納されている節 (1, 1) を出力します。あとは、これを繰り返すだけです。Sa[7] で節 (7, 6) をスタックに追加し、Sa[8] で節 (7, 6) を出力します。Sa[9], Sa[10] で節 (9, 2), (10, 4) をスタックに追加して、Sa[11] で節 (10, 4) を出力します。Sa[12] で節 (9, 2) を出力して、最後の Sa[13] で葉 sbanana$ を出力して巡回を終了します。
+</p>
+
+<p> 文章で説明するとけっこう複雑なように思えますが、<a href="pyalgo60.html#cite">参考文献 1</a> にはわかりやすいアルゴリズムが示されています。これを Python でプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 高さ配列を用いた接尾辞配列の巡回
+
+    def traverse(self, func):
+        s = [(-1, -1)]    # root (位置, 長さ)
+        for i in xrange(0, self.size):
+            # 葉
+            s.append((i, self.size - self.idx[i]))
+            # 節
+            hi = self.hgt[i]
+            # スタックにある子を出力
+            x, h = s[-1]
+            while h &gt; hi:
+                func(self.buff, self.idx[x], h)
+                s.pop()
+                x, h = s[-1]
+            if hi &gt; 0 and h &lt; hi:
+                # 節をスタックに追加
+                s.append((i, hi))
+</pre>
+
+<p> メソッド traverse は高階関数です。引数 func は関数 (メソッド) で、引数に文字列と開始位置と長さを渡します。変数 s にスタックをセットし、ルートを表す (-1, -1) で初期化します。ルートは番兵として使います。次の for 文で接尾辞配列 idx を先頭から順番にアクセスします。
+</p>
+<p> 最初に葉 (接尾辞) をスタックにセットします。葉は節の子になるので、最初にスタックから必ず取り出されて func に適用されます。次に、節の接頭辞長を高さ配列 Hgt から求めて変数 hi にセットします。そして、スタックの先頭にある節 (葉) の添字と接頭辞長を x, i にセットします。
+</p>
+<p> h が hi よりも大きい場合、その節は hi の子なので、スタックから取り出して関数 func を呼び出します。スタックの先頭には葉が格納されているので、ここで必ず葉にアクセスすることができます。そして、x, h の値を更新して、h &gt; hi を満たしている間は func を呼び出します。ここで節にアクセスすることができます。最後に、hi が 0 よりも大きく、かつ h よりも大きい場合は、hi は h の子になります。節 (i, hi) をスタックに追加します。
+</p>
+
+<p> それでは簡単な実行例を示します。
+</p>
+<pre class="list">
+リスト : 巡回のテスト
+
+def test1(buff):
+    def print_node(buff, x, n):
+        print buff[x:x + n]
+    sa = SuffixArray(buff)
+    print_array(sa.idx, buff)
+    print "-----"
+    sa.traverse(print_node)
+    print "-----"
+
+if __name__ == '__main__':
+    test1("banana$")
+    test1("abcabbca$")
+    test1("mississippi$")
+    test1("aabbaaab$")
+    test1("aaaaaaaa$")
+    test1("bananasbanana$")
+</pre>
+<pre>
+$
+a$
+ana$
+anana$
+banana$
+na$
+nana$
+-----
+$
+a$
+ana$
+anana$
+ana
+a
+banana$
+na$
+nana$
+na
+-----
+$
+a$
+abbca$
+abcabbca$
+bbca$
+bca$
+bcabbca$
+ca$
+cabbca$
+-----
+$
+a$
+abbca$
+abcabbca$
+ab
+a
+bbca$
+bca$
+bcabbca$
+bca
+b
+ca$
+cabbca$
+ca
+-----
+$
+i$
+ippi$
+issippi$
+ississippi$
+mississippi$
+pi$
+ppi$
+sippi$
+sissippi$
+ssippi$
+ssissippi$
+-----
+$
+i$
+ippi$
+issippi$
+ississippi$
+issi
+i
+mississippi$
+pi$
+ppi$
+p
+sippi$
+sissippi$
+si
+ssippi$
+ssissippi$
+ssi
+s
+-----
+$
+aaab$
+aab$
+aabbaaab$
+ab$
+abbaaab$
+b$
+baaab$
+bbaaab$
+-----
+$
+aaab$
+aab$
+aabbaaab$
+aab
+aa
+ab$
+abbaaab$
+ab
+a
+b$
+baaab$
+bbaaab$
+b
+-----
+$
+a$
+aa$
+aaa$
+aaaa$
+aaaaa$
+aaaaaa$
+aaaaaaa$
+aaaaaaaa$
+-----
+$
+a$
+aa$
+aaa$
+aaaa$
+aaaaa$
+aaaaaa$
+aaaaaaa$
+aaaaaaaa$
+aaaaaaa
+aaaaaa
+aaaaa
+aaaa
+aaa
+aa
+a
+-----
+$
+a$
+ana$
+anana$
+ananasbanana$
+anasbanana$
+asbanana$
+banana$
+bananasbanana$
+na$
+nana$
+nanasbanana$
+nasbanana$
+sbanana$
+-----
+$
+a$
+ana$
+anana$
+ananasbanana$
+anana
+anasbanana$
+ana
+asbanana$
+a
+banana$
+bananasbanana$
+banana
+na$
+nana$
+nanasbanana$
+nana
+nasbanana$
+na
+sbanana$
+-----
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●部分文字列の探索問題</h4>
+<p> 次は入力文字列の中で 2 回以上現れる最長の部分文字列を求めてみましょう。たとえば、sakurasaku$ で 2 回以上現れている部分文字列は次のようになります。
+</p>
+<pre class="fig">
+s, a, k, u, sa, ak, ku, sak, aku, saku
+</pre>
+<p> この場合、最長部分文字列は saku になります。考え方は接尾辞木の場合と同じです。葉を含む部分文字列は接尾辞になるので、入力文字列の中で一度しか現れていません。節の場合は 2 つ以上の子を持つので、それを含む部分文字列は入力文字列の中で必ず 2 回以上現れています。したがって、節を巡回して見つけた一番長い部分文字列が、条件を満たしていることになります。プログラムは次のようになります。 
+</p>
+
+<pre class="list">
+リスト : 2 回以上出現する部分文字列で最長のものを求める
+
+    def longest_repeated_substring(self):
+        max_pos = -1
+        max_len = -1
+        s = [(0, -1, -1)]   # root (葉の個数, 位置, 長さ)
+        for i in xrange(0, self.size):
+            s.append((1, i, self.size - self.idx[i])) # 葉
+            c, x, h = s[-1]
+            hi = self.hgt[i]
+            ci = 0
+            while h &gt; hi:
+                ci += c
+                if ci &gt;= 2 and h &gt; max_len:
+                    max_pos = self.idx[x]
+                    max_len = h
+                s.pop()
+                c, x, h = s[-1]
+            if h == hi:
+                s[-1] = (c + ci, x, h)
+            elif hi &gt; 0 and h &lt; hi:
+                s.append((ci, i, hi))
+        return max_pos, max_len
+</pre>
+<p> スタックに格納する節のデータに葉の個数を追加します。葉をスタックに追加するとき、葉の数は 1 になります。次に、節 hi にアクセスするとき、葉の数を変数 ci でカウントします。while ループで、スタックに格納されている子を取り出します。このとき、その節が持つ葉の数を c にセットします。すると、スタックから取り出した節が持つ葉の総数は ci + c になります。
+</p>
+<p> たとえば、最初は葉が取り出されるので、ci は 1 になります。次に取り出される節は、取り出した節の親になるので、葉の数は ci += c で求めることができます。ci が 2 以上で、h が max_len よりも長い場合は、max_pos の値を self.idx[x] に、max_len の値を h に更新します。
+</p>
+<p> while ループの後、h と hi が等しい場合は節 h に戻ってきたので、葉の個数を更新します。スタックトップの値を (c + ci, x, hi) に書き換えます。hi が h よりも大きい場合は、hi は h の子なのでスタックに追加します。このとき、葉の個数は ci になります。最後に、max_pos と max_len を返します。
+</p>
+
+<p> 簡単な実行例を示しましょう。 
+</p>
+<pre>
+&gt;&gt;&gt; sa = SuffixArray("sakurasaku$")
+&gt;&gt;&gt; sa.longest_repeated_substring()
+(6, 4)
+&gt;&gt;&gt; sa = SuffixArray("bananasbanana$")
+&gt;&gt;&gt; sa.longest_repeated_substring()
+(7, 6)
+</pre>
+<h4>●繰り返し出現する部分文字列を求める</h4>
+<p> 最後に頻出部分文字列と出現回数を求めるプログラムを作りましょう。プログラムは次のようになります。 
+</p>
+
+<pre class="list">
+リスト : n 文字以上で m 回出現している部分文字列を求める
+
+    def repeated_substring(self, n, m):
+        a = []
+        s = [(0, -1, -1)]   # root (葉の個数, 位置, 長さ)
+        for i in xrange(0, self.size):
+            s.append((1, i, self.size - self.idx[i])) # 葉
+            c, x, h = s[-1]
+            hi = self.hgt[i]
+            ci = 0
+            while h &gt; hi:
+                ci += c
+                if ci &gt;= m and h &gt;= n:
+                    a.append((self.idx[x], h, ci))
+                s.pop()
+                c, x, h = s[-1]
+            if h == hi:
+                s[-1] = (c + ci, x, h)
+            elif hi &gt; 0 and h &lt; hi:
+                s.append((ci, i, hi))
+        return a
+</pre>
+<p> 基本的な考え方は longest_repeated_substring と同じです。部分文字列長と出現回数をチェックし、それらが条件を満たしていたら、引数 a のリストに (開始位置, 終了位置, 回数) を追加します。
+</p>
+<p> なお、今回のプログラムでは、条件を満たす節の接頭辞をそのまま出力しています。たとえば、n = 1, m = 1 とすると、全ての部分文字列の出現回数を求めることになります。saku を表す節があるとすると、saku 以外にも sak, sa, s という部分文字列が存在しますが、saku しか出力していません。ご注意くださいませ。
+</p>
+
+<p> 簡単な実行例を示しましょう。 
+</p>
+<pre>
+&gt;&gt;&gt; sa = SuffixArray("sakurasaku$")
+&gt;&gt;&gt; for s, e, c in sa.repeated_substring(1, 2): print sa.buff[s:s + e], c
+...
+aku 2
+a 3
+ku 2
+saku 2
+u 2
+</pre>
+<p> このように、高さ配列を用いることで、接尾辞配列でも接尾辞木のような巡回が可能になります。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>笠井透, <a href="http://www-ikn.ist.hokudai.ac.jp/mthesis/H11_tohru_kasai_mastersthesis99_feb1999.pdf">『部分語計数問題の接尾辞配列を用いた高速アルゴリズム』[PDF]</a>
+  <li><a href="http://www.hgc.ims.u-tokyo.ac.jp/~tshibuya/index-j.html">渋谷哲朗</a>, <a href="http://www.hgc.ims.u-tokyo.ac.jp/~tshibuya/classes/seq2009_5suffixarrays.pdf">『接尾辞配列について』[PDF]</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+# coding: utf-8
+#
+# suffary.py : 接尾辞配列の応用
+#
+#             Copyright (C) 2010 Makoto Hiroi
+#
+
+# 接尾辞配列
+# buff には終端記号をつけること
+class SuffixArray:
+    def __init__(self, buff):
+        self.buff = buff
+        self.size = len(self.buff)
+        self.idx = range(0, self.size)
+        # 単純なソート
+        self.idx.sort(lambda x, y: self.compare(x, y))
+        # 逆接尾辞配列
+        self.rank = [0] * self.size
+        for x in xrange(0, self.size):
+            self.rank[self.idx[x]] = x
+        # 高さ配列
+        self.hgt = [0] * self.size
+        self.make_hgt()
+
+    # 高さ配列の生成
+    def make_hgt(self):
+        h = 0
+        # i は buff の位置
+        for i in xrange(0, self.size):
+            # i の idx の位置を j にセット
+            j = self.rank[i]
+            if j == self.size - 1:
+                self.hgt[j] = -1
+                h = 0
+                continue
+            # idx での i の隣の位置を求める
+            k = self.idx[j + 1]
+            if h &gt; 0:
+                h = h - 1 + self.lcp(i + h - 1, k + h - 1)
+            else:
+                h = self.lcp(i, k)
+            self.hgt[j] = h
+
+    # longest common prefix
+    def lcp(self, x, y):
+        i = 0
+        while self.buff[x + i] == self.buff[y + i]: i += 1
+        return i
+
+    # ソート用比較関数
+    def compare(self, x, y):
+        n = 0
+        while True:
+            a = self.buff[x + n]
+            b = self.buff[y + n]
+            if a &lt; b : return -1
+            elif a &gt; b: return 1
+            n += 1
+
+    # 探索用比較関数
+    def compare_pat(self, x, pat, size):
+        for i in xrange(0, size):
+            a = pat[i]
+            b = self.buff[x + i]
+            if a &lt; b: return -1
+            elif a &gt; b: return 1
+        return 0
+
+    # パターンの探索
+    def search_pattern_sub(self, pat, pat_size):
+        low = 0
+        high = self.size - 1
+        while low &lt;= high:
+            mid = (low + high) / 2
+            r = self.compare_pat(self.idx[mid], pat, pat_size)
+            if r == 0:
+                return mid
+            elif r &gt; 0:
+                low = mid + 1
+            else:
+                high = mid - 1
+        return -1
+
+    def search_pattern(self, pat):
+        pat_size = len(pat)
+        x = self.search_pattern_sub(pat, pat_size)
+        if x &gt;= 0: return self.idx[x]
+        return False
+
+    def search_pattern_all(self, pat):
+        pat_size = len(pat)
+        x = self.search_pattern_sub(pat, pat_size)
+        if x &lt; 0: return []
+        s = x - 1
+        while s &gt;= 0 and self.compare_pat(self.idx[s], pat, pat_size) == 0:
+            s -= 1
+        e = x + 1
+        while e &lt; self.size and self.compare_pat(self.idx[e], pat, pat_size) == 0:
+            e += 1
+        return [self.idx[i] for i in xrange(s + 1, e)]
+
+    # 高さ配列を使った接尾辞配列の巡回
+    def traverse(self, func):
+        s = [(-1, -1)]    # root (位置, 長さ)
+        for i in xrange(0, self.size):
+            # 葉
+            s.append((i, self.size - self.idx[i]))
+            # 節
+            hi = self.hgt[i]
+            # スタックにある子を出力
+            x, h = s[-1]
+            while h &gt; hi:
+                func(self.buff, self.idx[x], h)
+                s.pop()
+                x, h = s[-1]
+            if hi &gt; 0 and h &lt; hi:
+                # 節をスタックに追加
+                s.append((i, hi))
+
+    # n 文字以上で m 回出現している部分文字列を求める
+    def repeated_substring(self, n, m):
+        a = []
+        s = [(0, -1, -1)]   # root (葉の個数, 位置, 長さ)
+        for i in xrange(0, self.size):
+            s.append((1, i, self.size - self.idx[i])) # 葉
+            c, x, h = s[-1]
+            hi = self.hgt[i]
+            ci = 0
+            while h &gt; hi:
+                ci += c
+                if ci &gt;= m and h &gt;= n:
+                    a.append((self.idx[x], h, ci))
+                s.pop()
+                c, x, h = s[-1]
+            if h == hi:
+                s[-1] = (c + ci, x, h)
+            elif hi &gt; 0 and h &lt; hi:
+                s.append((ci, i, hi))
+        return a
+
+    # 2 回以上出現する部分文字列で最長のものを求める
+    def longest_repeated_substring(self):
+        max_pos = -1
+        max_len = -1
+        s = [(0, -1, -1)]   # root (葉の個数, 位置, 長さ)
+        for i in xrange(0, self.size):
+            s.append((1, i, self.size - self.idx[i])) # 葉
+            c, x, h = s[-1]
+            hi = self.hgt[i]
+            ci = 0
+            while h &gt; hi:
+                ci += c
+                if ci &gt;= 2 and h &gt; max_len:
+                    max_pos = self.idx[x]
+                    max_len = h
+                s.pop()
+                c, x, h = s[-1]
+            if h == hi:
+                s[-1] = (c + ci, x, h)
+            elif hi &gt; 0 and h &lt; hi:
+                s.append((ci, i, hi))
+        return max_pos, max_len
+
+# デバッグ用
+def print_array(ary, buff):
+    for i in ary: print buff[i:]
+
+# test
+def test(buff):
+    sa = SuffixArray(buff)
+    print_array(sa.idx, buff)
+    print sa.idx
+    for x in xrange(len(buff) - 1):
+        pat = buff[x:-1]
+        print pat, sa.search_pattern(pat),
+        print sa.search_pattern_all(pat)
+    print "-----"
+
+def test1(buff):
+    def print_node(buff, x, n):
+        print buff[x:x + n]
+    sa = SuffixArray(buff)
+    print_array(sa.idx, buff)
+    print "-----"
+    sa.traverse(print_node)
+    print "-----"
+    print sa.repeated_substring(1, 2)
+    print sa.longest_repeated_substring()
+    print "-----"
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo59.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo61.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

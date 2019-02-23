@@ -1,0 +1,1279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 SymPy プログラミング超入門 </title>
+  <meta name="description" content="Python,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881763</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Python3 Programming</h1>
+<h2>お気楽 SymPy プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="python3.html#sympy_abc">Python3</a> ]
+<hr>
+</div>
+<section class="contents">
+<h4 id="abc05">●行列</h4>
+<ul>
+  <li>行列の生成</li>
+  <ul>
+    <li>SymPy の行列は mutable, 数値だけではなく記号も格納することができる</li>
+    <li>SymPy の行列 (Matrix) は Matrix() で生成する</li>
+<pre class="item">
+Matrix([x1, x2, ..., xn]) =&gt; n 行 1 列 (列ベクトル)
+Matrix([[x1, x2, ..., xn]]) =&gt; 1 行 n 列 (行ベクトル)
+Matrix([[x11, x12, ... x1n], ..., [xm1, xm2, ..., xmn]]) =&gt; m 行 n 列
+Matrix(m, n, [x1, ... ]) =&gt; m 行 n 列
+Matrix(m, n, function) =&gt; m 行 n 列
+</pre>
+    <li>属性 shape は行列 A の形状をタプルで返す</li>
+<pre class="item">
+A.shape =&gt; (m, n)
+</pre>
+    <li>zeros(m, n), zeros(m), 零行列</li>
+    <li>eye(m, n), eye(m), 単位行列</li>
+    <li>ones(m, n), ones(m), 要素がすべて 1 の行列</li>
+    <li>diag(x1, ..., xn), 対角成分が x1, ..., xn でそれ以外の要素は0 の行列 (対角行列)</li>
+    <li>diag() の引数は行列でもよい</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.Matrix([1, 2, 3])
+⎡1⎤
+⎢ ⎥
+⎢2⎥
+⎢ ⎥
+⎣3⎦
+&gt;&gt;&gt; sy.Matrix([[1, 2, 3]])
+[1  2  3]
+&gt;&gt;&gt; sy.Matrix([[1, 2], [3, 4]])
+⎡1  2⎤
+⎢    ⎥
+⎣3  4⎦
+&gt;&gt;&gt; sy.Matrix(3, 3, range(1, 10))
+⎡1  2  3⎤
+⎢       ⎥
+⎢4  5  6⎥
+⎢       ⎥
+⎣7  8  9⎦
+&gt;&gt;&gt; sy.Matrix(3, 3, lambda i, j: i * 3 + j)
+⎡0  1  2⎤
+⎢       ⎥
+⎢3  4  5⎥
+⎢       ⎥
+⎣6  7  8⎦
+&gt;&gt;&gt; sy.zeros(2)
+⎡0  0⎤
+⎢    ⎥
+⎣0  0⎦
+&gt;&gt;&gt; sy.zeros(2, 3)
+⎡0  0  0⎤
+⎢       ⎥
+⎣0  0  0⎦
+&gt;&gt;&gt; sy.ones(2)
+⎡1  1⎤
+⎢    ⎥
+⎣1  1⎦
+&gt;&gt;&gt; sy.ones(2, 3)
+⎡1  1  1⎤
+⎢       ⎥
+⎣1  1  1⎦
+&gt;&gt;&gt; sy.eye(2)
+⎡1  0⎤
+⎢    ⎥
+⎣0  1⎦
+&gt;&gt;&gt; sy.eye(2, 3)
+⎡1  0  0⎤
+⎢       ⎥
+⎣0  1  0⎦
+&gt;&gt;&gt; sy.eye(3, 2)
+⎡1  0⎤
+⎢    ⎥
+⎢0  1⎥
+⎢    ⎥
+⎣0  0⎦
+&gt;&gt;&gt; sy.diag(sy.eye(2), sy.ones(2))
+⎡1  0  0  0⎤
+⎢          ⎥
+⎢0  1  0  0⎥
+⎢          ⎥
+⎢0  0  1  1⎥
+⎢          ⎥
+⎣0  0  1  1⎦
+&gt;&gt;&gt; sy.diag(sy.Matrix([[1, 2, 3]]), sy.Matrix([4, 5, 6]))
+⎡1  2  3  0⎤
+⎢          ⎥
+⎢0  0  0  4⎥
+⎢          ⎥
+⎢0  0  0  5⎥
+⎢          ⎥
+⎣0  0  0  6⎦
+</pre>
+<ul>
+  <li>行列のアクセス</li>
+  <ul>
+    <li>行列 A の要素 (i, j) は A[i, j] でアクセスする</li>
+    <li>A[k] は行列を平坦化した配列の k 番目の要素にアクセスする</li>
+    <li>メソッド row(i) は i 行目を、メソッド col(i) は i 列目を取り出す</li>
+    <li>スライス操作もできる</li>
+    <li>NumPy と違い、row(), col(), スライス操作は行列の要素をコピーする</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; x = sy.Matrix(4, 4, range(16))
+&gt;&gt;&gt; x
+⎡0   1   2   3 ⎤
+⎢              ⎥
+⎢4   5   6   7 ⎥
+⎢              ⎥
+⎢8   9   10  11⎥
+⎢              ⎥
+⎣12  13  14  15⎦
+&gt;&gt;&gt; x[0, 0]
+0
+&gt;&gt;&gt; x[3, 3]
+15
+&gt;&gt;&gt; x.row(0)
+[0  1  2  3]
+&gt;&gt;&gt; x.row(3)
+[12  13  14  15]
+&gt;&gt;&gt; x.col(1)
+⎡1 ⎤
+⎢  ⎥
+⎢5 ⎥
+⎢  ⎥
+⎢9 ⎥
+⎢  ⎥
+⎣13⎦
+&gt;&gt;&gt; x.col(2)
+⎡2 ⎤
+⎢  ⎥
+⎢6 ⎥
+⎢  ⎥
+⎢10⎥
+⎢  ⎥
+⎣14⎦
+&gt;&gt;&gt; x[1, :]
+[4  5  6  7]
+&gt;&gt;&gt; x[:, 2]
+⎡2 ⎤
+⎢  ⎥
+⎢6 ⎥
+⎢  ⎥
+⎢10⎥
+⎢  ⎥
+⎣14⎦
+&gt;&gt;&gt; x[2:, 2:]
+⎡10  11⎤
+⎢      ⎥
+⎣14  15⎦
+&gt;&gt;&gt; x[2:, 2:] = sy.Matrix(2, 2, [100, 100, 100, 100])
+&gt;&gt;&gt; x
+⎡0   1    2    3 ⎤
+⎢                ⎥
+⎢4   5    6    7 ⎥
+⎢                ⎥
+⎢8   9   100  100⎥
+⎢                ⎥
+⎣12  13  100  100⎦
+&gt;&gt;&gt; y = x[:2, :2]
+&gt;&gt;&gt; y
+⎡0  1⎤
+⎢    ⎥
+⎣4  5⎦
+&gt;&gt;&gt; y[1,1] *= 10
+&gt;&gt;&gt; y
+⎡0  1 ⎤
+⎢     ⎥
+⎣4  50⎦
+&gt;&gt;&gt; x
+⎡0   1    2    3 ⎤
+⎢                ⎥
+⎢4   5    6    7 ⎥
+⎢                ⎥
+⎢8   9   100  100⎥
+⎢                ⎥
+⎣12  13  100  100⎦
+&gt;&gt;&gt; z = x.row(0)
+&gt;&gt;&gt; z
+[0  1  2  3]
+&gt;&gt;&gt; z[3] *= 10
+&gt;&gt;&gt; z
+[0  1  2  30]
+&gt;&gt;&gt; x
+⎡0   1    2    3 ⎤
+⎢                ⎥
+⎢4   5    6    7 ⎥
+⎢                ⎥
+⎢8   9   100  100⎥
+⎢                ⎥
+⎣12  13  100  100⎦
+</pre>
+<ul>
+  <li>基本的な演算処理</li>
+  <ul>
+    <li>行列 M, N の足し算 M + N, 引き算 M - N</li>
+    <li>行列 M, N の積 M * N, (NumPy のような要素同士の積ではない)</li>
+    <li>要素同士の積はメソッド M.multiply_elementwise(N) を使う</li>
+    <li>行列 M とスカラー n の乗算 n * M, M * n, 除算 M / n, べき乗 M**n</li>
+    <li>行列 M の転置行列は M.T</li>
+    <li>ベクトル v1, v2 の内積はメソッド v1.dot(v2)</li>
+    <li>M.applyfunc(function) は行列 M の要素に関数 function を適用する</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; x = sy.Matrix([[1, 2, 3], [4, 5, 6]])
+&gt;&gt;&gt; y = x * 10
+&gt;&gt;&gt; y
+⎡10  20  30⎤
+⎢          ⎥
+⎣40  50  60⎦
+&gt;&gt;&gt; y / 5
+⎡2  4   6 ⎤
+⎢         ⎥
+⎣8  10  12⎦
+&gt;&gt;&gt; x + y
+⎡11  22  33⎤
+⎢          ⎥
+⎣44  55  66⎦
+&gt;&gt;&gt; y - x
+⎡9   18  27⎤
+⎢          ⎥
+⎣36  45  54⎦
+&gt;&gt;&gt; x * y.T
+⎡140  320⎤
+⎢        ⎥
+⎣320  770⎦
+&gt;&gt;&gt; x.multiply_elementwise(y)
+⎡10   40   90 ⎤
+⎢             ⎥
+⎣160  250  360⎦
+
+&gt;&gt;&gt; z = sy.Matrix([[1, 1], [1, 0]])
+&gt;&gt;&gt; z ** 2
+⎡2  1⎤
+⎢    ⎥
+⎣1  1⎦
+&gt;&gt;&gt; z ** 10
+⎡89  55⎤
+⎢      ⎥
+⎣55  34⎦
+&gt;&gt;&gt; z ** 40
+⎡165580141  102334155⎤
+⎢                    ⎥
+⎣102334155  63245986 ⎦
+&gt;&gt;&gt; z ** 100
+⎡573147844013817084101  354224848179261915075⎤
+⎢                                            ⎥
+⎣354224848179261915075  218922995834555169026⎦
+
+&gt;&gt;&gt; x = sy.Matrix([1, 2, 3])
+&gt;&gt;&gt; y = sy.Matrix([4, 5, 6])
+&gt;&gt;&gt; x
+⎡1⎤
+⎢ ⎥
+⎢2⎥
+⎢ ⎥
+⎣3⎦
+&gt;&gt;&gt; y
+⎡4⎤
+⎢ ⎥
+⎢5⎥
+⎢ ⎥
+⎣6⎦
+&gt;&gt;&gt; x.T
+[1  2  3]
+&gt;&gt;&gt; x.T * y
+[32]
+&gt;&gt;&gt; x.dot(y)
+32
+&gt;&gt;&gt; sy.Matrix([[1, 2], [3, 4]]).applyfunc(sy.sqrt)
+⎡1   √2⎤
+⎢       ⎥
+⎣√3  2 ⎦
+&gt;&gt;&gt; sy.Matrix([[1, 2], [3, 4]]).applyfunc(lambda x: x**2)
+⎡1  4 ⎤
+⎢     ⎥
+⎣9  16⎦
+</pre>
+<ul>
+  <li>行列の基本的な操作</li>
+  <ul>
+    <li>連結</li>
+    <ul>
+      <li>xs.row_join(ys), 行方向</li>
+      <li>xs.col_join(ys), 列方向</li>
+    </ul>
+    <li>挿入</li>
+    <ul>
+      <li>xs.row_insert(i, ys), i 行目に行ベクトル ys を挿入</li>
+      <li>xs.col_insert(i, ys), i 列目に列ベクトル ys を挿入</li>
+    </ul>
+    <li>削除</li>
+    <ul>
+      <li>xs.row_del(i), i 行目を削除</li>
+      <li>xs.col_del(i), i 列目を削除</li>
+      <li>これらのメソッドは行列 xs を破壊的に修正する</li>
+    </ul>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; x.row_join(sy.ones(3))
+⎡1  2  3  1  1  1⎤
+⎢                ⎥
+⎢4  5  6  1  1  1⎥
+⎢                ⎥
+⎣7  8  9  1  1  1⎦
+&gt;&gt;&gt; x.col_join(sy.ones(3))
+⎡1  2  3⎤
+⎢       ⎥
+⎢4  5  6⎥
+⎢       ⎥
+⎢7  8  9⎥
+⎢       ⎥
+⎢1  1  1⎥
+⎢       ⎥
+⎢1  1  1⎥
+⎢       ⎥
+⎣1  1  1⎦
+&gt;&gt;&gt; x.row_insert(0, sy.Matrix([[10, 11, 12]]))
+⎡10  11  12⎤
+⎢          ⎥
+⎢1   2   3 ⎥
+⎢          ⎥
+⎢4   5   6 ⎥
+⎢          ⎥
+⎣7   8   9 ⎦
+&gt;&gt;&gt; x.row_insert(3, sy.Matrix([[10, 11, 12]]))
+⎡1   2   3 ⎤
+⎢          ⎥
+⎢4   5   6 ⎥
+⎢          ⎥
+⎢7   8   9 ⎥
+⎢          ⎥
+⎣10  11  12⎦
+&gt;&gt;&gt; x.row_insert(0, sy.Matrix([[10, 11, 12]]))
+⎡10  11  12⎤
+⎢          ⎥
+⎢1   2   3 ⎥
+⎢          ⎥
+⎢4   5   6 ⎥
+⎢          ⎥
+⎣7   8   9 ⎦
+&gt;&gt;&gt; x.row_insert(3, sy.Matrix([[10, 11, 12]]))
+⎡1   2   3 ⎤
+⎢          ⎥
+⎢4   5   6 ⎥
+⎢          ⎥
+⎢7   8   9 ⎥
+⎢          ⎥
+⎣10  11  12⎦
+&gt;&gt;&gt; x.col_insert(0, sy.Matrix([10, 11, 12]))
+⎡10  1  2  3⎤
+⎢           ⎥
+⎢11  4  5  6⎥
+⎢           ⎥
+⎣12  7  8  9⎦
+&gt;&gt;&gt; x.col_insert(3, sy.Matrix([10, 11, 12]))
+⎡1  2  3  10⎤
+⎢           ⎥
+⎢4  5  6  11⎥
+⎢           ⎥
+⎣7  8  9  12⎦
+&gt;&gt;&gt; x.row_del(0)
+&gt;&gt;&gt; x
+⎡4  5  6⎤
+⎢       ⎥
+⎣7  8  9⎦
+&gt;&gt;&gt; x.col_del(2)
+&gt;&gt;&gt; x
+⎡4  5⎤
+⎢    ⎥
+⎣7  8⎦
+</pre>
+<h4 id="abc06">●線形代数</h4>
+<ul>
+  <li>メソッド V.norm() はベクトル V のノルム (大きさ) を求める</li>
+  <li>行列 A のトレース (trace, 跡) は A.trace()</li>
+  <li>トレースは行列の対角線上にある要素の和のこと (a11 + a22 + ... + ann)</li>
+  <li>行列 A の逆行列 A<sup>-1</sup> は A.inv() または A**(-1) で、行列式は A.det() で求めることができる</li>
+  <li>行列 A のランク (rank) は A.rank()</li>
+  <li>連立一次方程式 Ax = b を解く場合、拡大係数行列 (A, b) を関数 linsolve() に渡すこともできる</li>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.Matrix([1,2,3,4,5]).norm()
+√55
+&gt;&gt;&gt; sy.Matrix([[1,2,3,4,5]]).norm()
+√55
+&gt;&gt;&gt; sy.var('a b c d')
+(a, b, c, d)
+&gt;&gt;&gt; x = sy.Matrix([[a, b], [c, d]])
+&gt;&gt;&gt; x
+⎡a  b⎤
+⎢    ⎥
+⎣c  d⎦
+&gt;&gt;&gt; x.trace()
+a + d
+&gt;&gt;&gt; x**(-1)
+⎡    d         -b    ⎤
+⎢─────  ────⎥
+⎢a⋅d - b⋅c  a⋅d - b⋅c⎥
+⎢                    ⎥
+⎢   -c          a    ⎥
+⎢─────  ────⎥
+⎣a⋅d - b⋅c  a⋅d - b⋅c⎦
+&gt;&gt;&gt; x.inv()
+⎡    d         -b    ⎤
+⎢─────  ────⎥
+⎢a⋅d - b⋅c  a⋅d - b⋅c⎥
+⎢                    ⎥
+⎢   -c          a    ⎥
+⎢─────  ────⎥
+⎣a⋅d - b⋅c  a⋅d - b⋅c⎦
+&gt;&gt;&gt; x.det()
+a⋅d - b⋅c
+&gt;&gt;&gt; sy.Matrix(3, 3, range(1, 10))
+⎡1  2  3⎤
+⎢       ⎥
+⎢4  5  6⎥
+⎢       ⎥
+⎣7  8  9⎦
+&gt;&gt;&gt; sy.Matrix(3, 3, range(1, 10)).trace()
+15
+&gt;&gt;&gt; sy.Matrix(3, 3, range(1, 10)).det()
+0
+&gt;&gt;&gt; sy.Matrix(3, 3, range(1, 10)).rank()
+2
+&gt;&gt;&gt; sy.Matrix(3, 3, [1, 2, 3, 4, 5, 6, 7, 8, 10])
+⎡1  2  3 ⎤
+⎢        ⎥
+⎢4  5  6 ⎥
+⎢        ⎥
+⎣7  8  10⎦
+&gt;&gt;&gt; sy.Matrix(3, 3, [1, 2, 3, 4, 5, 6, 7, 8, 10]).det()
+-3
+&gt;&gt;&gt; sy.Matrix(3, 3, [1, 2, 3, 4, 5, 6, 7, 8, 10]).rank()
+3
+&gt;&gt;&gt; sy.Matrix(3, 3, [1, 2, 3, 4, 5, 6, 7, 8, 10]).inv()
+⎡-2/3  -4/3  1 ⎤
+⎢              ⎥
+⎢-2/3  11/3  -2⎥
+⎢              ⎥
+⎣ 1     -2   1 ⎦
+</pre>
+<ul>
+  <li>鶴亀算</li>
+  <ol>
+    <li>鶴と亀、合わせて 100 匹いる。足の合計が 272 本のとき、鶴と亀はそれぞれ何匹ずついるか。</li>
+    <li>鶴と亀とトンボが合わせて 10 匹いる。足の合計が 38 本で羽の合計が 14 枚であるとき、鶴と亀とトンボはそれぞれ何匹ずついるか。(トンボの足は 6 本で羽は 4 枚)</li>
+    <li>鶏と犬とタコ、合わせて 24 匹が台所にいる。足の合計が 102 本のとき、鶏、犬、タコはそれぞれ何匹ずついるか。</li>
+  </ol>
+  <li>解答</li>
+  <ol>
+    <li>x + y = 100, 2x + 4y = 272 を解く</li>
+<pre>
+&gt;&gt;&gt; sy.linsolve((sy.Matrix([[1, 1], [2, 4]]), sy.Matrix([100, 272])), (x, y))
+{(64, 36)}
+</pre>
+    <li>x + y + z = 10, 2x + 4y + 6z = 38, 2x + 4z = 14 を解く</li>
+<pre>
+&gt;&gt;&gt; sy.linsolve((sy.Matrix([[1, 1, 1], [2, 4, 6], [2, 0, 4]]), sy.Matrix([10, 38, 14])), (x, y, z))
+{(3, 5, 2)}
+</pre>
+    <li>x + y + z= 24, 2x + 4y + 8z = 102 を解く</li>
+<pre>
+&gt;&gt;&gt; sy.linsolve((sy.Matrix([[1, 1, 1], [2, 4, 8]]), sy.Matrix([24, 102])), (x, y, z))
+{(2⋅z - 3, -3⋅z + 27, z)}
+</pre>
+  </ol>
+</ul>
+<ul>
+  <li>行列の分解</li>
+  <ul>
+    <li>行列 A の LU 分解は LUdecomposition() で, QR 分解は QRdecomposition() で行う</li>
+<pre class="item">
+A.LUdecomposition() =&gt; (L, U, perm)
+A.QRdecomposition() =&gt; (Q, R)
+</pre>
+    <li>L は下三角行列, U は上三角行列, Q は直交行列, R は上三角行列</li>
+    <li>perm はピボット選択で交換した行の位置を記憶したリスト</li>
+    <li>LU 分解と QR 分解の説明は拙作のページ NumPy 入門: <a href="numpy03.html#chap21">連立一次方程式の解法</a> と <a href="numpy09.html">QR 分解と QR 法</a> を参照</li>
+    <li>メソッド diagonalize() は行列 A を P * D * P<sup>-1</sup> に分解する</li>
+<pre class="item">
+A.diagonalize() =&gt; (P, D)
+</pre>
+    <li>D は対角行列</li>
+    <li>この他にもコレスキー分解や LDL 分解を行うメソッドがある</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; a = sy.Matrix([[1, 1, 1], [2, 4, 6], [2, 0, 4]])
+&gt;&gt;&gt; a
+⎡1  1  1⎤
+⎢       ⎥
+⎢2  4  6⎥
+⎢       ⎥
+⎣2  0  4⎦
+&gt;&gt;&gt; L, U, _ = a.LUdecomposition()
+&gt;&gt;&gt; L
+⎡1  0   0⎤
+⎢        ⎥
+⎢2  1   0⎥
+⎢        ⎥
+⎣2  -1  1⎦
+&gt;&gt;&gt; U
+⎡1  1  1⎤
+⎢       ⎥
+⎢0  2  4⎥
+⎢       ⎥
+⎣0  0  6⎦
+&gt;&gt;&gt; L * U
+⎡1  1  1⎤
+⎢       ⎥
+⎢2  4  6⎥
+⎢       ⎥
+⎣2  0  4⎦
+
+&gt;&gt;&gt; Q, R = a.QRdecomposition()
+&gt;&gt;&gt; Q
+⎡           -2⋅√2⎤
+⎢1/3   0    ───⎥
+⎢             3   ⎥
+⎢                 ⎥
+⎢      √2    √2 ⎥
+⎢2/3   ──   ──⎥
+⎢      2      6   ⎥
+⎢                 ⎥
+⎢     -√2    √2 ⎥
+⎢2/3  ──    ──⎥
+⎣      2      6   ⎦
+&gt;&gt;&gt; R
+⎡3   3     7 ⎤
+⎢            ⎥
+⎢0  2⋅√2 √2⎥
+⎢            ⎥
+⎣0   0    √2⎦
+&gt;&gt;&gt; Q * R
+⎡1  1  1⎤
+⎢       ⎥
+⎢2  4  6⎥
+⎢       ⎥
+⎣2  0  4⎦
+
+&gt;&gt;&gt; b = sy.Matrix([[0, 2, 4], [1, 1, 1], [4, 2, 6]])
+&gt;&gt;&gt; b
+⎡0  2  4⎤
+⎢       ⎥
+⎢1  1  1⎥
+⎢       ⎥
+⎣4  2  6⎦
+&gt;&gt;&gt; L, U, p = b.LUdecomposition()
+&gt;&gt;&gt; L
+⎡1  0   0⎤
+⎢        ⎥
+⎢0  1   0⎥
+⎢        ⎥
+⎣4  -1  1⎦
+&gt;&gt;&gt; U
+⎡1  1  1⎤
+⎢       ⎥
+⎢0  2  4⎥
+⎢       ⎥
+⎣0  0  6⎦
+&gt;&gt;&gt; p
+[[0, 1]]
+&gt;&gt;&gt; L * U
+⎡1  1  1⎤
+⎢       ⎥
+⎢0  2  4⎥
+⎢       ⎥
+⎣4  2  6⎦
+
+&gt;&gt;&gt; Q, R = b.QRdecomposition()
+&gt;&gt;&gt; Q
+⎡        √34    √2   ⎤
+⎢  0     ──    ──  ⎥
+⎢         6       6    ⎥
+⎢                      ⎥
+⎢ √17   2⋅√34  -2⋅√2⎥
+⎢ ──   ───  ───⎥
+⎢  17     51      3    ⎥
+⎢                      ⎥
+⎢4⋅√17  -√34   √2   ⎥
+⎢───  ───  ──  ⎥
+⎣  17    102      6    ⎦
+&gt;&gt;&gt; R
+⎡     9⋅√17  25⋅√17 ⎤
+⎢√17  ─── ────⎥
+⎢       17      17    ⎥
+⎢                     ⎥
+⎢     6⋅√34  11⋅√34 ⎥
+⎢ 0   ───  ────⎥
+⎢       17      17    ⎥
+⎢                     ⎥
+⎣ 0     0      √2    ⎦
+&gt;&gt;&gt; Q * R
+⎡0  2  4⎤
+⎢       ⎥
+⎢1  1  1⎥
+⎢       ⎥
+⎣4  2  6⎦
+
+&gt;&gt;&gt; P, D = a.diagonalize()
+&gt;&gt;&gt; P
+⎡-3  -1  1⎤
+⎢         ⎥
+⎢-2  -2  4⎥
+⎢         ⎥
+⎣2   1   1⎦
+&gt;&gt;&gt; D
+⎡1  0  0⎤
+⎢       ⎥
+⎢0  2  0⎥
+⎢       ⎥
+⎣0  0  6⎦
+&gt;&gt;&gt; P * D * P.inv()
+⎡1  1  1⎤
+⎢       ⎥
+⎢2  4  6⎥
+⎢       ⎥
+⎣2  0  4⎦
+</pre>
+<ul>
+  <li>固有値と固有ベクトル</li>
+  <ul>
+    <li>メソッド eigenvals() は行列の固有値を、eigenvects() は固有ベクトルを求める</li>
+    <li>固有値と固有ベクトルの説明は拙作のページ NumPy 入門: <a href="numpy07.html#chap26">固有値と固有ベクトル</a> を参照</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; a = sy.Matrix([[1, 2], [2, 1]])
+&gt;&gt;&gt; a
+⎡1  2⎤
+⎢    ⎥
+⎣2  1⎦
+&gt;&gt;&gt; a.eigenvals()
+{-1: 1, 3: 1}
+&gt;&gt;&gt; a.eigenvects()
+⎡⎛       ⎡⎡-1⎤⎤⎞  ⎛      ⎡⎡1⎤⎤⎞⎤
+⎢⎜-1, 1, ⎢⎢  ⎥⎥⎟, ⎜3, 1, ⎢⎢ ⎥⎥⎟⎥
+⎣⎝       ⎣⎣1 ⎦⎦⎠  ⎝      ⎣⎣1⎦⎦⎠⎦
+&gt;&gt;&gt; b = sy.ones(3) + sy.diag(3,3,3)
+&gt;&gt;&gt; b
+⎡4  1  1⎤
+⎢       ⎥
+⎢1  4  1⎥
+⎢       ⎥
+⎣1  1  4⎦
+&gt;&gt;&gt; b.eigenvals()
+{3: 2, 6: 1}
+&gt;&gt;&gt; b.eigenvects()
+⎡⎛      ⎡⎡-1⎤  ⎡-1⎤⎤⎞  ⎛      ⎡⎡1⎤⎤⎞⎤
+⎢⎜      ⎢⎢  ⎥  ⎢  ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟⎥
+⎢⎜3, 2, ⎢⎢1 ⎥, ⎢0 ⎥⎥⎟, ⎜6, 1, ⎢⎢1⎥⎥⎟⎥
+⎢⎜      ⎢⎢  ⎥  ⎢  ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟⎥
+⎣⎝      ⎣⎣0 ⎦  ⎣1 ⎦⎦⎠  ⎝      ⎣⎣1⎦⎦⎠⎦
+
+&gt;&gt;&gt; c = sy.diag(1,2,3,4,5)
+&gt;&gt;&gt; c
+⎡1  0  0  0  0⎤
+⎢             ⎥
+⎢0  2  0  0  0⎥
+⎢             ⎥
+⎢0  0  3  0  0⎥
+⎢             ⎥
+⎢0  0  0  4  0⎥
+⎢             ⎥
+⎣0  0  0  0  5⎦
+&gt;&gt;&gt; c.eigenvals()
+{1: 1, 2: 1, 3: 1, 4: 1, 5: 1}
+&gt;&gt;&gt; c.eigenvects()
+⎡⎛      ⎡⎡1⎤⎤⎞  ⎛      ⎡⎡0⎤⎤⎞  ⎛      ⎡⎡0⎤⎤⎞  ⎛      ⎡⎡0⎤⎤⎞  ⎛      ⎡⎡0⎤⎤⎞⎤
+⎢⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟⎥
+⎢⎜      ⎢⎢0⎥⎥⎟  ⎜      ⎢⎢1⎥⎥⎟  ⎜      ⎢⎢0⎥⎥⎟  ⎜      ⎢⎢0⎥⎥⎟  ⎜      ⎢⎢0⎥⎥⎟⎥
+⎢⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟⎥
+⎢⎜1, 1, ⎢⎢0⎥⎥⎟, ⎜2, 1, ⎢⎢0⎥⎥⎟, ⎜3, 1, ⎢⎢1⎥⎥⎟, ⎜4, 1, ⎢⎢0⎥⎥⎟, ⎜5, 1, ⎢⎢0⎥⎥⎟⎥
+⎢⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟⎥
+⎢⎜      ⎢⎢0⎥⎥⎟  ⎜      ⎢⎢0⎥⎥⎟  ⎜      ⎢⎢0⎥⎥⎟  ⎜      ⎢⎢1⎥⎥⎟  ⎜      ⎢⎢0⎥⎥⎟⎥
+⎢⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟  ⎜      ⎢⎢ ⎥⎥⎟⎥
+⎣⎝      ⎣⎣0⎦⎦⎠  ⎝      ⎣⎣0⎦⎦⎠  ⎝      ⎣⎣0⎦⎦⎠  ⎝      ⎣⎣0⎦⎦⎠  ⎝      ⎣⎣1⎦⎦⎠⎦
+</pre>
+<h4 id="abc07">●素数と約数</h4>
+<ul>
+  <li>gcd(m, n), 最大公約数</li>
+  <li>lcm(m, n), 最小公倍数</li>
+  <li>divisors(n), 約数をリストに格納して返す</li>
+  <ul>
+    <li>キーワード引数 generator=True とするとジェネレータを返す</li>
+  </ul>
+  <li>divisor_count(n), 約数の個数を返す</li>
+  <li>factorint(n), 素因数分解 (素因数がキーで指数が値の辞書を返す)</li>
+  <li>primefactor(n), 素因数のみをリストに格納して返す
+  <li>prime(i), i 番目の素数を返す (1 から数える)
+  <li>primepi(n), n 以下の素数の個数を返す</li>
+  <li>nextprime(n, ith=1), n から ith 番目の素数を求める</li>
+  <li>prevprime(n), n 以下で最大の素数を求める</li>
+  <li>primerange(a, b), a 以上 b 未満の素数を生成するジェネレータを返す</li>
+  <li>primorial(n), 素数階乗 (1 番目から n 番目までの素数の積)</li>
+  <li>isprime(n), 素数の判定</li>
+  <li>multiplicity(p, m), p<sup>n</sup> == m となる整数 n を求める (p は素数)</li>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.gcd(12345678, 123456789)
+9
+&gt;&gt;&gt; sy.gcd(1234321, 12345654321)
+121
+
+&gt;&gt;&gt; sy.lcm(5, 7)
+35
+&gt;&gt;&gt; sy.lcm(14, 35)
+70
+
+&gt;&gt;&gt; sy.divisors(24)
+[1, 2, 3, 4, 6, 8, 12, 24]
+&gt;&gt;&gt; sy.divisors(12345678)
+[1, 2, 3, 6, 9, 18, 47, 94, 141, 282, 423, 846, 14593, 29186, 43779, 87558, 131337, 262674, 685871, 1371742,
+ 2057613, 4115226, 6172839, 12345678]
+&gt;&gt;&gt; sy.divisors(123456789)
+[1, 3, 9, 3607, 3803, 10821, 11409, 32463, 34227, 13717421, 41152263, 123456789]
+&gt;&gt;&gt; sy.divisors(1111111111)
+[1, 11, 41, 271, 451, 2981, 9091, 11111, 100001, 122221, 372731, 2463661, 4100041, 27100271, 101010101, 1111111111]
+
+&gt;&gt;&gt; sy.divisor_count(24)
+8
+&gt;&gt;&gt; sy.divisor_count(12345678)
+24
+&gt;&gt;&gt; sy.divisor_count(123456789)
+12
+&gt;&gt;&gt; sy.divisor_count(1111111111)
+16
+
+&gt;&gt;&gt; sy.factorint(24)
+{2: 3, 3: 1}
+&gt;&gt;&gt; sy.factorint(12345678)
+{2: 1, 3: 2, 47: 1, 14593: 1}
+&gt;&gt;&gt; sy.factorint(123456789)
+{3: 2, 3607: 1, 3803: 1}
+&gt;&gt;&gt; sy.factorint(1111111111)
+{11: 1, 41: 1, 271: 1, 9091: 1}
+
+&gt;&gt;&gt; sy.primefactors(24)
+[2, 3]
+&gt;&gt;&gt; sy.primefactors(12345678)
+[2, 3, 47, 14593]
+&gt;&gt;&gt; sy.primefactors(123456789)
+[3, 3607, 3803]
+&gt;&gt;&gt; sy.primefactors(1111111111)
+[11, 41, 271, 9091]
+
+&gt;&gt;&gt; for i in range(1, 11): print(sy.prime(i))
+...
+2
+3
+5
+7
+11
+13
+17
+19
+23
+29
+&gt;&gt;&gt; sy.primepi(29)
+10
+&gt;&gt;&gt; sy.primepi(100)
+25
+&gt;&gt;&gt; sy.nextprime(100)
+101
+&gt;&gt;&gt; sy.nextprime(100, ith=2)
+103
+&gt;&gt;&gt; sy.prevprime(100)
+97
+&gt;&gt;&gt; list(sy.primerange(100, 200))
+[101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197, 199]
+&gt;&gt;&gt; list(sy.primerange(100, 199))
+[101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191, 193, 197]
+
+&gt;&gt;&gt; sy.primorial(3)
+30
+&gt;&gt;&gt; sy.primorial(6)
+30030
+
+&gt;&gt;&gt; sy.isprime(199)
+True
+&gt;&gt;&gt; sy.isprime(1991)
+False
+&gt;&gt;&gt; sy.isprime(19991)
+True
+&gt;&gt;&gt; sy.multiplicity(2, 256)
+8
+&gt;&gt;&gt; sy.multiplicity(2, 257)
+0
+&gt;&gt;&gt; sy.multiplicity(3, 27)
+3
+&gt;&gt;&gt; sy.multiplicity(3, 28)
+0
+</pre>
+<ul>
+  <li>簡単な問題</li>
+  <ol>
+    <li> 3,000,000 以下の素数の個数とその最大値を求めてください。
+    <li> 3,000,001 を素因数分解してください。素因数分解とは、素数でない整数 (合成数) を素数の積の形に書き表すことです。たとえば、12 は 2<sup>2</sup> * 3 と素因数分解することができます。
+    <li> 3,000,000 以下のフィボナッチ素数 (フィボナッチ数で素数) の個数とその最大値を求めてください。
+    <li> 差が 2 である素数の組を「双子素数 (twin prime)」といいます。3,000,000 以下の双子素数の個数とその最大値を求めてください。
+    <li> 2<sup>n</sup> - 1 (n は自然数) の形の自然数を「メルセンヌ数 (Mersenne number)」といい、素数であるメルセンヌ数を「メルセンヌ素数」といいます。n が 32 以下の条件でメルセンヌ素数を求めてください。
+  <li> 完全数（かんぜんすう，perfect number）とは、その数自身を除く約数の和が、その数自身と等しい自然数のことです。10000 以下の完全数を求めてください。
+  <li> 友愛数（ゆうあいすう）とは、異なる 2 つの自然数の組で、自分自身を除いた約数の和が、互いに他方と等しくなるような数のことです。100000 以下の友愛数を求めてください。
+  </ol>
+  <li>解答１</li>
+<pre>
+&gt;&gt;&gt; sy.prevprime(3000000)
+2999999
+&gt;&gt;&gt; sy.primepi(3000000)
+216816
+</pre>
+  <li>解答２</li>
+<pre>
+&gt;&gt;&gt; sy.factorint(3000001)
+{853: 1, 3517: 1}
+</pre>
+  <li>解答３</li>
+  <ul>
+    <li>フィボナッチ数は SymPy の関数 fibonacci() で求めることができる</li>
+  </ul>
+<pre>
+&gt;&gt;&gt; for n in sy.Range(0, sy.oo):
+...     x = sy.fibonacci(n)
+...     if x &gt; 3000000: break
+...     if sy.isprime(x): print(n, x)
+...
+3 2
+4 3
+5 5
+7 13
+11 89
+13 233
+17 1597
+23 28657
+29 514229
+</pre>
+    <li>解答４</li>
+<pre>
+&gt;&gt;&gt; g = sy.primerange(2, 3000000)
+&gt;&gt;&gt; c, m, n = 0, 0, 0
+&gt;&gt;&gt; p = next(g)
+&gt;&gt;&gt; for q in g:
+...     if q - p == 2:
+...         m, n = p, q
+...         c += 1
+...     p = q
+...
+&gt;&gt;&gt; m
+2999831
+&gt;&gt;&gt; n
+2999833
+&gt;&gt;&gt; c
+20932
+</pre>
+  <li>解答５</li>
+<pre>
+&gt;&gt;&gt; for n in range(2, 33):
+...     m = 2 ** n - 1
+...     if sy.isprime(m): print(n, m)
+...
+2 3
+3 7
+5 31
+7 127
+13 8191
+17 131071
+19 524287
+31 2147483647
+</pre>
+  <ul>
+    <li>メルセンヌ素数には「リュカ-レーマー・テスト (Lucas-Lehmer primality test)」という高速な素数判定法がある</li>
+  </ul>
+  <li>解答６</li>
+<pre>
+&gt;&gt;&gt; for x in range(4, 10001):
+...     if sum(sy.divisors(x)[:-1]) == x: print(x)
+...
+6
+28
+496
+8128
+</pre>
+  <li>解答７</li>
+<pre>
+&gt;&gt;&gt; for x in range(1, 100001):
+...     m = sum(sy.divisors(x)[:-1])
+...     if m < x and x == sum(sy.divisors(m)[:-1]): print(m, x)
+...
+220 284
+1184 1210
+2620 2924
+5020 5564
+6232 6368
+10744 10856
+12285 14595
+17296 18416
+66928 66992
+67095 71145
+63020 76084
+69615 87633
+79750 88730
+</pre>
+</ul>
+<h4 id="abc08">●数列と級数</h4>
+<ul>
+  <li>数列は sequence() で生成する</li>
+<pre class="item">
+sequence(expr, (var, s, e))
+</pre>
+  <ul>
+    <li>引数 expr は式または列 (シーケンス)</li>
+    <li>sequence() で生成した数列を渡すこともできる</li>
+    <li>var は expr で使用する変数 (シンボル) で、s, e はその区間 [s, e] を表す</li>
+    <li>expr で使用する変数が一つしかない場合、var を省略することができる</li>
+    <li>s は -oo を、e は oo を指定できる</li>
+    <li>区間が有限の場合に限り、生成した数列は iterable になる</li>
+  </ul>
+  <li>数列同士の演算には +, -, *, +=, -=, *= が利用できる</li>
+  <ul>
+    <li>演算は区間が重なっているところだけ行われる</li>
+  </ul>
+  <li>スカラー倍はメソッド coeff_mul(n) を使う</li>
+  <li>第 i 番目の要素は Python のリストのように添字でアクセスする (i は 0 から始まる整数)</li>
+  <li>メソッド coeff(x) で第 x 項を求める (s &lt;= x &lt;= e, x は実数)</li>
+  <li>数列の和は summation() で求めることができる</li>
+<pre class="item">
+summation(expr, (var, s, e))
+</pre>
+  <ul>
+    <li>引数 expr は数列の一般項 (数列を表す式)</li>
+    <li>sequence() で生成した数列 seq の一般項は seq.formula で求めることができる</li>
+    <li>var は expr で使用する変数 (シンボル) で、s, e はその区間 [s, e] を表す</li>
+    <li>s, e に変数 (シンボル) を指定してもよい</li>
+  </ul>
+  <li>等差数列</li>
+  <ul>
+    <li>次のように、一定の差で並んだ数列を「等差数列」という</li>
+<pre class="item">
+a, a + d, a + 2d, a + 3d, ..., a + (n - 1)d
+</pre>
+    <li>a を「初項」、d を「公差」という</li>
+    <li>等差数列の一般項は次の式で表すことができる</li>
+<pre class="item">
+a<sub>n</sub> = a + (n - 1)d
+</pre>
+    <li>初項から a<sub>n</sub> までの和 S<sub>n</sub> は次の式で求めることができる</li>
+<pre class="item">
+S<sub>n</sub> = n(2a + (n - 1)d) / 2
+</pre>
+    <li>公式の導出</li>
+<pre class="item">
+S<sub>n</sub> = a              + (a + d)        + ,,, + (a + (n - 2)d) + (a + (n - 1)d)
+S<sub>n</sub> = (a + (n - 1)d) + (a + (n - 2)d) + ... + (a + d)        + a
+足し算すると
+2S<sub>n</sub> = (2a + (n - 1)d) + (2a + (n - 1)d) + ... (2a + (n - 1)d) + (2a + (n - 1)d)
+2S<sub>n</sub> = n(2a + (n - 1)d)
+ S<sub>n</sub> = n(2a + (n - 1)d)/2
+</pre>
+    <ul>
+      <li>右辺を逆順に並べ替えて足し算すると、2a + (n - 1)d が n 個並ぶことになる</li>
+      <li>あとは、これを 2 で割り算するだけ</li>
+    </ul>
+  </ul>
+  <li>等比数列</li>
+  <ul>
+    <li>次のように、一定の比で並んだ数列を「等比数列」という</li>
+<pre class="item">
+a, ar, ar<sup>2</sup>, ..., ar<sup>n-1</sup>, ...
+</pre>
+    <li>a を「初項」、d を「公比」という</li>
+    <li>等比数列の一般項は次の式で表すことができる</li>
+<pre class="item">
+a<sub>n</sub> = ar<sup>n-1</sup>
+</pre>
+    <li>初項から a<sub>n</sub> までの和 S<sub>n</sub> は次の式で求めることができる</li>
+<pre class="item">
+S<sub>n</sub> = a(1 - r<sup>n</sup>) / (1 - r)
+</pre>
+    <li>公式の導出</li>
+<pre class="item">
+S<sub>n</sub> = a + ar + ar<sup>2</sup> + ... + ar<sup>n-1</sup>
+両辺を r 倍すると
+rS<sub>n</sub> =    ar + ar<sup>2</sup> + ... + ar<sup>n-1</sup> + ar<sup>n</sup>
+これを引き算すると
+S<sub>n</sub> - rS<sub>n</sub> = a - ar<sup>n</sup> =&gt; S<sub>n</sub> = a(1 - r<sup>n</sup>) / (1 - r)
+</pre>
+    <ul>
+      <li>右辺を引き算すると ar から ar<sup>n-1</sup> の項がなくなって、a - ar<sup>n</sup> だけになる</li>
+      <li>あとは、1 - r で割り算するだけ</li>
+    </ul>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.var('m n x y z')
+(m, n, x, y, z)
+&gt;&gt;&gt; a = sy.sequence(x, (x, 1, 10))
+&gt;&gt;&gt; a
+[1, 2, 3, 4, …]
+&gt;&gt;&gt; list(a)
+[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+&gt;&gt;&gt; a.formula
+x
+&gt;&gt;&gt; sy.summation(a.formula, (x, 1, 1000))
+500500
+&gt;&gt;&gt; sy.summation(a.formula, (x, 1, n))
+ 2
+n    n
+─ + ─
+2    2
+
+&gt;&gt;&gt; b = sy.sequence(2*x+1, (x, 0, 10))
+&gt;&gt;&gt; list(b)
+[1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21]
+&gt;&gt;&gt; sy.summation(b.formula, (x, 1, 1000))
+1002000
+&gt;&gt;&gt; sy.summation(b.formula, (x, 0, n - 1))
+ 2
+n
+
+&gt;&gt;&gt; a + b
+[4, 7, 10, 13, …]
+&gt;&gt;&gt; a - b
+[-2, -3, -4, -5, …]
+&gt;&gt;&gt; a * b
+[3, 10, 21, 36, …]
+&gt;&gt;&gt; list(a + b)
+[4, 7, 10, 13, 16, 19, 22, 25, 28, 31]
+&gt;&gt;&gt; list(a - b)
+[-2, -3, -4, -5, -6, -7, -8, -9, -10, -11]
+&gt;&gt;&gt; list(a * b)
+[3, 10, 21, 36, 55, 78, 105, 136, 171, 210]
+
+&gt;&gt;&gt; b[2]
+5
+&gt;&gt;&gt; b[3]
+7
+&gt;&gt;&gt; b.coeff(2)
+5
+&gt;&gt;&gt; b.coeff(3)
+7
+&gt;&gt;&gt; b.coeff(2.5)
+6.00000000000000
+
+&gt;&gt;&gt; c = sy.sequence(x*x, (x, 1, 10))
+&gt;&gt;&gt; c
+[1, 4, 9, 16, …]
+&gt;&gt;&gt; list(c)
+[1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+&gt;&gt;&gt; sy.summation(c.formula, (x, 1, 100))
+338350
+&gt;&gt;&gt; sy.summation(c.formula, (x, 1, n))
+ 3    2
+n    n    n
+─ + ─ + ─
+3    2    6
+&gt;&gt;&gt; sy.factor(sy.summation(c.formula, (x, 1, n)))
+n⋅(n + 1)⋅(2⋅n + 1)
+──────────
+         6
+
+&gt;&gt;&gt; d = sy.sequence(x*(x+1), (x, 1, 10))
+&gt;&gt;&gt; d
+[2, 6, 12, 20, …]
+&gt;&gt;&gt; list(d)
+[2, 6, 12, 20, 30, 42, 56, 72, 90, 110]
+&gt;&gt;&gt; sy.factor(sy.summation(d.formula, (x, 1, n)))
+n⋅(n + 1)⋅(n + 2)
+─────────
+        3
+
+&gt;&gt;&gt; e = sy.sequence(1/(x*(x+1)), (x, 1, 10))
+&gt;&gt;&gt; e
+[1/2, 1/6, 1/12, 1/20, …]
+&gt;&gt;&gt; list(e)
+[1/2, 1/6, 1/12, 1/20, 1/30, 1/42, 1/56, 1/72, 1/90, 1/110]
+&gt;&gt;&gt; sy.factor(sy.summation(e.formula, (x, 1, n)))
+  n
+───
+n + 1
+
+&gt;&gt;&gt; f = sy.sequence(2**x, (x, 0, 10))
+&gt;&gt;&gt; f
+[1, 2, 4, 8, …]
+&gt;&gt;&gt; list(f)
+[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024]
+&gt;&gt;&gt; sy.summation(f.formula, (x, 0, n))
+ n + 1
+2      - 1
+
+&gt;&gt;&gt; sy.summation(y**x, (x, 0, n))
+⎧   n + 1      for y = 1
+⎪
+⎪   n + 1
+⎨- y      + 1
+⎪──────  otherwise
+⎪   -y + 1
+⎩
+
+&gt;&gt;&gt; sy.sequence(x + y, (x, 1, 10))
+[y + 1, y + 2, y + 3, y + 4, …]
+&gt;&gt;&gt; sy.sequence(sy.sequence(x + y, (x, 1, 10)), (y, 11, 20))
+[12, 14, 16, 18, …]
+&gt;&gt;&gt; list(sy.sequence(sy.sequence(x + y, (x, 1, 10)), (y, 11, 20)))
+[12, 14, 16, 18, 20, 22, 24, 26, 28, 30]
+&gt;&gt;&gt; list(sy.sequence(sy.sequence(x * y, (x, 1, 10)), (y, 11, 20)))
+[11, 24, 39, 56, 75, 96, 119, 144, 171, 200]
+</pre>
+<ul>
+  <li>級数は無限につづく数列の和のこと</li>
+  <li>たとえば、等比級数 Σar<sup>n</sup> は |r| &lt; 1 のとき a / (1 - r) に収束する</li>
+  <li>級数は summation() の端点 e に oo を指定する</li>
+  <li>調和級数 Σ1/n は発散するが、交代級数 Σ(-1)<sup>n+1</sup> / n は ln 2 に収束する</li>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.summation(x * y ** n, (n, 0, sy.oo))
+  ⎛⎧   1                 ⎞
+  ⎜⎪ ─── for │y│ &lt; 1⎟
+  ⎜⎪ -y + 1              ⎟
+  ⎜⎪                     ⎟
+  ⎜⎪  ∞                 ⎟
+  ⎜⎪ ___                 ⎟
+x⋅⎜⎨ ╲                   ⎟
+  ⎜⎪  ╲    n             ⎟
+  ⎜⎪  ╱   y    otherwise ⎟
+  ⎜⎪ ╱                   ⎟
+  ⎜⎪ ‾‾‾                 ⎟
+  ⎜⎪n = 0                ⎟
+  ⎝⎩                     ⎠
+&gt;&gt;&gt; sy.summation(1 / n, (n, 1, sy.oo))
+∞
+&gt;&gt;&gt; sy.summation((-1)**(n+1) / n, (n, 1, sy.oo))
+log(2)
+</pre>
+<ul>
+  <li>多角数 (polygonal number)</li>
+  <ul>
+    <li>点を多角形の形に並べたとき、その総数を多角数 (polygonal number) という</li>
+    <li>三角形に配置したものを三角数 (triangular number)</li>
+<pre class="fig">
+１    ３      ６        10          15
+●    ●      ●        ●          ●
+     ●●    ●●      ●●        ●●
+            ●●●    ●●●      ●●●
+                     ●●●●    ●●●●
+                                ●●●●●
+
+            図 : 三角数
+</pre>
+    <li>四角形に配置したものを四角数 (square number)</li>
+<pre class="fig">
+１   ４      ９        16          25
+●  ●●   ●●●   ●●●●   ●●●●●
+    ●●   ●●●   ●●●●   ●●●●●
+           ●●●   ●●●●   ●●●●●
+                    ●●●●   ●●●●●
+                               ●●●●●
+
+            図 : 四角数
+</pre>
+    <li>五角形に配置したものを五角数 (pentagonal number)</li>
+<pre class="fig">
+１       ５             12                      22
+●       ●             ●                      ●
+      ●    ●       ●    ●               ●      ●
+                 ●            ●        ●             ●
+       ●  ●         ●              ●      ●           ●
+                   ●    ●  ●            ●     ●
+                                       ●            ●  ●
+                     ● ● ●               ●
+                                         ●     ● ●  ●
+
+                                           ● ● ● ●
+
+            図 : 五角数
+</pre>
+    <li>三角数は公差 1、四角数は公差 2、五角数は公差 3、p 角数は公差 p - 2 の等差数列の和になる</li>
+<pre class="fig">
+ n   三角数            四角数             五角数
+---+-----------------------------------------------------------
+ 1 |  1                 1                  1
+ 2 |  3 = 1+2           4 = 1+3            5 = 1+4
+ 3 |  6 = 1+2+3         9 = 1+3+5         12 = 1+4+7
+ 4 | 10 = 1+2+3+4      16 = 1+3+5+7       22 = 1+4+7+10
+ 5 | 15 = 1+2+3+4+5    25 = 1+3+5+7+9     35 = 1+4+7+10+13
+ 6 | 21 = 1+2+3+4+5+6  36 = 1+3+5+7+9+11  51 = 1+4+7+10+13+16
+
+      ・・・・・・      ・・・・・・・     ・・・・・
+
+ n | n(n + 1) / 2      n^2                n(3n - 1) / 2
+</pre>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.var('m n x y z')
+(m, n, x, y, z)
+&gt;&gt;&gt; sy.init_printing()
+&gt;&gt;&gt; sy.factor(sy.summation((m - 2)*(x - 1) + 1, (x, 1, n)))
+n⋅(m⋅n - m - 2⋅n + 4)
+───────────
+          2
+&gt;&gt;&gt; sy.factor(sy.summation((m - 2)*(x - 1) + 1, (x, 1, n))).subs(m, 3)
+n⋅(n + 1)
+─────
+    2
+&gt;&gt;&gt; sy.factor(sy.summation((m - 2)*(x - 1) + 1, (x, 1, n))).subs(m, 4)
+ 2
+n
+&gt;&gt;&gt; sy.factor(sy.summation((m - 2)*(x - 1) + 1, (x, 1, n))).subs(m, 5)
+n⋅(3⋅n - 1)
+──────
+     2
+</pre>
+<ul>
+  <li> 三角数を 1 から順番に足した数列を考えることができる</li>
+  <li>これを三角錐数 (triangular pyramidal number) という</li>
+  <li>同様に、四角錐数 (square pyramidal number) と五角錐数 (pentagonal pyramidal number) がある</li>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.factor(sy.summation(x*(x + 1)/2, (x, 1, n)))
+n⋅(n + 1)⋅(n + 2)
+─────────
+        6
+&gt;&gt;&gt; sy.summation(x*(x + 1)/2, (x, 1, n)).subs(n, 1000000)
+166667166667000000
+&gt;&gt;&gt; sy.factor(sy.summation(x**2, (x, 1, n)))
+n⋅(n + 1)⋅(2⋅n + 1)
+──────────
+         6
+&gt;&gt;&gt; sy.summation(x**2, (x, 1, n)).subs(n, 1000000)
+333333833333500000
+&gt;&gt;&gt; sy.factor(sy.summation(x*(3*x - 1)/2, (x, 1, n)))
+ 2
+n ⋅(n + 1)
+─────
+    2
+&gt;&gt;&gt; sy.summation(x*(3*x - 1)/2, (x, 1, n)).subs(n, 1000000)
+500000500000000000
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="python3.html#sympy_abc">Python3</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

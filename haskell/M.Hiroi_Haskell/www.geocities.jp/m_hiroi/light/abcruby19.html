@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Ruby プログラミング入門</title>
+  <meta name="description" content="Ruby,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881801</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>お気楽 Ruby プログラミング入門</h1>
+<h2>番外編 遅延ストリーム</h2>
+<div class="small">
+[ <a href="abcruby18.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby20.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>遅延ストリーム (2)</h3>
+
+<h4>●zip() と zip_with()</h4>
+<p> 遅延ストリームを操作する場合、2 つの遅延ストリームを受け取るマップ関数があると便利です。関数型言語 Haskell では、この処理を zipWith() と呼んでいます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : zip() と zip_with()
+
+  def zip(xs)
+    return @@NIL if empty? || xs.empty?
+    LazyStream.new([first, xs.first]) { rest.zip(xs.rest) }
+  end
+
+  def zip_with(xs, &amp;func)
+    return @@NIL if empty? || xs.empty?
+    LazyStream.new(func.call(first, xs.first)) {
+      rest.zip_with(xs.rest, &amp;func)
+    }
+  end
+</pre>
+<p> zip() は自分自身 (self) と xs の遅延ストリームから要素を取り出して配列に格納し、それを新しい遅延ストリームに格納して返します。zip_with() は zip() と map() をひとつにしたメソッドです。どちらかの遅延ストリームが空になった場合は空の遅延ストリームを返します。これで有限と無限どちらの遅延ストリームにも対応することができます。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+irb&gt; xs = LazyStream.iota(1, 10)
+=&gt; (1, ?)
+irb&gt; ys = LazyStream.iota(11, 20)
+=&gt; (11, ?)
+irb&gt; zs = LazyStream.iterate(1){|x| x + 1}
+=&gt; (1, ?)
+irb&gt; xs.zip(ys).take(10)
+=&gt; [[1, 11], [2, 12], [3, 13], [4, 14], [5, 15], [6, 16], [7, 17], [8, 18], [9, 19], [10, 20]]
+irb&gt;> xs.zip(zs).take(10)
+=&gt; [[1, 1], [2, 2], [3, 3], [4, 4], [5, 5], [6, 6], [7, 7], [8, 8], [9, 9], [10, 10]]
+irb&gt; zs.zip(ys).take(10)
+=&gt; [[1, 11], [2, 12], [3, 13], [4, 14], [5, 15], [6, 16], [7, 17], [8, 18], [9, 19], [10, 20]]
+irb&gt; xs.zip_with(ys){|x, y| x *y}.take(10)
+=&gt; [11, 24, 39, 56, 75, 96, 119, 144, 171, 200]
+irb&gt; xs.zip_with(zs){|x, y| x *y}.take(10)
+=&gt; [1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+irb&gt; zs.zip_with(ys){|x, y| x *y}.take(10)
+=&gt; [11, 24, 39, 56, 75, 96, 119, 144, 171, 200]
+irb&gt; zs.zip_with(zs){|x, y| x *y}.take(20)
+=&gt; [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256, 289, 324, 361, 400]
+</pre>
+<p> zip_with() を使うと、遅延ストリームに対していろいろな処理を定義することができます。次の例を見てください。
+</p>
+<pre>
+irb&gt; def add_stream(xs, ys)
+irb&gt; xs.zip_with(ys){|x, y| x + y}
+irb&gt; end
+=&gt; :add_stream
+irb&gt; ones = LazyStream.iterate(1, &amp;:itself)
+=&gt; (1, ?)
+irb&gt; ints = LazyStream.new(1){ add_stream(ones, ints) }
+=&gt; (1, ?)
+irb&gt; ints.take(20)
+=&gt; [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+irb&gt; fibo = LazyStream.new(0){ LazyStream.new(1) { add_stream(fibo.rest, fibo) }}
+=&gt; (0, ?)
+irb&gt; fibo.take(20)
+=&gt; [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181]
+</pre>
+<p> add_stream() は xs と ys の要素を加算した遅延ストリームを返します。この add_stream() を使うと、整数を生成する遅延ストリーム ints やフィボナッチ数列を生成する遅延ストリーム fibo を定義することができます。
+</p>
+<p> 遅延ストリーム ints は、現在の ints に 1 を足し算することで整数を生成しています。fibo は現在のフィボナッチ数列を表していて、fibo.rest() で次の要素を求め、それらを足し算することで、その次の要素を求めています。この場合、ストリームの初期値として 2 つの要素が必要になることに注意してください。
+</p>
+
+<h4>●遅延ストリームの併合</h4>
+<p> 次は、要素を昇順に出力する 2 つの遅延ストリームを併合 (マージ: merge) するメソッドを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームのマージ
+
+  def merge(xs)
+    if empty?
+      xs
+    elsif xs.empty?
+      self
+    else
+      if first &lt;= xs.first
+        LazyStream.new(first) { rest.merge(xs) }
+      else
+        LazyStream.new(xs.first) { merge(xs.rest) }
+      end
+    end
+  end
+</pre>
+<p> メソッド merge() は 2 つの遅延ストリームを併合して新しい遅延ストリームを返します。自分自身 (self) が空であれば xs を返し、xs が空ならば self を返します。そうでなければ、遅延ストリームの先頭要素を比較します。first &lt;= xs.first ならば first を、そうでなければ xs.first を遅延ストリームに格納します。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+irb&gt; xs = LazyStream.iterate(0){|x| x + 2}
+=&gt; (0, ?)
+irb(main):007:0> ys = LazyStream.iterate(1){|x| x + 2}
+=&gt; (1, ?)
+irb&gt; xs.merge(ys).take(20)
+=&gt; [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+irb&gt; xs.merge(xs).take(20)
+=&gt; [0, 0, 2, 2, 4, 4, 6, 6, 8, 8, 10, 10, 12, 12, 14, 14, 16, 16, 18, 18]
+</pre>
+<h4>●集合演算</h4>
+<p> ここで、遅延ストリームには重複要素が存在せず、要素は昇順に出力されることを前提にすると、遅延ストリームでも集合演算を行うことができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 集合演算
+
+  # 和集合
+  def union(xs)
+    if empty?
+      xs
+    elsif xs.empty?
+      self
+    else
+      if first &lt; xs.first
+        LazyStream.new(first) { rest.union(xs) }
+      elsif xs.first &lt; first
+        LazyStream.new(xs.first) { union(xs.rest) }
+      else
+        LazyStream.new(first) { rest.union(xs.rest) }
+      end
+    end
+  end
+
+  # 積集合
+  def intersection(ys)
+    xs = self
+    loop {
+      if xs.empty? || ys.empty?
+        return @@NIL
+      elsif xs.first == ys.first
+        return LazyStream.new(xs.first) { xs.rest.intersection(ys.rest) }
+      elsif xs.first &lt; ys.first
+        xs = xs.rest
+      else
+        ys = ys.rest
+      end
+    }
+  end
+</pre>
+<p> メソッド union() は self と xs から要素を取り出して、小さいほうを遅延ストリームに追加します。等しい場合は要素をひとつだけ追加します。このとき、self と xs の両方から先頭要素を取り除くことに注意してください。
+</p>
+<p> メソッド intersection() も簡単です。xs, ys の先頭要素を比較して、等しい場合はその要素を遅延ストリームに追加します。xs.first が ys.first よりも小さい場合は xs を一つ進めて次の要素を調べます。ys.first が小さい場合は ys の次の要素を調べます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+irb&gt; xs = LazyStream.tabulate(1){|x| x * (x + 1) / 2}
+=&gt; (1, ?)
+irb&gt; xs.take(20)
+=&gt; [1, 3, 6, 10, 15, 21, 28, 36, 45, 55, 66, 78, 91, 105, 120, 136, 153, 171, 190, 210]
+irb&gt; ys = LazyStream.tabulate(1){|x| x * x}
+=&gt; (1, ?)
+irb&gt; ys.take(20)
+=&gt; [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256, 289, 324, 361, 400]
+irb&gt; xs.union(ys).take(20)
+=&gt; [1, 3, 4, 6, 9, 10, 15, 16, 21, 25, 28, 36, 45, 49, 55, 64, 66, 78, 81, 91]
+irb&gt; xs.intersection(ys).take(7)
+=&gt; [1, 36, 1225, 41616, 1413721, 48024900, 1631432881]
+</pre>
+<p> 遅延ストリーム xs は「三角数」、ys は「四角数」を表します。これらの遅延ストリームを union() でまとめると、三角数または四角数の数列になります。intersection() でまとめると、三角数かつ四角数の数列 (平方三角数) になります。平方三角数は拙作のページ <a href="../puzzle/index.html">Puzzle DE Progamming</a> <a href="../puzzle/polynum.html">多角数</a> でも取り上げています。興味のある方はお読みくださいませ。
+</p>
+
+<h4>●ハミングの問題</h4>
+<p> ここで unio() を使うと簡単に解ける問題を紹介しましょう。
+</p>
+<div class="question">
+<b>[ハミングの問題]</b><br>
+<p> 7 以上の素数で割り切れない正の整数を小さい順に N 個求めよ
+</p>
+<a name="cite0130">参考文献</a> : 奥村晴彦,『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991 (361 ページより引用)
+</div>
+<p> 7 以上の素数で割り切れない正の整数は、素因子が 2, 3, 5 しかない自然数のことで、これを「ハミング数 (Hamming Numbers)」といいます。ハミング数は素因数分解したとき、2<sup>i</sup> * 3<sup>j</sup> * 5<sup>k</sup> (i, j, k &gt;= 0) の形式になります。たとえば、100 以下のハミング数は次のようになります。
+</p>
+<pre class="item">
+1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30, 32, 36, 40, 45, 48, 50, 
+54, 60, 64, 72, 75, 80, 81, 90, 96, 100
+</pre>
+<p> 遅延ストリームを使うと「ハミングの問題」は簡単に解くことができます。小さい順にハミング数を出力する遅延ストリームを hs としましょう。hs は 1 から始まるので次のように定義できます。
+</p>
+<pre class="item">
+hs = LazyStream.new(1) { ... }
+</pre>
+<p> 最初の要素は 1 なので、それに 2, 3, 5 を掛け算した値 (2, 3, 5) もハミング数になります。この値は hs.map{|x| x * 2}, hs.map{|x| x * 3}, hs.map{|x| x * 5} で生成することができます。あとは、これらの遅延ストリームを union() でひとつにまとめて、小さい順に出力すればいいわけです。
+</p>
+<p> プログラムと実行結果を示します。
+</p>
+<pre>
+irb&gt; hs = LazyStream.new(1) {
+irb&gt; hs.map{|x| x * 2}.union(hs.map{|x| x * 3}).union(hs.map{|x| x * 5})
+irb&gt; }
+=&gt; (1, ?)
+irb&gt; hs.take(100)
+=&gt; [1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30, 32, 36, 40, 45, 
+48, 50, 54, 60, 64, 72, 75, 80, 81, 90, 96, 100, 108, 120, 125, 128, 135, 144, 150, 
+160, 162, 180, 192, 200, 216, 225, 240, 243, 250, 256, 270, 288, 300, 320, 324, 360, 
+375, 384, 400, 405, 432, 450, 480, 486, 500, 512, 540, 576, 600, 625, 640, 648, 675, 
+720, 729, 750, 768, 800, 810, 864, 900, 960, 972, 1000, 1024, 1080, 1125, 1152, 1200, 
+1215, 1250, 1280, 1296, 1350, 1440, 1458, 1500, 1536]
+</pre>
+
+<h4>●順列の生成</h4>
+<p> 順列を生成する遅延ストリームも簡単にプログラムすることができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 順列の生成 (lazyperm.rb)
+
+load "lazystream.rb"
+
+def permutation(n, xs)
+  if n == 0
+    LazyStream.new([]) { LazyStream.empty }
+  else
+    xs.flat_map {|x|
+      permutation(n - 1, xs.filter{|n| x != n}).map{|ys| [x] + ys}
+    }
+  end
+end
+</pre>
+<p> permutation() の引数 n は選択する要素の個数、xs は要素を格納した遅延ストリームです。n が 0 になったら、選択する要素はもうありません。空の配列 [] を格納した遅延ストリームを返します。
+</p>
+<p> 要素の選択は xs.flat_map() で行います。この場合、遅延ストリーム xs の要素を先頭から順番に選択することになります。ブロックの中で permutation() を呼び出すとき、xs から選んだ要素 x を filter() で削除します。これで x を取り除いた順列を生成することができます。あとは　map() で配列 ys の先頭に x を追加していくだけです。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+irb&gt; load "lazyperm.rb"
+=&gt; true
+irb&gt; ps = permutation(4, LazyStream.iota(1, 4))
+=&gt; ([1, 2, 3, 4], ?)
+irb&gt; ps.take(24)
+=&gt; [[1, 2, 3, 4], [1, 2, 4, 3], [1, 3, 2, 4], [1, 3, 4, 2], [1, 4, 2, 3], [1, 4, 3, 2], 
+[2, 1, 3, 4], [2, 1, 4, 3], [2, 3, 1, 4], [2, 3, 4, 1], [2, 4, 1, 3], [2, 4, 3, 1], 
+[3, 1, 2, 4], [3, 1, 4, 2], [3, 2, 1, 4], [3, 2, 4, 1], [3, 4, 1, 2], [3, 4, 2, 1], 
+[4, 1, 2, 3], [4, 1, 3, 2], [4, 2, 1, 3], [4, 2, 3, 1], [4, 3, 1, 2], [4, 3, 2, 1]]
+</pre>
+
+<h4>●組み合わせの生成</h4>
+<p> 次は組み合わせを生成する遅延ストリームです。
+</p>
+<pre class="list">
+リスト : 組み合わせの生成 (lazycomb.rb)
+
+load "lazystream.rb"
+
+def combination(n, xs)
+  if n == 0
+    LazyStream.new([]) { LazyStream.empty }
+  elsif xs.empty?
+    LazyStream.empty
+  else
+    combination(n - 1, xs.rest).map{|ys| [xs.first] + ys}
+      .lazy_append(Delay.new { combination(n, xs.rest) })
+  end
+end
+</pre>
+<p> combination() の第 1 引数が選択する要素の個数、第 2 引数が要素を格納した遅延ストリームです。n が 0 の場合、選択する要素がないので空リストを格納した遅延ストリームを返します。xs が空の場合、選択する要素がないので空の遅延ストリームを返します。
+</p>
+
+<p> そうでなければ、先頭要素 xs.first() を選びます。残りのリスト xs.rest() から n - 1 個を選ぶ組み合わせを combination() で求め、その先頭に xs.first() を追加します。あとは、xs.rest() から n 個を選ぶ組み合わせを combination() で求めて lazy_append() で連結します。遅延ストリーム ys と LazyStream.empty の連結は ys になるので、combination() が空の遅延ストリームを返しても正常に動作します。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+irb&gt; load "lazycomb.rb"
+=&gt; true
+irb&gt; combination(3, LazyStream.iota(1, 5)).take(10)
+=&gt; [[1, 2, 3], [1, 2, 4], [1, 2, 5], [1, 3, 4], [1, 3, 5], [1, 4, 5], [2, 3, 4], 
+[2, 3, 5], [2, 4, 5], [3, 4, 5]]
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●エラトステネスの篩</h4>
+<p> 最後に、遅延ストリームを使って素数を求めるプログラムを作ってみましょう。考え方は簡単です。最初に、2 から始まる整数列を生成する遅延ストリームを用意します。2 は素数なので、素数ストリームの要素になります。次に、この整数列から 2 で割り切れる整数を取り除き除きます。これは filter() を使うと簡単です。
+</p>
+<p> 2 で割り切れる整数が取り除かれたので、次の要素は 3 になります。今度は 3 で割り切れる整数を取り除けばいいのです。これも filter() を使えば簡単です。このとき、入力用の遅延ストリームは 2 で割り切れる整数が取り除かれています。したがって、この遅延ストリームに対して 3 で割り切れる整数を取り除くように filter() を設定すればいいわけです。
+</p>
+<p> このように、素数を見つけたらそれで割り切れる整数を取り除いていくアルゴリズムを「エラトステネスの篩」といいます。ようするに、2 から始まる整数ストリームに対して、見つけた素数 2, 3, 5, 7, 11, ... を順番に filter() で設定して素数でない整数をふるい落としていくわけです。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre>
+irb&gt; def sieve(xs)
+irb&gt; p = xs.first
+irb&gt; LazyStream.new(p) { sieve(xs.rest.filter{|x| x % p != 0}) }
+irb&gt; end
+=&gt; :sieve
+irb&gt; ps = sieve(LazyStream.iterate(2){|x| x + 1})
+=&gt; (2, ?)
+irb&gt; ps.take(25)
+=&gt; [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97]
+irb&gt; ps.take(50)
+=&gt; [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 
+79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 
+173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229]
+irb&gt; ps.take(100)
+=&gt; [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 
+79, 83, 89, 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 
+173, 179, 181, 191, 193, 197, 199, 211, 223, 227, 229, 233, 239, 241, 251, 257, 263, 
+269, 271, 277, 281, 283, 293, 307, 311, 313, 317, 331, 337, 347, 349, 353, 359, 367, 
+373, 379, 383, 389, 397, 401, 409, 419, 421, 431, 433, 439, 443, 449, 457, 461, 463, 
+467, 479, 487, 491, 499, 503, 509, 521, 523, 541]
+</pre>
+<p> sieve() には 2 から始まる整数列を生成する遅延ストリームを渡します。ブロックの中で sieve() を呼び出すとき、filter() により整数列から 2 で割り切れる整数を取り除いた遅延ストリームが渡されます。次の要素 3 を取り出すとき、この遅延ストリームに対して 3 で割り切れる整数を取り除くことになるので、2 と 3 で割り切れる整数が取り除かれることになります。次の要素は 5 になりますが、その遅延ストリームからさらに 5 で割り切れる整数が filter() で取り除かれることになります。このように filter() が設定されていくことで、素数でない整数をふるい落としていくことができるわけです。
+</p>
+<h4>●より高速な方法</h4>
+<p> メソッド sieve() は簡単にプログラムできますが、生成する素数の個数が多くなると、その実行速度はかなり遅くなります。実をいうと、sieve() なみに簡単で sieve() よりも高速な方法があります。
+</p>
+<p> 整数 n が素数か確かめる簡単な方法は、√n 以下の素数で割り切れるか試してみることです。割り切れる素数 m があれば、n は素数ではありません。そうでなければ、n は素数であることがわかります。
+</p>
+<p> これをそのままプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 素数の生成 (2)
+
+load 'lazystream.rb'
+
+def sieve(xs)
+  p = xs.first
+  LazyStream.new(p) { sieve(xs.rest.filter{|x| x % p != 0}) }
+end
+
+$primes = LazyStream.new(2) {
+  LazyStream.new(3) {
+    LazyStream.new(5) { primes_from(7) }
+  }
+}
+
+def primes_from(n)
+  p = next_prime(n)
+  LazyStream.new(p) { primes_from(p + 2) }
+end
+
+def next_prime(n)
+  loop {
+    ps = $primes
+    loop {
+      p = ps.first
+      return n if p * p &gt; n
+      break if n % p == 0
+      ps = ps.rest
+    }
+    n += 2
+  }
+end
+</pre>
+<p> 変数 $primes に素数列を生成する遅延ストリームをセットします。実際に素数を生成する処理はメソッド primes_from() で行います。primes_from() は簡単で、メソッド next_prime() を呼び出して n 以上で最小の素数を求め、それを遅延ストリームに追加します。偶数は素数ではないので、引数 n には奇数を与えていることに注意してください。
+</p>
+<p> next_pime() も簡単です。√n 以下の素数は生成済みなので、ループで $primes から素数を順番に first() で取り出して変数 p にセットします。p が√n よりも大きければ n を返します。ここでは√n のかわりに条件を p * p &gt; n としています。n が素数 p で割り切れれば、break で内側のループを脱出して次の数 (n + 2) を調べます。
+</p>
+<p> それでは実行してみましょう。get() で 1001 番目の素数を求めてみました。
+</p>
+<pre>
+irb&gt; ps = sieve(LazyStream.iterate(2){|x| x + 1})
+=&gt; (2, ?)
+irb&gt; Benchmark.realtime { print ps.get(1000) }
+7927=&gt; 1.8597616430001835
+irb&gt; Benchmark.realtime { print $primes.get(1000) }
+7927=&gt; 0.047792070000014064
+</pre>
+<p> sieve() よりも $primes のほうが高速になりました。興味のある方はいろいろ試してみてください。
+</p>
+<h4>●双子素数</h4>
+<p> 差が 2 である素数の組を「双子素数 (twin prime)」といいます。素数列 $primes を使うと双子素数は簡単に求めることができます。
+</p>
+<pre>
+irb&gt; twins = $primes.zip($primes.rest).filter{|x, y| y - x == 2}
+=&gt; ([3, 5], ?)
+irb&gt; twins.take(20)
+=> [[3, 5], [5, 7], [11, 13], [17, 19], [29, 31], [41, 43], [59, 61], [71, 73], 
+[101, 103], [107, 109], [137, 139], [149, 151], [179, 181], [191, 193], [197, 199], 
+[227, 229], [239, 241], [269, 271], [281, 283], [311, 313]]
+</pre>
+<p> LazyStream にメソッド each_cons() を追加しても簡単に求めることができます。
+</p>
+<pre class="item">
+obj.each_cons(n) {|xs| ... }
+obj.each_slice(n) {|xs| ... }
+</pre>
+<p> どちらのメソッドも obj から n 個ずつ要素を取り出し、それらを配列に格納してブロックの引数 xs に渡します。たとえば、[1, 2, 3, 4] から要素を 2 つ取り出す場合、each_slice() は [1, 2], [3, 4] のように先頭から 2 つずつ順番に取り出しますが、each_cons() は [1, 2], [2, 3], [3, 4] のように、隣り合った要素を順番に取り出します。
+</p>
+<p> プログラムは次のようになります。仕様は Ruby のメソッド each_cons(), each_slice() に合わせました。
+</p>
+<pre class="list">
+リスト : each_cons() と each_slice()
+
+  def each_cons(n)
+    return @@NIL if empty?
+    a = []
+    xs = self
+    n.times {
+      return @@NIL if xs.empty?
+      a.push xs.first
+      xs = xs.rest
+    }
+    LazyStream.new(a) { rest.each_cons(n) }
+  end
+
+  def each_slice(n)
+    return @@NIL if empty?
+    a = []
+    xs = self
+    n.times {
+      break if xs.empty?
+      a.push xs.first
+      xs = xs.rest
+    }
+    LazyStream.new(a) { xs.each_slice(n) }
+  end
+</pre>
+<p> とくに難しいところはないので、説明は割愛いたします。簡単な実行例を示します。
+</p>
+<pre>
+irb&gt; xs = LazyStream.iota(1, 10)
+=&gt; (1, ?)
+irb&gt; xs.each_cons(3).take(8)
+=&gt; [[1, 2, 3], [2, 3, 4], [3, 4, 5], [4, 5, 6], [5, 6, 7], [6, 7, 8], [7, 8, 9], [8, 9, 10]]
+irb&gt; xs.each_cons(2).take(9)
+=&gt; [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10]]
+irb&gt; xs.each_slice(2).take(5)
+=&gt; [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10]]
+irb&gt; xs.each_slice(3).take(4)
+=&gt; [[1, 2, 3], [4, 5, 6], [7, 8, 9], [10]]
+</pre>
+<p> each_cons() を使うと、双子素数は次のように求めることができます。
+</p>
+<pre>
+irb&gt; twins = $primes.each_cons(2).filter{|x, y| y - x == 2}
+=&gt; ([3, 5], ?)
+irb&gt; twins.take(20)
+=&gt; [[3, 5], [5, 7], [11, 13], [17, 19], [29, 31], [41, 43], [59, 61], [71, 73], 
+[101, 103], [107, 109], [137, 139], [149, 151], [179, 181], [191, 193], [197, 199], 
+[227, 229], [239, 241], [269, 271], [281, 283], [311, 313]]
+</pre>
+
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li><a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs (SICP)"</a> <a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-24.html#%_sec_3.5">3.5  Streams</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+# coding: utf-8
+#
+# lazystream.rb : 遅延ストリーム
+#
+#                 Copyright (C) 2017 Makoto Hiroi
+#
+
+# 遅延評価
+class Delay
+  def initialize(&amp;func)
+    @func = func
+    @flag = false
+    @value = false
+  end
+
+  def force
+    unless @flag
+      @value = @func.call
+      @flag = true
+    end
+    @value
+  end
+end
+
+#
+# 遅延ストリーム
+#
+class LazyStreamError &lt; StandardError
+end
+
+class LazyStream
+  def initialize(x, &amp;func)
+    @item = x
+    @next = Delay.new &amp;func
+  end
+
+  def inspect                                                             
+    "(" + @item.to_s + ", ?)"                                             
+  end                              
+
+  # 終端
+  @@NIL = LazyStream.new(nil) { nil }
+  def empty?
+    self == @@NIL
+  end
+  
+  def LazyStream.empty
+    @@NIL
+  end
+
+  # 生成
+  def LazyStream.iterate(a, &amp;func)
+    LazyStream.new(a) { iterate(func.call(a), &amp;func) }
+  end
+
+  def LazyStream.tabulate(a = 0, &amp;func)
+    LazyStream.new(func.call(a)) { tabulate(a + 1, &amp;func) }
+  end
+  
+  def LazyStream.iota(n, m, stepno = 1)
+    return @@NIL if n &gt; m
+    LazyStream.new(n) { iota(n + stepno, m) }
+  end
+
+  def LazyStream.of(xs, n = 0)
+    return @@NIL if xs.size == n
+    LazyStream.new(xs[n]) { of(xs, n + 1) }
+  end
+
+  #
+  # 基本操作
+  #
+  def first
+    raise LazyStreamError, "Stream is empty" if empty?
+    @item
+  end
+
+  def rest
+    raise LazyStreamError, "Stream is empty" if empty?
+    @next.force
+  end
+
+  def get(n)
+    xs = self
+    n.times {
+      xs = xs.rest
+    }
+    xs.first
+  end
+
+  def take(n)
+    xs = self
+    ys = []
+    n.times {
+      break if xs.empty?
+      ys.push xs.first
+      xs = xs.rest
+    }
+    ys
+  end
+
+  def drop(n)
+    xs = self
+    n.times {
+      break if xs.empty?      
+      xs = xs.rest
+    }
+    xs
+  end
+
+  def zip(xs)
+    return @@NIL if empty? || xs.empty?
+    LazyStream.new([first, xs.first]) { rest.zip(xs.rest) }
+  end
+
+  def append(xs)
+    return xs if empty?
+    LazyStream.new(first) { rest.append(xs) }
+  end
+
+  def interleave(xs)
+    return xs if empty?
+    LazyStream.new(first) { xs.interleave(rest) }
+  end  
+
+  def lazy_append(ys)
+    return ys.force if empty?
+    LazyStream.new(first) { rest.lazy_append(ys) }
+  end
+
+  def each_cons(n)
+    return @@NIL if empty?
+    a = []
+    xs = self
+    n.times {
+      return @@NIL if xs.empty?
+      a.push xs.first
+      xs = xs.rest
+    }
+    LazyStream.new(a) { rest.each_cons(n) }
+  end
+
+  def each_slice(n)
+    return @@NIL if empty?
+    a = []
+    xs = self
+    n.times {
+      break if xs.empty?
+      a.push xs.first
+      xs = xs.rest
+    }
+    LazyStream.new(a) { xs.each_slice(n) }
+  end
+
+  # 併合
+  def merge(xs)
+    if empty?
+      xs
+    elsif xs.empty?
+      self
+    else
+      if first &lt;= xs.first
+        LazyStream.new(first) { rest.merge(xs) }
+      else
+        LazyStream.new(xs.first) { merge(xs.rest) }
+      end
+    end
+  end
+
+  # 和集合
+  def union(xs)
+    if empty?
+      xs
+    elsif xs.empty?
+      self
+    else
+      if first &lt; xs.first
+        LazyStream.new(first) { rest.union(xs) }
+      elsif xs.first &lt; first
+        LazyStream.new(xs.first) { union(xs.rest) }
+      else
+        LazyStream.new(first) { rest.union(xs.rest) }
+      end
+    end
+  end
+
+  # 積集合
+  def intersection(ys)
+    xs = self
+    loop {
+      if xs.empty? || ys.empty?
+        return @@NIL
+      elsif xs.first == ys.first
+        return LazyStream.new(xs.first) { xs.rest.intersection(ys.rest) }
+      elsif xs.first &lt; ys.first
+        xs = xs.rest
+      else
+        ys = ys.rest
+      end
+    }
+  end
+
+  #
+  # 高階関数
+  #
+  def map(&amp;func)
+    return @@NIL if empty?
+    LazyStream.new(func.call(first)) { rest.map(&amp;func) }
+  end
+
+  def flat_map(&amp;func)
+    return @@NIL if empty?
+    func.call(first).lazy_append(Delay.new { rest.flat_map(&amp;func) })
+  end
+
+  def zip_with(xs, &amp;func)
+    return @@NIL if empty? || xs.empty?
+    LazyStream.new(func.call(first, xs.first)) {
+      rest.zip_with(xs.rest, &amp;func)
+    }
+  end
+
+  def filter(&amp;func)
+    xs = self
+    while !xs.empty?
+      if func.call xs.first
+        return LazyStream.new(xs.first) { xs.rest.filter(&amp;func) }
+      end
+      xs = xs.rest
+    end
+    @@NIL
+  end
+
+  def reduce(a, &amp;func)
+    xs = self
+    while !xs.empty?
+      a = func.call a, xs.first
+      xs = xs.rest
+    end
+    a
+  end
+
+  def each(&amp;func)
+    xs = self
+    while !xs.empty?
+      func.call xs.first
+      xs = xs.rest
+    end
+  end
+    
+  def take_while(&amp;func)
+    xs = self
+    ys = []
+    while !xs.empty? &amp;&amp; func.call(xs.first)
+      ys.push xs.first
+      xs = xs.rest
+    end
+    ys
+  end
+
+  def drop_while(&amp;func)
+    xs = self
+    while !xs.empty? &amp;&amp; func.call(xs.first)
+      xs = xs.rest
+    end
+    xs
+  end
+end
+</pre>
+</section>
+<hr>
+<div align="right">
+初版 2011 年 5 月 14 日<br>
+改訂 2017 年 1 月 28 日
+</div>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011-2017 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcruby18.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby20.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

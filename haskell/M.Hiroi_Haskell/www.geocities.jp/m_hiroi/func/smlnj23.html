@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881757</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj22.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj24.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>電卓プログラムの作成</h3>
+<p> 今回は簡単な電卓プログラムを例題にして、「字句解析 (lexical analysis) 」と「構文解析 (syntax analysys) 」の基本的な手法について説明します。
+</p>
+<p> なお、このドキュメントは拙作のページ Scheme 入門 <a href="abcscm50.html">電卓プログラムの作成</a> を SML/NJ 向けに書き直したものです。内容は重複していますが、あしからずご了承くださいませ。
+</p>
+<h4>●プログラミング言語処理系の基本的な構造</h4>
+<p> 簡単な電卓プログラムといっても、基本的な構造はプログラミング言語の処理系 (インタプリタやコンパイラ) と大きな違いはありません。たとえばコンパイラの場合、次のような構造に分けることができます。
+</p>
+<pre class="fig">
+ソースコード → [字句解析] → [構文解析] → [意味解析] → [コード生成] → 目的コード
+
+
+                        図 : コンパイラの構造
+</pre>
+<p> 字句解析は入力された文字を順番に調べて、名前、数値、予約語、演算子など、意味のある「かたまり (トークン : token) 」に分解します。構文解析はトークンの並びが構文規則にあっているかチェックします。構文解析を行うプログラムのことを「パーサ (parser) 」と呼びます。構文的には正しいプログラムでも、意味のうえでは間違っている場合があります。これをチェックするのが意味解析です。コード生成はターゲットマシンで実行するためのコード (機械語) を生成します。機械語ではなくアセンブリコードを出力するコンパイラも多くあります。
+</p>
+
+<p> インタプリタの場合、字句解析、構文解析、意味解析まではコンパイラとほとんど同じです。コードを生成するかわりに、プログラムを解釈して実行する処理が必要になります。最も原始的な方法は、ソースコートを読み込みながら逐次実行していくことです。この場合、字句解析、構文解析、意味解析を何度も繰り返し行うことになります。簡単な方法ですが、ループなどの繰り返しがある場合、無駄な処理が多くなるため実行速度は遅くなります。
+</p>
+
+<p> もうひとつは、字句解析、構文解析、意味解析まで行った情報を何らかの形で保存しておき、それを解釈しながら実行していくことです。一般的には、解析して得られた情報は「構文木」という形で保存されます。また、プログラムを実行するための仮想マシンを用意し、そのマシンが直接実行できるコード (バイトコードなど) を生成する方法もあります。この場合、仮想マシンがコードを読み込みながら実行していくことになります。
+</p>
+
+<p> 今回作成する電卓プログラムは式を計算するだけの簡単なものなので、字句解析と構文解析ともに難しいところはほとんどありません。構文解析は「再帰降下法」を使うと簡単にプログラムできます。
+</p>
+
+<h4>●文法の表現</h4>
+<p> ほとんどのプログラミング言語は、「文脈自由文法 (context free grammer : CFG) 」という方法で文法を定義することができます。文脈自由文法は「生成文法」と呼ばれる文法の一種で、文を生成する規則を定義し、その規則によって生成される文はその文法を満たしていると考えます。逆に、文法を満たしていない文は、その規則では生成することができない、ということになります。文脈自由文法は BNF (Backus Naur Form)、それを拡張した EBNF や構文図などで表すことができます。
+</p>
+
+<p> ここで用語について簡単に説明します。「終端記号」は対象となるプログラミング言語で使用する記号のことで、BNF や EBNF では "..." で表します。「非端記号」は BNF や EBNF で用いる記号のことで、BNF では &lt;...&gt; で表します。
+</p>
+<p> BNF の場合、構文規則は次の形式で表します。
+</p>
+<pre class="item">
+非端記号 ::= 定義1 | 定義2 | ... | 定義n
+
+ただし、| は「または」を表す。定義は終端記号や非端記号からなる。
+</pre>
+
+<p> 簡単な例を示しましょう。a がいくつか並んだあとに b がいくつか並んだ記号列 (aa...bb...) を BNF であらわすと次のようになります。
+</p>
+<pre class="item">
+&lt;SeqAB&gt; ::= &lt;SeqA&gt; &lt;SeqB&gt;
+&lt;SeqA&gt;  ::= "a" | "a" &lt;SeqA&gt;
+&lt;SeqB&gt;  ::= "b" | "b" &lt;SeqB&gt;
+</pre>
+<p> 記号列を &lt;SeqAB&gt; とすると、a が並んだ記号列 &lt;SeqA&gt; のあとに b が並んだ記号列 &lt;SeqB&gt; が続けばいいので、定義は &lt;SeqA&gt; &lt;SeqB&gt; になります。&lt;SeqA&gt; は記号 "a" だけではなく "a" のあとに &lt;SeqA&gt; が続くパターンがあります。定義は "a" | "a" &lt;SeqA&gt; となります。&lt;SeqB&gt; も同様です。ここで、&lt;SeqA&gt; と &lt;SeqB&gt; は再帰的に定義されていることに注意してください。
+</p>
+<p> この規則を適用することで、&lt;SeqAB&gt; を満たす任意の記号列を生成することができます。次の例を見てください。
+</p>
+<pre class="item">
+&lt;SeqAB&gt; =&gt; &lt;SeqA&gt; &lt;SeqB&gt; =&gt; "a" &lt;SeqA&gt; &lt;SeqB&gt; =&gt; "a" "a" &lt;SeqA&gt; &lt;SeqB&gt;
+ =&gt; "a" "a" "a" &lt;SeqB&gt; =&gt; "a" "a" "a" "b" &lt;SeqB&gt; =&gt; "a" "a" "a" "b" "b"
+</pre>
+<p> &lt;SeqA&gt; に定義 "a" &lt;SeqA&gt; を適用すると、"a" が一つ多い &lt;SeqA&gt; を生成することができます。定義 "a" を適用すると、そこで &lt;SeqA&gt; の生成は終了します。同様に &lt;SeqB&gt; の定義を適用することで記号列 &lt;SeqB&gt; を生成し、最終的には記号列 &lt;SeqAB&gt; を生成することができます。
+</p>
+
+<p> 文法が複雑になると BNF では読みにくくなることがあります。このような場合、EBNF を使うと便利です。EBNF で用いられる主な規則を示します。
+</p>
+<ul>
+  <li> 非端記号は &lt;...&gt; で囲まない
+  <li> ::= のかわりに = を使う
+  <li> 非端記号や終端記号を並べる場合はカンマ , で区切る
+  <li> 規則の最後に記号 (セミコロンやピリオドなど) を付加する
+  <li> { α } : αの 0 回以上の繰り返し
+  <li> [ α ] : αまたは空
+  <li> ( α ) : グループ化
+</ul>
+</pre>
+<p> EBNF で用いられる記号は正規表現と似ているので、正規表現がわかる方であれば EBNF を理解するのは難しくないでしょう。
+</p>
+<p> &lt;SeqAB&gt; を EBNF で表すと次のようになります。
+</p>
+<pre class="item">
+SeqAB = "a", { "a" }, "b", { "b" }.
+</pre>
+<p> BNF よりもわかりやすいと思います。
+</p>
+<p> もうひとつ簡単な例を示しましょう。整数を EBNF で表すと、次のようになります。
+</p>
+<pre class="item">
+整数       = ["+" | "-"], 無符号整数.
+無符号整数 = 数字 | 非零数字, { 数字 }.
+数字       = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "0".
+非零数字   = "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9".
+
+        図 : 整数の EBNF
+</pre>
+<p> 整数は +, - の符号が付いた (または省略された) 無符号整数で表すことができます。無符号整数は数字が 1 桁の場合と、2 桁以上ある場合に分けられます。桁が複数ある場合、先頭が 0 以外の数字 (非零数字) で、そのあとに数字がいくつか続きます。あとは、非零数字 と 数字 を定義するだけです。
+</p>
+
+<h4>●式の構文</h4>
+<p> 次は数値と演算子 +, - *, / とカッコ ( ) を使った数式の構文を考えてみましょう。式は数値と演算子をつないだものです。演算子には優先順位があり、+, - よりも *, / の計算を先に行わなければなりません。そこで、*, / でつながれたものを「項 (term) 」として定義することにします。すると、式は項を演算子 +, - でつないだものとして定義することができます。
+</p>
+<p> 次に項の定義について考えます。数値と演算子 *, / だけならば簡単ですが、カッコが出てきたら、その中を式として計算しなければなりません。そこで、演算子 *, / でつながれるものを「因子 (factor) 」として定義します。そうすると、項は因子を演算子 *, / でつないだものとして定義することができます。最後に、因子を定義します。これは数値またはカッコで囲まれた式となります。
+</p>
+<p> なお、演算子 +, -, *, / は左結合なので、同じ優先順位の演算子は左から順番に計算していくことに注意してください。この規則を BNF と EBNF で表すと次のようになります。
+</p>
+<pre class="item">
+[BNF]
+ &lt;式&gt;  ::= &lt;項&gt; | &lt;式&gt; "+" &lt;項&gt; | &lt;式&gt; "-" &lt;項&gt;
+ &lt;項&gt;  ::= &lt;因子&gt; | &lt;項&gt; "*" &lt;因子&gt; | &lt;項&gt; "/" &lt;因子&gt;
+&lt;因子&gt; ::= &lt;数値&gt; | "(" &lt;式&gt; ")"
+
+[EBNF]
+ 式  = 項, { ("+" | "-"), 項 }.
+ 項  = 因子, { ("*" | "/"), 因子 }.
+因子 = 数値 | "(", 式, ")".
+
+[注意] 数値の定義は省略
+</pre>
+<p> たとえば、式 12 + 34 + 56 * 78 と (12 + 34 + 56) * 78 を構文木であらわすと、次のようになります。
+</p>
+<pre class="fig">
+                 式
+               ／│＼
+             ／  │  ＼
+           ／    │    ＼
+         ／      │      ＼
+       式        ＋        項
+     ／│＼              ／│＼
+   ／  │  ＼          ／  │  ＼
+ 項    ＋    項      因子  ＊  因子
+ │          │       │        │
+因子        因子      56        78
+ │          │
+ 12          34
+
+図 : 12 + 34 + 56 * 78 の構文木
+</pre>
+<pre class="fig">
+                  式
+                  │
+                  項
+                ／│＼
+              ／  │  ＼
+            因子  ＊   因子
+           ／│＼       │
+         ／  │  ＼     78
+       （    式    ）
+           ／│＼
+         ／  │  ＼
+       式    ＋   項
+     ／│＼       │
+   ／  │  ＼    因子
+ 項    ＋    項   │
+ │          │   56
+因子        因子
+ │          │
+ 12          34
+
+図 : (12 + 34 + 56) * 78 の構文木
+</pre>
+<p> 構文木の場合、BNF の定義にそって構築すると簡単でわかりやすいでしょう。プログラムを作る場合は、EBNF の定義にそって行うと簡単です。EBNF で表した規則の左辺 (非端記号) を関数に割り当てます。右辺に出現する非端記号は対応する関数を呼び出します。終端記号は、正しい記号が現れていることを確認してそれを返します。選択 | は if や case などで、{ } は繰り返しで表すことができます。
+</p>
+<p> EBNF の定義が再帰的な構造になっているので、プログラムも再帰呼び出しの形になります。このような構文解析を「再帰降下法」と呼びます。具体的な説明はプログラムを作るところで行います。
+</p>
+
+<p> 単項演算子の + と - を追加する場合、文法は次のようになります。
+</p>
+
+<pre class="item">
+[EBNF]
+ 式  = 項 { ("+" | "-"), 項 }.
+ 項  = 因子 { ("*" | "/"), 因子 }.
+因子 = 数値 | ("+" | "-"), 因子 | "(" 式 ")".
+
+[注意] 数値の定義は省略
+</pre>
+<p> 因子の定義に ("+" | "-"), 因子 を追加するだけです。これで +3 や -5 を処理することができます。
+</p>
+
+<h4>●字句解析</h4>
+<p> それでは字句解析からプログラムを作っていきましょう。字句解析は入力ストリームから 1 記号ずつ読み取り、それをトークンに切り分けます。たとえば、数値を取得する場合、その数値が整数なのか実数なのか、また整数だとしてもそれが何桁あるのか、実際に記号を読み込んでみないとわかりません。このような場合、記号を先読みしておいて、それを大域変数に保存しておく方法がよく用いられます。
+</p>
+<p> 先読みした記号が数字であれば、さらに記号を読み込みます。そうでなければ、その記号を大域変数に保存しておいて、今まで読み込んだ記号から数値を生成します。そして、次の処理は大域変数に保存しておいた記号から始めればいいわけです。もちろん、記号を大域変数に保存しないで、記号を入力ストリームに戻す方法もあります。
+</p>
+<p> SML/NJ の場合、モジュール TextIO の関数 lookahead を使うと簡単です。
+</p>
+<pre class="item">
+val lookahead : instream -&gt; elem option
+</pre>
+<p> TextIO の場合、elem の型は文字型 (char) になります。lookahead はストリームの先頭要素を返しますが、そのデータをストリームから取り除くことはしません。これでデータを先読みすることができます。
+</p>
+
+<p> 切り分けたトークンは大域変数 tokenBuff にセットします。tokenBuff とトークンの定義は次のようになります。
+</p>
+
+<pre class="list">
+リスト : トークンの定義
+
+(* 値の定義 *)
+datatype value = Integer of IntInf.int | Float of real
+
+(* 演算子の定義 *)
+datatype operator = Add | Sub | Mul | Quo
+
+(* トークンの定義 *)
+datatype token = Number of value        (* 数 *)
+               | Oper of operator       (* 演算子 *)
+               | Lpar | Rpar            (* (, ) *)
+               | Semic                  (* ; *)
+               | Quit                   (* q : 終了 *)
+               | Others                 (* その他 *)
+
+(* 切り出したトークンを格納するバッファ *)
+val tokenBuff = ref Others
+</pre>
+<p> value は式の値を表すデータ型です。整数は多倍長整数を扱う IntInf.int を、実数は real を使います。簡単な電卓プログラムなので、整数と整数の演算結果は整数、実数と実数の演算結果は実数とし、整数と実数の演算は整数を実数に変換してから計算することにします。operator は演算子を表すデータ型です。Add, Sub, Mul, Quo が四則演算 (+, -, *, /) を表しています。
+</p>
+<p> token はトークンを表すデータ型です。Number が数値を、Oper が演算子を、Lpar と Rpar で左右のカッコを表します。Semic はセミコロン ';' を表し、数式を入力するときの区切り記号として使います。電卓プログラムはセミコロンを見つけたら、入力された数式を計算して返します。式の最後には必ずセミコロンを入力してください。
+</p>
+
+<p> トークンを切り分ける関数 get_token は次のようになります。
+</p>
+<pre class="list">
+リスト : トークンの切り分け
+
+(* トークンの切り出し *)
+fun get_token(s) =
+    let val c = valOf(lookahead s) in
+      if Char.isSpace(c) then (input1(s); get_token(s))
+      else if Char.isDigit(c) then get_number(s)
+      else (
+        input1(s); (* s から c を取り除く *)
+        tokenBuff := (case c of
+            #"+" =&gt; Oper(Add)
+          | #"-" =&gt; Oper(Sub)
+          | #"*" =&gt; Oper(Mul)
+          | #"/" =&gt; Oper(Quo)
+          | #"(" =&gt; Lpar
+          | #")" =&gt; Rpar
+          | #";" =&gt; Semic
+          | #"q" =&gt; Quit
+          | _    =&gt; Others
+        )
+      )
+    end
+</pre>
+<pre class="item">
+val get_token = fn : instream -&gt; unit
+</pre>
+<p> 最初に空白文字を読み飛ばします。空白文字のチェックは関数 Char.isSpace で行います。改行文字も空白文字として認識されることに注意してください。空白文字の場合は input1 で先頭の文字を読み捨てます。次に、関数 Char.isDigit で先頭の記号が数字 (0 - 9) かチェックします。そうであれば、関数 get_number を呼び出して数値に変換して tokenBuff にセットします。
+</p>
+<p> それ以外の場合は、input1 で先頭文字を取り除いてから、変数 c の値で処理を分岐します。#"+", #"-", #"*", #"/" の場合は演算子なので、該当するトークンを tokenBuff にセットします。#"(" と #")" の場合はカッコを表すトークン Lpar, Rpar をセットします。#";" の場合はセミコロンを表す Semic をセットします。#"q" の場合は電卓の終了を表すトークン Quit をセットします。それ以外の場合はトークン Others をセットします。
+</p>
+
+<p> 次は数値を求める関数 get_number を作ります。
+</p>
+<pre class="list">
+リスト : 数値を求める
+
+fun get_number(s) =
+    let
+      val buff = ref []
+      fun get_numeric() =
+          let val c = valOf(lookahead s) in
+            if Char.isDigit(c) then (
+              buff := valOf(input1(s)) :: (!buff);
+              get_numeric()
+            ) else ()
+          end
+      fun check_float(c) =
+          case c of
+            #"." =&gt; true
+          | #"e" =&gt; true
+          | #"E" =&gt; true
+          | _ =&gt; false
+    in
+      get_numeric();    (* 整数部の取得 *)
+      if check_float(valOf(lookahead s)) then (
+        if valOf(lookahead s) = #"." then (
+          (* 小数部の取得 *)
+          buff := valOf(input1(s)) :: (!buff);
+          get_numeric()
+        ) else ();
+        if Char.toUpper(valOf(lookahead s)) = #"E" then (
+          (* 指数形式 *)
+          buff := valOf(input1(s)) :: (!buff);
+          let val c = valOf(lookahead s) in
+            if c = #"+" orelse c = #"-" then
+              buff := (valOf(input1(s))) :: (!buff)
+            else ()
+          end;
+          get_numeric()
+        ) else ();
+        tokenBuff := Number(Float(valOf(Real.fromString(implode(rev (!buff))))))
+      ) else
+        tokenBuff := Number(Integer(valOf(IntInf.fromString(implode(rev (!buff))))))
+    end
+</pre>
+<pre class="item">
+val get_number = fn : instream -&gt; unit
+</pre>
+<p> 局所変数 buff に数値を表すデータを格納します。局所関数 get_numeric は数字 (0 - 9) を buff にセットします。最初に get_numeric で数字を取り出します。次に、文字が #"." であれば実数なので、#"." と小数部を表す整数を buff にセットします。そのあと、文字が #"e", #"E" であれば、指数部の指定と判断してそれを buff にセットします。次に、符号 #"+", #"-" があるかチェックし、指数部を表す整数を get_numeric で取得します。
+</p>
+<p> 最後に、buff を rev で反転して、関数 implode で文字列に変換し、それを関数 Real.fromString で実数に変換します。整数の場合は IntInf.fromString で文字列を整数に変換します。
+</p>
+
+<h4>●構文解析</h4>
+<p> 次は構文解析を作りましょう。字句解析と構文解析は別々に処理することも可能ですが、今回のプログラムでは構文解析を行う処理から関数 get_token を呼び出し、そのつど字句解析を行うことにします。また、Scheme 入門では構文解析のときに式の計算をいっしょに行っていましたが、今後の拡張のことを考えて、今回は簡単な「構文木」を組み立てることにします。SML/NJ や OCaml など ML 系の言語の場合、木構造の操作は簡単に行うことができるので、インタプリタやコンパイラは他の言語よりも作成しやすいと思います。
+</p>
+<p> 最初に、構文木 (式) を表すデータ型 expr を定義します。
+</p>
+<pre class="list">
+リスト : 構文木の定義
+
+datatype expr = Num  of value                  (* 数値 *)
+              | Op1  of operator * expr        (* 単項演算子 *)
+              | Op2  of operator * expr * expr (* 二項演算子 *)
+</pre>
+<p> Num は数値 (value) を表します。Op1 は単項演算子を、Op2 は二項演算子を表します。Op1 は 1 つの式を、Op2 は 2 つの式を格納します。簡単な例を示しましょう。
+</p>
+<pre class="item">
+1 + 2 - 3  =&gt; Op2(Sub, Op2(Add, Integer(1), Integer(2)), Integer(3))
+1 + 2 * 3  =&gt; Op2(Add, Integer(1), Op2(Mul, Integer(2), Integer(3)))
+1 + -2 * 3 =&gt; Op2(Add, Integer(1), Op2(Mul, Op1(Sub, Integer(2)), Integer(3)))
+</pre>
+<p> 1 + 2 * 3 は * の優先順位が高いので、Op2(Mul, ...) が Op2(Add, ...) の子になります。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 構文解析
+
+fun expression(s) =
+    let
+      fun iter v =
+          case !tokenBuff of
+            Oper(Add) =&gt; (get_token(s); iter(Op2(Add, v, term(s))))
+          | Oper(Sub) =&gt; (get_token(s); iter(Op2(Sub, v, term(s))))
+          | _ =&gt; v
+    in
+      iter (term(s))
+    end
+and term(s) =
+    let
+      fun iter v =
+          case !tokenBuff of
+            Oper(Mul) =&gt; (get_token(s); iter(Op2(Mul, v, factor(s))))
+          | Oper(Quo) =&gt; (get_token(s); iter(Op2(Quo, v, factor(s))))
+          | _ =&gt; v
+    in
+      iter (factor(s))
+    end
+and factor(s) =
+    case !tokenBuff of
+      Lpar =&gt; (
+          get_token(s);
+          let
+            val v = expression(s)
+          in
+            case !tokenBuff of
+              Rpar =&gt; (get_token(s); v)
+            | _ =&gt; raise Syntax_error("')' expected")
+          end
+        )
+    | Number(n) =&gt; (get_token(s); Num(n))
+    | Quit =&gt; raise Calc_exit
+    | Oper(Sub)  =&gt; (get_token(s); Op1(Sub, factor(s)))
+    | Oper(Add)  =&gt; (get_token(s); Op1(Add, factor(s)))
+    | _ =&gt; raise Syntax_error("unexpected token")
+</pre>
+<pre class="item">
+val expression = fn : instream -&gt; expr
+val term = fn : instream -&gt; expr
+val factor = fn : instream -&gt; expr
+</pre>
+<p> 非端記号「式」に対応する関数が expression、「項」に対応する関数が term、「因子」に対応する関数が factor です。式の定義は EBNF で 項, { ("+" | "-"), 項 } です。最初に term を呼び出して項の値を局所関数 iter の引数 v に渡します。{ } に対応するのが iter の再帰呼び出しです。tokenBuff が Add, Sub の場合、get_token で次のトークンを求め、term を呼び出して次の項の値を求め、Op2 に格納して iter を再帰呼び出しします。トークンが Add, Sub 以外の場合は v を返します。
+</p>
+
+<p> 関数 term も EBNF の定義 因子, { ("*" | "/"), 因子} と同じ処理になります。最初に factor を呼び出して因子の値を局所関数 iter の引数 v に渡します。term と同様に { } に対応するのが iter の再帰呼び出しです。tokenBuff が Mul, Quo の場合は、get_token で次のトークンを求め、factor を呼び出して次の因子の値を求め、Op2 に格納して iter を再帰呼び出しします。トークンが Mul, Quo 以外の場合は v を返します。
+</p>
+
+<p> 関数 factor も EBNF の定義 数値 | "(" 式 ")" と同じ処理になります。tokenBuff が lpar (左カッコ) の場合、get_token で次のトークンを求めてから、expression を再帰呼び出しして式を求めます。次に、tokenBuff の値が Rpar (右カッコ) であることをチェックします。右カッコがない場合はエラーを送出します。Rpar の場合は、get_token で次のトークンを求めてから v を返します。
+</p>
+<p> tokenBuff が Number(n) の場合は Num(n) を返します。Quit の場合はエラー Calc_exit を送出して電卓を終了します。Add と Sub の場合は、get_token のあとに factor を再帰呼び出しして、その値を Op1 にセットして返すだけです。これで単項演算子を処理することができます。トークンがそれ以外の値であればエラーを送出します。
+</p>
+
+<h4>●式の評価</h4>
+<p> 次は構文木を評価して式の値を求める関数 eval_expr を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト :  式の計算
+
+fun eval_op(op1, op2, v, w) =
+    case (v, w) of
+         (Integer(n), Integer(m)) =&gt; Integer(op1(n, m))
+       | (Integer(n), Float(m)) =&gt; Float(op2(Real.fromLargeInt(n), m))
+       | (Float(n), Integer(m)) =&gt; Float(op2(n, Real.fromLargeInt(m)))
+       | (Float(n), Float(m)) =&gt; Float(op2(n, m))
+
+fun eval_expr(Num(n)) = n
+|   eval_expr(Op2(op2, expr1, expr2)) =
+    let
+      val v = eval_expr(expr1)
+      val w = eval_expr(expr2)
+    in
+      case op2 of
+           Add =&gt; eval_op(op +, op +, v, w)
+         | Sub =&gt; eval_op(op -, op -, v, w)
+         | Mul =&gt; eval_op(op *, op *, v, w)
+         | Quo =&gt; eval_op(op div, op /, v, w)
+    end
+|   eval_expr(Op1(op1, expr1)) =
+    let
+      val v = eval_expr(expr1)
+    in
+      case (op1, v) of
+           (Add, _) =&gt; v
+         | (Sub, Integer(n)) =&gt; Integer(~n)
+         | (Sub, Float(n)) =&gt; Float(~n)
+         | _ =&gt; raise Syntax_error("Illegal expression")
+    end
+</pre>
+<pre class="item">
+val eval_op = fn : (IntInf.int * IntInf.int -&gt; IntInf.int) * (real * real -&gt; real) * value * value -&gt; value
+val eval_expr = fn : expr -&gt; value
+</pre>
+<p> 引数が Num(n) の場合は数値 n を返します。Op2 の場合、式 expr1 と expr2 を eval_expr で評価し、その結果をそれぞれ変数 v, w にセットします。そして、演算子 op2 で指定された演算を関数 eval_op で行います。eval_op の第 1 引数は整数同士の演算子、第 2 引数は実数同士の演算子を渡します。eval_op は引数 v, w のデータ型で場合分けを行い、必要であれば整数を実数に変換してから演算を行います。
+</p>
+<p> Op1 の場合、式 expr1 を eval_expr で評価し、その結果を変数 v にセットします。Add の場合は v をそのまま返すだけです。Sub の場合は符号を反転して返します。なお、単項演算子 + は、構文解析の段階で削除することもできます。
+</p>
+
+<h4>●式の入力と評価</h4>
+<p> 最後に式を入力して評価する処理を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 式の入力と評価
+
+fun toplevel() = (
+    print "Calc&gt; ";
+    flushOut(stdOut);
+    get_token(stdIn);
+    let val result = expression(stdIn) in
+      case !tokenBuff of
+        Semic =&gt; ()
+      | Quit  =&gt; raise Calc_exit
+      | _ =&gt; raise Syntax_error("unexpected token");
+      case eval_expr(result) of
+        Integer(n) =&gt; print(IntInf.toString(n) ^ "\n")
+      | Float(n) =&gt; print(Real.toString(n) ^ "\n")
+    end
+)
+
+fun calc() =
+    while true do (
+      toplevel() handle 
+        Syntax_error(mes) =&gt; (inputLine(stdIn); print("ERROR: " ^ mes ^ "\n"))
+      | Div =&gt; (inputLine(stdIn); print("ERROR: divide by zero\n"))
+      | err =&gt; raise err
+    )
+</pre>
+<pre class="item">
+val toplevel = fn : unit -&gt; unit
+val calc = fn : unit -&gt; unit
+</pre>
+<p> 関数 toplevel は expression を評価して入力された数式を解析します。そのあと、tokenBuff をチェックして、式がセミコロン (Semic) で終了していることを確認します。このとき、tokenBuff が Quit であればエラー Calc_exit を送出して電卓プログラムを終了します。次に、expression の返り値 result を eval_expr で評価して、入力された数式を計算し、その結果を表示します。
+</p>
+<p> 関数 calc は電卓プログラムを実行します。toplevel を呼び出して、handle でエラーを捕捉します。Syntax_error と Div の場合は、関数 inputLine で改行まで入力データを読み捨ててからエラーメッセージを表示します。それ以外の場合は raise でエラーを再送出します。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+Calc&gt; 1 + 2 + 3 + 4;
+10
+Calc&gt; (1 + 2) * (3 + 4);
+21
+Calc&gt; 123456789 * 123456789;
+15241578750190521
+Calc&gt; 1.23456789 * 1.111111111;
+1.37174209986
+Calc&gt; 3 / 2;
+1
+Calc&gt; 3 / 2.0;
+1.5
+Calc&gt; 1.23456789 / 1.1111111;
+1.11111111211
+Calc&gt; q;
+
+uncaught exception Calc_exit
+</pre>
+
+<p> 今回はここまでです。次回は変数と組込み関数の機能を追加してみましょう。
+</p>
+
+<h4>●参考文献</h4>
+<ul>
+  <li> 松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li> 水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li> 松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li> 高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li> 久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+</ul>
+<hr>
+<h4><a name="list1">●プログラムリスト</a></h4>
+<pre class="list">
+(*
+ * calc.sml : 電卓プログラム
+ *
+ *            Copyright (C) 2012 Makoto Hiroi
+ *
+ *)
+
+open TextIO
+
+(* 例外 *)
+exception Calc_exit
+exception Syntax_error of string
+
+(* 値の定義 *)
+datatype value = Integer of IntInf.int | Float of real
+
+(* 演算子の定義 *)
+datatype operator = Add | Sub | Mul | Quo
+
+(* トークンの定義 *)
+datatype token = Number of value        (* 数 *)
+               | Oper of operator       (* 演算子 *)
+               | Lpar | Rpar            (* (, ) *)
+               | Semic                  (* ; *)
+               | Quit                   (* q : 終了 *)
+               | Others                 (* その他 *)
+
+(* 式の定義 *)
+datatype expr = Num  of value                  (* 数値 *)
+              | Op1  of operator * expr        (* 単項演算子 *)
+              | Op2  of operator * expr * expr (* 二項演算子 *)
+
+(* 切り出したトークンを格納するバッファ *)
+val tokenBuff = ref Others
+
+(* 整数の切り出し *)
+fun get_number(s) =
+    let
+      val buff = ref []
+      fun get_numeric() =
+          let val c = valOf(lookahead s) in
+            if Char.isDigit(c) then (
+              buff := valOf(input1(s)) :: (!buff);
+              get_numeric()
+            ) else ()
+          end
+      fun check_float(c) =
+          case c of
+            #"." =&gt; true
+          | #"e" =&gt; true
+          | #"E" =&gt; true
+          | _ =&gt; false
+    in
+      get_numeric();    (* 整数部の取得 *)
+      if check_float(valOf(lookahead s)) then (
+        if valOf(lookahead s) = #"." then (
+          (* 小数部の取得 *)
+          buff := valOf(input1(s)) :: (!buff);
+          get_numeric()
+        ) else ();
+        if Char.toUpper(valOf(lookahead s)) = #"E" then (
+          (* 指数形式 *)
+          buff := valOf(input1(s)) :: (!buff);
+          let val c = valOf(lookahead s) in
+            if c = #"+" orelse c = #"-" then
+              buff := (valOf(input1(s))) :: (!buff)
+            else ()
+          end;
+          get_numeric()
+        ) else ();
+        tokenBuff := Number(Float(valOf(Real.fromString(implode(rev (!buff))))))
+      ) else
+        tokenBuff := Number(Integer(valOf(IntInf.fromString(implode(rev (!buff))))))
+    end
+
+(* トークンの切り出し *)
+fun get_token(s) =
+    let val c = valOf(lookahead s) in
+      if Char.isSpace(c) then (input1(s); get_token(s))
+      else if Char.isDigit(c) then get_number(s)
+      else (
+        input1(s); (* s から c を取り除く *)
+        tokenBuff := (case c of
+            #"+" =&gt; Oper(Add)
+          | #"-" =&gt; Oper(Sub)
+          | #"*" =&gt; Oper(Mul)
+          | #"/" =&gt; Oper(Quo)
+          | #"(" =&gt; Lpar
+          | #")" =&gt; Rpar
+          | #";" =&gt; Semic
+          | #"q" =&gt; Quit
+          | _    =&gt; Others
+        )
+      )
+    end
+
+(* 構文木の組み立て *)
+fun expression(s) =
+    let
+      fun iter v =
+          case !tokenBuff of
+            Oper(Add) =&gt; (get_token(s); iter(Op2(Add, v, term(s))))
+          | Oper(Sub) =&gt; (get_token(s); iter(Op2(Sub, v, term(s))))
+          | _ =&gt; v
+    in
+      iter (term(s))
+    end
+and term(s) =
+    let
+      fun iter v =
+          case !tokenBuff of
+            Oper(Mul) =&gt; (get_token(s); iter(Op2(Mul, v, factor(s))))
+          | Oper(Quo) =&gt; (get_token(s); iter(Op2(Quo, v, factor(s))))
+          | _ =&gt; v
+    in
+      iter (factor(s))
+    end
+and factor(s) =
+    case !tokenBuff of
+      Lpar =&gt; (
+          get_token(s);
+          let
+            val v = expression(s)
+          in
+            case !tokenBuff of
+              Rpar =&gt; (get_token(s); v)
+            | _ =&gt; raise Syntax_error("')' expected")
+          end
+        )
+    | Number(n) =&gt; (get_token(s); Num(n))
+    | Quit =&gt; raise Calc_exit
+    | Oper(Sub)  =&gt; (get_token(s); Op1(Sub, factor(s)))
+    | Oper(Add)  =&gt; (get_token(s); Op1(Add, factor(s)))
+    | _ =&gt; raise Syntax_error("unexpected token")
+
+(* 式の計算 *)
+fun eval_op(op1, op2, v, w) =
+    case (v, w) of
+         (Integer(n), Integer(m)) =&gt; Integer(op1(n, m))
+       | (Integer(n), Float(m)) =&gt; Float(op2(Real.fromLargeInt(n), m))
+       | (Float(n), Integer(m)) =&gt; Float(op2(n, Real.fromLargeInt(m)))
+       | (Float(n), Float(m)) =&gt; Float(op2(n, m))
+
+fun eval_expr(Num(n)) = n
+|   eval_expr(Op2(op2, expr1, expr2)) =
+    let
+      val v = eval_expr(expr1)
+      val w = eval_expr(expr2)
+    in
+      case op2 of
+           Add =&gt; eval_op(op +, op +, v, w)
+         | Sub =&gt; eval_op(op -, op -, v, w)
+         | Mul =&gt; eval_op(op *, op *, v, w)
+         | Quo =&gt; eval_op(op div, op /, v, w)
+    end
+|   eval_expr(Op1(op1, expr1)) =
+    let
+      val v = eval_expr(expr1)
+    in
+      case (op1, v) of
+           (Add, _) =&gt; v
+         | (Sub, Integer(n)) =&gt; Integer(~n)
+         | (Sub, Float(n)) =&gt; Float(~n)
+         | _ =&gt; raise Syntax_error("Illegal expression")
+    end
+
+(* 実行 *)
+fun toplevel() = (
+    print "Calc&gt; ";
+    flushOut(stdOut);
+    get_token(stdIn);
+    let val result = expression(stdIn) in
+      case !tokenBuff of
+        Semic =&gt; ()
+      | Quit  =&gt; raise Calc_exit
+      | _ =&gt; raise Syntax_error("unexpected token");
+      case eval_expr(result) of
+        Integer(n) =&gt; print(IntInf.toString(n) ^ "\n")
+      | Float(n) =&gt; print(Real.toString(n) ^ "\n")
+    end
+)
+
+fun calc() =
+    while true do (
+      toplevel() handle 
+        Syntax_error(mes) =&gt; (inputLine(stdIn); print("ERROR: " ^ mes ^ "\n"))
+      | Div =&gt; (inputLine(stdIn); print("ERROR: divide by zero\n"))
+      | err =&gt; raise err
+    )
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj22.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj24.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

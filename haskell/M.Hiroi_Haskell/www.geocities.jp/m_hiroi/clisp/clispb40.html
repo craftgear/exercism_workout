@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881769</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb39.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb41.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>●仮想計算機 COMETⅡの簡易シミュレータ (10)</h3>
+<p> <a href="../xyzzy_lisp.html#abclisp">Common Lisp 入門</a> の番外編です。前回は COMETA2A 用の簡単な「連結リストライブラリ」を作成しました。今回は連結リストライブラリにガベージコレクション機能を追加します。
+</p>
+
+<h4>●ガベージコレクションの基礎知識</h4>
+<p> 最初にガベージコレクションの基本を簡単に説明します。ガベージコレクションの基本的な動作は、使用しているセルと不要になったセルを区別して、不要になったセルを回収することです。セルはプログラムのいろいろな場所から参照されます。スタック上に確保された局所変数や静的に確保された大域変数、レジスタや他のセルからも参照されます。
+</p>
+<p> このように、セルを参照している領域はいろいろありますが、セル以外の領域をまとめて「ルート (root) 」と呼ぶことにします。すると、ルートから参照されているセルはプログラムで使用中のセルと考えることができます。そして、使用中のセルからたどることができるセルも、また使用中のセルと考えることができます。ルートからたどることができず、かつフリーリスト上にもないセルを「到達不能」であるといいます。到達不能なセルは「不要になったセル」と判断することができます。
+</p>
+
+<p> 到達不能なセルが生じたことを検出する簡単な方法は、各セルに「参照回数」を持たせることです。変数やセルの CDR 部などで、あるセルのアドレスをセットしたとき、そのセルの参照回数を +1 します。アドレスを書き換えたときは、元のセルの参照回数を -1 します。そして、参照回数が 0 になったならば、そのセルは到達不能になったので回収します (フリーリストに戻す) 。これを「リファレンスカウント法 (Reference counting) 」といいます。
+</p>
+
+<p> リファレンスカウント法には大きな欠点があります。循環リストがある場合、参照回数だけでは到達不能なセルを検出することができないのです。次の図を見てください。
+</p>
+<pre class="list">
+            ┌───────────────┐
+           A↓           B             C    │
+          ┌─┬─┐    ┌─┬─┐    ┌─┬┼┐
+変数──→│１│・┼─→│２│・┼─→│３│・│
+          └─┴─┘    └─┴─┘    └─┴─┘
+           RC:2          RC:1          RC:1
+
+            ┌───────────────┐
+           A↓           B             C    │
+          ┌─┬─┐    ┌─┬─┐    ┌─┬┼┐
+変数─Ｘ→│１│・┼─→│２│・┼─→│３│・│
+          └─┴─┘    └─┴─┘    └─┴─┘
+           RC:1          RC:1          RC:1
+
+                 図 : 循環リスト
+</pre>
+<p> ある変数がセル A を参照している状態で、各セルの参照回数を RC で表しています。セル A は変数とセル C から参照されているので RC は 2 になります。セル B と C の RC は 1 です。この状態で変数の値を書き換えて、セル A の RC が -1 されたとします。
+</p>
+
+<p> すると、A の RC は 1 になりますが 0 にはならないので、A をフリーリストには戻しません。セル B はセル A だけから参照されていますが、セル A が生き残っているので、RC は 1 のままです。セル C も同様です。つまり、循環リストがあると、ルートから到達できない状態になっても参照回数が 0 にならないのです。
+</p>
+
+<p> このため、リファレンスカウント法を使う場合は、到達不能な循環リストを検出するため、他のアルゴリズムと組み合わせることがあります。たとえば、スクリプト言語 Python の GC はリファレンスカウント法が基本ですが、循環したデータ構造を検出して回収するため、アルゴリズムが異なる GC も使っています。
+</p>
+<p> それから、COMET2A のような小さなメモリ空間しかない場合、セルに参照回数 (整数値) を持たせるとメモリが足りなくなることも考えられます。そこで、今回は伝統的なアルゴリズムである「マークスイープ法 (Mark-Sweep) 」を使うことにします。
+</p>
+
+<h4>●マークスイープ法によるゴミ集め</h4>
+<p> マークスイープ法は、フリーなセルがなくなった時点で GC を起動して、到達不能になったセルをいっきに回収する方法です。まず、ルートからたどることができるセルすべてに印をつける作業 (Mark) を行います。それから、セル領域全体を探索して、マークの付いていないセルを回収する作業 (Sweep) を行います。このように、2 段階の手順をふんで GC を実行することからマークスイープ法と呼ばれています。
+</p>
+
+<p> マークは 1 bit あれば十分です。連結リストのセル領域は偶数アドレスに配置されるので、セルの CDR 部に格納されるアドレスは必ず偶数になります。そこで、CDR 部の最下位ビット (LSB) をマーク用のフラグとして使うことにしましょう。
+</p>
+
+<h4>●Common Lisp での実装</h4>
+<p> COMET2A でプログラムを作る前に、まずは Common Lisp でマークスイープ法のプログラムを作り、その動作を確認することにしましょう。最初にメモリを定義します。
+</p>
+<pre class="list">
+リスト : メモリの定義
+
+(defvar *memory* (make-array 65536
+                             :element-type '(unsigned-byte 16)
+                             :initial-element 0))
+
+; スタックポインタ
+(defvar *sp* #x8000)
+
+; フリーセル
+(defvar *free-cell* #x8000)
+</pre>
+<p> メモリの定義は COMET2A と同じです。GC の動作を COMET2A になるべく近づけるため、メモリにスタック領域を用意して、Common Lisp の関数を呼び出すとき、引数をスタックにプッシュすることにします。GC はこのスタック領域をルートとして扱います。0 - #x7fff をスタック領域とし、#x8000 - #xffff がセル領域となります。
+</p>
+<p> 引数をスタックに積む処理を関数に追加するため、defun を改造して defun+ マクロを用意します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 引数をスタックに積む
+
+; スタックにデータを追加
+(defun push-stack (x)
+  (decf *sp*)
+  (setf (aref *memory* *sp*) x))
+
+; defun にスタック操作を追加
+(defmacro defun+ (name args &amp;rest body)
+  (let ((num (length args)))
+    `(defun ,name ,args
+       ,@(mapcar #'(lambda (x) `(push-stack ,x)) args)
+       (prog1
+           (progn ,@body)
+         (incf *sp* ,num)))))
+</pre>
+<p> 関数 push-stack は引数 x をスタックに追加します。スペシャル変数 *sp* がスタックポインタを表します。defun+ マクロは defun にスタック操作を追加します。関数本体 body を評価する前に、push-stack で引数の値をスタックにプッシュするコードを追加します。それから本体を評価して返り値を prog1 で返します。最後に、*sp* の値を元に戻す処理を追加します。
+</p>
+<p> なお、引数に 0 - #xffff 以外の値を与えると、push-stack でエラーになります。また、返り値はスタックに格納しないので、場合によっては GC から保護する必要があります。たとえば (foo (bar) (baz)) において、bar と baz が新しいリストを生成して返す場合を考えてみましょう。
+</p>
+<p> Common Lisp の場合、まず bar を評価してリスト A を生成し、それから baz を評価してリスト B を生成します。このあと foo が呼び出されて引数のリスト A, B がスタックに積まれます。リスト B を生成するとき、リスト A はまだスタックに積まれていないので、このときに GC が起動されると、リスト A が不要なセルとして回収されてしまうのです。
+</p>
+<p> このように defun+ には問題点がありますが、今回のプログラムは COMET2A 用の GC を実装する前のプロトタイプにすぎません。defun+ はこのままにして、テストプログラムのほうで対応することにします。
+</p>
+
+<h4>●セル領域の初期化</h4>
+<p> 次に、セルを操作する関数を定義します。
+</p>
+<pre class="list">
+リスト : セルの操作関数
+
+(defun mcar (cp) (aref *memory* cp))
+
+(defun mcdr (cp) (aref *memory* (1+ cp)))
+
+(defun set-mcar (cp x)
+  (setf (aref *memory* cp) x))
+
+(defun set-mcdr (cp x)
+  (setf (aref *memory* (1+ cp)) x))
+</pre>
+<p> mcar はセルの CAR を返し、mcdr は CDR を返します。set-mcar はセルの CAR を x に書き換え、set-mcdr は CDR を x に書き換えます。
+</p>
+<p> 次に、メモリを初期化する関数 initialize を作ります。
+</p>
+<pre class="list">
+リスト : メモリの初期化
+
+(defun initialize ()
+  (setf *sp* #x8000
+        *free-cell* #x8000)
+  (do ((p #x8000 (+ p 2))
+       (q #x8002 (+ q 2)))
+      ((= #x10000 q) (set-mcdr p 0))
+    (set-mcdr p q)))
+</pre>
+<p> 最初にスタックポインタ *sp* を #x8000 に初期化します。*free-cell* はフリーリストを保持するスペシャル変数です。セル領域の先頭アドレス #x8000 をセットして、セル領域を初期化します。この処理は前回作成したサブルーチン initialize-list と同じです。
+</p>
+
+<h4>●セルの取得</h4>
+<p> 次はセルを取得する関数 make-cell を作ります。
+</p>
+
+<pre class="list">
+リスト : セルの取得
+
+(defun make-cell ()
+  (when (zerop *free-cell*)
+    (mgc)
+    (when (zerop *free-cell*)
+      (error "make-cell : Out of memory")))
+  (let ((cp *free-cell*))
+    (setf *free-cell* (mcdr cp))
+    cp))
+
+; CONS
+(defun+ mcons (a b)
+  (let ((cp (make-cell)))
+    (set-mcar cp a)
+    (set-mcdr cp b)
+    cp))
+</pre>
+<p> make-cell は *free-cell* をチェックして、0 ならば GC を行う関数 mgc を呼び出します。不要なセルを回収できなかったらエラー終了します。そうでなければ、*free-cell* から先頭のセルを取り出して返します。関数 mcons は cons と同じ動作をします。
+</p>
+
+<h4>●リスト操作関数の実装</h4>
+<p> 次はテストで用いる簡単なリスト操作関数を作ります。
+</p>
+<pre class="list">
+リスト : リスト操作関数
+
+; IOTA
+(defun+ miota (n m)
+  (if (&lt; m n)
+      0
+    (mcons n (miota (1+ n) m))))
+
+; REVERSE
+(defun+ mreverse-sub (ls a)
+  (if (zerop ls)
+      a
+    (mreverse-sub (mcdr ls) (mcons (mcar ls) a))))
+
+(defun+ mreverse (ls) (mreverse ls 0))
+
+; REMOVE
+(defun+ mremove (x ls)
+  (cond ((zerop ls) 0)
+        ((eql (mcar ls) x)
+         (mremove x (mcdr ls)))
+        (t
+         (mcons (mcar ls) (mremove x (mcdr ls))))))
+
+; リストの表示
+(defun print-list (ls)
+  (when (plusp ls)
+    (format t "~D " (mcar ls))
+    (print-list (mcdr ls))))
+</pre>
+<p> miota は iota と、mreverse は reverse と、mremove は remove と同じです。リストの終端を zerop でチェックしていることに注意すれば、とくに難しいところはないと思います。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+* (initialize)
+
+0
+* (print-list (miota 1 20))
+1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20
+NIL
+* (print-list (mreverse (miota 1 20)))
+20 19 18 17 16 15 14 13 12 11 10 9 8 7 6 5 4 3 2 1
+NIL
+* (print-list (mremove 10 (mreverse (miota 1 20))))
+20 19 18 17 16 15 14 13 12 11 9 8 7 6 5 4 3 2 1
+NIL
+</pre>
+<p> GC がない場合、リストを生成する処理を何度も繰り返すと、そのうちにセル領域を使い切ってエラー終了してしまいます。GC がある場合、このような処理を何度でも繰り返すことができます。
+</p>
+<h4>●ガベージコレクションの実装</h4>
+<p> それでは GC を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ガベージコレクション
+
+; GC 本体
+(defun mgc ()
+  (format t "--- GC ---~%")
+  (mgc-mark)
+  (mgc-sweep))
+
+; MARK
+; スタックから使用中のセルを探してマークする
+(defun mgc-mark ()
+  (do ((x *sp* (1+ x)))
+      ((= x #x8000))
+    (let ((p (aref *memory* x)))
+      (when (and (&lt;= #x8000 p #xffff)
+                 (evenp p))
+        ; 使用中のセル
+        (do ()
+            ((zerop p))
+          (let ((q (mcdr p)))
+            (when (plusp (logand q 1))
+              ; MARK 済み
+              (return))
+            (set-mcdr p (logior q 1))   ; GC FLAG ON
+            (setf p q)))))))
+
+; SWEEP
+(defun mgc-sweep ()
+  (setf *free-cell* 0)    ; null で終端
+  (do ((p #x8000 (+ p 2)))
+      ((= p #x10000))
+    (cond ((zerop (logand (mcdr p) 1))
+           ; 未使用 (フリーセルの先頭に追加)
+           (set-mcdr p *free-cell*)
+           (setf *free-cell* p))
+          (t
+           ; 使用中 (GC FLAG CLEAR)
+           (set-mcdr p (logand #xfffe (mcdr p)))))))
+</pre>
+<p> 関数 mgc-mark がセルにマークを付け、関数 mgc-sweep でセルを回収します。mgc-mark はスタック領域からセルをたどります。スタックは上位から下位アドレスへ向かって伸びるので、メモリ領域の *sp* から #x7fff までの範囲を調べます。このとき、スタックの値がセルか否か判定しないといけません。この場合、次に示す 2 通りの方法があります。
+</p>
+<OL>
+  <LI>正確な GC (precise GC)
+  <LI>保守的な GC (conservative GC)
+</OL>
+<p> 1 の方法はデータに型を表すタグ (tag) を付加することで実現できます。たとえば、今回のように 16 bit の数値とセルの 2 種類のデータがある場合、最下位ビット (LSB) をタグとして考えます。偶数はセル、奇数は数値とすると、数値は LSB を除いた 15 bit で表すことになります。
+</p>
+<p> 2 の方法は曖昧な値をセルとして判定する方法です。今回の場合、値がセル領域 (#x8000 - #x7fff) の範囲外あれば数値と判定することができます。また、セル領域の範囲内であっても値が奇数であれば、それも数値として判定することができます。とりあえず、それ以外の値はセルとして判定します。
+</p>
+<p> 当然ですが、保守的な GC は数値としてスタックに詰まれたデータを間違ってセルと判定することがあります。その数値に対応するセルが到達不能な場合、そのセルを回収することはできません。ですが、その頻度がそれほど多くなければ、プログラムの実行に大きな影響を及ぼすことは少ないと考えられます <a href="clispb40.html#note1">[*1]</a>。今回はプログラムが簡単な保守的な GC を採用することにします。
+</p>
+
+<p> プログラムの説明に戻ります。gc-mark は変数 p にスタックの値をセットします。p がセル領域の範囲内かつ偶数であれば、p をセルと判定します。あとはつながっているセルを順番にたどり、CDR 部の LSB を 1 に書き換えます。すでにマークされている場合は return でセルをたどる処理を中断します。gc-sweep も簡単です。セル領域の先頭から順番にセルを調べていき、マークされていないセルをフリーリストの先頭に追加します。マーク付きのセルはマークをクリアすることをお忘れなく。
+</p>
+
+<p> 今回の連結リストライブラリはリストを入れ子にしないので、CAR 部のデータを調べる必要はありません。その分だけプログラムはとても簡単になりました。
+</p>
+<p> リストを入れ子にする場合、マーク付けの処理は再帰的なプログラムになるでしょう。再帰プログラムはスタックを消費するので、スタックが逼迫している状態では GC を実行できないかもしれません。幸いなことに、非再帰的にマーク付けを行うアルゴリズムがあります。<a href="clispb40.html#cite">参考文献 1, 2, 4</a> に説明があるので、興味のある方は調べてみてください。。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> Gauche でも使われている Boehm GC は保守的なガベージコレクタですが、たいていの場合は問題なく動作するようです。ただし、<a href="http://practical-scheme.net/wiliki/wiliki.cgi?Gauche%3a%a5%e1%a5%e2%a5%ea%a5%ea%a1%bc%a5%af&l=ja">Gauche:メモリリーク</a> で説明されているように、データ構造によっては問題が生じる場合もあるようです。
+</div>
+<h4>●簡単な実行例</h4>
+<p> それでは簡単なプログラムを作って、実際に GC を動かしてみましょう。最初は「エラトステネスの篩」で素数を求める関数 sieve を作ります。
+</p>
+<pre class="list">
+リスト : エラトステネスの篩
+
+; n の倍数を削除する
+(defun+ remove-multiple (n ls)
+  (cond ((zerop ls) 0)
+        ((zerop (mod (mcar ls) n))
+         (remove-multiple n (mcdr ls)))
+        (t
+         (mcons (mcar ls) (remove-multiple n (mcdr ls))))))
+
+; 素数を求める
+(defun+ sieve-sub (ls a)
+  (if (zerop ls)
+      (mreverse a)
+    (sieve-sub (remove-multiple (mcar ls) (mcdr ls))
+               (mcons (mcar ls) a))))
+
+(defun+ sieve (n)
+  (sieve-sub (miota 2 n) 0))
+</pre>
+<p> defun+ では引数に関数を渡すことができないので、n の倍数を削除する関数 remove-multiple を定義しています。
+</p>
+<p> 実行例を示しましょう。
+</p>
+<pre>
+* (initialize)
+
+0
+* (print-list (sieve 100))
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97
+NIL
+* (dotimes (x 10) (sieve 1000))
+--- GC ---
+--- GC ---
+--- GC ---
+--- GC ---
+--- GC ---
+--- GC ---
+--- GC ---
+--- GC ---
+--- GC ---
+--- GC ---
+NIL
+</pre>
+<p> GC により不要なセルが回収されて、プログラムを繰り返し実行することができます。
+</p>
+<p> もうひとつ簡単な例として、順列を求める関数 perm を作ってみましょう。
+</p>
+<pre class="list">
+リスト : 順列の生成
+
+(defun+ perm-sub (nums a)
+  (if (zerop nums)
+      (progn (print-list (mreverse a))
+             (terpri))
+    (do ((ls nums (mcdr ls)))
+        ((zerop ls))
+      (let ((nums1 (mremove (mcar ls) nums)))
+        (push-stack nums1)
+        (prog1
+          (perm-sub nums1
+                    (mcons (mcar ls) a)
+                    len)
+          (incf *sp*))))))
+
+(defun+ perm (nums) (perm-sub nums 0))
+</pre>
+<p> perm-sub を再帰呼び出しするとき、(mremove (car ls) nums) と (mcons (mcar ls) a) で新しいリストを生成します。最初のリストを GC から保護するため、mremove の返り値を nums1 にセットし、それをスタックにプッシュしています。最後に *sp* の値を +1 することをお忘れなく。
+</p>
+<p> 実行例を示します。
+</p>
+<pre>
+* (perm (miota 1 4))
+1 2 3 4
+1 2 4 3
+1 3 2 4
+1 3 4 2
+1 4 2 3
+1 4 3 2
+2 1 3 4
+2 1 4 3
+2 3 1 4
+2 3 4 1
+2 4 1 3
+2 4 3 1
+3 1 2 4
+3 1 4 2
+3 2 1 4
+3 2 4 1
+3 4 1 2
+3 4 2 1
+4 1 2 3
+4 1 3 2
+4 2 1 3
+4 2 3 1
+4 3 1 2
+4 3 2 1
+NIL
+</pre>
+<p> GC があるので、リストの要素が 8 個や 9 個でも順列を求めることができます。興味のある方はいろいろ試してみてください。
+</p>
+<h4>●COMET2A での実装</h4>
+<p> それでは COMT2A でプログラムを作りましょう。アセンブリ言語の場合、GC のルートとなるのはスタック領域だけではなく、レジスタも考慮しないといけません。一番簡単な方法はスタックポインタ以外の全レジスタをスタックにプッシュすることです。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ガベージコレクション
+
+gc
+        (push 0 gr0)            ; レジスタをスタックに退避
+        (push 0 gr1)
+        (push 0 gr2)
+        (push 0 gr3)
+        (push 0 gr4)
+        (push 0 gr5)
+        (push 0 gr6)
+        (push 0 gr7)
+        ; スタック上のセルをマークする
+        (ld   gr0 sp)
+        (lad  sp -2 sp)
+        (st   gr0 0 sp)
+        (lad  gr0 #xffff)
+        (st   gr0 1 sp)
+        (call gc-mark)
+        (lad  sp 2 sp)
+        ; 回収
+        (call gc-sweep)
+        ;
+        (pop  gr7)
+        (pop  gr6)
+        (pop  gr5)
+        (pop  gr4)
+        (pop  gr3)
+        (pop  gr2)
+        (pop  gr1)
+        (pop  gr0)
+        (ret)
+gc-mask (dc   #xfffe)
+gc-flag (dc   #x0001)
+</pre>
+<p> 最初に gr0 から gr7 までの汎用レジスタをスタックにプッシュします。次に、調べるメモリ領域の範囲をスタックに積んでサブルーチン gc-mark を呼び出します。これでレジスタとスタック上にあるセルをマークすることができます。あとは回収を行う gc-sweep を呼び出すだけです。
+</p>
+<p> ところで、今回の GC は静的なメモリ領域に対応していません。その処理を追加する場合、いくつか方法が考えられます。たとえば、initialize-list で GC のルートとなるメモリ領域を指定する、または、あらかじめルートとなる領域をラベルで設定しておいて、その中にリストを格納するメモリ領域を ds で設定してもらうなど、いろいろあると思います。
+</p>
+<p> もしくは、あらかじめスタック上にリストを格納するメモリを確保しておいて、グローバル変数のように使うことも考えられるでしょう。まあ、簡単なサンプルプログラム程度であれば、GC はこのままでも十分に使えると思います。そこで、静的なメモリの対応は皆様にお任せいたします。興味のある方はいろいろ試してみてください。
+</p>
+
+<h4>●マークとスイープ</h4>
+<p> 次はマークとスイープを行うサブルーチン gc-mark と gc-sweep を作りましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : マーク
+
+; 入力 +2) : 開始アドレス
+;      +3) : 終了アドレス
+; 出力 None
+gc-mark
+        (link gr7 0)
+        (ld   gr1 2 gr7)        ; 開始アドレス
+gc-mark-loop0
+        (cpl  gr1 3 gr7)
+        (jze  gc-mark-exit)
+        (ld   gr2 0 gr1)
+        (cpl  gr2 cell-top)
+        (jmi  gc-mark-lab1)     ; cell-top 未満
+        (cpl  gr2 cell-end)
+        (jpl  gc-mark-lab1)     ; cell-end 以上
+        (ld   gr0 gr2)
+        (and  gr0 gc-flag)
+        (jnz  gc-mark-lab1)     ; 奇数は関係なし
+        ;
+gc-mark-loop1
+        (ld   gr0 1 gr2)        ; CDR -&gt; gr0
+        (and  gr0 gc-flag)
+        (jnz  gc-mark-lab1)     ; mark 済み
+        (ld   gr0 1 gr2)
+        (ld   gr3 gr0)          ; CDR -&gt; gr0, gr3
+        (or   gr0 gc-flag)
+        (st   gr0 1 gr2)        ; flag-on
+        (ld   gr2 gr3)          ; 次のセルへ
+        (jnz  gc-mark-loop1)
+gc-mark-lab1
+        (lad  gr1 1 gr1)
+        (jump gc-mark-loop0)
+        ;
+gc-mark-exit
+        (unlk gr7)
+        (ret)
+</pre>
+<p> gc-mark を呼び出すのは gc だけなのでレジスタの保護は行っていません。あとの処理は Common Lisp のプログラムとほぼ同じです。
+</p>
+<p> 次は gc-sweep を作ります。
+</p>
+<pre class="list">
+リスト : スイープ
+
+gc-sweep
+        (xor  gr0 gr0)
+        (st   gr0 free-cell)    ; null clear
+        (ld   gr1 cell-top)
+gc-sweep-loop
+        (cpl  gr1 cell-end)
+        (jze  gc-sweep-exit)
+        (ld   gr0 1 gr1)        ; CDR
+        (and  gr0 gc-flag)
+        (jnz  gc-sweep-lab1)    ; 使用中
+        ; フリーセル
+        (ld   gr0 free-cell)
+        (st   gr0 1 gr1)
+        (st   gr1 free-cell)
+        (lad  gr1 2 gr1)
+        (jump gc-sweep-loop)
+gc-sweep-lab1
+        ; 使用中 (flag clear)
+        (ld   gr0 1 gr1)
+        (and  gr0 gc-mask)
+        (st   gr0 1 gr1)
+        (lad  gr1 2 gr1)
+        (jump gc-sweep-loop)
+gc-sweep-exit
+        (ret)
+</pre>
+<p> gc-sweep も Common Lisp のプログラムとほぼ同じです。とくに難しいところはないと思います。
+</p>
+<h4>●簡単な実行例 (2)</h4>
+<p> それでは簡単な実行例を示しましょう。前回作成した「エラトステネスの篩」で 1000 以下の素数を求めます。
+</p>
+<pre class="list">
+リスト : エラトステネスの篩
+
+sieve
+        (call initialize-heap)
+        (call initialize-list)
+        ;
+        (lad  sp -2 sp)
+        (lad  gr0 2)
+        (st   gr0 0 sp)
+        (lad  gr0 1000)
+        (st   gr0 1 sp)
+        (call iota)             ; 2 - 1000 のリストを生成
+        (lad  sp -2 sp)
+        (xor  gr3 gr3)          ; 素数のリスト -> gr3
+        (ld   gr4 gr0)          ; リスト -> gr4
+sieve-loop
+        (lad  sp -3 sp)
+        (ld   gr2 0 gr4)        ; 先頭要素 (gr2) は素数
+        (st   gr2 0 sp)
+        (st   gr3 1 sp)
+        (call cons)
+        (ld   gr3 gr0)          ; 素数をリスト gr3 に追加
+        (lad  gr0 multiplep)
+        (st   gr0 0 sp)
+        (st   gr2 1 sp)         ; 素数をセット
+        (ld   gr0 1 gr4)
+        (st   gr0 2 sp)         ; CDR をセット
+        (call remove-if)        ; ふるいにかける
+        (ld   gr4 gr0)
+        (lad  sp 3 sp)
+        (jnz  sieve-loop)       ; 空リストになれば終了
+sieve-exit
+        (push 0 gr3)
+        (call nreverse)
+        (st   gr0 0 sp)
+        (call print-list)
+        (call newline)
+        (pop  gr0)
+        (halt)
+
+; N は M の倍数か
+; 入力 +2) : N
+;      +3) : M
+; 出力 gr0 : N mod M == 0 ならば 1, else 0
+multiplep
+        (link gr7 0)
+        (ld   gr0 2 gr7)
+        (ld   gr1 3 gr7)
+        (divl gr0 gr1)                ; -> gr0 (商), gr1 (剰余)
+        (and  gr1 gr1)
+        (jze  multiplep-true)
+        (xor  gr0 gr0)
+multiplep-exit
+        (unlk gr7)
+        (ret)
+multiplep-true
+        (lad  gr0 1)
+        (jump multiplep-exit)
+</pre>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+* (asm-run "lista.cas")
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103 107
+109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211 223
+227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331 337
+347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449 457
+461 463 467 479 487 491 499 503 509 521 523 541 547 557 563 569 571 577 587 593
+599 601 607 613 617 619 631 641 643 647 653 659 661 673 677 683 691 701 709 719
+727 733 739 743 751 757 761 769 773 787 797 809 811 821 823 827 829 839 853 857
+859 863 877 881 883 887 907 911 919 929 937 941 947 953 967 971 977 983 991 997
+NIL
+</pre>
+<p> セルの総数が 8192 個しかないので、大きな素数を求めることはできませんが、このままでも 5000 までの素数は求めることができます。
+</p>
+<p> 今回はここまでです。次回は連結リストライブラリの簡単なサンプルプログラムを作ってみましょう。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>A.V.Aho, John E. Hopcroft, Jeffrey D. Ulman, 『データ構造とアルゴリズム』, 培風館, 1987
+  <li>Patrick Henry Winston, Berthold Klaus Paul Horn, 『LISP 原書第 3 版 (1)』, 培風館, 1992
+  <li><a href="http://matsu-www.is.titech.ac.jp/~endo/gc/">ガベコレページ</a>, <a href="http://matsu-www.is.titech.ac.jp/~endo/gc/gc.pdf">一般教養としてのGarbage Collection (PDF)</a> 
+  <li><a href="http://www.logos.t.u-tokyo.ac.jp/www/home/chik/algorithm-design/">アルゴリズム設計 講義資料 2009</a>, <a href="http://www.logos.t.u-tokyo.ac.jp/www/home/chik/algorithm-design/07%20Memory%20Management.pdf">アルゴリズム設計 (7) メモリ管理 (PDF)</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; testgc.l : マークスイープ法のテスト
+;
+;            Copyright (C) 2011 Makoto Hiroi
+;
+
+; メモリの定義
+(defvar *memory* (make-array 65536
+                             :element-type '(unsigned-byte 16)
+                             :initial-element 0))
+
+; スタックポインタ
+(defvar *sp* #x8000)
+
+; フリーセル
+(defvar *free-cell* #x8000)
+
+; 操作関数
+(defun mcar (cp) (aref *memory* cp))
+(defun mcdr (cp) (aref *memory* (1+ cp)))
+(defun set-mcar (cp x)
+  (setf (aref *memory* cp) x))
+(defun set-mcdr (cp x)
+  (setf (aref *memory* (1+ cp)) x))
+
+(defun push-stack (x)
+  (decf *sp*)
+  (setf (aref *memory* *sp*) x))
+
+; 引数をスタックに積む
+(defmacro defun+ (name args &amp;rest body)
+  (let ((num (length args)))
+    `(defun ,name ,args
+       ,@(mapcar #'(lambda (x) `(push-stack ,x)) args)
+       (prog1
+           (progn ,@body)
+         (incf *sp* ,num)))))
+
+; 初期化
+; 0-#x7fff : スタックエリア
+;  -#xffff : セルエリア
+(defun initialize ()
+  (setf *sp* #x8000
+        *free-cell* #x8000)
+  (do ((p #x8000 (+ p 2))
+       (q #x8002 (+ q 2)))
+      ((= #x10000 q) (set-mcdr p 0))
+    (set-mcdr p q)))
+
+;;;
+;;; GC
+;;;
+
+; MARK
+; スタックから使用中のセルを探してマークする
+(defun mgc-mark ()
+  (do ((x *sp* (1+ x)))
+      ((= x #x8000))
+    (let ((p (aref *memory* x)))
+      (when (and (&lt;= #x8000 p #xffff)
+                 (evenp p))
+        ; 使用中のセル
+        (do ()
+            ((zerop p))
+          (let ((q (mcdr p)))
+            (when (plusp (logand q 1))
+              ; MARK 済み
+              (return))
+            (set-mcdr p (logior q 1))   ; GC FLAG ON
+            (setf p q)))))))
+
+; SWEEP
+(defun mgc-sweep ()
+  (setf *free-cell* 0)    ; null で終端
+  (do ((p #x8000 (+ p 2)))
+      ((= p #x10000))
+    (cond ((zerop (logand (mcdr p) 1))
+           ; 未使用 (フリーセルの先頭に追加)
+           (set-mcdr p *free-cell*)
+           (setf *free-cell* p))
+          (t
+           ; 使用中 (GC FLAG CLEAR)
+           (set-mcdr p (logand #xfffe (mcdr p)))))))
+
+; GC 本体
+(defun mgc ()
+  (format t "--- GC ---~%")
+  (mgc-mark)
+  (mgc-sweep))
+
+;;;
+;;; テスト用のリスト操作関数
+;;;
+
+; セルの取得
+(defun make-cell ()
+  (when (zerop *free-cell*)
+    (mgc)
+    (when (zerop *free-cell*)
+      (error "make-cell : Out of memory")))
+  (let ((cp *free-cell*))
+    (setf *free-cell* (mcdr cp))
+    cp))
+
+; CONS
+(defun+ mcons (a b)
+  (let ((cp (make-cell)))
+    (set-mcar cp a)
+    (set-mcdr cp b)
+    cp))
+
+; IOTA
+(defun+ miota (n m)
+  (if (&lt; m n)
+      0
+    (mcons n (miota (1+ n) m))))
+
+; REVERSE
+(defun+ mreverse-sub (ls a)
+  (if (zerop ls)
+      a
+    (mreverse-sub (mcdr ls) (mcons (mcar ls) a))))
+
+(defun+ mreverse (ls) (mreverse ls 0))
+
+; REMOVE
+(defun+ mremove (x ls)
+  (cond ((zerop ls) 0)
+        ((eql (mcar ls) x)
+         (mremove x (mcdr ls)))
+        (t
+         (mcons (mcar ls) (mremove x (mcdr ls))))))
+
+; リストの表示
+(defun print-list (ls)
+  (when (plusp ls)
+    (format t "~D " (mcar ls))
+    (print-list (mcdr ls))))
+
+; 順列の生成
+(defun+ perm-sub (nums a)
+  (if (zerop nums)
+      (progn (print-list (mreverse a))
+             (terpri))
+    (do ((ls nums (mcdr ls)))
+        ((zerop ls))
+      (perm-sub (mremove (mcar ls) nums)
+                (mcons (mcar ls) a)))))
+
+(defun+ perm (nums) (perm-sub nums 0))
+
+; n の倍数を削除する
+(defun+ remove-multiple (n ls)
+  (cond ((zerop ls) 0)
+        ((zerop (mod (mcar ls) n))
+         (remove-multiple n (mcdr ls)))
+        (t
+         (mcons (mcar ls) (remove-multiple n (mcdr ls))))))
+
+; 素数を求める
+(defun+ sieve-sub (ls a)
+  (if (zerop ls)
+      (mreverse a)
+    (sieve-sub (remove-multiple (mcar ls) (mcdr ls))
+               (mcons (mcar ls) a))))
+
+(defun+ sieve (n)
+  (sieve-sub (miota 2 n) 0))
+</pre>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb39.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb41.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

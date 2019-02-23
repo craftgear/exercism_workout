@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 接尾辞木 (suffix tree)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881799</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>接尾辞木 (suffix tree) [3]</h2>
+<div class="small">
+[ <a href="pyalgo58.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo60.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 接尾辞木の続きです。今回は「一般化接尾辞木 (generalized suffix tree) 」について説明します。
+</p>
+
+<h4>●一般化接尾辞木とは？</h4>
+<p> 文字列の集合 T = {S<sub>1</sub>, S<sub>2</sub>, ..., S<sub>k</sub>} を考えます。一般化接尾辞木 (generalized suffix tree) は、集合 T に属している文字列の接尾辞をすべて格納した接尾辞木のことです。文字列 S<sub>i</sub> の終端記号を $<sub>i</sub> とすると、一般化接尾辞木は集合 T の全要素を終端記号を付け加えて連結した文字列 S<sub>1</sub>$<sub>1</sub>S<sub>2</sub>$<sub>2</sub> ... S<sub>k</sub>$<sub>k</sub> の接尾辞木と考えることができます。
+</p>
+
+<p> 一般化接尾辞木を用いると、あるパターンが文字列の集合に属しているか、それがどの要素に含まれているかといったことを簡単に調べることができます。また、全ての文字列に共通な部分文字列 (common substring) とその出現回数や、その中で最長な共通部分文字列 (longest common substring) も簡単に求めることができます。
+</p>
+
+<h4>●一般化接尾辞木の構築方法</h4>
+<p> 一般化接尾辞木は Ukkonen のアルゴリズムを用いると逐次的に構築することができます。たとえば、文字列 S<sub>1</sub> の接尾辞木 ST<sub>1</sub> を作ります。そこに文字列 S<sub>2</sub> を加えて一般化接尾辞木 GST<sub>2</sub> を作ることができます。さらに文字列 S<sub>3</sub> を加えて新しい一般化接尾辞木 GST<sub>3</sub> を作ることも簡単にできます。
+</p>
+<p> 簡単な例として、banana$ と bananas&amp; の一般化接尾辞木を作ってみましょう。$ と &amp; は終端記号を表します。まず最初に banana$ の接尾辞木を作ります。次に、banana$ に bananas&amp; を連結して文字列 banana$bananas&amp; を作ります。最初に作成した接尾辞木は、連結した文字列の banana$ まで読み込んで作成した接尾辞木と同じなので、このあと bananas&amp; を読み込んで Ukkonen のアルゴリズムで接尾辞木を構築すればいいのです。これを図に示すと、次のようになります。
+</p>
+
+<pre class="fig">
+(1) banana$ に bananas&amp; を追加
+   
+     ┌ [a] ┬ [na] ┬ (na$)
+     │     │      │
+     │     │      └ ($)
+     │     │
+     │     └ ($)
+     │
+root ┼ (banana$)
+     │
+     ├ [na] ┬ (na$)
+     │      │
+     │      └ ($)
+     │
+     └ ($)
+
+(2) b, a, n, a, n, a, s を読み込む
+
+     ┌ [a] ┬ [na] ┬ (na$bananas)
+     │     │      │
+     │     │      └ ($bananas)
+     │     │
+     │     └ ($bananas)
+     │  ......
+root ┼ [banana] ┬ ($bananas)   : banana まで一致
+     │          └ (s)          : 葉を追加
+     ├ [na] ┬ (na$bananas)
+     │      │
+     │      └ ($bananas)
+     │
+     └ ($bananas)
+
+(3) ananas の接尾辞を追加
+
+     ┌ [a] ┬ [na] ┬ [na] ┬ ($bananas)
+     │     │      │      └ (s)
+     │     │      ├ ($bananas)
+     │     │      └ (s)
+     │     ├ ($bananas)
+     │     └ (s)
+root ┼ [banana] ┬ ($bananas)
+     │          └ (s)
+     ├ [na] ┬ [na] ┬ ($bananas)
+     │      │      └ (s)
+     │      ├ ($bananas)
+     │      └ (s)
+     ├ ($bananas)
+     └ (s)
+
+(4) &amp; を挿入
+
+     ┌ [a] ┬ [na] ┬ [na] ┬ ($bananas&amp;)  : anana$
+     │     │      │      └ (s&amp;)         : ananas&amp;
+     │     │      ├ ($bananas&amp;)          : ana$
+     │     │      └ (s&amp;)                 : anas&amp;
+     │     ├ ($bananas&amp;)                  : a$
+     │     └ (s&amp;)                         : as&amp;
+root ┼ [banana] ┬ ($bananas&amp;)             : banana$
+     │          └ (s&amp;)                    : bananas&amp;
+     ├ [na] ┬ [na] ┬ ($bananas&amp;)         : nana$
+     │      │      └ (s&amp;)                : nanas&amp;
+     │      ├ ($bananas&amp;)                 : na$
+     │      └ (s&amp;)                        : nas&amp;
+     ├ ($bananas&amp;)                         : $
+     ├ (s&amp;)                                : s&amp;
+     └ (&amp;)                                 : &amp;
+
+        図 : banana$ と bananas&amp; の一般化接尾辞木
+</pre>
+<p> ルートから接尾辞木をたどり、最初に見つけた終端記号までの部分文字列が、集合に属する要素 (文字列) の接尾辞に対応します。したがって、$ がある葉は banana$ の接尾辞を表していることになり、$ がなくて &amp; がある葉は、bananas&amp; の接尾辞になります。
+</p>
+<p> ここで、$ を含む葉は banana$ の接尾辞木を構築するときに生成されることに注意してください。一般化接尾辞木で文字列 S<sub>i</sub> の接尾辞木を構築するとき、生成された葉に終端記号 $<sub>i</sub> は存在しますが、それ以前に接尾辞木を構築した文字列の終端記号 $<sub>1</sub> ... $<sub>i-1</sub> は存在しません。したがって、葉を生成するときに文字列の識別子を付加することで、その葉がどの文字列の接尾辞を表しているか簡単に区別することができます。
+</p>
+
+<p> このほかに、文字列を連結しないで一般化接尾辞木を構築する方法もあります。この場合、集合に属する文字列を配列に格納しておいて、配列のインデックスとその文字列のインデックスで節の部分文字列 (区間) を表すことになります。どちらの方法でもよいのですが、今回は簡単にプログラムできる「文字列を連結する方法」を採用しました。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。節はクラス Node で、葉はクラス Leaf で表します。そして、Leaf に識別子を格納するインスタンス変数 id を用意します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 葉の定義
+
+# 基本クラスの定義
+class BaseNode:
+  def __init__(self, start, depth):
+        self.start = start      # 開始位置
+        self.depth = depth      # 接頭辞の長さ (木の深さ)
+
+# 葉の定義
+class Leaf(BaseNode):
+    def __init__(self, start, depth, id):
+        BaseNode.__init__(self, start, depth)
+        self.id = id
+
+    # 節の長さ
+    def len(self): return MAX_LEN
+
+    # 葉の巡回
+    def traverse_leaf(self): yield self
+</pre>
+
+<p> あとは、葉を生成するときに識別子をセットするだけです。接尾辞木を構築するプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 接尾辞木の構築
+
+class SuffixTree:
+    def __init__(self, buff):
+        self.buff = buff
+        self.size = len(self.buff)
+        self.root = Node(ROOT, 0)
+        self.root.link = self.root
+        self.sets = 0
+        self.interval = [0]
+        #
+        self.make_suffix_tree(0)
+        self.sets += 1
+
+    # 接尾辞木の構築
+    def make_suffix_tree(self, bi):
+        # bi は buff の位置
+        ni = 0            # node 内の位置
+        si = bi           # 照合開始位置
+        node = self.root  # 照合中の節
+        prev = node       # node の親節
+        nlen = 0          # node の長さ
+        while bi &lt; self.size:
+            if ni == nlen:
+                # 次の子を探す
+                child = node.search_child(self.buff, self.size, self.buff[bi])
+                if child is None:
+                    if si == bi:
+                        # ルートに挿入
+                        self.root.insert_child(Leaf(bi, 0, self.sets))
+                        si += 1
+                        bi += 1
+                    else:
+                        # 葉を挿入する
+                        prev, node, nlen, ni, si, bi = self.insert_leaf(node, bi, si)
+                else:
+                    prev = node
+                    node = child
+                    nlen = child.len()
+                    ni = 1
+                    bi += 1
+            else:
+                if self.buff[bi] != self.buff[node.start + ni]:
+                    # 節を分割して葉を挿入する
+                    prev, node, nlen, ni, si, bi = self.divide_node(prev, node, ni, bi, si)
+                else:
+                    ni += 1
+                    bi += 1
+        #
+        if si &lt; bi:
+            if nlen == ni:
+                self.insert_leaf(node, bi, si)
+            else:
+                self.divide_node(prev, node, ni, bi, si)
+</pre>
+<p> クラス SuffixTree にインスタンス変数 sets と interval を用意します。sets は集合の要素数を表します。この値を識別子として使います。したがって、文字列の識別子は 0 から sets - 1 になります。なお、このプログラムでは終端記号の付加は行っておりません。引数には終端記号を付加した文字列を渡してください。
+</p>
+
+<p> interval には文字列の開始位置を格納します。接尾辞木の構築はメソッド make_suffix_tree で行います。これは今までのプログラムとほぼ同じですが、引数 bi の位置から接尾辞木の構築を開始するところが異なります。それから、葉を生成するときはコンストラクタ Leaf に sets の値を渡すように修正します。
+</p>
+
+<p> 次は接尾辞木に文字列を追加するメソッド add を作ります。
+</p>
+<pre class="list">
+リスト : 接尾辞木に文字列を追加する
+
+    def add(self, buff):
+        self.buff += buff
+        n = self.size
+        self.interval.append(n)
+        self.size = len(self.buff)
+        self.make_suffix_tree(n)
+        self.sets += 1
+</pre>
+<p> 最初に文字列を連結します。追加した文字列の開始位置は self.size になるので、それを変数 n にセットします。それから、interval に追加した文字列の開始位置 n を格納します。あとは make_suffix_tree を呼び出して、文字列 self.buff の n 番目から接尾辞木を構築します。最後に sets の値を +1 します。
+</p>
+<p> あとは葉を生成するするときに sets の値を渡すだけなので、難しいところはないと思います。説明は割愛いたしますので、詳細は <a href="pyalgo59.html#list1">プログラムリスト</a> をお読みくださいませ。
+</p>
+
+<h4>●パターンの探索</h4>
+<p> 次はパターンを探索するメソッド search_pattern_all を修正します。
+</p>
+<pre class="list">
+リスト : パターンの検索
+
+    def search_pattern_all(self, seq):
+        node = self.search_pattern_sub(seq)
+        if node is None: return
+        for x in node.traverse_leaf():
+            yield x.id, x.start - x.depth - self.interval[x.id]
+</pre>
+<p> search_pattern_all は、文字列の識別子とパターンの開始位置を返します。このとき、連結した文字列での開始位置を返すのではなく、見つけた id の文字列の開始位置を返すことに注意してください。x.start - x.depth で連結した文字列での開始位置を求め、そこから interval[x.id] を引き算すれば、id での文字列の開始位置を求めることができます。
+</p>
+
+<p> パターンの出現回数も簡単に求めることができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 文字列ごとにパターンが出現している回数を求める
+
+    def count_pattern(self, seq):
+        result = [0] * self.sets
+        node = self.search_pattern_sub(seq)
+        for x in node.traverse_leaf():
+            result[x.id] += 1
+        return result
+</pre>
+<p> メソッド count_pattern は文字列 (id) ごとに出現回数を配列 result に格納して返します。処理内容は search_pattern_all とほぼ同じで、traverse_leaf で葉 x を求め、result[x.id] の値を +1 するだけです。
+</p>
+
+<p> メソッド repeated_substring と longest_repeated_substring はそのまま利用することができます。ただし、連結した文字列が探索の対象になります。ご注意くださいませ。
+</p>
+<h4>●簡単な実行例１</h4>
+<p> それでは、簡単な実行例として　banana$ と bananas&amp; の一般化接尾辞木を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+if __name__ == '__main__':
+    # suffix tree
+    st = SuffixTree("banana$")
+    st.add("bananas&amp;")
+    print_node(st.root, st.buff)
+    check_node(st.root, st.buff)
+    for id, s in st.search_pattern_all("ana"):
+        print id, s
+    print st.count_pattern("ana")
+    s, e = st.longest_repeated_substring()
+    print st.buff[s:e]
+    for s, e, c in st.repeated_substring(1, 2):
+        print st.buff[s:e], c
+</pre>
+<p> 一般化接尾辞木 st からパターン ana を search_pattern_all で探索します。出現回数は count_pattern で求めることができます。また、longest_repeated_substring と repeated_substring も呼び出すことができますが、連結した文字列が探索対象となります。実行結果は次のようになります。
+</p>
+<pre>
+root
+&amp;
+s&amp;
+banana
+      s&amp;
+      $bananas&amp;
+$bananas&amp;
+a
+ s&amp;
+ $bananas&amp;
+ na
+   s&amp;
+   na
+     s&amp;
+     $bananas&amp;
+   $bananas&amp;
+na
+  s&amp;
+  na
+    s&amp;
+    $bananas&amp;
+  $bananas&amp;
+
+1 3
+1 1
+0 1
+0 3
+
+[2, 2]
+
+banana
+
+banana 2
+banan 2
+bana 2
+ban 2
+ba 2
+b 2
+anana 2
+anan 2
+ana 4
+an 4
+a 6
+nana 2
+nan 2
+na 4
+n 4
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●共通部分文字列の探索</h4>
+<p> 今度は、各文字列の共通部分文字列の中で最長のものを求めるメソッド longest_common_substring を作りましょう。考え方は最長の繰り返し部分文字列を求める longest_repeated_substring と同じです。接尾辞木を巡回して、節 node 以下の部分木にある葉の id を調べます。全ての id が揃っていれば、node までの部分文字列は各文字列で共通に出現していることがわかります。その中で最長の部分文字列を求めればよいわけです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 最長共通部分文字列を求める
+
+    def search_longest_substring(self, node, a):
+        if isinstance(node, Leaf):
+            # 葉は該当しない
+            return 1 &lt;&lt; node.id
+        else:
+          x = node.child
+          c = 0
+          while x is not None:
+              c |= self.search_longest_substring(x, a)
+              x = x.bros
+          if c == (1 &lt;&lt; self.sets) - 1:
+              if a[0].child.depth &lt; node.child.depth:
+                  a[0] = node
+          return c
+
+    def longest_common_substring(self):
+        a = [self.root]
+        self.search_longest_substring(self.root, a)
+        return self.buff[a[0].start - a[0].depth:a[0].start + a[0].len()]
+</pre>
+<p> 実際の処理は search_longest_substring で行います。引数 a は配列で、先頭要素に最長の部分文字列となる節をセットします。引数 node が葉の場合、葉の id をビットに変換して返します。node が節の場合、node 以下の部分木を巡回して、その返り値 (ビット) を変数 c に論理和でセットします。
+</p>
+<p> c に集合の要素の個数だけビットがセットされていれば、node までの部分文字列は全ての文字列に出現しています。引数 a に格納されている部分文字列と比較して、node の方が長い場合は a の値を node に更新します。最後に c の値を返します。
+</p>
+
+<p> 最後に、すべての文字列で共通に出現する n 文字以上の部分文字列を求めるメソッド common_substring を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト :  n 文字以上の共通部分文字列を求める
+
+    def search_common_substring(self, node, n, a):
+        def add_cnt(src, dst):
+            for x in xrange(self.sets): src[x] += dst[x]
+        #
+        if isinstance(node, Leaf):
+            cnt = [0] * self.sets
+            cnt[node.id] = 1
+            return cnt
+        else:
+            x = node.child
+            cnt = [0] * self.sets
+            while x is not None:
+                add_cnt(cnt, self.search_common_substring(x, n, a))
+                x = x.bros
+            # 節の長さをチェック
+            l = node.len()
+            if l &gt; 0 and 0 not in cnt:
+                for k in xrange(l, 0, -1):
+                    if node.depth + k &lt; n: break
+                    a.append((self.buff[node.start - node.depth:node.start + k], cnt))
+            return cnt
+
+    def common_substring(self, n):
+        a = []
+        self.search_common_substring(self.root, n, a)
+        return a
+</pre>
+<p> 考え方は longest_common_substring と同じですが、葉の id をカウントするところが異なります。node が葉の場合、その id を 1 に、他の id を 0 にセットした配列を返します。node が節の場合、node 以下の部分木を巡回して、葉の id の個数を求めます。局所関数 add_cnt は配列の要素を加算する処理を行います。
+</p>
+<p> 配列 cnt を 0 に初期化して、search_common_substring の返り値を add_cnt で cnt に加算します。そして、cnt に 0 が含まれていなければ、ルートから node までの部分文字列は全ての文字列で出現していることがわかります。その部分文字列の長さが n よりも長い場合は、配列 a に文字列と cnt をタプルにまとめて追加します。この処理は repeated_substring と同じです。
+</p>
+
+<h4>●簡単な実行例２</h4>
+<p> それでは簡単な実行例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+if __name__ == '__main__':
+    st = SuffixTree("sandollar1")
+    check_node(st.root, st.buff)
+    print_node(st.root, st.buff)
+    print "-----"
+    for x in ["sandlot2", "handler3", "grand4", "pantry5"]:
+        st.add(x)
+        check_node(st.root, st.buff)
+        print_node(st.root, st.buff)
+        print st.common_substring(2)
+        a = st.longest_common_substring()
+        print a, 
+        for x in st.search_pattern_all(a):
+            print x,
+        print
+        print "-----"
+</pre>
+<p> sandollar, sandlot, handler, grand, pantry の一般化接尾辞木を逐次的に作成します。数字 1, 2, 3, 4, 5 を終端記号に使っています。文字列を追加するたびに、共通部分文字列と最長共通部分文字列が変化していくことに注意してください。実行結果は次のようになります。
+</p>
+<pre>
+-----
+root
+1
+r1
+a
+ r1
+ ndollar1
+l
+ ar1
+ lar1
+ollar1
+dollar1
+ndollar1
+sandollar1
+-----
+root
+2
+t2
+o
+ t2
+ llar1sandlot2
+d
+ lot2
+ ollar1sandlot2
+nd
+  lot2
+  ollar1sandlot2
+sand
+    lot2
+    ollar1sandlot2
+1sandlot2
+r1sandlot2
+a
+ nd
+   lot2
+   ollar1sandlot2
+ r1sandlot2
+l
+ ot2
+ ar1sandlot2
+ lar1sandlot2
+
+[('nd', [1, 1]), ('sand', [1, 1]), ('san', [1, 1]), ('sa', [1, 1]), 
+ ('and', [1, 1]), ('an', [1, 1])]
+
+sand (1, 0) (0, 0)
+-----
+root
+3
+r
+ 3
+ 1sandlot2handler3
+er3
+handler3
+2handler3
+t2handler3
+o
+ t2handler3
+ llar1sandlot2handler3
+d
+ l
+  er3
+  ot2handler3
+ ollar1sandlot2handler3
+nd
+  l
+   er3
+   ot2handler3
+  ollar1sandlot2handler3
+sand
+    lot2handler3
+    ollar1sandlot2handler3
+1sandlot2handler3
+a
+ nd
+   l
+    er3
+    ot2handler3
+   ollar1sandlot2handler3
+ r1sandlot2handler3
+l
+ er3
+ ot2handler3
+ ar1sandlot2handler3
+ lar1sandlot2handler3
+
+[('nd', [1, 1, 1]), ('and', [1, 1, 1]), ('an', [1, 1, 1])]
+
+and (2, 1) (1, 1) (0, 1)
+-----
+root
+4
+grand4
+3grand4
+r
+ and4
+ 3grand4
+ 1sandlot2handler3grand4
+er3grand4
+handler3grand4
+2handler3grand4
+t2handler3grand4
+o
+ t2handler3grand4
+ llar1sandlot2handler3grand4
+d
+ 4
+ l
+  er3grand4
+  ot2handler3grand4
+ ollar1sandlot2handler3grand4
+nd
+  4
+  l
+   er3grand4
+   ot2handler3grand4
+  ollar1sandlot2handler3grand4
+sand
+    lot2handler3grand4
+    ollar1sandlot2handler3grand4
+1sandlot2handler3grand4
+a
+ nd
+   4
+   l
+    er3grand4
+    ot2handler3grand4
+   ollar1sandlot2handler3grand4
+ r1sandlot2handler3grand4
+l
+ er3grand4
+ ot2handler3grand4
+ ar1sandlot2handler3grand4
+ lar1sandlot2handler3grand4
+
+[('nd', [1, 1, 1, 1]), ('and', [1, 1, 1, 1]), ('an', [1, 1, 1, 1])]
+
+and (3, 2) (2, 1) (1, 1) (0, 1)
+-----
+root
+5
+y5
+t
+ ry5
+ 2handler3grand4pantry5
+n
+ try5
+ d
+  4pantry5
+  l
+   er3grand4pantry5
+   ot2handler3grand4pantry5
+  ollar1sandlot2handler3grand4pantry5
+pantry5
+4pantry5
+grand4pantry5
+3grand4pantry5
+r
+ y5
+ and4pantry5
+ 3grand4pantry5
+ 1sandlot2handler3grand4pantry5
+er3grand4pantry5
+handler3grand4pantry5
+2handler3grand4pantry5
+o
+ t2handler3grand4pantry5
+ llar1sandlot2handler3grand4pantry5
+d
+ 4pantry5
+ l
+  er3grand4pantry5
+  ot2handler3grand4pantry5
+ ollar1sandlot2handler3grand4pantry5
+sand
+    lot2handler3grand4pantry5
+    ollar1sandlot2handler3grand4pantry5
+1sandlot2handler3grand4pantry5
+a
+ n
+  try5
+  d
+   4pantry5
+   l
+    er3grand4pantry5
+    ot2handler3grand4pantry5
+   ollar1sandlot2handler3grand4pantry5
+ r1sandlot2handler3grand4pantry5
+l
+ er3grand4pantry5
+ ot2handler3grand4pantry5
+ ar1sandlot2handler3grand4pantry5
+ lar1sandlot2handler3grand4pantry5
+
+[('an', [1, 1, 1, 1, 1])]
+
+an (4, 1) (3, 2) (2, 1) (1, 1) (0, 1)
+-----
+</pre>
+<p> 正常に動作しています。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="list1">プログラムリスト</h4>
+<pre class="list">
+# coding: utf-8
+#
+# sufftree.py : 接尾辞木 (Suffix Tree)
+#               (Generalized suffix tree)
+#
+#               Copyright (C) 2009 Makoto Hiroi
+#
+
+# 定数
+ROOT = -1
+MAX_LEN = 0x7fffffff
+
+
+# 基本クラスの定義
+class BaseNode:
+  def __init__(self, start, depth):
+        self.start = start      # 開始位置
+        self.depth = depth      # 接頭辞の長さ (木の深さ)
+
+# 葉の定義
+class Leaf(BaseNode):
+    def __init__(self, start, depth, id):
+        BaseNode.__init__(self, start, depth)
+        self.id = id
+
+    # 節の長さ
+    def len(self): return MAX_LEN
+
+    # 葉の巡回
+    def traverse_leaf(self): yield self
+
+# 節の定義
+class Node(BaseNode):
+    # 初期化
+    def __init__(self, start, depth):
+        BaseNode.__init__(self, start, depth)
+        self.child = None       # 子のリンク
+        self.bros = None        # 兄弟のリンク
+        self.link = None        # サフィックスリンク
+
+    # 子を探す
+    def search_child(self, buff, size, x):
+        child = self.child
+        while child is not None:
+            if child.start &lt; size and buff[child.start] == x:
+                return child
+            child = child.bros
+        return None
+
+    # 子を挿入する
+    def insert_child(self, child):
+        child.bros = self.child
+        self.child = child
+
+    # 子を削除する
+    def delete_child(self, child):
+        if self.child is child:
+            self.child = child.bros
+        else:
+            # リンクをたどる
+            node = self.child
+            while node.bros is not None:
+                if node.bros is child:
+                    node.bros = node.bros.bros
+                    break
+                node = node.bros
+
+    # 節の長さを求める
+    def len(self):
+        if self.start == ROOT: return 0
+        return self.child.depth - self.depth
+
+    # 葉を巡回する
+    def traverse_leaf(self):
+        node = self.child
+        while node is not None:
+            for x in node.traverse_leaf():
+                yield x
+            node = node.bros
+
+# Suffix Tree
+class SuffixTreeError(Exception): pass
+
+class SuffixTree:
+    def __init__(self, buff):
+        self.buff = buff
+        self.size = len(self.buff)
+        self.root = Node(ROOT, 0)
+        self.root.link = self.root
+        self.sets = 0
+        self.interval = [0]
+        #
+        self.make_suffix_tree(0)
+        self.sets += 1
+
+    # 接尾辞木に文字列を追加する
+    def add(self, buff):
+        self.buff += buff
+        n = self.size
+        self.interval.append(n)
+        self.size = len(self.buff)
+        self.make_suffix_tree(n)
+        self.sets += 1
+
+    def make_suffix_tree(self, bi):
+        # bi は buff の位置
+        ni = 0            # node 内の位置
+        si = bi           # 照合開始位置
+        node = self.root  # 照合中の節
+        prev = node       # node の親節
+        nlen = 0          # node の長さ
+        while bi &lt; self.size:
+            if ni == nlen:
+                # 次の子を探す
+                child = node.search_child(self.buff, self.size, self.buff[bi])
+                if child is None:
+                    if si == bi:
+                        # ルートに挿入
+                        self.root.insert_child(Leaf(bi, 0, self.sets))
+                        si += 1
+                        bi += 1
+                    else:
+                        # 葉を挿入する
+                        prev, node, nlen, ni, si, bi = self.insert_leaf(node, bi, si)
+                else:
+                    prev = node
+                    node = child
+                    nlen = child.len()
+                    ni = 1
+                    bi += 1
+            else:
+                if self.buff[bi] != self.buff[node.start + ni]:
+                    # 節を分割して葉を挿入する
+                    prev, node, nlen, ni, si, bi = self.divide_node(prev, node, ni, bi, si)
+                else:
+                    ni += 1
+                    bi += 1
+        #
+        if si &lt; bi:
+            if nlen == ni:
+                self.insert_leaf(node, bi, si)
+            else:
+                self.divide_node(prev, node, ni, bi, si)
+
+    # サフィックスリンクをたどり葉を挿入していく
+    def insert_leaf(self, node, bi, si):
+        node.insert_child(Leaf(bi, node.depth + node.len(), self.sets))
+        node = node.link
+        si += 1
+        while si &lt; bi:
+            if bi &lt; self.size:
+                child = node.search_child(self.buff, self.size, self.buff[bi])
+                if child is not None:
+                    return node, child, child.len(), 1, si, bi + 1
+            node.insert_child(Leaf(bi, node.depth + node.len(), self.sets))
+            node = node.link
+            si += 1
+        return self.root, self.root, 0, 0, si, bi
+
+
+    # リンクをたどり節を分割して葉を挿入していく
+    def divide_node(self, prev, node, ni, bi, si):
+        link_node = self.insert_node(prev, node, bi, ni)
+        si += 1
+        while si &lt; bi:
+            prev, node, match = self.search_next_link(prev.link, si, bi)
+            if match == 0:
+                if bi &lt; self.size:
+                    child = node.search_child(self.buff, self.size, self.buff[bi])
+                    if child is not None:
+                        link_node.link = node
+                        return node, child, child.len(), 1, si, bi + 1
+                link_node.link = node
+                return self.insert_leaf(node, bi, si)
+            #
+            link_node.link = self.insert_node(prev, node, bi, match)
+            link_node = link_node.link
+            si += 1
+        #
+        link_node.link = self.root
+        return self.root, self.root, 0, 0, si, bi
+
+    # 分割位置を求める
+    def search_next_link(self, node, i, end):
+        prev = node
+        if node is not self.root:
+            i += node.child.depth
+        while i &lt; end:
+            child = node.search_child(self.buff, self.size, self.buff[i])
+            j = child.len()
+            if i + j &gt; end:
+                return node, child, end - i
+            i += j
+            prev = node
+            node = child
+        return prev, node, 0
+
+    # データの挿入
+    def insert_node(self, parent, node, match, sub_match):
+        # node を new_node - node に分割する
+        new_node = Node(node.start, node.depth)
+        node.depth += sub_match
+        node.start += sub_match
+        # 子の付け替え
+        parent.delete_child(node)
+        parent.insert_child(new_node)
+        new_node.insert_child(node)
+        # new_node に葉を追加する
+        new_node.insert_child(Leaf(match, node.depth, self.sets))
+        return new_node
+
+    #
+    # アプリケーション
+    #
+    
+    # 共通接頭辞の検索
+    def search_pattern_sub(self, seq):
+        size = len(seq)
+        node = self.root
+        i = 0
+        while i &lt; size:
+            child = node.search_child(self.buff, self.size, seq[i])
+            if child is None: return None
+            j = 1
+            k = child.len()
+            while j &lt; k:
+                if i + j == size: return child
+                if i + j == self.size or seq[i + j] != self.buff[child.start + j]:
+                    return None
+                j += 1
+            i += j
+            node = child
+        return node
+
+    def search_pattern(self, seq):
+        node = self.search_pattern_sub(seq)
+        if node is not None:
+            for x in node.traverse_leaf():
+                return True
+        return False
+
+    def search_pattern_all(self, seq):
+        node = self.search_pattern_sub(seq)
+        if node is None: return
+        for x in node.traverse_leaf():
+            yield x.id, x.start - x.depth - self.interval[x.id]
+
+    # n 文字以上 m 回以上出現している文字列を求める
+    def search_repeated_substring(self, node, n, m, a):
+        if isinstance(node, Leaf):
+            c = 1
+            l = self.size - node.start
+        else:
+            # 葉の数を求める
+            x = node.child
+            c = 0
+            while x is not None:
+                c += self.search_repeated_substring(x, n, m, a)
+                x = x.bros
+            # 節の長さをチェック
+            l = node.len()
+        if l &gt; 0 and c &gt;= m:
+            for k in xrange(l, 0, -1):
+                if node.depth + k &lt; n: break
+                a.append((node.start - node.depth, node.start + k, c))
+        return c
+
+    def repeated_substring(self, n, m):
+        a = []
+        self.search_repeated_substring(self.root, n, m, a)
+        return a
+
+    # 2 回以上繰り返しのある最長の文字列を求める
+    def search_longest_repeated_substring(self, node):
+        if isinstance(node, Leaf):
+            # 葉は該当しない
+            return None
+        else:
+          max_node = node
+          x = node.child
+          while x is not None:
+              y = self.search_longest_repeated_substring(x)
+              if y is not None and max_node.child.depth &lt; y.child.depth:
+                  max_node = y
+              x = x.bros
+          return max_node
+
+    def longest_repeated_substring(self):
+        node = self.search_longest_repeated_substring(self.root)
+        return node.start - node.depth, node.start + node.len()
+
+    # id ごとにパターンが出現している回数を求める
+    def count_pattern(self, seq):
+        result = [0] * self.sets
+        node = self.search_pattern_sub(seq)
+        for x in node.traverse_leaf():
+            result[x.id] += 1
+        return result
+
+    # n 文字以上で全ての id に出現している文字列を求める
+    def search_common_substring(self, node, n, a):
+        def add_cnt(src, dst):
+            for x in xrange(self.sets): src[x] += dst[x]
+        #
+        if isinstance(node, Leaf):
+            cnt = [0] * self.sets
+            cnt[node.id] = 1
+            return cnt
+        else:
+            x = node.child
+            cnt = [0] * self.sets
+            while x is not None:
+                add_cnt(cnt, self.search_common_substring(x, n, a))
+                x = x.bros
+            # 節の長さをチェック
+            l = node.len()
+            if l &gt; 0 and 0 not in cnt:
+                for k in xrange(l, 0, -1):
+                    if node.depth + k &lt; n: break
+                    a.append((self.buff[node.start - node.depth:node.start + k], cnt))
+            return cnt
+
+    def common_substring(self, n):
+        a = []
+        self.search_common_substring(self.root, n, a)
+        return a
+
+    # 全ての id で出現する最長の文字列を求める
+    def search_longest_substring(self, node, a):
+        if isinstance(node, Leaf):
+            # 葉は該当しない
+            return 1 &lt;&lt; node.id
+        else:
+          x = node.child
+          c = 0
+          while x is not None:
+              c |= self.search_longest_substring(x, a)
+              x = x.bros
+          if c == (1 &lt;&lt; self.sets) - 1:
+              if a[0].child.depth &lt; node.child.depth:
+                  a[0] = node
+          return c
+
+    def longest_common_substring(self):
+        a = [self.root]
+        self.search_longest_substring(self.root, a)
+        return self.buff[a[0].start - a[0].depth:a[0].start + a[0].len()]
+
+# デバッグ用表示ルーチン
+def print_node(node, buff):
+    if isinstance(node, Leaf):
+        print ' ' * node.depth + buff[node.start:]
+    else:
+        if node.start == ROOT:
+            print "root", id(node)
+        else:
+            print ' ' * node.depth + buff[node.start:node.start + node.len()], \
+                  id(node), id(node.link)
+        x = node.child
+        while x is not None:
+            print_node(x, buff)
+            x = x.bros
+
+# 子の個数を数える
+def count_child(node):
+    a = 0
+    x = node.child
+    while x is not None:
+        a += 1
+        x = x.bros
+    return a
+
+# 同じ文字から始まる兄弟がないかチェックする
+def check_same_child(node, buff):
+    if isinstance(node, Node):
+        x = buff[node.start]
+        node = node.bros
+        while node is not None:
+            if node.start &lt; len(buff) and buff[node.start] == x:
+                raise SuffixTreeError, "error2"
+            node = node.bros
+
+# suffix link のチェック
+def check_suffix_link(node, buff):
+    len1 = node.len()
+    len2 = node.link.len()
+    depth1 = node.depth
+    depth2 = node.link.depth
+    if depth1 + len1 != depth2 + len2 + 1:
+        raise SuffixTreeError, "suffix link error1"
+    str1 = buff[node.start - depth1 + 1:node.start + len1] 
+    str2 = buff[node.link.start - depth2:node.link.start + len2]
+    if str1 != str2:
+        raise SuffixTreeError, "suffix link error2"
+    # print "OK", id(node), str1, str2
+
+# suffix tree のチェック
+def check_node(node, buff):
+    if isinstance(node, Leaf):
+        return 1
+    else:
+        # 節
+        if node.start != ROOT:
+            check_suffix_link(node, buff)
+        if node.start != ROOT and count_child(node) &lt; 2:
+            raise SuffixTreeError, "error1"
+        x = node.child
+        a = 0
+        while x is not None:
+            check_same_child(x, buff)
+            a += check_node(x, buff)
+            x = x.bros
+        return a
+
+# 簡単なテスト
+if __name__ == '__main__':
+    st = SuffixTree("banana$")
+    st.add("bananas&amp;")
+    print_node(st.root, st.buff)
+    check_node(st.root, st.buff)
+    for id, s in st.search_pattern_all("ana"):
+        print id, s
+    print st.count_pattern("ana")
+    s, e = st.longest_repeated_substring()
+    print st.buff[s:e]
+    for s, e, c in st.repeated_substring(1, 2):
+        print st.buff[s:e], c
+    print "-----"
+    st = SuffixTree("sandollar1")
+    check_node(st.root, st.buff)
+    print_node(st.root, st.buff)
+    print "-----"
+    for x in ["sandlot2", "handler3", "grand4", "pantry5"]:
+        st.add(x)
+        check_node(st.root, st.buff)
+        print_node(st.root, st.buff)
+        print st.common_substring(2)
+        a = st.longest_common_substring()
+        print a, 
+        for x in st.search_pattern_all(a):
+            print x,
+        print
+        print "-----"
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo58.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo60.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

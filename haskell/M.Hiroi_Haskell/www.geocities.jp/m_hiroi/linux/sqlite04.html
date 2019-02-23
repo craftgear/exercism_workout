@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 SQLite 超入門</title>
+  <meta name="description" content="SQLite,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881816</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 SQLite 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="sqlite.html">SQLite</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>Python DE SQLite</h3>
+<p> SQLite は Perl, Python, Ruby などのスクリプト言語からでも簡単に利用することができます。本稿では Python (ver 2.7) から SQLite にアクセスする基本的な方法について簡単に説明します。
+</p>
+<h4>●インストール</h4>
+<p> Python は ver 2.5 から sqlite3 用のライブラリが標準で添付されています。別途インストールする必要はありません。
+</p>
+<h4>●接続と切断</h4>
+<p> Python で SQLite を使用する場合、最初に import sqlite3 でモジュール sqlite3 をインポートしてください。データベースの接続はメソッド connect を、切断は close を使います。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 接続と切断 (test01.py)
+
+# coding: utf-8
+import sqlite3
+
+# 接続 
+con = sqlite3.connect("sample_python.sqlite")
+
+# 切断
+con.close()
+print "OK"
+</pre>
+<p> connect の引数にはデータベース名を指定します。データベース名と一致するファイルが見つからない場合、新しいファイルが生成されます。同名のファイルがある場合はそれをデータベースとして使用します。connect の返り値 (Connection オブジェクト) はデータベースの操作に必要なので、変数 con に格納しておきます。切断はメソッド close を呼び出すだけです。
+</p>
+<h4>●テーブルの作成</h4>
+<p> Python で SQL 文を実行する場合、最初に Connection オブジェクトのメソッド cursor を呼び出して Cursor オブジェクトを生成します。SQL 文の実行は、Cursor オブジェクトのメソッド execute で行います。execute は引数に渡された文字列を SQL 文として実行します。
+</p>
+<p> execute は SQL 文にパラメータ情報を含めることができます。パラメータを表す方法は二種類あって、ひとつはパラメータを ? で表す方法です。これを qmark スタイルといいます。パラメータに対応する値は「タプル (tuple)」に格納して、execute の第 2 引数に渡します。
+</p>
+<p> もう一つの方法は名前を使う方法です。これを named スタイルといいます。named スタイルの場合、SQL 文の中では名前の前にコロン ( : ) をつけて表します。そして、execute の第 2 引数には名前と値を格納した「辞書 (dictionary)」を渡します。
+</p>
+<p> それでは簡単な例題として、次に示すテーブルを作成してみましょう。
+</p>
+<table border=1>
+<caption>テーブル名 : person</caption>
+<thead>
+  <tr><th>id</th><th>name</th><th>age</th><th>sex</th><th>email</th></tr>
+</thead>
+<tbody>
+  <tr><td>1</td><td>Foo</td><td>50</td><td>male</td><td>foo@yahoo.co.jp</td></tr>
+  <tr><td>2</td><td>Bar</td><td>35</td><td>female</td><td>bar@yahoo.co.jp</td></tr>
+  <tr><td>3</td><td>Baz</td><td>40</td><td>male</td><td>baz@yahoo.co.jp</td></tr>
+  <tr><td>4</td><td>Oops</td><td>30</td><td>female</td><td>oops@yahoo.co.jp</td></tr>
+</tbody>
+</table>
+<pre class="list">
+リスト : テーブルの作成 (test02.py)
+
+# coding: utf-8
+import sqlite3
+
+# 接続 
+con = sqlite3.connect("sample_python.sqlite")
+cur = con.cursor()
+
+# データベースの作成
+cur.execute("create table person (id integer, name text, age integer, sex text, email text)")
+for xs in [(1, 'Foo', 50, 'male', 'foo@yahoo.co.jp'),
+           (2, 'Bar', 35, 'female', 'bar@yahoo.co.jp'),
+           (3, 'Baz', 40, 'male', 'baz@yahoo.co.jp'),
+           (4, 'Oops', 30, 'female', 'oops@yahoo.co.jp')]:
+    cur.execute("insert into person (id, name, age, sex, email) values (?,?,?,?,?)", xs)
+
+# コミット
+con.commit()
+
+# 切断
+con.close()
+print "OK"
+</pre>
+<p> SQL では関連した複数の処理を一つの処理にまとめたものを「トランザクション (transaction)」といいます。トランザクションは SQL 文の BEGIN で開始します。この場合、データベースの変更を伴う行う作業 (insert, update など) では、そのつどデータベースに変更が反映されるのではありません。トランザクションを終了して実際にデータベースの変更を行う SQL 文が COMMIT (コミット) です。
+</p>
+<p> SQLite の場合、insert や update などの SQL 文を実行するとき、SQLite は暗黙のうちにトランザクションを開始します。Perl で SQLite を使用する場合、オートコミット (AutoCommit) モードがオンに設定されているので、明示的にコミットする必要はないのですが、Python の sqlite3 ではオートコミットモードがオフ <sup><a href="sqlite04.html#note1">[*1]</a></sup> になっているので、データベースに変更を反映するため、メソッド commit を必ず呼び出してください。
+</p>
+
+<p> なお、メソッド executemany を使用すると、複数の SQL 文を一括して実行することができます。
+</p>
+<pre class="list">
+リスト : メソッド executemany の使用例
+
+cur.executemany("insert into person (id, name, age, sex, email) values (?,?,?,?,?)",
+                [(1, 'Foo', 50, 'male', 'foo@yahoo.co.jp'),
+                 (2, 'Bar', 35, 'female', 'bar@yahoo.co.jp'),
+                 (3, 'Baz', 40, 'male', 'baz@yahoo.co.jp'),
+                 (4, 'Oops', 30, 'female', 'oops@yahoo.co.jp')])
+</pre>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> Python でオートコミットモードをオンにするには、isolation_level に None を指定します。
+<pre class="list">
+リスト : オートコミットモードの設定
+
+con = sqlite3.connect("sample_python.sqlite", isolation_level = None)
+</pre>
+</div>
+<h4>●データの抽出</h4>
+<p> select 文の実行結果を取得する場合、Python では 3 つの方法があります。最初はカーソルオブジェクトをイテレータ (iterator) として使う方法、二番目はカーソルオブジェクトのメソッド fetchone を呼び出して 1 行ずつデータを取得する方法、最後はメソッド fetchall を呼び出して全てのデータを受け取る方法です。
+</p>
+<p> それでは実際に試してみましょう。
+<?p>
+<pre class="list">
+リスト : データの抽出 (test03.py)
+
+# coding: utf-8
+import sqlite3
+
+# 接続 
+con = sqlite3.connect("sample_python.sqlite")
+cur = con.cursor()
+
+# イテレータ
+cur.execute("select * from person")
+for xs in cur:
+    print xs
+
+# メソッドで 1 行ずつ取り出す
+cur.execute("select * from person")
+while True:
+    xs = cur.fetchone()  # データがない場合は None を返す
+    if not xs: break
+    print xs
+
+# 全部のデータを取り出す
+cur.execute("select * from person")
+print cur.fetchall()
+
+# 切断
+con.close()
+print "OK"
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ python test03.py
+(1, u'Foo', 50, u'male', u'foo@yahoo.co.jp')
+(2, u'Bar', 35, u'female', u'bar@yahoo.co.jp')
+(3, u'Baz', 40, u'male', u'baz@yahoo.co.jp')
+(4, u'Oops', 30, u'female', u'oops@yahoo.co.jp')
+(1, u'Foo', 50, u'male', u'foo@yahoo.co.jp')
+(2, u'Bar', 35, u'female', u'bar@yahoo.co.jp')
+(3, u'Baz', 40, u'male', u'baz@yahoo.co.jp')
+(4, u'Oops', 30, u'female', u'oops@yahoo.co.jp')
+[(1, u'Foo', 50, u'male', u'foo@yahoo.co.jp'), (2, u'Bar', 35, u'female', u'bar@yahoo.co.jp'), 
+(3, u'Baz', 40, u'male', u'baz@yahoo.co.jp'), (4, u'Oops', 30, u'female', u'oops@yahoo.co.jp')]
+OK
+</pre>
+<p> カラム名でアクセスしたい場合は、Connection オブジェクトの変数 row_factory に sqlite3.Row をセットしてください。
+</p>
+<pre class="list">
+リスト : データの抽出 (test04.py)
+
+# coding: utf-8
+import sqlite3
+
+# 接続 
+con = sqlite3.connect("sample_python.sqlite")
+con.row_factory = sqlite3.Row
+cur = con.cursor()
+
+# メソッドで 1 行ずつ取り出す
+cur.execute("select * from person")
+while True:
+    xs = cur.fetchone()  # データがない場合は None を返す
+    if not xs: break
+    print xs["name"], xs["email"]
+
+# 切断
+con.close()
+print "OK"
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ python test04.py
+Foo foo@yahoo.co.jp
+Bar bar@yahoo.co.jp
+Baz baz@yahoo.co.jp
+Oops oops@yahoo.co.jp
+OK
+</pre>
+
+<h4>●メモリ上にデータベースを作成する</h4>
+<p> SQLite はデータベース名に :memory: を指定すると、メモリ上にデータベースを作成することができます。簡単な例として、拙作のページ Algorithms with Python <a href="../light/pyalgo27.html">幅優先探索と反復進化</a> の 8 パズルのプログラムで、Python の「辞書」のかわりに SQLite を使ってみましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 8 パズルの解法 (SQLite 版)
+
+# 幅優先探索
+def bf_search(start):
+    q = Queue(181440)
+    q.enqueue(State(start, start.index(0), None))
+    con = sqlite3.connect(':memory:')
+    cur = con.cursor()
+    cur.execute('create table state (val text)')
+    cur.execute('create index state_idx on state(val)')
+    set_state = 'insert into state (val) values (?)'
+    get_state = 'select val from state where val = ?'
+    cur.execute(set_state, (str(start),))
+    con.commit()
+    while not q.isEmpty():
+        a = q.dequeue()
+        for x in adjacent[a.space]:
+            b = a.board[:]
+            b[a.space] = b[x]
+            b[x] = 0
+            key = str(b)
+            cur.execute(get_state, (key,))
+            if cur.fetchone(): continue
+            c = State(b, x, a)
+            if b == GOAL:
+                print_answer(c)
+                return
+            q.enqueue(c)
+            cur.execute(set_state, (key,))
+            con.commit()
+</pre>
+<p> 変数 set_state にデータの挿入を行う SQL 文を、変数 get_state にデータを取り出す SQL 文をセットします。あとは、辞書のかわりに cur.execute(set_state, (key,)) と cur.execute(get_state, (key,)) を呼び出すだけです。実行結果は次のようになりました。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ time python eight.py
+[8, 6, 7, 2, 5, 4, 3, 0, 1]
+[8, 6, 7, 2, 0, 4, 3, 5, 1]
+[8, 0, 7, 2, 6, 4, 3, 5, 1]
+[0, 8, 7, 2, 6, 4, 3, 5, 1]
+[2, 8, 7, 0, 6, 4, 3, 5, 1]
+[2, 8, 7, 3, 6, 4, 0, 5, 1]
+[2, 8, 7, 3, 6, 4, 5, 0, 1]
+[2, 8, 7, 3, 6, 4, 5, 1, 0]
+[2, 8, 7, 3, 6, 0, 5, 1, 4]
+[2, 8, 0, 3, 6, 7, 5, 1, 4]
+[2, 0, 8, 3, 6, 7, 5, 1, 4]
+[2, 6, 8, 3, 0, 7, 5, 1, 4]
+[2, 6, 8, 0, 3, 7, 5, 1, 4]
+[2, 6, 8, 5, 3, 7, 0, 1, 4]
+[2, 6, 8, 5, 3, 7, 1, 0, 4]
+[2, 6, 8, 5, 3, 7, 1, 4, 0]
+[2, 6, 8, 5, 3, 0, 1, 4, 7]
+[2, 6, 0, 5, 3, 8, 1, 4, 7]
+[2, 0, 6, 5, 3, 8, 1, 4, 7]
+[2, 3, 6, 5, 0, 8, 1, 4, 7]
+[2, 3, 6, 0, 5, 8, 1, 4, 7]
+[2, 3, 6, 1, 5, 8, 0, 4, 7]
+[2, 3, 6, 1, 5, 8, 4, 0, 7]
+[2, 3, 6, 1, 5, 8, 4, 7, 0]
+[2, 3, 6, 1, 5, 0, 4, 7, 8]
+[2, 3, 0, 1, 5, 6, 4, 7, 8]
+[2, 0, 3, 1, 5, 6, 4, 7, 8]
+[0, 2, 3, 1, 5, 6, 4, 7, 8]
+[1, 2, 3, 0, 5, 6, 4, 7, 8]
+[1, 2, 3, 4, 5, 6, 0, 7, 8]
+[1, 2, 3, 4, 5, 6, 7, 0, 8]
+[1, 2, 3, 4, 5, 6, 7, 8, 0]
+
+real	0m13.039s
+user	0m12.860s
+sys	0m0.048s
+
+実行環境 : Lubuntu 16.04 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> 辞書を使ったバージョンでは約 1.9 秒でした。時間がかかるのは当然なのですが、10 倍以上遅くなるのかなと思っていたので、この結果にはちょっと驚きました。ところで、このプログラムはコミットしていますが、辞書のかわりに使うのであればコミットしなくても動作します。実行結果は次のようになりました。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ time python eight.py
+[8, 6, 7, 2, 5, 4, 3, 0, 1]
+[8, 6, 7, 2, 0, 4, 3, 5, 1]
+[8, 0, 7, 2, 6, 4, 3, 5, 1]
+
+   ・・・ 省略 ・・・
+
+[1, 2, 3, 4, 5, 6, 0, 7, 8]
+[1, 2, 3, 4, 5, 6, 7, 0, 8]
+[1, 2, 3, 4, 5, 6, 7, 8, 0]
+
+real	0m7.749s
+user	0m7.644s
+sys	0m0.068s
+
+実行環境 : Lubuntu 16.04 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> 約 1.7 倍速くなりました。コミットがちょっと時間のかかる処理であることがよくわかりました。
+</p>
+<h4>●参考 URL</h4>
+<ol>
+  <li><a href="http://docs.python.jp/2/library/sqlite3.html">11.13. sqlite3 — SQLite データベースに対する DB-API 2.0 インタフェース</a>, (<a href="http://docs.python.jp/2/index.html">Python 2.7.x ドキュメント</a>)
+  <li><a href="http://www.gesource.jp/programming/python/code/0013.html">SQLite3を使用する</a>, (山本隆さん)
+</ol>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+# coding: utf-8
+#
+# eight.py : 8 Puzzle (SQLite 版)
+#
+#            Copyright (C) 2016 Makoto Hiroi
+#
+import sqlite3
+
+class Queue:
+    def __init__(self, size):
+        self.size = size
+        self.buff = [None] * size
+        self.front = 0
+        self.rear = 0
+        self.count = 0
+
+    def enqueue(self, x):
+        if self.count &gt;= self.size: raise 'Queue is full'
+        self.buff[self.rear] = x
+        self.rear += 1
+        self.count += 1
+        if self.rear == self.size: self.rear = 0
+
+    def dequeue(self):
+        if self.count &lt;= 0: raise 'Queue is empty'
+        x = self.buff[self.front]
+        self.front += 1
+        self.count -= 1
+        if self.front == self.size: self.front = 0
+        return x
+
+    def isEmpty(self):
+        return self.count == 0
+
+# 隣接リスト
+adjacent = (
+    (1, 3),       # 0
+    (0, 2, 4),    # 1
+    (1, 5),       # 2
+    (0, 4, 6),    # 3
+    (1, 3, 5, 7), # 4
+    (2, 4, 8),    # 5
+    (3, 7),       # 6
+    (4, 6, 8),    # 7
+    (5, 7)        # 8
+)
+
+# ゴールの局面
+GOAL = [1, 2, 3, 4, 5, 6, 7, 8, 0]
+
+##### 幅優先探索 #####
+
+# 局面の定義
+class State:
+    def __init__(self, board, space, prev):
+        self.board = board
+        self.space = space
+        self.prev = prev
+
+
+def bf_search(start):
+    q = Queue(181440)
+    q.enqueue(State(start, start.index(0), None))
+    con = sqlite3.connect(':memory:')
+    cur = con.cursor()
+    cur.execute('create table state (val text)')
+    cur.execute('create index state_idx on state(val)')
+    set_state = 'insert into state (val) values (?)'
+    get_state = 'select val from state where val = ?'
+    cur.execute(set_state, (str(start),))
+    # con.commit()
+    while not q.isEmpty():
+        a = q.dequeue()
+        for x in adjacent[a.space]:
+            b = a.board[:]
+            b[a.space] = b[x]
+            b[x] = 0
+            key = str(b)
+            cur.execute(get_state, (key,))
+            if cur.fetchone(): continue
+            c = State(b, x, a)
+            if b == GOAL:
+                print_answer(c)
+                return
+            q.enqueue(c)
+            cur.execute(set_state, (key,))
+            # con.commit()
+
+# 表示
+def print_answer(x):
+    if x is not None:
+        print_answer(x.prev)
+        print x.board
+
+# 実行
+bf_search([8, 6, 7, 2, 5, 4, 3, 0, 1])
+</pre>
+</section>
+<hr>
+<div align="center">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="sqlite.html">SQLite</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

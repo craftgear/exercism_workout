@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 五芒星の問題</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881773</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>五芒星の問題</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>パズルの説明</h3>
+<p> <img src="five00.png" align="left" alt="五芒星" height=235 width=235>
+</p>
+<p> 五芒星（左図）を使ったパズルはいろいろな種類がありますが、今回は数字を配置するパズルを取り上げます。五芒星には頂点と交点が 10 ヵ所ありますが、ここに 1 から 10 までの数字を配置します。すると、直線上に 4 つの数字が並びますが、その和が n 本の直線で等しくなるような配置を求める、というものです。
+</p>
+<p> 3 本の直線で等しくなる配置は、ある本で見かけたことがあります。それでは、4 本の直線が等しくなる配置は何通りあるのでしょうか。プログラムを作って調べてみましょう。使用するプログラミング言語はＣ言語です。
+</p>
+<br CLEAR="left">
+<hr>
+<h4>●データ構造の定義</h4>
+<p><img src="five01.png" align="left" alt="五芒星の座標" height=235 width=235>
+</p>
+<p> 五芒星の 10 ヵ所の点は配列 stars で表します。そして、五芒星の点は左図のように stars の添字と対応づけると、5 本の直線は次に示すデータで表すことができます。
+</p>
+<br clear="left">
+<pre class="list">
+リスト：直線の定義
+
+const int lines[LINE][4] ={
+  0, 2, 5, 8,
+  0, 3, 6, 9,
+  1, 2, 3, 4,
+  1, 5, 7, 9,
+  4, 6, 7, 8,
+};
+</pre>
+<p> 1 行で 1 本の直線を表していることは、図を見ればすぐにわかるでしょう。あとは<b>生成検定法</b>の出番です。1 から 10 までの順列を生成して、それが条件を満たしているかチェックすればいいわけです。
+</p>
+<h4>●プログラムの作成</h4>
+<p> 最初に、順列を生成して五芒星をチェックするプログラムを作ります。
+</p>
+<pre class="list">
+リスト：探索
+
+void search_star( int pos )
+{
+  if( pos == SIZE ){
+    check_stars();
+  } else {
+    int n;
+    for( n = 1; n &lt;= SIZE; n++ ){
+      if( !use_number[n] &amp;&amp; !check_symmetry( pos, n ) ){
+        use_number[n] = TRUE;
+        stars[pos] = n;
+	search_star( pos + 1 );
+        use_number[n] = FALSE;
+      }
+    }
+  }
+}
+</pre>
+<p> 重複解をチェックする関数 check_symmetry を除くと、いままで説明したバックトラックによる探索とほぼ同じなので、とくに難しいところはないはずです。check_symmetry はあとで詳しく説明します。
+</p>
+<p> 次に、条件をチェックする関数 check_stars を作ります。
+</p>
+
+<pre class="list">
+リスト：条件のチェック
+
+void check_stars( void )
+{
+  int i, j;
+  for( i = 0; i &lt; LINE; i++ ){
+    total[i] = 0;
+    for( j = 0; j &lt; 4; j++ ){
+      total[i] += stars[ lines[i][j] ];
+    }
+  }
+  for( i = 0; i &lt; 2; i++ ){
+    int c = 0;
+    for( j = i; j &lt; LINE; j++ ){
+      if( total[i] == total[j] ) c++;
+    }
+    if( c &gt;= 4 ){
+      print_answer( total[i] ); break;
+    }
+  }
+}
+</pre>
+<p> 各直線の合計値を配列 total に格納します。次に、4 本以上同じ値の直線があるかチェックします。5 本のうち 4 本が同じ値になっているか調べるわけですから、直線 0 と同じ値の本数と、直線 1 と同じ値の本数を調べるだけです。また、直線 1 の場合は、1 から 4 までの直線を調べるだけで OK です。同じ値を 4 つ以上見つけたら print_answer で解を出力します。
+</p>
+
+<h4>●対称解のチェック</h4>
+<p> パズルの解法では <b>対称解</b> のチェックが必要になる場合があります。対称解とは、盤面を回転させたり裏返しにすると同じになる解のことで、<b>重複解</b> と呼ぶこともあります。盤面に対称性がある場合は必ず発生します。五芒星の場合、72 度ずつ回転させると同じ形になりますね。つまり、回転すると同じになる解（回転解）が 5 つあるわけです。また、五芒星を裏返しにすると、次の図のような配置になります。
+</p>
+
+<p><img src="five01.png"alt="五芒星の座標" height=235 width=235><img src="five04.png"alt="鏡像の配置" height=235 width=235>
+</p>
+
+<p> このような解を <b>鏡像解</b> といいます。当然ですが、この鏡像解にも回転解が存在します。したがって、重複解のチェックを行わないと、同じ解を 10 通り出力することになります。
+</p>
+
+<p> 五芒星の場合、重複解のチェックは難しい処理ではありません。まず、回転解のチェックですが、0 番で選んだ数字に注目してください。選択した数字が 1 だとすると、五芒星を 72 度ずつ回転していくと、1 は 1 番、8 番、9 番、4 番へと移動していきます。これらは同じ解なのですから、0 番でほかの数字を選んだ場合でも、これらの位置では数字 1 を選ぶ必要はありませんね。ようするに、0 番に配置したことがある数字は、1, 4, 8, 9 番に配置しないことで回転解を取り除くことができるわけです。
+</p>
+
+<p> 次は鏡像解のチェックです。上図の 2 番と 3 番に注目してください。左右の図で 2 つの位置が入れ替わっていますね。ある解の 2 番と 3 番の数字が 2, 10 だったとすると、鏡像解では逆の 10, 2 になるわけです。この数字の大小関係を限定することで、鏡像解をチェックすることができます。
+</p>
+
+<p> 対称解をチェックする関数 check_symmetry は次のようになります。
+</p>
+<pre class="list">
+リスト：条件のチェック
+
+int check_symmetry( int pos, int num )
+{
+  static const char flag[SIZE] = {
+    0, 1, 0, 0, 1, 0, 0, 0, 1, 1,
+  };
+  if((flag[pos] &amp;&amp; stars[0] &gt; num) || (pos == 3 &amp;&amp; stars[2] &gt; num))
+    return TRUE;
+  return FALSE;
+}
+</pre>
+<p> 引数 pos は位置で、num はそこに入れる数字です。配列 flag は位置 1, 4, 8, 9 を判定するために使います。flag[pos] が 1 で num が star[0] より小さい場合は、すでに 0 番に配置したことがある数字です。0 番は 1 から順番に数字がセットされるので、数字の大きさを比較するだけでチェックすることができます。鏡像解のチェックは簡単ですね。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは、実行結果を示します。
+</p>
+<p><img src="five02.png" align="left" alt="解答例" height=235 width=235>
+
+<table border=1>
+<caption>表：解の個数</caption>
+<thead>
+  <tr><th>直線の値</th><th>個数</th></tr>
+</thead>
+<tbody>
+  <tr><td>20 (30)</td><td>24</td></tr>
+  <tr><td>21 (26)</td><td>60</td></tr>
+  <tr><td>23 (18)</td><td>60</td></tr>
+  <tr><td>24 (14)</td><td>24</td></tr>
+  <tr><td>総数</td><td>168</td></tr>
+</tbody>
+</table>
+</p>
+<br clear="left">
+<p> 解の総数は 168 通りになりました。カッコの中は残り 1 本の値を表しています。解答例は、直線の値が 24 の場合です。ところで、直線の値が 20, 21, 23, 24 の 4 通りもあるとは驚きました。M.Hiroi は、六芒星で 6 本全部の直線が 26 になる場合を調べたことがあります。この場合、解は 80 通りありますが、もしかすると<STRIKE>六芒星でも別の値で解があるかもしれませんね</STRIKE>（追記参照）。
+</p>
+
+<p><a href="five_star.html#list1"><b>プログラムリスト</b></a>
+</p>
+<hr>
+<h4>●追記１(2000/10/06)</h4>
+<p> M.Kamada さんに 168 通りで正しいことを確認していただきました。また、六芒星の場合、M.Kamada さんが 26 以外では解が存在しないことを確認されました。M.Kamada さん、ありがとうございました。
+</p>
+
+<h4>●追記２(2000/10/08)</h4>
+<p> 一般の n 芒星で n 本の和が等しくなる場合について、次の関係が成り立つことを deepgreen さんがゲストブック(No.61)で指摘されました。
+</p>
+<blockquote>
+<p> 直線上の 4 点の和を m とし、n 本の直線の総和を考える。n 本の直線によって、すべての点は丁度 2 回数えられます。従って、
+</p>
+<pre class="item">
+ｍ＊ｎ　＝　２＊｛１＋２＋．．．＋２ｎ｝
+　　　　＝　２＊｛２ｎ＊（２ｎ＋１）／２｝
+</pre>
+<p> 即ち
+</p>
+<pre class="item">
+ｍ　＝　２（２ｎ＋１）
+</pre>
+<p> という関係が成り立つことが必要です。
+</p>
+</blockquote>
+<p> いやー、まいりました。このような関係が成立するとは、M.Hiroi はちっとも気がつきませんでした。この関係から、直線の和がすべて等しくなる場合、その値は 1 通りしかないこともわかりますね。deepgreen さん、ありがとうございました。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+/*
+ * five_star.c : 五芒星のパズル
+ *
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+#define SIZE 10
+#define LINE  5
+#define TRUE  1
+#define FALSE 0
+
+const int lines[LINE][4] ={
+  0,2,5,8,
+  0,3,6,9,
+  1,2,3,4,
+  1,5,7,9,
+  4,6,7,8,
+};
+
+int stars[SIZE];
+int use_number[SIZE + 1];
+int total[LINE];
+int count = 0;
+
+void print_answer( int num )
+{
+  int i;
+  count++;
+  printf("%d [", num );
+  for( i = 0; i &lt; SIZE; i++ ){
+    printf("%2d ", stars[i] );
+  }
+  printf("][");
+  for( i = 0; i &lt; LINE; i++ ){
+    printf("%2d ", total[i] );
+  }
+  printf("]\n");
+}
+
+void check_stars( void )
+{
+  int i, j;
+  for( i = 0; i &lt; LINE; i++ ){
+    total[i] = 0;
+    for( j = 0; j &lt; 4; j++ ){
+      total[i] += stars[ lines[i][j] ];
+    }
+  }
+  for( i = 0; i &lt; 2; i++ ){
+    int c = 0;
+    for( j = i; j &lt; LINE; j++ ){
+      if( total[i] == total[j] ) c++;
+    }
+    if( c &gt;= 4 ){
+      print_answer( total[i] ); break;
+    }
+  }
+}
+
+
+/* 対称解のチェック */
+int check_symmetry( int pos, int num )
+{
+  static const char flag[SIZE] = {
+    0, 1, 0, 0, 1, 0, 0, 0, 1, 1,
+  };
+  if((flag[pos] &amp;&amp; stars[0] &gt; num) || (pos == 3 &amp;&amp; stars[2] &gt; num))
+    return TRUE;
+  return FALSE;
+}
+
+/* 探索 */
+void search_star( int pos )
+{
+  if( pos == SIZE ){
+    check_stars();
+  } else {
+    int n;
+    for( n = 1; n &lt;= SIZE; n++ ){
+      if( !use_number[n] &amp;&amp;  !check_symmetry( pos, n ) ){
+        use_number[n] = TRUE;
+        stars[pos] = n;
+	search_star( pos + 1 );
+        use_number[n] = FALSE;
+      }
+    }
+  }
+}
+
+int main()
+{
+  int i;
+  for( i = 0; i &lt;= SIZE; i++ ){
+    use_number[i] = 0;
+  }
+  search_star( 0 );
+  printf("総数 %d\n", count );
+  return 0;
+}
+</pre>
+<hr>
+<h3 id="update">5 本の直線の和が等しくなる場合</h3>
+<p> ところで、書店で立ち読みした本に変形魔方陣の話があり、五芒星の魔方陣も掲載されていました。五芒星や六芒星のような星型は <b>魔星陣</b> と呼ばれていて、3 と 7 を除いた 1 から 12 までの数字を配置すると 5 本の直線の和が 24 になるそうです。もしかすると、別の数字の組み合わせがあるかもしれません。さっそくプログラムを作って確かめてみました。
+</p>
+
+<h4>●実行結果</h4>
+<p> 実行結果ですが、直線の和が 24 になる配置が 12 通り、28 になる配置が 12 通りありました。実行時間は M.Hiroi のオンボロマシン (Pentium 166 MHz) で約 72 秒かかりました。プログラムは対称解のチェックを行っているだけで、ほかの枝刈りはいっさい行っておりません。興味のある方は枝刈りを追加してプログラムの高速化に挑戦してみてください。配置の一例を図に示します。
+</p>
+<p><img src="../img/five24.png" width=238 height=238 alt="五芒星(和が24)"><img src="../img/five28.png" height=238 width=238 alt="五芒星(和が24)">
+</p>
+<hr>
+<h4>●プログラムリスト２</h4>
+<pre class="list">
+/*
+ * five_star.c : 五芒星のパズル(1 - 12 までの数字を 10 個選ぶ)
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;time.h&gt;
+
+#define SIZE   10
+#define NUMBER 12
+#define LINE    5
+#define TRUE    1
+#define FALSE   0
+
+const int lines[LINE][4] ={
+  0,2,5,8,
+  0,3,6,9,
+  1,2,3,4,
+  1,5,7,9,
+  4,6,7,8,
+};
+
+int stars[SIZE];
+int use_number[NUMBER + 1];
+int total[LINE];
+int count = 0;
+
+void print_answer( int num )
+{
+  int i;
+  count++;
+  printf("%d [", num );
+  for( i = 0; i &lt; SIZE; i++ ){
+    printf("%2d ", stars[i] );
+  }
+  printf("][ ");
+  for( i = 0; i &lt; LINE; i++ ){
+    printf("%2d ", total[i] );
+  }
+  printf("]\n");
+}
+
+void check_stars( void )
+{
+  int i, j;
+  for( i = 0; i &lt; LINE; i++ ){
+    total[i] = 0;
+    for( j = 0; j &lt; 4; j++ ){
+      total[i] += stars[ lines[i][j] ];
+    }
+  }
+  for( i = 0; i &lt; 2; i++ ){
+    int c = 0;
+    for( j = i; j &lt; LINE; j++ ){
+      if( total[i] == total[j] ) c++;
+    }
+    if( c &gt;= 5 ){
+      print_answer( total[i] ); break;
+    }
+  }
+}
+
+
+/* 対称解のチェック */
+int check_symmetry( int pos, int num )
+{
+  static const char flag[SIZE] = {
+    0, 1, 0, 0, 1, 0, 0, 0, 1, 1,
+  };
+  if((flag[pos] &amp;&amp; stars[0] &gt; num) || (pos == 3 &amp;&amp; stars[2] &gt; num))
+    return TRUE;
+  return FALSE;
+}
+
+/* 探索 */
+void search_star( int pos )
+{
+  if( pos == SIZE ){
+    check_stars();
+  } else {
+    int n;
+    for( n = 1; n &lt;= NUMBER; n++ ){
+      if( !use_number[n] &amp;&amp; !check_symmetry( pos, n ) ){
+        use_number[n] = TRUE;
+        stars[pos] = n;
+	search_star( pos + 1 );
+        use_number[n] = FALSE;
+      }
+    }
+  }
+}
+
+int main()
+{
+  int i, start, end;
+  for( i = 0; i &lt;= NUMBER; i++ ){
+    use_number[i] = 0;
+  }
+  start = clock();
+  search_star( 0 );
+  end = clock();
+  printf("総数 %d, 時間 %d\n", count, end - start );
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

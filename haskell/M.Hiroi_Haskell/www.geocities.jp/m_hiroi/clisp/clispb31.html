@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881768</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb19.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb32.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>●仮想計算機 COMETⅡの簡易シミュレータ</h3>
+<p> 今回は Commn Lisp で計算機の簡易シミュレータを作ってみましょう。実際のコンピュータ、たとえば最新の CPU はもちろんですが、Z80 とか 68000 といった実在する CPU のエミュレータを作るのはとても大変なことです。ですが、簡単な仮想計算機であればそれほど難しいことではありません。
+</p>
+
+<p> とくに、情報処理技術者試験で使われている仮想計算機 COMETⅡはシンプルなハードウェア構成ですが、CPU の基本的な動作を学ぶのに十分な機能を持っています。今回のように、簡単なシミュレータを作ってみよう、という目的にはぴったりの仮想計算機だと思います。
+</p>
+
+<p> COMETⅡには専用のアセンブリ言語 CASLⅡが規定されています。今回のシミュレータは Common Lisp で作成するので、CASLⅡのプログラムも S 式で記述することにします。また、COMETⅡを動作させるのに必要最低限な機能のみ実装することにします。CASLⅡシミュレータとはとてもいえませんが、その分だけプログラムは簡単になります。
+</p>
+
+<p> 今回は COMETⅡを題材に Common Lisp でプログラムを作ることが目的です。このため、本稿は<b>情報処理技術者試験の学習に適しておりません。</b>CASLⅡを勉強するために本稿を読まれる方はいないと思いますが、ご注意くださいませ。
+</p>
+
+<h4>●コンピュータの基本構造</h4>
+<p> 最初にコンピュータの基本構造について説明します。近代的なコンピュータが誕生して以来、ハードウェアの基本的な構造 (アーキテクチャ) はほとんど変わっていません。このアーキテクチャは設計者の名前から「フォン・ノイマン・マシン」と呼ばれています。
+</p>
+
+<pre class="fig">
+                ┌──────────┐
+┌─────┐  │    中央処理装置    │  ┌─────┐
+│ 入力装置 │→│[制御装置][演算装置]│→│ 出力装置 │
+└─────┘  └──────────┘  └─────┘
+                          ↓↑
+                ┌──────────┐  ┌──────┐
+                │ 主記憶装置(memory) │→│補助記憶装置│
+                └──────────┘←└──────┘
+
+            図 : フォン・ノイマン・マシンの構成
+</pre>
+<p> コンピュータの頭脳に当たるのが中央処理装置 CPU (Central Processing Unit) です。CPU は与えられたプログラムを忠実に実行していきます。プログラムは主記憶装置 (メモリ、メインメモリ) に格納されていて、CPU はメモリから 1 つずつ命令を取り出して実行します。けっきょく CPU の基本的な動作は、次に示す処理を繰り返しているだけなのです。
+</p>
+<ol>
+  <li>メモリからコードを取り出す (fetch)
+  <li>コードを解読する (decode)
+  <li>命令を実行する (execution)
+  <li>1 に戻って繰り返す
+</ol>
+
+<h4>●アセンブリ言語とアセンブラ</h4>
+<p> メモリに格納できるのは数値だけです。メモリの最小単位をバイト (8 ビット) <a href="clispb31.html#note1">[*1]</a> とすると、0 から 255 (#xff) までの数値を格納することができます。当然ですが、コンピュータの命令も数値で表されます。これを「マシン語」といいます。コンピュータが作られた当初は、プログラミング言語という便利なものはありませんから、数値を直接メモリに打ち込むことがプログラムすることだったのです。
+</p>
+
+<p> 数値を直接打ち込んでいるのでは効率が悪いので、マシン語を数値ではなく記号名 (ニーモニック) で表す方法が考案されました。人間は記号を使ってプログラムを書いて、それをプログラムでマシン語に変換します。ニーモニックを使って書かれたプログラミング言語を「アセンブリ言語」、ニーモニックからマシン語に変換するプログラムを「アセンブラ」といいます。
+</p>
+
+<p> アセンブリ言語によってプログラムはわかりやすくなりましたが、マシン語をニーモニックに置き換えただけですから、人間が CPU の立場になってプログラムを作ることには変わりありません。たとえば 1 + 2 という簡単な計算でも、アセンブリ言語では細かなことまで指定しないとプログラミングできません。
+</p>
+
+<p> このように、アセンブラを使ったプログラミングは、機械に近い考え方が必要なので「低水準言語」といわれます。これに対し、人間に近い考え方でプログラミングできる言語を「高水準言語」といいます。 
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> これを「バイトアドレッシング」といいます。2 バイト、4 バイト、8 バイトなど複数のバイトをまとめた単位を「ワード (word) 」といいます。ワード単位でアドレッシングするコンピュータを考えることもできます。ちなみにCOMETⅡの場合、メモリの最小単位は 2 byte (16 bit) です。
+</div>
+
+<h4>●COMETⅡのハードウェア構成</h4>
+<p> 次は COMETⅡのハードウェア構成について簡単に説明します。詳細は <a href="http://www.ipa.go.jp/">情報処理推進機構</a> で配布されている <a href="http://www.jitec.ipa.go.jp/1_00topic/topic_20081027_hani_yougo.pdf">「試験で使用する情報処理用語・プログラム言語など」(PDF)</a> をお読みください。
+</p>
+<ol>
+  <li>1 語 (word) は 16 bit である。
+  <li>メモリの単位は 1 word である。
+　<li>メモリの容量は 65536 word で、アドレスは 0 から 65535 番地までになる。
+  <li>汎用レジスタ (16 bit) が 8 個 (GR0 から GR7 まで)、プログラムレジスタ PR (16 bit)、スタックポインタ SP (16 bit)、フラグレジスタ (3 bit) がある。
+</ol>
+<p> メモリは byte 単位ではなく word (16 bit) 単位でアドレッシングされることに注意してください。したがって、メモリの容量は 65536 * 2 = 131072 byte になります。
+</p>
+
+<p> 「レジスタ (register) 」は CPU 内部にある一時記憶メモリのことで、CPU の外部に接続されているメインメモリとは異なります。一般に、レジスタはメインメモリに比べてとても高速にアクセス <a href="clispb31.html#note2">[*2]</a> することができます。
+</p>
+
+<p> 汎用レジスタは算術、論理、比較、シフトなどの演算に用いられます。また、GR0 以外のレジスタは指標レジスタ (index register) にも用いられます。これはあとで詳しく説明します。
+</p>
+<p> スタックポインタはスタックの先頭アドレスを保持します。スタックはサブルーチンの呼び出しやデータを一時的に格納するときなどに使います。
+</p>
+<p> プログラムレジスタは次に実行する命令のアドレスを保持します。つまり、COMETⅡは PR が示すアドレスの内容を取り込み (fetch)、そのコードを解読 (decode) して、命令を実行 (execution) するわけです。なお、一般的にはプログラムレジスタではなく、「プログラムカウンタ (PC) 」と呼ぶことが多いです。
+</p>
+<p> フラグレジスタは 3 つのフラグ (1 bit) を持っています。各フラグは演算結果によってセットされたりリセットされたりします。
+</p>
+<ul>
+  <li>OF : オーバーフローフラグ<br>
+符号付き算術演算の結果、値が -32768 以上 32767 以下に収まる場合は 0 に、収まらない場合は 1 になる。無符号算術演算の場合、0 以上 65535 以下に収まる場合は 0 に、収まらない場合は 1 になる。
+  <li>SF : サインフラグ<br>
+演算の結果、最上位ビット (15 bit) が 1 になる (符号付き整数で負になる) 場合は 1 に、それ以外の場合は 0 になる。
+  <li>ZF : ゼロフラグ<br>
+演算結果が 0 のときは 1 に、それ以外のときは 0 になる。
+</ul>
+<div class="note">
+-- note --------<br>
+<a name="note2">[*2]</a> 近年、ハードウェアの高速化により、CPU からみるとメモリアクセスは遅い処理になります。メインメモリのアクセスが遅くなると、CPU に待ち時間 (wait) が生じるため処理速度が遅くなってしまいます。このため、最近の CPU はメインメモリとの間にキャッシュメモリを入れ、速度のギャップを埋めるようにしています。
+</div>
+<h4>●COMETⅡの命令</h4>
+<p> COMETⅡの命令は大きく分けると、次の 9 通りになります。
+</p>
+<ol>
+  <li>データ転送 : LD, ST, LAD
+  <li>算術演算 : ADDA, SUBA, ADDL, SUBL
+  <li>論理演算 : AND, OR, XOR
+  <li>比較演算 : CPA, CPL
+  <li>シフト演算 : SLA, SRA, SLL, SRL
+  <li>ジャンプ : JMI, JNZ, JZE, JUMP, JPL, JOV
+  <li>スタック操作 : PUSH, POP
+  <li>サブルーチン : CALL, RET
+  <li>その他 : NOP, SVC
+</ol>
+<p> CASLⅡは 1 行に 1 命令を記述します。1 行の書式は次のようになります。
+</p>
+<pre class="fig">
+ LABEL   LD   GR0, TABLE, GR1    ; コメント
+ ----   ----  ---------------
+  (1)   (2)         (3)
+
+  (1) ラベル
+  (2) オペレーション
+  (3) オペランド
+  (2) + (3) =&gt; 命令
+
+            図 : CASLⅡの書式
+</pre>
+<p> ラベルはアドレスに名前を付けたもので、アセンブル時にアドレスに変換されます。ジャンプ命令の跳び先やサブルーチンや変数の名前として使います。オペレーションは操作コード (operation code) といい、どのような操作を行うかを指定します。オペランドは操作対象となる情報 (レジスタやメモリなど) を指定します。
+</p>
+<p> オペレーションにより、オペランドの個数が決まっています。複数のオペランドを指定するときはカンマで区切り、先頭から第 1 オペランド、第 2 オペランドと呼ぶことがあります。セミコロン ( ; ) から行末までがコメントになります。
+</p>
+<p> なお、これは CASLⅡの仕様であり、今回作成するプログラムは S 式でプログラムを記述するため、この書式とは異なります。ご注意ください。
+</p>
+<p> それでは各命令について詳しく説明しましょう。なお、GRn, GRm は汎用レジスタ、GRx は指標レジスタ、adr はアドレス (数値) を表します。
+</p>
+<h4>●データ転送</h4>
+<p> データ転送は汎用レジスタと汎用レジスタ、または汎用レジスタとメモリの間で行われます。
+</p>
+<pre class="item">
+LD   GRn, GRm       ; GRn &lt;= GRm
+LD   GRn, adr       ; GRn &lt;= (adr)
+LD   GRn, adr, GRx  ; GRn &lt;= (adr + GRx)
+ST   GRn, adr       ; GRn =&gt; (adr)
+ST   GRn, adr, GRx  ; GRn =&gt; (adr + GRx)
+LAD  GRn, adr       ; GRn &lt;= adr
+LAD  GRn, adr, GRx  ; GRn &lt;= adr + GRx
+</pre>
+<p> LD (LoaD) 命令は汎用レジスタ間のデータ転送と、メモリから汎用レジスタへのデータ転送を行います。ST (STore) 命令は汎用レジスタの値をメモリへ転送します。メモリのアドレスは adr で直接指定する方法と、指標レジスタを使って間接的に指定する方法があります。前者を「直接アドレッシング (dircet addressing) 」といい、後者を「間接アドレッシング (indirect addressing) 」といいます。
+</p>
+
+<p> 簡単な例を示しましょう。次の図を見てください。
+</p>
+<pre class="fig">
+ address | 1000  1001  1002  1003  1004  1005  1006  1007  1008
+---------+-----------------------------------------------------
+  memory :  10    20    30    40    50    60    70    80    00
+
+             図 : 1000 番地からのメモリの内容
+</pre>
+<p> 上図はメモリの 1000 番地からの内容を表示したものです。直接アドレッシングはメモリの番地を直接指定します。
+</p>
+<pre class="item">
+LD  GR0, 1000       ; (1000) =&gt; GR0 : 10
+ST  GR0, 1008       ; GR0 : 10 =&gt; (1008) : 10 に書き換えられる
+</pre>
+<p> LD GR0, 1000 は 1000 番地の内容を取り出して GR0 にセットします。1000 番地の値は 10 なので、GR0 の値は 10 になります。ST GR0, 1008 は GR0 の値を 1008 番地に書き込みます。GR0 の値は 10 なので、1008 番地の値は 10 に書き換えられます。なお、COMETⅡにはメモリ間のデータ転送命令はありません。
+</p>
+<h4>●間接アドレッシング</h4>
+<p> COMETⅡで間接アドレッシングを使うには、指標レジスタに番地をセットする必要があります。このとき使う命令が LAD (Load ADdress) です。LAD GRn, adr は adr 番地に格納されている値を取り出すのではなく、番地を表す整数値そのものを GRn に転送します。簡単にいえば、汎用レジスタに整数値をセットする命令です。
+</p>
+<p> 間接アドレッシングは adr + GRx を計算し、その値を番地とみなします。LD はその番地に格納されている値を取り出し、ST はその番地にデータを書き込みます。次の例を見てください。
+</p>
+<pre class="item">
+   LAD GR1, 1000       ; 1000 =&gt; GR1 : 1000
+1. LD  GR0, 0, GR1     ; (0 + 1000) =&gt; GR0 : 10
+2. LD  GR0, 1, GR1     ; (1 + 1000) =&gt; GR0 : 20
+3. LD  GR0, 7, GR1     ; (7 + 1000) =&gt; GR0 : 80
+4. ST  GR0, 8, GR1     ; GR0 : 80 =&gt; (8 + 1000) : 1008 番地の値は 80 に書き換えられる
+</pre>
+<p> LAD で GR1 に 1000 をセットします。1. の例では、0 + GR1 = 1000 番地、2. の例では 1 + GR1 = 1001 番地、3. の例では 7 + GR1 = 1007 番地の値を取り出して GR0 にセットします。4. の例は GR0 の値を 8 + GR1 = 1008 番地に書き込みます。
+</p>
+<p> LAD 命令も指標レジスタを使うことができます。この命令を使って指標レジスタの加減算を行うことができます。次の例を見てください。
+</p>
+<pre class="item">
+   LAD GR1, 1000      ; 1000 =&gt; GR1 : 1000
+1. LAD GR1, 1, GR1    ; 1 + 1000 =&gt; GR1 : 1001
+2. LAD GR1, -1, GR1   ; -1 + 1001 =&gt; GR1 : 100
+</pre>
+<p> LAD は指標レジスタ GRx に整数値 adr を加算するだけなので、第１オペランドに同じレジスタを指定すると、そのレジスタの値を +adr することができます。これは COMETⅡでよく用いられる方法です。
+</p>
+
+<p> それから、LD 命令はフラグレジスタに影響を与えることに注意してください。オーバーフローフラグ (OF) はリセット (0) されます。逆に ST 命令と LAD 命令はフラグレジスタに影響を与えません。
+</p>
+<p> たとえば、転送するデータが 0 の場合、LD を実行するとゼロフラグがセットされます。負の場合はサインフラグがセットされます。たとえば、LD GR0, GR0 を実行すると、GR0 の値を書き換えずに、値がプラスかゼロかマイナスか判定することができます。
+</p>
+<h4>●算術演算</h4>
+<p> COMETⅡの算術演算は加減算しかありません。ADDA, SUBA が符号付き整数の加減算、ADDL, SUBL が無符号整数の加減算です。末尾の A は Arithmetic を、L は Logical を意味します。アドレスの指定はデータ転送命令と同じです。
+</p>
+<pre class="item">
+; 符号付き整数の加減算
+ADDA  GRn, GRm       ; GRn += GRm
+ADDA  GRn, adr       ; GRn += (adr)
+ADDA  GRn, adr, GRx  ; GRn += (adr + GRx)
+SUBA  GRn, GRm       ; GRn -= GRm
+SUBA  GRn, adr       ; GRn -= (adr)
+SUBA  GRn, adr, GRx  ; GRn -= (adr + GRx)
+
+; 無符号整数の加減算
+ADDL  GRn, GRm
+ADDL  GRn, adr
+ADDL  GRn, adr, GRx
+SUBL  GRn, GRm
+SUBL  GRn, adr
+SUBL  GRn, adr, GRx
+</pre>
+<p> どの命令も第１オペランドで指定したレジスタの値を書き換えます。また、演算結果によりフラグレジスタに影響を与えることに注意してください。なお、無符号整数の演算でも、最上位ビット (15 bit) が 1 になるとサインフラグがセットされます。
+</p>
+
+<h4>●2 の補数</h4>
+<p> COMETⅡは負数を 2 の補数で表現します。2 の補数はビットを反転した値 (1 の補数) に 1 を加算することで求めることができます。2 の補数を使うと、減算を加算で代用することができるため、多くのコンピュータは負数を 2 の補数で表現しています。
+</p>
+<p> 簡単な例として 4 ビットの整数値を考えてみます。負の整数を 2 の補数で表した場合、4 ビットで表される整数は -8 から 7 になります。次の図を見てください。
+</p>
+<pre class="fig">
+ 0 : 0000              
+ 1 : 0001    -1 : 1111        0 1 1 1  ( 7)
+ 2 : 0010    -2 : 1110    +   1 1 1 0  (-2)
+ 3 : 0011    -3 : 1101    -----------------
+ 4 : 0100    -4 : 1100      1 0 1 0 1  ( 5) 桁上がりを無視する
+ 5 : 0101    -5 : 1011 
+ 6 : 0110    -6 : 1010 
+ 7 : 0111    -7 : 1001 
+             -8 : 1000 
+
+  図 : 2 の補数表現
+</pre>
+<p> 7 - 2 を計算する場合、2 の補数表現を使うと 7 + (-2) として加算処理を行います。すると、10101 になりますが桁上がりのビットを無視すると、値は 0101 (5) になり 7 - 2 を計算することができます。
+</p>
+
+<h4>●論理演算</h4>
+<p> COMETⅡの論理演算は AND, OR, XOR の 3 命令があります。アドレスの指定はデータ転送命令と同じです。
+</p>
+<pre class="item">
+AND  GRn, GRm         ; GRn AND GRm =&gt; GRn
+AND  GRn, adr         ; GRn AND (adr) =&gt; GRn
+AND  GRn, adr, GRx    ; GRn AND (adr + GRx) =&gt; GRn
+OR   GRn, GRm         ; GRn OR GRm =&gt; GRn
+OR   GRn, adr         ; GRn OR (adr) =&gt; GRn
+OR   GRn, adr, GRx    ; GRn OR (adr + GRx) =&gt; GRn
+XOR  GRn, GRm         ; GRn XOR GRm =&gt; GRn
+XOR  GRn, adr         ; GRn XOR (adr) =&gt; GRn
+XOR  GRn, adr, GRx    ; GRn XOR (adr + GRx) =&gt; GRn
+</pre>
+<p> どの命令も第１オペランドで指定したレジスタの値を書き換えます。また、演算結果によりフラグレジスタに影響を与えることに注意してください。論理演算命令の場合、オーバーフローフラグ (OF) はリセット (0) されます。
+</p>
+<h4>●比較演算</h4>
+<p> 比較演算は符号付き整数を比較する CPA と、無符号整数を比較する CPL があります。アドレスの指定はデータ転送命令と同じです。
+</p>
+<pre class="item">
+CPA  GRn, GRm
+CPA  GRn, adr
+CPA  GRn, adr, GRx
+CPL  GRn, GRm
+CPL  GRn, adr
+CPL  GRn, adr, GRx
+</pre>
+<p> GRn の値を N, GRm または (adr + GRx) の値を M とすると、CPA と CPL は N と M を比較してフラグレジスタを次のようにセットします。
+</p>
+<pre class="fig">
+    | N &lt; M | N = M | N &gt; M
+----+-------+-------+------
+ OF |   0   |   0   |   0
+ SF |   1   |   0   |   0
+ ZF |   0   |   1   |   0
+
+図 : 比較演算によるフラグレジスタの変化
+</pre>
+<h4>●シフト演算</h4>
+<p> シフト演算は SLA と SRA が算術シフト命令 (arithmetic shift) で, SLL と SRL が論理シフト命令 (logical shift) です。
+</p>
+<pre class="item">
+SLA  GRn, GRm
+SLA  GRn, adr
+SLA  GRn, adr, GRx
+SRA  GRn, GRm
+SRA  GRn, adr
+SRA  GRn, adr, GRx
+SLL  GRn, GRm
+SLL  GRn, adr
+SLL  GRn, adr, GRx
+SRL  GRn, GRm
+SRL  GRn, adr
+SRL  GRn, adr, GRx
+</pre>
+<p> GRn の値を N, GRm または adr + GRx の値を M とすると、SRA, SRL は N を右へ M ビットシフトし、SLA, SLL は N を左へ M ビットシフトします。そして、その結果を GRn にセットします。adr, adr + GRx の指定は LAD 命令と同じで、adr の値または adr + GRx を計算した値が使われます。
+</p>
+<p> シフト演算はビットをシフトして空いたところに 0 を入れる命令ですが、算術シフトと論理シフトで動作に違いがあります。次の例を見てください。
+</p>
+<pre class="fig">
+    ┌────────┐  OF    OF  ┌────────┐
+ 0→│0101010101010101│  0      0  │1010101010101010│←0
+    └────────┘            └────────┘
+          シフト前                        シフト前
+
+
+    ┌────────┐  OF    OF  ┌────────┐
+    │0010101010101010│→1      1←│0101010101010100│
+    └────────┘            └────────┘
+          右シフト                        左シフト
+
+                図 : 論理シフトの動作
+</pre>
+<p> 論理シフトで 1 ビットシフトする場合、右へシフトするときは LSB (0) の値が OF にセットされ、MSB (15) のビットには 0 が挿入されます。逆に、左へシフトするときは、MSB の値が OF にセットされ、LSB に 0 が挿入されます。
+</p>
+<p> 算術シフトの場合、負数を考慮するため動作が少し複雑になります。
+</p>
+<pre class="fig">
+    ┌────────┐  OF    OF  ┌────────┐
+    │1101010101010101│  0      0  │1010101010101010│←0
+    └────────┘            └────────┘
+          シフト前                        シフト前
+
+    ┌────────┐  OF    OF  ┌────────┐
+    │1110101010101010│→1      0←│1101010101010100│
+    └────────┘            └────────┘
+          右シフト                        左シフト
+
+    MSB (15) の値はそのまま       14 bit の値を OF にセット
+                                  15 bit の値はシフトしない
+
+                図 : 算術シフトの動作
+</pre>
+<p> 右へ 1 ビットシフトする場合、LSB の値が OF にセットされるのは論理シフトと同じですが、MSB の値がそのままになるところが違います。これで負数を右シフトする、たとえば -8 を右シフトすると -4 に、さらに右シフトすると -2 になります。
+</p>
+<p> 左へ 1 ビットシフトする場合、LSB に 0 が挿入されるのは論理シフトと同じです。左シフトの場合も MSB の値はそのままです。そして、14 bit の値が OF にセットされます。つまり、MSB の値はシフトしないわけです。
+</p>
+<h4>●ジャンプ命令</h4>
+<p> ジャンプ命令は JMI, JNZ, JZE, JUMP, JPL, JOV の 6 種類があります。
+</p>
+<pre class="item">
+JMI  adr, GRx        ; SF が 1 ならば adr + GRx 番地にジャンプ
+JNZ  adr, GRx        ; ZF が 0 ならば adr + GRx 番地にジャンプ
+JZE  adr, GRx        ; ZF が 1 ならば adr + GRx 番地にジャンプ
+JUMP adr, GRx        ; 無条件に adr + GRx 番地にジャンプ
+JPL  adr, GRx        ; SF が 0 ならば adr + GRx 番地にジャンプ
+JOV  adr, GRx        ; OF が 1 ならば adr + GRx 番地にジャンプ
+
+注 : 第 2 オペランド GRx は省略可
+</pre>
+<p> ジャンプ先のアドレス指定は LAD 命令と同じです。
+</p>
+
+<h4>●スタック操作</h4>
+<p> スタック操作命令は PUSH と POP があります。
+</p>
+<pre class="item">
+PUSH adr, GRx        ; adr + GRx をスタックに追加
+                     ; 第 2 オペランド GRx は省略可
+POP  GRn             ; スタックから値を取り出して GRn にセット
+</pre>
+<p> COMETⅡの場合、PUSH 0, GR0 とすることでレジスタ GR0 の値をスタックに退避することができます。スタックから値を取り出したいときは POP GR0 とします。
+</p>
+<h4>●サブルーチン</h4>
+<p> サブルーチン (関数) を呼び出す命令が CALL で、呼び出し先に戻る命令が RET です。
+</p>
+<pre class="item">
+CALL adr, GRx       ; CALL の次に実行する番地をスタックに積んで、
+                    ; adr + GRx 番地へジャンプする
+                    ; 第 2 オペランド GRx は省略可
+RET                 ; スタックから戻り先の番地を取り出し、
+                    ; その番地へジャンプする
+</pre>
+<p> もちろん、再帰呼び出しもできます。
+</p>
+
+<h4>●その他</h4>
+<p> NOP は何もしない命令で、SVC (SuperVisor Call) は OS の機能 (入出力など) を呼び出すために使います。
+</p>
+<pre class="item">
+NOP
+SVC  adr, GRx      ; GRx は省略可
+</pre>
+<h4>●命令語の構成</h4>
+<p> COMETⅡの命令語は 1 word または 2 word で表されます。命令語の 2 word 目はアドレスを指定するために使われます。アドレス指定が不要な命令は 1 word になります。1 word 目の構成を図に、命令語とアセンブラとの対応を表に示します。なお、命令語の構成は<a href="http://www.jitec.ipa.go.jp/1_00topic/topic_20081027_hani_yougo.pdf">「試験で使用する情報処理用語・プログラム言語など」(PDF)</a> で示されているものと同じです。
+</p>
+<pre class="fig">
+  15 14 13 12 11 10  9  8  7  6  5  4  3  2  1  0
+ ------------+-----------+-----------+------------
+  main (op1) | sub (op2) | GRnを指定 | GRxを指定
+
+             図 : operation の構成
+</pre>
+<pre class="fig">
+  op1  op2 | アセンブラ
+-----------+--------------------
+  00   00  | NOP
+-----------+--------------------
+  01   00  | LD   GRn, adr, GRx
+       01  | ST   GRn, adr, GRx
+       02  | LAD  GRn, adr, GRx
+       04  | LD   GRn, GRm
+-----------+--------------------
+  02   00  | ADDA GRn, adr, GRx
+       01  | SUBA GRn, adr, GRx
+       02  | ADDL GRn, adr, GRx
+       03  | SUBL GRn, adr, GRx
+       04  | ADDA GRn, GRm
+       05  | SUBA GRn, GRm
+       06  | ADDL GRn, GRm
+       07  | SUBL GRn, GRm
+-----------+--------------------
+  03   00  | AND  GRn, adr, GRx
+       01  | OR   GRn, adr, GRx
+       02  | XOR  GRn, adr, GRx
+       04  | AND  GRn, GRm
+       05  | OR   GRn, GRm
+       06  | XOR  GRn, GRm
+-----------+--------------------
+  04   00  | CPA  GRn, adr, GRx
+       01  | CPL  GRn, adr, GRx
+       04  | CPA  GRn, GRm
+       05  | CPL  GRn, GRm
+-----------+--------------------
+  05   00  | SLA  GRn, adr, GRx
+       01  | SRA  GRn, adr, GRx
+       02  | SLL  GRn, adr, GRx
+       03  | SRA  GRn, adr, GRx
+-----------+--------------------
+  06   01  | JMI  adr, GRx
+       02  | JNZ  adr, GRx
+       03  | JZE  adr, GRx
+       04  | JUMP adr, GRx
+       05  | JPL  adr, GRx
+       06  | JOV  adr, GRx
+-----------+--------------------
+  07   00  | PUSH adr, GRx
+       01  | POP  GRn
+-----------+--------------------
+  08   00  | CALL adr, GRx
+       01  | RET
+-----------+--------------------
+  FF   00  | SVC  adr, GRx
+       01  | HALT                ; 仮想計算機の停止命令 (追加)
+
+    表 : 命令語とアセンブラの対応
+</pre>
+<p> 仮想マシンを停止するための命令 HALT を追加しています。
+</p>
+<h4>●S 式によるプログラムの記述</h4>
+<p> プログラムを S 式で表すことにすると、Common Lisp でアセンブラを作成するのは簡単です。サンプルプログラムの一例を示します。
+</p>
+<pre class="list">
+リスト : サンプルプログラム
+
+;
+; sample.cas
+;
+
+; data の bit 1 をカウントして ans にセットする
+        (lad  gr2 0)
+sample-loop
+        (ld   gr1 data gr2)
+        (call logcount)
+        (st   gr0 ans gr2)
+        (lad  gr2 1 gr2)
+        (cpl  gr2 len)
+        (jmi  sample-loop)
+        (halt)
+len     (dc 4)
+data    (dc #x0123 #x4567 #x89ab #xcdef)
+ans     (ds 4)
+
+; ビット 1 を数える (4 bit ずつ処理する)
+; 入力 gr1 : データ
+; 出力 gr0 : ビット 1 の個数
+logcount
+        (push 0 gr1)
+        (push 0 gr2)
+        (xor  gr0 gr0)
+loop
+        (ld   gr2 gr1)
+        (and  gr2 mask)
+        (addl gr0 table gr2)
+        (srl  gr1 4)
+        (jnz  loop)
+        (pop  gr2)
+        (pop  gr1)
+        (ret)
+mask    (dc 15)
+        ;   0 1 2 3 4 5 6 7 8 9 a b c d e f
+table   (dc 0 1 1 2 1 2 2 3 1 2 2 3 2 3 3 4)
+</pre>
+<p> ニーモニックはシンボルで表し、命令をカッコで囲みます。アセンブラ命令は、とりあえず DC と DS のみサポートします。これもカッコで囲みます。START 命令をサポートしないので、プログラムは先頭から開始するものとします。カッコで囲まれていないシンボルはラベルとして扱います。アセンブル時に番地を求めて、プログラム中のラベルをその番地に変換します。
+</p>
+<p> このプログラムをファイル sample.cas に格納したとすると、プログラムファイルの読み込みは次のようになります。
+</p>
+<pre class="list">
+リスト : プログラムファイルの読み込み
+
+(defun read-casl2-file (filename)
+  (with-open-file (in filename :direction :input)
+    (let ((data nil) (a nil))
+      (loop
+        (setf data (read in nil))
+        (unless data
+          (return (nreverse a)))
+        (push data a)))))
+</pre>
+<p> read でファイルからデータを読み込み、それを累積変数 a に格納します。ファイルの終了に達したら nreverse で逆順にして返します。アセンブラを S 式で記述することで、簡単にプログラムすることができます。また、プログラム全体をカッコで囲めば、一回 read するだけでプログラムを読み込むこともできます。
+</p>
+
+<h4>●アセンブラの作成</h4>
+<p> それではアセンブルを行う関数 assemble を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : アセンブラ
+
+(defun assemble (ls &amp;optional (start 0))
+  (do ((ls ls (cdr ls))
+       (wp start)
+       (label nil)
+       (code nil))
+      ((null ls) (sublis label (nreverse code)))
+    (cond ((symbolp (car ls))
+           (push (cons (car ls) wp) label))
+          ((consp (car ls))
+           (case (caar ls)
+             ((ds)
+              (let ((size (get-ds-size (car ls))))
+                (push (car ls) code)
+                (incf wp size)))
+             ((dc)
+              (let ((xs (to-number (car ls))))
+                (push xs code)
+                (incf wp (length (cdr xs)))))
+             (t
+              (multiple-value-bind (op1 op2)
+                  (make-opcode (car ls))
+                (push op1 code)
+                (incf wp)
+                (when op2
+                  (push op2 code)
+                  (incf wp))))))
+          (t (asm-error (car ls))))))
+</pre>
+<p> 引数 ls がプログラムを格納したリスト、start がプログラムをロードするアドレスです。局所変数 wp が命令を書き込むアドレス、label はラベルとそのアドレスを格納する連想リスト、code は生成した命令語を格納するリストです。ls が空リストになったら、nreverse で code を破壊的に反転して、sublis で code に残されているラベルをアドレスに変換します。sublis の説明は拙作のページ Common Lisp 入門 <a href="../xyzzy_lisp/abclisp08.html">リスト操作 (その２)</a> をお読みください。
+</p>
+<p> リストの要素がシンボルの場合、それはラベルを表します。ラベルとアドレスのペアを作成して、連想リスト label に追加します。リストの要素がコンスセルの場合、その先頭要素によって処理を振り分けます。ds の場合、2 番目の要素が領域の大きさを表します。関数 get-ds-size で大きさを取得して、wp を size だけ増やします。ds のコードはそのまま code に格納し、プログラムをロードするときに展開します。
+</p>
+<p> dc の場合、数値だけではなく文字や文字列も指定することができます。これを関数 to-number で数値に変換します。そして、変換したリストをそのまま code に格納し、wp の値をコードの大きさ (length (cdr xs)) だけ増やします。リストの展開はプログラムをロードするときに行います。
+</p>
+<p> それ以外の場合は関数 make-opcode で命令語に変換します。make-opcode は op1, op2 を返します。op1 を code に追加して wp を +1 します。op2 が nil でなければ、2 word の命令なので、op2 を code に追加して wp を +1 します。
+</p>
+
+<h4>●命令語の生成</h4>
+<p> 次は命令語を作る make-opcode を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 命令語の生成
+
+(defun make-opcode (ls)
+  (case (length (cdr ls))
+    ((0) ; (op)
+     (values (make-op1 (get-main-opcode ls *op-table0*) #x0f #x0f) nil))
+    ((1) ; (op r1), (op adr)
+     (let ((r1 (get-gr-number (second ls))))
+       (if r1
+           (values (make-op1 (get-main-opcode ls *op-table1*) r1 #x0f)
+                   nil)
+         (values (make-op1 (get-main-opcode ls *op-table21*) #x0f #x0f)
+                 (second ls)))))
+    ((2)
+     (let ((r1 (get-gr-number (second ls)))
+           (r2 (get-gr-number (third ls))))
+       (if r1
+           (if r2
+               ; (op r1 r2)
+               (values (make-op1 (get-main-opcode ls *op-table2*) r1 r2)
+                       nil)
+             ; (op r1 adr)
+             (values (make-op1 (get-main-opcode ls *op-table3*) r1 #x0f)
+                     (third ls)))
+         ; (op adr r2)
+         (progn
+           (when (or (null r2) (zerop r2))
+             (asm-error ls))
+           (values (make-op1 (get-main-opcode ls *op-table21*) #x0f r2)
+                   (second ls))))))
+    ((3) ; (op r1 adr r2)
+     (let ((r1 (get-gr-number (second ls)))
+           (r2 (get-gr-number (fourth ls))))
+       (unless (and r1 r2 (plusp r2))
+         (asm-error ls))
+       (values (make-op1 (get-main-opcode ls *op-table3*) r1 r2)
+               (third ls))))
+    (t (asm-error ls))))
+</pre>
+<p> 引数 ls の長さにより 4 通りのパターに分けて処理します。(cdr ls) の長さが 0 の場合、OP だけの形式です。この形式の命令には NOP, RET, HALT があります。これらの命令に対応した命令語をリスト *op-table0* から探します。この処理を関数 get-main-opcode で行います。見つからない場合はエラーを送出します。*op-table0* は次に示す連想リストになります。
+</p>
+
+<pre class="list">
+(defvar *op-table0*
+  '((nop  . #x0000)   ; NOP
+    (ret  . #x8100)   ; RET
+    (halt . #xf100)   ; HALT  (終了命令を追加)
+    ))
+</pre>
+<p> 次に、関数 make-op1 で 1 word 目の命令を生成します。このとき、レジスタの指定を行いますが、レジスタを使用しない命令の場合は #x0f を指定します。そして、values で 2 つの命令語を返します。この場合、1 word の命令なので 2 番目の返り値は nil になります。
+</p>
+<p> (cdr ls) の長さが 1 の場合は OP GRn か OP adr の形式です。2 番目の要素がレジスタか関数 get-gr-number で調べます。レジスタであればその番号を、そうでなければ nil を返します。レジスタであれば OP GRn の形式です。*op-table1* から命令語を取り出し、make-op1 では第 2 引数にレジスタの番号を、第 3 引数には #x0f を渡します。
+</p>
+<p> OP adr の場合は *op-table21* から命令語を取り出します。レジスタ指定は #x0f になります。そして、2 番目の命令語はアドレス adr になります。ここはラベルが指定されていてもかまいません。そのままラベルを返すだけです。
+</p>
+<p> (cdr ls) の長さが 2 の場合は OP GRn, GRm か OP GRn adr か OP adr GRx になります。最初に ls の 2 番目と 3 番目の要素がレジスタか get-gr-number で調べ、結果を r1 と r2 にセットします。r1 がレジスタで r2 もレジスタであれば OP GRn GRm の形式です。*op-table2* から命令語を取り出して、make-op1 には r1 と r2 を指定します。
+</p>
+<p> r2 がレジスタでなければ OP GRn adr の形式です。*op-table3* から命令語を取り出して、make-op1 には r1 と #x0f を指定します。そして、2 番目の命令語として adr (third ls) を返します。
+</p>
+<p> r1 がレジスタでなければ OP adr GRx の形式です。この場合、GRx に GR0 を指定できないので、r2 が nil または 0 の場合はエラーを送出します。*op-table21* から命令語を取り出して、make-op1 には #x0f と r2 を指定します。2 番目の命令語として (second ls) を返します。
+</p>
+<p> (cdr ls) の長さが 3 の場合は OP GRn adr GRx の形式です。get-gr-number でレジスタ番号を求めて r1 と r2 にセットします。r1 と r2 がレジスタで、かつ r2 が 1 以上でなければエラーを送出します。そして、*op-table3* から命令語を取り出して、make-o1 には r1 と r2 を指定します。2 番目の命令語として (third ls) を返します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛いたします。詳細は <a href="clispb31.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●アセンブラの実行例</h4>
+<p> それではサンプルプログラムをアセンブルしてみましょう。
+</p>
+<pre>
+* (assemble (read-casl2-file "sample.cas"))
+
+(4655 0 4114 16 33023 24 4354 20 4642 1 16687 15 25087 2 61951 (DC 4)
+ (DC 291 17767 35243 52719) (DS 4) 28913 0 28914 0 13824 5153 12335 41 8706 42
+ 21279 4 25343 29 28975 28959 33279 (DC 15)
+ (DC 0 1 1 2 1 2 2 3 1 2 2 3 2 3 3 4))
+</pre>
+<p> わかりやすく 16 進数で書き直すと次のようになります。
+</p>
+<pre class="fig">
+00 : 122f    ; (lad gr2 0)
+01 : 0000
+02 : 1012    ; sample-loop (ld gr1 data gr2)
+03 : 0010
+04 : 80ff    ; (call logcount)
+05 : 0018
+06 : 1102    ; (st gr0 ans gr2)
+07 : 0014
+08 : 1222    ; (lad gr2 1 gr2)
+09 : 0001
+0A : 412f    ; (cpl gr2 len)
+0B : 000f
+0C : 61ff    ; (jmi sample-loop)
+0D : 0002
+0E : f1ff    ; (halt)
+0F : (DC 4)  ; len 
+10 : (DC 291 17767 35243 52719)  ; data
+14 : (DS 4)  ; ans
+18 : 70f1    ; logcount (push 0 gr1)
+19 : 0000
+1A : 70f2    ; (push 0 gr2)
+1B : 0000
+1C : 3600    ; (xor gr0 gr0)
+1D : 1421    ; loop (ld gr2 gr1)
+1E : 302f    ; (and gr2 mask)
+1F : 0029
+20 : 2202    ; (addl gr0 table gr2)
+21 : 002a
+22 : 531f    ; (srl gr1 4)
+23 : 0004
+24 : 62ff    ; (jnz loop)
+25 : 001d
+26 : 712f    ; (pop gr2)
+27 : 711f    ; (pop gr1)
+28 : 81ff    ; (ret)
+29 : (DC 15) ; mask
+2A : (DC 0 1 1 2 1 2 2 3 1 2 2 3 2 3 3 4) ; table
+</pre>
+<p> 正しくアセンブルされていますね。
+</p>
+<p> 今回はここまでです。次回はこのコードを実行する仮想マシン本体を作りましょう。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; COMET2.l : COMET2 簡易シミュレータ
+;
+;            Copyright (C) 2010 Makoto Hiroi
+;
+
+;;;
+;;; アセンブラ
+;;;
+
+;;; コード表
+(defvar *op-table0*
+  '((nop  . #x0000)   ; NOP
+    (ret  . #x8100)   ; RET
+    (halt . #xf100)   ; HALT  (終了命令を追加)
+    ))
+
+(defvar *op-table1*
+  '((pop  . #x7100)   ; POP r
+    ))
+
+(defvar *op-table2*
+  '((ld   . #x1400)  ; LD   r1,r2
+    (adda . #x2400)  ; ADDA r1,r2
+    (suba . #x2500)  ; SUBA r1,r2
+    (addl . #x2600)  ; ADDL r1,r2
+    (subl . #x2700)  ; SUBL r1,r2
+    (and  . #x3400)  ; AND  r1,r2
+    (or   . #x3500)  ; OR   r1,r2
+    (xor  . #x3600)  ; XOR  r1,r2
+    (cpa  . #x4400)  ; CPA  r1,r2
+    (cpl  . #x4500)  ; CPL  r1,r2
+    ))
+
+(defvar *op-table21*
+  '((jmi  . #x6100)  ; JMI  adr,r2
+    (jnz  . #x6200)  ; JNZ  adr,r2
+    (jze  . #x6300)  ; JZE  adr,r2
+    (jump . #x6400)  ; JUMP adr,r2
+    (jpl  . #x6500)  ; JPL  adr,r2
+    (jov  . #x6600)  ; JOV  adr,r2
+    (push . #x7000)  ; PUSH adr,r2
+    (call . #x8000)  ; CALL adr,r2
+    (svc  . #xf000)  ; SVC  adr,r2
+    ))
+
+(defvar *op-table3*
+  '((ld   . #x1000)  ; LD   r1,adr,r2
+    (st   . #x1100)  ; ST   r1,adr,r2
+    (lad  . #x1200)  ; LAD  r1,adr,r2
+    (adda . #x2000)  ; ADDA r1,adr,r2
+    (suba . #x2100)  ; SUBA r1,adr,r2
+    (addl . #x2200)  ; ADDL r1,adr,r2
+    (subl . #x2300)  ; SUBL r1,adr,r2
+    (and  . #x3000)  ; AND  r1,adr,r2
+    (or   . #x3100)  ; OR   r1,adr,r2
+    (xor  . #x3200)  ; XOR  r1,adr,r2
+    (cpa  . #x4000)  ; CPA  r1,adr,r2
+    (cpl  . #x4100)  ; CPL  r1,adr,r2
+    (sla  . #x5000)  ; SLA  r1,adr,r2
+    (sra  . #x5100)  ; SRA  r1,adr,r2
+    (sll  . #x5200)  ; SLL  r1,adr,r2
+    (srl  . #x5300)  ; SRL  r1,adr,r2
+    ))
+
+; アセンブルエラー
+(defun asm-error (code)
+  (error "assemble error: ~S~%" code))
+
+; 汎用レジスタの番号を取得
+(defun get-gr-number (gr)
+  (position gr '(gr0 gr1 gr2 gr3 gr4 gr5 gr6 gr7)))
+
+; main op を求める
+(defun get-main-opcode (ls table)
+  (let ((op (assoc (car ls) table)))
+    (if op
+        (cdr op)
+      (asm-error ls))))
+
+; 1st op の生成
+(defun make-op1 (op r1 r2)
+  (+ op (ash r1 4) r2))
+
+; code の生成
+; ls = (op r1 adr r2)
+(defun make-opcode (ls)
+  (case (length (cdr ls))
+    ((0) ; (op)
+     (values (make-op1 (get-main-opcode ls *op-table0*) #x0f #x0f) nil))
+    ((1) ; (op r1), (op adr)
+     (let ((r1 (get-gr-number (second ls))))
+       (if r1
+           (values (make-op1 (get-main-opcode ls *op-table1*) r1 #x0f)
+                   nil)
+         (values (make-op1 (get-main-opcode ls *op-table21*) #x0f #x0f)
+                 (second ls)))))
+    ((2)
+     (let ((r1 (get-gr-number (second ls)))
+           (r2 (get-gr-number (third ls))))
+       (if r1
+           (if r2
+               ; (op r1 r2)
+               (values (make-op1 (get-main-opcode ls *op-table2*) r1 r2)
+                       nil)
+             ; (op r1 adr)
+             (values (make-op1 (get-main-opcode ls *op-table3*) r1 #x0f)
+                     (third ls)))
+         ; (op adr r2)
+         (progn
+           (when (or (null r2) (zerop r2))
+             (asm-error ls))
+           (values (make-op1 (get-main-opcode ls *op-table21*) #x0f r2)
+                   (second ls))))))
+    ((3) ; (op r1 adr r2)
+     (let ((r1 (get-gr-number (second ls)))
+           (r2 (get-gr-number (fourth ls))))
+       (unless (and r1 r2 (plusp r2))
+         (asm-error ls))
+       (values (make-op1 (get-main-opcode ls *op-table3*) r1 r2)
+               (third ls))))
+    (t (asm-error ls))))
+
+; 文字、文字列を数値に変換
+(defun to-number (ls)
+  (apply #'append
+         (mapcar #'(lambda (x)
+                     (cond ((stringp x)
+                            (mapcar #'char-code (coerce x 'list)))
+                           ((characterp x)
+                            (list (char-code x)))
+                           (t (list x))))
+                 ls)))
+
+; ds の大きさを取得
+(defun get-ds-size (ls)
+  (let ((size (second ls)))
+    (if (and (integerp size)
+             (&lt;= 0 size #xffff))
+        size
+      (asm-error ls))))
+
+; アセンブラ
+(defun assemble (ls &amp;optional (start 0))
+  (do ((ls ls (cdr ls))
+       (wp start)
+       (label nil)
+       (code nil))
+      ((null ls) (sublis label (nreverse code)))
+    (cond ((symbolp (car ls))
+           (push (cons (car ls) wp) label))
+          ((consp (car ls))
+           (case (caar ls)
+             ((ds)
+              (let ((size (get-ds-size (car ls))))
+                (push (car ls) code)
+                (incf wp size)))
+             ((dc)
+              (let ((xs (to-number (car ls))))
+                (push xs code)
+                (incf wp (length (cdr xs)))))
+             (t
+              (multiple-value-bind (op1 op2)
+                  (make-opcode (car ls))
+                (push op1 code)
+                (incf wp)
+                (when op2
+                  (push op2 code)
+                  (incf wp))))))
+          (t (asm-error (car ls))))))
+
+; プログラムファイルの読み込み
+(defun read-casl2-file (filename)
+  (with-open-file (in filename :direction :input)
+    (let ((data nil) (a nil))
+      (loop
+        (setf data (read in nil))
+        (unless data
+          (return (nreverse a)))
+        (push data a)))))
+</pre>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2010 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb19.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb32.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

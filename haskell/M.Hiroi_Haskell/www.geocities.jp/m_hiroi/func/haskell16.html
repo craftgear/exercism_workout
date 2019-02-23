@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881790</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell15.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell17.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>●パズルの解法 (5)</h3>
+<p> <a href="haskell13.html">パズルの解法 (4)</a> では、幅優先探索の例題として 8 パズルを解いてみました。今回は反復深化の例題として、ペグ・ソリテアと 8 パズルを解いてみましょう。拙作のページ <a href="haskell14.html#chap02">経路の探索 (2)</a> で説明したように、反復深化は最短手数を求めることができるアルゴリズムです。幅優先探索と違って局面を保存する必要が無いため、必要となるメモリは深さ優先探索と同程度で済みます。また、プログラムも深さ優先探索と同じくらい簡単に作成することができます。
+</p>
+
+<p> ただし、同じ探索を何度も繰り返すため実行時間が増大する、という欠点があります。ようするに、使用するメモリは少ないが実行時間が長くなるアルゴリズムなのです。実行時間が長くなるといっても、枝刈りを工夫することでパズルを高速に解くことができます。メモリ不足になる場合には、積極的に使ってみたいアルゴリズムといえるでしょう。
+</p>
+
+<p> なお、本稿は拙作のページ <a href="scheme.html">お気楽 Scheme プログラミング入門</a> <a href="abcscm19.html">パズルの解法 [3]</a> を Haskell で書き直したものです。内容は重複しますが、あしからずご了承ください。
+</p>
+
+<h4>●ペグ・ソリテア</h4>
+<p> ペグ・ソリテアは盤上に配置されたペグ（駒）を、最後にはひとつ残るように取り除いていく古典的なパズルです。ペグは、次のルールに従って移動し、除去することができます。
+</p>
+<ol>
+  <li>ペグは隣にあるペグをひとつだけ跳び越して、空き場所へ着地する。
+  <li>跳び越されたペグは盤上から取り除かれる。
+  <li>移動方向はふつう縦横のみの 4 方向だが、ルールによっては斜め方向の移動を許す場合もある。
+  <li>同じペグの連続跳びは 1 手と数える。
+</ol>
+<p> 盤は今までに多数考案されていますが、33 穴英国盤、37 穴フランス盤、41 穴盤が有名です。下図に 33 穴英国盤を示します。
+</p>
+<pre class="fig">
+        ●─●─●
+        │  │  │
+        ●─●─●
+        │  │  │
+●─●─●─●─●─●─●
+│  │  │  │  │  │  │
+●─●─●─○─●─●─●
+│  │  │  │  │  │  │
+●─●─●─●─●─●─●
+        │  │  │
+        ●─●─●
+        │  │  │
+        ●─●─●
+
+    図 : 33 穴英国盤
+</pre>
+
+<p> 33 の穴にペグがありますが、そこからひとつペグを取り除いてゲームを始めます。図では黒丸でペグを表し、白丸で空き場所を表しています。ルールに従ってペグを移動し、最後にひとつだけ残ればクリアとなります。ただし、最初に取り除くペグの位置によって、解けない場合もあるので注意してください。
+</p>
+
+<p> 橋本哲氏の記事 (<a href="haskell16.html#cite">参考文献 3</a>) によると、最初の空き位置と最後に残ったペグの位置が同じになることを「補償型の解」といい、最初の空き位置が盤の中央で、なおかつ、補償型の解がある場合を「中央補償型の解」と呼ぶそうです。33 穴英国盤には、中央補償型の解があるそうです。
+</p>
+
+<p> ペグ・ソリテアの場合、昔から補償型や中央補償型の解の最小手数を求めることが行われてきました。33 穴英国盤のように、ペグの数が多くなるとパソコンで解くのは大変になります。そこで、今回はサイズを小さくした簡単なペグ・ソリテアを反復深化で解いてみましょう。
+</p>
+
+<h4>●Hoppers</h4>
+<p> Hoppers は芦ヶ原伸之氏が考案されたペグ・ソリテアです。次の図を見てください。
+</p>
+<pre class="fig">
+●───●───●  
+│＼  ／│＼  ／│  
+│  ●  │  ●  │  
+│／  ＼│／  ＼│  
+●───○───●  
+│＼  ／│＼  ／│  
+│  ●  │  ●  │  
+│／  ＼│／  ＼│  
+●───●───●  
+
+   図 : Hoppers
+</pre>
+<p> Hoppers は穴を 13 個に減らしていて、遊ぶのに手頃な大きさになっています。上図に示したように、最初に中央のペグを取り除きます。この状態から始めて、最後のペグが中央の位置に残る跳び方の最小手数を求めることにします。
+</p>
+
+<h4>●跳び先表とペグの移動</h4>
+<p> それでは、プログラムを作りましょう。今回は Hoppers の盤面をリストではなく、整数値のビットを使って表すことにします。つまり、ペグがある状態をビットオン (1) で、ペグがない状態をビットオフ (0) で表します。盤面とビットの対応は、下図を見てください。
+</p>
+<pre class="fig">
+●───●───●    ０───１───２
+│＼  ／│＼  ／│    │＼  ／│＼  ／│
+│  ●  │  ●  │    │  ３  │  ４  │
+│／  ＼│／  ＼│    │／  ＼│／  ＼│
+●───○───●    ５───６───７
+│＼  ／│＼  ／│    │＼  ／│＼  ／│
+│  ●  │  ●  │    │  ８  │  ９  │
+│／  ＼│／  ＼│    │／  ＼│／  ＼│
+●───●───●    10───11───12
+ 
+  (1) Hoppers         (2) ビットの位置
+
+          図 : Hoppers の盤面
+</pre>
+<p> ペグの移動は跳び先表を用意すると簡単です。次のプログラムを見てください。
+</p>
+<pre class="list">
+リスト : 跳び先表
+
+jumpTable :: [[(Int, Int)]]
+jumpTable =
+  [[(1, 2), (3, 6), (5, 10)],
+   [(3, 5), (6, 11), (4, 7)],
+   [(1, 0), (4, 6), (7, 12)],
+   [(6, 9)],
+   [(6, 8)],
+   [(3, 1), (6, 7), (8, 11)],
+   [(3, 0), (4, 2), (8, 10), (9, 12)],
+   [(4, 1), (6, 5), (9, 11)],
+   [(6, 4)],
+   [(6, 3)],
+   [(5, 0), (8, 6), (11, 12)],
+   [(8, 5), (6, 1), (9, 7)],
+   [(11, 10), (9, 6), (7, 2)]]
+</pre>
+<p> ペグの跳び先表はリスト jumpTable で定義します。データ型は [[(Int, Int)]] になります。タプルの先頭要素が跳び越されるペグの位置、2 番目の要素が跳び先の位置を表します。たとえば、0 番の位置にあるペグは、1 番を跳び越して 2 番へ移動する場合と、3 番を跳び越して 6 番へ移動する場合と、5 番を跳び越して 10 番へ移動する場合の 3 通りがあります。
+</p>
+
+<p> 次にペグを動かして新しい盤面を作る関数 movePeg を作ります。
+</p>
+<pre class="list">
+リスト : ペグの移動
+
+movePeg :: Int -&gt; Int -&gt; Int -&gt; Int -&gt; Int
+movePeg board from del to =
+  setBit (clearBit (clearBit board from) del) to
+</pre>
+
+<p> 引数 from は跳ぶペグの位置、del は削除されるペグの位置、to は跳び先の位置を表します。from と del のビットをオフに、to のビットをオンにして、新しい盤面を返します。
+</p>
+
+<h4>●新しい盤面の生成</h4>
+<p> 次は movePeg を使って新しい盤面を生成する関数 makeBoard を作ります。
+</p>
+<pre class="list">
+リスト : 新しい盤面を生成する
+
+makeBoard :: Int -&gt; [(Int, Int, Int)]
+makeBoard board = 
+  foldl (\a x -&gt; if testBit board x then (makeBoard' x) ++ a else a) [] [0..12]
+  where makeBoard' from =
+          foldr (\(del, to) a -&gt; if testBit board del &amp;&amp; not(testBit board to)
+                                 then (movePeg board from del to, from, to):a else a)
+                []
+                (jumpTable !! from)
+</pre>
+<p> makeBoard の返り値の型は [(Int, Int, Int)] です。タプルの要素は、新しい盤面、動かすペグの位置、跳び先の位置を表します。foldl のラムダ式で x 番目の位置にペグがあるか testBit で調べます。ペグがある場合、局所関数 makeBoard' でペグを動かして新しい盤面を生成し、その結果と累積変数 a を連結します。ペグがない場合は a をそのまま返します。
+</p>
+<p> makeBoard' は from の位置にあるペグを動かします。jumpTable から跳び越される位置と跳び先の位置を求め、それを foldr に渡します。ラムダ式の引数 del が跳び越される位置、to が跳び先の位置になります。del にペグがあり、to が空き場所ならばペグを動かすことができます。この条件を testBit でチェックします。そうであれば、movePeg でペグを動かし、タプルに新しい盤面と from, to をセットして累積変数 a に追加します。ペグを動かせない場合は a をそのまま返します。
+</p>
+<h4>●移動手順の表示</h4>
+<p> 次は手順を表示する関数 makeAnswer を作ります。
+</p>
+<pre class="list">
+リスト : 手順の表示
+
+makeAnswer :: [(Int,Int)] -&gt; [[Int]]
+makeAnswer ((a,b):xs) = iter xs [b, a] [] where
+  iter [] ys zs = zs ++ [reverse ys]
+  iter ((a, b):xs) ys@(y:_) zs
+    | y == a    = iter xs (b:ys) zs
+    | otherwise = iter xs [b,a] (zs ++ [reverse ys])
+</pre>
+<p> makeAnswer はリスト [(Int,Int)] を受け取り、それを [[Int]] に変換して返します。
+</p>
+入力のタプルは動かすペグの位置 (from) と跳び先の位置 (to) を表します。移動手順は 1 手を [from, to] で表し、連続跳びの場合は [from, to1, to2, ..., toN] とします。
+<p> 実際の処理は局所関数 iter で行います。第 2 引数 ys に移動中のペグの手順を逆順で格納します。第 3 引数の zs が手順を格納する累積変数です。第 1 引数が空リストの場合、ペグの移動が終わったので zs と reverse ys を連結して返します。次の節で、タプル (a, b) の a (ペグの位置) と第 2 引数の先頭要素 y が等しい場合、同じペグが移動しているので連続跳びであることがわかります。b を ys に追加します。そうでなければ、別のペグが移動するので、第 2 引数に [b, a] を、第 3 引数の zs に reverse ys を連結して iter を呼び出します。
+</p>
+
+<h4>●反復深化による Hoppers の解法</h4>
+<p> あとは単純な反復深化で最短手順を求めます。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 反復深化による解法
+
+solver :: First [[Int]]
+solver = iter 2 where
+  start = (clearBit 8191 6)
+  goal  = bit 6
+  incJc jc x y = if x == y then jc else jc + 1
+  dfs board jc limit move@((from',to'):_)
+    | jc &gt; limit          = mempty
+    | popCount board == 1 =
+        if board == goal then First (Just (makeAnswer (reverse move))) else mempty
+    | otherwise =
+        foldl (\a (board', from, to) -&gt;
+                 a `mappend` dfs board' (incJc jc from to') limit ((from,to):move))
+              mempty
+              (makeBoard board)
+  iter 12 = mempty
+  iter n  = dfs (movePeg start 0 3 6) 1 n [(0, 6)] `mappend` iter (n + 1)
+</pre>
+
+<p> solver は最短手順を一つ求めて返します。データ型 First は <a href="haskell15.html">前回</a> 説明した Maybe のモノイドです。反復深化の処理は局所関数 iter と dfs で行います。dfs の引数 board が盤面を表す整数値、jc がペグが跳んだ回数、limit が反復深化の上限値、move が移動手順を格納するリストで、要素はタプル (form, to) です。
+</p>
+
+<p> ペグ・ソリテアを反復深化で解く場合、上限値 limit に達していても連続跳びによりペグを移動できることに注意してください。最初に、jc をチェックして limit よりも大きい場合は mempty を返します。limit 以下の場合、ペグが一つだけ残っているかモジュール Data.Bits の関数 popCount でチェックします。そして、board が goal と等しいかチェックします。goal であれば makeAnswer で移動手順を作って First に格納して返します。goal でなければ mempty を返します。
+</p>
+
+<p> ペグが複数ある場合、makeBoard で生成した新しい盤面を foldl に渡して、ラムダ式の中で a `mappend` dfs ... を評価します。このとき、累積変数 a が mempty でなければ手順を一つ求めることができたので、dfs の再帰呼び出しは行われません。dfs を再帰呼び出しするときは、関数 incJc でペグが連続跳びしているかチェックし、そうであれば jc の値はそのままとします。
+</p>
+
+<p> dfs は iter から呼び出します。iter の引数が反復深化の上限値となります。最初の移動は、四隅にあるペグのひとつを中央に動かす手順しかありません。そこで、最初は 0 のペグを 6 へ動かすことに決めて、その状態から探索を開始します。dfs の返り値が mempty であれば、mappend の右辺が評価されるので、iter が再帰呼び出しされて上限値を増やして探索が行われます。
+</p>
+
+<p> 最短手順をすべて求める場合は次のようになります。
+</p>
+
+<pre class="list">
+リスト : 最短手順をリストに格納して返す
+
+solver' :: [[[Int]]]
+solver' = iter 2 where
+  start = (clearBit 8191 6)
+  goal  = bit 6
+  incJc jc x y = if x == y then jc else jc + 1
+  dfs board jc limit ys move@((from',to'):_)
+    | jc &gt; limit          = ys
+    | popCount board == 1 =
+        if board == goal then (makeAnswer (reverse move)):ys else ys
+    | otherwise =
+        foldr (\(board', from, to) a -&gt;
+                 dfs board' (incJc jc from to') limit a ((from,to):move))
+              ys
+              (makeBoard board)
+  iter 12 = mempty
+  iter n  = let ans = dfs (movePeg start 0 3 6) 1 n [] [(0, 6)]
+            in if null ans then iter (n + 1) else ans
+</pre>
+<p> dfs の第 4 引数 ys を累積変数として使います。見つけた最短手順を ys に格納して返します。iter では dfs の返り値 ans をチェックし、空リストであれば上限値を +1 して探索を続行し、そうでなければ ans をそのまま返します。
+</p>
+
+<ul>
+  <li><a href="haskell16.html#list1">プログラムリスト１</a>
+</ul>
+<h4>●実行結果</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+<pre>
+*Main> solver
+First {getFirst = Just [[0,6],[9,3],[10,0,6],[7,5],[12,10,6],[4,8],[2,0,10,6]]}
+*Main> solver'
+[[[0,6],[9,3],[10,0,6],[7,5],[12,10,6],[4,8],[2,0,10,6]],
+ [[0,6],[9,3],[10,0,6],[7,5],[2,0,10,6],[4,8],[12,10,6]],
+ [[0,6],[9,3],[10,0,6],[7,5],[2,6],[8,4],[12,10,0,2,6]],
+ [[0,6],[9,3],[10,6],[4,8],[12,10,0,6],[7,5],[2,0,10,6]],
+ [[0,6],[9,3],[10,6],[4,8],[12,10,0,6],[1,11],[2,12,10,6]],
+ [[0,6],[9,3],[10,6],[4,8],[12,10,6],[1,11],[2,12,10,0,6]],
+ [[0,6],[9,3],[10,6],[4,8],[2,0,6],[11,1],[12,2,0,10,6]],
+ [[0,6],[9,3],[10,6],[4,8],[2,0,10,6],[11,1],[12,2,0,6]],
+ [[0,6],[9,3],[10,6],[4,8],[2,0,10,6],[7,5],[12,10,0,6]],
+ [[0,6],[9,3],[2,0,6],[11,1],[12,2,6],[8,4],[10,0,2,6]],
+ [[0,6],[9,3],[2,0,6],[11,1],[10,0,2,6],[8,4],[12,2,6]],
+ [[0,6],[9,3],[2,0,6],[11,1],[10,6],[4,8],[12,2,0,10,6]],
+ [[0,6],[9,3],[2,6],[8,4],[12,2,0,6],[11,1],[10,0,2,6]],
+ [[0,6],[9,3],[2,6],[8,4],[12,2,0,6],[5,7],[10,12,2,6]],
+ [[0,6],[9,3],[2,6],[8,4],[12,2,6],[5,7],[10,12,2,0,6]],
+ [[0,6],[9,3],[2,6],[8,4],[10,0,2,6],[11,1],[12,2,0,6]],
+ [[0,6],[9,3],[2,6],[8,4],[10,0,2,6],[7,5],[12,10,0,6]],
+ [[0,6],[9,3],[2,6],[8,4],[10,0,6],[7,5],[12,10,0,2,6]]]
+</pre>
+<p> 7 手で解くことができました。解は全部で 18 通りになりました。インタプリタ ghci での実行時間は、solver が 0.42 秒、solver' が 0.72 秒 (Windows 7, Core i7-2670QM 2.20GHz) でした。最近のパソコンは高性能なので、穴の数が少ない盤面であれば、単純な反復深化でも高速に解くことができるようです。
+</p>
+
+<h4>●反復深化による 8 パズルの解法</h4>
+<p> 次は 8 パズルを反復深化で解いてみましょう。幅優先探索では全ての局面を保存しましたが、反復深化ではその必要はありません。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 単純な反復深化による解法
+
+import Data.List
+import Data.Maybe
+import Data.Monoid
+import Data.Time
+
+-- 隣接リスト
+adjacent =
+  [[1, 3],
+   [0, 2, 4],
+   [1, 5],
+   [0, 4, 6],
+   [1, 3, 5, 7],
+   [2, 4, 8],
+   [3, 7],
+   [4, 6, 8],
+   [5, 7]]
+
+-- 局面を表すデータ型
+data State = State {board :: [Int], space :: Int, piece :: Int}
+  deriving Show
+
+-- ピースを動かす
+movePiece :: [Int] -&gt; Int -&gt; [Int]
+movePiece [] _ = []
+movePiece (x:xs) p 
+  | x == 0    = p : movePiece xs p
+  | x == p    = 0 : movePiece xs p
+  | otherwise = x : movePiece xs p
+
+-- 新しい盤面を作る
+makeState :: State -&gt; [State]
+makeState s =
+  foldr (\x a -&gt; let p = board s !! x
+                 in if piece s == p then a
+                    else State (movePiece (board s) p) x p : a)                           []
+        (adjacent !! space s)
+
+-- 反復深化
+solver :: [Int] -&gt; [Int] -&gt; First [State]
+solver start goal = iter 1 where
+  z = fromJust (elemIndex 0 start)
+  dfs n limit xs@(x:_)
+    | n == limit = if board x == goal
+                   then First (Just (reverse xs)) else mempty
+    | otherwise =
+      foldl (\a s -&gt; a `mappend` dfs (n + 1) limit (s:xs))
+            mempty
+            (makeState x)
+  iter 32 = mempty
+  iter n  = dfs 0 n [State start z 0] `mappend` iter (n + 1)
+
+main :: IO ()
+main = do
+  a &lt;- getCurrentTime
+  print $ solver [8,6,7,2,5,4,3,0,1] [1,2,3,4,5,6,7,8,0]
+  b &lt;- getCurrentTime
+  print $ diffUTCTime b a
+</pre>
+<p> 手順は局面 State を格納したリストで表します。<a href="haskell13.html">パズルの解法 (4)</a> で作成した State の定義から一手前の局面を保存する prev と終端を表す Null を削除しています。movePiece と makeState は前のプログラムとほとんど同じです。局所関数 dfs の引数 n が手数、limit が反復深化の上限値、第 3 引数が手順を表すリストです。局所関数 iter で上限値 limit を増やしながら dfs を呼び出します。
+</p>
+
+<p> 8 パズルのように、元の局面に戻すことが可能（可逆的）なパズルの場合、単純な深さ優先探索では同じ移動手順を何度も繰り返すことがあります。そうなると、とんでもない解を出力するだけではなく、再帰呼び出しが深くなるとスタックがオーバーフローしてプログラムの実行ができなくなることがあります。このような場合、局面の履歴を保存しておいて同じ局面がないかチェックすることで、解を求めることができるようになります。ただし、同一局面をチェックする分だけ時間が余分にかかりますし、最初に見つかる解が最短手数とは限りません。
+</p>
+
+<p> 反復深化では深さが制限されているため、同一局面のチェックを行わなくてもスタックオーバーフローが発生することはありません。そのかわり、無駄な探索はどうしても避けることができません。8 パズルの場合、1 手前に動かした駒を再度動かすと 2 手前の局面に戻ってしまいます。完全ではありませんが、このチェックを入れるだけでもかなりの無駄を省くことができます。今回のプログラムでは、この処理を関数 makeState で行っています。
+</p>
+
+<p> あとは、dfs で手数が上限値に到達していて、盤面が goal と等しい場合は First に手順を格納して返します。そうでなければ、makeState で新しい局面を生成して foldl に渡して、ラムダ式の中で dfs を再帰呼び出しします。累積変数が mempty でなければ、最短手順を見つけたので再帰呼び出しは行われません。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは実際に実行してみましょう。インタプリタ ghci では時間がかかるので、GHC でコンパイルしました。
+</p>
+<pre>
+First {getFirst = Just [
+[State {board = [8,6,7,2,5,4,3,0,1], space = 7, piece = 0},
+ State {board = [8,6,7,2,0,4,3,5,1], space = 4, piece = 5},
+ State {board = [8,0,7,2,6,4,3,5,1], space = 1, piece = 6},
+ State {board = [0,8,7,2,6,4,3,5,1], space = 0, piece = 8},
+ State {board = [2,8,7,0,6,4,3,5,1], space = 3, piece = 2},
+ State {board = [2,8,7,3,6,4,0,5,1], space = 6, piece = 3},
+ State {board = [2,8,7,3,6,4,5,0,1], space = 7, piece = 5},
+ State {board = [2,8,7,3,6,4,5,1,0], space = 8, piece = 1},
+ State {board = [2,8,7,3,6,0,5,1,4], space = 5, piece = 4},
+ State {board = [2,8,0,3,6,7,5,1,4], space = 2, piece = 7},
+ State {board = [2,0,8,3,6,7,5,1,4], space = 1, piece = 8},
+ State {board = [2,6,8,3,0,7,5,1,4], space = 4, piece = 6},
+ State {board = [2,6,8,0,3,7,5,1,4], space = 3, piece = 3},
+ State {board = [2,6,8,5,3,7,0,1,4], space = 6, piece = 5},
+ State {board = [2,6,8,5,3,7,1,0,4], space = 7, piece = 1},
+ State {board = [2,6,8,5,3,7,1,4,0], space = 8, piece = 4},
+ State {board = [2,6,8,5,3,0,1,4,7], space = 5, piece = 7},
+ State {board = [2,6,0,5,3,8,1,4,7], space = 2, piece = 8},
+ State {board = [2,0,6,5,3,8,1,4,7], space = 1, piece = 6},
+ State {board = [2,3,6,5,0,8,1,4,7], space = 4, piece = 3},
+ State {board = [2,3,6,0,5,8,1,4,7], space = 3, piece = 5},
+ State {board = [2,3,6,1,5,8,0,4,7], space = 6, piece = 1},
+ State {board = [2,3,6,1,5,8,4,0,7], space = 7, piece = 4},
+ State {board = [2,3,6,1,5,8,4,7,0], space = 8, piece = 7},
+ State {board = [2,3,6,1,5,0,4,7,8], space = 5, piece = 8},
+ State {board = [2,3,0,1,5,6,4,7,8], space = 2, piece = 6},
+ State {board = [2,0,3,1,5,6,4,7,8], space = 1, piece = 3},
+ State {board = [0,2,3,1,5,6,4,7,8], space = 0, piece = 2},
+ State {board = [1,2,3,0,5,6,4,7,8], space = 3, piece = 1},
+ State {board = [1,2,3,4,5,6,0,7,8], space = 6, piece = 4},
+ State {board = [1,2,3,4,5,6,7,0,8], space = 7, piece = 7},
+ State {board = [1,2,3,4,5,6,7,8,0], space = 8, piece = 8}]}
+33.1518962s
+</pre>
+<p> 実際に実行してみると、当然ですが最短手数は 31 手になります。実行時間は 33 秒 (Windows 7, Core i7-2670QM 2.20GHz) かかりました。反復深化の場合、枝刈りを工夫しないと高速に解くことはできません。そこで、反復深化の常套手段である「下限値枝刈り法」を使うことにしましょう。
+</p>
+
+<h4>●下限値枝刈り法</h4>
+<p> 下限値枝刈り法は難しいアルゴリズムではありません。たとえば、5 手進めた局面を考えてみます。探索の上限値が 10 手とすると、あと 5 手だけ動かすことができますね。この時、パズルを解くのに 6 手以上かかることがわかれば、ここで探索を打ち切ることができます。
+</p>
+<p> このように、必要となる最低限の手数が明確にわかる場合、この値を「下限値 (Lower Bound)」と呼びます。この下限値を求めることができれば、「今の移動手数＋下限値」が探索手数を超えた時点で、枝刈りすることが可能になります。これが下限値枝刈り法の基本的な考え方です。
+</p>
+
+<p> 一般に、このような方法を「分岐限定法」とか「分岐制約法」といいます。<a href="haskell16.html#cite">参考文献 1</a> には、巡回セールスマンの問題を例題にした分岐制約法の説明があります。また、思考ルーチンを作る時の常套手段である <a href="../light/pyalgo24.html">アルファベータ法</a> も分岐制約法のひとつです。
+</p>
+
+<p> さて、下限値を求める方法ですが、これにはいろいろな方法が考えられます。今回は、各駒が正しい位置へ移動するまでの手数 (移動距離) <sup><a href="haskell16.html#note1">[*1]</a></sup> を下限値として利用することにしましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+┌─┬─┬─┐    ┌──┬──┬──┐
+│１│２│３│    │8(3)│6(2)│7(4)│
+├─┼─┼─┤    ├──┼──┼──┤
+│４│５│６│    │2(2)│5(0)│4(2)│
+├─┼─┼─┤    ├──┼──┼──┤
+│７│８│  │    │3(4)│    │1(4)│
+└─┴─┴─┘    └──┴──┴──┘
+                   (n) : n は移動距離
+
+  (1) 完成形     (2) 初期状態：合計 21
+
+          図 : 下限値の求め方
+</pre>
+
+<p> たとえば、右下にある 1 の駒を左上の正しい位置に移動するには、最低でも 4 手必要です。もちろん、ほかの駒との関連で、それ以上の手数が必要になる場合もあるでしょうが、4 手より少なくなることは絶対にありません。同じように、各駒について最低限必要な手数を求めることができます。そして、その合計値はパズルを解くのに最低限必要な手数となります。これを下限値として利用することができます。ちなみに、上図 (2) の初期状態の下限値は 21 手になります。
+</p>
+
+<p> 下限値枝刈り法を使う場合、下限値の計算を間違えると正しい解を求めることができなくなります。たとえば、10 手で解ける問題の下限値を 11 手と計算すれば、最短手数を求めることができなくなります。それどころか、10 手の解しかない場合は、答えを求めることすらできなくなります。下限値の計算には十分に注意してください。
+</p>
+
+<div class="note">
+-- note -----<br>
+<a name="note1">[*1]</a> これを「マンハッタン距離 (Manhattan Distance) 」と呼ぶことがあります。
+</div>
+<h4>●下限値枝刈り法のプログラム</h4>
+<p> それでは、プログラムを作りましょう。下限値の求め方ですが、駒を動かすたびに各駒の移動距離を計算していたのでは時間がかかります。8 パズルの場合、1 回に一つの駒しか移動しないので、初期状態の下限値を求めておいて、動かした駒の差分だけ計算すればいいでしょう。また、駒の移動距離はいちいち計算するのではなく、あらかじめ計算した結果をリストに格納しておきます。このリストを distance とすると、盤面から移動距離を求めるプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 移動距離を求める
+
+distance :: [[Int]]
+distance =
+  [[0, 0, 0, 0, 0, 0, 0, 0, 0],  -- dummy
+   [0, 1, 2, 1, 2, 3, 2, 3, 4],
+   [1, 0, 1, 2, 1, 2, 3, 2, 3],
+   [2, 1, 0, 3, 2, 1, 4, 3, 2],
+   [1, 2, 3, 0, 1, 2, 1, 2, 3],
+   [2, 1, 2, 1, 0, 1, 2, 1, 2],
+   [3, 2, 1, 2, 1, 0, 3, 2, 1],
+   [2, 3, 4, 1, 2, 3, 0, 1, 2],
+   [3, 2, 3, 2, 1, 2, 1, 0, 1]]
+
+-- アクセス関数
+getDistance :: Int -&gt; Int -&gt; Int
+getDistance piece pos = (distance !! piece) !! pos
+
+-- 移動距離を求める
+calcDistance :: [Int] -&gt; Int
+calcDistance board =
+  foldl (\a (piece, pos) -&gt; a + getDistance piece pos)
+        0
+        (zip board [0..8])
+</pre>
+<p> distance のデータ型は [[Int]] で「駒の種類×駒の位置」を表しています。簡単にアクセスできるように関数 getDistance を用意します。空き場所は関係ないので、0 番目のリストは全部の要素が 0 となります。関数 calcDistance は盤面 board にある駒と位置から移動距離を求めます。zip で board と位置をタプルにまとめ、それを foldl に渡します。あとは、ラムダ式の中で getDistance を呼び出して駒の移動距離を求め、それを累積変数 a に足し算するだけです。
+</p>
+
+<p> 次は下限値を更新する処理を作ります。
+</p>
+<pre class="list">
+リスト : 下限値の更新処理
+
+-- 局面を表すデータ型
+data State = State {board :: [Int], space :: Int, piece :: Int, lower :: Int}
+  deriving Show
+
+-- 下限値の更新
+update :: State -&gt; Int -&gt; Int -&gt; Int
+update s x p =
+  (lower s) - getDistance p x + getDistance p (space s)
+
+-- 新しい盤面を作る
+makeState :: State -&gt; [State]
+makeState s =
+  foldr (\x a -&gt; let p = board s !! x
+                 in if piece s == p then a
+                    else State (movePiece (board s) p) x p (update s x p) : a)
+        []
+        (adjacent !! space s)
+</pre>
+<p> State の lower に盤面の下限値を格納します。makeState で新しい局面を生成するとき、関数 update で lower の値を更新します。update の処理は簡単で、元の盤面の下限値 lower s から動かす駒の元の下限値 getDistance p x を引いて、新しい位置の下限値 getDistance p (space s) を足し算するだけです。
+</p>
+
+<p> 最後に、下限値枝刈り法による反復深化を行う関数 solver を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 下限値枝刈り法
+
+solver :: [Int] -&gt; [Int] -&gt; First [State]
+solver start goal = iter low where
+  low  = calcDistance start
+  zero = fromJust (elemIndex 0 start)
+  init = [State start zero 0 low]
+  dfs n limit xs@(x:_)
+    | n + lower x &gt; limit = mempty
+    | n == limit = if board x == goal
+                   then First (Just (reverse xs)) else mempty
+    | otherwise =
+      foldl (\a s -&gt; a `mappend` dfs (n + 1) limit (s:xs))
+            mempty
+            (makeState x)
+  iter 32 = mempty
+  iter n  = dfs 0 n init `mappend` iter (n + 1)
+</pre>
+<p> 局所関数 dfs の最初の節で、n + lower x が limit よりも大きくなったならば mempty を返します。これで下限値枝刈り法が機能します。それから、iter を呼び出す処理を修正します。関数 calcDistance で初期状態の下限値 low を求めます。下限値がわかるのですから、上限値 limit は 1 手からではなく下限値 low からスタートします。あとは反復深化のプログラムと同じです。とても簡単ですね。
+</p>
+<ul>
+  <li><a href="haskell16.html#list2">プログラムリスト２</a>
+</ul>
+<h4>●実行結果</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+First {getFirst = Just [
+State {board = [8,6,7,2,5,4,3,0,1], space = 7, piece = 0, lower = 21},
+State {board = [8,6,7,2,0,4,3,5,1], space = 4, piece = 5, lower = 22},
+State {board = [8,0,7,2,6,4,3,5,1], space = 1, piece = 6, lower = 21},
+State {board = [0,8,7,2,6,4,3,5,1], space = 0, piece = 8, lower = 20},
+State {board = [2,8,7,0,6,4,3,5,1], space = 3, piece = 2, lower = 19},
+State {board = [2,8,7,3,6,4,0,5,1], space = 6, piece = 3, lower = 18},
+State {board = [2,8,7,3,6,4,5,0,1], space = 7, piece = 5, lower = 19},
+State {board = [2,8,7,3,6,4,5,1,0], space = 8, piece = 1, lower = 18},
+State {board = [2,8,7,3,6,0,5,1,4], space = 5, piece = 4, lower = 19},
+State {board = [2,8,0,3,6,7,5,1,4], space = 2, piece = 7, lower = 18},
+State {board = [2,0,8,3,6,7,5,1,4], space = 1, piece = 8, lower = 19},
+State {board = [2,6,8,3,0,7,5,1,4], space = 4, piece = 6, lower = 20},
+State {board = [2,6,8,0,3,7,5,1,4], space = 3, piece = 3, lower = 19},
+State {board = [2,6,8,5,3,7,0,1,4], space = 6, piece = 5, lower = 18},
+State {board = [2,6,8,5,3,7,1,0,4], space = 7, piece = 1, lower = 17},
+State {board = [2,6,8,5,3,7,1,4,0], space = 8, piece = 4, lower = 16},
+State {board = [2,6,8,5,3,0,1,4,7], space = 5, piece = 7, lower = 15},
+State {board = [2,6,0,5,3,8,1,4,7], space = 2, piece = 8, lower = 14},
+State {board = [2,0,6,5,3,8,1,4,7], space = 1, piece = 6, lower = 13},
+State {board = [2,3,6,5,0,8,1,4,7], space = 4, piece = 3, lower = 12},
+State {board = [2,3,6,0,5,8,1,4,7], space = 3, piece = 5, lower = 11},
+State {board = [2,3,6,1,5,8,0,4,7], space = 6, piece = 1, lower = 10},
+State {board = [2,3,6,1,5,8,4,0,7], space = 7, piece = 4, lower = 9},
+State {board = [2,3,6,1,5,8,4,7,0], space = 8, piece = 7, lower = 8},
+State {board = [2,3,6,1,5,0,4,7,8], space = 5, piece = 8, lower = 7},
+State {board = [2,3,0,1,5,6,4,7,8], space = 2, piece = 6, lower = 6},
+State {board = [2,0,3,1,5,6,4,7,8], space = 1, piece = 3, lower = 5},
+State {board = [0,2,3,1,5,6,4,7,8], space = 0, piece = 2, lower = 4},
+State {board = [1,2,3,0,5,6,4,7,8], space = 3, piece = 1, lower = 3},
+State {board = [1,2,3,4,5,6,0,7,8], space = 6, piece = 4, lower = 2},
+State {board = [1,2,3,4,5,6,7,0,8], space = 7, piece = 7, lower = 1},
+State {board = [1,2,3,4,5,6,7,8,0], space = 8, piece = 8, lower = 0}]}
+0.0500001s
+</pre>
+<p> 実行時間は 0.05 秒 (Windows 7, Core i7-2670QM 2.20GHz) でした。660 倍という高速化に驚いてしまいました。8 パズルの場合、下限値枝刈り法の効果は極めて高いですね。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>A.V.Aho,J.E.Hopcroft,J.D.Ullman, 『データ構造とアルゴリズム』, 培風館, 1987
+  <li>高橋謙一郎, 『特集 悩めるプログラマに効くアルゴリズム』, C MAGAZINE 2000 年 11 月号, ソフトバンク
+  <li>橋本哲, 『特集コンピュータパズルへの招待 ペグ・ソリテア編』, C MAGAZINE 1996 年 2 月号, ソフトバンク
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+--
+-- hoppers.hs : Hoppers (ペグ・ソリテア) の解法
+--
+--              Copyright (C) 2013 Makoto Hiroi
+--
+
+import Data.Bits
+import Data.Monoid
+
+-- 跳び先表 (del, to)
+jumpTable :: [[(Int, Int)]]
+jumpTable =
+  [[(1, 2), (3, 6), (5, 10)],
+   [(3, 5), (6, 11), (4, 7)],
+   [(1, 0), (4, 6), (7, 12)],
+   [(6, 9)],
+   [(6, 8)],
+   [(3, 1), (6, 7), (8, 11)],
+   [(3, 0), (4, 2), (8, 10), (9, 12)],
+   [(4, 1), (6, 5), (9, 11)],
+   [(6, 4)],
+   [(6, 3)],
+   [(5, 0), (8, 6), (11, 12)],
+   [(8, 5), (6, 1), (9, 7)],
+   [(11, 10), (9, 6), (7, 2)]]
+
+-- ペグの移動
+movePeg :: Int -&gt; Int -&gt; Int -&gt; Int -&gt; Int
+movePeg board from del to =
+  setBit (clearBit (clearBit board from) del) to
+
+-- 新しい盤面を生成する (board, from, to)
+makeBoard :: Int -&gt; [(Int, Int, Int)]
+makeBoard board = 
+  foldl (\a x -&gt; if testBit board x then (makeBoard' x) ++ a else a) [] [0..12]
+  where makeBoard' from =
+          foldr (\(del, to) a -&gt; if testBit board del &amp;&amp; not(testBit board to)
+                                 then (movePeg board from del to, from, to):a else a)
+                []
+                (jumpTable !! from)
+
+-- 解答手順の生成
+makeAnswer :: [(Int,Int)] -&gt; [[Int]]
+makeAnswer ((a,b):xs) = iter xs [b, a] [] where
+  iter [] ys zs = zs ++ [reverse ys]
+  iter ((a, b):xs) ys@(y:_) zs
+    | y == a    = iter xs (b:ys) zs
+    | otherwise = iter xs [b,a] (zs ++ [reverse ys])
+
+-- 反復深化による解法
+solver :: First [[Int]]
+solver = iter 2 where
+  start = (clearBit 8191 6)
+  goal  = bit 6
+  incJc jc x y = if x == y then jc else jc + 1
+  dfs board jc limit move@((from',to'):_)
+    | jc &gt; limit          = mempty
+    | popCount board == 1 =
+        if board == goal then First (Just (makeAnswer (reverse move))) else mempty
+    | otherwise =
+        foldl (\a (board', from, to) -&gt;
+                 a `mappend` dfs board' (incJc jc from to') limit ((from,to):move))
+              mempty
+              (makeBoard board)
+  iter 12 = mempty
+  iter n  = dfs (movePeg start 0 3 6) 1 n [(0, 6)] `mappend` iter (n + 1)
+
+
+solver' :: [[[Int]]]
+solver' = iter 2 where
+  start = (clearBit 8191 6)
+  goal  = bit 6
+  incJc jc x y = if x == y then jc else jc + 1
+  dfs board jc limit ys move@((from',to'):_)
+    | jc &gt; limit          = ys
+    | popCount board == 1 =
+        if board == goal then (makeAnswer (reverse move)):ys else ys
+    | otherwise =
+        foldr (\(board', from, to) a -&gt;
+                 dfs board' (incJc jc from to') limit a ((from,to):move))
+              ys
+              (makeBoard board)
+  iter 12 = mempty
+  iter n  = let ans = dfs (movePeg start 0 3 6) 1 n [] [(0, 6)]
+            in if null ans then iter (n + 1) else ans
+</pre>
+<HR>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+--
+-- eight.hs : ８パズル (反復深化＋下限値枝刈り法)
+--
+--            Copyright (C) 2013 Makoto Hiroi
+--
+import Data.List
+import Data.Maybe
+import Data.Monoid
+import Data.Time
+
+-- 隣接リスト
+adjacent =
+  [[1, 3],
+   [0, 2, 4],
+   [1, 5],
+   [0, 4, 6],
+   [1, 3, 5, 7],
+   [2, 4, 8],
+   [3, 7],
+   [4, 6, 8],
+   [5, 7]]
+
+-- 下限値枝刈り法
+
+distance :: [[Int]]
+distance =
+  [[0, 0, 0, 0, 0, 0, 0, 0, 0],  -- dummy
+   [0, 1, 2, 1, 2, 3, 2, 3, 4],
+   [1, 0, 1, 2, 1, 2, 3, 2, 3],
+   [2, 1, 0, 3, 2, 1, 4, 3, 2],
+   [1, 2, 3, 0, 1, 2, 1, 2, 3],
+   [2, 1, 2, 1, 0, 1, 2, 1, 2],
+   [3, 2, 1, 2, 1, 0, 3, 2, 1],
+   [2, 3, 4, 1, 2, 3, 0, 1, 2],
+   [3, 2, 3, 2, 1, 2, 1, 0, 1]]
+
+-- アクセス関数
+getDistance :: Int -&gt; Int -&gt; Int
+getDistance piece pos = (distance !! piece) !! pos
+
+-- 移動距離を求める
+calcDistance :: [Int] -&gt; Int
+calcDistance board =
+  foldl (\a (piece, pos) -&gt; a + getDistance piece pos)
+        0
+        (zip board [0..8])
+
+-- 局面を表すデータ型
+data State = State {board :: [Int], space :: Int, piece :: Int, lower :: Int}
+  deriving Show
+
+-- ピースを動かす
+movePiece :: [Int] -&gt; Int -&gt; [Int]
+movePiece [] _ = []
+movePiece (x:xs) p 
+  | x == 0    = p : movePiece xs p
+  | x == p    = 0 : movePiece xs p
+  | otherwise = x : movePiece xs p
+
+-- 下限値の更新
+update :: State -&gt; Int -&gt; Int -&gt; Int
+update s x p =
+  (lower s) - getDistance p x + getDistance p (space s)
+
+-- 新しい盤面を作る
+makeState :: State -&gt; [State]
+makeState s =
+  foldr (\x a -&gt; let p = board s !! x
+                 in if piece s == p then a
+                    else State (movePiece (board s) p) x p (update s x p) : a)
+        []
+        (adjacent !! space s)
+
+-- 下限値枝刈り法
+solver :: [Int] -&gt; [Int] -&gt; First [State]
+solver start goal = iter low where
+  low  = calcDistance start
+  zero = fromJust (elemIndex 0 start)
+  init = [State start zero 0 low]
+  dfs n limit xs@(x:_)
+    | n + lower x &gt; limit = mempty
+    | n == limit = if board x == goal
+                   then First (Just (reverse xs)) else mempty
+    | otherwise =
+      foldl (\a s -&gt; a `mappend` dfs (n + 1) limit (s:xs))
+            mempty
+            (makeState x)
+  iter 32 = mempty
+  iter n  = dfs 0 n init `mappend` iter (n + 1)
+
+main :: IO ()
+main = do
+  a &lt;- getCurrentTime
+  print $ solver [8,6,7,2,5,4,3,0,1] [1,2,3,4,5,6,7,8,0]
+  b &lt;- getCurrentTime
+  print $ diffUTCTime b a
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell15.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell17.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

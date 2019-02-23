@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 集合, グラフ, 経路の探索</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881792</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>集合 (set), グラフ (graph), 経路の探索</h2>
+<div class="small">
+[ <a href="pyalgo04.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo06.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 今回は「集合 (set) 」を表すデータ型を作ってみましょう。集合はいくつかの要素を集めたものです。一般に、集合は重複した要素を含まず、要素の順番に意味はありません。なお、要素の重複を許す集合は「多重集合 (multi set) 」と呼ばれます。たとえば、集合 {1, 3, 5, 7} は {7, 5, 3, 1} や {5, 3, 1, 7} と表すこともできます。このように、要素は適当に並べてもかまわないのですが、ある規則で要素を整列させておく場合もあります。
+</p>
+
+<p> Python の場合、集合を表すデータ型 set が用意されていますが、私達でも簡単にプログラムすることができます。今回はアルゴリズムのお勉強ということで、あえて「連結リスト (linked list) 」を使って集合 (Set) を実装してみましょう。
+</p>
+
+<p> 最初に定義するメソッドを表に示します。
+</p>
+
+<table border=1>
+<caption>表 : セットの基本操作</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>s.insert(x) </td><td>要素 x を追加する</td></tr>
+  <tr><td>s.remove(x) </td><td>要素 x を削除する</td></tr>
+  <tr><td>s.member(x) </td><td>要素 x は集合に含まれているか</td></tr>
+  <tr><td>s1.issubset(s2)</td><td>s1 は s2 の部分集合か</td></tr>
+  <tr><td>s1.isequal(s2) </td><td>s1 と s2 は等しいか</td></tr>
+  <tr><td>s1.union(s2)       </td><td>s1 と s2 の和を求める</td></tr>
+  <tr><td>s1.intersection(s2)</td><td>s1 と s2 の積を求める</td></tr>
+  <tr><td>s1.difference(s2)  </td><td>s1 と s2 の差を求める</td></tr>
+</tbody>
+</table>
+
+<p> 簡単な例を示しましょう。a = Set([1, 2, 3, 4, 5]), b = Set([4, 5, 6, 7]), c = Set([6, 7]) とします。
+</p>
+<pre>
+a.issubset(b) =&gt; False
+c.issubset(b) =&gt; True
+
+a.union(b) =&gt; Set([1, 2, 3, 4, 5, 6, 7])
+a.union(c) =&gt; Set([1, 2, 3, 4, 5, 6, 7])
+
+a.intersection(b) =&gt; Set([4, 5])
+a.intersection(c) =&gt; Set([])
+
+a.difference(b) =&gt; Set([1, 2, 3])
+a.difference(c) =&gt; Set([1, 2, 3, 4, 5])
+</pre>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。最初にクラスを定義します。
+</p>
+<pre class="list">
+リスト : クラスの定義
+
+class Set:
+    class Cell:
+        def __init__(self, x, next = None):
+            self.item = x
+            self.next = next
+    
+    def __init__(self, data = None):
+        self.top = Set.Cell(None)   # Header Cell
+        if data:
+            for x in data:
+                if not self.member(x):
+                    self.top.next = Set.Cell(x, self.top.next)
+</pre>
+
+<p> クラス名は Set としました。連結リストを表す Cell は Set の中で定義します。インスタンス変数 item に要素を、next に次のセルへの参照を格納します。終端は None で表します。今回の連結リストはヘッダセルを使います。Set のインスタンス変数 top にヘッダセルを格納し、その後ろのセルに集合の要素を格納します。
+</p>
+<p> Set のメソッド __init__ は、引数 data にデータがある場合、それを連結リストに格納します。このとき、重複した要素がないかメソッド member を使ってチェックします。要素はヘッダセルの後ろに追加していきます。
+</p>
+
+<p> メソッド member は次のようになります。
+</p>
+
+<pre class="list">
+リスト : 集合に要素が含まれているか
+
+    def member(self, x):
+        cp = self.top.next
+        while cp:
+            if cp.item == x: return True
+            cp = cp.next
+        return False
+</pre>
+<p> 最初に、ヘッダセルの後ろのセルを取り出して変数 cp にセットします。あとは、セルをたどって x と等しい要素 (cp.item) を探します。見つけた場合は True を返します。なければ False を返します。探索は基本的な操作なので難しいところはないでしょう。
+</p>
+
+<p> メソッド member を使うと、データを挿入するメソッド insert は簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの挿入
+
+    def insert(self, x):
+        if not self.member(x):
+            self.top.next = Set.Cell(x, self.top.next)
+</pre>
+<p> データ x が自分自身 (self) に含まれているかメソッド member を呼び出してチェックします。含まれていなければ、ヘッダセルの後ろにデータを挿入します。これも簡単ですね。
+</p>
+<p> メソッド issubset と isequal も簡単です。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 集合の同値と包含関係の判定
+
+    # 部分集合の判定
+    def issubset(self, x):
+        cp = self.top.next
+        while cp:
+            if not x.member(cp.item): return False
+            cp = cp.next
+        return True
+
+    # 同値の判定
+    def isequal(self, x):
+        return self.issubset(x) and x.issubset(self)
+</pre>
+<p> 集合 self の要素が集合 x にすべて含まれている場合、issubset は True をかえします。異なる要素があれば部分集合ではないので False を返します。self の連結リストを順番にたどって cp.item が x に含まれているか member を呼び出してチェックするだけです。
+</p>
+<p> 集合の同値関係 a = b は、a が b の部分集合で、かつ b が a の部分集合のときに成立します。したがって、isequal は self.issubset(x) and x.issubset(self) をチェックするだけです。
+</p>
+<h4>●union</h4>
+<p> 次は 2 つの集合の和を求めるメソッド union を作ります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 集合の和を求める
+
+    def union(self, x):
+        def _union(cp):
+            if cp is None: return x.top.next
+            elif x.member(cp.item):
+                return _union(cp.next)
+            else:
+                return Set.Cell(cp.item, _union(cp.next))
+
+        s = Set()
+        s.top.next = _union(self.top.next)
+        return s
+</pre>
+<p> メソッド union は集合 self と x の和を計算します。実際の処理は内部関数 _union で行います。_union の引数 cp は self の連結リストです。cp.item が x に含まれていなければ、その要素を x の連結リスト x.top.next に追加します。この処理を再帰呼び出しで行っています。
+</p>
+<p> 関数 _union の引数 cp が None の場合は、x の連結リストをそのまま返します。union は第 2 引数の連結リストを共有することに注意してください。次に、cp.item が x に含まれている場合は _union を再帰呼び出しして、その返り値をそのまま返します。そうでない場合は、cp.item を新しいセルに格納して返します。これで cp.item を集合に含めることができます。
+</p>
+<p> あとは、Set() で新しい集合 s を生成し、s.top.next に _union の返り値をセットするだけです。これで集合の和を求めることができます。
+</p>
+<h4>●intersection</h4>
+<p> 次は 2 つの集合の積を求めるメソッド intersection を作ります。
+</p>
+<pre class="list">
+リスト : 集合の積を求める
+
+    def intersection(self, x):
+        def _intersection(cp):
+            if cp is None: return None
+            elif x.member(cp.item):
+                return Set.Cell(cp.item, _intersection(cp.next))
+            else:
+                return _intersection(cp.next)
+
+        s = Set()
+        s.top.next = _intersection(self.top.next)
+        return s
+</pre>
+
+<p> メソッド intersection は集合 self と x の積を計算します。実際の処理は内部関数 _intersection で行います。_intersection の引数 cp は self の連結リストです。cp.item が x に含まれている場合は、その要素を新しい集合（連結リスト）に追加します。この処理を再帰呼び出しで行っています。
+</p>
+<p> 関数 _intersection の引数 cp が None の場合は、空リスト None を返します。次に、cp.item が x に含まれている場合は cp.item を新しいセルに格納して返します。これで cp.item が集合に含まれます。そうでなければ、_intersection の返り値をそのまま返します。
+</p>
+<p> あとは、新しい集合を Set() で生成して、s.top.next に _intersection の返り値をセットするだけです。これで集合の積を求めることができます。
+</p>
+<h4>●difference</h4>
+<p> 次は集合の差を求めるメソッド difference を作ります。
+</p>
+<pre class="list">
+リスト : 集合の差を求める
+
+    def difference(self, x):
+        def _difference(cp):
+            if cp is None: return None
+            elif x.member(cp.item):
+                return _difference(cp.next)
+            else:
+                return Set.Cell(cp.item, _difference(cp.next))
+
+        s = Set()
+        s.top.next = _difference(self.top.next)
+        return s
+</pre>
+<p> メソッド difference は集合 self と x の差を計算します。実際の処理は内部関数 _difference で行います。_difference の引数 cp は self の連結リストです。cp.item が x に含まれていない場合は、その要素を新しい集合（連結リスト）に追加します。この処理を再帰呼び出しで行っています。
+</p>
+<p> 関数 _difference の引数 cp が None の場合は、空リスト None を返します。次に、cp.item が x に含まれている場合は _difference の返り値をそのまま返します。そうでなければ、cp.item を新しいセルに格納して返します。これで cp.item が集合に含まれます。
+</p>
+<p> あとは、新しい集合を Set() で生成して、s.top.next に _difference の返り値をセットするだけです。これで集合の差を求めることができます。
+</p>
+<h4>●要素の削除</h4>
+<p> 最後に要素を削除するメソッド remove を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 要素の削除
+
+    def remove(self, x):
+        def _remove(cp):
+            if cp is None: return None
+            elif cp.item == x: return cp.next
+            else: return Set.Cell(cp.item, _remove(cp.next))
+
+        self.top.next = _remove(self.top.next)
+</pre>
+<p> メソッド union で連結リストを共有しているので、remove は新しいリストを生成して返します。実際の処理は内部関数 _remove で行います。_remove の引数 cp は self の連結リストです。cp が None の場合は空リスト None を返します。これは削除する要素 x が見つからない場合です。
+</p>
+<p> 次に cp.item が x と等しい場合は、それ以降の要素を調べる必要はないので cp.next を返します。ここで、要素 cp.item が削除されます。そうでなければ、cp.item を新しいセルに格納して返します。あとは、self.top.next の値を _remove の返り値に書き換えるだけです。
+</p>
+<p> あとはとくに難しいところはないでしょう。詳細は <a href="pyalgo05.html#list1">プログラムリスト１</a> をお読みください。また、要素の個数が多くなると連結リストでは処理が遅くなってしまいます。そのような場合はハッシュ法を使うと良いでしょう。ご参考までに、Python の辞書 (dictionary) を使った実装を <a href="pyalgo05.html#list2">プログラムリスト２</a> に示します。よろしければお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは実際に実行してみましょう。次に示す簡単なテストを行ってみました。
+</p>
+<pre class="list">
+# 簡単なテスト
+if __name__ == '__main__':
+    a = Set([1,2,3,4,5])
+    b = Set([4,5,6,7,8])
+    print a
+    print b
+    c = a.union(b)
+    print c
+    d = a.intersection(b)
+    print d
+    e = a.difference(b)
+    print e
+    print a.issubset(c)
+    print c.issubset(a)
+    print a.isequal(a)
+    a.insert(1)
+    print a
+    a.insert(10)
+    print a
+    b.remove(5)
+    print b
+    print c
+</pre>
+<p> 実行結果を示します。
+</p>
+<pre>
+Set([5, 4, 3, 2, 1)]
+Set([8, 7, 6, 5, 4)]
+Set([3, 2, 1, 8, 7, 6, 5, 4)]
+Set([5, 4)]
+Set([3, 2, 1)]
+True
+False
+True
+Set([5, 4, 3, 2, 1)]
+Set([10, 5, 4, 3, 2, 1)]
+Set([8, 7, 6, 4)]
+Set([3, 2, 1, 8, 7, 6, 5, 4)]
+</pre>
+<hr>
+<h4>●グラフ</h4>
+<p> 今度は「グラフ (graph) 」というデータ構造を取り上げます。一般にグラフというと、 円グラフや折れ線グラフといった図表を思い出す人が多いと思います。数学の「グラフ理論」では、いくつかの点とそれを結ぶ線でできた図形を「グラフ」といいます。次の図を見てください。
+</p>
+<pre class="fig">
+ 頂点       辺
+  ↓        ↓
+  ●─────────●  
+  │                  │  
+  │                  │  
+  │                  │  
+  ●─────────●
+
+    図 : グラフの例
+</pre>
+<p> 上図に示すように、グラフは点とそれを接続する線から構成されています。点のことを「頂点 (vertex) 」や「節点 (node) 」と呼び、線のことを「辺 (edge) 」や「弧 (arc) 」と呼びます。また、グラフには 2 種類あって、辺に向きの無いグラフを「無向グラフ」といい、辺に向きがあるグラフを「有向グラフ」といいます。有向グラフは一方通行の道と考えればいいでしょう。 次の図を見てください。
+</p>
+<pre class="fig">
+ (1) Ａ──────────→Ｂ  有向グラフ 
+
+ (2) Ａ←─────────→Ｂ  無向グラフ
+
+        図 : 有向グラフと無向グラフ
+</pre>
+<p> たとえば、上図の (1) では A 地点から B 地点へ行くことができますが、一方通行のため B 地点から A 地点に戻ることはできません。これが有効グラフです。(2) の無効グラフでは、A 地点から B 地点へ行くことができるし、逆に B 地点から A 地点に戻ることもできます。
+</p>
+
+<p> データ間のさまざまな関係を表す場合、グラフはとても役に立ちます。たとえば、下図のように経路をグラフで表すことができます。
+</p>
+<pre class="fig">
+     Ｂ───Ｄ───Ｆ 
+   ／│      │
+ Ａ  │      │
+   ＼│      │
+     Ｃ───Ｅ───Ｇ
+
+    図 : 経路図
+</pre>
+<p> 上図ではアルファベットで頂点を表しています。この例では経路をグラフで表していますが、このほかにもいろいろな問題をグラフで表現することができます。
+</p>
+
+<h4>●隣接行列と隣接リスト</h4>
+<p> グラフをプログラムする場合、よく使われる方法に「隣接行列」と「隣接リスト」があります。隣接行列は 2 次元配列で頂点の連結を表す方法です。頂点が N 個ある場合、隣接行列は N 行 N 列の行列で表すことができます。上の経路図を隣接行列で表すと次のようになります。
+</p>
+<pre class="fig">
+   │A B C D E F G
+ ─┼─────── 
+  A│0 1 1 0 0 0 0
+  B│1 0 1 1 0 0 0
+  C│1 1 0 0 1 0 0
+  D│0 1 0 0 1 1 0
+  E│0 0 1 1 0 0 1
+  F│0 0 0 1 0 0 0
+  G│0 0 0 0 1 0 0
+
+    図 : 隣接行列
+</pre>
+<p> A に接続している頂点は B と C なので、A 行の B と C に 1 をセットし、接続していない頂点には 0 をセットします。経路が一方通行ではない無向グラフの場合は、A 列の B と C にも 1 がセットされます。これを Python でプログラムすると、次のようになります。
+</p>
+<pre class="list">
+リスト : 隣接行列
+
+adjacent = ((0, 1, 1, 0, 0, 0, 0),   # A 
+            (1, 0, 1, 1, 0, 0, 0),   # B
+            (1, 1, 0, 0, 1, 0, 0),   # C
+            (0, 1, 0, 0, 1, 1, 0),   # D
+            (0, 0, 1, 1, 0, 0, 1),   # E
+            (0, 0, 0, 1, 0, 0, 0),   # F
+            (0, 0, 0, 0, 1, 0, 0))   # G
+</pre>
+<p> 頂点 A から G を数値 0 から 6 に対応させるところがポイントです。隣接行列は 2 次元配列 (Python ではリストのリスト) で表します。このプログラムではタプルを使いました。内容は上図の隣接行列と同じです。
+</p>
+
+<p> 隣接行列の欠点は、辺の数が少ない場合でも N 行 N 列の行列が必要になることです。つまり、ほとんどの要素が 0 になってしまい、メモリを浪費してしまうのです。この欠点を補う方法に隣接リストがあります。これはつながっている頂点を格納する方法です。
+</p>
+<pre class="fig">
+ A =&gt; (B, C)
+ B =&gt; (A, C, D) 
+ C =&gt; (A, B, E)
+ D =&gt; (B, E, F)
+ E =&gt; (C, D, G)
+ F =&gt; (D)
+ G =&gt; (E)
+
+  図 : 隣接リスト
+</pre>
+<p> これを Python でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 隣接リスト
+
+adjacent = ((1, 2),    # A 
+            (0, 2, 3), # B
+            (0, 1, 4), # C
+            (1, 4, 5), # D
+            (2, 3, 6), # E
+            (3,),      # F
+            (1,))      # G
+</pre>
+<p> 隣接行列と同様に、頂点 A から G を数値 0 から 6 に対応させます。Python の場合、要素が一つしかないタプルは、要素の後ろにカンマが必要になります。ご注意ください。
+</p>
+
+<p> ところで、隣接リストにも欠点があります。たとえば、E と G が接続しているか調べるには、データを順番に調べていくしか方法がありません。このため、接続の判定に時間がかかることがあるのです。まあ、頂点に接続されている辺の数が少なければ、処理速度が極端に遅くなることはないでしょう。
+</p>
+
+<h4>●経路の探索</h4>
+<p> それでは簡単な例題として、地図上の A 地点から B 地点までの道順を求めるプログラムを作ってみましょう。「探索」にはいろいろな種類があります。たとえば、8 クイーン のようなパズルの解法も、あらゆる可能性の中から正解に行き着く手順を探すことですから、探索の一つと考えることができます。そして、探索でよく用いられる最も基本的な方法が「バックトラック (backtracking) 」なのです。もちろん、経路の探索もバックトラックで解くことができます。
+</p>
+
+<h4>●バックトラックによる探索</h4>
+<p> 経路図を再掲します。今回は隣接リストでグラフを表し、A から G までの経路を求めることにします。
+</p>
+<pre class="fig">
+     Ｂ───Ｄ───Ｆ 
+   ／│      │
+ Ａ  │      │
+   ＼│      │
+     Ｃ───Ｅ───Ｇ
+
+    図 : 経路図
+</pre>
+<p> バックトラックを再帰呼び出しで実現する場合、経路を「進む」ことを再帰呼び出しに対応させるのがポイントです。たとえば、経路を探索する関数を search としましょう。search は引数として現在地点の頂点を受け取ることにします。最初は search(A) と呼び出します。そして、A から B へ進むには search(B) と呼び出します。これで B へ進むことができます。
+</p>
+<p> それでは、A に戻るにはどうしたらいいのでしょう。search(B) は search(A) から呼び出されたので、search(B) の実行を終了すれば、呼び出し元である search(A) に戻ることができます。つまり、関数の実行を終了すれば、一つ手前の地点にバックトラックできるのです。このように再帰呼び出しを使うと、進むことと戻ることを関数呼び出しで簡単に実現することができます。
+</p>
+
+<p> それでは具体的に説明します。経路はリスト path に頂点を格納して表すことにします。経路の探索を行う関数 search は、次のように定義します。
+</p>
+<pre class="list">
+def search(goal, path):
+</pre>
+
+<p> search の第 1 引数がゴール、第 2 引数が経路を表すリストです。リストの最後尾の要素が現在地点の頂点になります。search は現在地点に隣接している頂点を一つ選び、経路を進めていきます。A から Gまでの経路を求めるには、次のように呼び出します。
+</p>
+<pre class="list">
+  # A から G までの経路を求めるK *)
+  search(6, [0])
+</pre>
+<p> search は出発点 A をリストにセットし、A に接続されている頂点を選びます。隣接リストから順番に選ぶことにすると、次の頂点は B となります。B へ進むためには、次のように search を再帰呼び出しします。
+</p>
+<pre class="list">
+  # B へ進む時の再帰呼び出し
+  search(6, [0, 1]);
+</pre>
+<p> この関数の実行を終了すると、呼び出し元の関数である頂点 A の処理に戻ります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 経路の探索
+
+def search(goal, path):
+    n = path[len(path) - 1]
+    if n == goal:
+        print path
+    else:
+        for x in adjacent[n]:
+            if x not in path:
+                path.append(x)
+                search(goal, path)
+                path.pop()
+</pre>
+<p> 関数 search を見てください。最初に path の最後尾の要素を取り出して変数 n にセットします。これが現在地点になります。そして、n がゴール地点 goal かチェックします。これが再帰呼び出しの停止条件になります。ゴールに到達したら print で経路 path を表示します。
+</p>
+<p> ここで探索を終了することもできますが、バックトラックすることで全ての経路を見つけることができます。パズルを解く場合、解の総数を求めることが多いので、全ての解をもれなく探索する必要があります。バックトラックを使えば、このような要求も満たすことができます。
+</p>
+<p> ゴールしていない場合は、隣接リストから次の頂点を選びます。隣接リストから順番に頂点を取り出して、変数 x にセットします。このとき、経路に含まれている頂点を選んではいけません。そうしないと、同じ道をぐるぐると回る巡回経路が発生し、ゴールまでたどり着くことができなくなります。not in 演算子で path 内に頂点 x がないことを確認します。それから、append で path に x を追加して search を再帰呼び出しします。再帰呼び出しのあと、pop で x を削除することをお忘れなく。
+</p>
+
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+[0, 1, 2, 4, 6]
+[0, 1, 3, 4, 6]
+[0, 2, 1, 3, 4, 6]
+[0, 2, 4, 6]
+</pre>
+<p> 4 通りの経路を見つけることができました。バックトラックによる探索は、経路を先へ先へ進めるので、「縦形探索」とか「深さ優先探索 (depth first search) 」と呼ばれています。このため、結果を見てもわかるように、最初に見つかる経路が最短経路とは限りません。最短経路を求めるのに適したアルゴリズムが「幅優先探索 (breadth first search) 」です。
+</p>
+
+<h4>●幅優先探索</h4>
+<p> バックトラックによる探索は「深さ優先探索」や「縦形探索」とも呼ばれるように、一つの経路を先へ先へと進めていきます。このため最初に見つかる経路が最短経路であるとは限りません。幅優先探索は全ての経路について平行に探索を進めていくため、最初に見つかる経路が最短経路となります。それでは、同じ経路図を使って幅優先探索を具体的に説明しましょう。
+</p>
+<p> 幅優先探索の様子を下図に示します。
+</p>
+<pre class="fig">
+    [A] ─┬─ [A,B] ─┬─ [A,B,C]  ・・・・
+          │           └─ [A,B,D] ─┬─ [A,B,D,F] 行き止まり  
+          │                          └─ [A,B,D,E]
+          └─ [A,C] ─┬─ [A,C,B]  ・・・・
+                       └─ [A,C,E] ─┬─ [A,C,E,G] GOAL
+                                      └─ [A,C,E,D] 
+
+（出発点）    （２節点）  （３節点）      （４節点）
+
+                図 : 幅優先探索
+</pre>
+<p> まず、出発点 A から一つ進んだ経路 (2 節点) を全て求めます。この場合は、[A, B] と [A, C] の 2 つあり、これを全て記憶しておきます。次に、これらの経路から一つ進めた経路 (3 節点) を全て求めます。経路 [A, B] は [A, B, C] と [A, B, D] へ進めることができますね。ほかの経路 [A, C] も同様に進めて、全ての経路を記憶します。あとはこの作業をゴールに達するまで繰り返せばいいのです。
+</p>
+
+<p> 上図では、4 節点の経路 [A, C, E, G] でゴールに達していることがわかります。このように幅優先探索では、最初に見つかった経路が最短距離 (または最小手数) となるのです。この性質は、全ての経路を平行に進めていく探索順序から考えれば当然のことといえるでしょう。このことからバックトラックの縦形探索に対して、幅優先探索は「横形探索」と呼ばれます。このあとも探索を繰り返せば全ての経路を求めることができます。
+</p>
+
+<p> 完成までの最小手数を求めるパズルを解く場合、幅優先探索を使ってみるといいでしょう。ただし、探索を進めるにしたがって、記憶しておかなければならないデータの総数が爆発的に増加する、つまりメモリを大量消費することに注意してください。
+</p>
+
+<p> 上図の場合ではメモリを大量消費することはありませんが、問題によってはマシンに搭載されているメモリが不足するため、幅優先探索を実行できない場合もあるでしょう。したがって、幅優先探索を使う場合は、メモリの消費量を抑える工夫も必要になります。
+</p>
+
+<h4>●経路の管理</h4>
+<p> 経路の管理はキューを使うと簡単です。幅優先探索でのキューの動作を下図に示します。
+</p>
+<pre class="fig">
+  (1)     ───── QUEUE  ──────
+    ┌── [A]
+    │    ───────────────
+    │
+    └─→ キューからデータを取り出す
+
+  (2)     ───── QUEUE  ──────
+                                      ←─┐
+          ───────────────  │
+                                          │
+          [A] の経路を進め    [A,B] ───┤
+          キューに追加する    [A,C] ───┘
+
+   (3)     ───── QUEUE  ──────
+    ┌── [A,B] [A,C]                  ←─┐
+    │    ───────────────    │
+    │                                      │
+    └─→ [A,B] の経路を進めキューに追加   │
+           [A,B,C] [A,B,D]  ────────┘
+
+  (4)     ───── QUEUE  ──────
+    ┌── [A,C] [A,B,C] [A,B,D]        ←─┐
+    │    ───────────────    │
+    │                                      │
+    └─→ キューに経路がある間繰り返す ──┘  
+
+        図 : 幅優先探索とキューの動作
+</pre>
+<p> 最初は、(1) のように出発点をキューにセットしておきます。次に、キューから経路を取り出し、(2) のように経路 [A] を一つ進めて、経路 [A, B] [A, C] を作り、それをキューに追加します。(3) では、経路 [A, B] を取り出して、一つ進めた経路 [A, B, C] と [A, B, D] をキューに追加します。あとはキューに経路がある間、処理を繰り返せばいいわけです。
+</p>
+<p> キューは先入れ先出し (FIFO) の性質を持つデータ構造です。距離の短い経路から順番に処理されるため、幅優先探索として機能するわけです。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。経路図は深さ優先探索と同じく隣接リスト (1) で表します。今回は簡単な例題ということで、キューはリストで表すことにします。キューにデータを追加する操作 (enqueue) は append で、キューからデータを取り出す操作 (dequeue) は pop(0) で代用します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 幅優先探索
+
+def bf_search(start, goal):
+    q = [[start]]
+    while len(q) &gt; 0:        # &lt; を &gt; に修正 (2011/04/10)
+        # dequeu
+        path = q.pop(0)
+        n = path[len(path) - 1]
+        if n == goal:
+            print path
+        else:
+            for x in adjacent[n]:
+                if x not in path:
+                    new_path = path[:]
+                    new_path.append(x)
+                    # enqueue
+                    q.append(new_path)
+</pre>
+<p> 最初にキュー q を初期化します。これはスタート地点の経路 [start] を追加するだけです。あとは、キューにデータがある間、経路を取り出して処理を行います。まず、pop(0) で先頭の経路を取り出して変数 path にセットします。次に、変数 n に現在地点をセットします。もし、n が goal と等しい場合は、print で経路 path を表示します。
+</p>
+
+<p> そうでなければ、経路を一つ進めます。この処理は深さ優先探索とほぼ同じです。ただし、新しい経路 new_path が必要になるので、path[:] で経路をコピーしていることに注意してください。それから、append で new_path に x を追加して、それを q に追加します。これで全ての経路を求めることができます。
+</p>
+
+<p> それでは、実際に実行してみましょう。
+</p>
+<pre>
+[0, 2, 4, 6]
+[0, 1, 2, 4, 6]
+[0, 1, 3, 4, 6]
+[0, 2, 1, 3, 4, 6]
+</pre>
+<p> 結果を見ればおわかりのように、最初に見つかる経路が最短で、最後に見つかる経路が最長となります。当然ですが、経路の総数は 4 通りとなります。
+</p>
+
+<h4>●反復深化</h4>
+<p> 幅優先探索は最短手数を求めるのに適したアルゴリズムですが、生成する局面数が多くなると大量のメモリを必要とします。このため、メモリが不足するときは、幅優先探索を使うことができません。深さ優先探索の場合、メモリの消費量は少ないのですが、最初に見つかる解が最短手数とは限らないという問題点があります。
+</p>
+
+<p> それでは、大量のメモリを使わずに最短手数を求める方法はないのでしょうか。実は、とても簡単な方法があるのです。それは、深さ優先探索の「深さ」に上限値を設定し、解が見つかるまで上限値を段階的に増やしていく、という方法です。
+</p>
+
+<p> たとえば、1 手で解が見つからない場合は、2 手までを探索し、それでも見つからない場合は 3 手までを探索する、というように制限値を 1 手ずつ増やしていくわけです。このアルゴリズムを「反復深化 (iterative deeping) 」といいます。
+</p>
+
+<p> 反復深化は最短手数を求めることができるアルゴリズムですが、幅優先探索と違って局面を保存する必要が無いため、必要となるメモリは深さ優先探索と同程度で済みます。また、プログラムも深さ優先探索と同じくらい簡単に作成することができます。ただし、同じ探索を何度も繰り返すため実行時間が増大するという欠点があります。ようするに、使用するメモリは少ないが実行時間が長くなるアルゴリズムなのです。
+</p>
+
+<h4>●反復深化のプログラム</h4>
+<p> それでは、同じ経路図を使って反復深化を具体的に説明しましょう。反復深化のプログラムはとても簡単です。設定した上限値まで深さ優先探索を行う関数を作り、上限値を１手ずつ増やしてその関数を呼び出せばいいのです。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 反復深化
+
+def id_search(limit, goal, path):
+    n = len(path)
+    m = path[n - 1]
+    if n == limit:
+        if m == goal: print path
+    else:
+        for x in adjacent[m]:
+            if x not in path:
+                path.append(x)
+                id_search(limit, goal, path)
+                path.pop()
+
+# 実行
+for x in range(1, 8):
+    print x, 'moves'
+    id_search(x, 6, [0])
+</pre>
+<p> 関数 id_search の引数 limit が上限値を表します。関数 id_search は limit まで深さ優先探索を行います。変数 n が経路の長さを表し、これが上限値 limit に達したら探索を打ち切ります。このとき、ゴールに到達したかチェックします。あとは、limit の値を増やしながら id_search を呼び出せばいいわけです。それでは実行結果を示しましょう。
+</p>
+<pre>
+1 moves
+2 moves
+3 moves
+4 moves
+[0, 2, 4, 6]
+5 moves
+[0, 1, 2, 4, 6]
+[0, 1, 3, 4, 6]
+6 moves
+[0, 2, 1, 3, 4, 6]
+7 moves
+</pre>
+<p> 結果を見ればおわかりのように、最初に見つかる解が最短手数になります。このプログラムでは全ての経路を求めましたが、最短手数を求めるだけでよい場合は、解が見つかった時点で探索を終了すればいいでしょう。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+#
+# set.py : Set (linked list version)
+#
+#          Copyright (C) 2006 Makoto Hiroi
+#
+class Set:
+    class Cell:
+        def __init__(self, x, next = None):
+            self.item = x
+            self.next = next
+    
+    def __init__(self, data = None):
+        self.top = Set.Cell(None)   # Header Cell
+        if data:
+            for x in data:
+                if not self.member(x):
+                    self.top.next = Set.Cell(x, self.top.next)
+
+    def member(self, x):
+        cp = self.top.next
+        while cp:
+            if cp.item == x: return True
+            cp = cp.next
+        return False
+
+    def issubset(self, x):
+        cp = self.top.next
+        while cp:
+            if not x.member(cp.item): return False
+            cp = cp.next
+        return True
+
+    def isequal(self, x):
+        return self.issubset(x) and x.issubset(self)
+    
+    def insert(self, x):
+        if not self.member(x):
+            self.top.next = Set.Cell(x, self.top.next)
+
+    def remove(self, x):
+        def _remove(cp):
+            if cp is None: return None
+            elif cp.item == x: return cp.next
+            else: return Set.Cell(cp.item, _remove(cp.next))
+
+        self.top.next = _remove(self.top.next)
+
+    def union(self, x):
+        def _union(cp):
+            if cp is None: return x.top.next
+            elif x.member(cp.item):
+                return _union(cp.next)
+            else:
+                return Set.Cell(cp.item, _union(cp.next))
+
+        s = Set()
+        s.top.next = _union(self.top.next)
+        return s
+
+    def intersection(self, x):
+        def _intersection(cp):
+            if cp is None: return None
+            elif x.member(cp.item):
+                return Set.Cell(cp.item, _intersection(cp.next))
+            else:
+                return _intersection(cp.next)
+
+        s = Set()
+        s.top.next = _intersection(self.top.next)
+        return s
+
+    def difference(self, x):
+        def _difference(cp):
+            if cp is None: return None
+            elif x.member(cp.item):
+                return _difference(cp.next)
+            else:
+                return Set.Cell(cp.item, _difference(cp.next))
+
+        s = Set()
+        s.top.next = _difference(self.top.next)
+        return s
+
+    def traverse(self):
+        cp = self.top.next
+        while cp:
+            yield cp.item
+            cp = cp.next
+    
+    def __len__(self):
+        n = 0
+        cp = self.top.next
+        while cp:
+            n += 1
+            cp = cp.next
+        return n
+    
+    def __str__(self):
+        cp = self.top.next
+        if cp is None: return 'Set([])'
+        buff = 'Set(['
+        while cp.next:
+            buff += '%s, ' % cp.item
+            cp = cp.next
+        buff += '%s)]' % cp.item
+        return buff
+
+# test
+if __name__ == '__main__':
+    a = Set([1,2,3,4,5])
+    b = Set([4,5,6,7,8])
+    print a
+    print b
+    c = a.union(b)
+    print c
+    d = a.intersection(b)
+    print d
+    e = a.difference(b)
+    print e
+    print a.issubset(c)
+    print c.issubset(a)
+    print a.isequal(a)
+    a.insert(1)
+    print a
+    a.insert(10)
+    print a
+    b.remove(5)
+    print b
+    print c
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+#
+# set.py : Set (dictionary version)
+#
+#          Copyright (C) 2006 Makoto Hiroi
+#
+class Set:
+    def __init__(self, data = None):
+        self.buff = {}
+        if data:
+            for x in data:
+                if x not in self.buff: self.buff[x] = True
+
+    def member(self, x): return x in self.buff
+
+    def issubset(self, x):
+        if len(self.buff) &gt; len(x.buff): return False
+        for y in self.buff:
+            if not x.member(y): return False
+        return True
+
+    def isequal(self, x):
+        return self.buff == x.buff
+
+    def insert(self, x):
+        if not self.member(x): self.buff[x] = True
+
+    def remove(self, x):
+        if x in self.buff: del self.buff[x]
+
+    def union(self, x):
+        s = Set(self.buff)
+        for y in x.buff: s.insert(y)
+        return s
+
+    def intersection(self, x):
+        s = Set()
+        for y in self.buff:
+            if y in x.buff: s.buff[y] = True
+        return s
+
+    def difference(self, x):
+        s = Set()
+        for y in self.buff:
+            if y not in x.buff: s.buff[y] = True
+        return s
+
+    def traverse(self):
+        for x in self.buff.keys():
+            yield x
+
+    def __len__(self): return len(self.buff)
+
+    def __str__(self):
+        return 'Set(%s)' % self.buff.keys()
+
+# test
+if __name__ == '__main__':
+    a = Set([1,2,3,4,5])
+    b = Set([4,5,6,7,8])
+    print a
+    print b
+    c = a.union(b)
+    print c
+    d = a.intersection(b)
+    print d
+    e = a.difference(b)
+    print e
+    print a.issubset(c)
+    print c.issubset(a)
+    print a.isequal(a)
+    a.insert(1)
+    print a
+    a.insert(10)
+    print a
+    b.remove(5)
+    print b
+    print c
+    print len(c)
+    for x in c.traverse(): print x
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2006 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo04.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo06.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

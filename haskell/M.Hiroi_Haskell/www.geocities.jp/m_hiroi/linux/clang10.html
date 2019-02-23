@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ言語プログラミング超入門</title>
+  <meta name="description" content="Ｃ言語,Ｃ言語入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881808</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ言語プログラミング超入門</h2>
+<div class="small">
+[ <a href="clang09.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang11.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>ファイル入出力</h3>
+<p> 今回はＣ言語のファイル入出力について説明します。プログラムの典型的な動作は、外部から入力されたデータを処理し、その結果を外部へ出力することです。外部とのインターフェースはいろいろありますが、基本となるのがファイル入出力です。近代的なプログラミング言語では、「ストリーム (stream) 」というデータを使ってファイルにアクセスすることが多いようです。辞書を引いてみると stream は「流れ」や「小川」という意味です。プログラミング言語の場合は、ファイルとプログラムの間でやりとりされるデータの流れ、という意味で使われているようです。
+</p>
+
+<p> Unix 系 OS の場合、ファイルは「ファイル記述子 (file descriptor) 」と呼ばれる番号を使って管理しています。ファイル記述子はファイルディスクプリタとかファイルハンドルと呼ばれることもあります。Unix 系 OS ではファイル記述子を使って入出力を行うシステムコールが用意されていて、Ｃ言語から直接呼び出すことができます。これを「低水準入出力関数」といいます。
+</p>
+<p> 低水準入出力関数は使い勝手が悪いので、Ｃ言語の標準ライブラリ (stdio.h) には「高水準入出力関数」が用意されています。高水準入出力関数は「ファイル構造体 (FILE) 」というデータを介してファイルにアクセスします。この FILE をストリームを表すデータ型と考えてください。FILE はファイルと一対一に対応していて、ファイルからデータを入力する場合は、FILE を経由してデータが渡されます。逆に、ファイルへデータを出力するときも、FILE を経由して行われます。
+</p>
+<p> ところで、高水準入出力関数は引数にファイル構造体へのポインタを受け取ります。本稿ではファイル構造体へのポインタを「ファイルポインタ」と記述することにします。ファイルポインタとストリームを同じものと考えてもらってかまいません。
+</p>
+
+<h4>●標準入出力</h4>
+<p> 通常のファイルはファイルポインタを生成しないとアクセスすることはできません。ただし、標準入出力はプログラムの起動時にファイルポインタが自動的に生成されるので、簡単に利用することができます。一般に、キーボードからの入力を「標準入力」、画面への出力を「標準出力」といいます。下表に標準入出力を表す名前を示します。
+<table border=1>
+<caption>表 : 標準入出力</caption>
+<thead>
+  <tr><th>名前</th><th>ファイル</th></tr>
+</thead>
+<tbody>
+  <tr><td>stdin  </td><td>標準入力</td></tr>
+  <tr><td>stdout </td><td>標準出力</td></tr>
+  <tr><td>stderr </td><td>標準エラー出力</td></tr>
+</tbody>
+</table>
+
+<p> ファイルのアクセスは標準入出力を使うと簡単です。今まで使ってきた関数 printf はデータを変換して画面に表示するものでした。1 文字ずつ入出力を行う場合は関数 getchar, putchar を使うと簡単です。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+int getchar(void);
+int putchar(int c);
+</pre>
+<p> getchar の返り値は標準入力から読み込んだ文字 (0 - 255 の整数値) です。失敗した場合は EOF (-1) を返します。EOF はマクロ記号で、End of file (ファイルの終了) を表します。また、入出力の操作でエラーが発生したこと表すためにも使われます。putchar の返り値は出力した文字 c で、エラーが発生した場合は EOF を返します。
+</p>
+<p> 簡単な例として、標準入力からデータを読み込み、それをそのまま標準出力へ書き込むプログラムを作ってみましょう。
+</p>
+<pre class="list">
+リスト : mycat.c
+
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+  int c;
+  while ((c = getchar()) != EOF) putchar(c);
+  return 0;
+}
+</pre>
+<p> プログラムはとても簡単です。getchar で標準入力から 1 文字読み込み、それが EOF でなければ putchar で画面に表示するだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./mycat
+hello, world  &lt;-- 入力
+hello, world
+foo bar baz   &lt;-- 入力
+foo bar baz   &lt;-- Ctrl-D を入力
+mhiroi@mhiroi-VirtualBox:~/clang$ ./mycat &lt; mycat.c &gt; foo.txt
+mhiroi@mhiroi-VirtualBox:~/clang$ ./mycat &lt; foo.txt
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+  int c;
+  while ((c = getchar()) != EOF) putchar(c);
+  return 0;
+}
+</pre>
+<p> このような簡単なプログラムでも、シェルのリダイレクトと組み合わせれば、ファイルの表示やコピーを行うことができます。
+</p>
+<h4>●行単位の入出力</h4>
+<p> 文字単位ではなく、行単位で入出力を行う関数も用意されています。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+char *gets(char *buff);       // C11 で廃止
+int  puts(const char *buff);
+</pre>
+<p> 関数 gets は標準入力からデータを読み込み、それをバッファ buff に格納します。ただし、gets はバッファのオーバーランを考慮していないので、昔から使ってはいけない関数とされています。最新の規格 (C11) では廃止されたようです。関数 puts は文字列 buff を画面に表示します。成功した場合は 0 以上の整数値を返し、エラーが発生した場合は EOF を返します。
+</p>
+<p> 文字列の入力は関数 fgets を使いましょう。
+</p>
+<pre class="item">
+char *fgets(char *buff, int n, FILE *fp);
+</pre>
+<p> 引数 buff が文字列を格納するバッファ、n がバッファの大きさ、fp が入力ファイルポインタです。fgets は fp から文字を読み込みんでバッファに格納します。最大で n - 1 文字、またはファイルの終了か改行文字まで読み込みます。最後にヌル文字を付加します。返り値はバッファの先頭アドレスで、読み込みに失敗した場合は NULL を返します。
+</p>
+<p> なお、puts は最後に改行文字を付加して出力します。fgets は改行文字を読み込んでバッファにセットします。fgets で読み込んだ文字列をそのまま puts で出力すると改行が 2 回行われることに注意してください。
+</p>
+<p> それでは、fgets と puts を使って mycat.c を書き直してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : mycat2.c
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+
+#define N 256
+
+char *chop(char *buff)
+{
+  char *p = strchr(buff, '\n')
+  if (p != NULL) *p = '\0';
+  return buff;
+}
+
+int main(void)
+{
+  char buff[N];
+  while (fgets(buff, N, stdin) != NULL)
+    puts(chop(buff));   // printf("%s", buff); のほうが簡単
+  return 0;
+}
+</pre>
+<p> fgets で stdin (標準入力) から 1 行読み込み、それを puts で出力します。このとき、末尾の改行文字を関数 chop で取り除きます。なお、このプログラムでは puts を使うよりも printf の変換指定子 %s を使ったほうが簡単でしょう。
+</p>
+
+
+<h4>●ファイルのアクセス方法</h4>
+<p> 標準入出力を使わずにファイルにアクセスする場合、次の 3 つの操作が基本になります。
+</p>
+<ol>
+  <li>アクセスするファイルをオープンする
+  <li>入出力関数を使ってファイルを読み書きする。
+  <li>ファイルをクローズする。
+</ol>
+
+<p> 「ファイルをオープンする」とは、アクセスするファイルを指定して、それと一対一に対応するファイルポインタを生成することです。入出力関数は、そのファイルポインタを経由してファイルにアクセスします。
+</p>
+<p> ファイルをオープンするには関数 fopen を使います。
+</p>
+<PRE class="item">
+&lt;stdio.h&gt;
+FILE *fopen(const char *filename, const char *mode);
+</PRE>
+<p> 関数 fopen はファイル filename をアクセスモード mode でオープンします。アクセスモードの種類を下表に示します。
+</p>
+<table border=1>
+<caption>表：fopen のアクセスモード</caption>
+<thead>
+  <tr><th>mode</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>r</td><td>読み出し専用でオープンする。ファイルが存在しないとエラーになる。</td></tr>
+  <tr><td>r+</td><td>読み書き両用でオープンする。ファイルが存在しないとエラーになる。</td></tr>
+  <tr><td>w</td><td>書き込み専用でオープンする。すでにファイルが存在していれば内容を削除し、<br>ファイルがなければ新しいファイルを作成する。</td></tr>
+  <tr><td>w+</td><td>読み書き両用でオープンする。すでにファイルが存在していれば内容を削除し、<br>ファイルがなければ新しいファイルを作成する。</td></tr>
+  <tr><td>a</td><td>書き込み専用でオープンする。データはファイルの最後に追加される。<br>ファイルがなければ新しいファイルを作成する。</td></tr>
+  <tr><td>a+</td><td>読み書き両用でオープンする。データはファイルの最後に追加される。<br>ファイルがなければ新しいファイルを作成する。</td></tr>
+</tbody>
+</table>
+<p> このようなアクセスモードは初めてという方は、とりあえずリードオープン ( r ) とライトオープン ( w ) を覚えておけば十分です。リードオープンの場合、実際にファイルが存在しないとエラーになります。ライトオープンの場合、同名のファイルがあるとその内容は削除 (上書き) されるので注意してください。
+</p>
+<p> fopen はオープンしたファイルに対応するファイルポインタを返します。オープンに失敗した場合は NULL を返します。オープンしたファイルにアクセスするときは、このファイルポインタを指定します。通常、fopen が返したファイルポインタを変数に格納して、ファイルを操作する入出力関数に渡します。
+</p>
+<p> オープンしたファイルは必ずクローズしてください。それを行う関数が fclose です。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+int fclose(FILE *fp);
+</pre>
+<p> 正常にファイルをクローズした場合、fclose は 0 を返し、失敗した場合は EOF を返します。
+</p>
+<p> 簡単な使用例を示します。
+<pre class="list">
+リスト : ファイルのオープンとクローズ
+
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+  FILE *in = fopen("testin.txt", "r");
+  if (in == NULL) {
+    fprintf(stderr, "testin.txt が見つかりません\n");
+    return 1;
+  }
+  FILE *out = fopen("testout.txt", "w");
+  if (out == NULL) {
+    fprintf(stderr, "testout.txt をライトオープンできません\n");
+    return 1;
+  }
+  int c;
+  while ((c = fgetc(in)) != EOF)
+    fputc(c, out);
+  fclose(out);
+  fclose(in);
+  return 0;
+}
+</pre>
+<p> 最初に testin.txt をリードモードでオープンします。変数 in が NULL の場合、fprintf で stderr にエラーメッセージを出力して、プログラムを異常終了します。fprintf は第 1 引数に出力先のファイルポインタを指定します。あとは printf と同じです。次に、出力先のファイルをライトモードでオープンします。オープンできない場合はエラーメッセージを出力して異常終了します。
+</p>
+<P> あとは while ループで testin.txt からデータを読み込み、それを testout.txt へ書き込みます。fgetc と fputc はバイト単位で入出力を行うライブラリ関数です。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+int fgetc(FILE *fp);
+int fputc(int c, FILE *fp);
+</pre>
+<p> fgetc はファイルポインタ fp からデータを 1 バイト (値は 0 - 255) 読み込んで返します。ファイルの終了またはエラーが発生した場合は EOF を返します。fputc は引数 c (値は 0 - 255) をファイルポインタ fp に出力します。返り値は出力した値で、エラーが発生した場合は EOF を返します。
+</p>
+<p> 最後に fclose でファイルをクローズします。これで testin.txt を testout.txt にコピーすることができます。
+</p>
+<h4>●改行文字の取り扱い</h4>
+<p> 一般に、テキストファイルの「行」は改行文字で区切られます。改行文字は OS によって異なります。'\n' (0x0a) までを 1 行とする仕様は Unix 系 OS で、Windows は '\r\n' (0x0d, 0x0a) の 2 バイトで改行を表します。
+</p>
+<p> この違いを吸収するため、Window 用のＣ言語ではファイルのアクセスモードに「テキストモード」と「バイナリモード」が用意されています。次に示すように、テキストモードでは改行コードの変換が行われます。
+</p>
+<pre class="item">
+読み込み時： '\r\n' ─→  '\n'
+書き込み時： '\n'   ─→  '\r\n'
+</pre>
+<p> バイナリモードの場合、改行コードの変換は行われません。Unix 系 OS 用のＣ言語では、テキストモードとバイナリモードに違いはありません。すべてバイナリモードとして扱われます。
+</p>
+
+<h4>●コマンドライン引数の取得</h4>
+<p> Ｃ言語の場合、次のように関数 main の引数を指定することができます。
+</p>
+<pre class="item">
+int main(int argc, char *argv[]); 
+</pre>
+<p> argv には実行したコマンド名とコマンドラインで与えられた引数、argc には argv に格納された要素数が渡されます。簡単な例を示しましょう。
+</p>
+
+<PRE class="list">
+リスト : コマンドライン引数の表示 (sample100.c)
+
+#include &lt;stdio.h&gt;
+
+int main(int argc, char *argv[])
+{
+  for (int i = 0; i &lt; argc; i++)
+    printf("%s\n", argv[i]);
+  return 0;
+}
+</pre>
+<P> sample100.c は変数 argv の内容を表示するだけです。3 つの引数を与えて起動すると、次のように表示されます。
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample100 foo bar baz
+./sample100
+foo
+bar
+baz
+</pre>
+
+<p> argv[0] には実行したコマンド名 (./sample100) がセットされるので、argc はコマンド名と引数の個数を足した値 4 になります。
+</p>
+<p> 簡単な例として、複数のファイルを連結するコマンド concat を作ってみましょう。
+</p>
+<pre class="list">
+リスト : ファイルの表示 (concat.c)
+
+#include &lt;stdio.h&gt;
+
+void cat(char *filename)
+{
+  FILE *fp = fopen(filename, "r");
+  if (fp != NULL) {
+    int c;
+    while ((c = fgetc(fp)) != EOF) fputc(c, stdout);
+    fclose(fp);
+  }
+}
+
+int main(int argc, char *argv[])
+{
+  for (int i = 1; i &lt; argc; i++)
+    cat(argv[i]);
+  return 0;
+}
+</pre>
+<p> for ループで argv からファイル名を取得して関数 cat を呼び出します。cat は filename をリードモードでオープンします。ファイルが見つからない場合は無視して、何も出力しないことにします。あとは、while ループで 1 文字読み込み、それを stoput に出力します。最後にファイルをクローズします。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ cat &gt; foo.txt
+foo 
+mhiroi@mhiroi-VirtualBox:~/clang$ cat &gt; bar.txt
+bar
+mhiroi@mhiroi-VirtualBox:~/clang$ cat &gt; baz.txt
+baz
+mhiroi@mhiroi-VirtualBox:~/clang$ ./concat foo.txt bar.txt baz.txt 
+foo
+bar
+baz
+</pre>
+<h4>●fread と fwrite</h4>
+<p> 文字 (バイト) や行以外の単位で入出力を行う関数に fread と fwrite があります。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+int fread(void *buff, size_t size, size_t n, FILE *fp);
+int fwrite(void *buff, size_t size, size_t n, FILE *fp);
+
+引数 buff : データを格納するバッファ
+     size : データ 1 要素の大きさ
+     n    : データの個数
+     fp   : ファイルポインタ
+</pre>
+
+<p> fread の返り値は読み込んだ要素の個数です。指定した個数だけ読めない場合、リードエラーが発生したかファイルの終わりかのどちらかです。fwrite の返り値はファイルに書き込んだデータの個数です。指定した個数分書き込めない場合はライトエラーが発生したときです。入出力関数で発生したエラーのチェック方法はあとで説明します。
+</p>
+<p> 簡単な例を示しましょう。乱数で生成した整数をバッファに格納し、それをファイルにセーブします。そのあと、ファイルからデータを読み込みます。
+</p>
+<pre class="list">
+リスト : sample101.c
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+
+#define N 8
+
+int main(int argc, char *argv[])
+{
+  int buff[N];
+  if (argc &lt; 2) {
+    fprintf(stderr, "ファイル名を指定してください\n");
+    return 1;
+  }
+  // データの生成
+  for (int i = 0; i &lt; N; i++) {
+    buff[i] = rand();
+    printf("%d ", buff[i]);
+  }
+  printf("\n");
+  // データの出力
+  FILE *out = fopen(argv[1], "w");
+  if (out == NULL) {
+    fprintf(stderr, "%s: write open error\n", argv[1]);
+    return 1;
+  }
+  printf("data write\n");
+  fwrite(buff, sizeof(int), N, out);
+  fclose(out);
+  // データの入力
+  FILE *in = fopen(argv[1], "r");
+  if (in == NULL) {
+    fprintf(stderr, "%s: read open error\n", argv[1]);
+    return 1;
+  }
+  printf("data read\n");
+  fread(buff, sizeof(int), N, in);
+  fclose(in);
+  for (int i = 0; i &lt; N; i++)
+    printf("%d ", buff[i]);
+  printf("\n");
+  return 0;
+}
+</pre>
+<p> プログラムは特に難しいところはないと思います。それでは実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample101 test.dat
+1804289383 846930886 1681692777 1714636915 1957747793 424238335 719885386 1649760492 
+data write
+data read
+1804289383 846930886 1681692777 1714636915 1957747793 424238335 719885386 1649760492 
+</pre>
+<p> 正常に動作していますね。ただし、このプログラムで作成したデータを他の処理系に持っていくときには「エンディアン」に注意する必要があります。
+</p>
+<h4>●エンディアンとは？</h4>
+<p> エンディアンとは、整数値をメモリに格納するときのバイトの並び順のことをいいます。例えば、0x12345678 のデータをメモリにセットする場合、x86 系と他の CPU (古いですが MC680x0 など) では下図に示すように順番が逆になります。
+</p>
+<pre class="fig">
+    0x12345678 をメモリに格納する場合
+
+ アドレス Low           High
+            [12|34|56|78]        680x0 系の場合
+
+
+ アドレス Low           High
+            [78|56|34|12]        x86 系の場合
+
+
+                図 : エンディアンの違い
+</PRE>
+<p> 大きな位から順番に詰めていく方式を「ビッグエンディアン」といい、小さな位から詰めていく方法を「リトルエンディアン」といいます。エンディアンは CPU によって異なり、モトローラの MC680x0 はビッグエンディアンで、インテル系の x86 は逆にリトルエンディアンになります。エンディアンが異なると、fread だけではデータを正しく読むことができません。ご注意くださいませ。
+</p>
+
+<h4>●書式付き出力関数</h4>
+<p> printf のように、データを整形して出力する関数のことを書式付き出力関数といいます。printf 以外にも次の関数が標準ライブラリに用意されています。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+int printf(const char *format, 引数, ...);
+int fprintf(FILE *fp, const char *format, 引数, ...);
+int sprintf(char *buff, const char *format, 引数, ,,,);
+</pre>
+<p> printf は標準出力に、fprint はファイルポインタ fp に出力します。sprintf は第 1 引数の配列 buff に書き込みます。返り値は出力したバイト数で、エラーが発生した場合は負の値を返します。なお、sprintf はバッファのオーバーランを考慮していません。このため、最近の規格 (C99) では、バッファの大きさを指定する関数 snprintf が追加されています。
+</p>
+<pre class="item">
+int snprintf(char *buff, size_t n, const char *format, 引数, ...);
+</pre>
+<p> 第 2 引数 n でバッファの大きさを指定します。sprintf と違って、バッファをオーバーランすることはありません。
+</p>
+<p> 引数の文字列 format を書式文字列といい、出力に関する様々な指定を行います。書式文字列はそのまま文字列として扱われますが、文字列の途中にパーセント % が表れると、その後ろの文字を変換指示子として解釈し、引数に与えられたデータをその指示に従って表示します。
+</p>
+<p> それから、% と変換指示子の間にオプションでいろいろな設定を行うことができます。
+<ol>
+  <li> フラグ
+  <li> 最小フィールド幅
+  <li> 精度
+  <li> 変換修飾子
+</ol>
+<p> これらのオプションは変換指示子によって動作が異なる場合があります。オプションは省略することができますが、順番を変更することはできません。簡単な例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : 整数の出力 (sample102.c)
+
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+  printf("%d, %x, %o\n", 100, 100, 100);
+  printf("[%d]\n", 10);
+  printf("[%4d]\n", 10);
+  printf("[%4d]\n", 100000);
+  printf("[%4d]\n", 123456);
+  printf("[%-8d]\n", 123456);
+  printf("[%08d]\n", 123456);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample102
+100, 64, 144
+[10]
+[  10]
+[100000]
+[123456]
+[123456  ]
+[00123456]
+</pre>
+<p> % の次の文字 d, x, o が変換指示子です。これらの指示子は整数値を表示する働きをします。例が示すように、d は 10 進数、x は 16 進数、o は 8 進数で表示します。変換指示子の個数と与えるデータの数が合わないとエラーになるので注意してください。% を出力したい場合は %% と続けて書きます。
+</p>
+<p> 整数値を表示する変換指示子は、データを表示するフィールド幅を指定することができます。最初の例がフィールド幅を指定しない場合で、次の例がフィールド幅を 4 に指定した場合です。10 ではフィールド幅に満たないので、右詰めに出力されています。もし、フィールド幅に収まらない場合は、指定を無視して数値を出力します。フィールド幅を 0 で埋めたい場合は、フラグに 0 を指定します。左詰めにしたい場合は、フラグに - を指定します。
+</p>
+<p> なお、long long int を表示したい場合は変換修飾子 ll を使って、%lld のように指定します。
+</p>
+<p> s 変換子は文字列を表示します。s 変換子の場合でも、フィールド幅を指定することができます。簡単な例を示しましょう。
+</p>
+<PRE class="list">
+リスト : 文字列の表示 (sample103.c)
+
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+  char a[] = "hello, world";
+  printf("[%s]\n", a);
+  printf("[%20s]\n", a);
+  printf("[%-20s]\n", a);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample103
+[hello, world]
+[        hello, world]
+[hello, world        ]
+</pre>
+<p> 浮動小数点数 (float, double) を表示するには変換指示子 e, f, g を使います。
+</p>
+<ul>
+  <li>e<br>
+引数を [-]m.nnnnE[+/-]xx の形式の 10 進数に変換する。
+  <li>f<br>
+引数を [-]mmm.nnnn の形式の 10 進数に変換する。
+  <li>g<br>
+%e または %f の形式で、出力する文字数の短いほうを使う。
+</ul>
+<p> 小数点の右側に印字される桁数は、デフォルトで 6 桁になります。これを変更するには精度を使います。精度はピリオド ( <b>.</b> ) のあとに数字を指定します。たとえば、"%.14f" とすると、小数点は 14 桁で表示されます。
+<p> このほかにも、書式付き出力関数にはいろいろな機能があります。詳細はＣ言語のマニュアルをお読みください。
+</p>
+
+<h4>●書式付き入力関数</h4>
+<p> ファイルからデータを読み込む場合、データをバッファに格納するだけではなく、数値や他のデータ型に変換できると便利です。Ｃ言語の場合、書式付き入力関数を使うと、入力データの変換を行うことができます。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+int scanf(const char *format, ...);
+int fscanf(FILE *fp, const char *format, ...);
+int sscanf(const char *buff, const char *format, ...);
+</pre>
+<p> scanf は標準入力 (stdin)、fscanf はファイルポインタ (fp)、sscanf は配列 buff からデータを読み込みます。返り値は読み込んだデータ数で、失敗した場合は EOF を返します。format のあとの引数には、読み込んだデータを格納する変数をポインタで指定します。
+</p>
+<p> % と変換指示子の間にはオプションを指定することができます。
+</p>
+<ol>
+  <li>代入抑止文字 ( <b>*</b> )
+  <li>最大フィールド幅 (10進数)
+  <li>変換修飾子
+</ol>
+<p> 代入抑止文字を指定すると、データの読み込みは行われますが、その変換結果は変数に格納されません。最大フィールド幅は、データを変換するときに読み込む最大文字数を指定します。フィールド幅を使い切った時点でデータの変換は終了します。変換修飾子 h は整数に変換するとき、short int の変数に格納することを表します。l は long int または double に格納します。ll は long long int に格納します。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : scanf の使用例 (sample104.c)
+
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+  int n;
+  float f;
+  double d;
+  char c;
+  char s[256];
+  sscanf("5678abcd", "%d", &amp;n);
+  printf("%d\n", n);
+  sscanf("5678abcd", "%o", &amp;n);
+  printf("%o\n", n);
+  sscanf("5678abcd", "%x", &amp;n);
+  printf("%x\n", n);
+  sscanf("1.23456789", "%f", &amp;f);
+  printf("%f\n", f);
+  sscanf("1.23456789", "%lf", &amp;d);
+  printf("%f\n", d);
+  sscanf("hello, world", "%c", &amp;c);
+  printf("%c\n", c);
+  sscanf("hello, world", "%s", s);
+  printf("%s\n", s);
+  sscanf("hello, world", "%[a-z]", s);
+  printf("%s\n", s);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample104
+5678
+567
+5678abcd
+1.234568
+1.234568
+h
+hello,
+hello
+</pre>
+<p> %d はデータを 10 進整数に変換します。入力データが 5678abcd の場合、5678 まで読み込んで整数に変換します。このとき、入力データ abcd は残っていることに注意してください、%o は 8 進整数に、%x は 16 進整数に変換します。この場合、接頭辞に 0 や 0x が付いていてもかまいません。
+</p>
+<p> %f はデータを浮動小数点数 (float) に変換します。double に変換したい場合は変換修飾子 l を使って %lf と指定してください。%c は文字を読み込みます。%s は空白以外の文字列を読み込みます。空白文字 (タブや改行も含む) は区切り記号として使われます。これはあとで説明します。
+</p>
+<p> [...] は角カッコの中で指定した文字と一致する入力データを読み込んで配列に格納します。a-z のようにハイフン ( <b>-</b> ) を使って範囲を指定することができます。[^...] のように先頭に <b>^</b> を付けると、指定した文字以外の入力データと一致します。
+</p>
+
+<p> 書式文字列の中では複数の変換指示子を指定することができます。入力データの空白文字は区切り記号として扱われるので、"%d%d%d" は入力データ "123 456 789" とマッチングします。なお、先頭にある空白文字は読み飛ばされますが、読み飛ばさない変換指示子 (たとえば %c など) もあります。
+</p>
+
+<h4>●scanf の使い方</h4>
+<p> scanf 系の関数は使い方がちょっと難しいので、もう少し具体的に説明しましょう。下図において受け付けられるデータはどれだと思いますか。
+</p>
+<pre class="fig">
+int ai;
+scanf("input data %d", &amp;ai );
+
+(1) 1234
+(2) INPUT DATA 1234
+(3) input data 1234
+</pre>
+<p> 答えは (3) です。変換書式以外の文字は、その文字と一致しないと入力として受け付けません。(1) は数値しかないので受け付けられません。このとき大文字小文字を区別するので (2) も受け付けられません。ただし空白の場合は、空白文字が続く限り読み込んでいくことに注意してください。つまり次のような例でも入力は受け付けられます。
+</p>
+<pre class="fig">
+(1) input    data    1234
+
+(2) input
+    data
+    1234
+
+(3) inputdata1234
+</PRE>
+
+<p> (1) の場合は、空白がいくつ続いても入力データとして受け付けられることを表しています。(2) の場合、改行でも受け付けることを表しています。空白文字はライブラリ (ctype.h) 関数 isspace が真を返す文字のことで、ASCII コードでは次の文字が空白文字になります。
+</p>
+<pre class="item">
+' '  : 空白     (0x20)
+'\t' : 水平タブ (0x09)
+'\n' : 改行     (0x0a)
+'\v' : 垂直タブ (0x0b)
+'\f' : 書式送り (0x0c)
+'\r' : 復帰     (0x0d)
+</pre>
+<p> (3) はちょっとわかりにくいですね。空白文字が「あれば」それが続く限り読み込むので、なければ次の文字を調べるのです。したがって空白文字で区切られてなくてもデータとして受け付けられます。
+</p>
+<p> では、入力が受け付けられなかった場合はどうなるのでしょうか。scanf 系の返り値は、実際に代入した入力数です。ただし、ファイルの終わりであれば EOF を返します。この返り値を使うことでエラーをチェックすることができます。たとえば、ファイルに数値データがありそれを全部足し算する処理を考えてみましょう。
+</p>
+<pre class="list">
+リスト : 数値データの総和 (sample105.c)
+
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+  int n, sum = 0;
+  while (scanf("%d", &amp;n) != EOF)
+    sum += n;
+  printf("sum = %d\n", sum);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ cat input.txt
+ 28236
+ 21625
+ 22672
+ 30646
+  8110
+ 30976
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample105 &lt;input.txt
+sum = 142265
+</pre>
+<p> 書式文字列には区切り文字が指定されていませんが、先頭の空白文字は読み飛ばされるので問題ありません。ただし、入力データに誤りがある場合、このプログラムは正常に動作しません。
+</p>
+<pre class="fig">
+mhiroi@mhiroi-VirtualBox:~/clang$ cat input_bad.txt
+ 28236
+ 21625
+ 22672
+ 30646
+  8110.  &lt;--- 誤りがある。
+ 30976
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample105 &lt; input_bad.txt
+^C       &lt;--- 無限ループ, Ctrl-C で中止
+</pre>
+<p> scanf はストリームよりデータを読み込んで変換書式にマッチングするか調べますが、マッチングしなかった場合はその文字をストリームに押し戻します。たとえば、入力データに間違ってピリオドが含まれているとしましょう。%d は整数値に変換する書式なので 8110 まで読み込みますが、次がピリオドで整数値ではないので、それをストリームに押し戻して 8110 を変換して変数に代入します。
+</p>
+<p> そのあと、再びストリームから読み込もうとしますが、読み込む文字がピリオドなのでマッチングに失敗します。このときもピリオドはストリームに押し戻されます。つまり、エラーになった文字をストリームから取り除かない限り、無限に同じことを繰り返すことになります。
+</p>
+<p> それでは、エラーチェックを入れた改良版を示します。
+</p>
+<pre class="list">
+リスト : 改良版 (sample106.c)
+
+#include &lt;stdio.h&gt;
+
+int main(void)
+{
+  int n, sum = 0;
+  for (;;) {
+    int result = scanf("%d", &amp;n);
+    if (result == EOF) break;
+    if (result &lt; 1)
+      scanf("%*[^0-9]");
+    else
+      sum += n;
+  }
+  printf("sum = %d\n", sum);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample106 &lt; input_bad.txt
+sum = 142265
+</pre>
+<p> scanf の返り値を result に格納してエラーチェックを行います。result が EOF であれば break で for ループを脱出します。result が 1 未満のときは入力エラーが発生したことがわかります。一度エラーが発生すると scanf は、その時点で入力動作を終了します。
+</p>
+<p> 不正な文字をストリームから削除する処理は scanf を使って行うことができます。2 番目の scanf には入力する変数がありませんが大丈夫です。* は代入抑止文字で、ストリームから書式に一致する文字を読み込みますが、実際に変数には代入しません。簡単な例を示しましょう。
+</p>
+<pre class="item">
+int ai, bi;
+scanf("%d %*d %d", &amp;ai, &amp;bi );
+
+入力データ : 123 456 789
+結果 ai = 123, bi = 789
+</pre>
+<P> 最初に 123 が読み込まれ、変数 ai に代入されます。次に 456 が読み込まれますが * の働きで変数には代入されません。最後に 789 が読み込まれ変数 bi に代入されます。</p>
+<p> [ ] は指定した文字が続いている限りストリームより読み込みます。先頭に ^ をつけると否定の意味になり、指定した文字以外が続いている限りストリームよりデータを読み込みます。ただし空白文字は例外で、どちらの場合にも一致しません。この場合、整数が入力されることを期待しているので、整数以外の文字を指定して取り除けばいいわけです。
+</p>
+<p> これで書式違反のデータがあっても無限ループにはならずに動作するようになります。しかし、きちんとプログラムを作るのであれば、エラーが有ったことを報告して、データを修正できるように情報を表示すべきでしょう。たとえば行単位で入力し、エラーが有った場合は行数と項目を表示するようにします。こうなるとＣ言語を使うよりも AWK や Perl のようなスクリプト言語を使った方が簡単だと思います。
+</p>
+<h4>●入出力関数のエラーチェック</h4>
+<p> 入出力関数のエラーチェックは関数 ferror で行うことができます。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+int ferror(FILE *fp);
+</pre>
+<p> ferror はエラーが発生したならば真を、正常ならば偽を返します。
+</p>
+<p> Ｃ言語はエラーが発生したとき、その原因を大域変数 errno にセットします。errno に対応するエラーメッセージは関数 perror で表示することができます。
+</p>
+<pre class="item">
+&lt;stdio.h&gt;
+void perror(const char *mes);
+</pre>
+<p> perror はerrno に対応するエラーメッセージを標準エラー出力へ出力します。引数 mes が NULL でなければ、mes が示す文字列とコロンとスペースを表示してからエラーメッセージを表示します。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : perror の使用例 (sample107.c)
+
+#include &lt;stdio.h&gt;
+
+int main(int argc, char *argv[])
+{
+  if (argc &lt; 2) {
+    fprintf(stderr, "ファイル名を指定してください\n");
+    return 1;
+  }
+  FILE *fp = fopen(argv[1], "r");
+  if (fp == NULL) {
+    perror("oops!");
+    return 1;
+  }
+  printf("%s open!\n", argv[1]);
+  fclose(fp);
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ls foo*
+foo.txt
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample107 foo.txt
+foo.txt open!
+mhiroi@mhiroi-VirtualBox:~/clang$ ./sample107 foobar.txt
+oops!: No such file or directory
+</pre>
+<h4>●ファイルを行単位で連結する</h4>
+<p> 最後に簡単な例題として、ファイルを行単位で連結するコマンドを作りましょう。Unix 系 OS には paste というコマンドがありますが、今回作成するプログラムは paste の簡易バージョンで、空白文字を挟んで連結することにします。動作例を図に示します。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ cat file1.txt
+abcde
+fghij
+klmno
+mhiroi@mhiroi-VirtualBox:~/clang$ cat file2.txt
+ABCDE
+FGHIJ
+KLMNO
+12345
+mhiroi@mhiroi-VirtualBox:~/clang$ ./mypaste file1.txt file2.txt
+abcde ABCDE
+fghij FGHIJ
+klmno KLMNO
+12345
+</pre>
+
+<p> mypaste.c は 2 つのファイル file1.txt と file2.txt の各行を連結して標準出力へ出力します。この場合、2 つのファイルを同時にオープンしなければいけませんが、近代的なプログラミング言語であれば特別なことをしなくても複数のファイルを扱うことができます。
+</p>
+<p> 2 つのファイルをリードモードでオープンし、ファイルポインタを別々の変数 file1, file2 にセットします。変数 file1 に fgets を適用すれば、ファイル 1 から 1 行分データをリードすることができます。同様に、変数 file2 に fgets を適用すれば、ファイル 2 からデータをリードできるのです。あとは、文字列を連結して標準出力へ出力すればいいわけです。
+</p>
+<p> ただし、一つだけ注意点があります。それは、2 つのファイルの行数は同じとは限らないということです。つまり、どちらかのファイルが先に終了する場合があるのです。この場合は、残ったファイルをそのまま出力します。処理内容を下図に示します。
+</p>
+<pre class="fig">
+                              ↓
+                      ┌───────┐
+                      │file 1,2 open │
+                      └───────┘
+                              ├←────┐
+                              ↓          │
+      ┌─────┐ EOF┌─────┐    │
+┌←─│file2 出力│←─│file1 read│    │
+│    └─────┘    └─────┘    │
+│                            ↓          │
+│    ┌─────┐ EOF┌─────┐    │
+│    │文字列出力│←─│file2 read│    │
+│    └─────┘    └─────┘    │
+│          ↓                ↓          │
+│    ┌─────┐   ┌──────┐   │
+├←─│file1 出力│   │連結して出力│   │
+│    └─────┘   └──────┘   │
+│                            ↓          │
+↓                            └─────┘
+└──────────────┐
+                              ↓
+
+                  図 : 処理の流れ
+</pre>
+
+<p> ファイル 1 が終了した場合は、ファイル 2 をそのまま出力します。ファイル 2 が終了した場合は、ファイル 1 をそのまま出力しますが、その前に入力したファイル 1 のデータが残っているので、読み込んだデータを出力することをお忘れなく。
+</p>
+<p> それでは、プログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 行の結合 (mypaste.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;string.h&gt;
+
+#define N 1024
+
+void output_file(FILE *fp)
+{
+  int c;
+  while ((c = fgetc(fp)) != EOF) putchar(c);
+}
+
+void paste(FILE *in1, FILE *in2)
+{
+  char buff1[N];
+  char buff2[N];
+  while (true) {
+    if (fgets(buff1, N, in1) == NULL) {
+      output_file(in2);
+      break;
+    }
+    if (fgets(buff2, N, in2) == NULL) {
+      printf("%s", buff1);
+      output_file(in1);
+      break;
+    }
+    char *p = strchr(buff1, '\n');
+    if (p != NULL) *p = '\0';
+    printf("%s %s", buff1, buff2);
+  }
+}
+
+int main(int argc, char *argv[])
+{
+  if (argc &lt; 3) {
+    fprintf(stderr, "Not enough arguments");
+    return 1;
+  }
+  FILE *in1 = fopen(argv[1], "r");
+  if (in1 == NULL) {
+    perror(argv[1]);
+    return 1;
+  }
+  FILE *in2 = fopen(argv[2], "r");
+  if (in2 == NULL) {
+    perror(argv[2]);
+    fclose(in1);
+    return 1;
+  }
+  paste(in1, in2);
+  fclose(in1);
+  fclose(in2);
+  return 0;
+}
+</pre>
+
+<p> main で引数の個数をチェックし、ファイル名が 2 つ指定されていない場合はエラーを表示して終了します。次に、ファイル args[1] と args[2] をオープンします。オープンできない場合はエラーを表示して終了します。それから、ファイルポインタを関数 paste に渡して呼び出します。最後に、fclose でオープンしたファイルをクローズします。
+</p>
+<p> 関数 paste は簡単です。in1 から fgets で 1 行読み込みます。ファイルが終了した場合は関数 output_file で in2 を出力してから break で while ループを脱出します。次に、in2 から 1 行読み込みます。ファイルが終了した場合は、in1 の文字列 buff1 を出力してから output_file で in1 を出力します。そうでなければ、文字列 buff1 と buff2 を連結して出力します。このとき、buff1 の改行文字を取り除きます。
+</p>
+<p> 関数 output_file も簡単で、ファイルの最後まで 1 文字ずつ読み込んで、それを putchar で出力するだけです。これでプログラムは完成です。
+</p>
+<p> 今回はプログラムを簡単にするため、1 行の最大文字数を 1024 - 1 としましたが、この制限を取り外すこともできます。興味のある方はプログラムを改造してみてください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="clang09.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang11.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

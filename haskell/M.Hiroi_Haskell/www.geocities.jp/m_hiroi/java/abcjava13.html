@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>続・お気楽 Java プログラミング入門</title>
+  <meta name="description" content="Java,Java入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881776</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Java Programming</h1>
+<h2>続・お気楽 Java プログラミング入門</h2>
+<div class="small">
+[ <a href="abcjava12.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava14.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>ラムダ式</h3>
+<p> 今回は Java 8 で導入された「ラムダ式 (lambda expression)」について説明します。ラムダ式は Lisp / Scheme のラムダ式のことで、関数型言語では「匿名関数」とか「無名関数」と呼ばれています。最近ではラムダ式をサポートしているプログラミング言語が多くなりました。Perl, Python, Ruby などのスクリプト言語でもラムダ式 (匿名関数) を使うことができます。
+</p>
+<p> 関数型言語の世界では、関数はほかのデータと同等に取り扱うことができます。つまり、関数を変数に代入したり、引数として渡すことができます。また、関数を返す関数も簡単に作ることができます。関数を引数として受け取る関数を「汎関数 (functional)」とか「高階関数 (higher order function)」と呼びます。
+</p>
+<p> Java は手続き型言語なので、関数型言語のようにメソッドをそのまま変数に代入したり、引数として渡すことはできません。そのかわり、インターフェース (関数型インターフェース) とローカルクラス (匿名クラス) を使って、関数型言語のようにメソッドを変数に代入したり引数に渡すことができます。このとき、プログラムの記述がけっこう面倒になるのですが、「ラムダ式」や「メソッド参照」を使うともっと簡単に実現することができます。
+</p>
+<h4>●関数型インターフェース</h4>
+<p> Java 8 では、抽象メソッドをひとつだけ宣言したインターフェースのことを「関数型インターフェース」と呼びます。ジェネリクスを使って関数型インターフェースを定義することもできます。簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : 関数型インターフェース
+
+@FunctionalInterface
+interface Func&lt;T, U&gt; {
+  U apply(T x);
+}
+</pre>
+<p> インターフェース Func は T 型の値を受け取り U 型の値を返すメソッド apply() がひとつだけ定義されているので、関数型インターフェースとして扱うことができます。このとき、@FunctionalInterface アノテーションを指定すると、関数型インターフェースの条件を満たしているか、コンパイラがチェックしてくれます。
+</p>
+<p> Java のジェネリクスは int, double など基本的なデータ型を型パラメータに渡すことはできません。このため、これらのデータ型に対応した関数型インターフェースが必要になります。Java のライブラリ java.util.function には、よく使われる関数型インターフェースがあらかじめ定義されています。たとえば、ライブラリで定義されている Function は Func と同じ関数型インターフェースです。詳細は Java のマニュアル <a href="https://docs.oracle.com/javase/jp/8/docs/api/java/util/function/package-summary.html">パッケージjava.util.function</a> をお読みください。
+</p>
+<p> 以前の Java では、関数型インターフェースをインプリメントしたクラスを定義してそのインスタンスを生成する、もしくは匿名クラスを使ってインスタンスを生成し、それを関数型インターフェースの変数に代入していました。Java 8 になると、ラムダ式やメソッドをそのまま関数型インターフェースの変数に代入することができます。
+</p>
+<h4>●ラムダ式とメソッド参照</h4>
+<p> ラムダ式の構文を示します。
+</p>
+<pre class="item">
+(仮引数, ...) -&gt; { 処理; ... }
+</pre>
+<p> ( ... ) の中に仮引数を指定します。データ型を指定してもかまいませんが、関数型インターフェースに代入するときにデータ型が判明するので、データ型を省略するケースがほとんどです。引数が一つしかない場合はカッコを省略することができます。
+</p>
+<p> 関数本体の処理は { ... } の中に記述します。値を返す場合は return 文を使います。返り値は関数型インターフェースに記述されているデータ型に合わせる必要があります。void の場合、return は必要ありません。また、処理がひとつしかない場合、波カッコと return 文を省略することができます。
+</p>
+<p> メソッド参照はメソッドを関数型インターフェースの変数に代入するための構文です。メソッド参照はスタティックメソッドとインスタンスメソッドどちらでも可能です。以下に構文を示します。
+</p>
+<ol>
+  <li>インスタンス変数名::インスタンスメソッド名
+  <li>クラス名::スタティックメソッド名
+  <li>クラス名::new
+</ol>
+<p> 3 のように new を指定するとコンストラクタを渡すこともできます。これを「コンストラクタ参照」と呼びます。
+</p>
+<p> 簡単な例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ラムダ式とメソッド参照
+
+import java.util.*;
+import java.util.function.*;
+
+public class sample130 {
+  // マップ関数
+  static &lt;T, U&gt; List&lt;U&gt; map(Function&lt;T, U&gt; fn, List&lt;T&gt; xs) {
+    List&lt;U&gt; ys = new ArrayList&lt;&gt;();
+    for (T x: xs) ys.add(fn.apply(x));
+    return ys;
+  }
+
+  public static int square(int x) { return x * x; }
+  
+  public static void main(String[] args) {
+    List&lt;Integer&gt; xs = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
+    // 匿名クラス
+    List&lt;Integer&gt; ys = map(
+      new Function&lt;Integer, Integer&gt;() {
+        @Override
+        public Integer apply(Integer x) { return x * x; }
+      },
+      xs);
+    System.out.println(ys);
+    // ラムダ式
+    List&lt;Integer&gt; zs1 = map(n -&gt; n * 10, xs);
+    System.out.println(zs1);
+    // メソッド参照
+    List&lt;Integer&gt; zs2 = map(sample130::square, xs);
+    System.out.println(zs2);
+  }
+}
+</pre>
+<pre>
+C&gt;java sample130
+[1, 4, 9, 16, 25, 36, 49, 64]
+[10, 20, 30, 40, 50, 60, 70, 80]
+[1, 4, 9, 16, 25, 36, 49, 64]
+</pre>
+<p> ジェネリクスを使ってマップ関数 map() を定義します。第 1 引数が関数型インターフェース Function で、型 T の値を引数に受け取り、型 U の値を返す関数を表します。map() は List&lt;T&gt; を受け取り、その要素に Function のメソッド apply() を適用して、その結果を格納した List&lt;U&gt; を返します。
+</p>
+<p> main() の Arrays.asList() は、引数を格納した固定サイズの List を返すスタティックメソッドです。引数には配列を渡すことも可能です。その場合、List の要素を書き換えると配列の要素も書き換えられます。逆に、配列の要素を書き換えると List の要素が書き換えられます。
+</p>
+<p> 従来の方法では、匿名クラス new Function&lt;Integer, Integer&gt;() { ... } でインスタンスを生成します。この中で Function のメソッド apply() をオーバーライドするため、プログラムはけっこう複雑になります。これに対し、ラムダ式であれば n -&gt; n * 10 と記述するだけで、map() にメソッドを渡すことができます。また、スタティックメソッド square() が定義されていれば、メソッド参照を使って sample130::square と記述するだけで square() を渡すこともできます。これも簡単ですね。
+</p>
+
+<h4>●レキシカルスコープ</h4>
+<p> ここで、もう少し詳しく局所変数の規則を説明しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : レキシカルスコープ
+
+public class sample131 {
+  static int x = 10;
+
+  static void foo() { System.out.println(x); }
+
+  static void foo1() {
+    int x = 100;
+    foo();
+  }
+
+  public static void main(String[] args) {
+    foo();
+    foo1();
+  }
+}
+</pre>
+<p> 変数 x を表示するスタティックメソッド foo() を定義します。foo() には変数 x を定義していないので、foo() を実行するとスタティックなフィールド変数 x の値を探しにいきます。次に、foo1() というメソッドから foo() を呼び出す場合を考えてみましょう。foo1() には局所変数 x を定義します。この場合、foo() はどちらの値を表示するのでしょうか。実際に試してみましょう。
+</p>
+<pre>
+C&gt;sample131
+10
+10
+</pre>
+<p> スタティック変数の値を表示しました。このように、foo1() で定義した局所変数 x は、foo() からアクセスすることはできません。次の図を見てください。
+</p>
+<pre class="fig">
+ ┌──────class sample131 ──────┐
+ │                                        │
+ │      スタティック変数  x ←────┐  │
+ │                                    │  │
+ │  ┌→┌── foo()  ──────┐  │  │
+ │  │  │          ┌──────┼─┘  │
+ │  │  │   println(x);          │      │
+ │  │  └────────────┘      │
+ │  │  ┌── foo1() ──────┐      │
+ │  │  │                        │      │
+ │  │  │   x = 100;             │      │
+ │  └─┼─ foo();               │      │
+ │      └────────────┘      │
+ │                                        │
+ └────────────────────┘
+
+           図 : レキシカルスコープ
+</pre>
+<p> 上図では、変数の有効範囲を枠で表しています。foo1() で定義した局所変数 x は、メソッド foo1() の枠の中でのみ有効です。もしも、この枠で変数が見つからない場合は、ひとつ外側の枠を調べます。この場合、メソッドの枠しかないので、ここで変数が見つからない場合はスタティック変数を調べます。
+</p>
+<p> foo() はメソッドの枠しかありません。そこに変数 x が定義されていないので、スタティック変数を調べることになるのです。このように、foo() から foo1() の枠を超えて変数 x にアクセスすることはできません。これを「レキシカルスコープ (lexical scope)」といいます。レキシカルには文脈上いう意味があり、変数が定義されている範囲内 (枠内) でないと、その変数にアクセスすることはできません。
+</p>
+<h4>●ラムダ式と局所変数</h4>
+<p> それでは、ラムダ式の場合はどうでしょうか。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : リストの要素を n 倍する
+
+import java.util.*;
+import java.util.function.*;
+
+public class sample132 {
+  static &lt;T, U&gt; List&lt;U&gt; map(Function&lt;T, U&gt; fn, List&lt;T&gt; xs) {
+    List&lt;U&gt; ys = new ArrayList&lt;&gt;();
+    for (T x: xs) {
+      ys.add(fn.apply(x));
+    }
+    return ys;
+  }
+
+  static List&lt;Integer&gt; nTimes(Integer n, List&lt;Integer&gt; xs) {
+    return map(x -&gt; n * x, xs);
+  }
+
+  public static void main(String[] args) {
+    List&lt;Integer&gt; xs = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
+    List&lt;Integer&gt; ys = nTimes(10, xs);
+    System.out.println(ys);
+  }
+}
+</pre>
+<pre>
+C&gt;java sample132
+[10, 20, 30, 40, 50, 60, 70, 80]
+</pre>
+<p> メソッド nTimes() は List の要素を n 倍した新しい List を返します。ラムダ式の仮引数は x だけですから、変数 n はスタティック変数をアクセスすると思われるかもしれません。ところが、変数 n は関数 nTimes() の引数 n をアクセスするのです。次の図を見てください。
+</p>
+<pre class="fig">
+┌──────class sample132 ─────┐ 
+│                                      │
+│    ┌──── nTimes(n, xs)  ─┐    │
+│    │                ↑        │    │
+│    │                └──┐  │    │
+│    │  ┌─ lambda : x ─┐│  │    │
+│    │  │            ↑  ││  │    │
+│    │  │      ┌──┘  ││  │    │
+│    │  │      x * n     ││  │    │
+│    │  │          └──┼┘  │    │
+│    │  └────────┘    │    │
+│    └─────────────┘    │
+│                                      │
+└───────────────────┘
+
+        図 : ラムダ式の変数
+</pre>
+<p> ポイントはラムダ式がメソッド nTimes() 内で定義されているところです。変数 n はメソッドの引数として定義されていて、その有効範囲はメソッドの終わりまでです。ラムダ式はその範囲内に定義されているため、変数 n にアクセスすることができるのです。つまり、メソッド内で定義されたラムダ式は、そのとき有効な局所変数にアクセスすることができるのです。
+</p>
+<p> 外側の局所変数を参照できるのは匿名クラスと同じです。ただし、匿名クラスは final で宣言されたものに限定されています。ラムダ式の場合、final で宣言する必要はありませんが、実質 final であることが条件になります。つまり、immutable な局所変数しか参照することができないのです。ラムダ式が参照している変数を更新するとコンパイルエラーになります。ご注意くださいませ。
+</p>
+<h4>●forEach メソッド</h4>
+<p> Java 8 からコレクションや配列などで高階関数 forEach() を利用できるようになりました。また、Java 8 ではコレクションや配列を「ストリーム (stream)」として操作するパッケージ Stream が導入されました。Stream を使うと、forEach() だけではなく map(), filter(), reduce() など便利な高階関数を利用できるようになります。Stream は回を改めて説明する予定です。
+</p>
+
+<p> たとえば、Iterable&lt;T&gt; を継承したクラスの場合、forEach() は次のよう定義されています。
+</p>
+<pre class="list">
+リスト : forEach() の定義
+
+void forEach(Consumer&lt;? super T&gt; action) {
+  for (T e: this)
+    action.accept(e);
+}
+</pre>
+<p> 関数型インターフェース Consumer は、引数を一つ受け取って値を返さない関数を表します。引数の型は T で、宣言されているメソッドは void accept(T e) です。
+</p>
+<p> forEach() の処理は簡単です。引数 action にメソッドを受け取り、for ループで順番に要素を取り出して action.accept(e) を呼び出すだけです。このように、forEach() の内部でコレクションの要素を取り出し、それをメソッドに渡して処理する方法を「内部イテレータ」と呼びます。Java の Iterator のように、要素を指し示すオブジェクトを作り、それを操作して処理する方法を「外部イテレータ」と呼びます。
+</p>
+<p> ラムダ式は外側の局所変数を参照できるので、内部イテレータでも柔軟な処理が可能です。簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : forEach() の使用例
+
+public class sample133 {
+  public static void main(String[] args) {
+    List&lt;Integer&gt; xs = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8);
+    xs.forEach(System.out::println);
+    List&lt;Integer&gt; ys = new ArrayList&lt;&gt;();
+    xs.forEach(x -&gt; ys.add(x * 10));
+    ys.forEach(System.out::println);
+  }
+}
+</pre>
+<pre>
+C&gt;java sample133
+1
+2
+3
+4
+5
+6
+7
+8
+10
+20
+30
+40
+50
+60
+70
+80
+</pre>
+<p> forEach() にメソッド参照 System.out::println を渡すと xs の要素を表示することができます。ラムダ式は immutable な変数しか参照できませんが、コレクションに値を追加することは可能です。変数 ys に List をセットします。ys そのものの値を書き換えていないので、ラムダ式の中から ys を参照することができ、List に要素を追加することができます。
+</p>
+<h4>●クロージャ (closure)</h4>
+<p> Lisp などの関数型言語では、関数を生成する関数を簡単に作ることができます。このとき使われる機能が「クロージャ (closure)」です。クロージャは評価する関数と参照可能な局所変数をまとめたものです。クロージャは関数のように実行することができますが、クロージャを生成するときに参照可能な局所変数を保存するところが異なります。参照可能な局所変数の集合を「環境 (environment)」と呼ぶことがあります。
+</p>
+<p> きしださんの <a href="http://d.hatena.ne.jp/nowokay/20130522">Java8のlambda構文がどのようにクロージャーではないか</a> によると、Java のラムダ式はクロージャではないとのことですが、ラムダ式を使って関数型言語のクロージャと同様なことを行うことは可能です。たとえば、「引数に n を加算する関数」を生成する関数は、ラムダ式を使うと次のようになります。
+</p>
+<pre class="list">
+リスト : 関数を返す関数
+
+import java.util.function.*;
+
+public class sample134 {
+  static Function&lt;Integer, Integer&gt; adder(Integer n) {
+    return x -&gt; x + n;
+  }
+
+  public static void main(String[] args) {
+    Function&lt;Integer, Integer&gt; add10 = adder(10);
+    System.out.println(add10.apply(10));
+    System.out.println(add10.apply(100));
+    Function&lt;Integer, Integer&gt; add20 = adder(20);
+    System.out.println(add20.apply(10));
+    System.out.println(add20.apply(100));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample134
+20
+110
+30
+120
+</pre>
+<p> メソッド adder() は引数に n を加算する関数を生成します。変数 add10 に adder(10) の返り値をセットします。すると、add10 は引数に 10 を加算する関数として使うことができます。同様に、変数 add20 に adder(20) の返り値をセットすると、add20 は引数に 20 を加算する関数になります。
+</p>
+<p> 関数型言語の場合、ラムダ式を実行するとクロージャが生成されます。このとき、局所変数の「環境」もいっしょにクロージャに保存されます。クロージャを実行するときは保存された環境に切り替えるので、ラムダ式の外側の局所変数にアクセスすることができます。
+</p>
+<p> <a href="http://d.hatena.ne.jp/nowokay/20130522">きしださん</a> によると、Java のラムダ式は生成するメソッドといっしょに環境を保存するのではなく、ラムダ式が参照している局所変数の値を生成するメソッドの引数に渡しているそうです。メソッドといっしょに環境を保存しているわけではないので、関数型言語のラムダ式 (クロージャ) とは仕組みが異なっているわけです。
+</p>
+<p> もうひとつ、Java のラムダ式には他の言語とは異なるところがあります。たとえば Lisp の場合、ラムダ式の中で使用する引数や局所変数に制限はありません。外側の関数の局所変数と同名の変数を宣言することも可能です。その場合、ラムダ式内の変数が優先されるので、外側の関数の局所変数は参照できなくなるだけです。これを変数の「隠蔽 (shadowing)」といいます。
+</p>
+<p> Java の場合、入れ子のブロック内で局所変数を宣言するとき、外側のブロックと同名の局所変数を宣言することはできません。Ｃ言語の場合、入れ子のブロックの中で宣言する変数に制限はありません。外側の変数と同名の変数を宣言することも可能で、外側の変数は隠蔽されるだけです。Lisp や関数型言語の場合、局所変数の宣言は let を使いますが、let を入れ子にしたとき、内側の let で宣言する局所変数に制限はありません。
+</p>
+<p> Java のラムダ式はブロックと同じ規則で、外側の関数で宣言されている局所変数と同名の変数や引数を宣言することはできません。この仕様には M.Hiroi もびっくりしました。Java のラムダ式は関数型言語のラムダ式とは違って、匿名クラスを簡単に記述するための仕組みと考えたほうがよいのかもしれません。ご注意くださいませ。
+</p>
+<h4>●ジェネレータ</h4>
+<p> 次は、クロージャの応用例として「ジェネレータ (generator)」を取り上げます。ジェネレータは呼び出されるたびに新しい値を生成します。Java の場合、クラスを使って同じようなプログラムを簡単に作ることができるので、このような用途にクロージャを使うことはほとんどないと思いますが、クロージャのお勉強ということで、あえてプログラムを作ってみましょう。 
+</p>
+<p> 簡単な例題として、フィボナッチ数列 (0, 1, 1, 2, 3, 5, 8, ...) を発生するジェネレータを作ってみます。まず最初に、ジェネレータを作るメソッドを定義します。 
+</p>
+<pre class="list">
+リスト : ジェネレータ生成 (1)
+
+import java.util.function.*;
+
+public class sample135 {
+  static Supplier&lt;Long&gt; MakeGenFibo() {
+    long[] a = {0, 1};
+    return () -&gt; {
+      long c = a[0];
+      a[0] = a[1];
+      a[1] += c;
+      return c;
+    };
+  }
+
+  public static void main(String[] args) {
+    Supplier&lt;Long&gt; fibo1 = MakeGenFibo();
+    for (int i = 0; i &lt; 20; i++)
+      System.out.print(fibo1.get() + " ");
+    System.out.println("");
+    Supplier&lt;Long&gt; fibo2 = MakeGenFibo();
+    for (int i = 0; i &lt; 25; i++)
+      System.out.print(fibo2.get() + " ");
+    System.out.println("");
+  }
+}
+</pre>
+<pre>
+C&gt;java sample135
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 28657 46368
+</pre>
+<p> Java の関数型インターフェースでは、引数無しで値を返す関数を Supplier&lt;T&gt; で表します。型パラメータ T が返り値の型で、宣言されているメソッドは T get() です。MakeGenFibo() は Supplier&lt;T&gt; を返すようにします。
+</p>
+<p> Java のラムダ式は参照している局所変数の値を書き換えることができません。そこで、フィボナッチ数列の値を保持するため配列を使うことにします。局所変数 a に大きさ 2 の配列をセットします。変数 a は更新できませんが、配列の要素はラムダ式からでも更新することが可能です。
+</p>
+<p> MakeGenFibo() で作成したクロージャを変数 fibo1 にセットし、fibo1.get() で呼び出します。0, 1, 1, 2, 3, 5, ... とフィボナッチ数列を生成していますね。新しいクロージャを変数 fibo2 にセットし、この fibo2.get() を評価すれば、新しいフィボナッチ数列が生成されます。 
+</p>
+<p> クロージャが参照する MakeGenFibo() 内の局所変数は a で、セットされる配列は MakeGenFibo() を実行するときに生成されることに注意してください。クロージャが参照する局所変数はクロージャによって異なります。fibo1 のクロージャが評価されると、そのクロージャが参照している配列の要素が更新されるのであって、ほかのクロージャに影響を与えることはありません。 
+</p>
+<p> したがって、あるジェネレータが発生するフィボナッチ数列が、ほかのジェネレータに影響を与えることはないのです。あとは必要な数だけジェネレータを MakeGenFibo() で作り、生成したクロージャを変数に格納しておけばいいわけです。 
+</p>
+<h4>●ジェネレータをリセットする</h4>
+<p> 次はフィボナッチ数列を最初に戻す、つまり、ジェネレータをリセットすることを考えましょう。この場合、クロージャ内の変数を書き換えるしか方法はありません。そこで、クロージャに引数を与えて、Value ならばフィボナッチ数列を発生させる、Reset ならばリセットするようにしましょう。数列を発生させる処理とリセットする処理をラムダ式で作成し、それを MakeGenFibo() 内の局所変数に格納しておけば、その処理を呼び出すことができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ジェネレータ生成 (2)
+
+import java.util.function.*;
+
+public class sample136 {
+  enum Fibo { Value, Reset }
+  
+  static Function&lt;Fibo, Long&gt; MakeGenFibo() {
+    long[] a = {0, 1};
+    Supplier&lt;Long&gt; fiboValue = () -&gt; {
+      long c = a[0];
+      a[0] = a[1];
+      a[1] += c;
+      return c;
+    };
+    Supplier&lt;Long&gt; fiboReset = () -&gt; {
+      a[0] = 0;
+      a[1] = 1;
+      return 0L;
+    };
+    return x -&gt; {
+      if (x == Fibo.Value)
+        return fiboValue.get();
+      else
+        return fiboReset.get();
+    };
+  }
+
+  public static void main(String[] args) {
+    Function&lt;Fibo, Long&gt; fibo = MakeGenFibo();
+    for (int i = 0; i &lt; 20; i++)
+      System.out.print(fibo.apply(Fibo.Value) + " ");
+    System.out.println("");
+    fibo.apply(Fibo.Reset);
+    for (int i = 0; i &lt; 25; i++)
+      System.out.print(fibo.apply(Fibo.Value) + " ");
+    System.out.println("");
+  }
+}
+</pre>
+<p> 局所変数 fiboReset にジェネレータをリセットする処理を、fiboValue にフィボナッチ数列を発生する処理をセットします。ジェネレータ本体の処理は、引数が Fibo.Value ならば fiboValue.get() を、Fibo.Reset ならば fiboReset.get() を呼び出すだけです。 
+</p>
+<p> それでは実行してみましょう。 
+</p>
+<pre>
+C&gt;java sample136
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 28657 46368
+</pre>
+<p> 正常に動作していますね。 
+</p>
+<p> クロージャは少し難しいかもしれませんが、便利で面白い機能だと思います。Java は手続き型のプログラミング言語なので、クロージャを使う機会は少ないと思いますが、興味のある方はいろいろと試してみてください。 また、関数を扱うことは、やっぱり関数型言語の方が優れています。クロージャの話に興味をもたれた方は、ぜひ関数型言語 (Lisp, Scheme, ML, Haskell など) にも挑戦してみてください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcjava12.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava14.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

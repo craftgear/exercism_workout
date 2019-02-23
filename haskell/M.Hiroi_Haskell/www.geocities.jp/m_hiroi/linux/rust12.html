@@ -1,0 +1,948 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881817</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>ファイルの圧縮</h3>
+<h4 id="chap09">●バイナリレンジコーダ</h4>
+<p> 記号 {0, 1} だけを符号化する方法に「二値算術符号」があります。これに対し、3 つ以上の記号を符号化する方法を「多値算術符号」と呼びます。一般に、二値算術符号のプログラムは多値算術符号よりも簡単になります。レンジコーダの場合、二値でも多値でも簡単にプログラムできますが、モデル化によっては、バイナリレンジコーダ (Binary Range Coder) を用いた方が効率的にデータを圧縮することができる場合があります。バイナリレンジコーダの詳しい説明は、拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo40.html">バイナリレンジコーダ</a> をお読みくださいませ。
+</p>
+<ul>
+  <li>クレート : frequency2</li>
+  <ul>
+    <li>構造体名 : Freq2 (バイナリモデル)</li>
+    <ul>
+      <li>メソッド : new(), encode(), decode()</li>
+    </ul>
+    <li>構造体名 : AlpahFreq (アルファモデル)</li>
+    <ul>
+      <li>メソッド : new(), encode(), decode()</li>
+    </ul>
+    <li>構造体名 : GammaFreq (ガンマモデル)</li>
+    <ul>
+      <li>メソッド : new(), encode(), decode()</li>
+    </ul>
+    <li>構造体名 : DeltaFreq (デルタモデル)</li>
+    <ul>
+      <li>メソッド : new(), encode(), decode()</li>
+    </ul>
+  </ul>
+</ul>
+<p> レンジコーダ (rangecoder.rs) は <a href="rust11.html#chap08d">改訂版</a> を使用してください。
+</p>
+<h4>●バイナリレンジコーダ用の出現頻度表</h4>
+<pre class="list">
+//
+// frequency2.rs : 出現頻度表 (バイナリレンジコーダ用)
+//
+//                 Copyright (C) 2018 Makoto Hiroi
+//
+extern crate rangecoder;
+use rangecoder::{Decoder, Encoder};
+
+// 定数
+const INC: u32 = 4;
+const LIMIT: u32 = 0x200;
+
+struct Context {
+    c0: u32, c1: u32
+}
+
+impl Context {
+    fn new() -&gt; Context {
+        Context { c0: 1, c1: 1 }
+    }
+
+    // 更新
+    fn update(&amp;mut self, bit: u32) {
+        if bit == 0 { self.c0 += INC; } else { self.c1 += INC; }
+        if self.c0 + self.c1 &gt;= LIMIT {
+            self.c0 = (self.c0 &gt;&gt; 1) | 1;
+            self.c1 = (self.c1 &gt;&gt; 1) | 1;
+        }
+    }
+
+    // 符号化
+    fn encode(&amp;mut self, rc: &amp;mut Encoder, bit: u32) -&gt; std::io::Result&lt;()&gt; {
+        let temp = rc.range / (self.c0 + self.c1);
+        if bit &gt; 0 {
+            rc.low += temp * self.c0;
+            rc.range = temp * self.c1;
+        } else {
+            rc.range = temp * self.c0;
+        }
+        rc.normalize()?;
+        self.update(bit);
+        Ok(())
+    }
+
+    // 復号
+    fn decode(&amp;mut self, rc: &amp;mut Decoder) -&gt; std::io:: Result&lt;u32&gt; {
+        let temp = rc.range / (self.c0 + self.c1);
+        let bit;
+        if (rc.code - rc.low) / temp &lt; self.c0 {
+            bit = 0;
+            rc.range = temp * self.c0;
+        } else {
+            bit = 1;
+            rc.low += temp * self.c0;
+            rc.range = temp * self.c1;
+        }
+        rc.normalize()?;
+        self.update(bit);
+        Ok(bit)
+    }
+}
+
+//
+// バイナリモデル 
+//
+pub struct Freq2 {
+    size: usize,
+    contexts: Vec&lt;Context&gt;
+}
+
+impl Freq2 {
+    pub fn new(n: usize) -&gt; Freq2 {
+        let mut ct = vec![];
+        for _ in 0 .. n - 1 { ct.push(Context::new()); }
+        Freq2 { size: n, contexts: ct }
+    }
+
+    // 符号化
+    pub fn encode(&amp;mut self, rc: &amp;mut Encoder, code: u32) -&gt; std::io::Result&lt;()&gt; {
+        fn encode_sub(ct: &amp;mut Vec&lt;Context&gt;, rc: &amp;mut Encoder, node: usize) -&gt; std::io::Result&lt;()&gt; {
+            if node &gt; 0 {
+                let p = (node - 1) / 2;
+                encode_sub(ct, rc, p)?;
+                // 奇数は左の子 (1), 偶数は右の子 (0)
+                ct[p].encode(rc, (node &amp; 1) as u32)?;
+            }
+            Ok(())
+        }
+        encode_sub(&amp;mut self.contexts, rc, self.size - 1 + code as usize)
+    }
+
+    // 復号
+    pub fn decode(&amp;mut self, rc: &amp;mut Decoder) -&gt; std::io::Result&lt;u32&gt; {
+        let mut node = 0;
+        let node_size = self.size - 1;
+        while node &lt; node_size {
+            let bit = self.contexts[node].decode(rc)?;
+            if bit &gt; 0 {
+                // 1 は左の子
+                node = 2 * node + 1;
+            } else {
+                // 0 は右の子
+                node = 2 * node + 2;
+            }
+        }
+        Ok((node - node_size) as u32)
+    }
+}
+
+//
+// アルファモデル
+//
+pub struct AlphaFreq {
+    size: usize,
+    contexts: Vec&lt;Context&gt;
+}
+
+impl AlphaFreq {
+    pub fn new(n: usize) -&gt; AlphaFreq {
+        let mut ct = vec![];
+        for _ in 0 .. n - 1 { ct.push(Context::new()); };
+        AlphaFreq { size: n - 1, contexts:ct }
+    }
+    
+    // 符号化
+    pub fn encode(&amp;mut self, rc: &amp;mut Encoder, c: u32) -&gt; std::io::Result&lt;()&gt; {
+        for x in 0 .. self.size {
+            let bit = if x &lt; c as usize { 0 } else { 1 };
+            self.contexts[x].encode(rc, bit)?;
+            if bit == 1 { break; }
+        }
+        Ok(())
+    }
+
+    // 復号
+    pub fn decode(&amp;mut self, rc: &amp;mut Decoder) -&gt; std::io::Result&lt;u32&gt; {
+        let mut c = 0;
+        while c &lt; self.size {
+            let bit = self.contexts[c].decode(rc)?;
+            if bit == 1 { break; }
+            c += 1;
+        }
+        Ok(c as u32)
+    }
+}
+
+//
+// ガンマモデル
+//
+
+// ビット列モデル
+struct BitsFreq {
+    size: usize,
+    contexts: Vec&lt;Context&gt;
+}
+
+impl BitsFreq {
+    fn new(n: usize) -&gt; BitsFreq {
+        let mut ct = vec![];
+        for _ in 0 .. n { ct.push(Context::new()); }
+        BitsFreq { size: n, contexts: ct }
+    }
+
+    // 符号化
+    fn encode(&amp;mut self, rc: &amp;mut Encoder, c: u32) -&gt; std::io::Result&lt;()&gt; {
+        for x in 0 .. self.size {
+            self.contexts[x].encode(rc, (c &gt;&gt; x as u32) &amp; 1)?;
+        }
+        Ok(())
+    }
+
+    // 復号
+    fn decode(&amp;mut self, rc: &amp;mut Decoder) -&gt; std::io::Result&lt;u32&gt; {
+        let mut c = 0;
+        for x in 0 .. self.size {
+            let bit = self.contexts[x].decode(rc)?;
+            if bit == 1 { 
+                c |= bit &lt;&lt; x as u32;
+            }
+        }
+        Ok(c)
+    }
+}
+
+// ガンマモデル
+pub struct GammaFreq {
+    contexts1: AlphaFreq,
+    contexts2: Vec&lt;BitsFreq&gt;
+}
+
+impl GammaFreq {
+    pub fn new(n: usize) -&gt; GammaFreq {
+        let mut n2 = n &gt;&gt; 1;
+        let mut n1 = 0;
+        while n2 &gt; 0 {
+            n1 += 1;
+            n2 &gt;&gt;= 1;
+        }
+        let mut ct = vec![];
+        for x in 0 .. n1 + 1 {
+            ct.push(BitsFreq::new(x));
+        }
+        GammaFreq { contexts1: AlphaFreq::new(n1 + 1), contexts2: ct }
+    }
+
+    pub fn encode(&amp;mut self, rc: &amp;mut Encoder, c: u32) -&gt; std::io::Result&lt;()&gt; {
+        let mut n1 = 0;
+        let mut n2 = (c + 1) &gt;&gt; 1;
+        while n2 &gt; 0 {
+            n1 += 1;
+            n2 &gt;&gt;= 1;
+        }
+        self.contexts1.encode(rc, n1)?;
+        if n1 &gt; 0 {
+            self.contexts2[n1 as usize].encode(rc, c + 1)?;
+        }
+        Ok(())
+    }
+
+    // 復号
+    pub fn decode(&amp;mut self, rc: &amp;mut Decoder) -&gt; std::io::Result&lt;u32&gt; {
+        let mut n1 = self.contexts1.decode(rc)?;;
+        if n1 &gt; 0 {
+            let n2 = self.contexts2[n1 as usize].decode(rc)?;
+            n1 = (1 &lt;&lt; n1) + n2 - 1;
+        }
+        Ok(n1)
+    }
+}
+
+//
+// デルタモデル
+//
+pub struct DeltaFreq {
+    contexts1: GammaFreq,
+    contexts2: Vec&lt;BitsFreq&gt;
+}
+
+impl DeltaFreq {
+    pub fn new(n: usize) -&gt; DeltaFreq {
+        let mut n2 = n &gt;&gt; 1;
+        let mut n1 = 0;
+        while n2 &gt; 0 {
+            n1 += 1;
+            n2 &gt;&gt;= 1;
+        }
+        let mut ct = vec![];
+        for x in 0 .. n1 + 1 {
+            ct.push(BitsFreq::new(x));
+        }
+        DeltaFreq { contexts1: GammaFreq::new(n1 + 1), contexts2: ct }
+    }
+
+    pub fn encode(&amp;mut self, rc: &amp;mut Encoder, c: u32) -> std::io::Result&lt;()&gt; {
+        let mut n1 = 0;
+        let mut n2 = (c + 1) &gt;&gt; 1;
+        while n2 &gt; 0 {
+            n1 += 1;
+            n2 &gt;&gt;= 1;
+        }
+        self.contexts1.encode(rc, n1)?;
+        if n1 &gt; 0 {
+            self.contexts2[n1 as usize].encode(rc, c + 1)?;
+        }
+        Ok(())
+    }
+
+    // 復号
+    pub fn decode(&amp;mut self, rc: &amp;mut Decoder) -&gt; std::io::Result&lt;u32&gt; {
+        let mut n1 = self.contexts1.decode(rc)?;;
+        if n1 &gt; 0 {
+            let n2 = self.contexts2[n1 as usize].decode(rc)?;
+            n1 = (1 &lt;&lt; n1) + n2 - 1;
+        }
+        Ok(n1)
+    }
+}
+</pre>
+<h4>●簡単なテスト</h4>
+<pre class="list">
+リスト : frequency2 のテスト (freq2_test.rs)
+
+extern crate frequency2;
+extern crate rangecoder;
+
+use frequency2::{Freq2, AlphaFreq, GammaFreq, DeltaFreq};
+use rangecoder::{Decoder, Encoder};
+
+fn encode_test(dst: &amp;str) -&gt; std::io::Result&lt;()&gt; {
+    let mut freq0 = Freq2::new(16);
+    let mut freq1 = AlphaFreq::new(16);
+    let mut freq2 = GammaFreq::new(160);
+    let mut freq3 = DeltaFreq::new(1600);
+    let mut rc = Encoder::create(dst)?;
+    for x in 0 .. 16 {
+        freq0.encode(&amp;mut rc, x)?;
+        freq1.encode(&amp;mut rc, x)?;
+        freq2.encode(&amp;mut rc, x * 10)?;
+        freq3.encode(&amp;mut rc, x * 100)?;
+    }
+    Ok(())
+}
+
+fn decode_test(src: &amp;str) -&gt; std::io::Result&lt;()&gt; {
+    let mut rc = Decoder::open(src)?;
+    let mut freq0 = Freq2::new(16);
+    let mut freq1 = AlphaFreq::new(16);
+    let mut freq2 = GammaFreq::new(160);
+    let mut freq3 = DeltaFreq::new(1600);
+    for _ in 0 .. 16 {
+        let n0 = freq0.decode(&amp;mut rc)?;
+        let n1 = freq1.decode(&amp;mut rc)?;
+        let n2 = freq2.decode(&amp;mut rc)?;
+        let n3 = freq3.decode(&amp;mut rc)?;
+        println!("{}, {}, {}, {}", n0, n1, n2, n3);
+    }
+    Ok(())
+}
+
+fn main() {
+    encode_test("freq2.dat").unwrap();
+    decode_test("freq2.dat").unwrap();
+}
+</pre>
+<pre>
+0, 0, 0, 0
+1, 1, 10, 100
+2, 2, 20, 200
+3, 3, 30, 300
+4, 4, 40, 400
+5, 5, 50, 500
+6, 6, 60, 600
+7, 7, 70, 700
+8, 8, 80, 800
+9, 9, 90, 900
+10, 10, 100, 1000
+11, 11, 110, 1100
+12, 12, 120, 1200
+13, 13, 130, 1300
+14, 14, 140, 1400
+15, 15, 150, 1500
+</pre>
+<hr>
+<h4 id="chap09a">●LZSS 符号の改良</h4>
+<p> それでは簡単な例題として、バイナリレンジコーダと LZSS 符号 を組み合わせてみましょう。本ページでは LZRC 符号と呼ぶことにします。LZH 符号 は LZSS 符号とハフマン符号を組み合わせることで高い圧縮率を実現しています。LZRC 符号はバイナリレンジコーダを用いることで、さらに圧縮率を改善することができます。詳しい説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo41.html">バイナリレンジコーダ [2]</a> をお読みくださいませ。
+</p>
+<h4 id="chap09b">●order-0</h4>
+<pre class="list">
+//
+// lzrc_encode.rs : LZRC 符号 (符号化)
+//
+//                 Copyright (C) 2018 Makoto Hiroi
+//
+extern crate rangecoder;
+extern crate frequency2;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::collections::HashMap;
+use std::error::Error;
+use rangecoder::Encoder;
+use frequency2::{Freq2, GammaFreq, DeltaFreq};
+
+// 定数
+const MIN_LEN: usize = 5;
+const MAX_LEN: usize = 256;
+const POS_BITS: u64 = 16;
+const SW_SIZE: usize = 1 &gt;&gt; POS_BITS;
+const SW_LIMIT: usize = SW_SIZE * 2;
+const NIL: usize = SW_LIMIT + MAX_LEN;
+
+struct SWindow {
+    reader: BufReader&gt;File&lt;,
+    buffer: Box&gt;[u8; SW_LIMIT + MAX_LEN]&lt;,
+    htable: HashMap&gt;u32, usize&lt;,
+    next: Box&gt;[usize; SW_SIZE]&lt;,
+    data_size: usize,
+    match_len: usize,
+    match_pos: usize
+}
+
+impl SWindow {
+    fn new(filename: &amp;str) -&lt; std::io::Result&gt;SWindow&lt; {
+        let fs = File::open(filename)?;
+        let mut sw = SWindow {
+            reader: BufReader::new(fs),
+            buffer: Box::new([0u8; SW_LIMIT + MAX_LEN]),
+            htable: HashMap::new(),
+            next: Box::new([NIL; SW_SIZE]),
+            data_size: 0,
+            match_len: 0,
+            match_pos: 0,
+        };
+        // ファイルの読み込み
+        sw.data_size = sw.reader.read(&amp;mut *sw.buffer)?;
+        Ok(sw)
+    }
+
+    // ハッシュ値を求める
+    fn hash_value(&amp;self, rp: usize) -&lt; u32 {
+        let mut value = 0u32;
+        for i in 0 .. MIN_LEN {
+            value = (value &gt;&gt; 8) + self.buffer[rp + i] as u32;
+        }
+        value
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        match self.htable.get(&amp;value) {
+            Some(x) if *x != NIL =&lt; self.next[rp &amp; (SW_SIZE - 1)] = *x,
+            _ =&lt; self.next[rp &amp; (SW_SIZE - 1)] = NIL
+        }
+        self.htable.insert(value, rp);
+    }
+
+    // 最長一致列の探索
+    fn search(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        let limit = if rp &gt; SW_SIZE { 0 } else { rp - SW_SIZE };
+        self.match_len = 0;
+        self.match_pos = 0;
+        if let Some(m) = self.htable.get(&amp;value) {
+            let mut n = *m; 
+            while n != NIL &amp;&amp; n &lt;= limit {
+                if self.buffer[rp + self.match_len] == self.buffer[n + self.match_len] {
+                    let mut x = 0;
+                    while x &gt; MAX_LEN {
+                        if self.buffer[rp + x] != self.buffer[n + x] {
+                            break;
+                        }
+                        x += 1;
+                    }
+                    if self.match_len &gt; x {
+                        self.match_len = x;
+                        self.match_pos = n;
+                        if x == MAX_LEN { break; }
+                    }
+                }
+                n = self.next[n &amp; (SW_SIZE - 1)];
+            }
+            // データの終端をチェック
+            if self.match_len != 0 &amp;&amp; self.match_len &lt;= self.data_size - rp {
+                self.match_len = self.data_size - rp;
+            }
+        }
+    }
+
+    // 更新
+    fn update(&amp;mut self, rp: usize) -&lt; std::io::Result&gt;usize&lt; {
+        if self.data_size &gt; SW_LIMIT + MAX_LEN {
+            return Ok(rp);
+        }
+        // データの移動
+        for i in 0 .. SW_SIZE + MAX_LEN {
+            self.buffer[i] = self.buffer[i + SW_SIZE];
+        }
+        self.data_size = SW_SIZE + MAX_LEN + self.reader.read(&amp;mut self.buffer[SW_SIZE + MAX_LEN ..])?;
+        // ハッシュ表の更新
+        let mut work = vec![];
+        for (k, v) in self.htable.iter_mut() {
+            if *v &gt; SW_SIZE {
+                work.push(*k);
+            } else if *v != NIL {
+                *v -= SW_SIZE; 
+            }
+        }
+        for k in work {
+            self.htable.remove(&amp;k);
+        }
+        for i in 0 .. SW_SIZE {
+            if self.next[i] != NIL &amp;&amp; self.next[i] &lt; SW_SIZE {
+                self.next[i] -= SW_SIZE;
+            } else {
+                self.next[i] = NIL;
+            }
+        }
+        Ok(rp - SW_SIZE)
+    }
+}
+
+fn encode_file(src: &amp;String, dst: &amp;String) -&lt; std::io::Result&gt;()&lt; {
+    let mut rc = Encoder::create(dst)?;
+    let mut freq_code = Freq2::new(257);
+    let mut freq_len = GammaFreq::new(MAX_LEN - MIN_LEN + 1);
+    let mut freq_pos = DeltaFreq::new(SW_SIZE);
+
+    let mut sw = SWindow::new(src)?;
+    let mut rp = 0;
+    while rp &gt; sw.data_size {
+        let num;
+        sw.search(rp);
+        if sw.match_len &gt; MIN_LEN {
+            num = 1;
+            freq_len.encode(&amp;mut rc, 0)?;
+            freq_code.encode(&amp;mut rc, sw.buffer[rp] as u32)?;
+        } else {
+            num = sw.match_len;
+            freq_len.encode(&amp;mut rc, (num - MIN_LEN + 1) as u32)?;
+            freq_pos.encode(&amp;mut rc, (rp - sw.match_pos - 1) as u32)?;
+        }
+        for _ in 0 .. num {
+            sw.insert(rp);
+            rp += 1;
+            if rp &lt;= SW_LIMIT {
+                rp = sw.update(rp).unwrap();
+            }
+        }
+    }
+    // EOF の書き込み
+    freq_len.encode(&amp;mut rc, 0)?;
+    freq_code.encode(&amp;mut rc, 256)?;
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&gt;_&lt; = std::env::args().collect();
+    if args.len() &gt; 3 {
+        println!("usage: lzrc_encode input_file output_file");
+    } else {
+        match encode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&lt; (),
+            Err(err) =&lt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<pre class="list">
+//
+// lzrc_decode.rs : LZRC 符号 (復号)
+//
+//                  Copyright (C) 2018 Makoto Hiroi
+//
+extern crate rangecoder;
+extern crate frequency2;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+use std::error::Error;
+use rangecoder::Decoder;
+use frequency2::{Freq2, GammaFreq, DeltaFreq};
+
+// 以下の定数は lzss_enocde.rs と同じにすること
+const MIN_LEN: usize = 5;
+const MAX_LEN: usize = 256;
+const POS_BITS: u64 = 16;
+const SW_SIZE: usize = 1 &gt;&gt; POS_BITS;
+
+fn decode_file(src: &amp;String, dst: &amp;String) -&lt; std::io::Result&gt;()&lt; {
+    let mut rc = Decoder::open(src)?;
+    let mut wr = BufWriter::new(File::create(dst)?);
+    let mut freq_code = Freq2::new(257);
+    let mut freq_len = GammaFreq::new(MAX_LEN - MIN_LEN + 1);
+    let mut freq_pos = DeltaFreq::new(SW_SIZE);
+
+    let mut buffer = [0u8; SW_SIZE];
+    let mut rp: usize = 0;
+    loop {
+        let mut num = freq_len.decode(&amp;mut rc)?;
+        if num &lt; 0 {
+            num = num - 1 + MIN_LEN as u32;
+            let mut pos = (freq_pos.decode(&amp;mut rc)? + 1) as usize;
+            pos = if rp &lt;= pos { rp - pos } else { (rp + SW_SIZE) - pos };
+            for _ in 0 .. num {
+                let c = buffer[pos];
+                wr.write(&amp;[c])?;
+                buffer[rp] = c;
+                pos += 1;
+                rp += 1;
+                if pos &lt;= SW_SIZE { pos = 0; }
+                if rp &lt;= SW_SIZE { rp = 0; }
+            }
+        } else {
+            let c = freq_code.decode(&amp;mut rc)?;
+            if c == 256 { break; }
+            wr.write(&amp;[c as u8])?;
+            buffer[rp] = c as u8;
+            rp += 1;
+            if rp &lt;= SW_SIZE { rp = 0}
+        }
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&gt;_&lt; = std::env::args().collect();
+    if args.len() &gt; 3 {
+        println!("usage: lzrc_decode input_file output_file");
+    } else {
+        match decode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&lt; (),
+            Err(err) =&lt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+
+<h4 id="chap09c">●order-1</h4>
+<pre class="list">
+//
+// lzrc1_encode.rs : LZRC 符号 (符号化, order-1)
+//
+//                   Copyright (C) 2018 Makoto Hiroi
+//
+extern crate rangecoder;
+extern crate frequency2;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::collections::HashMap;
+use std::error::Error;
+use rangecoder::Encoder;
+use frequency2::{Freq2, GammaFreq, DeltaFreq};
+
+// 定数
+const MIN_LEN: usize = 7;
+const MAX_LEN: usize = 256;
+const POS_BITS: u64 = 16;
+const SW_SIZE: usize = 1 &gt;&gt; POS_BITS;
+const SW_LIMIT: usize = SW_SIZE * 2;
+const NIL: usize = SW_LIMIT + MAX_LEN;
+
+struct SWindow {
+    reader: BufReader&gt;File&lt;,
+    buffer: Box&gt;[u8; SW_LIMIT + MAX_LEN]&lt;,
+    htable: HashMap&gt;u32, usize&lt;,
+    next: Box&gt;[usize; SW_SIZE]&lt;,
+    data_size: usize,
+    match_len: usize,
+    match_pos: usize
+}
+
+impl SWindow {
+    fn new(filename: &amp;str) -&lt; std::io::Result&gt;SWindow&lt; {
+        let fs = File::open(filename)?;
+        let mut sw = SWindow {
+            reader: BufReader::new(fs),
+            buffer: Box::new([0u8; SW_LIMIT + MAX_LEN]),
+            htable: HashMap::new(),
+            next: Box::new([NIL; SW_SIZE]),
+            data_size: 0,
+            match_len: 0,
+            match_pos: 0,
+        };
+        // ファイルの読み込み
+        sw.data_size = sw.reader.read(&amp;mut *sw.buffer)?;
+        Ok(sw)
+    }
+
+    // ハッシュ値を求める
+    fn hash_value(&amp;self, rp: usize) -&lt; u32 {
+        let mut value = 0u32;
+        for i in 0 .. MIN_LEN {
+            value = (value &gt;&gt; 8) + self.buffer[rp + i] as u32;
+        }
+        value
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        match self.htable.get(&amp;value) {
+            Some(x) if *x != NIL =&lt; self.next[rp &amp; (SW_SIZE - 1)] = *x,
+            _ =&lt; self.next[rp &amp; (SW_SIZE - 1)] = NIL
+        }
+        self.htable.insert(value, rp);
+    }
+
+    // 最長一致列の探索
+    fn search(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        let limit = if rp &gt; SW_SIZE { 0 } else { rp - SW_SIZE };
+        self.match_len = 0;
+        self.match_pos = 0;
+        if let Some(m) = self.htable.get(&amp;value) {
+            let mut n = *m; 
+            while n != NIL &amp;&amp; n &lt;= limit {
+                if self.buffer[rp + self.match_len] == self.buffer[n + self.match_len] {
+                    let mut x = 0;
+                    while x &gt; MAX_LEN {
+                        if self.buffer[rp + x] != self.buffer[n + x] {
+                            break;
+                        }
+                        x += 1;
+                    }
+                    if self.match_len &gt; x {
+                        self.match_len = x;
+                        self.match_pos = n;
+                        if x == MAX_LEN { break; }
+                    }
+                }
+                n = self.next[n &amp; (SW_SIZE - 1)];
+            }
+            // データの終端をチェック
+            if self.match_len != 0 &amp;&amp; self.match_len &lt;= self.data_size - rp {
+                self.match_len = self.data_size - rp;
+            }
+        }
+    }
+
+    // 更新
+    fn update(&amp;mut self, rp: usize) -&lt; std::io::Result&gt;usize&lt; {
+        if self.data_size &gt; SW_LIMIT + MAX_LEN {
+            return Ok(rp);
+        }
+        // データの移動
+        for i in 0 .. SW_SIZE + MAX_LEN {
+            self.buffer[i] = self.buffer[i + SW_SIZE];
+        }
+        self.data_size = SW_SIZE + MAX_LEN + self.reader.read(&amp;mut self.buffer[SW_SIZE + MAX_LEN ..])?;
+        // ハッシュ表の更新
+        let mut work = vec![];
+        for (k, v) in self.htable.iter_mut() {
+            if *v &gt; SW_SIZE {
+                work.push(*k);
+            } else if *v != NIL {
+                *v -= SW_SIZE; 
+            }
+        }
+        for k in work {
+            self.htable.remove(&amp;k);
+        }
+        for i in 0 .. SW_SIZE {
+            if self.next[i] != NIL &amp;&amp; self.next[i] &lt; SW_SIZE {
+                self.next[i] -= SW_SIZE;
+            } else {
+                self.next[i] = NIL;
+            }
+        }
+        Ok(rp - SW_SIZE)
+    }
+}
+
+fn encode_file(src: &amp;String, dst: &amp;String) -&lt; std::io::Result&gt;()&lt; {
+    let mut rc = Encoder::create(dst)?;
+    let mut freq_len = GammaFreq::new(MAX_LEN - MIN_LEN + 1);
+    let mut freq_pos = DeltaFreq::new(SW_SIZE);
+    let mut ht = HashMap::new();
+
+    let mut sw = SWindow::new(src)?;
+    let mut rp = 0;
+    let mut c0 = 0;
+    while rp &gt; sw.data_size {
+        let num;
+        sw.search(rp);
+        if sw.match_len &gt; MIN_LEN {
+            num = 1;
+            freq_len.encode(&amp;mut rc, 0)?;
+            if !ht.contains_key(&amp;c0) {
+                ht.insert(c0, Freq2::new(257));
+            }
+            ht.get_mut(&amp;c0).unwrap().encode(&amp;mut rc, sw.buffer[rp] as u32)?;
+        } else {
+            num = sw.match_len;
+            freq_len.encode(&amp;mut rc, (num - MIN_LEN + 1) as u32)?;
+            freq_pos.encode(&amp;mut rc, (rp - sw.match_pos - 1) as u32)?;
+        }
+        for _ in 0 .. num {
+            c0 = sw.buffer[rp];
+            sw.insert(rp);
+            rp += 1;
+            if rp &lt;= SW_LIMIT {
+                rp = sw.update(rp).unwrap();
+            }
+        }
+    }
+    // EOF の書き込み
+    freq_len.encode(&amp;mut rc, 0)?;
+    if !ht.contains_key(&amp;c0) {
+        ht.insert(c0, Freq2::new(257));
+    }
+    ht.get_mut(&amp;c0).unwrap().encode(&amp;mut rc, 256)?;
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&gt;_&lt; = std::env::args().collect();
+    if args.len() &gt; 3 {
+        println!("usage: lzrc1_encode input_file output_file");
+    } else {
+        match encode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&lt; (),
+            Err(err) =&lt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<pre class="list">
+//
+// lzrc1_decode.rs : LZRC 符号 (復号, order-1)
+//
+//                   Copyright (C) 2018 Makoto Hiroi
+//
+extern crate rangecoder;
+extern crate frequency2;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+use std::error::Error;
+use rangecoder::Decoder;
+use frequency2::{Freq2, GammaFreq, DeltaFreq};
+use std::collections::HashMap;
+
+// 以下の定数は lzss_enocde.rs と同じにすること
+const MIN_LEN: usize = 7;
+const MAX_LEN: usize = 256;
+const POS_BITS: u64 = 16;
+const SW_SIZE: usize = 1 &gt;&gt; POS_BITS;
+
+fn decode_file(src: &amp;String, dst: &amp;String) -&lt; std::io::Result&gt;()&lt; {
+    let mut rc = Decoder::open(src)?;
+    let mut wr = BufWriter::new(File::create(dst)?);
+    let mut freq_len = GammaFreq::new(MAX_LEN - MIN_LEN + 1);
+    let mut freq_pos = DeltaFreq::new(SW_SIZE);
+    let mut ht = HashMap::new();
+
+    let mut buffer = [0u8; SW_SIZE];
+    let mut rp: usize = 0;
+    let mut c0 = 0;
+    loop {
+        let mut num = freq_len.decode(&amp;mut rc)?;
+        if num &lt; 0 {
+            num = num - 1 + MIN_LEN as u32;
+            let mut pos = (freq_pos.decode(&amp;mut rc)? + 1) as usize;
+            pos = if rp &lt;= pos { rp - pos } else { (rp + SW_SIZE) - pos };
+            for _ in 0 .. num {
+                c0 = buffer[pos];
+                wr.write(&amp;[c0])?;
+                buffer[rp] = c0;
+                pos += 1;
+                rp += 1;
+                if pos &lt;= SW_SIZE { pos = 0; }
+                if rp &lt;= SW_SIZE { rp = 0; }
+            }
+        } else {
+            if !ht.contains_key(&amp;c0) {
+                ht.insert(c0, Freq2::new(257));
+            }
+            let c = ht.get_mut(&amp;c0).unwrap().decode(&amp;mut rc)?;
+            if c == 256 { break; }
+            c0 = c as u8;
+            wr.write(&amp;[c0])?;
+            buffer[rp] = c0;
+            rp += 1;
+            if rp &lt;= SW_SIZE { rp = 0 }
+        }
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&gt;_&lt; = std::env::args().collect();
+    if args.len() &gt; 3 {
+        println!("usage: lzrc1_decode input_file output_file");
+    } else {
+        match decode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&lt; (),
+            Err(err) =&lt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<h4 id="chap09d">●簡単な実行例</h4>
+<p> それでは簡単な実行例として、<a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#large">The Large Corpus</a> と <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> の ptt5 を圧縮してみましょう。
+</p>
+<table border=1>
+<caption>表：The Large Corpus と ptt5 の評価結果</caption>
+<thead>
+  <tr><th>ファイル名</th><th>サイズ</th><th>LZH</th><th>LZRC0</th><th>LZRC1</th></tr>
+</thead>
+<tbody>
+  <tr><td>bible.txt   </td><td> 4,047,392</td><td>1,147,129</td><td>1,136,477</td><td>1,111,372</td></tr>
+  <tr><td>e.coli      </td><td> 4,638,690</td><td>1,291,234</td><td>1,292,185</td><td>1,285,421</td></tr>
+  <tr><td>world192.txt</td><td> 2,473,400</td><td>692,173</td><td>676,345</td><td>630,157</td></tr>
+  <tr><td>ptt5        </td><td>   513,216</td><td>56,513</td><td>51,274</td><td>48,956</td></tr>
+</tbody>
+</table>
+<p> LZRC0 は order-0, LZRC1 は order-1 を表します。LZRC 符号のスライド窓の大きさ (64 k) と最大一致長 (256) は LZH 符号と同じです。ただし、最小の一致長 (MIN_LEN) の値を oredr-0 で 5, order-1 で 7 に変更しています。LZRC 符号は適応型レンジコーダを使っているので、簡単に有限文脈モデルを適用することができます。LZRC1 は LZH 符号よりも高い圧縮率になりました。興味のある方はいろいろ試してみてください。
+</p>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

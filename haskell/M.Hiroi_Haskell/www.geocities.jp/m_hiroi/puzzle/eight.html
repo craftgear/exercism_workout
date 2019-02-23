@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 幅優先探索の高速化 -- ８パズルを解く --</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881774</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>幅優先探索の高速化 -- ８パズルを解く --</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>パズルの説明</h3>
+<p>15 パズルでお馴染みのスライディングブロックと呼ばれるパズルを、幅優先探索で解いてみましょう。<a href="index.html#puz_cite">参考文献 [7]</a> によると、15 パズルはアメリカのサム・ロイドが 1870 年代に考案したパズルで、彼はパズルの神様と呼ばれるほど有名なパズル作家だそうです。
+</p>
+
+<pre class="fig">
+ ┌─┬─┬─┬─┐
+ │１│２│３│４│
+ ├─┼─┼─┼─┤
+ │５│６│７│８│
+ ├─┼─┼─┼─┤
+ │９│10│11│12│
+ ├─┼─┼─┼─┤
+ │13│14│15│  │
+ └─┴─┴─┴─┘
+
+  図 1 : 15 パズル
+</pre>
+
+<p> 15 パズルは図 1 に示すように、1 から 15 までの駒を並べるパズルです。駒の動かし方は、1 回に 1 個の駒を空いている隣の場所に滑らせる、というものです。駒を跳び越したり持ち上げたりすることはできません。
+</p>
+<p> 15 パズルの場合、駒の配置は空き場所がどこでもいいことにすると、16! (約 2e13) 通りもあります。実際には、15 パズルの性質からその半分になるのですが、それでもパソコンで扱うにはあまりにも大きすぎる数です。そこで、盤面を一回り小さくした、1 から 8 までの数字を並べる「8 パズル」を考えることにします。
+</p>
+
+<pre class="fig">
+  ┌─┬─┬─┐      ┌─┬─┬─┐
+  │１│２│３│      │１│２│３│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │４│５│６│      │４│５│６│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │７│８│  │      │８│７│  │
+  └─┴─┴─┘      └─┴─┴─┘
+  （１）完成形      （２）不可能な局面  
+
+          図 2 : 8 パズル
+</pre>
+<p> 15 パズルは 4 行 4 列の盤ですが、8 パズルは 3 行 3 列と盤を小さくしたパズルです。8 パズルの場合、駒の配置は空き場所がどこでもいいことにすると、9! =  362880 通りあります。ところが 15 パズルや 8 パズルの場合、<a href="index.html#puz_cite">参考文献 [5]</a> によると次のことが証明されているそうです。
+</p>
+<blockquote>
+<cite>『適当な 2 つの駒をつまみ上げて交換する動作を偶数回行った局面にした移行できない』
+</cite>
+</blockquote>
+<p> 図 2 :  (2) は 7 と 8 を入れ替えただけの配置です。この場合、交換の回数が奇数回のため完成形に到達することができない、つまり解くことができないのです。したがって、完成形に到達する局面の総数は 9! / 2 = 181440 個となります。
+</p>
+<hr>
+<h4>●N! 通りのパターンに 0 から N! - 1 までの番号をつける方法</h4>
+<p> 今までにも説明しましたが、幅優先探索でパズルを解く場合、同一局面の検索処理が重要になります。単純な線形探索で局面を検索すると、答えが出るまでに時間がとてもかかってしまいます。このような場合の常套手段が、線形探索にかえて高速な検索アルゴリズムを使うことです。ハッシュ法や二分探索木など優秀なアルゴリズムを使うことで、実行時間を大幅に短縮することができます。
+</p>
+<p> まあ、ハッシュ法や二分探索木を使っていもいいのですが、これらのアルゴリズムは拙作のプログラミング入門講座でも取り上げていますので、今回は趣向をこらして（笑）、順列のパターンに番号をつける方法を採用します。8 パズルの場合、9! = 362880 のパターンがありますね。このパターンに 0 から 362879 までの番号をつけることができれば、362,880 byte の配列を使って同一局面のチェックを高速に行うことができます。
+</p>
+
+<p> それでは、番号の振り方を考えてみましょう。最初が 0 で始まるパターンは 8! = 40320 通りありますね。このパターンには 0 - 40319 までの番号を割り当てます。そして、1 で始まるパターンには 40320 - 80639 までの番号を割り当てます。残りのパターンも同じです。
+</p>
+<p> 次に 2 番目の数字を考えましょう。01 で始まるパターンは 7! = 5040 通りあります。
+</p>
+したがって、このパターンには 0 - 5039 までの番号を割り当てます。10 で始まるパターンには 40320 - 45359 までの番号を、12 で始まるパターンには 45360 - 50399 までの番号を割り当てます。あとはこれを 9 番目までの数字まで続ければ、すべてパターンに番号を割り当てることができます。
+
+<p> では実際に 867254301 というパターンで試してみましょう。次の図を見てください。
+</p>
+<pre class="item">
+ ８ 8 * 8!
+ ６ [0 1 2 3 4 5 6 7] : 8*8! + 6*7!
+ ７ [0 1 2 3 4 5 7] : 8*8! + 6*7! + 6*6!
+ ２ [0 1 2 3 4 5] : 8*8! + 6*7! + 6*6! + 2*5!
+ ５ [0 1 3 4 5] : 8*8! + 6*7! + 6*6! + 2*5! + 4*4!
+ ４ [0 1 3 4] : 8*8! + 6*7! + 6*6! + 2*5! + 4*4! + 3*3!
+ ３ [0 1 3] : 8*8! + 6*7! + 6*6! + 2*5! + 4*4! + 3*3! + 2*2!
+ ０ [0 1] : 8*8! + 6*7! + 6*6! + 2*5! + 4*4! + 3*3! + 2*2! + 0*1!    
+ １ [1] :
+ 番号：357478
+</pre>
+<p> 注意すべき点は、数字をそのまま掛け算してはいけないところです。たとえば、7 に注目してください。このとき、残されている数字は 0, 1, 2, 3, 4, 5, 7 がありますね。番号は順番に振っていくので、867 は 86 で始まるパターンの 6*6! 番目から始まるのです。つまり、残っている数字の中で何番目に位置しているのか、を求めなければならないのです。
+</p>
+<p> うむう、けっこうめんどいな、と思ったのですが、<a href="index.html#puz_cite">参考文献 [2]</a> に目からウロコが落ちるようなプログラムがありました。次の図を見てください。
+</p>
+<pre class="fig">
+8|6 7 2 5 4 3 0 1
+  6 7 2 5 4 3 0 1 : 8 より大きな数字を -1 する    
+
+8 6|7 2 5 4 3 0 1
+    6 2 5 4 3 0 1 : 6 より大きな数字を -1 する
+
+8 6 6|2 5 4 3 0 1
+      2 5 4 3 0 1 : 6 より大きな数字を -1 する
+
+8 6 6 2|5 4 3 0 1
+        4 3 2 0 1 : 2 より大きな数字を -1 する
+
+8 6 6 2 4|3 2 0 1
+          3 2 0 1 : 4 より大きな数字を -1 する
+
+・・・省略・・・
+
+8 6 6 2 4 3 2 0 0
+</pre>
+
+<p> 2 番目の 6 に注目してください。次の数字 7 は 6 より大きいですね。6 が使われたのですから、7 は 7 番目ではなく 6 番目になるわけです。つまり、数字ではなく位置を表していると考えるのです。自分よりも前にある数字を使ったならば、位置を -1 して前に詰めればいいわけです。あとはこれを繰り返すだけです。こんな簡単な方法で求めることができるのですね。
+</p>
+<h4>●グローバル変数の定義</h4>
+<p> それではプログラムを作りましょう。使用するプログラミング言語はＣ言語です。<a href="farmer.html">農夫と山羊と狼とキャベツの問題</a> でも説明しましたが、幅優先探索はキュー (queue) というデータ構造を使うと、簡単にプログラムできます。
+</p>
+<p> まずはグローバル変数を定義します。
+</p>
+
+<pre class="list">
+リスト：グローバル変数の定義
+
+/* 隣接リスト */
+const char adjacent[SIZE][5] = {
+  1, 3,-1,-1,-1,  0, 4, 2,-1,-1,  1, 5,-1,-1,-1,
+  0, 4, 6,-1,-1,  1, 3, 5, 7,-1,  2, 4, 8,-1,-1,
+  3, 7,-1,-1,-1,  4, 6, 8,-1,-1,  5, 7,-1,-1,-1,
+};
+
+char state[MAX_STATE + 1][SIZE];  /* 局面を格納 */
+char space_postion[MAX_STATE];    /* スペースの位置 */
+int  prev_state[MAX_STATE];       /* ひとつ前の局面 */
+char check_table[MAX_STATE * 2];  /* 同一局面チェックテーブル */
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  8, 6, 7, 2, 5, 4, 3, 0, 1
+};
+
+/* ゴール */
+char final_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 7, 8, 0
+};
+</pre>
+<p> 8 パズルは隣接リストを使って表しています。8 パズルの座標は、左上から右へ 0 から順番に番号を振ります。MAX_STATE は 181440 (9! / 2) を表しています。
+</p>
+
+<h4>●局面を番号に変換</h4>
+<p> このプログラムのポイントは、局面を番号に変換するプログラムです。
+</p>
+
+<pre class="list">
+リスト：局面を番号に変換
+
+int change_number( char *board )
+{
+  char work[SIZE];
+  static int fact_table[SIZE] = {
+    40320, 5040, 720, 120, 24, 6, 2, 1, 0,
+  };
+  int j, k, value = 0;
+  memcpy( work, board, SIZE );
+  for( j = 0; j &lt; SIZE - 1; j++ ){
+    value += fact_table[j] * work[j];
+    for( k = j + 1; k &lt; SIZE; k++ ){
+      if( work[j] &lt; work[k] ) work[k] -= 1;
+    }
+  }
+  return value;
+}
+</pre>
+<p> 局面を表す board を work にコピーして番号に変換します。先ほど説明した通りにプログラムしてあるので、難しいところはないと思います。ただし、このプログラムだけだと、理解するのはちょっと難しいでしょう。M.Hiroi は、最初に <a href="index.html#puz_cite">参考文献 [2]</a> のプログラムを見たときには、さっぱり理解できませんでした。よく分からない方は、もう一度説明を読み直して考えてみてください。
+</p>
+
+<h4>●探索処理</h4>
+<p> メインの探索プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：探索処理
+
+void search( void )
+{
+  int front = 0, rear = 1;
+  /* 初期化 */
+  memcpy( state[0], init_state, SIZE );
+  space_postion[0] = 7;
+  prev_state[0] = -1;
+  check_table[ change_number( init_state ) ] = TRUE;
+  check_table[ change_number( final_state ) ] = GOAL;
+  /* キューにデータがある間繰り返す */
+  while( front &lt; rear ){
+    int s = space_postion[front];
+    int i, k, n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      memcpy( state[rear], state[front], SIZE ); /* 状態をコピー */
+      state[rear][s] = state[rear][n];           /* 移動 */
+      state[rear][n] = 0;
+      space_postion[rear] = n;
+      prev_state[rear] = front;
+      k = change_number( state[rear] );
+      if( check_table[k] == GOAL ){
+        /* 発見 */
+        print_answer( rear );
+        printf("状態数 %d 個\n", rear );
+        return;
+      } else if( !check_table[k] ){
+	/* キューに登録 */
+        check_table[k] = TRUE;
+	rear++;
+      }
+    }
+    front++;
+  }
+}
+</pre>
+<p> まず、初期状態をキューに登録します。check_table には、初期状態のほかにゴールも登録しておきます。新しく作った局面は番号に変換するので、ゴールを登録しておけば簡単にチェックすることができます。
+</p>
+<p> 次に、キューからデータを取り出して、駒を動かして次の局面を生成します。局面を番号に変換し、check_table の値をチェックします。GOAL であれば解が求まったので、手順を表示してリターンします。値が 0 であれば新しい局面なので、それをキューに登録し探索を続行します。リストは少々長めですが、プログラムの骨格はシンプルです。
+</p>
+
+<h4>●実行結果</h4>
+<p> それではプログラムを実行してみましょう。
+</p>
+<pre class="fig">
+8 6 7   8 6 7   8 0 7
+2 5 4   2 0 4   2 6 4
+3 0 1   3 5 1   3 5 1
+
+    ・・省略・・
+
+1 2 3   1 2 3  1 2 3
+4 5 6   4 5 6  4 5 6
+0 7 8   7 0 8  7 8 0
+</pre>
+<p> 31 手で解くことができました。生成した状態数は 181439 個で、
+</p>
+実はこれが 8 パズルの最長手数なのです。31 手で解ける局面は次の 2 つです。
+
+<pre class="fig">
+┌─┬─┬─┐    ┌─┬─┬─┐
+│８│６│７│    │６│４│７│
+├─┼─┼─┤    ├─┼─┼─┤
+│２│５│４│    │８│５│  │
+├─┼─┼─┤    ├─┼─┼─┤
+│３│  │１│    │３│２│１│
+└─┴─┴─┘    └─┴─┴─┘
+
+    図 : 31 手で解ける局面
+</pre>
+<p> 実行速度ですが Pentium 166 MHz で約 2.6 秒かかりました。これは速いです。二分探索木を使って 8 パズルを解いた時は、約 13 秒かかりました。番号の変換に時間がかかるかな、と予想していましたが、それほどでもないようです。
+</p>
+<p> 実はこのプログラム、もう一工夫することができます。8 パズルの場合、同じ駒を続けて動かすと、駒を元の場所に戻すことになってしまいます。これは元の局面に戻ることなので、わざわざ番号に変換する必要はありません。今のプログラムでは、このチェックを行っていないため、無駄な変換が行われているのです。同じ駒を続けて動かさないようにすれば、もう少し速くなるでしょう。
+</p>
+<p> この工夫を行うと、二分探索木は約 8.5 秒まで短縮しました。このプログラムでも、もう少し速くなるかもしれません。興味のある方は、プログラムを改造してみてください。
+</p>
+<p> ところで、幅優先探索の場合には、スタートとゴールの 2 方向から平行に探索を進めると、実行速度を劇的に速くすることできます。この話は次回のお楽しみに。
+</p>
+<hr>
+<h4>●プログラムリスト１</h4>
+<pre class="list">
+/*
+ * eigth.c : 「８パズル」幅優先探索
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define GOAL  2
+#define SIZE  9
+
+/* 状態数 (9! / 2) */
+#define MAX_STATE 181440
+
+/* 隣接リスト */
+const char adjacent[SIZE][5] = {
+  1, 3,-1,-1,-1,
+  0, 4, 2,-1,-1,
+  1, 5,-1,-1,-1,
+  0, 4, 6,-1,-1,
+  1, 3, 5, 7,-1,
+  2, 4, 8,-1,-1,
+  3, 7,-1,-1,-1,
+  4, 6, 8,-1,-1,
+  5, 7,-1,-1,-1,
+};
+
+/* キュー */
+char state[MAX_STATE + 1][SIZE];      /* +1 はワーク領域 */
+char space_postion[MAX_STATE];
+int  prev_state[MAX_STATE];
+
+/* 同一局面チェックテーブル */
+char check_table[MAX_STATE * 2];
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  8, 6, 7, 2, 5, 4, 3, 0, 1
+};
+
+char final_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 7, 8, 0
+};
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int i, j;
+  if( n != 0 ) print_answer( prev_state[n] );
+  for( i = 0; i &lt; 3; i++ ){
+    for( j = 0; j &lt; 3; j++ ){
+      printf("%d ", state[n][i * 3 + j] );
+    }
+    printf("\n");
+  }
+  printf("\n");
+}
+
+/* 番号に変換 */
+int change_number( char *board )
+{
+  char work[SIZE];
+  static int fact_table[SIZE] = {
+    40320, 5040, 720, 120, 24, 6, 2, 1, 0,
+  };
+  int j, k, value = 0;
+  memcpy( work, board, SIZE );
+  for( j = 0; j &lt; SIZE - 1; j++ ){
+    value += fact_table[j] * work[j];
+    for( k = j + 1; k &lt; SIZE; k++ ){
+      if( work[j] &lt; work[k] ) work[k]--;
+    }
+  }
+  return value;
+}
+
+/* 探索 */
+void search( void )
+{
+  int front = 0, rear = 1;
+  /* 初期化 */
+  memcpy( state[0], init_state, SIZE );
+  space_postion[0] = 7;
+  prev_state[0] = -1;
+  check_table[ change_number( init_state ) ] = TRUE;
+  check_table[ change_number( final_state ) ] = GOAL;
+  /* キューにデータがある間繰り返す */
+  while( front &lt; rear ){
+    int s = space_postion[front];
+    int i, k, n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 状態をコピー */
+      memcpy( state[rear], state[front], SIZE );
+      /* 移動 */
+      state[rear][s] = state[rear][n];
+      state[rear][n] = 0;
+      space_postion[rear] = n;
+      prev_state[rear] = front;
+      k = change_number( state[rear] );
+      if( check_table[k] == GOAL ){
+        /* 発見 */
+        print_answer( rear );
+        printf("状態数 %d 個\n", rear );
+        return;
+      } else if( !check_table[k] ){
+	/* キューに登録 */
+        check_table[k] = TRUE;
+	rear++;
+      }
+    }
+    front++;
+  }
+}
+
+int main()
+{
+  int start, end;
+  /* 
+   * 静的変数が 0 に初期化される場合は不用だが
+   * 初期化することは悪いことではない。
+   */
+  memset( check_table, 0 , MAX_STATE * 2 );
+  start = clock();
+  search();
+  end = clock();
+  printf("時間 %d \n", end - start );
+  return 0;
+}
+</pre>
+<hr>
+<h3 id="eight2">双方向からの探索</h3>
+<p> 8 パズルの続きです。幅優先探索の場合、スタートから探索するだけではなく、ゴールからも探索を行うことで、探索する局面数を減らすことができます。その理由を説明するために、簡単なシミュレーションをしてみましょう。
+</p>
+<p> たとえば、1 手進むたびに 3 つの新しい局面が生成され、5 手で解けると仮定します。すると、n 手目で生成される局面は 3 の n 乗個になるので、スタートから単純に探索すると、生成される局面の総数は、3 + 9 + 27 + 81 + 243 = 363 個となります。
+</p>
+<p> これに対し、スタートとゴールから同時に探索を始めた場合、お互い 3 手まで探索した時点で同じ局面に到達する、つまり、解を見つけることができます。この場合、生成される局面の総数は 3 手目までの局面数を 2 倍した 78 個となります。
+</p>
+<p> 生成される局面数はぐっと減りますね。このことにより、キューからデータを取り出して新しい局面を作る、という根本的な処理のループ回数を減らすことになるので、処理速度は大幅に向上するのです。
+</p>
+
+<h4>●プログラムの改造</h4>
+<p> それではプログラムを改造しましょう。単純に考えると、2 つの探索処理を交互に行うことになりますが、そうするとプログラムの大幅な改造が必要になります。ここは、探索方向を示すフラグを用意することで、ひとつのキューだけで処理することにしましょう。
+</p>
+<p> フラグを格納する配列には、同一局面のチェックテーブル check_table を使います。スタートから生成した局面には FORWARD (1) を、ゴールから生成した局面には BACKWARD (2) をセットします。それから、局面を格納する配列 state と check_table との対応づけが必要になるため、配列 number_table を用意します。この配列には局面を change_number で変換した値を格納します。
+</p>
+<p> 主な変更はこれだけです。探索プログラムは次のようになります
+</p>
+
+<pre class="list">
+リスト：探索処理
+
+void search( void )
+{
+  int front = 0, rear = 2;
+  init_queue();
+  while( front &lt; rear ){
+    int s = space_postion[front];
+    int num1 = number_table[front];
+    int num2, i, n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      memcpy( state[rear], state[front], SIZE );
+      state[rear][s] = state[rear][n];
+      state[rear][n] = 0;
+      space_postion[rear] = n;
+      prev_state[rear] = front;
+      num2 = change_number( state[rear] );
+      if( !check_table[num2] ){
+	/* 登録 */
+        number_table[rear] = num2;
+        check_table[num2] = check_table[num1];
+	rear++;
+      } else if( check_table[num1] != check_table[num2] ){
+        /* 解が見つかった */
+        print_answer( rear, num1, num2 );
+        printf("状態数 %d 個\n", rear );
+        return;
+      }
+    }
+    front++;
+  }
+}
+</pre>
+<p> まず、キューを初期化します。この処理は init_queue で行います。最初にスタートを、次にゴールをセットします。2 つのデータをセットしたのですから、変数 rear の値は 2 に初期化することに注意してください。最初に、スタートから 1 手目の局面が生成され、次にゴールから 1 手目の局面が生成されます。あとは交互に探索が行われます。
+</p>
+<p> 駒を移動して局面を作る処理は同じです。そして check_table をチェックして、新しい局面ならば登録します。同じ局面を見つけたとき、値を比較して探索方向が異なっていれば、2 方向の探索で同一局面に到達したことがわかります。見つけた最短手順を print_answer で出力します。同じ探索方向であれば、キューへの追加は行いません。
+</p>
+
+<p> 手順の表示は探索方向によって処理が異なるので、print_answer で振り分ます。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：解を表示
+
+void print_answer( int pos1, int num1, int num2 )
+{
+  /* num2 の位置を見つける */
+  int pos2 = pos1 - 1;
+  while( num2 != number_table[pos2] ) pos2--;
+  if( check_table[num1] == FORWARD ){
+    print_answer_forward( pos1 );
+    print_answer_backward( pos2 );
+  } else {
+    print_answer_forward( pos2 );
+    print_answer_backward( pos1 );
+  }
+}
+</pre>
+
+<p> 最初に番号 num2 の局面を探します。これは単純な線形探索で十分です。初期状態からの手順を表示する関数が print_answer_forward です。この処理は、今までの print_answer と同じです。終了状態までの手順を表示するのが print_answer_backward です。これは prev_state を順番にたどって表示するだけなので、繰り返しで簡単にプログラムできます。これで主なプログラムの修正は終わりです。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは結果を示します。
+</p>
+<pre class="item">
+前回：状態数 181439 個 時間 2.60 秒 
+今回：状態数  16088 個 時間 0.26 秒
+</pre>
+<p> 生成した局面数は 1/11 に激減し、実行速度も 10 倍速くなりました。双方向からの探索は、本当に効果が高いですね。
+</p>
+<hr>
+<h4>●プログラムリスト２</h4>
+<pre class="list">
+/*
+ * eigth1.c : 幅優先探索（双方向）
+ *
+ */
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define FORWARD  1
+#define BACKWARD 2
+#define SIZE  9
+#define NIL   (-1)
+
+/* 状態数 (9! / 2) */
+#define MAX_STATE 181440
+
+/* 隣接リスト */
+const char adjacent[SIZE][5] = {
+  1, 3,-1,-1,-1,
+  0, 4, 2,-1,-1,
+  1, 5,-1,-1,-1,
+  0, 4, 6,-1,-1,
+  1, 3, 5, 7,-1,
+  2, 4, 8,-1,-1,
+  3, 7,-1,-1,-1,
+  4, 6, 8,-1,-1,
+  5, 7,-1,-1,-1,
+};
+
+/* キュー */
+char state[MAX_STATE + 1][SIZE];      /* +1 はワーク領域 */
+char space_postion[MAX_STATE];
+int  prev_state[MAX_STATE];
+int  number_table[MAX_STATE];
+
+/* 同一局面チェックテーブル */
+char check_table[MAX_STATE * 2];
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  8, 6, 7, 2, 5, 4, 3, 0, 1
+};
+
+/* 終了状態 */
+char final_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 7, 8, 0
+};
+
+/***** 解を表示  *****/
+void print_state( int n )
+{
+  int i;
+  for( i = 0; i &lt; SIZE; i++ ){
+    if( i == 3 || i == 6 ) printf("\n");
+    printf("%d ", state[n][i] );
+  }
+  printf("\n\n");
+}
+
+void print_answer_forward( int n )
+{
+  if( n &gt; 1 ) print_answer_forward( prev_state[n] );
+  print_state( n );
+}
+
+void print_answer_backward( int n )
+{
+  do {
+    n = prev_state[n];
+    print_state( n );
+  } while( prev_state[n] != -1 );
+}
+
+void print_answer( int pos1, int num1, int num2 )
+{
+  /* num2 の位置を見つける */
+  int pos2 = pos1 - 1;
+  while( num2 != number_table[pos2] ) pos2--;
+  if( check_table[num1] == FORWARD ){
+    print_answer_forward( pos1 );
+    print_answer_backward( pos2 );
+  } else {
+    print_answer_forward( pos2 );
+    print_answer_backward( pos1 );
+  }
+}
+
+/* 番号に変換 */
+int change_number( char *board )
+{
+  char work[SIZE];
+  static int fact_table[SIZE] = {
+    40320, 5040, 720, 120, 24, 6, 2, 1, 0,
+  };
+  int j, k, value = 0;
+  memcpy( work, board, SIZE );
+  for( j = 0; j &lt; SIZE - 1; j++ ){
+    value += fact_table[j] * work[j];
+    for( k = j + 1; k &lt; SIZE; k++ ){
+      if( work[j] &lt; work[k] ) work[k]--;
+    }
+  }
+  return value;
+}
+
+/* キューの初期化 */
+void init_queue( void )
+{
+  int num;
+  /* スタート */
+  memcpy( state[0], init_state, SIZE );
+  space_postion[0] = 7;
+  prev_state[0] = -1;
+  num = change_number( init_state );
+  number_table[0] = num;
+  check_table[ num ] = FORWARD;
+  /* ゴール */
+  memcpy( state[1], final_state, SIZE );
+  space_postion[1] = 8;
+  prev_state[1] = -1;
+  num = change_number( final_state );
+  number_table[1] = num;
+  check_table[ num ] = BACKWARD;
+}
+
+/* 探索 */
+void search( void )
+{
+  int front = 0, rear = 2;
+  /* 初期化 */
+  init_queue();
+  while( front &lt; rear ){
+    int s = space_postion[front];
+    int num1 = number_table[front];
+    int num2, i, n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 状態をコピー */
+      memcpy( state[rear], state[front], SIZE );
+      /* 移動 */
+      state[rear][s] = state[rear][n];
+      state[rear][n] = 0;
+      space_postion[rear] = n;
+      prev_state[rear] = front;
+      num2 = change_number( state[rear] );
+      if( !check_table[num2] ){
+	/* 登録 */
+        number_table[rear] = num2;
+        check_table[num2] = check_table[num1];
+	rear++;
+      } else if( check_table[num1] != check_table[num2] ){
+        /* 解が見つかった */
+        print_answer( rear, num1, num2 );
+        printf("状態数 %d 個\n", rear );
+        return;
+      }
+    }
+    front++;
+  }
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("時間 %d \n", end - start );
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

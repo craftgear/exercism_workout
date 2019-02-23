@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ言語プログラミング超入門</title>
+  <meta name="description" content="Ｃ言語,Ｃ言語入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881810</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ言語プログラミング超入門 : 番外編</h2>
+<div class="small">
+[ <a href="clangb01.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clangb03.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>続・電卓プログラムの作成 (2)</h3>
+<p> 前回は四則演算を行う簡単な電卓プログラムを作りました。今回は電卓プログラムに変数と組み込み関数の機能を追加してみましょう。
+</p>
+
+<h4>●変数 (代入演算子)</h4>
+<p> <a href="clang28.html">電卓プログラムの作成 (後編)</a> では、変数に値を代入するため「代入文」を追加しましたが、今回は代入演算子 "=" を用意して、式の中で処理することにしましょう。代入演算子は右辺の式の値を左辺の変数に代入するので、文法は次のように表すことができます。
+</p>
+<pre class="item">
+[EBNF]
+  式   = 代入式 | 式１.
+代入式 = 変数, "=", 式.
+ 式１  = 項, { ("+" | "-"), 項 }.
+  項   = 因子, { ("*" | "/"), 因子 }.
+ 因子  = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数.
+ 変数  = 識別子
+
+[注意] 数値と識別子の定義は省略
+</pre>
+
+<p> 演算子 = は他の演算子と違って右結合になることに注意してください。このため、他の演算子よりも優先順位を低くし、右辺の式の評価を優先して行います。そして、その結果を変数にセットします。文法では、式を 代入式 | 式１ に変更し、代入式で演算子 = の処理を行います。式１は今までの式の定義と同じです。これで演算子 = の優先順位を低くすることができます。あとは代入式の処理で、右辺の式を先に評価して、その結果を変数にセットすればいいわけです。
+</p>
+
+<h4>●関数</h4>
+<p> 次は文法に関数を追加します。
+</p>
+
+<pre class="item">
+[EBNF]
+  式   = 代入式 | 式１.
+代入式 = 変数, "=", 式.
+ 式１  = 項, { ("+" | "-"), 項 }.
+  項   = 因子, { ("*" | "/"), 因子 }.
+ 因子  = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数 | 関数, "(", 引数リスト, ")".
+ 変数  = 識別子
+ 関数  = 識別子
+
+引数リスト = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+<p> 関数の追加は <a href="clang28.html">電卓プログラムの作成 (後編)</a> と同じなので、説明は割愛します。
+</p>
+
+<h4>●データ型の定義</h4>
+<p> それではプログラムを作りましょう。最初に、構文木を表す構造体 Expr を修正します。
+</p>
+<PRE class="list">
+リスト : データ型の定義
+
+// タグ
+enum {Num, Add2, Sub2, Mul2, Div2, Add1, Sub1,
+      Assign2, Sym, Func1, Func2};
+
+// 構文木
+typedef struct expr {
+  int tag;
+  union {
+    double num;      // 数値
+    void *ref_value; // 参照型
+    struct {         // 構文木
+      struct expr *left;
+      struct expr *right;
+    };
+  };
+} Expr;
+</pre>
+<p> メンバ変数 ref_value を追加します。数値以外のデータは ref_value に格納します。タグ Assign2 が代入演算子 (=) を表します。Sym が変数で、シンボルを ref_value にセットします。Func1, Func2 が関数呼び出しを表します。連結リストに関数本体と引数の式を格納して、それを ref_value にセットします。
+</p>
+<p> 連結リストは次のように定義します。
+<pre class="list">
+リスト : 連結リストの定義
+
+// 連結リスト
+typedef struct cell {
+  void *item;
+  struct cell *next;
+} Cell;
+
+// セルの生成
+Cell *cons(void *x, Cell *xs)
+{
+  Cell *cp = GC_MALLOC(sizeof(Cell));
+  cp-&gt;item = x;
+  cp-&gt;next = xs;
+  return cp;
+}
+</pre>
+<p> 要素 item のデータ型を void * とすることで、ポインタであれば何でも連結リストに格納することができます。連結リストの生成は関数 cons で行います。このほかに、先頭要素を取り出す関数 car, 先頭要素を取り除く関数 cdr, 2 番目の要素を取り出す関数 second, 3 番目の要素を取り出す関数 third, リストの長さを求める関数 length を定義します。これらの関数は簡単なので説明は割愛します。詳細は <a href="clangb02.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<p> 次は構文木の節を生成する関数を追加します。
+</p>
+<pre class="list">
+リスト ; 構文木の生成
+
+// 関数呼び出し
+Expr *make_func(Symbol *sym, int tag, Cell *cp)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = tag;
+  e-&gt;ref_value = cons(sym-&gt;ref_val, cp);
+  return e;
+}
+
+// 変数の生成
+Expr *make_sym(Symbol *sym)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = Sym;
+  e-&gt;ref_value = sym;
+  return e;
+}
+</pre>
+<p> make_func が関数呼び出しを表す構文木、make_sym が変数を表す構文木を生成します。make_func は引数 sym から関数本体を取り出して、引数のリスト cp の先頭に追加して ref_value にセットします。cp には関数の引数 (式) が逆順に格納されています。make_sym は引数 sym を ref_value にセットするだけです。
+</p>
+
+<h4>●字句解析の修正</h4>
+<p> 次は関数 get_token を修正します。
+<pre class="list">
+リスト : 字句解析の修正
+
+// トークン
+enum {Eof, Number, Ident, Assign, Add, Sub, Mul, Div, Lpar, Rpar,
+      Comma, Semic, Others};
+
+void get_token(void)
+{
+  // 空白文字の読み飛ばし
+  while (isspace(getch())) nextch();
+  if (isdigit(getch())) {
+    token = Number;
+    value = get_number();
+  } else if (isalpha(getch())) {
+    token = Ident;
+    symbol = get_ident();
+  } else {
+    switch(getch()){
+    case '=':
+      token = Assign;
+      nextch();
+      break;
+    case '+':
+      token = Add;
+      nextch();
+      break;
+    case '-':
+      token = Sub;
+      nextch();
+      break;
+    case '*':
+      token = Mul;
+      nextch();
+      break;
+    case '/':
+      token = Div;
+      nextch();
+      break;
+    case '(':
+      token = Lpar;
+      nextch();
+      break;
+    case ')':
+      token = Rpar;
+      nextch();
+      break;
+    case ';':
+      token = Semic;
+      nextch();
+      break;
+    case ',':
+      token = Comma;
+      nextch();
+      break;
+    case EOF:
+      token = Eof;
+      break;
+    default:
+      token = Others;
+    }
+  }
+}
+</pre>
+<p> トークンに Assign (=) と Comma ( , ) を追加します。あとは、<a href="clang28.html">電卓プログラムの作成 (後編)</a> のプログラムと同じです。
+</p>
+
+<h4>●構文解析の修正</h4>
+<p> 次は構文解析を修正します。まず最初に、代入演算子の処理を expression に追加します。次のリストを見てください。
+
+<PRE class="list">
+リスト : expression の修正
+
+Expr *expression(void)
+{
+  Expr *e = expr1();
+  if (token == Assign) {
+    if (e-&gt;tag != Sym) error("invalid assign form");
+    get_token();
+    return make_op2(Assign2, e, expression());
+  }
+  return e;
+}
+
+Expr *expr1(void)
+{
+  Expr *e = term();
+  while (true) {
+    switch (token) {
+    case Add:
+      get_token();
+      e = make_op2(Add2, e, term());
+      break;
+    case Sub:
+      get_token();
+      e = make_op2(Sub2, e, term());
+      break;
+    default:
+      return e;
+    }
+  }
+}
+</pre>
+<p> 演算子 Add, Sub の処理は関数 expr1 で行い、演算子 Assign (=) の処理を expression で行います。expression は最初に expr1 を実行して、返り値を変数 e にセットします。次に、token が Assign かチェックします。そうであれば、左辺の式 e が変数であることを確認します。e-&gt;tag が Sym でなければ、変数ではないのでエラーを送出します。変数ならば make_op2 で代入処理を行う構文木を生成して返します。expr1 は今までの expression と同じです。
+</p>
+
+<p> 次は関数 factor を修正します。
+</p>
+<PRE class="list">
+リスト : 因子の修正
+
+// 引数の取得
+Cell *get_argument(void)
+{
+  Cell *cp = NULL;
+  get_token();
+  while (true) {
+    cp = cons(expression(), cp);
+    if (token == Rpar) {
+      get_token();
+      return cp;
+    } else if (token == Comma) {
+      get_token();
+    } else 
+      error("unexpected token in argument list");
+  }
+}
+
+Expr *factor(void)
+{
+  Symbol *sym;
+  switch (token) {
+  case Lpar:
+    get_token();
+    Expr *e = expression();
+    if (token == Rpar)
+      get_token();
+    else 
+      error("')' expected");
+    return e;
+  case Number:
+    get_token();
+    return make_number(value);
+  case Add:
+    get_token();
+    return make_op1(Add1, factor());
+  case Sub:
+    get_token();
+    return make_op1(Sub1, factor());
+  case Ident:
+    sym = symbol;
+    get_token();
+    if (sym-&gt;type == 0)
+      return make_sym(sym);
+    else {
+      if (token != Lpar) error("'(' expected");
+      Cell *cp = get_argument();
+      int i = length(cp);
+      if (i &lt; sym-&gt;type)
+	error("too few arguments");
+      else if (i &gt; sym-&gt;type)
+        error("too many arguments");
+      if (sym-&gt;type == 1)
+	return make_func(sym, Func1, cp);
+      else
+	return make_func(sym, Func2, cp);
+    }
+  default:
+    error("unexpected token");
+  }
+}
+</pre>
+<p> token が Ident の場合、変数または関数呼び出しの処理を行います。最初に、外部変数 symbol の値を変数 sym にセットしてから get_token を呼び出します。sym-&gt;type が 0 ならば、make_sym で変数を表す構文木を生成して返します。そうでなければ、関数呼び出しです。token が左カッコ (Lpar) でなければエラーを送出します。
+</p>
+
+<p> それから、get_argument で引数を取得します。リストの長さが sym-&gt;type と異なる場合はエラーを送出します。sym-&gt;type が 1 であれば make_func の引数 tag に Func1 を渡し、そうでなければ Func2 を渡して、関数呼び出しを表す構文木を生成して返します。
+</p>
+
+<h4>●式の評価の修正</h4>
+<p> 次は式を評価する関数 eval を修正します。
+</p>
+<pre class="list">
+リスト : 式の計算
+
+double eval(Expr *e)
+{
+  Symbol *sym;
+  switch (e-&gt;tag) {
+  case Num: return e-&gt;num;
+  case Sym:
+    sym = e-&gt;ref_value;
+    return sym-&gt;val;
+  case Add1:  return eval(e-&gt;left);
+  case Sub1:  return -eval(e-&gt;left);
+  case Add2:  return eval(e-&gt;left) + eval(e-&gt;right); 
+  case Sub2:  return eval(e-&gt;left) - eval(e-&gt;right); 
+  case Mul2:  return eval(e-&gt;left) * eval(e-&gt;right); 
+  case Div2:  return eval(e-&gt;left) / eval(e-&gt;right); 
+  case Assign2:
+    sym = e-&gt;left-&gt;ref_value;
+    return sym-&gt;val = eval(e-&gt;right);
+  case Func1:
+    {
+      Cell *cp = e-&gt;ref_value;
+      double (*func1)(double) = cp-&gt;item;
+      return func1(eval(second(cp)));
+    }
+  case Func2:
+    {
+      Cell *cp = e-&gt;ref_value;
+      double (*func2)(double, double) = cp-&gt;item;
+      return func2(eval(third(cp)), eval(second(cp)));
+    }
+  default:
+    fprintf(stderr, "invalid Expr tag %d\n", e-&gt;tag);
+    exit(1);
+  }
+}
+</pre>
+<p> e-&gt;tag が Assign2 の場合、左辺の式 e-&gt;left は変数です。e-&gt;left-&gt;ref_value を変数 sym にセットします。それから、右辺の式 (e-&gt;right) を eval で評価して、その結果を sym-&gt;val に代入します。Func1, Func2 の場合、連結リストの先頭要素が関数で、残りの要素が引数になります。先頭要素を関数へのポインタにキャストし、引数を eval で評価して関数に渡します。このとき、引数は逆順になっているので、Func2 の場合は 3 番目の要素が第 1 引数、2 番目の要素が第 2 引数になることに注意してください。
+</p>
+<p> あとの修正は簡単なので説明は割愛します。詳細は <A href="clangb02.html#list1">プログラムリスト</A> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは実行してみましょう。
+<pre>
+Calc&gt; a = 10;
+=&gt; 10
+Calc&gt; a;
+=&gt; 10
+Calc&gt; a * 10;
+=&gt; 100
+Calc&gt; (b = 20) * 10;
+=&gt; 200
+Calc&gt; b;
+=&gt; 20
+Calc&gt; x = y = z = 0;
+=&gt; 0
+Calc&gt; x;
+=&gt; 0
+Calc&gt; y;
+=&gt; 0
+Calc&gt; z;
+=&gt; 0
+</pre>
+<p> 変数に値を代入すると、その値を使って式を評価することができます。また、式の中に演算子 = が入っていても、その式を評価することができます。x = y = z = 0; のように、多重代入することも可能です。
+</p>
+<p> 次は組み込み関数を実行してみましょう。
+</p>
+<pre>
+Calc&gt; sqrt(2);
+=&gt; 1.414213562373095
+Calc&gt; pow(2, 32);
+=&gt; 4294967296
+Calc&gt; pi = asin(0.5) * 6;
+=&gt; 3.141592653589794
+Calc&gt; sin(0);
+=&gt; 0
+Calc&gt; sin(pi/2);
+=&gt; 1
+Calc&gt; sin(pi);
+=&gt; -3.216245299353273e-16
+</pre>
+<p> 正常に動作していますね。今回はここまでです。次回はユーザが関数を定義する機能を追加してみましょう。
+</p>
+
+<h4>●参考文献</h4>
+<ol>
+  <li> 松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li> 水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li> 松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li> 高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li> 久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// calc4.c : 電卓プログラム (変数と関数の追加)
+//
+//           Copyright (C) 2015 Makoto Hiroi
+//
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;ctype.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;math.h&gt;
+#include &lt;setjmp.h&gt;
+#include &lt;gc.h&gt;
+
+#define SYM_NAME_SIZE 32
+
+// 連結リスト
+typedef struct cell {
+  void *item;
+  struct cell *next;
+} Cell;
+
+// セルの生成
+Cell *cons(void *x, Cell *xs)
+{
+  Cell *cp = GC_MALLOC(sizeof(Cell));
+  cp-&gt;item = x;
+  cp-&gt;next = xs;
+  return cp;
+}
+
+// 先頭要素を取り出す
+void *car(Cell *cp)
+{
+  return cp-&gt;item;
+}
+
+// 先頭要素を取り除く
+Cell *cdr(Cell *cp)
+{
+  return cp-&gt;next;
+}
+
+// 2 番目の要素
+void *second(Cell *cp)
+{
+  return car(cdr(cp));
+}
+
+// 3 番目の要素
+void *third(Cell *cp)
+{
+  return car(cdr(cdr(cp)));
+}
+
+// 長さ
+int length(Cell *cp)
+{
+  int n = 0;
+  while (cp != NULL) {
+    cp = cdr(cp);
+    n++;
+  }
+  return n;
+}
+
+// シンボル
+typedef struct {
+  int type;
+  char name[SYM_NAME_SIZE + 1];    // 変数名
+  union {
+    double val;     // 即値
+    void *ref_val;  // 参照型
+  };
+} Symbol;
+
+// シンボル表
+#define SYM_TBL_SIZE 512
+
+Symbol sym_table[SYM_TBL_SIZE];
+int sym_count;
+
+// タグ
+enum {Num, Add2, Sub2, Mul2, Div2, Add1, Sub1,
+      Assign2, Sym, Func1, Func2};
+
+// 構文木
+typedef struct expr {
+  int tag;
+  union {
+    double num;      // 数値
+    void *ref_value; // 参照型
+    struct {         // 構文木
+      struct expr *left;
+      struct expr *right;
+    };
+  };
+} Expr;
+
+// 数値の生成
+Expr *make_number(double n)
+{
+  Expr *e = GC_MALLOC_ATOMIC(sizeof(Expr));
+  e-&gt;tag = Num;
+  e-&gt;num = n;
+  return e;
+}
+
+// 単項演算子の生生
+Expr *make_op1(int op, Expr *e1)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = op;
+  e-&gt;left = e1;
+  e-&gt;right = NULL;
+  return e;
+}
+
+// 二項演算子
+Expr *make_op2(int op, Expr *e1, Expr *e2)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = op;
+  e-&gt;left = e1;
+  e-&gt;right = e2;
+  return e;
+}
+
+// 関数呼び出し
+Expr *make_func(Symbol *sym, int tag, Cell *cp)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = tag;
+  e-&gt;ref_value = cons(sym-&gt;ref_val, cp);
+  return e;
+}
+
+// 変数の生成
+Expr *make_sym(Symbol *sym)
+{
+  Expr *e = GC_MALLOC(sizeof(Expr));
+  e-&gt;tag = Sym;
+  e-&gt;ref_value = sym;
+  return e;
+}
+
+// トークン
+enum {Eof, Number, Ident, Assign, Add, Sub, Mul, Div, Lpar, Rpar,
+      Comma, Semic, Others};
+
+// 外部変数
+int ch;         // 記号
+int token;      // トークン
+double value;   // 数値
+Symbol *symbol; // シンボル
+jmp_buf err;    // エラー脱出用
+
+// トークン名
+char *token_name[] = {
+  "EOF",
+  "Number",
+  "Ident",
+  "=",
+  "+",
+  "-",
+  "*",
+  "/",
+  "(",
+  ")",
+  ",",
+  ";",
+  "Others",
+};
+
+// 記号の先読み
+void nextch(void)
+{
+  ch = getchar();
+}
+
+// 先読み記号の取得
+int getch(void)
+{
+  return ch;
+}
+
+// エラー
+_Noreturn
+void error(char *mes)
+{
+  fprintf(stderr, "%s, %s\n", mes, token_name[token]);
+  longjmp(err, 1);
+}
+
+// シンボルの探索
+Symbol *lookup(const char *name)
+{
+  for (int i = 0; i &lt; sym_count; i++) {
+    Symbol *sym = &amp;sym_table[i];
+    if (strcmp(sym-&gt;name, name) == 0) return sym;
+  }
+  return NULL;
+}
+
+// シンボルの生成
+Symbol *gensym(const char *name)
+{
+  if (sym_count &gt;= SYM_TBL_SIZE) error("Symbol table is full");
+  Symbol *sym = &amp;sym_table[sym_count++];
+  strcpy(sym-&gt;name, name);
+  sym-&gt;val = 0;
+  sym-&gt;type = 0;
+  return sym;
+}
+
+// 組み込み関数の初期化
+void init_func1(const char *name, double (*func)(double))
+{
+  Symbol *sym = gensym(name);
+  sym-&gt;type = 1;
+  sym-&gt;ref_val = func;
+}
+
+void init_func2(const char *name, double (*func)(double, double))
+{
+  Symbol *sym = gensym(name);
+  sym-&gt;type = 2;
+  sym-&gt;ref_val = func;
+}
+
+void init_func(void)
+{
+  init_func1("sqrt", sqrt);
+  init_func2("fmod", fmod);
+  init_func2("pow", pow);
+  init_func1("exp", exp);
+  init_func1("log", log);
+  init_func1("log10", log10);
+  init_func1("fabs", fabs);
+  init_func1("ceil", ceil);
+  init_func1("floor", floor);
+  init_func1("sin", sin);
+  init_func1("cos", cos);
+  init_func1("tan", tan);
+  init_func1("asin", asin);
+  init_func1("acos", acos);
+  init_func1("atan", atan);
+  init_func2("atan2", atan2);
+  init_func1("sinh", sinh);
+  init_func1("cosh", cosh);
+  init_func1("tanh", tanh);
+}
+
+// シンボル (識別子) を取得する
+Symbol *get_ident(void)
+{
+  char name[SYM_NAME_SIZE + 1];
+  int i = 0;
+  name[i++] = getch();
+  nextch();
+  while (true) {
+    int c = getch();
+    if (!isalnum(c) &amp;&amp; c != '_') break;
+    name[i++] = c;
+    if (i &gt; SYM_NAME_SIZE)
+      error("symbol name is too long");
+    nextch();
+  }
+  name[i] = '\0';
+  Symbol *sym = lookup(name);
+  if (sym == NULL)
+    sym = gensym(name);
+  return sym; 
+}
+
+#define SIZE 1024
+
+// 整数部をバッファに格納する
+int get_fixnum(char *buff, int i)
+{
+  while (isdigit(getch())) {
+    buff[i++] = getch();
+    nextch();
+  }
+  return i;
+}
+
+// 数値を求める
+double get_number(void)
+{
+  char buff[SIZE + 1];
+  char *err;
+  int i = get_fixnum(buff, 0);
+  if (getch() == '.') {
+    buff[i++] = getch();
+    nextch();
+    i = get_fixnum(buff,i);
+  }
+  if (getch() == 'e' || getch() == 'E') {
+    buff[i++] = getch();
+    nextch();
+    if (getch() == '+' || getch() == '-') {
+      buff[i++] = getch();
+      nextch();
+    }
+    i = get_fixnum(buff, i);
+  }
+  buff[i] = '\0';
+  double value = strtod(buff, &amp;err);
+  if (*err != '\0')
+    error("get_number: not Number\n");
+  return value;
+}
+
+// トークンの切り分け
+void get_token(void)
+{
+  // 空白文字の読み飛ばし
+  while (isspace(getch())) nextch();
+  if (isdigit(getch())) {
+    token = Number;
+    value = get_number();
+  } else if (isalpha(getch())) {
+    token = Ident;
+    symbol = get_ident();
+  } else {
+    switch(getch()){
+    case '=':
+      token = Assign;
+      nextch();
+      break;
+    case '+':
+      token = Add;
+      nextch();
+      break;
+    case '-':
+      token = Sub;
+      nextch();
+      break;
+    case '*':
+      token = Mul;
+      nextch();
+      break;
+    case '/':
+      token = Div;
+      nextch();
+      break;
+    case '(':
+      token = Lpar;
+      nextch();
+      break;
+    case ')':
+      token = Rpar;
+      nextch();
+      break;
+    case ';':
+      token = Semic;
+      nextch();
+      break;
+    case ',':
+      token = Comma;
+      nextch();
+      break;
+    case EOF:
+      token = Eof;
+      break;
+    default:
+      token = Others;
+    }
+  }
+}
+
+// 構文解析
+Expr *expression(void);
+Expr *expr1(void);
+Expr *term(void);
+Expr *factor(void);
+
+// 式の評価
+Expr *expression(void)
+{
+  Expr *e = expr1();
+  if (token == Assign) {
+    if (e-&gt;tag != Sym) error("invalid assign form");
+    get_token();
+    return make_op2(Assign2, e, expression());
+  }
+  return e;
+}
+
+Expr *expr1(void)
+{
+  Expr *e = term();
+  while (true) {
+    switch (token) {
+    case Add:
+      get_token();
+      e = make_op2(Add2, e, term());
+      break;
+    case Sub:
+      get_token();
+      e = make_op2(Sub2, e, term());
+      break;
+    default:
+      return e;
+    }
+  }
+}
+
+// 項
+Expr *term(void)
+{
+  Expr *e = factor();
+  while (true) {
+    switch (token) {
+    case Mul:
+      get_token();
+      e = make_op2(Mul2, e, factor());
+      break;
+    case Div:
+      get_token();
+      e = make_op2(Div2, e, factor());
+      break;
+    default:
+      return e;
+    } 
+  }
+}
+
+// 引数の取得
+Cell *get_argument(void)
+{
+  Cell *cp = NULL;
+  get_token();
+  while (true) {
+    cp = cons(expression(), cp);
+    if (token == Rpar) {
+      get_token();
+      return cp;
+    } else if (token == Comma) {
+      get_token();
+    } else 
+      error("unexpected token in argument list");
+  }
+}
+
+// 因子
+Expr *factor(void)
+{
+  Symbol *sym;
+  switch (token) {
+  case Lpar:
+    get_token();
+    Expr *e = expression();
+    if (token == Rpar)
+      get_token();
+    else 
+      error("')' expected");
+    return e;
+  case Number:
+    get_token();
+    return make_number(value);
+  case Add:
+    get_token();
+    return make_op1(Add1, factor());
+  case Sub:
+    get_token();
+    return make_op1(Sub1, factor());
+  case Ident:
+    sym = symbol;
+    get_token();
+    if (sym-&gt;type == 0)
+      return make_sym(sym);
+    else {
+      if (token != Lpar) error("'(' expected");
+      Cell *cp = get_argument();
+      int i = length(cp);
+      if (i &lt; sym-&gt;type)
+	error("too few arguments");
+      else if (i &gt; sym-&gt;type)
+        error("too many arguments");
+      if (sym-&gt;type == 1)
+	return make_func(sym, Func1, cp);
+      else
+	return make_func(sym, Func2, cp);
+    }
+  default:
+    error("unexpected token");
+  }
+}
+
+// 数式の評価
+double eval(Expr *e)
+{
+  Symbol *sym;
+  switch (e-&gt;tag) {
+  case Num: return e-&gt;num;
+  case Sym:
+    sym = e-&gt;ref_value;
+    return sym-&gt;val;
+  case Add1:  return eval(e-&gt;left);
+  case Sub1:  return -eval(e-&gt;left);
+  case Add2:  return eval(e-&gt;left) + eval(e-&gt;right); 
+  case Sub2:  return eval(e-&gt;left) - eval(e-&gt;right); 
+  case Mul2:  return eval(e-&gt;left) * eval(e-&gt;right); 
+  case Div2:  return eval(e-&gt;left) / eval(e-&gt;right); 
+  case Assign2:
+    sym = e-&gt;left-&gt;ref_value;
+    return sym-&gt;val = eval(e-&gt;right);
+  case Func1:
+    {
+      Cell *cp = e-&gt;ref_value;
+      double (*func1)(double) = cp-&gt;item;
+      return func1(eval(second(cp)));
+    }
+  case Func2:
+    {
+      Cell *cp = e-&gt;ref_value;
+      double (*func2)(double, double) = cp-&gt;item;
+      return func2(eval(third(cp)), eval(second(cp)));
+    }
+  default:
+    fprintf(stderr, "invalid Expr tag %d\n", e-&gt;tag);
+    exit(1);
+  }
+}
+
+// 式の入力と評価
+void toplevel(void)
+{
+  Expr *e = expression();
+  if (token == Semic) {
+    printf("=&gt; %.16g\nCalc&gt; ", eval(e));
+    fflush(stdout);
+  } else {
+    error("invalid token");
+  }
+}
+
+int main(void)
+{
+  init_func();
+  printf("Calc&gt; ");
+  fflush(stdout);
+  nextch();
+  while (true) {
+    if (!setjmp(err)) {
+      get_token();
+      if (token == Eof) break;
+      toplevel();
+    } else {
+      // 入力のクリア
+      while (getch() != '\n') nextch();
+      printf("Calc&gt; ");
+      fflush(stdout);
+    }
+  }
+  printf("bye\n");
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="clangb01.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clangb03.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

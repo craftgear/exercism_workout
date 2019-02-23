@@ -1,0 +1,971 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 ISLisp プログラミング超入門</title>
+  <meta name="description" content="Lisp,ISLisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881772</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>お気楽 ISLisp プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <A href="../index.html">Home</a> | <a href="index.html">Common Lisp</a> | <a href="islisp.html">ISLisp</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3 id="abc">ISLisp の機能</h3>
+<h4 id="abc01">●動的変数</h4>
+<p> Common Lisp は defvar で宣言された変数をダイナミックスコープで管理しますが、ISLisp にもダイナミックスコープで管理する変数が用意されています。Common Lisp と違うところは、レキシカルスコープの変数とダイナミックスコープの変数で名前空間が分かれていて、ダイナミックスコープ専用の関数が用意されているところです。
+</p>
+<p> ダイナミックスコープの変数は defdynamic で宣言します。
+</p>
+<pre class="item">
+defdynamic symbol value
+</pre>
+<p> defdynamic で宣言された変数を ISLisp では「動的変数」といいます。動的変数の値は関数 dynamic で参照することができます。値を書き換えるには setf を使います。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+ISLisp&gt;(defdynamic x 100)
+X
+ISLisp&gt;(dynamic x)
+100
+ISLisp&gt;x
+> Unbound Variable: X
+
+ISLisp&gt;(defglobal x 10)
+X
+ISLisp&gt;x
+10
+ISLisp&gt;(dynamic x)
+100
+ISLisp&gt;(setf (dynamic x) 200)
+200
+ISLisp&gt;(dynamic x)
+200
+</pre>
+<p> defdynmaic で x を動的変数に宣言し、値を 100 に初期化します。このとき、通常の変数 x は未束縛であることに注意してください。defglobal は大域変数を宣言します。Common Lisp と違って、トップレベルで (setq x 10) としても、x が defglobal で宣言されていないと、ISLisp ではエラーになります。
+</p>
+<p> defglobal で x に 10 をセットします。変数 x を評価すると 10 になり、(dynamic x) を評価すると、動的変数 x の値を参照して 100 になります。このように、名前空間が異なることに注意してください。それから、(setf (dynamic x) 200) とすると、動的変数 x の値は 200 に更新されます。
+</p>
+<p> Common Lisp の場合、defvar で宣言された変数の値は、let で一時的に値を更新することができます。簡単な例を示しましょう。
+</p>
+<pre>
+* (defvar x 10)
+
+X
+* (defun foo () (print x))
+
+FOO
+* (foo)
+
+10 
+10
+* (let ((x 100)) (foo))
+
+100 
+100
+* x
+
+10
+</pre>
+<p> defvar で宣言された変数 x はダイナミックスコープで管理されます。let で x を定義すると、それは局所変数ではなく、defvar で宣言した変数 x の値を一時的に更新します。(foo) を評価すると、let で定義した値 100 が表示されます。let が終了すると元の値に戻ります。
+</p>
+<p> ISLisp の場合は dynamic-let で動的変数の値を一時的に更新することができます。簡単な例を示しましょう。
+</p>
+<pre>
+ISLisp&gt;(dynamic x)
+200
+ISLisp&gt;(defun foo () (format (standard-output) "~D~%" (dynamic x)))
+FOO
+ISLisp&gt;(foo)
+200
+NIL
+ISLisp&gt;(dynamic-let ((x 1)) (foo))
+1
+NIL
+ISLisp&gt;(dynamic x)
+200
+</pre>
+<p> x は動的変数なので、関数 foo から dynamic-let で宣言した x にアクセスすることができます。dynamic-let が終了すると x は元の値に戻ります。
+</p>
+<hr>
+<h4 id="abc02">●オブジェクト指向 (ILOS)</h4>
+<p> ISLisp は CLOS (Common Lisp Object System) のサブセットである ILOS というオブジェクト指向をサポートしています。ILOS の基本的な機能は CLOS とよく似ています。ただし、多重継承に大きな違いがあって、ユーザーが定義したクラスは菱形継承ができないように制限されています。
+</p>
+<p> 簡単な例を示しましょう。最初は Common Lisp (SBCL) です。
+</p>
+<pre>
+* (defclass Foo () (a))
+
+#&lt;STANDARD-CLASS COMMON-LISP-USER::FOO>
+* (defclass Bar1 (Foo) (b1))
+
+#&lt;STANDARD-CLASS COMMON-LISP-USER::BAR1>
+* (defclass Bar2 (Foo) (b2))
+
+#&lt;STANDARD-CLASS COMMON-LISP-USER::BAR2>
+* (defclass Baz (Bar1 Bar2) (c)) 
+
+#&lt;STANDARD-CLASS COMMON-LISP-USER::BAZ>
+</pre>
+<p> Bar1 と Bar2 は Foo を継承していて、Baz は Bar1 と Bar2 を継承しています。これを図に示すと次のようになります。
+</p>
+<pre class="fig">
+      Foo
+    ／  ＼
+  ／      ＼
+Bar1       Bar2
+  ＼      ／
+    ＼  ／
+      Baz
+
+図 : 菱形継承
+</pre>
+<p> Baz の継承を Baz1 と Baz2 からたどると同じスーパークラス Foo に合流します。CLOS の場合、このような継承が可能なのですが、ILOS では禁止されています。次の例を見てください。
+</p>
+<pre>
+ISLisp&gt;(defclass Foo () (a))
+FOO
+ISLisp&gt;(defclass Bar1 (Foo) (b1))
+BAR1
+ISLisp&gt;(defclass Bar2 (Foo) (b2))
+BAR2
+ISLisp&gt;(defclass Baz (Bar1 Bar2) (c))
+&gt; Error at DEFCLASS
+&gt; Superclasses of any two direct superclasses have superclasses other than 
+&lt;standard-object&gt; and &lt;object&gt; in common:
+</pre>
+<p> このように、Bar1 と Bar2 に同じスーパークラスがあると、Bar1 と Bar2 を多重継承することはできません。ILOS ではスーパークラスを指定しないと、デフォルトで &lt;standard-object&gt; と &lt;object&gt; を継承します。つまり、これらのクラス以外で共通なスーパークラスがないように制限されているわけです。この制限により、ILOS の多重継承は CLOS よりも扱いやすくなっていると思います。
+</p>
+<p> オブジェクト指向の簡単な例題として、点を表すクラスを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 点を表すクラス
+
+;; 2 次元
+(defclass &lt;point&gt; ()
+  ((x :accessor point-x :initform 0.0 :initarg x)
+   (y :accessor point-y :initform 0.0 :initarg y)))
+
+;; 3 次元
+(defclass &lt;point3d&gt; ()
+  ((x :accessor point-x :initform 0.0 :initarg x)
+   (y :accessor point-y :initform 0.0 :initarg y)
+   (z :accessor point-z :initform 0.0 :initarg z)))
+
+; メソッド
+(defgeneric distance (p1 p2))
+
+(defmethod distance ((p1 &lt;point&gt;) (p2 &lt;point&gt;))
+  (let ((dx (- (point-x p1) (point-x p2)))
+        (dy (- (point-y p1) (point-y p2))))
+    (sqrt (+ (* dx dx) (* dy dy)))))
+
+(defmethod distance ((p1 &lt;point3d&gt;) (p2 &lt;point3d&gt;))
+  (let ((dx (- (point-x p1) (point-x p2)))
+        (dy (- (point-y p1) (point-y p2)))
+        (dz (- (point-z p1) (point-z p2))))
+    (sqrt (+ (* dx dx) (* dy dy) (* dz dz)))))
+
+;; テスト
+(defun test ()
+  (let ((p1 (create (class &lt;point&gt;)))
+        (p2 (create (class &lt;point&gt;) 'x 10.0 'y 10.0))
+        (p3 (create (class &lt;point3d&gt;)))
+        (p4 (create (class &lt;point3d&gt;) 'x 100.0 'y 100.0 'z 100.0)))
+    (format (standard-output) "~G~%" (distance p1 p2))
+    (format (standard-output) "~G~%" (distance p3 p4))))
+</pre>
+<pre>
+ISLisp&gt;(test)
+14.1421
+173.205
+NIL
+</pre>
+<p> クラス &lt;point&g; は 2 次元の点を表します。defclass の :accessor でスロット x, y のアクセス関数 point-x, point-y を定義します。クラス &lt;point3d&gt; は point を 3 次元に拡張しただけです。
+<p> CLOS の場合、メソッドの定義は defmethod だけで行えますが、ILOS の場合は defgenric でメソッドの引数 (ラムダリスト) を指定する必要があります。メソッド distance は 2 つ定義されていて、&lt;point&gt; クラスのインスタンスを 2 つ受け取って距離を計算するメソッドと、&lt;point3d&gt; クラスのインスタンスを 2 つ受け取って距離を計算するメソッドがあります。このように、&lt;point&gt; でも &lt;point3d&gt; でも距離を計算するメソッド distance を定義することができます。
+</p>
+<p> 最後に関数 test で &lt;point&gt; と &lt;point3d&gt; のインスタンスを生成します。ILOS の場合、make-instance ではなく、(create (class クラス名)) で生成します。初期値を指定する場合は :initarg で指定したシンボルを使います。指定が無い場合は :initform で指定した値に初期化されます。あとは distance を実行すると、2 次元の点の距離と 3 次元の点の距離を計算することができます。
+</p>
+
+<p> ところで、ISLisp は Common Lisp と違って「構造体」がありません。オブジェクト指向は大変難しいと思われている方が多いようですが、ISLisp (ILOS) の場合、もっと気楽に考えて構造体のかわりにクラスを使ってもよいのではないか、と思っています。
+</p>
+<p> たとえば、単純な二分探索木であれば、データ構造はクラスで定義し、操作関数はメソッドではなく通常の関数で定義することも可能です。興味のある方は <a href="islisp01.html#chap12">二分探索木 (immutable)</a> のプログラムをお読みくださいませ。
+</p>
+<hr>
+<h4 id="abc03">●特殊な制御構造</h4>
+<p> Lisp は関数型言語と呼ばれるプログラミング言語ですが、完全な関数型言語ではありません。とくに Common Lisp の場合、手続き型言語からいろいろな機能が持ち込まれたため、ほかの関数型言語に比べると不純度の高い関数型言語になっています。これは ISLisp も同様です。
+</p>
+<p> 手続き型言語から持ち込まれた機能に block や tagbody があります。block はブロック構造を定義し、tagbody の中では無条件ジャンプ go を使うことができます。昔の Lisp では、prog という関数で局所変数とブロック構造を定義し、その中で go を使うことができました。Common Lisp や ISLisp の場合、prog の機能を block, tagbody, let の 3 つに分離し、必要な機能だけを使用できるようになっています。
+</p>
+<p> 今回はブロック構造や大域脱出など、ISLisp に用意されているちょっと「特殊な制御構造」について説明します。
+</p>
+
+<h4>●block と return-from</h4>
+<p> block は Pascal やＣ言語などのブロック構造を定義する関数 (特殊形式) で、return-from を使って block から脱出することができます。
+</p>
+<pre class="item">
+block tag-name Ｓ式 ...
+</pre>
+<p> block は progn と同じように S 式を左から右へ順番に評価します。そして、最後に評価された S 式の値を返します。S 式の評価中に tag-name と同じシンボルを指定した return-from が評価されると、それ以降の S 式の評価を中止して、return-from が評価した値を block の評価値として返します。つまり、block から脱出することができるのです。
+</p>
+<pre class="item">
+return-from tag-name result
+</pre>
+<p> return-from の引数 tag-name は評価されず、シンボルでなければいけません。return-from は result の評価結果を返します。Common Lisp の場合、result を省略すると nil を返しますが、ISLisp では result を省略することはできません。ご注意くださいませ。
+</p>
+<p> それから、Common Lisp で block の name に nil を指定した場合、return-from だけではなく return でも脱出することができますが、ISLisp に return はありません。必ず return-from を使ってください。また、Common Lisp は do, dotimes, dolist などの繰り返しや関数本体には暗黙のブロックが設定されていますが、ISLisp にはありません。必ず block name ... でブロックを設定してください。
+</p>
+
+<p> それでは簡単な例題として、リストを線形探索する関数 find-if を作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 線形探索
+
+(defun find-if (pred xs)
+  (block exit
+    (for ((xs xs (cdr xs)))
+         ((null xs))
+         (if (funcall pred (car xs))
+             (return-from exit (car xs))))))
+</pre>
+<p> find-if はリストから述語 pred を満たす要素を探します。最初に block exit でブロックを定義します。そして、for でリストの要素を順番に取り出し、pred が真を返したら return-from でその要素を返します。これで繰り返しを中断して見つけた要素を返すことができます。
+</p>
+<p> もう一つ簡単な例題として、リストの要素を 2 乗する関数 square-list を作りましょう。この関数は負の要素を見つけたら nil を返すことにします。これは mapcar と block を使うと簡単に定義することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 要素を 2 乗する
+
+(defun square-list (xs)
+  (block exit
+    (mapcar (lambda (x)
+              (if (&lt; x 0)
+                  (return-from exit nil)
+                (* x x)))
+            xs)))
+</pre>
+<pre>
+ISLisp&gt;(square-list '(1 2 3 4 5))
+(1 4 9 16 25)
+ISLisp&gt;(square-list '(1 2 -3 4 5))
+NIL
+</pre>
+<p> block のタグ exit はレキシカルスコープで管理されるので、mapcar に渡すラムダ式の中から参照することができ、ラムダ式の中で return-from exit を評価すれば、そのブロックから脱出することができます。
+</p>
+<h4>●tagbody と go</h4>
+<p> Common Lisp や ISLisp の場合、tagbody と go は制御構造を実現するために用いられます。
+</p>
+<pre class="item">
+tagbody name-or-form .....
+</pre>
+
+<p> tagbody は go のラベルとして使用されるシンボル (name) と、評価されるフォーム (form : S 式のこと) からなります。name は評価されません。tagbody は form を順番に評価していき、最後まで評価すると nil を返します。もしも form の評価中に go が評価された場合、go で指定された name に分岐し、そこから評価を続けます。
+</p>
+<pre class="item">
+go name
+</pre>
+<p> go は tagbody 内で使用され、実行の制御を name によってラベル付けされた場所に移すために用いられます。name はシンボルでなければいけません。tagbody 内に該当する name がない場合はエラーとなります。なお、go でジャンプできる有効範囲はレキシカルスコープです。ご注意ください。
+</p>
+<p> 簡単な例題として、あえて tagbody と go を使って階乗を計算する fact を作ってみます。
+</p>
+
+<pre class="list">
+リスト : 階乗の計算
+
+(defun fact (x)
+  (block fact
+    (let ((result 1) (num 1))
+      (tagbody 
+        loop-tag
+        (if (&gt; num x)
+            (return-from fact result))
+        (setq result (* result num))
+        (setq num (+ num 1))
+        (go loop-tag)))))
+</pre>
+
+<p> 繰り返しを実現するために tagbody と go を使っています。(go loop-tag) が評価されると loop-tag にジャンプし、次の S 式から評価を続けます。これで無限ループを構成しています。階乗を計算したら return-from で値を返します。なお、繰り返しは for などを使って簡単に実現できるので、このようなプログラムで tagbody と go を使ってはいけません。
+</p>
+
+<h4>●使用上の重要な注意</h4>
+<p> Common Lisp (ISLisp) に tagbody と go が用意されているのは、基本的な繰り返しや制御構造をマクロで実現するためです。一般的なプログラムであれば tagbody と go を使う必要はまったくありません。go の使用について CLtL2 (参考文献 1) より引用します。
+</p>
+
+<blockquote>
+『スタイルの問題として、go を用いる前に二度考えることを勧める。go のほとんどの目的は、繰り返しのための基本構文のうちの１つ、入れ子になった条件フォーム、あるいは return-from を用いて達成することができる。もし go の使用が避けられないと思われるならば、おそらく go によって実現される制御構造は、マクロ定義としてパッケージ化されるべきである。』
+</blockquote>
+
+<p> tagbody と go を安易に使用してはいけません。くれぐれもご注意くださいませ。
+</p>
+<div class="note">
+-- 参考文献 --------<br>
+1. Guy L. Steele Jr., 『COMMON LISP 第 2 版』, 共立出版, 1991
+</div>
+<h4>●大域脱出</h4>
+<p> Common Lisp (ISLisp) の場合、catch と throw を使って評価中の関数からほかの関数へ制御を移すことができます。これを「大域脱出 (global exit)」といいます。catch と throw の使い方を説明します。
+</p>
+<pre class="item">
+catch tag-name Ｓ式 ...
+throw tag-name result
+</pre>
+<p> catch と throw は特殊形式で、その名が示すように catch が受け手で throw が投げ手としての役割を持っています。catch は最初に tag-name を評価します。このとき、評価結果はシンボルでなければいけません。
+</p>
+<p> throw は tag-name を評価し、それと同じシンボルを持つ catch を探し、result を評価した結果を持って見つけた catch へジャンプします。そして、その値が catch の評価値となります。tag-name はダイナミックスコープで管理されることに注意してください。
+</p>
+<p> それでは簡単な使用例を示しましょう。
+</p>
+<pre>
+ISLisp&gt;(defun print (x) (format (standard-output) "~A~%" x))
+PRINT
+ISLisp&gt;(defun bar1 () (print "call bar1"))
+BAR1
+ISLisp&gt;(defun bar2 () (throw 'exit t))
+BAR2
+ISLisp&gt;(defun bar3 () (print "call bar3"))
+BAR3
+ISLisp&gt;(defun foo () (bar1) (bar2) (bar3))
+FOO
+ISLisp&gt;(catch 'exit (foo))
+call bar1
+T          &lt;= catch の返り値
+</pre>
+<p> この様子を図に示すと、次のようになります。
+</p>
+
+<pre class="fig">
+ ┌──────┐
+ │catch 'exit │←──┐
+ └──────┘      │
+        ↓             │
+ ┌──────┐      │
+ │    foo     │──┐│
+ └──────┘    ││
+       ↓↑          ↓│
+ ┌──────┐  ┌ bar2 ────┐ 
+ │    bar1    │  │throw 'exit t │
+ └──────┘  └───────┘
+
+        図 2 : 大域脱出
+</pre>
+<p> 通常の関数呼び出しでは、呼び出し元の関数に制御が戻ります。ところが bar2 で throw が評価されると、呼び出し元の関数 foo を飛び越えて、制御が catch に移るのです。このように、大域脱出により関数を飛び越えて制御を移すことができます。
+</p>
+<p> catch と throw はとても強力な関数ですが、多用すると処理の流れがわからなくなる、いわゆる「スパゲッティプログラム」になってしまいます。使用には十分ご注意下さい。
+</p>
+
+<h4>●unwind-protect</h4>
+<p> ところで、プログラムの途中で大域脱出が行われると残りのプログラムは評価されません。このため、必要な処理が行われない場合があります。たとえば、ファイルの入出力処理の場合、最初にファイルをオープンし最後でファイルをクローズしなければいけません。ファイルを関数 open でオープンして関数 close でクローズする場合、エラーや大域脱出で処理が中断されるとファイルをクローズすることができません。
+</p>
+<p> ところが、拙作のページ Common Lisp 入門 <A href="../xyzzy_lisp/abclisp07.html">ファイル入出力</A> で説明したマクロ with-open-file の場合、評価が終了するとファイルは自動的にクローズされますが、実はそれだけではなく、エラーや大域脱出などで処理が中断されてもファイルはクローズされます。とても便利な機能ですね。これは unwind-protect (特殊形式) を使って実現されています。with-open-file と unwind-protect は ISLisp でも使用することができます。
+</p>
+<pre class="item">
+unwind-protect protected-form cleanup-form ...
+</pre>
+<p> unwind-protect は protected-form を評価し、そのあとで cleanup-form を評価します。protected-form の評価中にエラーや大域脱出などで処理が中断されても、cleanup-form は必ず評価されます。cleanup-form には複数の S 式を指定することができます。unwind-protect の返り値は protected-form の評価結果です。
+</p>
+<p> 簡単な例を示しましょう。大域脱出で作成した関数 foo を使います。
+</p>
+<pre>
+ISLisp&gt;(catch 'exit (unwind-protect (foo) (print "cleanup1") (print "cleanup2")))
+call bar1
+cleanup1
+cleanup2
+T           &lt;= catch の評価結果
+</pre>
+<p> 関数 bar2 の大域脱出により unwind-protect を飛び越えて catch に制御が移りますが、このとき cleanup-form が評価されていることがわかります。また、unwind-protect は大域脱出だけではなく return-from などによる脱出にも有効です。次の例を見てください。
+</p>
+<pre>
+ISLisp&gt;(block nil
+ (unwind-protect
+ (progn (print 1) (return-from nil t) (print 2))
+ (print "cleanup")))
+1
+cleanup
+T
+</pre>
+<p> return-from で block から脱出しますが、このときに cleanup-form が評価されていることがわかります。
+</p>
+
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap00">簡単なプログラム</h3>
+<h4 id="chap01">●FizzBuzz 問題</h4>
+<pre class="list">
+リスト : FizzBuzz 問題
+
+(defun display (x)
+  (format (standard-output) "~A " x))
+
+(defun fizzbuzz ()
+  (for ((x 0 (+ x 1)))
+       ((&gt; x 100))
+       (cond ((= (mod x 15) 0)
+              (display "FizzBuzz"))
+             ((= (mod x 3) 0)
+              (display "Fizz"))
+             ((= (mod x 5) 0)
+              (display "Buzz"))
+             (t (display x)))))
+
+(defun iota (n m)
+  (for ((m m (- m 1))
+        (a nil (cons m a)))
+       ((&lt; m n) a)))
+
+(defun fizzbuzz1 ()
+  (mapcar (lambda (x)
+            (cond ((= (mod x 15) 0) 'fizzbuzz)
+                  ((= (mod x 3) 0) 'fizz)
+                  ((= (mod x 5) 0) 'buzz)
+                  (t x)))
+          (iota 1 100)))
+</pre>
+<pre>
+ISLisp&gt;(fizzbuzz)
+FizzBuzz 1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz 16 17 Fizz 19
+ Buzz Fizz 22 23 Fizz Buzz 26 Fizz 28 29 FizzBuzz 31 32 Fizz 34 Buzz Fizz 37 38
+Fizz Buzz 41 Fizz 43 44 FizzBuzz 46 47 Fizz 49 Buzz Fizz 52 53 Fizz Buzz 56 Fizz
+ 58 59 FizzBuzz 61 62 Fizz 64 Buzz Fizz 67 68 Fizz Buzz 71 Fizz 73 74 FizzBuzz 7
+6 77 Fizz 79 Buzz Fizz 82 83 Fizz Buzz 86 Fizz 88 89 FizzBuzz 91 92 Fizz 94 Buzz
+ Fizz 97 98 Fizz Buzz NIL
+ISLisp&gt;(fizzbuzz1)
+(1 2 FIZZ 4 BUZZ FIZZ 7 8 FIZZ BUZZ 11 FIZZ 13 14 FIZZBUZZ 16 17 FIZZ 19 BUZZ FI
+ZZ 22 23 FIZZ BUZZ 26 FIZZ 28 29 FIZZBUZZ 31 32 FIZZ 34 BUZZ FIZZ 37 38 FIZZ BUZ
+Z 41 FIZZ 43 44 FIZZBUZZ 46 47 FIZZ 49 BUZZ FIZZ 52 53 FIZZ BUZZ 56 FIZZ 58 59 F
+IZZBUZZ 61 62 FIZZ 64 BUZZ FIZZ 67 68 FIZZ BUZZ 71 FIZZ 73 74 FIZZBUZZ 76 77 FIZ
+Z 79 BUZZ FIZZ 82 83 FIZZ BUZZ 86 FIZZ 88 89 FIZZBUZZ 91 92 FIZZ 94 BUZZ FIZZ 97
+ 98 FIZZ BUZZ)
+</pre>
+<ul>
+  <li>format は Common Lisp によく似ているが、第 1 引数のリストの中に出力ストリームを必ず指定すること。
+  <li>for は Common Lisp の do とほぼ同じ。
+  <li>繰り返しは for のほかに while がある。
+  <li>末尾再帰最適化は ISLisp の仕様に規定されていない。
+  <li>OKI-ISLisp は末尾再帰を最適化しない。
+  <li>ラムダ式は #' を付けない。
+</ul>
+
+<h4 id="chap02">●階乗</h4>
+<pre class="list">
+リスト : 階乗
+
+;; 再帰定義
+(defun fact (n)
+  (if (= n 0)
+      1
+    (* n (fact (- n 1)))))
+
+;; 末尾再帰
+(defun fact1 (n a)
+  (if (= n 0)
+      a
+    (fact1 (- n 1) (* a n))))
+
+;; 繰り返し
+(defun fact2 (n)
+  (for ((n n (- n 1))
+        (a 1 (* a n)))
+       ((&lt;= n 0) a)))
+</pre>
+<pre>
+ISLisp&gt;(fact 50)
+30414093201713378043612608166064768844377641568960512000000000000
+ISLisp&gt;(fact 100)
+93326215443944152681699238856266700490715968264381621468592963895217599993229915
+608941463976156518286253697920827223758251185210916864000000000000000000000000
+ISLisp&gt;(fact 160)
+>Error: Stack Overflow!!
+>       Return to top level.
+ISLisp&gt;(fact1 160 1)
+47147236359920613224069432117619437795119262304546020497690457831754257346742158
+03469780302381149956995627281048195962621069473893039017489429098878575096251148
+80781313585012959529941660203611234871833992565791817698209861793313332044734813
+700096000000000000000000000000000000000000000
+ISLisp&gt;(fact1 200 1)
+>Error: Stack Overflow!!
+>       Return to top level.
+ISLisp&gt;(fact2 200)
+78865786736479050355236321393218506229513597768717326329474253324435944996340334
+29203042840119846239041772121389196388302576427902426371050619266249528299311134
+62857270763317237396988943922445621451664240254033291864131227428294853277524242
+40757390324032125740557956866022603190417032406235170085879617892222278962370389
+7374720000000000000000000000000000000000000000000000000
+</pre>
+<ul>
+  <li>ISLisp の数は整数 (多倍長整数) と浮動小数点数の 2 種類だけ。
+  <li>分数 (有理数) や複素数は仕様外。
+  <li>除算は / ではなく、quotient と div がある。
+  <li>quotient は整数同士の除算で割り切れないときは浮動小数点数を返す。
+  <li>div は整数同士の除算で割り切れないときは小数点数以下を切り捨てた整数を返す。
+  <li>OKI-ISLisp は末尾再帰を最適化しないが、スタックの消費は末尾再帰のほうが少ないようだ。
+</ul>
+<h4 id="chap03">●フィボナッチ数</h4>
+<pre class="list">
+リスト : フィボナッチ数
+
+;; 再帰呼び出し
+(defun fibo (n)
+  (cond ((= n 0) 0)
+        ((= n 1) 1)
+        (t (+ (fibo (- n 2)) (fibo (- n 1))))))
+
+;; 末尾再帰
+(defun fibo1 (n a b)
+  (if (= n 0)
+      a
+    (fibo1 (- n 1) b (+ a b))))
+
+;; 繰り返し
+(defun fibo2 (n)
+  (for ((n n (- n 1))
+        (a 0 b)
+        (b 1 (+ a b)))
+       ((&lt;= n 0) a)))
+</pre>
+<pre>
+ISLisp&gt;(fibo 10)
+55
+ISLisp&gt;(fibo1 10 0 1)
+55
+ISLisp&gt;(fibo 20)
+6765
+ISLisp&gt;(fibo1 20 0 1)
+6765
+ISLisp&gt;(fibo 30)
+832040
+ISLisp&gt;(fibo1 30 0 1)
+832040
+ISLisp&gt;(fibo2 10)
+55
+ISLisp&gt;(fibo2 20)
+6765
+ISLisp&gt;(fibo2 30)
+832040
+ISLisp&gt;(fibo2 100)
+354224848179261915075
+</pre>
+<h4 id="chap04">●リスト操作関数</h4>
+<ul>
+  <li>Common Lisp の場合、(car nil), (cdr nil) は nil を返すが、ISLisp はエラーになる
+</ul>
+<pre>
+ISLisp&gt;(car nil)
+> Error at CAR
+> Not a Cons: NIL
+
+ISLisp&gt;(cdr nil)
+> Error at CDR
+> Not a Cons: NIL
+</pre>
+<ul>
+  <li>Common Lisp の do 系 (dotimes, dolist, do など) は暗黙のブロック (block nil ...) が設定されているが、ISLisp の for や while にはない。
+  <li>ISLisp の場合、関数本体も暗黙のブロックは設定されていない。
+  <li>ブロックは (block tag ... ) で定義して、(return-from tag 値) で脱出する。
+  <li>ISLisp の setq は引数を 2 つだけしかとらない。
+</ul>
+<pre class="list">
+;;
+;; list.l : ISLisp 用リスト操作関数
+;;
+;;          Copyright (C) 2016 Makoto Hiroi
+;;
+
+;; 参照
+(defun caar (xs) (car (car xs)))
+(defun cadr (xs) (car (cdr xs)))
+(defun cdar (xs) (cdr (car xs)))
+(defun cddr (xs) (cdr (cdr xs)))
+
+(defun first  (xs) (car xs))
+(defun second (xs) (cadr xs))
+(defun third  (xs) (elt xs 2))  ; (elt xs n) は列関数
+(defun fourth (xs) (elt xs 3))
+(defun fifth  (xs) (elt xs 4))
+
+;; 末尾のセル
+(defun last-pair (xs)
+  (for ((xs xs (cdr xs)))
+       ((null (cdr xs)) xs)))
+
+;; 末尾の要素
+(defun last (xs) (car (last-pair xs)))
+
+;; 先頭から n 個の要素を取り出す
+(defun take (xs n)
+  (for ((n n (- n 1))
+        (a nil (cons (car xs) a))
+        (xs xs (cdr xs)))
+       ((or (&lt;= n 0) (null xs)) (nreverse a))))
+
+;; 先頭から n 個の要素を取り除く
+(defun drop (xs n)
+  (for ((n n (- n 1))
+        (xs xs (cdr xs)))
+       ((or (&lt;= n 0) (null xs)) xs)))
+
+;; xs を反転して ys と連結する
+(defun append-reverse (xs ys)
+  (for ((xs xs (cdr xs)))
+       ((null xs) ys)
+       (setq ys (cons (car xs) ys))))
+
+;;
+;; リストの生成
+;;
+(defun iota (n m)
+  (for ((m m (- m 1))
+        (a nil))
+       ((&gt; n m) a)
+       (setq a (cons m a))))
+;;
+;; 削除
+;;
+
+;; 重複要素を削除する
+(defun remove-duplicate (xs)
+  (for ((xs xs (cdr xs))
+        (ys nil))
+       ((null xs) (nreverse ys))
+       (if (not (member (car xs) ys))
+           (setq ys (cons (car xs) ys)))))
+
+;; フィルター
+(defun remove-if (f xs)
+  (for ((xs xs (cdr xs))
+        (a nil))
+       ((null xs) (nreverse a))
+       (if (not (funcall f (car xs)))
+           (setq a (cons (car xs) a)))))
+
+(defun remove (x xs)
+  (remove-if (lambda (y) (eql x y)) xs))
+
+;;
+;; 畳み込み
+;;
+(defun fold-left (f a xs)
+  (for ((ys xs (cdr ys))
+        (acc a (funcall f acc (car ys))))
+       ((null ys) acc)))
+
+(defun fold-right (f a xs)
+  (for ((ys (reverse xs) (cdr ys))
+        (acc a (funcall f (car ys) acc)))
+       ((null ys) acc)))
+
+;;
+;; 巡回
+;;
+(defun for-each (f xs)
+  (for ((ys xs (cdr ys)))
+       ((null ys))
+       (funcall f (car ys))))
+
+;;
+;; 分割
+;;
+(defun partition (pred xs)
+  (for ((xs xs (cdr xs))
+        (ys nil)
+        (zs nil))
+       ((null xs) (cons (nreverse ys) (nreverse zs)))
+       (if (funcall pred (car xs))
+           (setq ys (cons (car xs) ys))
+         (setq zs (cons (car xs) zs)))))
+
+;;
+;; 検索
+;;
+(defun find-if (pred xs)
+  (block exit
+    (for ((xs xs (cdr xs)))
+         ((null xs))
+         (if (funcall pred (car xs))
+             (return-from exit (car xs))))))
+
+(defun find (a xs)
+  (find-if (lambda (x) (eql x a)) xs))
+
+(defun position-if (pred xs)
+  (block exit
+    (for ((i 0 (+ i 1))
+          (xs xs (cdr xs)))
+         ((null xs) -1)
+         (if (funcall pred (car xs))
+             (return-from exit i)))))
+
+(defun position (a xs)
+  (position-if (lambda (x) (eql x a)) xs))
+
+(defun count-if (pred xs)
+  (for ((c 0)
+        (xs xs (cdr xs)))
+       ((null xs) c)
+       (if (funcall pred (car xs)) (setq c (+ c 1)))))
+
+(defun count (a xs)
+  (count-if (lambda (x) (eql x a)) xs))
+
+(defun any (pred &amp;rest xs)
+  (block exit
+    (for ((xs xs (mapcar #'cdr xs)))
+         ((member nil xs))
+         (let ((ys (mapcar #'car xs)))
+           (if (apply pred ys)
+               (return-from exit t))))))
+
+(defun every (pred &amp;rest xs)
+  (block exit
+    (for ((xs xs (mapcar #'cdr xs)))
+         ((member nil xs) t)
+         (let ((ys (mapcar #'car xs)))
+           (if (not (apply pred ys))
+               (return-from exit nil))))))
+
+;;
+;; 集合演算
+;;
+(defun union (xs ys)
+  (for ((xs xs (cdr xs))
+        (zs nil))
+       ((null xs) (append-reverse zs ys))
+       (if (not (member (car xs) ys))
+           (setq zs (cons (car xs) zs)))))
+
+(defun intersection (xs ys)
+  (for ((xs xs (cdr xs))
+        (zs nil))
+       ((null xs) (nreverse zs))
+       (if (member (car xs) ys)
+           (setq zs (cons (car xs) zs)))))
+
+(defun difference (xs ys)
+  (for ((xs xs (cdr xs))
+        (zs nil))
+       ((null xs) (nreverse zs))
+       (if (not (member (car xs) ys))
+           (setq zs (cons (car xs) zs)))))
+
+(defun subsetp (xs ys)
+  (block exit
+    (for ((xs xs (cdr xs)))
+         ((null xs) t)
+         (if (not (member (car xs) ys))
+             (return-from exit nil)))))
+</pre>
+<pre>
+ISLisp&gt;(load "list.l")
+T
+ISLisp&gt;(caar '((a b) (c d) (e f)))
+A
+ISLisp&gt;(cadr '((a b) (c d) (e f)))
+(C D)
+ISLisp&gt;(cdar '((a b) (c d) (e f)))
+(B)
+ISLisp&gt;(cddr '((a b) (c d) (e f)))
+((E F))
+ISLisp&gt;(first '(a b c d e f))
+A
+ISLisp&gt;(second '(a b c d e f))
+B
+ISLisp&gt;(third '(a b c d e f))
+C
+ISLisp&gt;(fourth '(a b c d e f))
+D
+ISLisp&gt;(fifth '(a b c d e f))
+E
+ISLisp&gt;(last-pair '(a b c d e f))
+(F)
+ISLisp&gt;(last '(a b c d e f))
+F
+ISLisp&gt;(take '(a b c d e f) 3)
+(A B C)
+ISLisp&gt;(drop '(a b c d e f) 3)
+(D E F)
+ISLisp&gt;(take '(a b c d e f) 7)
+(A B C D E F)
+ISLisp&gt;(drop '(a b c d e f) 7)
+NIL
+ISLisp&gt;(append-reverse '(a b c) '(d e f))
+(C B A D E F)
+ISLisp&gt;(append-reverse nil '(d e f))
+(D E F)
+ISLisp&gt;(append-reverse '(a b c) nil)
+(C B A)
+ISLisp&gt;(iota 1 10)
+(1 2 3 4 5 6 7 8 9 10)
+ISLisp&gt;(iota 1 1)
+(1)
+ISLisp&gt;(iota 1 0)
+NIL
+ISLisp&gt;(remove-duplicate '(a b c a b c d a b c d e))
+(A B C D E)
+ISLisp&gt;(remove-duplicate '(a b c d e f))
+(A B C D E F)
+ISLisp&gt;(defun evenp (x) (= (mod x 2) 0))
+EVENP
+ISLisp&gt;(remove-if #'evenp '(1 2 3 4 5 6 7 8 9 10))
+(1 3 5 7 9)
+ISLisp&gt;(remove 'a '(a b c a b c d a b c d e))
+(B C B C D B C D E)
+ISLisp&gt;(fold-left #'+ 0 '(1 2 3 4 5 6 7 8 9 10))
+55
+ISLisp&gt;(fold-left #'cons nil '(a b c d e f))
+((((((NIL . A) . B) . C) . D) . E) . F)
+ISLisp&gt;(defun xcons (a b) (cons b a))
+XCONS
+ISLisp&gt;(fold-left #'xcons nil '(a b c d e f))
+(F E D C B A)
+ISLisp&gt;(fold-right #'+ 0 '(1 2 3 4 5 6 7 8 9 10))
+55
+ISLisp&gt;(fold-right #'cons nil '(a b c d e f))
+(A B C D E F)
+ISLisp&gt;(partition #'evenp '(1 2 3 4 5 6 7 8 9 10))
+((2 4 6 8 10) 1 3 5 7 9)
+ISLisp&gt;(partition (lambda (x) (&lt; x 5)) '(1 2 3 4 5 6 7 8 9 10))
+((1 2 3 4) 5 6 7 8 9 10)
+ISLisp&gt;(find-if #'evenp '(1 2 3 5 7 9)
+)
+2
+ISLisp&gt;(find-if #'evenp '(1 3 5 7 9 4))
+4
+ISLisp&gt;(find-if #'evenp '(1 3 5 7 9))
+NIL
+ISLisp&gt;(find 'a '(a b c d e))
+A
+ISLisp&gt;(find 'e '(a b c d e))
+E
+ISLisp&gt;(find 'f '(a b c d e))
+NIL
+ISLisp&gt;(position-if #'evenp '(2 1 3 5 7 9))
+0
+ISLisp&gt;(position-if #'evenp '(1 3 5 7 9 2))
+5
+ISLisp&gt;(position-if #'evenp '(1 3 5 7 9))
+-1
+ISLisp&gt;(position 'a '(a b c d e))
+0
+ISLisp&gt;(position 'e '(a b c d e))
+4
+ISLisp&gt;(position 'f '(a b c d e))
+-1
+ISLisp&gt;(count-if #'evenp '(1 2 3 4 5 6 7 8 9))
+4
+ISLisp&gt;(count-if #'evenp '(1 3 5 7 9))
+0
+ISLisp&gt;(count 'a '(a b a b c a b c d))
+3
+ISLisp&gt;(count 'd '(a b a b c a b c d))
+1
+ISLisp&gt;(count 'e '(a b a b c a b c d))
+0
+ISLisp&gt;(any #'&lt; '(1 3 5) '(2 1 0))
+T
+ISLisp&gt;(any #'&lt; '(1 3 5) '(0 1 0))
+NIL
+ISLisp&gt;(every #'&lt; '(1 3 5) '(2 4 6))
+T
+ISLisp&gt;(every #'&lt; '(1 3 5) '(2 4 0))
+NIL
+ISLisp&gt;(any #'evenp '(1 3 4 5))
+T
+ISLisp&gt;(any #'evenp '(1 3 5))
+NIL
+ISLisp&gt;(every #'evenp '(1 2 3 4 5))
+NIL
+ISLisp&gt;(every #'evenp '(2 4 6 8))
+T
+ISLisp&gt;(union '(1 2 3 4) '(3 4 5 6))
+(1 2 3 4 5 6)
+ISLisp&gt;(intersection '(1 2 3 4) '(3 4 5 6))
+(3 4)
+ISLisp&gt;(difference '(1 2 3 4) '(3 4 5 6))
+(1 2)
+ISLisp&gt;(subsetp '(1 2) '(1 2 3 4))
+T
+ISLisp&gt;(subsetp '(1 2 5) '(1 2 3 4))
+NIL
+</pre>
+<h4 id="chap05">●クイックソート</h4>
+<pre class="list">
+リスト : クイックソート
+
+(load "list.l")  ; リスト操作関数をロード
+
+(defun quick-sort (xs)
+  (if (null xs)
+      nil
+    (let ((zs (partition (lambda (x) (&lt; x (car xs))) (cdr xs))))
+      (append (quick-sort (car zs))
+              (cons (car xs) (quick-sort (cdr zs)))))))
+</pre>
+<pre>
+ISLisp&gt;(quick-sort '(5 6 4 7 3 8 2 9 1 0))
+(0 1 2 3 4 5 6 7 8 9)
+ISLisp&gt;(quick-sort '(0 1 2 3 4 5 6 7 8 9))
+(0 1 2 3 4 5 6 7 8 9)
+ISLisp&gt;(quick-sort '(9 8 7 6 5 4 3 2 1 0))
+(0 1 2 3 4 5 6 7 8 9)
+</pre>
+<h4 id="chap06">●順列と組み合わせ</h4>
+<pre class="list">
+リスト ; 順列と組み合わせ
+
+(load "list.l")
+
+;; mapcar の結果を平坦化する
+(defun flatmap (func ls)
+  (apply #'append (mapcar func ls)))
+
+;; 順列をリストに格納して返す
+(defun permutations (n ls)
+  (if (= n 0)
+      (list nil)
+    (flatmap (lambda (x)
+               (mapcar (lambda (y) (cons x y))
+                       (permutations (- n 1) (remove x ls))))
+             ls)))
+
+;; 組み合わせをリストに格納して返す
+(defun combinations (n xs)
+  (labels ((comb (n xs ys zs)
+             (cond ((= n 0) (cons (reverse ys) zs))
+                   ((null xs) zs)
+                   (t (comb (- n 1)
+                            (cdr xs)
+                            (cons (car xs) ys)
+                            (comb n (cdr xs) ys zs))))))
+    (comb n xs nil nil)))
+</pre>
+<pre>
+ISLisp&gt;(permutations 3 '(a b c))
+((A B C) (A C B) (B A C) (B C A) (C A B) (C B A))
+ISLisp&gt;(combinations 3 '(a b c d e))
+((A B C) (A B D) (A B E) (A C D) (A C E) (A D E) (B C D) (B C E) (B D E) (C D E))
+ISLisp&gt;(combinations 2 '(a b c d e))
+((A B) (A C) (A D) (A E) (B C) (B D) (B E) (C D) (C E) (D E))
+ISLisp&gt;(combinations 2 '(a b c d e))
+((A B) (A C) (A D) (A E) (B C) (B D) (B E) (C D) (C E) (D E))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<hr>
+<div class="small">
+[ <A href="../index.html">Home</a> | <a href="index.html">Common Lisp</a> | <a href="islisp.html">ISLisp</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

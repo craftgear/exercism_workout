@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881761</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm05.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>数当てゲーム（その２）</h3>
+<p> 前回はひとつの数字を当てるゲームでした。今回は 4 つの数字を当てるゲームを作りましょう。これは「マスターマインド」とか「ヒット・アンド・ブロー」と呼ばれているゲームです。コンピュータは 0 から 9 までの中から重複しないように数字を 4 つ選びます。私たちは数字だけではなく、その位置も当てなくてはいけません。数字は合っているが位置が間違っている個数を cows で表し、数字も位置も合っている個数を bulls で表します。つまり、bulls が 4 になると正解というわけです。
+</p>
+<p> 言葉で説明するとわかりにくいので、ゲームの進行状況を見てみましょう。
+</p>
+<pre class="fig">
+    (6 2 8 1)
+---------------------------------
+1.  (0 1 2 3) : bulls 0 : cows 2 
+2.  (1 0 4 5) : bulls 0 : cows 1 
+3.  (2 3 5 6) : bulls 0 : cows 2 
+4.  (3 2 7 4) : bulls 1 : cows 0 
+5.  (3 6 0 8) : bulls 0 : cows 2 
+6.  (6 2 8 1) : bulls 4 : cows 0  ＊＊！正解！＊＊
+
+        図 : マスターマインドの動作例
+</pre>
+<p> 4 つの数字はリストに格納することにします。コンピュータが選んだ数字は (6 2 8 1) です。プレーヤーは、最初に (0 1 2 3) を入力しました。0 と 3 は (6 2 8 1) に含まれていませんね。1 と 2 は (6 2 8 1) の中にあるのですが、位置が異なっているので、cows が 2 となります。この場合の bulls は 0 です。
+</p>
+<p> あとは bulls が 4 になるように数字を選んで入力していきます。4 番目の入力では、2 の位置が合っているので bulls は 1 となります。この例では 6 回で正解となりました。
+</p>
+
+<h4>●数字を 4 つ選ぶ</h4>
+<p> それでは、処理内容を順番に考えていきましょう。まず、コンピュータが数字を 4 つ選ばないことには、ゲームを始めることができません。前回の数当てゲームと違って、今回は重複しないように数字を選ばなければいけません。処理手順を図に示すと、次のようになるでしょう。
+</p>
+<pre class="fig">
+          ├←───────┐
+          ↓                │
+┌─────────┐      │
+│0 - 9 の数字を生成│      │
+└─────────┘      │
+          ↓                │
+┌─────────┐      │
+│同じ数字があるか？│──→┤
+└─────────┘#t    │
+          ↓#f              │
+┌──────────┐    │
+│ 数字をリストに追加 │    │
+└──────────┘    │
+          ↓                │
+┌─────────┐      │
+│  ４つ揃ったか？  │──→┘
+└─────────┘#f
+          ↓#t
+
+    図 : 数字を決める処理
+</pre>
+<p> 0 - 9 の数字を生成する処理は、乱数を使えば簡単に実現できます。今回はこの数字をリストに格納することにします。リストは空リストに初期化しておきます。数字をリストに追加する前に、同じ数字があるかチェックします。もし、同じ数字があれば、リストに追加しないで、数字を生成する処理に戻ります。違う数字であればリストに追加します。あとは数字が 4 つそろうまで、この処理を繰り返します。
+</p>
+
+<p> リストの中に同じ数字があるかチェックする処理は、再帰定義を使って簡単に作ることができますが、Scheme には memq, memv, memberという便利な述語が用意されています。
+</p>
+
+<ul>
+  <li>memq item list
+  <li>memv item list
+  <li>member item list
+</ul>
+
+<p> これらの関数は list の中に item が含まれているかテストします。データの比較には、memq が eq? を、memv が eqv? を、member が equal? を使用します。もしも、item が見つからなければ #f を返します。見つけた場合は、item 以降のリストの残りを返します。これらの関数はリストのトップレベルの中から item を探すことに気をつけてください。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+gosh&gt; (member 'd '(b c d e f))
+(d e f)
+gosh&gt; (member 'a '(b c d e f))
+#f
+gosh&gt; (member 'c '((a b) (c d) (e f)))  ; c はトップレベルではない
+#f
+</pre>
+<p> 比較するデータは整数値なので、memv か member を使うといいでしょう。
+</p>
+<p> それでは、具体的にプログラムします。関数名は make-answer とし、4 つの数字を格納したリストを返します。
+</p>
+
+<pre class="list">
+リスト : 4 つの数字を決める
+
+; 0 から n - 1 までの乱数を生成
+(define (make-number n)
+    (modulo (quotient (irand) #x10000) n))
+
+; 4 つの数字を決める
+(define (make-answer answer)
+    (if (= (length answer) 4)
+        answer
+        (let ((num (make-number 10)))
+            (if (member num answer)
+                (make-answer answer)
+                (make-answer (cons num answer))))))
+</pre>
+
+<p> 乱数の生成は前回作成した「線形合同法」のプログラムを使います。make-number は引数 n を受け取り、 0 以上 n - 1 以下の乱数を生成して返します。関数 make-answer の引数 answer には空リストを渡します。ここに選んだ数字を格納します。
+</p>
+
+<p> 最初の if で answer に要素が 4 つあるかチェックします。length はリストの要素を数える関数です。lenght はリストのトップレベルにある要素を数えることに注意してください。また、リストの要素の個数を「リストの長さ」といいます。answer の長さが 4 の場合は answer を返します。
+</p>
+
+<p> そうでない場合は、make-number で数字を一つ生成して局所変数 num にセットします。num が answer に含まれているか member でチェックし、同じ数字がある場合は make-answer をそのまま再帰呼び出しします。同じ数字がない場合は、answer の先頭に num を追加して make-number を再帰呼び出しします。これで異なる数字を 4 つ選ぶことができます。
+</p>
+
+<h4>●入力処理を作る</h4>
+<p> 次は、数字を入力する処理を作りましょう。まず、数字をひとつ入力する関数 input-one-number を作ります。これは、前回作成した関数 input-number を改造すれば、簡単に作ることができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 数字を一つ入力する
+
+(define (input-one-number)
+    (let ((num (read)))
+        (cond ((not (integer? num))
+               (display "please input integer (0 - 9)\n")
+               #f)
+              ((&lt;= 0 num 9) num)
+              (else
+               (display "range error\n")
+               #f))))
+</pre>
+<p> 今回は、入力時にエラーが発生した場合は偽を返すことにして、呼び出し側の関数でエラー処理を行うことにします。データは read で読み込み、局所変数 num にセットします。num が整数型データでなければ、メッセージを表示して #f を返します。num が 0 以上 9 以下であれば num を返します。そうでなければ、数値の範囲が間違っているので #f を返します。
+</p>
+
+<p> この関数を使って、 4 つの数字を入力する input-four-numbers を作ります。
+</p>
+
+<pre class="list">
+リスト : 4 つの数字を入力
+(define (input-four-numbers)
+    (display "please input four numbers\n&gt; ")
+    (let loop ((num-list '()))
+        (if (= (length num-list) 4)
+            (reverse num-list)
+            (let ((num (input-one-number)))
+                (cond ((not num)
+                       (delete-input-data)
+                       (input-four-numbers))
+                      ((member num num-list)
+                       (display "same number error\n")
+                       (delete-input-data)
+                       (input-four-numbers))
+                      (else
+                       (loop (cons num num-list))))))))
+</pre>
+
+<p> 最初に入力を促すメッセージを display で出力します。次に、名前付き let で入力処理を繰り返します。入力された数値は局所変数 num-list に格納します。num-list の長さが 4 になった場合は、reverse で num-list を反転して返します。そうでなければ、input-one-number を呼び出して数字を読み込み、それを局所変数 num にセットします。それから cond で num のチェックを行います。
+</p>
+
+<p> 最初に、入力エラーがあるかチェックします。数字の入力は 1 つずつ行うだけではなく、1 行に 4 つまとめて行うこともできます。たとえば、次の例を見てください。
+</p>
+<pre>
+&gt; 1 a 4 5
+</pre>
+<p> この場合、2 つめの数字の入力で input-one-number は #f を返します。このとき、それ以降の入力データ 4 と 5 は残ったままになっているので、それを読み捨てる処理が必要になります。そこで、改行まで入力データを読み捨てる関数 delete-input-data を作ります。この関数はあとで説明します。入力データを削除したら input-four-numbers を再帰呼び出しして、入力処理をやり直します。
+</p>
+
+<p> 次に、num と同じ数字が num-list にあるか member を使ってチェックします。同じ数字がある場合はメッセージを表示して入力データを削除します。そして、input-four-numbers を再帰呼び出しして入力処理を繰り返します。最後に else 節が評価されます。loop を再帰呼び出しして次の数字を読み取ります。このとき、num-list の先頭に num を追加することをお忘れなく。
+</p>
+
+<h4>●文字型データ</h4>
+<p> delete-input-data を作る前に、キーボードから 1 文字入力する処理を説明します。Scheme (Lisp) は文字をデータとして扱うことができます。これを「文字型データ (character) 」といいます。文字型データは、文字の前に #\ を付けて表します。文字型データは自己評価フォームです。簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; (read-char)a
+#\a
+gosh&gt; (read-char)A
+#\A
+gosh&gt; (read-char)       &lt; -- 空白文字を入力してリターンキーを押す
+#\space
+gosh&gt; (read-char)       &lt; -- リターンキーのみを押す
+#\newline
+gosh&gt; #\x20
+#\space
+gosh&gt; #\x0a
+#\newline
+</pre>
+<p> 文字の入力は関数 read-char で行うことができます。read-char は入力されたデータを文字型データに変換して返します。特定の文字は名前で指定することができます。space は空白文字、newline は改行文字を表します。それから、#\xN のように 16 進数の整数 N で文字を指定することもできます。このほかにも、便利な指定方法があるので詳細は Gauche のマニュアルをお読みください。
+</p>
+
+<p> 次は文字型データを比較する述語を説明します。
+</p>
+<ul>
+  <li>char=?  char1 char2
+  <li>char&lt;?  char1 char2
+  <li>char&gt;?  char1 char2
+  <li>char&lt;=? char1 char2
+  <li>char&gt;=? char1 char2
+</ul>
+<p> これらの述語は文字 char1 と char2 を比較します。引数は文字型データでなければいけません。条件を満たせば #t を、そうでなければ #f を返します。条件は数値を比較する述語 =, &lt;, &gt;, &lt;=, &gt;= と同じです。
+</p>
+
+<p> それでは関数 delete-input-data を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 入力データを改行文字まで読み捨てる
+
+(define (delete-input-data)
+    (let ((c (read-char)))
+        (if (not (char=? #\newline c))
+            (delete-input-data))))
+</pre>
+<p> プログラムは簡単です。read-char で 1 文字読み込んで局所変数 c にセットします。それが改行文字 #\newline でなければ、delete-input-data を再帰呼び出しして次の文字を読み込みます。これで改行文字までデータを詠み捨てることができます。
+</p>
+
+<h4>●bulls を数える</h4>
+<p> それでは、数当てゲームの処理内容を考えていきましょう。このゲームは、入力されたデータと正解から bulls の個数をカウントし、それが 4 になればゲーム終了、そうでなければ入力処理に戻ります。この処理を図に示すと、次のようになるでしょう。
+</p>
+<pre class="fig">
+                         ↓
+                  ┌──────┐
+                  │数字を決める│
+                  └──────┘
+                         ├←────────┐
+                         ↓                  │
+                  ┌──────┐           │
+                  │データの入力│           │
+                  └──────┘           │
+                         ↓                  │
+                 ┌───────┐          │
+                 │bulls を数える│          │
+                 └───────┘          │
+                         ↓                  │
+┌───┐      ┌────────┐         │
+│正解！│←──│bulls は４個か？│         │
+└───┘  #t  └────────┘         │
+                         ↓#f                │
+              ┌───────────┐     │
+              │bulls とcowsを表示する│     │
+              └───────────┘     │
+                         │                  │
+                         └─────────┘
+
+            図 : 数当てゲームの流れ図
+</pre>
+<p> この処理の中で、bulls と cows を数える処理を新しく作る必要があります。まず、bulls を求める関数 count-bulls を作りましょう。今回は、リスト操作の常套手段である再帰を使います。bulls は、同じ位置にある数字が等しい場合にカウントされます。リストの先頭にある要素は、car を使えば簡単に比較できますね。残りの要素は、リストに cdr を適用して count-bulls を再帰呼び出しすればいいのです。
+</p>
+<pre class="fig">
+    │(6 2 8 1)  (3 2 7 4)
+    │ =          =  ─────→ +0    １─→１
+再  ↓                                  ↑
+帰  │(2 8 1)    (2 7 4)                │  返
+呼  │ =          =  ─────→ +1    １
+び  ↓                                  ↑  り
+出  │(8 1)      (7 4)                  │
+し  │ =          =  ─────→ +0    ０  値
+    ↓                                  ↑
+    │(1)        (4)                    │
+    │ =          =  ─────→ +0    ０
+    ↓                                  ↑
+      ()         ()  ─────→  0  ─┘
+
+          図 : count-bulls の処理手順
+</pre>
+<p> 上図に示すように、リストに cdr を適用して再帰呼び出しをすると、最後は空リスト () になります。ここが再帰呼び出しの停止条件になります。このとき count-bulls は 0 を返します。あとは、リストの car を比較して、等しい数字であれば count-bulls の返り値に 1 を足した値を返します。そうでなければ、そのままの値を返せばいいのです。これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : bulls を求める
+
+(define (count-bulls answer data)
+    (cond ((null? answer) 0)
+          ((= (car answer) (car data))
+           (+ 1 (count-bulls (cdr answer) (cdr data))))
+          (else
+           (count-bulls (cdr answer) (cdr data)))))
+</pre>
+
+<p> 引数 answer が正解のデータで、data が入力データです。cond の最初の節が再帰呼び出しの停止条件です。引数 answer が空リストであれば 0 を返します。次の節で、引数のリストに car を適用して先頭の要素を比較します。等しい場合は count-bulls を再帰呼び出しし、その返り値に 1 を足した値を返します。最後の else 節が、先頭の要素が等しくない場合の処理です。ここは count-bulls を再帰呼び出しするだけです。それから、count-bulls を呼び出す場合は、引数に cdr を適用することをお忘れなく。
+</p>
+
+<p> ご参考までに、末尾再帰のプログラムを示します。
+</p>
+<pre class="list">
+リスト : bulls を数える (末尾再帰)
+
+(define (count-bulls answer data)
+    (let loop ((ls1 answer) (ls2 data) (n 0))
+        (cond ((null? ls1) n)
+              ((= (car ls1) (car ls2))
+               (loop (cdr ls1) (cdr ls2) (+ n 1)))
+              (else
+               (loop (cdr ls1) (cdr ls2) n)))))
+</pre>
+
+<h4>●cows を数える</h4>
+<p> 次は、cows を数える処理を作ります。いきなり cows を数えようとすると難しいのですが、2 つのリストに共通の数字を数えることは簡単にできます。この方法では、bulls の個数を含んだ数を求めることになりますが、そこから bulls を引けば cows を求めることができます。関数名は count-same-numberとしましょう。基本的には count-bulls と同じ考え方で作ることができます。
+</p>
+<pre class="fig">
+    │(6 2 8 1)  (2 3 5 6)
+    │ =                = ──→ +1    ２─→２
+再  ↓                                 ↑
+帰  │(2 8 1)    (2 3 5 6)             │  返
+呼  │ =          =   ────→ +1    １
+び  ↓                                 ↑  り
+出  │(8 1)      (2 3 5 6)             │
+し  │ =                  ──→ +0    ０  値
+    ↓                                 ↑
+    │(1)        (2 3 5 6)             │
+    │ =                  ──→ +0    ０
+    ↓                                 ↑
+      ()         ()  ─────→ 0  ─┘
+
+       図 : count-same-number の処理手順
+</pre>
+<p> count-same-number の場合、要素の位置は関係ないので、第 1 引数のリストの要素が他方のリストに含まれているか調べればいいのです。これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 同じ数字を数える
+
+(define (count-same-number answer data)
+    (cond ((null? answer) 0)
+          ((member (car answer) data)
+           (+ 1 (count-same-number (cdr answer) data)))
+          (else
+           (count-same-number (cdr answer) data))))
+</pre>
+
+<p> cond の最初の節が再帰呼び出しの停止条件です。引数 answer が空リストであれば 0 を返します。次の節で、answer に car を適用して、それが data に含まれているか述語 member でチェックします。もしも、同じ数字が見つかれば count-same-number を再帰呼び出しし、その返り値に 1 を足した値を返します。
+</p>
+<p> 同じ数字が見つからない場合は最後の else 節が実行されます。ここは count-same-number を再帰呼び出しするだけです。それから、count-same-number を呼び出す場合は、第 1 引数に cdr を適用し、第 2 引数はそのまま渡すことに注意してください。
+</p>
+
+<p> ご参考までに、末尾再帰のプログラムを示します。
+</p>
+<pre class="list">
+リスト : 同じ数字を数える (末尾再帰)
+
+(define (count-same-number answer data)
+    (let loop ((ls answer) (n 0))
+        (cond ((null? ls) n)
+              ((member (car ls) data)
+               (loop (cdr ls) (+ n 1)))
+              (else
+               (loop (cdr ls) n)))))
+</pre>
+
+<h4>●ゲーム本体を作る</h4>
+<p> 必要な関数がそろったので、ゲーム本体を作りましょう。
+</p>
+
+<pre class="list">
+リスト : ゲーム本体
+
+; ゲームオーバーの表示
+(define (display-gameover answer)
+    (display "GameOver: ")
+    (display answer)
+    (newline))
+
+; bulls と cows の表示
+(define (display-bulls-cows count answer data bulls)
+    (display count)
+    (display " : ")
+    (display "bulls ")
+    (display bulls)
+    (display ", cows ")
+    (display (- (count-same-number answer data) bulls))
+    (newline))
+
+; ゲーム本体
+(define (play answer)
+    (let loop ((count 1))
+        (let* ((data (input-four-numbers))
+               (bulls (count-bulls answer data)))
+            (display-bulls-cows count answer data bulls)
+            (cond ((= bulls 4)
+                   (display "Congratulation!\n"))
+                  ((&lt;= 10 count)
+                   (display-gameover answer))
+                  (else
+                   (loop (+ count 1)))))))
+</pre>
+
+<p> display-gameover と display-bulls-cows はメッセージを表示する関数です。cows を表示するときは、count-same-number で求めた数から bulls を引くことに注意してください。
+</p>
+<p> 関数 play は引数 answer に正解を受け取ります。今回は 10 回以内に当てないとゲームオーバーとしました。入力回数は局所変数 count に記憶しておきます。そして、input-four-numbers の返り値を局所変数 data にセットし、bulls の個数を局所変数 bulls にセットします。
+</p>
+<p> let* は let とよく似たシンタックス形式です。局所変数を定義する機能は同じですが、変数の初期化が逐次的に行われるところが異なります。let* を使うと、先に初期化された変数の値をあとから参照することができるのです。bulls の個数を求めるときに data を参照していますが、let では data の値を参照することはできません。ご注意くださいませ。
+</p>
+<p> 次に cond で bulls の値をチェックします。bulls が 4 であれば正解です。メッセージを表示して繰り返しから脱出します。次の節で count が 10 より大きくなったかチェックします。そうであれば、10 回以内で当てることができなかったので、ゲームオーバーを表示して繰り返しから脱出します。最後の節で loop を再帰呼び出ししてゲームを続けます。このとき、count を +1 することをお忘れなく。
+</p>
+
+<h4>●ゲームの実行</h4>
+<p> プログラムはこれで完成です。それでは実行してみましょう。
+</p>
+
+<pre>
+C&gt;gosh master.scm
+please input four numbers
+&gt; 0 1 2 3
+1 : bulls 0, cows 2
+please input four numbers
+&gt; 4 5 6 7
+2 : bulls 0, cows 2
+please input four numbers
+&gt; 6 7 0 1
+3 : bulls 0, cows 2
+please input four numbers
+&gt; 2 0 4 6
+4 : bulls 1, cows 0
+please input four numbers
+> 3 0 7 5
+5 : bulls 0, cows 2
+please input four numbers
+> 1 3 5 6
+6 : bulls 2, cows 2
+please input four numbers
+> 5 3 1 6
+7 : bulls 4, cows 0
+Congratulation!
+
+C&gt;
+</pre>
+<p> 7 回で当てることができました。今回は 4 つの数字ですが、簡単だと思ったら 5 つに増やしてみる、逆に難しいと思ったら 3 つに減らしてみる、などいろいろ改造してみてください。
+</p>
+
+<h4>●まとめ</h4>
+<p> 今回はここまでです。簡単に復習しておきましょう。
+</p>
+<ol>
+  <li> memq, memv, member はリストの中に等しいデータがないかテストする。
+  <li> length はリストのトップレベルの要素を数える。
+  <li> read-char は 1 文字読み込む関数である。
+  <li> 文字型データは文字を表すデータで、文字の前に #\ を付けて表す。
+  <li> char=?, char&lt;?. char&gt;?, char&lt;=?. char&gt;=? は文字型データを比較する述語である。
+  <li> let* は局所変数の初期化を逐次的に行う。
+</ol>
+<p> 次回は Scheme の入出力について説明します。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+;
+; master.scm : マスターマインド
+;
+;              Copyright (C) 2007 Makoto Hiroi
+;
+
+;
+; 線形合同法による乱数の生成
+;
+
+; 種 (seed)
+(define *seed* 1)
+
+; シードの設定
+(define (srand x)
+    (set! *seed* x))
+
+; 整数の一様乱数
+(define (irand)
+    (set! *seed* (modulo (+ (* 69069 *seed*) 1) #x100000000)))
+
+; 実数の一様乱数
+(define (random)
+    (* (/ 1.0 #x100000000) (irand)))
+
+;
+; マスターマインド
+;
+
+; 0 から n - 1 までの乱数を生成
+(define (make-number n)
+    (modulo (quotient (irand) #x10000) n))
+
+; 4 つの数字を決める
+(define (make-answer answer)
+    (if (= (length answer) 4)
+        answer
+        (let ((num (make-number 10)))
+            (if (member num answer)
+                (make-answer answer)
+                (make-answer (cons num answer))))))
+
+; 数字を一つ入力する
+(define (input-one-number)
+    (let ((num (read)))
+        (cond ((not (integer? num))
+               (display "please input integer (0 - 9)\n")
+               #f)
+              ((&lt;= 0 num 9) num)
+              (else
+               (display "range error\n")
+               #f))))
+
+; 入力データを改行文字まで読み捨てる
+(define (delete-input-data)
+    (let ((c (read-char)))
+        (if (not (char=? #\newline c))
+            (delete-input-data))))
+
+; 4 つの数字を入力
+(define (input-four-numbers)
+    (display "please input four numbers\n&gt; ")
+    (let loop ((num-list '()))
+        (if (= (length num-list) 4)
+            (reverse num-list)
+            (let ((num (input-one-number)))
+                (cond ((not num)
+                       (delete-input-data)
+                       (input-four-numbers))
+                      ((member num num-list)
+                       (display "same number error\n")
+                       (delete-input-data)
+                       (input-four-numbers))
+                      (else
+                       (loop (cons num num-list))))))))
+
+; bulls を求める
+(define (count-bulls answer data)
+    (cond ((null? answer) 0)
+          ((= (car answer) (car data))
+           (+ 1 (count-bulls (cdr answer) (cdr data))))
+          (else
+           (count-bulls (cdr answer) (cdr data)))))
+
+; 同じ数字を数える
+(define (count-same-number answer data)
+    (cond ((null? answer) 0)
+          ((member (car answer) data)
+           (+ 1 (count-same-number (cdr answer) data)))
+          (else
+           (count-same-number (cdr answer) data))))
+
+; ゲームオーバーの表示
+(define (display-gameover answer)
+    (display "GameOver: ")
+    (display answer)
+    (newline))
+
+; bulls と cows の表示
+(define (display-bulls-cows count answer data bulls)
+    (display count)
+    (display " : ")
+    (display "bulls ")
+    (display bulls)
+    (display ", cows ")
+    (display (- (count-same-number answer data) bulls))
+    (newline))
+
+; ゲーム本体
+(define (play answer)
+    (let loop ((count 1))
+        (let* ((data (input-four-numbers))
+               (bulls (count-bulls answer data)))
+            (display-bulls-cows count answer data bulls)
+            (cond ((= bulls 4)
+                   (display "Congratulation!\n"))
+                  ((&lt;= 10 count)
+                   (display-gameover answer))
+                  (else
+                   (loop (+ count 1)))))))
+
+; 実行
+(srand (sys-time))
+(play (make-answer '()))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm05.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm07.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

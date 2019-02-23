@@ -1,0 +1,1188 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 ECMAScritp2015 超入門</title>
+  <meta name="description" content="JavaScript,ECMAScript2015,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881858</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>お気楽 ECMAScript2015 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="js2015.html">ES2015</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3 id="chap18">Lisp ライクな連結リスト</h3>
+<p> ES2015 の機能を使った簡単な例題として Lisp ライクな連結リストを作ってみました。
+</p>
+<h4>●連結リストのデータ構造</h4>
+<p> 今回作成する連結リストの構造を図で表すと次のようになります。
+<pre class="fig">
+  CAR CDR       CAR CDR       CAR CDR
+ ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ │・│・┼─→│・│・┼─→│・│・┼→ nil
+ └┼┴─┘    └┼┴─┘    └┼┴─┘
+   ↓            ↓            ↓
+   １            ２            ３
+
+        図 : リスト内部の構造
+</pre>
+<p> リストは貨物列車にたとえるとわかりやすいでしょう。車両に相当するものを「コンスセル (cons cell)」といいます。貨物列車には多数の車両が接続されて運行されるように、リストは複数のコンスセルを接続して構成されます。1 つのコンスセルには、貨物 (データ) を格納する場所 (CAR) と、連結器に相当する場所 (CDR) があります。
+</p>
+<p> 上図では、コンスセルを箱で表しています。コンスセルの左側がデータを格納する場所で、右側が次のコンスセルと連結しています。この例では、3 つのコンスセルが接続されています。それから、最後尾のコンスセルの CDR にはデータ nil を格納します。nil は空リストをあらわすデータとして使います。今回のライブラリでは nil を () と表示します。Lisp / Scheme では、このような連結リストを (1 2 3) と表記します。
+</p>
+
+<h4>●ドットリスト</h4>
+<p> Lisp / Scheme の場合、リストの終端は CDR 部に格納されるデータがセル以外であれば、そこがリストの終端であることがわかります。つまり、nil でなくてもかまわないのです。リストの終端が nil 以外のデータである場合、そのリストを次のように表します。
+<pre class="fig">
+ ┌─┬─┐            ┌─┬─┐
+ │・│・┼─→ ()     │・│・┼─→２
+ └┼┴─┘            └┼┴─┘
+   ↓                    ↓
+   １                    １
+
+ (1) ≡ (1 . nil)      (1 . 2)
+
+ ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ │・│・┼─→│・│・┼─→│・│・┼─→ ()
+ └┼┴─┘    └┼┴─┘    └┼┴─┘
+   ↓            ↓            ↓
+   １            ２            ３
+
+     (1 2 3) ≡ (1 . (2 . (3 . ())))
+
+        図 : ドットリスト (1)
+</pre>
+<p> 左右の括弧の中間にドット ( . ) を置き、左側に CAR 部のデータを、右側に CDR 部のデータを書きます。つまり、リスト (a) は (a . ()) と表すことができます。このようなデータを「ドット対 (dotted pair)」と呼びます。たとえば、CAR 部が 1 で CDR 部が 2 であれば (1 . 2) となります。
+</p>
+<p> それでは、リスト (1 2 3) の終端を 4 に変えてみましょう。ドット対を使った表記法では、(1 . (2 . (3 . 4))) となりますが、これは (1 2 3 . 4) と表すことができます。
+</p>
+<pre class="fig">
+ ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ │・│・┼─→│・│・┼─→│・│・┼─→４
+ └┼┴─┘    └┼┴─┘    └┼┴─┘
+   ↓            ↓            ↓
+   １            ２            ３
+
+     (1 2 3 . 4) ≡ (1 . (2 . (3 . 4)))
+
+    図 : ドットリスト (2)
+</pre>
+<p> このように、nil 以外のアトムで終端されたリストを「ドットリスト (dotted list)」と呼びます。なお、ライブラリのほとんどのメソッドはドットリストの終端要素を nil と同様に扱います。たとえば、リスト (1 2 3 . 4) を for ... of 文で取り出す場合、終端の 4 は nil とみなされて取り出すことはできません。これは Lisp / Scheme の関数と同じ動作です。ご注意くださいませ。
+</p>
+<hr>
+<h4>●連結リストの仕様</h4>
+<ul>
+  <li>クラス名 : List
+  <li>基本操作
+    <ul>
+      <li>List.cons(x, y)<br>
+セルの CAR に x を、CDR に y を格納した新しいセルを生成する。
+      <li>List.nil()<br>
+空リストを返す。
+      <li>xs.first<br>
+リスト xs の CAR にアクセスする。
+      <li>xs.rest<br>
+リスト xs の CDR にアクセスする。
+    </ul>
+  <li>述語
+    <ul>
+      <li>List.isNil(xs)<br>
+引数 xs が空リストならば真を返す。
+      <li>List.isList(xs)<br>
+引数 xs がリストならば真を返す。
+      <li>List.isCons(xs)<br>
+引数 xs がリストかつ空リストでなければ真を返す。
+      <li>List.equal(xs, ys)<br>
+引数 xs と ys が等しければ真を返す。xs, ys がリストの場合、その要素を再帰的に比較する。
+      <li>xs.every(pred)<br>
+リスト xs の要素に述語 pred を適用し、すべて真ならば every() は真を返す。
+      <li>xs.some(pred)<br>
+リスト xs の要素に述語 pred を適用し、ひとつでも真となる要素があれば some() は真を返す。
+    </ul>
+  <li>リストの生成
+    <ul>
+      <li>List.list(...args)<br>
+引数をリストに格納して返す。
+      <li>List.makeList(n, x)<br>
+引数 x を n 個格納したリストを返す。
+      <li>List.iterate(n, a, func)<br>
+初項が a で次項を関数 func で生成し、それを n 個格納したリストを返す。
+    </ul>
+  <li>リストの操作
+    <ul>
+      <li>xs.last()<br>
+リスト xs の末尾要素を返す。
+      <li>xs.length()<br>
+リスト xs の長さを求める。
+      <li>xs.reverse(ys = nil), xs.nreverse(ys = nil)<br>
+リスト xs を反転する。nreverse() はリストを破壊的に修正する。<br>
+リスト ys が与えられると、xs を反転したリストと ys を連結する。
+      <li>xs.append(...ys), xs.nconc(...ys)<br>
+リストを連結する。nconc() はリストを破壊的に修正する。
+      <li>xs.add(n, x)<br>
+リスト xs の n 番目に要素 x を挿入する。n がリストの長さより大きい場合、末尾に x を追加する。
+      <li>xs.delete(n)<br>
+リスト xs の n 番目の要素を削除する。要素がない場合は undefined を返す。
+      <li>xs.take(n)<br>
+リスト xs の先頭から n 個の要素を取り出す。
+      <li>xs.drop(n)<br>
+リスト xs の先頭から n 個の要素を取り除く。
+      <li>xs.get(n)<br>
+リスト xs の n 番目の要素を参照する。
+      <li>xs.set(n, x)<br>
+リスト xs の n 番目の要素を x に更新する。
+    </ul>
+  <li>リストの置換
+    <ul>
+      <li>xs.substitute(oldItem, newItem), xs.nsubstitute(oldItem, newItem)<br>
+リスト xs の要素と引数 oldItem を比較し、等しい要素を newItem に置換する。<br>
+nsubstitute() はリスト xs を破壊的に修正する。
+      <li>xs.substituteIf(pred, newItem), xs.nsubstituteIf(pred, newItem)<br>
+リスト xs の要素に述語 pred を適用し、真を返す要素を newItem に置換する。<br>
+nsubstituteIf() はリスト xs を破壊的に修正する。
+    </ul>
+  <li>リストの探索
+    <ul>
+      <li>xs.member(x)</br>
+リスト xs から引数 x と等しい要素を探索する。<br>
+見つけた場合、それ以降のリストを返す。見つからない場合は空リストを返す。
+      <li>xs.contains(x)</br>
+リスト xs に引数 x と等しい要素が含まれていれば真を返す。
+      <li>xs.indexOf(x)</br>
+引数 x と等しい要素の位置を返す。見つからない場合は -1 を返す。
+      <li>xs.find(pred)</br>
+述語 pred が真となる要素を返す。
+      <li>xs.count(x)</br>
+引数 x と等しい要素の個数を返す。
+      <li>xs.countIf(pred)</br>
+述語 pred が真となる要素の個数を返す。
+    </ul>
+  <li>高階関数
+    <ul>
+      <li>xs.map(func, ...ys)<br>
+リストの要素に関数 func を適用し、その結果を格納したリストを返す。
+      <li>xs.flatMap(func, ...ys)<br>
+リストの要素に関数 func を適用し、その結果 (リスト) を append で連結したリストを返す。
+      <li>xs.filter(pred)<br>
+述語 pred が真となる要素を格納したリストを返す。
+      <li>xs.reduce(func, init), xs.reduceRight(func. init)<br>
+畳み込みを行う。reduce() はリストの先頭から、reduceRight() は末尾から行う。
+      <li>xs.forEach(func)<br>
+リスト xs の要素に関数 func を適用する。
+      <li>xs.takeWhile(pred)<br>
+リスト xs の先頭から述語 pred が真を返す要素をリストに格納して返す。
+      <li>xs.dropWhile(pred)<br>
+リスト xs の先頭から述語 pred が真を返す要素を取り除く。
+    </ul>
+  <li>その他
+    <ul>
+      <li>toString()<br>
+文字列に変換。
+      <li>[@@iterator]()<br>
+イテレータを返す。
+  </ul>
+</ul>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+//
+// list.js : Lisp ライクな連結リスト
+//
+//           Copyright (C) 2017 Makoto Hiroi
+//
+
+class List {
+  constructor(x, y) {
+    this._first = x;
+    this._rest = y;
+  }
+  get first() { return this._first; }
+  get rest() { return this._rest; }
+  set first(x) { this._first = x; }
+  set rest(x) { this._rest = x; }
+
+  // 述語
+  static isNil(xs) { return xs === nil; }
+  static isList(xs) { return xs instanceof List; }
+  static isCons(xs) { return List.isList(xs) &amp;&amp; !List.isNil(xs); }
+
+  static equal(xs, ys) {
+    while (List.isCons(xs) &amp;&amp; List.isCons(ys)) {
+      if (!List.equal(xs.first, ys.first)) return false;
+      xs = xs.rest;
+      ys = ys.rest;
+    }
+    return xs == ys;
+  }
+
+  every(pred) {
+    for (let x of this) {
+      if (!pred(x)) return false;
+    }
+    return true;
+  }
+
+  some(pred) {
+    for (let x of this) {
+      if (pred(x)) return true;
+    }
+    return false;
+  }
+
+  // 空リストを返す
+  static nil() { return nil; }
+
+  // 生成
+  static cons(x, y) { return new List(x, y); }
+
+  static list(...args) {
+    let xs = nil;
+    for (let i = args.length - 1; i &gt;= 0; i--) xs = new List(args[i], xs);
+    return xs;
+  }
+
+  static makeList(n, x) {
+    let xs = nil;
+    while (n-- &gt; 0) xs = new List(x, xs);
+    return xs;
+  }
+
+  static iterate(n, a, func) {
+    let xs = nil;
+    while (n-- &gt; 0) {
+      xs = new List(a, xs);
+      a = func(a);
+    }
+    return xs.nreverse();
+  }
+
+  // 文字列化
+  toString() {
+    let s = "(", xs = this;
+    for (; List.isCons(xs); xs = xs.rest) {
+      s += xs.first.toString();
+      if (List.isCons(xs.rest)) s += " ";
+    }
+    if (!List.isNil(xs)) s += " . " + xs.toString();
+    s += ")";
+    return s;
+  }
+
+  // 表示
+  inspect(depth) { return this.toString(); }
+
+  // ジェネレータ
+  *[Symbol.iterator]() {
+	for (let xs = this; List.isCons(xs); xs = xs.rest)
+      yield xs.first;
+  }
+
+  // リスト操作
+
+  // 末尾の要素
+  last() {
+    let xs = this;
+    while (List.isCons(xs.rest)) xs = xs.rest;
+    return xs.first;
+  }
+
+  // 長さ
+  length() {
+    let n = 0;
+    for (let x of this) n++;
+    return n;
+  }
+
+  // 反転
+  reverse(xs = nil) {
+    for (let x of this) xs = new List(x, xs);
+    return xs;
+  }
+
+  // 破壊的反転
+  nreverse(ys = nil) {
+    let xs = this;
+    while (List.isCons(xs)) {
+      let zs = xs.rest;
+      xs.rest = ys;
+      ys = xs;
+      xs = zs;
+    }
+    return ys;
+  }
+
+  // 連結
+  _append(ys) {
+    if (List.isNil(this)) return ys;
+    if (List.isNil(ys)) return this;
+    let xs = this.reverse(),
+        zs = xs.nreverse();
+    xs.rest = ys;
+    return zs;
+  }
+
+  append(...ys) {
+    let n = ys.length;
+    if (n == 0) return this;
+    let zs = ys[--n];
+    while (--n &gt;= 0) {
+      zs = ys[n]._append(zs);
+    }
+    return this._append(zs);
+  }
+
+  // 破壊的連結
+  _nconc(ys) {
+    if (List.isNil(this)) return ys;
+    if (List.isNil(ys)) return this;
+    let xs = this;
+    while (List.isCons(xs.rest)) xs = xs.rest;
+    xs.rest = ys;
+    return this;
+  }
+
+  nconc(...ys) {
+    let n = ys.length;
+    if (n == 0) return this;
+    let zs = ys[--n];
+    while (--n &gt;= 0) {
+      zs = ys[n]._nconc(zs);
+    }
+    return this._nconc(zs);
+  }
+
+  // 先頭から n 個の要素を取り出す
+  _take(n) {
+    let xs = this, ys = nil;
+    for (; n-- &gt; 0 &amp;&amp; List.isCons(xs); xs = xs.rest) {
+      ys = new List(xs.first, ys);
+    }
+    return [ys, xs]
+  }
+
+  // 挿入 (非破壊的)
+  add(n, value) {
+    if (n == 0) return new List(value, this);
+    let [xs, ys] = this._take(n);
+    return xs.nreverse(new List(value, ys));
+  }
+
+  // 削除 (非破壊的)
+  delete(n) {
+    if (n == 0) return this.rest;
+    let [xs, ys] = this._take(n);
+    if (List.isCons(ys))
+      return xs.nreverse(ys.rest);
+  }
+
+  // 先頭から n 個の要素を取り出す
+  take(n) {
+    let [xs, ys] = this._take(n);
+    return xs.nreverse();
+  }
+
+  // 先頭から n 個の要素を取り除く
+  drop(n) {
+    let xs = this;
+    for (; n-- &gt; 0 &amp;&amp; List.isCons(xs); xs = xs.rest);
+    return xs;
+  }
+
+  // n 番目の要素
+  get(n) {
+    let xs = this.drop(n);
+    if (List.isCons(xs)) return xs.first;
+  }
+
+  // n 番目の要素を更新
+  set(n, value) {
+    let xs = this.drop(n);
+    if (List.isCons(xs)) return xs.first = value;
+  }
+
+  // 置換 (非破壊的)
+  substitute(oldItem, newItem) {
+    let ys = nil;
+    for (let x of this) {
+      ys = new List(x == oldItem ? newItem : x, ys);
+    }
+    return ys.nreverse();
+  }
+
+  substituteIf(pred, newItem) {
+    let ys = nil;
+    for (let x of this) {
+      ys = new List(pred(x) ? newItem : x, ys);
+    }
+    return ys.nreverse();
+  }
+
+  // 破壊的
+  nsubstitute(oldItem, newItem) {
+    for (let xs = this; List.isCons(xs); xs = xs.rest) {
+      if (xs.first == oldItem) xs.first = newItem;
+    }
+    return this;
+  }
+
+  nsubstituteIf(pred, newItem) {
+    for (let xs = this; List.isCons(xs); xs = xs.rest) {
+      if (pred(xs.first)) xs.first = newItem;
+    }
+    return this;
+  }
+
+  // 探索
+  member(x) {
+    for (let xs = this; List.isCons(xs); xs = xs.rest) {
+      if (xs.first == x) return xs;
+    }
+    return nil;
+  }
+
+  contains(x) {
+    for (let y of this) {
+      if (y == x) return true;
+    }
+    return false;
+  }
+
+  indexOf(x) {
+    let n = 0;
+    for (let y of this) {
+      if (y == x) return n;
+      n++;
+    }
+    return -1;
+  }
+
+  find(pred) {
+    for (let x of this) {
+      if (pred(x)) return x;
+    }
+    return false;
+  }
+
+  count(x) {
+    let c = 0;
+    for (let y of this) {
+      if (x == y) c++;
+    }
+    return c;
+  }
+
+  countIf(pred) {
+    let c = 0;
+    for (let y of this) {
+      if (pred(y)) c++;
+    }
+    return c;
+  }
+
+  // 高階関数
+  static _map(func, ...xs) {
+    let ys = nil;
+    while (xs.every(List.isCons)) {
+      let zs = xs.map(x =&gt; x.first);
+      ys = new List(func(...zs), ys);
+      xs = xs.map(x =&gt; x.rest);
+    }
+    return ys;
+  }
+
+  map(func, ...ys) {
+    return List._map(func, this, ...ys).nreverse();
+  }
+
+  flatMap(func, ...ys) {
+    let xs = List._map(func, this, ...ys),
+        zs = xs.first;
+    for (let x of xs.rest) zs = x.append(zs);
+    return zs;
+  }
+
+  filter(pred) {
+    let ys = nil;
+    for (let x of this) {
+      if (pred(x)) ys = new List(x, ys);
+    }
+    return ys.nreverse();
+  }
+
+  reduce(func, a) {
+    for (let x of this) a = func(a, x);
+    return a;
+  }
+
+  reduceRight(func, a) {
+    for (let x of this.reverse()) a = func(x, a);
+    return a;
+  }
+
+  forEach(func) {
+    for (let x of this) func(x);
+  }
+
+  takeWhile(pred) {
+    let xs = nil;
+    for (let x of this) {
+      if (!pred(x)) break;
+      xs = new List(x, xs);
+    }
+    return xs.nreverse();
+  }
+
+  dropWhile(pred) {
+    let xs = this;
+    while (List.isCons(xs) &amp;&amp; pred(xs.first)) xs = xs.rest;
+    return xs;
+  }
+}
+
+// 終端の定義
+const nil = new List(undefined, undefined);
+
+module.exports = List;
+</pre>
+<hr>
+<h4>●簡単なテスト</h4>
+<pre class="list">
+//
+// testlist.js : 連結リストのテスト
+//
+//               Copyright (C) 2017 Makoto Hiroi
+//
+const List = require("./list.js");
+
+console.log("----- cons, first, rest -----");
+var a = List.cons(1, 2);
+console.log(a);
+console.log(a.first);
+console.log(a.rest);
+
+console.log("----- isNil, isList, isCons, equal -----");
+console.log(List.isNil(List.nil()));
+console.log(List.isList(List.nil()));
+console.log(List.isCons(List.nil()));
+console.log(List.isNil(a));
+console.log(List.isList(a));
+console.log(List.isCons(a));
+console.log(List.equal(a, a));
+console.log(List.equal(a, List.cons(1, 3)));
+
+console.log("----- list, makeList, iterate -----");
+console.log(List.list(1,2,3,4,5));
+console.log(List.makeList(10, 0));
+console.log(List.iterate(10, 0, x =&gt; x + 1));
+
+console.log("--- for...of -----");
+var xs = List.iterate(8, 1, x =&gt; x + 1);
+for (let x of xs) console.log(x);
+
+console.log("----- last, length, reverse, nreverse -----")
+console.log(xs.last());
+console.log(xs.length());
+console.log(xs.reverse());
+var ys = xs.nreverse();
+console.log(xs);
+console.log(ys);
+
+console.log("----- append, nconc -----");
+xs = List.list(1,2,3);
+ys = List.list(4,5,6);
+var zs = List.list(7,8,9);
+console.log(xs.append(ys));
+console.log(xs.append(ys, zs));
+xs.nconc(ys, zs);
+console.log(xs);
+console.log(ys);
+console.log(zs);
+
+console.log("----- get, set -----");
+console.log(xs.get(0));
+console.log(xs.get(8));
+console.log(xs.get(9));
+console.log(xs.set(0, 10));
+console.log(xs);
+console.log(xs.set(8, 11));
+console.log(xs);
+console.log(xs.set(9, 12));
+console.log(xs);
+
+console.log("----- add, delete -----");
+console.log(xs.add(0, 100));
+console.log(xs.add(5, 100));
+console.log(xs.add(9, 100));
+console.log(xs.add(10, 100));
+console.log(xs.delete(0));
+console.log(xs.delete(5));
+console.log(xs.delete(8));
+console.log(xs.delete(9));
+
+console.log("----- take, drop -----");
+console.log(xs.take(0));
+console.log(xs.take(5));
+console.log(xs.take(10));
+console.log(xs.drop(0));
+console.log(xs.drop(5));
+console.log(xs.drop(10));
+
+console.log("----- substitute, nsubstitute -----");
+xs = List.list(1,2,3,4,5,6,7,8,9,10);
+console.log(xs);
+console.log(xs.substitute(1, 100));
+console.log(xs.substitute(5, 100));
+console.log(xs.substitute(10, 100));
+console.log(xs.substitute(11, 100));
+console.log(xs.substituteIf(x =&gt; x % 2 == 0, 10));
+console.log(xs.nsubstitute(1, 100));
+console.log(xs);
+console.log(xs.nsubstitute(5, 100));
+console.log(xs);
+console.log(xs.nsubstitute(10, 100));
+console.log(xs);
+console.log(xs.nsubstitute(11, 100));
+console.log(xs);
+console.log(xs.nsubstituteIf(x =&gt; x % 2 == 0, 10));
+console.log(xs);
+
+console.log("----- member, contains, indexOf, find -----");
+xs = List.list(1,2,3,4,5,6,7,8,9,10);
+console.log(xs.member(1));
+console.log(xs.member(10));
+console.log(xs.member(11));
+console.log(xs.contains(1));
+console.log(xs.contains(10));
+console.log(xs.contains(11));
+console.log(xs.indexOf(1));
+console.log(xs.indexOf(10));
+console.log(xs.indexOf(11));
+console.log(xs.find(x =&gt; x == 1));
+console.log(xs.find(x =&gt; x == 10));
+console.log(xs.find(x =&gt; x == 11));
+
+console.log("----- count, countIf -----");
+xs = List.list(1,2,1,2,3,4,1,2,3,4,5);
+console.log(xs.count(1));
+console.log(xs.count(4));
+console.log(xs.count(5));
+console.log(xs.count(6));
+console.log(xs.countIf(x =&gt; x == 1));
+console.log(xs.countIf(x =&gt; x == 4));
+console.log(xs.countIf(x =&gt; x == 5));
+console.log(xs.countIf(x =&gt; x == 6));
+
+console.log("----- map, flatMap -----");
+xs = List.list(1,2,3,4,5);
+ys = List.list(6,7,8,9,10);
+console.log(xs.map(x =&gt; x * x));
+console.log(xs.flatMap(x =&gt; List.list(x, x)));
+console.log(xs.map((x, y) =&gt; List.list(x, y), ys));
+console.log(xs.flatMap((x, y) =&gt; List.list(x, y), ys));
+
+console.log("----- filter, reduce, reduceRight -----");
+xs = List.list(1,2,3,4,5,6,7,8);
+console.log(xs.filter(x =&gt; x % 2 == 0));
+console.log(xs.reduce((x, y) =&gt; x + y, 0));
+console.log(xs.reduceRight((x, y) =&gt; x + y, 0));
+console.log(xs.reduce((x, y) =&gt; List.cons(y, x), List.nil()));
+console.log(xs.reduceRight((x, y) =&gt; List.cons(x, y), List.nil()));
+
+console.log("----- forEach, every, some -----");
+xs.forEach(console.log);
+console.log(List.list(1,3,5,7,9).every(x =&gt; x % 2 == 1));
+console.log(List.list(1,3,5,7,8).every(x =&gt; x % 2 == 1));
+console.log(List.list(1,3,5,7,8).some(x =&gt; x % 2 == 0));
+console.log(List.list(1,3,5,7,9).some(x =&gt; x % 2 == 0));
+
+console.log("----- takeWhile, dropWhile -----");
+console.log(xs);
+console.log(xs.takeWhile(x =&gt; x &lt; 5));
+console.log(xs.dropWhile(x =&gt; x &lt; 5));
+</pre>
+<h4>●実行結果</h4>
+<pre> 
+C&gt;node testlist.js
+----- cons, first, rest -----
+(1 . 2)
+1
+2
+----- isNil, isList, isCons, equal -----
+true
+true
+false
+false
+true
+true
+true
+false
+----- list, makeList, iterate -----
+(1 2 3 4 5)
+(0 0 0 0 0 0 0 0 0 0)
+(0 1 2 3 4 5 6 7 8 9)
+--- for...of -----
+1
+2
+3
+4
+5
+6
+7
+8
+----- last, length, reverse, nreverse -----
+8
+8
+(8 7 6 5 4 3 2 1)
+(1)
+(8 7 6 5 4 3 2 1)
+----- append, nconc -----
+(1 2 3 4 5 6)
+(1 2 3 4 5 6 7 8 9)
+(1 2 3 4 5 6 7 8 9)
+(4 5 6 7 8 9)
+(7 8 9)
+----- get, set -----
+1
+9
+undefined
+10
+(10 2 3 4 5 6 7 8 9)
+11
+(10 2 3 4 5 6 7 8 11)
+undefined
+(10 2 3 4 5 6 7 8 11)
+----- add, delete -----
+(100 10 2 3 4 5 6 7 8 11)
+(10 2 3 4 5 100 6 7 8 11)
+(10 2 3 4 5 6 7 8 11 100)
+(10 2 3 4 5 6 7 8 11 100)
+(2 3 4 5 6 7 8 11)
+(10 2 3 4 5 7 8 11)
+(10 2 3 4 5 6 7 8)
+undefined
+----- take, drop -----
+()
+(10 2 3 4 5)
+(10 2 3 4 5 6 7 8 11)
+(10 2 3 4 5 6 7 8 11)
+(6 7 8 11)
+()
+----- substitute, nsubstitute -----
+(1 2 3 4 5 6 7 8 9 10)
+(100 2 3 4 5 6 7 8 9 10)
+(1 2 3 4 100 6 7 8 9 10)
+(1 2 3 4 5 6 7 8 9 100)
+(1 2 3 4 5 6 7 8 9 10)
+(1 10 3 10 5 10 7 10 9 10)
+(100 2 3 4 5 6 7 8 9 10)
+(100 2 3 4 5 6 7 8 9 10)
+(100 2 3 4 100 6 7 8 9 10)
+(100 2 3 4 100 6 7 8 9 10)
+(100 2 3 4 100 6 7 8 9 100)
+(100 2 3 4 100 6 7 8 9 100)
+(100 2 3 4 100 6 7 8 9 100)
+(100 2 3 4 100 6 7 8 9 100)
+(10 10 3 10 10 10 7 10 9 10)
+(10 10 3 10 10 10 7 10 9 10)
+----- member, contains, indexOf, find -----
+(1 2 3 4 5 6 7 8 9 10)
+(10)
+()
+true
+true
+false
+0
+9
+-1
+1
+10
+false
+----- count, countIf -----
+3
+2
+1
+0
+3
+2
+1
+0
+----- map, flatMap -----
+(1 4 9 16 25)
+(1 1 2 2 3 3 4 4 5 5)
+((1 6) (2 7) (3 8) (4 9) (5 10))
+(1 6 2 7 3 8 4 9 5 10)
+----- filter, reduce, reduceRight -----
+(2 4 6 8)
+36
+36
+(8 7 6 5 4 3 2 1)
+(1 2 3 4 5 6 7 8)
+----- forEach, every, some -----
+1
+2
+3
+4
+5
+6
+7
+8
+true
+false
+true
+false
+----- takeWhile, dropWhile -----
+(1 2 3 4 5 6 7 8)
+(1 2 3 4)
+(5 6 7 8)
+</pre>
+<hr>
+<h3 id="chap19">リストで遊ぼう</h3>
+<p> 前回作成した連結リストを使った簡単な問題集です。
+</p>
+<ol>
+  <li>リスト xs はリスト ys よりも長いか調べるメソッド longer(xs, ys) を定義してください。
+  <li>リスト xs の最後尾から n 個の要素を取り除くメソッド butlast(xs, n) を定義してください。
+  <li>リスト xs を長さ n の部分リストに分割するメソッド group(xs, n) を定義してください。
+  <li>リスト xs の n 番目から m - 1 番目までの要素を部分リストとして取り出すメソッド subList(xs, n, m) を定義してください。
+  <li>2 つのリスト xs, ys の要素をリストに格納し、それをリストに格納して返すメソッド zip(xs, ys) を定義してください。
+  <li>zip() で生成したリスト xs を 2 つリストに分離するメソッド unzip(xs) を定義してください。
+  <li>連想リスト xs からキー key を探索するメソッド assoc(xs, key) を定義してください。
+  <li>リスト xs の要素を述語 pred で二分割するメソッド partition(pred, xs) を定義してください。
+  <li>リスト xs をクイックソートするメソッド quickSort(xs) を定義してください。
+  <li>整列済みの 2 つのリスト xs, ys をマージするメソッド mergeList(xs, ys) を定義してください。
+  <li>リスト xs をマージソートするメソッド mergeSort(xs) を定義してください。
+  <li>リスト xs から n 個の要素を選ぶ順列を求めるメソッド permutations(n, xs) を定義してください。
+  <li>リスト xs から n 個の要素を選ぶ組み合わせを求めるメソッド combinations(n, xs) を定義してください。
+  <li>リスト xs のべき集合を求めるメソッド powerSet(xs) を定義してください。
+  <li>n 以下の素数を求めるメソッド sieve(n) を定義してください。
+</ol>
+<hr>
+<h4>●解答</h4>
+<pre class="list">
+//
+// playlist.js : 「リストで遊ぼう」の解答
+//
+//               Copyright (C) 2017 Makoto Hiroi
+//
+var List = require('./list');
+const nil = List.nil();
+
+// Q01
+function longer(xs, ys) {
+  while (List.isCons(xs) &amp;&amp; List.isCons(ys)) {
+    xs = xs.rest;
+    ys = ys.rest;
+  }
+  return !List.isNil(xs);
+}
+
+// Q02
+function butlast(xs, n) {
+  return xs.reverse().drop(n).nreverse();
+}
+
+// Q03
+function group(xs, n) {
+  let ys = nil;
+  while (!List.isNil(xs)) {
+    ys = List.cons(xs.take(n), ys);
+    xs = xs.drop(n);
+  }
+  return ys.nreverse();
+}
+
+// Q04
+function subList(xs, n, m) {
+  return xs.drop(n).take(m - n);
+}
+
+// Q05
+function zip(xs, ys) {
+  return xs.map((x, y) =&gt; List.list(x, y), ys);
+}
+
+// Q06
+function unzip(zs) {
+  let xs = nil, ys = nil;
+  for (let z of zs) {
+    xs = List.cons(z.first, xs);
+    ys = List.cons(z.rest.first, ys);
+  }
+  return [xs.nreverse(), ys.nreverse()];
+}
+
+// Q07
+function assoc(xs, key) {
+  return xs.find(x =&gt; x.first == key)
+}
+
+// Q08
+function partition(pred, xs) {
+  let a = nil, b = nil;
+  for (let x of xs) {
+    if (pred(x)) 
+      a = List.cons(x, a);
+    else
+      b = List.cons(x, b);
+  }
+  return [a.nreverse(), b.nreverse()];
+}
+
+// Q09
+function quickSort(xs) {
+  if (List.isNil(xs)) return xs;
+  let pivot = xs.first,
+      [a, b] = partition(x =&gt; x &lt; pivot, xs.rest),
+      ys = quickSort(a),
+      zs = quickSort(b);
+  return ys.append(List.cons(pivot, zs));
+}
+
+// Q10
+function mergeList(xs, ys) {
+  let zs = nil;
+  while (List.isCons(xs) &amp;&amp; List.isCons(ys)) {
+    if (xs.first &lt;= ys.first) {
+      zs = List.cons(xs.first, zs);
+      xs = xs.rest;
+    } else {
+      zs = List.cons(ys.first, zs);
+      ys = ys.rest;
+    }
+  }
+  return zs.nreverse(List.isNil(xs) ? ys : xs);
+}
+
+// Q11
+function mergeSortSub(xs, n) {
+  if (n == 0) {
+    return nil;
+  } else if (n == 1) {
+    return List.list(xs.first);
+  } else {
+    let m = Math.floor(n / 2),
+        ys = mergeSortSub(xs, m),
+        zs = mergeSortSub(xs.drop(m), n - m);
+    return mergeList(ys, zs);
+  }
+}
+
+function mergeSort(xs) {
+  return mergeSortSub(xs, xs.length());
+}
+
+// Q12
+function permutations(n, xs) {
+  if (n == 0)
+    return List.list(nil);
+  else
+    return xs.flatMap(x =&gt; permutations(n - 1, xs.filter(y =&gt; x != y)).map(z =&gt; List.cons(x, z)));
+}
+
+// Q13
+function combinations(n, xs) {
+  if (n == 0) {
+    return List.list(nil);
+  } else if (n == xs.length()) {
+    return List.list(xs);
+  } else {
+    return combinations(n - 1, xs.rest)
+      .map(ys =&gt; List.cons(xs.first, ys))
+      .append(combinations(n, xs.rest));
+  }
+}
+
+// Q14
+function powerSet(xs) {
+  if (List.isNil(xs)) {
+    return List.list(nil);
+  } else {
+    let ys = powerSet(xs.rest);
+    return ys.append(ys.map(zs =&gt; List.cons(xs.first, zs)));
+  }
+}
+
+// Q15
+function sieve(n) {
+  let xs = List.iterate(n - 1, 2, x =&gt; x + 1),
+      ys = nil;
+  while (true) {
+    let p = xs.first;
+    if (p * p &gt; n) break;
+    ys = List.cons(p, ys);
+    xs = xs.rest.filter(x =&gt; x % p != 0);
+  }
+  return ys.nreverse(xs);
+}
+
+function iota(n, m) {
+  return List.iterate(m - n + 1, n, x =&gt; x + 1);
+}
+
+// 簡単なテスト
+var xs = iota(1, 8);
+var ys = iota(1, 9);
+console.log("----- Q01 -----");
+console.log(longer(ys, xs));
+console.log(longer(xs, ys));
+console.log(longer(xs, xs));
+console.log("----- Q02 -----");
+console.log(butlast(xs, 0));
+console.log(butlast(xs, 1));
+console.log(butlast(xs, 7));
+console.log(butlast(xs, 8));
+console.log("----- Q03 -----");
+console.log(group(xs, 2));
+console.log(group(ys, 3));
+console.log(group(xs, 4));
+console.log(group(ys, 5));
+console.log("----- Q04 -----");
+console.log(subList(xs, 2, 5));
+console.log(subList(xs, 0, 8));
+console.log("----- Q05 -----");
+var nList1 = zip(iota(1,5), iota(11,15));
+var nList2 = zip(iota(1,6), iota(11,15));
+var nList3 = zip(iota(1,5), iota(11,16));
+console.log(nList1);
+console.log(nList2);
+console.log(nList3);
+console.log("----- Q06 -----");
+console.log(unzip(nList1));
+console.log("----- Q07 -----");
+var aList = List.list(
+  List.list("foo", 10),
+  List.list("bar", 20),
+  List.list("baz", 30),
+  List.list("oops", 40));
+console.log(assoc(aList, "foo"));
+console.log(assoc(aList, "oops"));
+console.log(assoc(aList, "FOO"));
+console.log("----- Q08 -----");
+console.log(partition(x =&gt; x % 2 == 0, xs));
+console.log(partition(x =&gt; x % 2 != 0, ys));
+console.log("----- Q09 -----");
+var zs = List.list(5,6,4,7,3,8,2,9,1,0);
+console.log(quickSort(zs));
+console.log(quickSort(ys));
+console.log(quickSort(ys.reverse()));
+console.log("----- Q10 -----");
+var a = List.list(1,3,5,7,9);
+var b = List.list(2,4,6,8,10);
+console.log(mergeList(a, b));
+console.log(mergeList(b, a));
+console.log(mergeList(a, a));
+console.log("----- Q11 -----");
+console.log(mergeSort(zs));
+console.log(mergeSort(ys));
+console.log(mergeSort(ys.reverse()));
+console.log("----- Q12 -----");
+console.log(permutations(3, iota(1, 3)));
+console.log(permutations(4, iota(1, 4)));
+console.log("----- Q13 -----");
+console.log(combinations(3, iota(1, 5)));
+console.log(combinations(4, iota(1, 5)));
+console.log("----- Q14 -----");
+console.log(powerSet(iota(1, 3)));
+console.log(powerSet(iota(1, 4)));
+console.log("----- Q15 -----");
+console.log(sieve(100));
+console.log(sieve(500));
+console.log(sieve(1000));
+</pre>
+<h4>●実行結果</h4>
+<pre>
+C&gt;node playlist.js
+----- Q01 -----
+true
+false
+false
+----- Q02 -----
+(1 2 3 4 5 6 7 8)
+(1 2 3 4 5 6 7)
+(1)
+()
+----- Q03 -----
+((1 2) (3 4) (5 6) (7 8))
+((1 2 3) (4 5 6) (7 8 9))
+((1 2 3 4) (5 6 7 8))
+((1 2 3 4 5) (6 7 8 9))
+----- Q04 -----
+(3 4 5)
+(1 2 3 4 5 6 7 8)
+----- Q05 -----
+((1 11) (2 12) (3 13) (4 14) (5 15))
+((1 11) (2 12) (3 13) (4 14) (5 15))
+((1 11) (2 12) (3 13) (4 14) (5 15))
+----- Q06 -----
+[ (1 2 3 4 5), (11 12 13 14 15) ]
+----- Q07 -----
+(foo 10)
+(oops 40)
+false
+----- Q08 -----
+[ (2 4 6 8), (1 3 5 7) ]
+[ (1 3 5 7 9), (2 4 6 8) ]
+----- Q09 -----
+(0 1 2 3 4 5 6 7 8 9)
+(1 2 3 4 5 6 7 8 9)
+(1 2 3 4 5 6 7 8 9)
+----- Q10 -----
+(1 2 3 4 5 6 7 8 9 10)
+(1 2 3 4 5 6 7 8 9 10)
+(1 1 3 3 5 5 7 7 9 9)
+----- Q11 -----
+(0 1 2 3 4 5 6 7 8 9)
+(1 2 3 4 5 6 7 8 9)
+(1 2 3 4 5 6 7 8 9)
+----- Q12 -----
+((1 2 3) (1 3 2) (2 1 3) (2 3 1) (3 1 2) (3 2 1))
+((1 2 3 4) (1 2 4 3) (1 3 2 4) (1 3 4 2) (1 4 2 3) (1 4 3 2) (2 1 3 4) (2 1 4 3)
+ (2 3 1 4) (2 3 4 1) (2 4 1 3) (2 4 3 1) (3 1 2 4) (3 1 4 2) (3 2 1 4) (3 2 4 1)
+ (3 4 1 2) (3 4 2 1) (4 1 2 3) (4 1 3 2) (4 2 1 3) (4 2 3 1) (4 3 1 2) (4 3 2 1)
+)
+----- Q13 -----
+((1 2 3) (1 2 4) (1 2 5) (1 3 4) (1 3 5) (1 4 5) (2 3 4) (2 3 5) (2 4 5) (3 4 5)
+)
+((1 2 3 4) (1 2 3 5) (1 2 4 5) (1 3 4 5) (2 3 4 5))
+----- Q14 -----
+(() (3) (2) (2 3) (1) (1 3) (1 2) (1 2 3))
+(() (4) (3) (3 4) (2) (2 4) (2 3) (2 3 4) (1) (1 4) (1 3) (1 3 4) (1 2) (1 2 4)
+(1 2 3) (1 2 3 4))
+----- Q15 -----
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211
+223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331
+337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449
+457 461 463 467 479 487 491 499)
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211
+223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331
+337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449
+457 461 463 467 479 487 491 499 503 509 521 523 541 547 557 563 569 571 577 587
+593 599 601 607 613 617 619 631 641 643 647 653 659 661 673 677 683 691 701 709
+719 727 733 739 743 751 757 761 769 773 787 797 809 811 821 823 827 829 839 853
+857 859 863 877 881 883 887 907 911 919 929 937 941 947 953 967 971 977 983 991
+997)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="js2015.html">ES2015</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

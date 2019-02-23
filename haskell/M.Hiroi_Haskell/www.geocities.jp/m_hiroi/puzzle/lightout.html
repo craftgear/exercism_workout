@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / ライツアウトの解法</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881773</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>ライツアウトの解法</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p> ライツアウトは「(株)タカラ」から 1995 年に発売されたパズルゲーム機です。光っているボタンをすべて消すことができればクリアとなります。M.Hiroi は月刊・電脳倶楽部 Vol.94 (1996 年 3 月号) で、このゲームを知りました。
+</p>
+<p> ルールは簡単で、あるボタンを押すと、そのボタンと上下左右のボタンの状態が反転します。つまり、光っているボタンは消灯し、消えていたボタンは点灯します。次の図を見てください。
+</p>
+<pre class="fig">
+      □□□□□      □□□□□
+      □□□□□      □□■□□
+      □□□□□      □■■■□
+      □□□□□      □□■□□
+      □□□□□      □□□□□
+
+図：中央のボタンを押したときの点灯パターン
+</pre>
+<p> ボタンは 5 行 5 列に配置されています。図に示したように、中央のボタンを押すと、そのボタンと上下左右のボタンが反転します。もう一度同じボタンを押すと、再度ボタンの状態が反転するので、元の状態に戻ります。つまり、ライツアウトでは<b>同じボタンは二度押さなくてよい</b>ことがわかります。
+</p>
+<p> また、実際にボタンを押してみるとわかりますが、<b>ボタンを押す順番は関係がない</b>ことがわかります。たとえば、ボタン A と B を押す場合、A -&gt; B と押すのも、B -&gt; A と押したのも、同じ結果になります。
+</p>
+<p> この 2 つの法則から、ボタンを押す組み合わせは全部で 2 ^ 25 (2 の 25 乗)、約 32 万通りになります。この組み合わせを生成して、ライトが全部消えるかチェックすればいいわけです。
+</p>
+<hr>
+<h4>●組み合わせの生成</h4>
+<p> まずは、3 個のボタンの組み合わせを求めるプログラムを作って、動作を確認しましょう。組み合わせは 7 通りしかないので、チェックも簡単です。プログラムはＣ言語で作成しました。
+</p>
+
+<pre class="list">
+リスト：ボタンを押す組み合わせを生成
+
+#define MAX_NUM 3
+char numbers[MAX_NUM];
+
+/* 組み合わせの生成 */
+void generate( int num, int low )
+{
+  int i;
+  for( i = low; i &lt; MAX_NUM; i++ ){
+    numbers[num] = i;
+    print_number( num );
+    generate( num + 1, i + 1 );
+  }
+}
+
+int main()
+{
+  generate( 0, 0 );
+  return 0;
+}
+</pre>
+<p> ボタンは 0, 1, 2 で表し、押したボタンは配列 numbers に格納します。関数 generate はちょっと変わったプログラムですね。ふつうにプログラムするならば、3 個の中から 1 個を選ぶ組み合わせを求め、次に 3 個の中から 2 個を選ぶ組み合わせを求める、というように順番に求めた方がわかりやすいかもしれません。ただ、ライツアウトを解く場合は、このプログラムの方が都合がいいのです。関数 print_number は簡単なので省略します。では、実際に動かしてみましょう。
+</p>
+<pre>
+実行結果
+
+0
+0 1
+0 1 2
+0 2
+1
+1 2
+2
+</pre>
+<p> きちんと動作していますね。ライツアウトの場合、ボタンを押してライトが全部消えたならば、それ以降の組み合わせを求める必要はありません。たとえば、0, 1 を押して解が求まれば、0, 1, 2 を試す必要はないのです。ここで、枝刈りができるわけです。
+</p>
+<p> ライツアウトの解法プログラムは、次のようになります。
+</p>
+<pre class="list">
+リスト：ライツアウトの解法（単純版）
+
+#define MAX_NUM 25
+int actions[MAX_NUM + 1];
+
+int pattern[MAX_NUM] = {
+  0x0000023,  0x0000047,  0x000008e,  0x000011c,  0x0000218,
+  0x0000461,  0x00008e2,  0x00011c4,  0x0002388,  0x0004310,
+  0x0008c20,  0x0011c40,  0x0023880,  0x0047100,  0x0086200,
+  0x0118400,  0x0238800,  0x0471000,  0x08e2000,  0x10c4000,
+  0x0308000,  0x0710000,  0x0e20000,  0x1c40000,  0x1880000,
+};
+
+void search( int num, int low, int now_pat )
+{
+  int i;
+  for( i = low; i &lt; MAX_NUM; i++ ){
+    int new_pat = now_pat ^ pattern[i];
+    actions[num] = i;
+    if( !new_pat ){
+      /* クリアした */
+      print_answer( num + 1 );
+    } else {
+      /* 見つからなければ再帰する */
+      search( num + 1, i + 1, new_pat );
+    }
+  }
+}
+</pre>
+<p> ボタンの状態はビットで表します。1 が点灯で 0 が消灯です。配列 pattern は、ボタンを押したときに状態が変わる位置をビットで示したものです。この値とボタンの状態の排他的論理和 (xor) を取ると、ボタンの状態を反転させることができます。押したボタンは配列 actions に格納し、ボタンを押してできた新しいパターン new_pat が 0 ならば、print_answer で解答を表示します。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実行してみましょう。プログラム名は lo で、MS-Windows の DOS プロンプトで実行します。
+</p>
+<pre>
+lo 00000 00000 00100 00000 00000
+
+探索パターン：1000
+
+・・・・・
+・・・・・
+・・○・・
+・・・・・
+・・・・・
+
+・○・・・  ・・○○・  ・・○・○  ・・・・○
+・・○・・  ○・・・○  ○・・・○  ・・○・・
+○・○○・  ・○○・○  ○・○○・  ・○○・○
+○・・・○  ・・○・・  ・・○・・  ○・・・○
+・○○・○  ・・・○○  ○○・・・  ○・○○・
+
+時間 6916
+</pre>
+<p> 引数には 1 行ごとの点灯パターンを与えます。押すボタンの位置を<b>○</b>で表しています。このページでは解答を 4 つ並べていますが、実際は単純に標準出力へ書き出しているだけです。実行時間は約 7 秒かかりました。
+</p>
+<p> このプログラムは、月刊・電脳倶楽部 Vol.95 (1996 年 4 月号) で掲載された拙作を改造したものです。X68030 [25 MHz] では約 4 分ほどかかりました。オンボロマシン (Pentium 166 MHz) ではありますが、ずいぶんと速くなったのには驚きました。ちょっとした改造が速さに貢献しているのかもしれません。
+</p>
+<p><a href="lightout.html#list1">●プログラムリスト１</a>
+</p>
+
+<hr>
+<h3>あっと驚く解法アルゴリズム</h3>
+<p> 月刊・電脳倶楽部 Vol.95 (1996 年 4 月号) では、拙作を含めて 3 つの解法プログラムが発表されました。拙作のプログラムは遅かったのですが、中谷秀洋さんと松本康弘さんのプログラムがメチャクチャ速いのです。
+</p>
+<p> 中谷さんのプログラムでは、次の法則を利用して効率的な枝刈りが行われています。
+</p>
+<UL>
+  <LI>点灯しているボタンの回りでは、ボタンを押す回数は奇数回である。
+  <LI>消灯しているボタンの回りでは、ボタンを押す回数は偶数回である。
+</UL>
+<p> ボタンの回りとは、そのボタン自身も含みます。パズルには、このような奇数と偶数による場合分けができるものがあります。これを<b>パリティ（偶奇性）</b>といいます。パリティをチェックすることで、解の有無を簡単に判定できる場合があります。中谷さんのプログラムは 68000 アセンブラで記述されていて、パリティチェックを高速に行っています。
+</p>
+<p> 松本康弘さんのプログラムは、ボタンを 1 行ずつ消灯していくという、わかりやすいアルゴリズムです。次の図を見てください。
+</p>
+<pre class="fig">
+  ＡＢＣＤＥ     ＡＢＣＤＥ     ＡＢＣＤＥ     ＡＢＣＤＥ
+１□■□■□   １□□□□□   １□□□□□   １□□□□□
+２□□□□□   ２■■□■■   ２□□□□□   ２□□□□□
+３□□□□□   ３□■□■□   ３□■□■□   ３□□□□□
+４□□□□□   ４□□□□□   ４■■□■■   ４□□□□□
+５□□□□□   ５□□□□□   ５□□□□□   ５□■□■□
+    （１）         （２）         （３）         （４）
+
+            図：１行ずつボタンを消灯していく方法
+</pre>
+<p> (1) では、1 行目のボタンが 2 つ点灯しています。このボタンを消すには、真下にある 2 行目の B と D のボタンを押せばいいですね。すると (2) の状態になります。次に、2 行目のボタンを消します。3 行目の A, B, D, E のボタンを押して、(3) の状態になります。
+</p>
+<p> あとはこれを繰り返して、4 行目までのボタンを消したときに 5 行目のボタンも全部消えていれば成功となります。(4) のように、5 行目のボタンが消えない場合は失敗です。この場合は、1 行目のボタンを押して、点灯パターンを変更します。
+</p>
+<p> 2 - 5 行目のボタンの押し方は、1 行目の点灯パターンにより決定されるので、けっきょく 1 行目のボタンの押し方により、解けるか否かが決まります。この場合、ボタンの押し方は、2 の 5 乗 (32) 通りしかありせん。つまり、たった 32 通り調べるだけで、ライツアウトの解を求めることができるのです。
+</p>
+<p> これは、とてもわかりやすいアルゴリズムですね。松本さんのほかにも、この解法を見つけた方は多いのではないでしょうか。Web ページでは高橋謙一郎さんの <a href="http://www.ic-net.or.jp/home/takaken/">コンピュータ＆パズル</a> に、同じアルゴリズムを使った解法プログラムが公開されています。
+</p>
+<p> 高橋さんの詳細な考察によると、実際は 8 通り調べるだけで解を見つけることができるそうです。このほかにも、<b>細江万太郎さん</b>が考案されたライツアウトを連立方程式で解く方法が紹介されています。パズル好きの方は要チェックです。
+</p>
+<p> それでは、32 通りをチェックするプログラムを作りましょう。
+</p>
+
+<pre class="list">
+リスト：ライツアウトの解法（高速版）
+
+void check_answer( int now_pat, int num )
+{
+  int i;
+  int biton = 0x01;
+  for( i = 5; i &lt; MAX_NUM; i++ ){
+    if( now_pat & biton ){
+      now_pat ^= pattern[i];
+      actions[num++] = i;
+    }
+    biton &lt;&lt;= 1;
+  }
+  if( !now_pat ) print_answer( num );
+}
+
+void search( int num, int low, int now_pat )
+{
+  int i;
+  for( i = low; i &lt; LOW_SIZE; i++ ){
+    int new_pat = now_pat ^ pattern[i];
+    actions[num] = i;
+    /* 消えるかチェックする */
+    check_answer( new_pat, num + 1 );
+    search( num + 1, i + 1, new_pat );
+  }
+}
+</pre>
+<p> 関数 check_answer は、2 行目から 5 行目のボタンを押して、全部消えるかチェックします。上のボタンの位置を biton で表し、押すボタンの位置を i で表しています。ボタンが全部消えたら、print_answer で解を出力します。関数 search は、31 通りのボタンの押し方を生成します。1 行目のボタンを押さない場合は、直接 check_answer を呼び出します。これで、32 通りの場合をすべて調べることができます。
+</p>
+<p><a href="lightout.html#list2">●プログラムリスト２</a>
+</p>
+<hr>
+<h3 id="light_max">最長手数を求める</h3>
+<p> これで、ライツアウトを高速に解くことができるようになりました。今度は、いちばん手数のかかるパターンを探してみましょう。つまり、最短手順で解いてもいちばん長い手順となる、いちばん難しい配置を求めるわけです。ライツアウトの場合、ボタンをすべて押して作られたパターン (25 手) が、いちばん長い手数のように思えますが、実は違います。すべてのボタンを押して作られるパターンは、次のようになります。
+</p>
+<pre class="fig">
+             ■□□□■
+             □■■■□
+             □■■■□
+             □■■■□
+             ■□□□■
+
+図：25個のボタンを押して作られるパターン
+</pre>
+<p>このパターンは、すべてのボタンを押しても解くことができますが、最小 9 手で解くことができます。
+</p>
+<p> このような場合、すべてのパターンについて最小手数をチェックしていたのでは、時間がとてもかかってしまいます。そこで、光がついていない状態（完成形）から始めて、いちばん長い手数の局面を生成することにします。まず、完成形からボタンを押して 1 手で到達するパターンをすべて作ります。次に、これらのパターンからボタンを押して新しいパターンを作れば、完成形から 2 手で到達するパターンとなります。このように、手数を 1 手ずつ延ばしていき、新しいパターンが生成できなくなった時点での手数が求める最長手数となります。
+</p>
+<p> このような問題を解く場合、<b>幅優先探索</b>というアルゴリズムが適しています。幅優先探索を使う場合、同一パターンのチェック処理が重要になります。この処理のよしあしによって、実行時間が極端に遅くなることがあるからです。データの検索処理には、<b>ハッシュ法</b>や<b>二分探索木</b>など定番の高速アルゴリズムがありますが、メモリを大量に消費することになるので、今回は単純な 32 M byte の配列を使うことにします。
+</p>
+<p> パターンを数値に対応させ、配列にはそのパターンに到達するまでの手数を書き込みます。まず、0 から始めて、1 手で到達するパターンを生成して、配列に 1 を書き込みます。次に、配列から 1 手のパターンを検索して、2 手で到達するパターンを作ります。このとき、配列の値が 0 以外の値であれば、既に生成したパターンであることがわかります。あとは手数を延ばしていくだけです。32 M byte の配列を検索するのは時間がかかりそうですが、高速 CPU (M.Hiroi は Pentium 166 MHz ですが) にがんばってもらいましょう。
+</p>
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：ライツアウト最長手数の探索
+
+/* ボタンを押す */
+int push_button( int now_pat, int move )
+{
+  int i;
+  int c = 0;
+  for( i = 0; i &lt; SIZE; i++ ){
+    int new_pat = now_pat ^ pattern[i];
+    if( !check_table[new_pat] ){
+      check_table[new_pat] = move;
+      c++;
+    }
+  }
+  return c;
+}
+
+/* 探索 */
+void solve( void )
+{
+  int i, move, c, total = 1;
+  /* 最初は 0 からスタート */
+  move = 1;
+  c = push_button( 0, move );
+  total += c;
+  printf("%2d手のパターン数 %d\n", move, c );
+  check_table[0] = -1;
+
+  /* 2 手目以降の探索 */
+  for( ; move &lt; SIZE; move++ ){
+    c = 0;
+    for( i = 0; i &lt; MAX_SIZE; i++ ){
+      if( check_table[i] == move ){
+        c += push_button( i, move + 1 );
+      }
+    }
+    if( c == 0 ) break;
+    printf("%2d手のパターン数 %d\n", move + 1, c );
+    total += c;
+  }
+  printf("合計 %d 個\n", total );
+}
+</pre>
+<p> 配列 check_table は関数 calloc で確保します。これは関数 main で行っています。あとはとくに難しいところはないはずです。それでは実行結果を示します。
+</p>
+<pre>
+ 1手のパターン数 25
+ 2手のパターン数 300
+ 3手のパターン数 2300
+ 4手のパターン数 12650
+ 5手のパターン数 53130
+ 6手のパターン数 176176
+ 7手のパターン数 467104
+ 8手のパターン数 982335
+ 9手のパターン数 1596279
+10手のパターン数 1935294
+11手のパターン数 1684446
+12手のパターン数 1004934
+13手のパターン数 383670
+14手のパターン数 82614
+15手のパターン数 7350
+合計 8388608 個
+時間 86713
+</pre>
+<p> この結果から、ライツアウトは 15 手あれば解けることがわかります。15 手で解けないときは解がない場合です。15 手必要なパターンは 7350 通りありますが、そのうちのひとつが、ライトが全部ついているパターンです。
+</p>
+
+<p> 実行時間は約 1 分半、32 万回のループを繰り返すわりには速かったですね。X68030 [25 MHz] で解いた時は 32 M byte の配列が使えなかったので、ビットでチェックするようにプログラムを工夫しました。その結果、実行時間は約 1 時間ほどかかってしまいました。それでも解けたときは、とても嬉しかったことを覚えています。
+</p>
+<p> ハードウェアの進歩は速く、低価格の PC でも高速 CPU と大容量メモリを使用できるようになりました。パズルを解くには、よい環境になったものです。
+</p>
+<p><a href="lightout.html#list3">●プログラムリスト３</a>
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+/*
+ * LO.C : 光掃除解法プログラム
+ *
+ *        Copyright (C) 1996 - 2000 by Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;ctype.h&gt;
+#include &lt;time.h&gt;
+
+#define MAX_NUM 25
+
+/* 押したボタンを記憶 */
+int actions[MAX_NUM + 1];
+
+/* 押したボタンによって状態を代えるパターン */
+int pattern[MAX_NUM] = {
+  0x0000023,  0x0000047,  0x000008e,  0x000011c,  0x0000218,
+  0x0000461,  0x00008e2,  0x00011c4,  0x0002388,  0x0004310,
+  0x0008c20,  0x0011c40,  0x0023880,  0x0047100,  0x0086200,
+  0x0118400,  0x0238800,  0x0471000,  0x08e2000,  0x10c4000,
+  0x0308000,  0x0710000,  0x0e20000,  0x1c40000,  0x1880000,
+};
+
+/*
+ * 使用方法
+ *
+ */
+volatile void usage()
+{
+  fprintf( stderr, "usage : LO パターン ... \n");
+  fprintf( stderr, "\t+--+--+--+--+--+  パターンは 1 (ON) と 0 (OFF) で表します。\n");
+  fprintf( stderr, "\t| 1| 2| 3| 4| 5|  10101 [ 1  3  5 が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n");
+  fprintf( stderr, "\t| 6| 7| 8| 9|10|  01010 [ 7  8    が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n");
+  fprintf( stderr, "\t|11|12|13|14|15|  10101 [11 13 15 が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n");
+  fprintf( stderr, "\t|16|17|18|19|20|  01010 [17 19    が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n");
+  fprintf( stderr, "\t|21|22|23|24|25|  10101 [21 23 25 が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n\n");
+  fprintf( stderr, "\tこの場合は 1 の位置から 10101 01010 10101 01010 10101 と\n");
+  fprintf( stderr, "\t入力してください。この時空白で区切らなくても構いません。\n");
+  exit( 1 );
+}
+
+/*
+ * 解答を表示
+ *
+ */
+void print_answer( int num  )
+{
+  int i, j;
+  actions[num] = -1;  /* 終端 */
+  for( i = 0, j = 0; i &lt; MAX_NUM; i++ ){
+    if( !(i % 5) ) printf("\n");
+    if( i == actions[j] ){
+      printf("○"); j++;
+    } else {
+      printf("・");
+    }
+  }
+  printf("\n\n");
+}
+
+
+/*
+ * 検索関数
+ *
+ */
+void search( int num, int low, int now_pat )
+{
+  int i;
+  for( i = low; i &lt; MAX_NUM; i++ ){
+    int new_pat = now_pat ^ pattern[i];
+    actions[num] = i;
+    if( !new_pat ){
+      /* クリアした */
+      print_answer( num + 1 );
+    } else {
+      /* 見つからなければ再帰する */
+      search( num + 1, i + 1, new_pat );
+    }
+  }
+}
+
+/*
+ * 引数解析
+ *
+ */
+int getargs( int argc, char *argv[] )
+{
+  int i, j, count = 0, pat = 0;
+  for( i = 1; i &lt; argc &amp;&amp; argv[i][0] == '-'; i++ ){
+    int	opt = toupper( argv[i][1] );
+    switch( opt ){
+    case '?' : usage(); break;
+    default :
+      fprintf( stderr, "不正なオプションです\n" );
+      usage();
+    }
+  }
+  for( j = 0; i &lt; argc; i++ ){
+    char *ptr;
+    for( ptr = argv[i]; *ptr != '\0'; ptr++ ){
+      if( *ptr != '0' ){
+        pat |= (1 &lt;&lt; count);
+        actions[j++] = count;
+      }
+      if( ++count == MAX_NUM ){
+        printf("\n探索パターン：%x\n", pat );
+        print_answer( j );
+        return pat;
+      }
+    }
+  }
+  fprintf( stderr, "パターンの設定が不十分です\n" );
+  exit( 1 );
+}
+
+int main( int argc, char *argv[] )
+{
+  int s, e;
+  int pattern = getargs( argc, argv );
+  s = clock();
+  search( 0, 0, pattern );
+  e = clock();
+  printf("時間 %d\n", e - s );
+  return 0;
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+/*
+ * LO1.C : 光掃除解法プログラム
+ *
+ *        Copyright (C) 2000 by Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;ctype.h&gt;
+#include &lt;time.h&gt;
+
+#define MAX_NUM  25
+#define LOW_SIZE 5
+
+/* 押したボタンを記憶 */
+int actions[MAX_NUM + 1];
+
+/* 押したボタンによって状態を代えるパターン */
+int pattern[MAX_NUM] = {
+  0x0000023,  0x0000047,  0x000008e,  0x000011c,  0x0000218,
+  0x0000461,  0x00008e2,  0x00011c4,  0x0002388,  0x0004310,
+  0x0008c20,  0x0011c40,  0x0023880,  0x0047100,  0x0086200,
+  0x0118400,  0x0238800,  0x0471000,  0x08e2000,  0x10c4000,
+  0x0308000,  0x0710000,  0x0e20000,  0x1c40000,  0x1880000,
+};
+
+/*
+ * 使用方法
+ *
+ */
+volatile void usage()
+{
+  fprintf( stderr, "usage : LO パターン ... \n");
+  fprintf( stderr, "\t+--+--+--+--+--+  パターンは 1 (ON) と 0 (OFF) で表します。\n");
+  fprintf( stderr, "\t| 1| 2| 3| 4| 5|  10101 [ 1  3  5 が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n");
+  fprintf( stderr, "\t| 6| 7| 8| 9|10|  01010 [ 7  8    が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n");
+  fprintf( stderr, "\t|11|12|13|14|15|  10101 [11 13 15 が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n");
+  fprintf( stderr, "\t|16|17|18|19|20|  01010 [17 19    が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n");
+  fprintf( stderr, "\t|21|22|23|24|25|  10101 [21 23 25 が ON]\n");
+  fprintf( stderr, "\t+--+--+--+--+--+                        \n\n");
+  fprintf( stderr, "\tこの場合は 1 の位置から 10101 01010 10101 01010 10101 と\n");
+  fprintf( stderr, "\t入力してください。この時空白で区切らなくても構いません。\n");
+  exit( 1 );
+}
+
+/*
+ * 解答を表示
+ *
+ */
+void print_answer( int num  )
+{
+  int i, j;
+  actions[num] = -1;  /* 終端 */
+  for( i = 0, j = 0; i &lt; MAX_NUM; i++ ){
+    if( !(i % 5) ) printf("\n");
+    if( i == actions[j] ){
+      printf("○"); j++;
+    } else {
+      printf("・");
+    }
+  }
+  printf("\n\n");
+}
+
+/* 消えるかチェックする */
+void check_answer( int now_pat, int num )
+{
+  int i;
+  int biton = 0x01;
+  for( i = 5; i &lt; MAX_NUM; i++ ){
+    if( now_pat &amp; biton ){
+      now_pat ^= pattern[i];
+      actions[num++] = i;
+    }
+    biton &lt;&lt;= 1;
+  }
+  if( !now_pat ) print_answer( num );
+}
+
+/*
+ * 検索関数
+ *
+ */
+void search( int num, int low, int now_pat )
+{
+  int i;
+  for( i = low; i &lt; LOW_SIZE; i++ ){
+    int new_pat = now_pat ^ pattern[i];
+    actions[num] = i;
+    /* 消えるかチェックする */
+    check_answer( new_pat, num + 1 );
+    search( num + 1, i + 1, new_pat );
+  }
+}
+
+/*
+ * 引数解析
+ *
+ */
+int getargs( int argc, char *argv[] )
+{
+  int i, j, count = 0, pat = 0;
+  for( i = 1; i &lt; argc &amp;&amp; argv[i][0] == '-'; i++ ){
+    int	opt = toupper( argv[i][1] );
+    switch( opt ){
+    case '?' : usage(); break;
+    default :
+      fprintf( stderr, "不正なオプションです\n" );
+      usage();
+    }
+  }
+  for( j = 0; i &lt; argc; i++ ){
+    char *ptr;
+    for( ptr = argv[i]; *ptr != '\0'; ptr++ ){
+      if( *ptr != '0' ){
+        pat |= (1 &lt;&lt; count);
+        actions[j++] = count;
+      }
+      if( ++count == MAX_NUM ){
+        printf("\n探索パターン：%x\n", pat );
+        print_answer( j );
+        return pat;
+      }
+    }
+  }
+  fprintf( stderr, "パターンの設定が不十分です\n" );
+  exit( 1 );
+}
+
+int main( int argc, char *argv[] )
+{
+  int s, e;
+  int pat = getargs( argc, argv );
+  s = clock();
+
+  /* １行目を変えない場合 */
+  check_answer( pat, 0 );
+
+  /* １行目を変える場合 */
+  search( 0, 0, pat );
+
+  e = clock();
+  printf("時間 %d\n", e - s );
+  return 0;
+}
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+/*
+  lo_max.c : ライトアウトの最長手数を求める
+
+               とっても単純なバージョン
+
+               Copyright (C) 2000 by Makoto Hiroi
+*/
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;time.h&gt;
+
+#define MAX_SIZE 0x2000000
+#define SIZE     25
+
+/* チェックテーブル */
+char *check_table = NULL;
+
+/* 押した時に変化するボタン */
+int pattern[SIZE] = {
+  0x0000023,  0x0000047,  0x000008e,  0x000011c,  0x0000218,
+  0x0000461,  0x00008e2,  0x00011c4,  0x0002388,  0x0004310,
+  0x0008c20,  0x0011c40,  0x0023880,  0x0047100,  0x0086200,
+  0x0118400,  0x0238800,  0x0471000,  0x08e2000,  0x10c4000,
+  0x0308000,  0x0710000,  0x0e20000,  0x1c40000,  0x1880000,
+};
+
+/* ボタンを押す */
+int push_button( int now_pat, int move )
+{
+  int i;
+  int c = 0;
+  for( i = 0; i &lt; SIZE; i++ ){
+    int new_pat = now_pat ^ pattern[i];
+    if( !check_table[new_pat] ){
+      check_table[new_pat] = move;
+      c++;
+    }
+  }
+  return c;
+}
+
+/*
+  力任せの 32M 回 ループ！！
+  これを最高 25 回繰り返すが、最高手数は１５手よーん
+ */
+void solve( void )
+{
+  int i, move, c, total = 1;
+  /* 最初は 0 からスタート */
+  move = 1;
+  c = push_button( 0, move );
+  total += c;
+  printf("%2d手のパターン数 %d\n", move, c );
+  check_table[0] = -1;
+
+  /* 2 手目以降の探索 */
+  for( ; move &lt; SIZE; move++ ){
+    c = 0;
+    for( i = 0; i &lt; MAX_SIZE; i++ ){
+      if( check_table[i] == move ){
+        c += push_button( i, move + 1 );
+      }
+    }
+    /* 新しいパターンが生成されなければ探索終了 */
+    if( c == 0 ) break;
+    printf("%2d手のパターン数 %d\n", move + 1, c );
+    total += c;
+  }
+  printf("合計 %d 個\n", total );
+}
+
+int main()
+{
+  int s, e;
+  /* メモリの確保 */
+  check_table = calloc( MAX_SIZE, sizeof( char ) );
+  if( check_table == NULL ){
+    fprintf( stderr, "Out of memory!!\n");
+    exit( 1 );
+  }
+  s = clock();
+  solve();
+  e = clock();
+  printf("時間 %d\n", e - s );
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

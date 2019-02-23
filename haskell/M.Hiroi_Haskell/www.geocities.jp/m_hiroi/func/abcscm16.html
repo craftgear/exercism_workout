@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881782</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm15.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm17.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>ヒープとハッシュ法</h3>
+<p> 前回はリストを使って二分木 (binary tree) のプログラムを作りました。今回はベクタを使ったデータ構造として、「ヒープ (heap) 」と「ハッシュ法 (hashing) 」を取り上げます。
+</p>
+
+<h4>●ヒープ</h4>
+<p> 「ヒープ (heap) 」は「半順序木 (partial ordered tree) 」をベクタで実現したデータ構造です。一般的な二分木では、親よりも左側の子のほうが小さく、親よりも右側の子が大きい、という関係を満たすように作ります。「半順序木」の場合、親は子より小さいか等しい、という関係を満たすように作ります。したがって、木の根（ベクタの添字 0）には、必ず最小値のデータが格納されます。下図にヒープとベクタの関係を示します。
+</p>
+<pre class="fig">
+            0  1  2  3  4  5  6
+    TABLE [10 20 30 40 50 60 70]
+
+         (root)
+           10 (0)
+         ／   ＼            親の添字を k とすると
+       ／       ＼          その子は 2*k+1, 2*k+2 になる。
+     20 (1)       30 (2)    子の添字を k とすると
+   ／  ＼       ／  ＼      その親は (k - 1) / 2 になる。
+ 40     50   60      70     親の値 &lt;= 子の値 の関係を満たす。
+ (3)    (4)  (5)     (6)
+
+    図 : ヒープとベクタの対応関係
+</pre>
+<p> ヒープを利用すると、最小値をすぐに見つけることができ、新しくデータを挿入する場合も、高々要素の個数 (n) の対数 (log<SUB>2</SUB> n) に比例する程度の時間で済みます。
+</p>
+<h4>●ヒープの構築 (1)</h4>
+<p> ヒープは、次の手順で作ることができます。
+</p>
+<pre class="fig">
+TABLE [＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     最初は空
+
+      [80 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     最初のデータをセット
+
+      [80 10 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     次のデータをセットし親と比較
+       親 子                              親の位置 0 = (1 - 1)/2
+
+      [10 80 ＊ ＊ ＊ ＊ ＊ ＊ ＊ ＊]     順序が違っていたら交換
+
+      [10 80 60 ＊ ＊ ＊ ＊ ＊ ＊ ＊]     データをセットし比較
+       親    子                           親の位置 0 = (2 - 1)/2
+
+      [10 80 60 20 ＊ ＊ ＊ ＊ ＊ ＊]     データをセットし比較
+          親    子                        親の位置 1 = (3 - 1)/2
+
+      [10 20 60 80 ＊ ＊ ＊ ＊ ＊ ＊]     交換する
+
+      ・・・・データがなくなるまで繰り返す・・・・
+
+                図 : ヒープの構築 (1)
+</pre>
+<p> まず、データを最後尾に追加します。そして、このデータがヒープの条件を満たしているかチェックします。もしも、条件を満たしていなければ、親と子を入れ換えて、次の親をチェックします。これを木のルート方向 (添字 0 の方向) に向かって繰り返します。条件を満たすか、木のルート (添字 0) まで到達すれば、処理を終了します。これをデータの個数だけ繰り返します。
+</p>
+<p> このアルゴリズムを Scheme でプログラムすると、次のようになります。
+</p>
+<pre class="list">
+リスト : ヒープの構築
+
+(define (make-heap max-size cmp)
+    (let ((buff (make-vector max-size))
+          (num 0))
+        ; 比較関数
+        (define (obj=? x y)
+            (zero? (cmp (vector-ref buff x) (vector-ref buff y))))
+        (define (obj&gt;? x y)
+            (&gt; (cmp (vector-ref buff x) (vector-ref buff y)) 0))
+        ; 交換
+        (define (swap x y)
+            (let ((temp (vector-ref buff x)))
+                (vector-set! buff x (vector-ref buff y))
+                (vector-set! buff y temp)))
+
+        ; ヒープの構築
+        (define (upheap n)
+            (let ((p (quotient (- n 1) 2)))
+                (cond ((and (&lt;= 0 p) (obj&gt;? p n))
+                       (swap p n)
+                       (upheap p)))))
+
+        ; ・・・以下省略・・・
+))
+</pre>
+<p> 関数 make-heap はヒープを操作するクロージャを返します。引数 max-size はヒープに格納するデータの最大値、cmp はデータを比較する関数で、(cmp x y) は x &lt; y ならば負の値を、x = y ならば 0 を、x &gt; y ならば正の値を返すものとします。最初に、let でデータを格納するベクタを make-vector で作成して局所変数 buff にセットします。局所変数 num はヒープに格納しているデータ数を表します。
+</p>
+<p> 次に、ベクタ buff の要素を比較する内部関数を定義します。述語 obj=? は添字 x, y の要素が等しいときに #t を返します。obj&gt? は x の要素 &gt; y の要素 のときに #t を返します。関数 swap は添字 x, y の要素を交換します。これらの関数を使うとヒープの操作関数は簡単に作ることができます。
+</p>
+
+<p> 関数 upheap はヒープを満たすように n 番目の要素をルート方向に向かって移動させます。0 から n - 1 番目までの要素はヒープの条件を満たしているものとします。n の親を p とすると、p は (n - 1) / 2 で求めることができます。そして、p が 0 以上で、かつ p の要素が n の要素よりも大きいのであれば、p と n の要素を交換して次の親子関係をチェックします。そうでなければ、ヒープの条件を満たしているので処理を終了します。
+</p>
+
+<p> あとは、buff の最後尾にデータを追加して、upheap を呼び出せばいいわけです。また、データが格納されているベクタでも、次のように upheap を適用してヒープを構築することができます。
+</p>
+<pre class="list">
+リスト : ヒープの構築
+
+(let loop ((n 1))
+    (cond ((&lt; n num)
+           (upheap n)
+           (loop (+ n 1)))))
+</pre>
+<p> ただし、この方法はデータ数を N とすると upheap を N - 1 回呼び出すため、それほど速い方法ではありません。もう少し高速な方法はあとで説明することにしましょう。
+</p>
+
+<h4>●ヒープの再構築</h4>
+<p> 次に、最小値を取り出したあとで新しいデータを追加し、ヒープを再構築する手順を説明します。
+</p>
+<pre class="fig">
+TABLE [10 20 30 40 50 60 70 80 90 100]    ヒープを満たしている
+
+      [＊ 20 30 40 50 60 70 80 90 100]    最小値を取り出す
+
+      [66 20 30 40 50 60 70 80 90 100]    新しい値をセット
+
+      [66 20 30 40 50 60 70 80 90 100]    小さい子と比較する
+       ^  ^                               (2*0+1) &lt; (2*0+2)
+       親 子 子
+
+      [20 66 30 40 50 60 70 80 90 100]    交換して次の子と比較
+          ^     ^                         (2*1+1) &lt; (2*1+2)
+          親    子 子
+
+      [20 40 30 66 50 60 70 80 90 100]    交換して次の子と比較
+                ^        ^                (2*3+1) &lt; (2*3+2)
+                親       子 子            親が小さいから終了
+
+                図 : ヒープの再構築
+</pre>
+<p> 最初に、ヒープの最小値である添字 0 の位置にあるデータを取り出します。次に、その位置に新しいデータをセットし、ヒープの条件を満たしているかチェックします。ヒープの構築とは逆に、葉の方向 (添字の大きい方向) に向かってチェックしていきます。
+</p>
+<p> まず、2 つの子の中で小さい方の子を選び、それと挿入したデータを比較します。もしも、ヒープの条件を満たしていなければ、親と子を交換して、その次の子と比較します。この処理を、ヒープの条件を満たすか子がなくなるまで繰り返します。
+</p>
+<p> このアルゴリズムを Scheme でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : ヒープの再構築
+
+(define (downheap n)
+    (let ((c (+ (* n 2) 1)))
+        (cond ((&lt; c num)
+               (if (and (&lt; (+ c 1) num) (obj&gt;? c (+ c 1)))
+                   (set! c (+ c 1)))
+               (cond ((obj&gt;? n c)
+                      (swap n c)
+                      (downheap c)))))))
+</pre>
+<p> 関数 downheap はヒープを満たすように n 番目の要素を葉の方向へ移動させます。n + 1 番目から最後までの要素はヒープの条件を満たしているものとします。最初に、n の子 c を求めます。これが num 以上であれば処理を終了します。もう一つの子 (c + 1) がある場合は、値が小さい方を選択します。そして、n の要素が c の要素よりも大きい場合はヒープの条件を満たしていないので、n 番目と c 番目の要素を交換して処理を繰り返します。、
+</p>
+
+<p> なお、最小値を取り出したあと新しいデータを挿入しない場合は、新しいデータのかわりにベクタ buff の最後尾のデータを先頭にセットしてヒープを再構築します。上図の例でいえば、100 を buff の 0 番目にセットして、ヒープを再構築すればいいわけです。この場合、ヒープに格納されているデータの個数は一つ減ることになります。
+</p>
+<h4>●ヒープの構築 (2)</h4>
+<p> ところで、N 個のデータをヒープに構築する場合、N - 1 回 upheap を呼び出さなければいけません。ところが、すべてのデータをベクタに格納したあとで、ヒープを構築するうまい方法があります。次の図を見てください。
+</p>
+<pre class="fig">
+TABLE [100 90 80 70 60|50 40 30 20 10]    後ろ半分が葉に相当
+
+      [100 90 80 70|60 50 40 30 20 10]    60 を挿入する
+                    ^
+      [100 90 80 70|60 50 40 30 20 10]    子供と比較する
+                    ^              ^       (2*4+1), (2*4+2)
+                    親             子
+
+      [100 90 80 70|10 50 40 30 20 60]    交換する
+
+      ・・・ 70 80 90 を順番に挿入し修正する ・・・
+
+      [100|10 40 20 60 50 80 30 70 90]    90 を挿入し修正した
+
+      [100 10 40 20 60 50 80 30 70 90]    100 を挿入、比較
+        ^  ^  ^                           (2*0+1), (2*0+2)
+        親 子 子
+
+      [10 100 40 20 60 50 80 30 70 90]    小さい子と交換し比較
+           ^     ^  ^                     (2*1+1), (2*1+2)
+           親    子 子
+
+      [10 20 40 100 60 50 80 30 70 90]    小さい子と交換し比較
+                 ^           ^  ^         (2*3+1), (2*3+2)
+                 親          子 子
+
+      [10 20 40 30 60 50 80 100 70 90]    交換して終了
+
+                図 : ヒープの構築 (2)
+</pre>
+<p> ベクタを前半と後半の 2 つに分けると、後半部分はデータがつながっていない葉の部分になります。つまり、後半部分の要素は互いに関係がなく、前半部分の親にあたる要素と関係しているだけなのです。したがって、後半部分だけを見れば、それはヒープを満たしていると考えることができます。
+</p>
+
+<p> あとは、前半部分の要素に対して、葉の方向に向かってヒープの関係を満たすよう修正していけば、ベクタ全体がヒープを満たすことになります。この処理は関数 downheap を使うと次のようになります。
+</p>
+<pre class="list">
+リスト : ヒープの構築 (2)
+
+(let loop ((n (- (quotient num 2) 1)))
+    (cond ((&lt;= 0 n)
+           (downheap n)
+           (loop (- n 1)))))
+</pre>
+<p> 後ろからヒープを再構築していくと考えるとわかりやすいでしょう。この方法の場合、要素 N の配列に対して、N / 2 個の要素の修正を行えばよいので、最初に説明したヒープの構築方法よりも少し速くなります。
+</p>
+<h4>●優先度つき待ち行列</h4>
+<p> それでは、ヒープを使って「優先度つき待ち行列 (priority queue) 」を作ってみましょう。一般に、キューは先入れ先出し (FIFO : first-in, first-out) のデータ構造です。キューからデータを取り出すときは、先に挿入されたデータから取り出されます。これに対し、優先度つき待ち行列は、データに優先度をつけておいて、優先度の高いデータから取り出していきます。
+</p>
+<p> 優先度つき待ち行列は、優先度を基準にヒープを構築することで実現できます。今回のプログラムで作成する処理を示します。
+</p>
+<ul>
+  <li>push! x<br> データ x を追加する。
+  <li>push-list! list<br> リストの要素を追加する。
+  <li>pop!<br> 最小値のデータを取り出す。
+  <li>peek<br> 最小値のデータを求める。
+  <li>empyt?<br> キューが空ならば #t を返す。
+</ul>
+
+<p> メソッド名は enqueue!, dequeue! としてもよかったのですが、このプログラムでは push!, pop! としました。また、データを追加する関数を insert とし、最小値を取り出す関数を delete-min としている教科書もあります。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : プライオリティーキューの操作
+
+(lambda (msg . args)
+    (cond ((eq? msg 'push!)
+           (cond ((&lt; num max-size)
+                  (vector-set! buff num (car args))
+                  (upheap num)
+                  (set! num (+ 1 num)))
+                 (else #f)))
+          ((eq? msg 'push-list!)
+           (let loop ((ls (car args)))
+               (cond ((pair? ls)
+                      (vector-set! buff num (car ls))
+                      (set! num (+ num 1))
+                      (loop (cdr ls)))))
+           (let loop ((n (- (quotient num 2) 1)))
+               (cond ((&lt;= 0 n)
+                      (downheap n)
+                      (loop (- n 1))))))
+          ((eq? msg 'pop!)
+           (if (zero? num)
+               #f
+               (let ((item (vector-ref buff 0)))
+                   (set! num (- num 1))
+                   (cond ((&lt; 0 num)
+                          (vector-set! buff 0 (vector-ref buff num))
+                          (downheap 0)))
+                   item)))
+          ((eq? msg 'peek)
+           (vector-ref buff 0))
+          ((eq? msg 'empty?)
+           (zero? num))
+          (else #f)))))
+</pre>
+<p> push! は buff の最後尾にデータをセットして upheap を呼び出します。push-list! は最初の loop でリストの要素を buff に挿入して、次の loop で downheap を呼び出してヒープを構築します。pop! は buff の先頭の要素を item に取り出して、データが残っていれば最後尾のデータを先頭に移して、downheap でヒープを再構築します。peek は buff の先頭の要素を返すだけで、empyt? は (zero? num) の返り値を返すだけです。
+</p>
+<ul>
+  <li><a href="abcscm16.html#list1">プログラムリスト１</a>
+</ul>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示しましょう。
+</p>
+<pre>
+gosh&gt; (define (num-cmp x y) (- x y))
+num-cmp
+gosh&gt; (define a (make-heap 10 num-cmp))
+a
+gosh&gt; (a 'push-list! '(68 20 37 68 97 90 75 77 39 11))
+#&lt;undef&gt;
+gosh&gt; (while (not (a 'empty?)) (format #t "~D " (a 'pop!)))
+11 20 37 39 68 68 75 77 90 97 #&lt;undef&gt;
+</pre>
+<p> このように、ヒープを使うと小さなデータから順番に取り出していくことができます。
+</p>
+<hr>
+<h4>●ハッシュ法</h4>
+<p> 次は高速な探索アルゴリズムである「ハッシュ法 (hashing) 」を取り上げます。ハッシュ法はコンパイラやインタプリタなどで、予約語、関数名、変数名などの管理に使われている方法です。また、Perl, Python, Ruby など連想配列（辞書）をサポートしているスクリプト言語では、その実装にハッシュ法が使われています。
+</p>
+
+<p> ハッシュ法は、設計をうまく行えば 1 回の比較でデータを見つけることができます。実際、コンパイラの予約語のように探索するデータが固定されている場合は、そのように設計することが可能です。不特定多数のデータが探索対象になる場合は、すべてのデータを 1 回の比較で見つけることはできませんが、うまく設計すれば数回程度の比較でデータを見つけることができるようになります。
+</p>
+
+<p> Gauche には組み込みライブラリに「ハッシュテーブル」がありますが、今回はアルゴリズムの勉強としてハッシュ法のプログラムを作ってみましょう。
+</p>
+
+<h4>●ハッシュ法の仕組み</h4>
+<p> ハッシュ法は「ハッシュ表 (hash table) 」と呼ばれるデータを格納するベクタと、データを数値に変換する「ハッシュ関数 (hash function) 」を用意します。たとえば、ハッシュ表の大きさを M とすると、ハッシュ関数はデータを 0 から M - 1 までの整数値に変換します。この値を「ハッシュ値 (hash value) 」と呼びます。ハッシュ値はハッシュ表の添字に対応し、この位置にデータを格納します。つまり、ハッシュ関数によってデータを格納する位置を決める探索方法がハッシュ法なのです。
+</p>
+
+<p> ハッシュ法で不特定多数のデータを扱う場合、異なるデータでも同じハッシュ値が生成される可能性があります。これをハッシュ値の「衝突 (collision) 」といいます。つまり、データをハッシュ表に登録しようとしても、すでに先客が居座っているわけです。この場合、2 種類の解決方法があります。
+</p>
+
+<p> 第 1 の方法はハッシュ表に複数のデータを格納することです。ベクタの要素には一つのデータしか格納できないので、複数個のデータをまとめて格納する工夫が必要になります。このときよく利用されるデータ構造が「リスト」です。ハッシュ表からデータを探索する場合、まずハッシュ値を求め、そこに格納されているリストの中からデータを探索します。これを「チェイン法 (chaining) 」といいます。なお、リストのほかに二分木を使う方法もあります。
+</p>
+
+<p> 第 2 の方法は空いている場所を探して、そこにデータを格納する方法です。この場合、最初とは違うハッシュ関数を用意して、新しいハッシュ値を計算して場所を決めます。この処理を空いている場所が見つかるまで繰り返します。空き場所が見つからない場合、つまりハッシュ表が満杯の場合はデータを挿入することはできません。この方法を「オープンアドレス法 (open addressing) 」といいます。
+</p>
+
+<p> 今回は Scheme (Lisp) で簡単に操作できるチェイン法でプログラムを作りましょう。オープンアドレス法は、拙作のページ <a href="http://www.geocities.jp/m_hiroi/light/scheme.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo04.html">ハッシュ法</a> で詳しく説明しています。興味のある方はお読みください。
+</p>
+<h4>●チェイン法</h4>
+<p> チェイン法の場合、ハッシュ表にはデータをそのまま格納しないでリストに格納します。ハッシュ表からデータを探索する場合、まずハッシュ値を求め、そこに格納されているリストの中からデータを探索します。
+</p>
+<p> 簡単な例を示しましょう。次の図を見てください。
+</p>
+<pre class="fig">
+     ハッシュ値 0 1 2 3 4 5 6
+    --------------------------
+                A B C D E F G
+                H I J K L M N
+                O P Q R S T U
+                V W X Y Z
+
+HASH TABLE 0 [      ] -&gt; (O H A)
+           1 [      ] -&gt; (B)
+           2 [  ()  ]
+           3 [      ] -&gt; (Y D)
+           4 [  ()  ]
+           5 [      ] -&gt; (M F)
+           6 [      ] -&gt; (G)
+
+        図 : チェイン法
+</pre>
+<p> たとえば、上図のようにハッシュ関数とハッシュ表が構成されているとします。データ A の場合、ハッシュ値は 0 なのでハッシュ表の 0 の位置に格納されているリストを探索します。A はリストの中に登録されているので探索は成功です。データ C の場合、ハッシュ値は 2 ですが、ハッシュ表の要素は空リストなので探索は失敗です。データ U の場合、ハッシュ値は 6 ですが、連結リストの中に U が登録されていないので探索は失敗です。
+</p>
+<p> ところで、チェイン法はハッシュ値の衝突が頻繁に発生すると、データを格納するリストが長くなるので、探索に時間がかかることになります。効率良く探索するには、うまくハッシュ値を分散させることが必要になります。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは、チェイン法のプログラムを作りましょう。今回のプログラムではキーと値を組にしてハッシュ表に登録することにします。この場合、連想リストにすると簡単です。CAR 部がキーで CDR 部が値とします。これでデータの探索に関数 assoc を使うことができます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ハッシュ法
+
+(define (make-hash-table size func obj=?)
+    (let ((hash-table (make-vector size '())))
+        ; ハッシュ関数
+        (define (hash-func x)
+            (modulo (func x) size))
+
+        ; 内部関数の定義
+        ・・・省略・・・
+
+        ; ハッシュ表の操作
+        (lambda (msg . args)
+            (cond ((eq? msg 'insert!)
+                   (apply insert! args))
+                  ((eq? msg 'search)
+                   (search (car args)))
+                  ((eq? msg 'delete!)
+                   (delete! (car args)))
+                  ((eq? msg 'for-each)
+                   (traverse (car args)))
+                  (else #f)))))
+</pre>
+<p> 関数 make-hash-table はハッシュ表を操作するクロージャを生成して返します。引数 size はハッシュ表の大きさ、引数 func はキーを数値に変換する関数です。次に、make-vector でベクタを生成して局所変数 hash-table にセットします。hash-table は空リストで初期化します。
+</p>
+<p> 内部関数 hash-func はハッシュ値を計算して返します。これは与えられた関数 func を呼び出して、size との剰余を計算するだけです。ところで、<a href="abcscm16.html#cite">参考文献 1</a> ではハッシュ表の大きさを M とすると、<cite>『M を素数にしておくと安心である』</cite> とのことです。
+</p>
+
+<p> その次にハッシュ表を操作する内部関数を定義します。これは後で詳しく説明します。最後に、クロージャを返すラムダ式を定義します。引数 msg で実行する処理を指定します。今回のプログラムで実装する処理は次の 4 つです。
+</p>
+<ul>
+  <li>insert! key value<br>キー key と対応する値 vaulue をハッシュ表に挿入する。
+  <li>search key<br>ハッシュ表からキー key を探し、見つけた場合は対応する値を返す。
+  <li>delete! key<br>キー key と対応する値をハッシュ表から削除する。
+  <li>for-each func<br>ハッシュ表に登録されているすべての要素に対して、関数 func を呼び出す。func にはキーと値が渡される。
+</ul>
+<p> 実際の処理は、対応する内部関数で行います。これらの内部関数はライブラリ srfi-1 を使うと簡単にプログラムすることができます。
+</p>
+
+<h4>●データの探索</h4>
+<p> それでは関数 search から作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの探索
+
+(define (search key)
+    (let* ((hash-value (hash-func key))
+           (cell (assoc key
+                        (vector-ref hash-table hash-value)
+                        obj=?)))
+        (if cell (cdr cell) #f)))
+</pre>
+<p> 最初に、引数 key に関数 hash-func を適用してハッシュ値 hash-value を求めます。次に、関数 assoc で key と等しい CAR 部を持つ要素を探します。Gauche の場合、ライブラリ srfi-1 を使うと、assoc は等値関係を調べる述語を受け取ることができるようになります。今回のプログラムでは、obj=? を使って等値関係がチェックされます。見つけた場合は、コンスセル cell の CDR 部に格納された値を返します。そうでなければ #f を返します。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次はハッシュ表にデータを挿入する関数 insert! を作ります。
+</p>
+<pre class="list">
+リスト : データの挿入
+
+(define (insert! key value)
+    (let* ((hash-value (hash-func key))
+           (cell (assoc key
+                        (vector-ref hash-table hash-value)
+                        obj=?)))
+        (if cell
+            ; 値を書き換え
+            (set-cdr! cell value)
+            ; 新しいデータ
+            (vector-set! hash-table
+                         hash-value
+                         (cons (cons key value)
+                               (vector-ref hash-table hash-value))))))
+</pre>
+<p> 最初に key を探します。この処理は search と同じです。見つけた場合は set-cdr! で CDR 部の値を value に書き換えます。見つからない場合はキーとデータの組 (cons key value) を連想リストの先頭に追加します。そして、そのリストをハッシュ表にセットします。
+</p>
+
+<h4>●データの削除</h4>
+<p> データを削除する関数 delete! も簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの削除
+
+(define (delete! key)
+    (let ((hash-value (hash-func key)))
+        (vector-set! hash-table
+                     hash-value
+                     (alist-delete key
+                                   (vector-ref hash-table hash-value)
+                                   obj?=))))
+</pre>
+<p> 関数 alist-delete は srfi-1 に用意されている関数で、連想リストの中から key と等しいキーを持つ要素をすべて削除します。第 3 引数に等値を調べる述語を指定することができます。指定を省略した場合は述語 eqv? が使用されます。あとは alist-delete の返り値をハッシュ表にセットするだけです。
+</p>
+
+<h4>●巡回</h4>
+<p> 最後に、ハッシュ表に登録されているすべての要素に関数 func を適用する traverse を作ります。
+</p>
+<pre class="list">
+リスト : 巡回
+
+(define (traverse func)
+    (let loop ((n 0))
+        (cond ((&lt; n size)
+               (if (pair? (vector-ref hash-table n))
+                   (for-each (lambda (x) (func (car x) (cdr x)))
+                             (vector-ref hash-table n)))
+               (loop (+ n 1))))))
+</pre>
+<p> この処理も簡単です。ハッシュ表の先頭から順番にリストを取り出して for-each に渡し、その中のラムダ式で func を呼び出します。func の第 1 引数がキーで、第 2 引数がデータになります。
+</p>
+<ul>
+  <li><a href="abcscm16.html#list2">プログラムリスト２</a>
+</ul>
+<h4>●実行例</h4>
+<p> これでプログラムは完成です。簡単な実行例を示しましょう。キーは文字列とします。最初にハッシュ関数を定義します。
+</p>
+<pre class="list">
+リスト : ハッシュ関数
+
+(define (string-hash x)
+    (fold (lambda (x y) (+ (char-&gt;integer x) y)) 0 (string-&gt;list x)))
+</pre>
+<p> 関数 string-hash は文字列の文字を数値に変換してその合計値を求めます。関数 string-&gt;list は文字列をリストに変換する関数です。リストの要素は文字になります。関数 char-&gt;integer は文字を数値に変換する関数です。あとは fold で合計値を求めるだけです。単純な関数ですが、ハッシュ表のサイズが大きくなければ、それなりの効果を発揮します。なお、文字列のハッシュ関数はいろいろ考案されているので、興味のある方は調べてみてください。
+</p>
+<pre>
+gosh&gt; (define a (make-hash-table 13 string-hash equal?))
+a
+gosh&gt; (a 'insert! "abc" 1)
+#&lt;undef&gt;
+gosh&gt; (a 'insert! "foo" 2)
+#&lt;undef&gt;
+gosh&gt; (a 'insert! "bar" 3)
+#&lt;undef&gt;
+gosh&gt; (a 'insert! "baz" 4)
+#&lt;undef&gt;
+gosh&gt; (a 'for-each (lambda (x y) (format #t "(~A, ~A)~%" x y)))
+(baz, 4)
+(abc, 1)
+(bar, 3)
+(foo, 2)
+gosh&gt; (a 'search "abc")
+1
+gosh&gt; (a 'delete! "abc")
+#&lt;undef&gt;
+gosh&gt; (a 'search "abc")
+#f
+gosh&gt; (a 'search "foo")
+2
+gosh&gt; (a 'delete! "foo")
+#&lt;undef&gt;
+gosh&gt; (a 'search "foo")
+#f
+gosh&gt; (a 'search "bar")
+3
+gosh&gt; (a 'delete! "bar")
+#&lt;undef&gt;
+gosh&gt; (a 'search "bar")
+#f
+gosh&gt; (a 'search "baz")
+4
+gosh&gt; (a 'delete! "baz")
+#&lt;undef&gt;
+gosh&gt; (a 'search "baz")
+#f
+</pre>
+
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>奥村晴彦, 『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; heap.scm : プライオリティキュー (ヒープ)
+;
+;            Copyright (C) 2008 Makoto Hiroi
+;
+
+(define (make-heap max-size cmp)
+    (let ((buff (make-vector max-size))
+          (num 0))
+        ; 比較関数
+        (define (obj=? x y)
+            (zero? (cmp (vector-ref buff x) (vector-ref buff y))))
+        (define (obj&gt;? x y)
+            (&gt; (cmp (vector-ref buff x) (vector-ref buff y)) 0))
+        ; 交換
+        (define (swap x y)
+            (let ((temp (vector-ref buff x)))
+                (vector-set! buff x (vector-ref buff y))
+                (vector-set! buff y temp)))
+
+        ; ヒープの構築
+        (define (upheap n)
+            (let ((p (quotient (- n 1) 2)))
+                (cond ((and (&lt;= 0 p) (obj&gt;? p n))
+                       (swap p n)
+                       (upheap p)))))
+
+        ; ヒープの再構築
+        (define (downheap n)
+            (let ((c (+ (* n 2) 1)))
+                (cond ((&lt; c num)
+                       (if (and (&lt; (+ c 1) num) (obj&gt;? c (+ c 1)))
+                           (set! c (+ c 1)))
+                       (cond ((obj&gt;? n c)
+                              (swap n c)
+                              (downheap c)))))))
+        
+        ; プライオリティーキューの操作
+        (lambda (msg . args)
+            (cond ((eq? msg 'push!)
+                   (cond ((&lt; num max-size)
+                          (vector-set! buff num (car args))
+                          (upheap num)
+                          (set! num (+ 1 num)))
+                         (else #f)))
+                  ((eq? msg 'push-list!)
+                   (let loop ((ls (car args)))
+                       (cond ((pair? ls)
+                              (vector-set! buff num (car ls))
+                              (set! num (+ num 1))
+                              (loop (cdr ls)))))
+                   (let loop ((n (- (quotient num 2) 1)))
+                       (cond ((&lt;= 0 n)
+                              (downheap n)
+                              (loop (- n 1))))))
+                  ((eq? msg 'pop!)
+                   (if (zero? num)
+                       #f
+                       (let ((item (vector-ref buff 0)))
+                           (set! num (- num 1))
+                           (cond ((&lt; 0 num)
+                                  (vector-set! buff 0 (vector-ref buff num))
+                                  (downheap 0)))
+                           item)))
+                  ((eq? msg 'peek)
+                   (vector-ref buff 0))
+                  ((eq? msg 'empty?)
+                   (zero? num))
+                  (else #f)))))
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+;
+; hash.scm : ハッシュ表
+;
+;            Copyright (C) 2008 Makoto Hiroi
+;
+
+(use srfi-1)
+
+(define (make-hash-table size func obj=?)
+    (let ((hash-table (make-vector size '())))
+        ; ハッシュ関数
+        (define (hash-func x)
+            (modulo (func x) size))
+
+        ; 挿入
+        (define (insert! key value)
+            (let* ((hash-value (hash-func key))
+                   (cell (assoc key
+                                (vector-ref hash-table hash-value)
+                                obj=?)))
+                (if cell
+                    ; 値を書き換え
+                    (set-cdr! cell value)
+                    ; 新しいデータ
+                    (vector-set! hash-table
+                                 hash-value
+                                 (cons (cons key value)
+                                       (vector-ref hash-table hash-value))))))
+
+        ; 探索
+        (define (search key)
+            (let* ((hash-value (hash-func key))
+                   (cell (assoc key
+                                (vector-ref hash-table hash-value)
+                                obj=?)))
+                (if cell (cdr cell) #f)))
+
+        ; 削除
+        (define (delete! key)
+            (let ((hash-value (hash-func key)))
+                (vector-set! hash-table
+                             hash-value
+                             (alist-delete key
+                                           (vector-ref hash-table hash-value)
+                                           obj=?))))
+
+        ; 巡回
+        (define (traverse func)
+            (let loop ((n 0))
+                (cond ((&lt; n size)
+                       (if (pair? (vector-ref hash-table n))
+                           (for-each (lambda (x) (func (car x) (cdr x)))
+                                     (vector-ref hash-table n)))
+                       (loop (+ n 1))))))
+
+        ;
+        (lambda (msg . args)
+            (cond ((eq? msg 'insert!)
+                   (apply insert! args))
+                  ((eq? msg 'search)
+                   (search (car args)))
+                  ((eq? msg 'delete!)
+                   (delete! (car args)))
+                  ((eq? msg 'for-each)
+                   (traverse (car args)))
+                  (else #f)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm15.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm17.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

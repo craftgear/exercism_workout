@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881759</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj35.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj37.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<DIV class="contents">
+<h3>関数型電卓プログラムの改良 (付録A)</h3>
+<p> 関数型電卓プログラム fcalc の使用例として簡単なライブラリ (付録A) と、それを使ったパズルの解法プログラム (付録B) を示します。
+</p>
+
+<h4>●関数型電卓プログラム用ライブラリ</h4>
+<h4>数値演算</h4>
+<ul>
+  <li>evenp(n), oddp(n)<br>
+n が偶数ならば evenp は 1 を oddp は 0 を、奇数ならば evenp は 0 を oddp は 1 を返す。
+  <li>abs(n)<br>n の絶対値を返す。
+  <li>max(a, b), min(a, b)<br>
+max は引数 a, b の大きいほうを、min は小さいほうを返す。
+  <li>gcd(a, b)<br>
+整数値 a, b の最大公約数を求める。
+  <li>lcm(a, b)<br>
+整数値 a, b の最小公倍数を求める。
+  <li>comb(n, r)<br>
+組み合わせの数 <SUB>n</SUB>Ｃ<SUB>r</SUB> を求める。
+  <li>fact(n)<br>
+n の階乗を求める。
+  <li>expt(a, b)<br>
+a の b 乗 を求める。(a, b, 結果ともに整数値)
+  <li>fibo(n)<br>
+フィボナッチ数を求める。
+</ul>
+<pre>
+Calc&gt; evenp(2);
+1
+Calc&gt; evenp(3);
+0
+Calc&gt; oddp(4);
+0
+Calc&gt; oddp(5);
+1
+Calc&gt; abs(-10);
+10
+Calc&gt; abs(10);
+10
+Calc&gt; max(1, 10);
+10
+Calc&gt; min(1, 10);
+1
+Calc&gt; gcd(24, 32);
+8
+Calc&gt; lcm(24, 32);
+96
+Calc&gt; comb(10, 5);
+252
+Calc&gt; comb(100, 50);
+100891344545564193334812497256
+Calc&gt; fact(10);
+3628800
+Calc&gt; fact(20);
+2432902008176640000
+Calc&gt; expt(2,32);
+4294967296
+Calc&gt; expt(2,64);
+18446744073709551616
+Calc&gt; fibo(0);
+1
+Calc&gt; fibo(1);
+1
+Calc&gt; fibo(2);
+2
+Calc&gt; fibo(10);
+89
+Calc&gt; fibo(100);
+573147844013817084101
+</pre>
+<h4>述語</h4>
+<ul>
+  <li>pair(xs)<br>
+xs がリストならば真を返す。
+  <li>null(xs)<br>
+xs が空リストならば真を返す。
+  <li>listp(xs)<br>
+xs がリストまたは空リストならば真を返す。
+  <li>single(xs)<br>
+xs が長さ 1 のリストであれば真を返す。
+  <li>any(pred, xs)<br>
+リストまたはベクタ xs の要素がひとつでも述語 pred を満たせば真を返す。
+  <li>every(pred, xs)<br>
+リストまたはベクタ xs のすべての要素が述語 pred を満たせば真を返す。
+  <li>equal(xs, ys)<br>
+xs と ys が等しい場合は真を返す。等値の定義は、xs と ys が同じデータ型で値が等しいこと。リストとベクタの場合は要素に対して equal を再帰的に適用する。
+</ul>
+<pre>
+Calc&gt; pair(cons(1, 2));
+1
+Calc&gt; pair(nil);
+0
+Calc&gt; null(nil);
+1
+Calc&gt; null(cons(1, 2));
+0
+Calc&gt; listp(cons(1, 2));
+1
+Calc&gt; listp(nil);
+1
+Calc&gt; listp(10);
+0
+Calc&gt; single(cons(1, nil));
+1
+Calc&gt; single(nil);
+0
+Calc&gt; single(list(1,2,3));
+0
+Calc&gt; any(evenp, list(1,3,5,7,9));
+0
+Calc&gt; any(evenp, list(1,3,4,5,7,9));
+1
+Calc&gt; any(oddp, [2,4,6,8,10]);
+0
+Calc&gt; any(oddp, [2,4,5,6,8,10]);
+1
+Calc&gt; every(evenp, list(2,4,6,8));
+1
+Calc&gt; every(evenp, list(2,4,5,6,8));
+0
+Calc&gt; every(evenp, [2,4,6,8,10]);
+1
+Calc&gt; every(evenp, [2,4,6,8,10,11]);
+0
+Calc&gt; equal(1, 1);
+1
+Calc&gt; equal(1, 1.0);
+0
+Calc&gt; equal("abc", "abc");
+1
+Calc&gt; equal("abc", "def");
+0
+Calc&gt; equal("abc", 2);
+0
+Calc&gt; equal(list(1,2,3), list(1,2,3));
+1
+Calc&gt; equal(list(1,2,3), list(1,2,3.0));
+0
+Calc&gt; equal([[1,2],[3,4]], [[1,2],[3,4]]);
+1
+Calc&gt; equal([[1,2],[3,4]], [[1,2],[3.0,4]]);
+0
+</pre>
+<h4>リストのアクセス</h4>
+<ul>
+  <li>caar(xs), cadr(xs), cdar(xs), cddr(xs), cdddr(xs), cddddr(xs)<br>
+cXYr(xs) は cXr(cYr(xs)) と同じ、cdddr(xs) は cdr(cddr(xs)) と同じ、cddddr(xs) は cdr(cdddr(xs)) と同じ。
+  <li>first(xs), second(xs), third(xs), fourth(xs), fifth(xs)<br>
+first はリスト xs の先頭の要素、second は 2 番目の要素、 third は 3 番目の要素、fourth は 4 番目の要素、fifth は 5 番目の要素を取り出す。
+  <li>nth(xs, n)<br>
+リスト xs の n 番目の要素を取り出す。ただし、要素の順番は 0 から数える。
+</ul>
+<pre>
+Calc&gt; a = list(1,2,3,4,5);
+(1 2 3 4 5)
+Calc&gt; first(a);
+1
+Calc&gt; second(a);
+2
+Calc&gt; third(a);
+3
+Calc&gt; fourth(a);
+4
+Calc&gt; fifth(a);
+5
+Calc&gt; nth(a, 0);
+1
+Calc&gt; nth(a, 4);
+5
+</pre>
+<h4>リストの生成</h4>
+<ul>
+  <li>makelist(n, x)<br>
+要素が x で長さが n のリストを生成する。
+  <li>iota(n, m)<br>
+整数 n から m までの数列を格納したリストを生成する。
+  <li>tabulate(f, n, m)<br>
+整数 n から m までの数列の要素に関数 f を適用した結果をリストに格納して返す。
+</ul>
+<pre>
+Calc&gt; makelist(10, 0);
+(0 0 0 0 0 0 0 0 0 0)
+Calc&gt; iota(1, 10);
+(1 2 3 4 5 6 7 8 9 10)
+Calc&gt; tabulate(fn(x) x * x end, 1, 10);
+(1 4 9 16 25 36 49 64 81 100)
+</pre>
+<h4>簡単なリスト操作</h4>
+<ul>
+  <li>append(xs, ys)<br>
+リスト xs と ys を連結する。
+  <li>length(xs)<br>
+リスト xs の長さを求める。
+  <li>reverse(xs), nreverse(xs)<br>
+リスト xs を反転する。nreverse はリストを破壊的に反転する。
+  <li>take(xs, n)<br>
+リスト xs の先頭から n 個の要素を取り出す。
+  <li>drop(xs, n)<br>
+リスト xs の先頭から n 個の要素を取り除く。
+  <li>partition(pred, xs)<br>
+リスト xs を述語 pred が真を返す要素とそうでないものの 2 つに分ける。
+</ul>
+<pre>
+Calc&gt; a = iota(1, 4);
+(1 2 3 4)
+Calc&gt; b = iota(5, 8);
+(5 6 7 8)
+Calc&gt; append(a, b);
+(1 2 3 4 5 6 7 8)
+Calc&gt; c = append(a, b);
+(1 2 3 4 5 6 7 8)
+Calc&gt; length(c);
+8
+Calc&gt; reverse(c);
+(8 7 6 5 4 3 2 1)
+Calc&gt; c;
+(1 2 3 4 5 6 7 8)
+Calc&gt; nreverse(c);
+(8 7 6 5 4 3 2 1)
+Calc&gt; c;
+(1)
+Calc&gt; c = iota(1, 9);
+(1 2 3 4 5 6 7 8 9)
+Calc&gt; drop(c, 3);
+(4 5 6 7 8 9)
+Calc&gt; take(c, 3);
+(1 2 3)
+Calc&gt; partition(evenp, c);
+((2 4 6 8) 1 3 5 7 9)
+Calc&gt; partition(oddp, c);
+((1 3 5 7 9) 2 4 6 8)
+</pre>
+<h4>探索</h4>
+<ul>
+  <li>member(x, xs)<br>
+リスト xs の中から x と等しい要素を探す。比較は演算子 == で行われる。見つけた場合、その要素以降のリストを返す。見つからない場合は nil を返す。
+  <li>find(pred, xs)<br>
+リストまたはベクタ xs の中から述語 pred を満たす最初の要素を返す。見つからない場合は nil を返す。
+  <li>position(pred, xs)<br>
+リストまたはベクタ xs の中から述語 pred を満たす最初の要素の位置を返す。見つからない場合は -1 を返す。
+  <li>count(pred, xs)<br>
+リストまたはベクタ xs の中から述語 pred を満たす要素の個数を返す。
+</ul>
+<pre>
+Calc&gt; a;
+(1 2 3 4 5 6 7 8 9)
+Calc&gt; b;
+[1, 2, 3, 4, 5, 6, 7, 8, 9]
+Calc&gt; find(evenp, a);
+2
+Calc&gt; find(evenp, b);
+2
+Calc&gt; find(fn(x) x == 10 end, a);
+
+Calc&gt; position(evenp, b);
+1
+Calc&gt; position(evenp, a);
+1
+Calc&gt; position(fn(x) x == 10 end, a);
+~1
+Calc&gt; count(evenp, a);
+4
+Calc&gt; count(evenp, b);
+4
+Calc&gt; member(5, a);
+(5 6 7 8 9)
+Calc&gt; member(10, a);
+
+</pre>
+<h4>マッピング、フィルター、畳み込み</h4>
+<ul>
+  <li>map(f, xs)<br>
+リストまたはベクタ xs の要素に関数 f を適用した結果をリストまたはベクタに格納して返す。
+  <li>filter(pred, xs), remove(pred, xs)<br>
+filter はリスト xs から述語 pred を満たす要素を取り出す。remove は pred を満たす要素を削除する。
+  <li>foldl(f, a, xs), foldr(f, a, xs)<br>
+リストまたはベクタ xs の要素 x と累積変数 a に関数 f(x, a) を適用して畳み込みを行う。foldl は先頭から順番に要素を取り出し、foldr は逆に末尾から順番に要素を取り出す。
+　<li>foldl2(f, a, xs, ys), foldr2(f, a, xs, ys)<br>
+リスト xs, ys の要素 x, y と累積変数 a に関数 f(x, y, a) を適用して畳み込みを行う。foldl2 は先頭から順番に要素を取り出し、foldr2 は逆に末尾から順番に要素を取り出す。畳み込みはどちらかのリストが空リストになった時点で終了する。
+</ul>
+<pre>
+Calc&gt; a = iota(1, 8);
+(1 2 3 4 5 6 7 8)
+Calc&gt; map(fn(x) x * 2 end, a);
+(2 4 6 8 10 12 14 16)
+Calc&gt; filter(evenp, a);
+(2 4 6 8)
+Calc&gt; remove(evenp, a);
+(1 3 5 7)
+Calc&gt; foldl(fn(x, a) cons(x, a) end, nil, iota(1, 8));
+(8 7 6 5 4 3 2 1)
+Calc&gt; foldr(fn(x, a) cons(x, a) end, nil, iota(1, 8));
+(1 2 3 4 5 6 7 8)
+Calc&gt; b = iota(11, 18);
+(11 12 13 14 15 16 17 18)
+Calc&gt; foldl2(fn(x, y, a) cons(cons(x, y), a) end, nil, a, b);
+((8 . 18) (7 . 17) (6 . 16) (5 . 15) (4 . 14) (3 . 13) (2 . 12) (1 . 11))
+Calc&gt; foldr2(fn(x, y, a) cons(cons(x, y), a) end, nil, a, b);
+((1 . 11) (2 . 12) (3 . 13) (4 . 14) (5 . 15) (6 . 16) (7 . 17) (8 . 18))
+</pre>
+<h4>foreach と copy</h4>
+<ul>
+  <li>foreach(f, xs)<br>
+リストまたはベクタ xs の要素に関数 f を適用する。関数 f の副作用が目的で、返り値は捨てられる。
+  <li>copy(xs)<br>
+リストまたはベクタ xs のコピーを返す。コピーされるのはトップレベルのみで、いわゆる深いコピーは行われない。
+</ul>
+<pre>
+Calc&gt; foreach(print, a);
+12345678
+Calc&gt; foreach(print, [1,2,3,4,5,6,7,8]);
+12345678
+Calc&gt; copy(list(1,2,3,4,5));
+(1 2 3 4 5)
+Calc&gt; copy([1,2,3,4,5]);
+[1, 2, 3, 4, 5]
+</pre>
+<h4>集合</h4>
+<p> リストを集合として扱う関数で、リストには重複要素がないものとする。
+</p>
+<ul>
+  <li>removeDup(xs)<br>
+リスト xs から重複した要素を削除する。等値の判定には演算子 == を用いる。
+  <li>union(xs, ys)<br>
+リスト xs, ys の和集合を求める。
+  <li>intersection(xs, ys)<br>
+リスト xs, ys の積集合を求める。
+  <li>difference(xs, ys)<br>
+リスト xs, ys の差集合を求める。
+  <li>product(xs, ys)<br>
+リスト xs, ys の直積集合を求める。
+  <li>powerSet(xs)<br>
+リスト xs のべき集合を求める。
+</ul>
+<pre>
+Calc&gt; a = removeDup(list(1,1,2,1,2,3,1,2,3,4,1,2,3,4));
+(1 2 3 4)
+Calc&gt; b = list(3,4,5,6);
+(3 4 5 6)
+Calc&gt; union(a, b);
+(1 2 3 4 5 6)
+Calc&gt; intersection(a, b);
+(3 4)
+Calc&gt; difference(a, b);
+(1 2)
+Calc&gt; difference(b, a);
+(5 6)
+Calc&gt; product(list(1,2,3), list(4,5));
+((1 . 4) (1 . 5) (2 . 4) (2 . 5) (3 . 4) (3 . 5))
+Calc&gt; powerSet(list(1,2,3,4));
+(() (4) (3) (3 4) (2) (2 4) (2 3) (2 3 4) (1) (1 4) (1 3) (1 3 4) (1 2) (1 2 4) (1 2 3) (1 2 3 4))
+</pre>
+<h4>マージとソート</h4>
+<ul>
+  <li>merge(pred, xs, ys)<br>
+リスト xs, ys をひとつのリストに併合する。xs, ys は述語 pred を満たすように整列しておくこと。
+  <li>insert_sort(pred, xs)<br>
+隣接する要素が述語 pred を満たすようにリスト xs を整列 (単純挿入ソート) する。
+  <li>quick_sort(pred, xs)<br>
+隣接する要素が述語 pred を満たすようにリスト xs を整列 (クイックソート) する。
+  <li>merge_sort(pred, n, xs)<br>
+隣接する要素が述語 pred を満たすようにリスト xs を整列 (マージソート) する。引数 n は xs の要素数である。
+</ul>
+<pre>
+Calc&gt; merge(fn(x, y) x &lt; y end, list(1,3,5,7), list(2,4,6,8));
+(1 2 3 4 5 6 7 8)
+Calc&gt; insert_sort(fn(x, y) x &lt; y end, list(1,3,5,7,2,4,6,8));
+(1 2 3 4 5 6 7 8)
+Calc&gt; quick_sort(fn(x, y) x &lt; y end, list(1,3,5,7,2,4,6,8));
+(1 2 3 4 5 6 7 8)
+Calc&gt; merge_sort(fn(x, y) x &lt; y end, 8, list(1,3,5,7,2,4,6,8));
+(1 2 3 4 5 6 7 8)
+</pre>
+<h4>順列と組み合わせ</h4>
+<ul>
+  <li>permutation(f, n, xs)<br>
+リスト xs から n 個を選ぶ順列を生成し、それを関数 f に渡して評価する。
+  <li>combination(f, n, xs)<br>
+リスト xs から n 個を選ぶ組み合わせを生成し、それを関数 f に渡して評価する。
+</ul>
+<pre>
+Calc&gt; permutation(print, 3, list(1,2,3));
+(1 2 3)(1 3 2)(2 1 3)(2 3 1)(3 1 2)(3 2 1)
+Calc&gt; combination(print, 3, list(1,2,3,4,5));
+(1 2 3)(1 2 4)(1 2 5)(1 3 4)(1 3 5)(1 4 5)(2 3 4)(2 3 5)(2 4 5)(3 4 5)
+</pre>
+<h4>スタックとキュー</h4>
+<ul>
+  <li>makeStack()<br>
+スタックを生成する。スタックを表すリスト s を返す。
+  <li>push(s, x)<br>
+スタック s に x をプッシュする。
+  <li>pop(s)<br>
+スタックからデータをポップする。
+  <li>top(s)<br>
+スタックトップにあるデータを返す。
+  <li>isEmptyStack(s)<br>
+スタック s が空であれば真を返す。
+  <li>makeQueue()<br>
+キューを生成する。キューを表すリスト q を返す。
+  <li>enqueue(q, x)<br>
+キュー q にデータ x を挿入する。
+  <li>dequeue(q)<br>
+キュー q からデータを取り出す。
+  <li>front(q)<br>
+キュー q の先頭データを返す。
+  <li>isEmptyQueue(q)<br>
+キュー q が空であれば真を返す。
+</ul>
+<pre>
+Calc&gt; s = makeStack();
+(())
+Calc&gt; push(s, 1);
+(1)
+Calc&gt; push(s, 2);
+(2 1)
+Calc&gt; push(s, 3);
+(3 2 1)
+Calc&gt; isEmptyStack(s);
+0
+Calc&gt; top(s);
+3
+Calc&gt; pop(s);
+3
+Calc&gt; pop(s);
+2
+Calc&gt; pop(s);
+1
+Calc&gt; isEmptyStack(s);
+1
+Calc&gt; q = makeQueue();
+(())
+Calc&gt; enqueue(q, 1);
+(1)
+Calc&gt; enqueue(q, 2);
+(2)
+Calc&gt; enqueue(q, 3);
+(3)
+Calc&gt; isEmptyQueue(q);
+0
+Calc&gt; front(q);
+1
+Calc&gt; dequeue(q);
+1
+Calc&gt; dequeue(q);
+2
+Calc&gt; dequeue(q);
+3
+Calc&gt; isEmptyQueue(q);
+1
+</pre>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+#
+# lib.cal : 関数型電卓ライブラリ (fcalc.sml 用)
+#
+#           Copyright (C) 2012 Makoto Hiroi
+#
+
+# 数値計算
+def evenp(n) n % 2 == 0 end
+def oddp(n) n % 2 != 0 end
+
+def abs(n)
+  if n &gt; 0 then n else - n end
+ end
+
+def max(a, b)
+  if a &gt; b then a else b end
+end
+
+def min(a, b)
+  if a &lt; b then a else b end
+end
+
+# 最大公約数
+def gcd(a, b)
+  if b == 0 then a else gcd(b, a % b) end
+end
+
+# 最小公倍数
+def lcm(a, b) a * b / gcd(a, b) end
+
+# 組み合わせの数
+def comb(n, r)
+  if n == 0 or r == 0 then
+    1
+  else
+    comb(n, r - 1) * (n - r + 1) / r
+  end
+end
+
+# 階乗
+def fact(n)
+  if n == 0 then
+    1
+  else
+    n * fact(n - 1)
+  end
+end
+
+# 整数の累乗
+def expt(x, y)
+  if y == 0 then
+    1
+  else 
+    let
+      z = expt(x, y / 2)
+    in
+      if y % 2 == 0 then z * z else x * z * z end
+    end
+  end
+end
+
+# フィボナッチ数列
+def fibo(n)
+  let rec
+    iter = fn(i, a, b)
+      if i == 0 then
+        a
+      else
+        iter(i - 1, a + b, a)
+      end
+    end
+  in
+    iter(n, 1, 0)
+  end
+end
+
+# 基本的なリスト操作関数
+def pair(xs) isPair(xs) end
+def null(xs) isNil(xs) end
+def listp(xs) isPair(xs) or isNil(xs) end
+def single(xs) isPair(xs) and null(cdr(xs)) end
+
+def caar(xs) car(car(xs)) end
+def cadr(xs) car(cdr(xs)) end
+def cdar(xs) cdr(car(xs)) end
+def cddr(xs) cdr(cdr(xs)) end
+def cdddr(xs) cdr(cdr(cdr(xs))) end
+def cddddr(xs) cdr(cdr(cdr(cdr(xs)))) end
+
+def first(xs) car(xs) end
+def second(xs) car(cdr(xs)) end
+def third(xs) car(cdr(cdr(xs))) end
+def fourth(xs) car(cdr(cdr(cdr(xs)))) end
+def fifth(xs) car(cdr(cdr(cdr(cdr(xs))))) end
+
+# リストの n 番目の要素を取得
+def nth(xs, n)
+  if null(xs) then
+    nil
+  else
+    if n == 0 then
+      car(xs)
+    else
+      nth(cdr(xs), n - 1)
+    end
+  end
+end
+
+# リストの生成
+def makelist(n, x)
+  let rec
+    iter = fn(n, a)
+      if n == 0 then
+        a
+      else
+        iter(n - 1, cons(x, a))
+      end
+    end
+  in
+    iter(n, nil)
+  end
+end
+
+def iota(n, m)
+  let rec
+    iter = fn(m, a)
+      if m &lt; n then
+        a
+      else
+        iter(m - 1, cons(m, a))
+      end
+    end
+  in
+    iter(m, nil)
+  end
+end
+
+def tabulate(f, n, m)
+  let rec
+    iter = fn(m, a)
+      if m &lt; n then
+        a
+      else
+        iter(m - 1, cons(f(m), a))
+      end
+    end
+  in
+    iter(m, nil)
+  end
+end
+
+# 畳み込み
+def foldl(f, a, xs)
+  let rec
+    iterL, iterV =
+      fn(a, xs)
+        if null(xs) then
+          a
+        else
+          iterL(f(car(xs), a), cdr(xs))
+        end
+      end,
+      fn()
+        let
+          k = len(xs), i = 0
+        in
+          while i &lt; k do
+            a = f(xs[i], a),
+            i = i + 1
+          end,
+          a
+        end
+      end
+  in
+    if isVector(xs) then iterV() else iterL(a, xs) end
+  end
+end
+
+def foldl2(f, a, xs, ys)
+  if null(xs) or null(ys) then
+    a
+  else
+    foldl2(f, f(car(xs), car(ys), a), cdr(xs), cdr(ys))
+  end
+end
+
+def foldr(f, a, xs)
+  let rec
+    iterL, iterV =
+      fn(a, xs)
+        if null(xs) then
+          a
+        else
+          f(car(xs), iterL(a, cdr(xs)))
+        end
+      end,
+      fn()
+        let
+          i = len(xs) - 1
+        in
+          while i &gt;= 0 do
+            a = f(xs[i], a),
+            i = i - 1
+          end,
+          a
+        end
+      end
+  in
+    if isVector(xs) then iterV() else iterL(a, xs) end
+  end
+end
+
+def foldr2(f, a, xs, ys)
+  if null(xs) or null(ys) then
+    a
+  else
+    f(car(xs), car(ys), foldr2(f, a, cdr(xs), cdr(ys)))
+  end
+end
+
+# マッピング
+def map(f, xs)
+  if isVector(xs) then
+    let
+      v = makeVector(len(xs), nil)
+    in
+      foldl(fn(x, a) v[a] = f(x), a + 1 end, 0, xs),
+      v
+    end
+  else
+    foldr(fn(x, a) cons(f(x), a) end, nil, xs)
+  end
+end
+
+# フィルター
+def filter(pred, xs)
+  foldr(fn(x, a) if pred(x) then cons(x, a) else a end end, nil, xs)
+end
+
+def remove(pred, xs)
+  foldr(fn(x, a) if pred(x) then a else cons(x, a) end end, nil, xs)
+end
+
+#
+def foreach(f, xs)
+  foldl(fn(x, a) f(x) end, nil, xs),
+  nil
+end
+
+# コピー
+def copy(xs)
+  if isVector(xs) then
+    let
+      v = makeVector(len(xs), nil),
+    in
+      foldl(fn(x, a) v[a] = x, a + 1 end, 0, xs),
+      v
+    end
+  else
+    foldr(fn(x, a) cons(x, a) end, nil, xs)
+  end
+end
+
+# 述語
+def every(pred, xs)
+  callcc(fn(k)
+    foldl(fn(x, a) if not pred(x) then k(0) end end, nil, xs),
+    1
+  end)
+end
+
+#
+def any(pred, xs)
+  callcc(fn(k)
+    foldl(fn(x, a) if pred(x) then k(1) end end, nil, xs),
+    0
+  end)
+end
+
+
+# 等値判定
+def equal(xs, ys)
+  if pair(xs) and pair(ys) then
+    if equal(car(xs), car(ys)) then
+      equal(cdr(xs), cdr(ys))
+    end
+  else
+    if isVector(xs) and isVector(ys) then
+      let
+        k = len(xs), i = 0
+      in
+        if len(ys) == k then
+          while i &lt; k and equal(xs[i], ys[i]) do
+            i = i + 1
+          end,
+          i == k
+        end
+      end
+    else
+      if (isInteger(xs) and isInteger(ys)) or
+         (isFloat(xs) and isFloat(ys)) then
+        xs == ys
+      else
+        if (isString(xs) and isString(ys)) then
+           strcmp(xs, ys) == 0
+        else
+          null(xs) and null(ys)
+        end
+      end
+    end
+  end
+end
+
+# 線形探索
+def member(x, xs)
+  if null(xs) then
+    nil
+  else
+    if car(xs) == x then
+      xs
+    else
+      member(x, cdr(xs))
+    end
+  end
+end
+
+def find(pred, xs)
+  callcc(fn(k)
+    foldl(fn(x, a) if pred(x) then k(x) end end, nil, xs),
+    nil
+  end)
+end
+
+def position(pred, xs)
+  callcc(fn(k)
+    foldl(fn(x, a) if pred(x) then k(a) else a + 1 end end, 0, xs),
+    -1
+  end)
+end
+
+def count(pred, xs)
+  foldl(fn(x, a) if pred(x) then a + 1 else a end end, 0, xs)
+end
+
+# リストの連結
+def append(xs, ys)
+  foldr(fn(x, a) cons(x, a) end, ys, xs)
+end
+
+# リストの長さ
+def length(xs)
+  foldl(fn(x, a) a + 1 end, 0, xs)
+end
+
+# リストの反転
+def reverse(xs)
+  foldl(fn(x, a) cons(x, a) end, nil, xs)
+end
+
+# リストの破壊的な反転
+def nreverse(xs)
+  let rec
+    iter = fn(xs, a)
+      if null(xs) then
+        a
+      else
+        let ys = cdr(xs) in
+          setCdr(xs, a),
+          iter(ys, xs)
+        end
+      end
+    end
+  in
+    iter(xs, nil)
+  end
+end
+
+# リストの先頭から n 個の要素を取り出す
+def take(xs, n)
+  if n == 0 or null(xs) then
+    nil
+  else
+    cons(car(xs), take(cdr(xs), n - 1))
+  end
+end
+
+# リストの先頭から n 個の要素を取り除く
+def drop(xs, n)
+  if n == 0 or null(xs) then
+    xs
+  else
+    drop(cdr(xs), n - 1)
+  end
+end
+
+# リストの分割
+def partition(pred, xs)
+  let rec
+    iter = fn(xs, a, b)
+      if null(xs) then
+        cons(nreverse(a), nreverse(b))
+      else
+        if pred(car(xs)) then
+          iter(cdr(xs), cons(car(xs), a), b)
+        else
+          iter(cdr(xs), a, cons(car(xs), b))
+        end
+      end
+    end
+  in
+    iter(xs, nil, nil)
+  end
+end
+
+# 集合
+def removeDup(xs)
+  foldr(fn(x, a) if member(x, a) then a else cons(x, a) end end, nil, xs)
+end
+
+def union(xs, ys)
+  foldr(fn(x, a) if member(x, ys) then a else cons(x, a) end end, ys, xs)
+end
+
+def intersection(xs, ys)
+  foldr(fn(x, a) if member(x, ys) then cons(x, a) else a end end, nil, xs)
+end
+
+def difference(xs, ys)
+  foldr(fn(x, a) if member(x, ys) then a else cons(x, a) end end, nil, xs)
+end
+
+# 直積集合
+def product(xs, ys)
+  foldr(fn(x, a) append(map(fn(y) cons(x, y) end, ys), a) end, nil, xs)
+end
+
+# べき集合
+def powerSet(xs)
+  if null(xs) then
+    list(nil)
+  else
+    append(powerSet(cdr(xs)),
+           map(fn(ys) cons(car(xs), ys) end, powerSet(cdr(xs))))
+  end
+end
+
+# ソート
+
+# 単純挿入ソート
+def insert_sort(pred, xs)
+  let rec
+    insert = fn(x, xs)
+      if null(xs) then
+        list(x)
+      else
+        if pred(x, car(xs)) then
+          cons(x, xs)
+        else
+          cons(car(xs), insert(x, cdr(xs)))
+        end
+      end
+    end
+  in
+    foldl(fn(x, a) insert(x, a) end, nil, xs)
+  end
+end
+
+# リストのマージ
+def merge(pred, xs, ys)
+  if null(xs) or null(ys) then
+    if null(xs) then ys else xs end
+  else
+    if pred(car(xs), car(ys)) then
+      cons(car(xs), merge(pred, cdr(xs), ys))
+    else
+      cons(car(ys), merge(pred, xs, cdr(ys)))
+    end
+  end
+end
+
+# マージソート
+def merge_sort(pred, n, xs)
+  if n &lt;= 2 then
+    if n == 1 then
+      list(car(xs))
+    else
+      if pred(car(xs), cadr(xs)) then
+        list(car(xs), cadr(xs))
+      else
+        list(cadr(xs), car(xs))
+      end
+    end
+  else
+    let
+      m = n / 2
+    in
+      merge(pred,
+            merge_sort(pred, m, xs),
+            merge_sort(pred, n - m, drop(xs, m)))
+    end
+  end
+end
+
+# クイックソート
+def quick_sort(pred, xs)
+  if null(xs) then
+    nil
+  else 
+    if null(cdr(xs)) then
+      xs
+    else
+      let
+        ys = partition(fn(y) pred(y, car(xs)) end, cdr(xs))
+      in
+        append(quick_sort(pred, car(ys)),
+               cons(car(xs), quick_sort(pred, cdr(ys))))
+      end
+    end
+  end
+end
+
+# 順列の生成
+def permutation(f, n, xs)
+  let rec
+    iter = fn(n, xs, a)
+      if n == 0 then
+        f(reverse(a))
+      else
+        foreach(fn(x) iter(n - 1, remove(fn(y) x == y end, xs), cons(x, a)) end, xs)
+      end
+    end
+  in
+    iter(n, xs, nil)
+  end
+end
+
+# 組み合わせの生成
+def combination(f, n, xs)
+  let rec
+    iter = fn(n, xs, a)
+      if n == 0 then
+        f(reverse(a))
+      else
+        if n == length(xs) then
+          f(append(reverse(a), xs))
+        else
+          iter(n - 1, cdr(xs), cons(car(xs), a)),
+          iter(n, cdr(xs), a)
+        end
+      end
+    end
+  in
+    if n &gt; length(xs) then nil else iter(n, xs, nil) end
+  end
+end
+
+# スタック
+def makeStack() list(nil) end
+
+def push(s, x) setCar(s, cons(x, car(s))) end
+
+def pop(s)
+  if null(car(s)) then
+    nil
+  else
+    let x = caar(s) in
+      setCar(s, cdar(s)),
+      x
+    end
+  end
+end
+
+def top(s)
+  if null(car(s)) then nil else caar(s) end
+end
+
+def isEmptyStack(s) null(car(s)) end
+
+# キュー
+def makeQueue() cons(nil, nil) end
+
+def enqueue(q, x)
+  let
+    newCell = list(x)
+  in
+    if null(car(q)) then
+      setCar(q, newCell),
+      setCdr(q, newCell)
+    else
+      setCdr(cdr(q), newCell),
+      setCdr(q, newCell)
+    end
+  end
+end
+
+def dequeue(q)
+  if null(car(q)) then
+    nil
+  else
+    let x = car(q) in
+      setCar(q, cdr(x)),
+      if null(cdr(x)) then setCdr(q, nil) end,
+      car(x)
+    end
+  end
+end
+
+def front(q)
+  if null(car(q)) then
+    nil
+  else
+    caar(q)
+  end
+end
+
+def isEmptyQueue(q) null(car(q)) end
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj35.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj37.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

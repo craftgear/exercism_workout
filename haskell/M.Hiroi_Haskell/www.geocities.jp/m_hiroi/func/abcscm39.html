@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881785</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm38.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm40.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>パズルの解法 [4]</h3>
+<p> <a href="abcscm38.html">パズルに挑戦 (3)</a> では、ビット単位で処理を行う高階関数 bit-for-each-with-index を作りました。この関数は下位ビットから順番にビットの値を取り出していきますが、オンビットを求めるだけでよれば、もっと簡単で高速な方法があります。今回はビット操作を使ってパズルの高速な解法に挑戦してみましょう。
+</p>
+
+<h4>●ちょっと便利なビット操作関数</h4>
+<p> 簡単な例として 4 ビットの整数値を考えてみましょう。負の整数を 2 の補数で表した場合、4 ビットで表される整数は -8 から 7 になります。次の図を見てください。
+</p>
+<pre class="fig">
+ 0 : 0000
+ 1 : 0001    -1 : 1111    (logand 1 -1) =&gt; 0001
+ 2 : 0010    -2 : 1110    (logand 2 -2) =&gt; 0010
+ 3 : 0011    -3 : 1101    (logand 3 -3) =&gt; 0001
+ 4 : 0100    -4 : 1100    (logand 4 -4) =&gt; 0100
+ 5 : 0101    -5 : 1011    (logand 5 -5) =&gt; 0001
+ 6 : 0110    -6 : 1010    (logand 6 -6) =&gt; 0010
+ 7 : 0111    -7 : 1001    (logand 7 -7) =&gt; 0001
+             -8 : 1000
+
+        図 : 下位のオンビットを取り出す方法
+</pre>
+
+<p> 2 の補数はビットを反転した値 (1 の補数) に 1 を加算することで求めることができます。したがって、x と -x の論理積は、最も下位にあるオンビットだけが残り、あとのビットはすべて 0 になります。このビットをオフにすれば、同じ方法で次のオンビットを求めることができます。
+</p>
+<p> それでは、この方法を使ってオンビットを順番に取り出す関数を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ビット用高階関数
+
+(define (bit-for-each func n)
+  (let loop ((n n))
+    (if (positive? n)
+        (let ((m (logand (- n) n)))
+          (func m)
+          (loop (logxor n m))))))
+</pre>
+<p> 関数 bit-for-each は高階関数で、オンビットを順番に取り出して引数の関数 func に渡します。整数値 n の最も下位にあるオンビットは (logand (- n) n) で求めることができます。この値を変数 m にセットして、関数 func を呼び出します。それから、(logxor n m) でビットを反転してオフにします。これでオンビットを順番に取り出すことができます。
+</p>
+<p> オンビットの位置が必要な場合は次のように求めることができます。
+</p>
+<pre class="item">
+(logcount (- m 1)) または (logcount (- m))
+</pre>
+<p> Gauche の logcount は、引数の整数値が正の場合はビット 1 の個数を返します。負の場合はビット 0 の個数を返します。m の値を -1 する場合、そのビットは 0 になり、それ以下のビットは 1 になります。あとは、1 になったビットの個数を求めればよいわけです。m を - m にする場合は、オンビットを含めて上位ビットは 1 になり、それより下位のビットは 0 になります。あとはビット 0 の個数を求めればよいわけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (bit-for-each (lambda (x) (format #t "~D, ~D~%" x (logcount (- x)))) 255)
+1, 0
+2, 1
+4, 2
+8, 3
+16, 4
+32, 5
+64, 6
+128, 7
+#&lt;undef&gt;
+</pre>
+<p> それでは実際にどのくらい速くなるのか、拙作のページ <a href="abcscm11.html">順列と組み合わせ</a> で作成した関数 permutations を使って試してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 順列の生成
+
+(use srfi-1)
+
+; リスト版
+(define (permutations func n)
+  (define (perm ls a)
+    (if (null? ls)
+        (func (reverse a))
+      (for-each
+        (lambda (n)
+          (perm (remove (lambda (x) (eqv? n x)) ls) (cons n a)))
+        ls)))
+  (perm (iota n) '()))
+
+; ビット版
+(define (permutations-fast func n)
+  (define (perm xs a)
+    (if (zero? xs)
+        (func (reverse a))
+      (bit-for-each
+        (lambda (x)
+          (perm (logxor x xs) (cons x a)))
+        xs)))
+  (perm (- (expt 2 n) 1) '()))
+</pre>
+<p> リスト版 (permutations) はリストから要素を選んで順列を生成します。ビット版は整数値からオンビットの値を選んで順列を生成します。どちらの関数も高階関数です。引数 func に (lambda (x) x) を指定して評価したところ、実行時間は次のようになりました。
+</p>
+<pre>
+  表 : 実行時間 (単位 : 秒)
+
+  個数   :   8  :   9  :  10
+---------+------+------+------
+リスト版 : 0.68 : 6.22 : 63.6
+ビット版 : 0.29 : 2.52 : 26.0
+
+実行環境 : Windows XP, celeron 1.40 GHz, Gauche 0.8.14
+</pre>
+<p> ビット版のほうが 2 倍以上高速になりました。
+</p>
+<h4>●N Queens Problem</h4>
+<p> 次は実際にパズルを解いてみましょう。N Queens Problem は「8 クイーン」の拡張バージョンで、N 行 N 列の盤面に N 個のクイーンを互いの利き筋が重ならないように配置する問題です。拙作のページ <a href="abcscm12.html">パズルの解法 [1]</a> で作成した「８クイーン」の解法プログラムは、盤面が大きくなると大変遅くなります。今回は <a href="abcscm39.html#cite_url">高橋謙一郎さん</a> の <CITE>『Ｎクイーン問題（解の個数を求める）』</CITE> を参考に、ビット演算を使ってどのくらい高速化するか Gauche で試してみましょう。
+</p>
+
+<p> プログラムのポイントは、斜めの利き筋のチェックをビット演算で行うことです。次の図を見てください。
+</p>
+<pre class="fig">
+    0 1 2 3 4
+  *-------------
+  | . . . . . .
+  | . . . -3. .  #x02
+  | . . -2. . .  #x04
+  | . -1. . . .  #x08 (1 bit 右シフト)
+  | Q . . . . .  #x10 (Q の位置は 4)
+  | . +1. . . .  #x20 (1 bit 左シフト)  
+  | . . +2. . .  #x40
+  | . . . +3. .  #x80
+  *-------------
+
+      図 : 斜めの利き筋のチェック
+</pre>
+<p> クイーンの位置をオンビットで表すことします。上図のように 0 列目の 4 番目にクイーンを置いた場合、クイーンの位置は第 4 ビットをオンにした値 #x10 となります。
+</p>
+<p> 次に、斜めの利き筋を考えます。上図の場合、1 列目の右斜め上の利き筋は 3 番目 (#x08)、2 列目の右斜め上の利き筋は 2 番目 (#x04) になります。この値は 0 列目のクイーンの位置 #x10 を 1 ビットずつ右シフトすれば求めることができます。また、左斜め上の利き筋の場合、1 列目では 5 番目 (#x20) で 2 列目では 6 番目 (#x40) になるので、今度は 1 ビットずつ左シフトすれば求めることができます。
+</p>
+<p> つまり、右斜め上の利き筋を right、左斜め上の利き筋を left で表すことにすると、right と left にクイーンの位置をセットしたら、隣の列を調べるときに right と left を 1 ビットシフトするだけで、斜めの利き筋を求めることができるわけです。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : N Queens Problem の解法
+
+(use srfi-1)
+
+; 衝突しているか
+(define (conflict? column line board)
+  (let loop ((x (- column 1)) (ls board))
+    (cond ((null? ls) #f)
+          ((or (= (- column line) (- x (car ls)))
+               (= (+ column line) (+ x (car ls))))
+           #t)
+          (else
+           (loop (- x 1) (cdr ls))))))
+
+; N Queens の解法 (リスト版)
+(define (nqueens n)
+  (define count 0)
+  (define (queen ls board)
+    (if (null? ls)
+        (inc! count)
+      (for-each
+        (lambda (n)
+          (if (not (conflict? (length board) n board))
+              (queen
+                (remove (lambda (x) (= x n)) ls)
+                (cons n board))))
+        ls)))
+  (queen (iota n) '())
+  count)
+
+; ビット用高階関数
+(define (bit-for-each func n)
+  (let loop ((n n))
+    (if (positive? n)
+        (let ((m (logand (- n) n)))
+          (func m)
+          (loop (logxor n m))))))
+
+; ビット版
+(define (nqueens-fast n)
+  (define count 0)
+  (define (queen qs left right)
+    (if (zero? qs)
+        (inc! count)
+      (bit-for-each
+        (lambda (q)
+          (if (zero? (logand (logior left right) q))
+              (queen (logxor qs q)
+                     (ash (logior left q) 1)
+                     (ash (logior right q) -1))))
+        qs)))
+  ;
+  (queen (- (expt 2 n) 1) 0 0)
+  count)
+</pre>
+<p> 関数 nqueens は <a href="abcscm12.html">パズルの解法 [1]</a> と同じで、リストを使ったプログラムです。関数 nqueens-fast はビット版のプログラムです。どちらも解の個数を数えるだけで盤面は出力しません。
+</p>
+
+<p> ビット版の場合、実際の処理は局所関数 queen で行います。引数 qs はクイーンの位置をビットで表した整数値、right が右斜め上の利き筋、left が左斜め上の利き筋を表します。qs が 0 の場合、全てのクイーンを配置できたので count を +1 します。
+</p>
+
+<p> そうでなければ、bit-for-each で qs のオンビットを順番に取り出します。ラムダ式の引数 q がクイーンを表します。rigth と left の論理和を計算し、q との論理積が 0 ならば、q を盤面に配置することができます。qs から q を削除して、斜めの利き筋 left と right に q をセットします。このとき、左右に 1 ビットシフトすることをお忘れなく。
+</p>
+<p> 実行結果は次のようになりました。
+</p>
+<pre>
+        表 : 実行結果 (単位 : 秒)
+
+   サイズ  :  10  :  11  :  12   :  13
+  ---------+------+------+-------+-------
+  解の個数 :  724 : 2680 : 14200 : 73712
+  リスト版 : 0.47 : 2.38 :  13.0 :  75.6
+  ビット版 : 0.18 : 0.85 :   4.5 :  25.0
+
+  実行環境 : Windows XP, celeron 1.40 GHz, Gauche 0.8.14
+</pre>
+<p> ビット演算を使うことで、約 3 倍の高速化に成功しました。ネイティブコードにコンパイルする言語、たとえば、OCaml や Common Lisp の SBCL などを使うと、ビット演算の効果はもっと高くなるかもしれません。興味のある方は試してみてください。
+</p>
+
+<h4 id="cite_url">●参考文献, URL</h4>
+<p> <a href="http://www.ic-net.or.jp/home/takaken/">高橋謙一郎さん</a> が公開された <a href="http://www.ic-net.or.jp/home/takaken/nt/queen/index.html">Ｎクイーン問題（解の個数を求める）</a> では、ビット演算による高速化やユニーク解の判定方法が詳しく解説されていて、とても勉強になります。興味のある方は、高橋さんのドキュメントをお読みくださいませ。
+</p>
+<hr>
+<h4>●数独 (改訂 2013/11/23)</h4>
+<p> 次は皆さんお馴染みのパズル「数独 (ナンバープレース) 」の解法プログラムを作りましょう。数独は 9×9 の盤を用いて、縦 9 列、横 9 列のそれぞれに 1 から 9 までの数字をひとつずつ入れます。また、太線で囲まれた 3×3 の枠内にも 1 から 9 までの数字をひとつずつ入れます。ただし、縦、横、枠の中で、同じ数字が重複して入ることはありません。
+</p>
+
+<p> パズルの解き方 <sup><a href="abcscm39.html#note1">[*1]</a></sup> ですが、基本的には次の条件を満たすマスを探して数字を確定していきます。
+</p>
+<ol>
+ <li>置くことができる数字がただひとつしかない場合
+ <li> 縦、横、枠の中で、数字を置くことができるマスがひとつしかない場合
+</ol>
+<p> (1) は簡単ですね。(2) は次の例をみてください。
+</p>
+<pre class="fig">
+      置くことができる数字
+--------------------------
+  ８
+  Ａ  [4,5,7,9]
+  Ｂ  [4,5,7]
+  ６
+  ２
+  Ｃ  [3,5,7]
+  １
+  Ｄ  [4,5,9]
+  Ｅ  [4,9]
+</pre>
+<p> これは縦 1 列を抜き出したものです。マス C に注目してください。C には 3, 5, 7 を置くことができるので、条件 (1) で確定することはできません。ここで縦全体を見てください。この中で、数字 3 を置くことができるのは、このマスしかありませんね。したがって、C は 3 に確定することができるのです。同じように、横の関係、枠の関係で数字を確定することができます。
+</p>
+
+<p> 条件を満たすマスを探して数字を確定していくと、そのことで新たに (1) か (2) を満たすマスが出てくるので、それを探して数字を確定します。これを繰り返すことで、ナンバープレースを解くことができます。本稿ではこれを「確定サーチ」と呼ぶことにします。ナンバープレースの多くは、この確定サーチで解くことができるのですが、実はこれでは解けない難しい問題があるのです。
+</p>
+
+<p> このような難しい問題をどうやって解くのか M.Hiroi には見当もつきませんが、コンピュータを使えば「試行錯誤」という力技で解を見つけることができます。つまり、適当な数字を選んでマスを埋めていき、矛盾するようであれば元に戻って違う数字を選び直せばいいわけです。今回は確定サーチを使わずに「バックトラック」だけでプログラムを作ることにします。
+</p>
+<div class="note">
+-- Note --------<br>
+<a name="note1">[*1]</a> 今回説明した数独の解き方は基本的なもので、<a href="http://puzzle.gr.jp/show/Japanese">Puzzle Generater Japan</a> の <a href="http://puzzle.gr.jp/show/Japanese/NPStrategies">ナンプレ手筋集</a> には基本的なものから上級者向けのものまで、数独を解くためのいろいろなテクニックが紹介されています。
+</div>
+<h4>●単純なバックトラックによる解法</h4>
+<p> 最近のパソコンはハイスペックなので、9 行 9 列盤の数独であれば単純なバックトラックで簡単に解くことができます。空き場所の数字を決めるとき、縦、横、枠にない数字を選択して、解けない場合はバックトラックして異なる数字を選び直せばいいわけです。
+</p>
+
+<p> それでは、プログラムを作りましょう。最初にグローバル変数を定義します。
+</p>
+
+<pre class="list">
+リスト : グローバル変数の定義
+
+; 定数
+(define SIZE 9)
+(define SIZE2 (* SIZE SIZE))
+
+; 盤面
+(define *board* #f)
+
+; 縦、横、枠の位置を格納する
+(define *x-tbl*   #f)
+(define *y-tbl*   #f)
+(define *g-tbl*   #f)
+(define *xyg-tbl* #f)
+</pre>
+<pre class="fig">
+            列 (縦)
+            ↓
+           +--+-----+-----------------+
+行 (横) → |０|１ ２|３ ４ ５ ６ ７ ８|
+           +--+-----+-----------------+
+           |９|10 11|12 13 14 15 16 17|
+           |18|19 20|
+           +--+-----+
+           |27|28 29|
+           |36|37 38|← 枠 (3行3列)
+           |45|46 47|
+           +--+-----+
+           |54|55 56|
+           |63|64 65|66 67 68 69 70 71|
+           |72|73 74|75 76 77 78 79 80|
+           +--+-----+-----------------+
+
+    図 : *board* の添字と盤面の対応
+</pre>
+
+<p> 盤面はベクタで表します。大きさは SIZE2 (9 * 9 = 81) で、変数 *board* にセットします。値は 0 から 9 までの整数で、0 が空き場所を表します。*x-tbl*, *y-tbl*, *g-tbl* は大きさ SIZE のベクタです。*x-tbl* が列 (縦)、*y-tbl* が行 (横)、*g-tbl* が枠を表していて、それぞれ n 番目に位置するマスの番号を格納したリストをセットします。たとえば、*y-tbl* の 0 番目は 0 行目にあるマスを格納したリスト (0 1 2 3 4 5 6 7 8) で、*x-tbl* の 0 番目には 0 列目にある (0 9 18 27 36 45 54 63 72) で、*g-tbl* の 0 番目は (0 1 2 9 10 11 18 19 20) となります。
+</p>
+<p> *xyg-tbl* は大きさが SIZE2 のベクタで、マス n が属する縦横枠のマスを格納したリストをセットします。たとえば、*xyg-tbl* の 0 番目の要素は次のようになります。
+</p>
+<pre class="item">
+(0 1 2 3 4 5 6 7 8 9 10 11 18 19 20 27 36 45 54 63 72)
+</pre>
+
+<p> 次はグローバル変数にアクセスする関数を定義します。
+</p>
+<pre class="list">
+リスト : アクセス関数の定義
+
+; 盤面のアクセス関数
+(define (get-number k)    (vector-ref *board* k))
+(define (put-number! n k) (vector-set! *board* k n))
+
+; 縦横枠のマスを求める
+(define (get-cell k) (vector-ref *xyg-tbl* k))
+
+; 縦方向のマスを求める
+(define (get-x-cell k) (vector-ref *x-tbl* k))
+
+; 横方向のマスを求める
+(define (get-y-cell k) (vector-ref *y-tbl* k))
+
+; 枠内のマスを求める
+(define (get-g-cell k) (vector-ref *g-tbl* k))
+
+; 添字 -&gt; 座標
+(define (get-x k) (modulo k SIZE))
+(define (get-y k) (quotient k SIZE))
+(define (get-g k)
+    (+ (quotient (get-x k) 3) (* (quotient (get-y k) 3) 3)))
+</pre>
+<p> 関数 get-number は *board* から k 番目の数字を取り出し、関数 put-number! は *board* の k 番目に数字 n を書き込みます。関数 get-cell は k 番目のマスが属する縦横枠のマスを *xyg-tbl* から求めます。関数 get-x-cell は縦方向のマスを、関数 get-y-cell は横方向のマスを、関数 get-g-cell は枠内のマスを *x-tbl*, *y-tbl*, *g-tbl* から求めます。関数 get-x は k 番目のマスが属する縦の位置を、関数 get-y は横の位置を、関数 get-g は枠の位置を求めます。
+</p>
+<p> 次は表 *xyg-tbl*, *x-tbl*, *y-tbl*, *g-tbl* を初期化する関数 init-tbl を作ります。
+</p>
+<pre class="list">
+リスト : 表の初期化
+
+(define (init-tbl)
+  (set! *x-tbl*
+        (list-&gt;vector (map (lambda (k) (iota SIZE k SIZE))
+                           (iota SIZE 0))))
+  (set! *y-tbl*
+        (list-&gt;vector (map (lambda (k) (iota SIZE (* k SIZE)))
+                           (iota SIZE 0))))
+  (set! *g-tbl*
+        (list-&gt;vector
+         (map (lambda (k)
+                (let ((start (vector-ref #(0 3 6 27 30 33 54 57 60) k)))
+                  (map (lambda (x) (+ start x))
+                       '(0 1 2 9 10 11 18 19 20))))
+              (iota SIZE 0))))
+  (set! *xyg-tbl*
+        (list-&gt;vector (map (lambda (p)
+                             (sort (lset-union eqv?
+                                               (get-x-cell (get-x p))
+                                               (get-y-cell (get-y p))
+                                               (get-g-cell (get-g p)))))
+                           (iota SIZE2 0)))))
+</pre>
+<p> *x-tbl* は SRFI-1 の関数 iota で増分 SIZE (9) の数列を作ってセットします。*y-tbl* は増分 1 の数列を作りますが、初期値は 0, 9, 18, ... 72 となります。*g-tbl* はちょっと複雑になります。初期値 start は枠の左上の位置を表します。あとは、start に増分値 (0 1 2 9 10 11 18 19 20) を足し算するだけです。*xyg-tbl* は get-x-cell, get-y-cell, get-g-cell で縦横枠のセルを求め、lset-union で集合の和を求めるだけです。
+</p>
+<p> バックトラックによる数独の解法プログラムは簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 数独の解法 (単純なバックトラック)
+
+; 空き場所か？
+(define (space? k) (zero? (get-number k)))
+
+; 安全確認
+(define (safe? n k)
+  (every (lambda (x) (not (= (get-number x) n))) (get-cell k)))
+
+; 盤面の表示
+(define (print-board)
+  (dotimes (k SIZE2)
+    (display (get-number k))
+    (display " ")
+    (if (= (modulo k SIZE) (- SIZE 1)) (newline))))
+
+; 解法
+(define (solver qs)
+  (define (iter k)
+    (cond ((&gt;= k SIZE2)
+           (print-board))
+          ((space? k)
+           (do ((n 1 (+ n 1)))
+               ((&gt; n SIZE))
+             (when (safe? n k)
+               (put-number! n k)
+               (iter (+ k 1))
+               (put-number! 0 k))))
+          (else (iter (+ k 1)))))
+  ;
+  (set! *board* (list-&gt;vector qs))
+  (iter 0))
+</pre>
+<p> 関数 space? は k 番目のマスが空き場所ならば真を返す述語です。関数 safe? は k 番目のマスに数字 n を書き込むとき、縦横枠で同じ数字がなければ真を返す述語です。これは SRFI-1 の関数 every を使うと簡単です。get-cell でマス k が属する縦横枠のマスを求め、n と同じ数字がないことを確認します。関数 print-board は盤面を表示する関数です。
+</p>
+<p> 関数 solver はバックトラックで解を求めます。引数 qs が問題を表すリストです。最初に、list-&gt;vector で qs をベクタに変換して *board* にセットします。それから局所関数 iter を呼び出して解を求めます。iter は *board* を書き換えているので、再帰呼び出しから戻ってきたら、空き場所 (0) に戻すことを忘れないでください。あとは単純な深さ優先探索なので、難しいところはないと思います。
+</p>
+
+<h4>●実行例 (1)</h4>
+<p> それでは、実際に数独を解いてみましょう。<a href="http://puzzle.gr.jp/show/Japanese">Puzzle Generater Japan</a> にある <a href="http://puzzle.gr.jp/show/Japanese/NPProblems/Java">Java版標準問題集</a> より問題 8-a, 8-b, 9-a, 9-b, 10-a, 10-b を試してみたところ、実行時間は次のようになりました。
+</p>
+<pre>
+  表 : 実行結果
+
+  問題 : Hint :  秒
+ ------+------+------
+   8-a :  20  : 1.04
+   8-b :  20  : 2.78
+   9-a :  20  : 3.44
+   9-b :  21  : 1.31
+  10-a :  22  : 0.29
+  10-b :  22  : 0.61
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, Gauche ver 0.9.2
+</pre>
+<p> このように、9 行 9 列盤の数独は単純なバックトラックで簡単に解くことができますが、問題によっては時間がかかります。今回の処理で時間がかかっているのは、数字を選択する処理です。空き場所に置くことができる数字を簡単に求めることができれば、もっと速くなるかもしれません。
+</p>
+
+<h4>●データ構造を工夫する</h4>
+<p> そこで、空き場所に置くことができる数字をデータとして持たせることにします。置くことができる数字は、各マスごとに持たせるのが自然な考え方です。必要なときに数字を直に求めることができますし、マスに数字を置いたならば、そのマスが属している縦、横、枠のマスに対して数字を削除すればいいわけです。ところが、バックトラックするとなると、これでは問題があるのです。
+</p>
+
+<p> バックトラックする場合、マスに埋めた数字を空白に戻す処理が必要になります。当然ですが、置くことができる数字も元の状態に戻さなくてはいけません。このとき、各マスごとに数字を持たせていると、数字を空白に戻すときに、縦、横、枠に対して単純に数字を追加するだけでは、元の状態に戻すことができません。次の例を見てください。
+</p>
+<pre class="fig">
+      数字リスト            数字リスト            数字リスト
+------------------    ------------------    ------------------
+  ８                    ８                    ８
+  Ａ  [4,5,7,9]         ７                    Ａ  [4,5,7,9]
+  Ｂ  [4,5,7]           Ｂ  [4,5]             Ｂ  [4,5,7]
+  ６                    ６                    ６
+  ２                    ２                    ２
+  ３                    ３                    ３
+  １                    １                    １
+  Ｃ  [4,5,9]           Ｃ  [4,5,9]           Ｃ  [4,5,7,9]
+  Ｄ  [4,9]             Ｄ  [4,9]             Ｄ  [4,7,9]
+
+(1)最初の状態         (2)Ａに 7 を置く      (3)Ａを元に戻す
+</pre>
+<p> A から D の 4 箇所のマスが空いています。ここで、A を 7 としてみましょう。B, C, D から 7 を削除すると (2) の状態になります。次に、A を元に戻してみましょう。ここで、単純に数字 7 を追加すると (3) の状態になります。C と D は元の状態には戻っていませんね。 縦、横、枠の関係から、C と D には 7 を置くことができない状態だったので、無条件に 7 を追加することはできないのです。
+</p>
+
+<p> 結局、置くことができる数字を元の状態に戻すには、値を書き換えるときに元の値を保存しておいて、後戻りするときに値を元に戻す処理が必要になります。バックトラックでは、後戻りする処理が頻繁に発生するので、これでは時間がかかってしまいます。そこで、<a href="abcscm39.html#cite">参考文献 [1]</a> に書かれていた方法を採用します。それは、「縦、横、枠のそれぞれについて、置くことができる数字をビットで管理する」という方法です。
+</p>
+
+<p> ビットと数字の関係は次のように定義しましょう。
+</p>
+<pre class="fig">
+bit 9 8 7 6 5 4 3 2 1 0  =&gt; 数字に対応させる
+   ---------------------
+    1 1 1 1 1 1 1 1 1 0  =&gt; #x3fe : すべての数字を置くことができる
+</pre>
+<p> 第 0 ビットはダミーとします。置くことができる数字は対応するビットをセットし、そうでなければビットをクリアします。
+</p>
+
+<p> 縦、横、枠の状態は、ベクタ *xflag*, *yflag*, *gflag* で管理します。次の図を見てください。
+</p>
+<pre class="fig">
+                                      9876543210
+                                      ----------
+            (vector-ref *xflag* 0) =&gt; 0110111010
+                          ↓
+                        ┏━┯━┯━┳━┯━┯━┳━┯━┯━┓
+(vector-ref *yflag* 0)→┃◎│３│  ┃９│１│７┃  │  │８┃
+                        ┠─┼─┼─╂─┼─┼─╂─┼─┼─┨
+              9876543210┃  │８│２┃  │  │６┃  │３│  ┃
+              ----------┠─┼─┼─╂─┼─┼─╂─┼─┼─┨
+              0001110100┃９│  │  ┃  │２│  ┃  │  │  ┃
+                        ┣━┿━┿━╋━┿━┿━╋━┿━┿━┫
+                        ┃  │  │７┃
+                        ┠─┼─┼─╂                            9876543210
+                        ┃  │  │９┃                            ----------
+                        ┠─┼─┼─╂  (vector-ref *gflag* 0) =&gt; 0011110010
+                        ┃  │２│  ┃
+                        ┣━┿━┿━╋
+                        ┃６│９│  ┃
+                        ┠─┼─┼─╂
+                        ┃２│  │８┃
+                        ┠─┼─┼─╂
+                        ┃  │  │５┃
+                        ┗━┷━┷━┻
+</pre>
+<p> 左上隅のマス◎に注目してください。縦で使われている数字は 2, 6, 9 なので、*xflag* の 0 番目の要素は 2 進数で表すと 0110111010 になります。横は 1, 3, 7, 8, 9 が使われているので、*yflag* の 0 番目の要素は 0001110100 となります。枠 *gflag* の 0 番目の要素は、2, 3, 8, 9 が使われているので 0011110010 となります。
+</p>
+
+<p> マス◎に置くことができる数字は、この 3 つの状態でビットが立っている数字、つまり、ビットの論理積で求めることができます。
+</p>
+<pre class="fig">
+                          9876543210
+                          ----------
+(vector-ref *xflag* 0) =&gt; 0110111010
+(vector-ref *yflag* 0) =&gt; 0001110100
+(vector-ref *gflag* 0) =&gt; 0011110010
+                      AND ----------
+                          0000110000
+</pre>
+<p> マス◎に置くことができる数字は 4, 5 であることがわかります。
+</p>
+
+<p> このように、縦、横、枠に分けて数字を管理するため、マスに置くことができる数字は、いちいち AND 演算しなければ求めることができません。ところが、マスに数字を置くときは縦、横、枠の該当するビットをクリアするだけでいいのです。また、元に戻すときも、縦、横、枠の該当するビットをセットするだけで済むので、簡単にバックトラックすることができます。
+</p>
+
+<h4>●フラグの操作関数</h4>
+<p> それではプログラムを作りましょう。今回は盤面の数字もビットの位置で表すことにします。空き場所は今までと同じく 0 で表します。*xlag*, *yflag*, *gflag* の初期化は関数 init-flag で行います。
+</p>
+
+<p> フラグの操作関数は次のようになります。
+</p>
+
+<pre class="list">
+リスト : フラグのアクセス関数
+
+; フラグの反転
+(define (inv-flag! n k)
+  (define (inv-flag-sub vec m)
+    (vector-set! vec m (logxor (vector-ref vec m) n)))
+  (inv-flag-sub *xflag* (get-x k))
+  (inv-flag-sub *yflag* (get-y k))
+  (inv-flag-sub *gflag* (get-g k)))
+
+; 置くことができる数字を求める
+(define (get-number-bit k)
+  (logand (vector-ref *xflag* (get-x k))
+          (vector-ref *yflag* (get-y k))
+          (vector-ref *gflag* (get-g k))))
+</pre>
+<p> 関数 inv-flag! は k 番目のセルに数字 n を書き込んだとき、該当するフラグをクリアします。局所関数 inv-flag-sub はベクタ vec の m 番目にあるフラグのビット n を logxor で反転します。n は数字を表すビットです。あとは、get-k, get-y, get-g で縦横枠の番号を求め、inv-flag-sub でビットを反転するだけです。
+</p>
+
+<p> 関数 get-number-bit は k 番目のセルに置くことができる数字を求めます。 get-k, get-y, get-g で縦横枠の番号を求め、各々の要素の論理積を logand で求めるだけです。
+</p>
+
+<p> 次はフラグを初期化する関数 init-flag を作ります。
+</p>
+<pre class="list">
+リスト : フラグの初期化
+
+(define (init-flag)
+  (set! *xflag* (make-vector SIZE #x3fe))
+  (set! *yflag* (make-vector SIZE #x3fe))
+  (set! *gflag* (make-vector SIZE #x3fe))
+  (dotimes (k SIZE2)
+    (let ((n (get-number k)))
+      (if (positive? n) (inv-flag! n k)))))
+</pre>
+
+<p> init-flag は問題を *board* にセットしてから呼び出します。最初に make-vector で要素が #x3fe のベクタを生成して *xflag*, *yflag*, *gflag* にセットします。次に、get-number で *board* から数字を取り出して変数 n にセットします。n が正の値であれば、対応するフラグを inv-flag! でクリアします。
+</p>
+
+<h4>●バックトラックによる解法</h4>
+<p> 最後にバックトラックで解を求める関数 solver1 を作ります。
+</p>
+
+<pre class="list">
+リスト : 数独の解法
+
+; 数字をビットに変換する
+(define (make-bit-board qs)
+  (list-&gt;vector (map (lambda (n) (if (zero? n) n (ash 1 n))) qs)))
+
+; 盤面の表示
+(define (print-bit-board)
+  (dotimes (k SIZE2)
+    (display (logcount (- (get-number k) 1)))
+    (display " ")
+    (if (= (modulo k SIZE) (- SIZE 1)) (newline))))
+
+; 深さ優先探索
+(define (dfs k)
+  (cond ((>= k 81)
+         (print-bit-board))
+        ((space? k)
+         (bit-for-each
+          (lambda (n)
+            (put-number! n k)
+            (inv-flag! n k)
+            (dfs (+ k 1))
+            (put-number! 0 k)
+            (inv-flag! n k))
+          (get-number-bit k)))
+        (else (dfs (+ k 1)))))
+
+; 数独の解法
+(define (solver1 qs)
+  (set! *board* (make-bit-board qs))
+  (init-flag)
+  (dfs 0))
+</pre>
+<p> 関数 make-bit-board は問題 qs の数字をビットに変換して盤面 *board* にセットします。関数 print-bit-board はビットを数字に戻して表示します。
+</p>
+<p> 関数 dfs は深さ優先探索で解を求めます。get-number-bit でマス k に置くことができる数字を求め、それを高階関数 bit-for-each に渡します。bit-for-each は、ビットを順番に取り出してラムダ式を呼び出します。ラムダ式の引数 n が数字を表すビットです。put-number! で n を *board* に書き込み、inv-flag! でフラグを反転します。再帰呼び出しから戻ってきたら、put-number! で書き込んだ数字を 0 に戻し、inv-flag! でフラグを反転して元に戻します。
+</p>
+<p> 関数 solver1 は make-bit-board で問題 qs を盤面 *board* にセットし、init-flag でフラグを初期化してから dfs を呼び出します。
+</p>
+
+
+<h4>●実行例 (2)</h4>
+<p> それでは、実行してみましょう。<a href="http://puzzle.gr.jp/show/Japanese">Puzzle Generater Japan</a> にある <a href="http://puzzle.gr.jp/show/Japanese/NPProblems/Java">Java版標準問題集</a> より問題 8-a, 8-b, 9-a, 9-b, 10-a, 10-b を試してみたところ、実行時間は次のようになりました。
+</p>
+<pre>
+  表 : 実行結果 (単位 : 秒)
+
+  問題 : Hint : (1)  : (2)
+ ------+------+------+------
+   8-a :  20  : 1.04 : 0.34
+   8-b :  20  : 2.78 : 0.85
+   9-a :  20  : 3.44 : 1.04
+   9-b :  21  : 1.31 : 0.41
+  10-a :  22  : 0.29 : 0.12
+  10-b :  22  : 0.61 : 0.20
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz, Gauche ver 0.9.2
+</pre>
+
+<p> どの問題でも実行時間は (1) よりも 2, 3 倍速くなりました。ビット操作による高速化の効果は十分に出ていると思います。ここで、バックトラックする前に「確定サーチ」を行うと、実行時間はもっと速くなります。次回は確定サーチを実装して、更なる高速化に挑戦してみましょう。
+</p>
+
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>松田晋, 『実践アルゴリズム戦略 解法のテクニック &lt;第11回&gt; バックトラックによる｢数独｣の解法』, C MAGAZINE 1993 年 3 月号, ソフトバンク
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; nplace.scm : 数独の解法
+;
+;              Copyright (C) 2013 Makoto Hiroi
+;
+(use srfi-1)
+
+; 定数
+(define SIZE 9)
+(define SIZE2 (* SIZE SIZE))
+
+; 盤面
+(define *board* #f)
+
+; 縦、横、枠の位置を格納する
+(define *xyg-tbl* #f)
+(define *x-tbl* #f)
+(define *y-tbl* #f)
+(define *g-tbl* #f)
+
+; 盤面のアクセス関数
+(define (get-number k)    (vector-ref *board* k))
+(define (put-number! n k) (vector-set! *board* k n))
+
+; 縦横枠のマスを求める
+(define (get-cell k) (vector-ref *xyg-tbl* k))
+
+; 縦方向のマスを求める
+(define (get-x-cell k) (vector-ref *x-tbl* k))
+
+; 横方向のマスを求める
+(define (get-y-cell k) (vector-ref *y-tbl* k))
+
+; 枠内のマスを求める
+(define (get-g-cell k) (vector-ref *g-tbl* k))
+
+; 添字 -&gt; 座標
+(define (get-x k) (modulo k SIZE))
+(define (get-y k) (quotient k SIZE))
+(define (get-g k)
+    (+ (quotient (get-x k) 3) (* (quotient (get-y k) 3) 3)))
+
+; 空き場所か？
+(define (space? k) (zero? (get-number k)))
+
+; 表の初期化
+(define (init-tbl)
+  (set! *x-tbl*
+        (list-&gt;vector (map (lambda (k) (iota SIZE k SIZE))
+                           (iota SIZE 0))))
+  (set! *y-tbl*
+        (list-&gt;vector (map (lambda (k) (iota SIZE (* k SIZE)))
+                           (iota SIZE 0))))
+  (set! *g-tbl*
+        (list-&gt;vector
+         (map (lambda (k)
+                (let ((start (vector-ref #(0 3 6 27 30 33 54 57 60) k)))
+                  (map (lambda (x) (+ start x))
+                       '(0 1 2 9 10 11 18 19 20))))
+              (iota SIZE 0))))
+  (set! *xyg-tbl*
+        (list-&gt;vector (map (lambda (p)
+                             (sort (lset-union eqv?
+                                               (get-x-cell (get-x p))
+                                               (get-y-cell (get-y p))
+                                               (get-g-cell (get-g p)))))
+                           (iota SIZE2 0)))))
+
+; 安全確認
+(define (safe? n k)
+  (every (lambda (x) (not (= (get-number x) n))) (get-cell k)))
+
+; 盤面の表示
+(define (print-board)
+  (dotimes (k SIZE2)
+    (display (get-number k))
+    (display " ")
+    (if (= (modulo k SIZE) (- SIZE 1)) (newline))))
+
+; 解法
+(define (solver qs)
+  (define (iter k)
+    (cond ((&gt;= k SIZE2)
+           (print-board))
+          ((space? k)
+           (do ((n 1 (+ n 1)))
+               ((&gt; n SIZE))
+             (when (safe? n k)
+               (put-number! n k)
+               (iter (+ k 1))
+               (put-number! 0 k))))
+          (else (iter (+ k 1)))))
+  ;
+  (set! *board* (list-&gt;vector qs))
+  (iter 0))
+
+;;
+;; フラグ
+;;
+(define *xflag* #f)
+(define *yflag* #f)
+(define *gflag* #f)
+
+; ビット用高階関数
+(define (bit-for-each func n)
+  (let loop ((n n))
+    (if (positive? n)
+        (let ((m (logand (- n) n)))
+          (func m)
+          (loop (logxor n m))))))
+
+; フラグの反転
+(define (inv-flag! n k)
+  (define (inv-flag-sub vec m)
+    (vector-set! vec m (logxor (vector-ref vec m) n)))
+  (inv-flag-sub *xflag* (get-x k))
+  (inv-flag-sub *yflag* (get-y k))
+  (inv-flag-sub *gflag* (get-g k)))
+
+; フラグの初期化
+(define (init-flag)
+  (set! *xflag* (make-vector SIZE #x3fe))
+  (set! *yflag* (make-vector SIZE #x3fe))
+  (set! *gflag* (make-vector SIZE #x3fe))
+  (dotimes (k SIZE2)
+    (let ((n (get-number k)))
+      (if (positive? n)        (inv-flag! n k)))))
+
+; 置くことができる数字を求める
+(define (get-number-bit k)
+  (logand (vector-ref *xflag* (get-x k))
+          (vector-ref *yflag* (get-y k))
+          (vector-ref *gflag* (get-g k))))
+
+; 数字をビットに変換
+(define (make-bit-board qs)
+  (list-&gt;vector (map (lambda (n) (if (zero? n) n (ash 1 n))) qs)))
+
+; 盤面の表示
+(define (print-bit-board)
+  (dotimes (k SIZE2)
+    (display (logcount (- (get-number k) 1)))
+    (display " ")
+    (if (= (modulo k SIZE) (- SIZE 1)) (newline))))
+
+; 深さ優先探索
+(define (dfs k)
+  (cond ((&gt;= k SIZE2)
+         (print-bit-board))
+        ((space? k)
+         (bit-for-each
+          (lambda (n)
+            (put-number! n k)
+            (inv-flag! n k)
+            (dfs (+ k 1))
+            (put-number! 0 k)
+            (inv-flag! n k))
+          (get-number-bit k)))
+        (else (dfs (+ k 1)))))
+
+; 解法
+(define (solver1 qs)
+  (set! *board* (make-bit-board qs))
+  (init-flag)
+  (dfs 0))
+
+; 表の初期化
+; 最初に１回だけ実行する
+(init-tbl)
+</pre>
+<hr>
+<div align="right">
+初出 2010/06/05<br>
+改訂 2013/11/23
+</div>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2010-2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm38.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm40.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

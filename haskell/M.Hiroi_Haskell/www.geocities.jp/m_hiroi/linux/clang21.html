@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ言語プログラミング超入門</title>
+  <meta name="description" content="Ｃ言語,Ｃ言語入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881809</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ言語プログラミング超入門</h2>
+<div class="small">
+[ <a href="clang20.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang22.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>ハッシュ法 (2)</h3>
+<p> <a href="clang20.html">ハッシュ法</a> の続きです。今回はオープンアドレス法について説明します。
+</p>
+<h4>●オープンアドレス法</h4>
+<p> オープンアドレス法の場合、チェイン法とは違ってハッシュ表に直接データをセットするので、衝突が発生したとき別の空き場所を探す手順が必要になります。この手順のことを｢再ハッシュ (rehashing) 」といいます。
+</p>
+<p> 再ハッシュの手順はいくつかの方法がありますが、その中で最も簡単な方法が「線形走査法 (linear probing) 」です。ハッシュ関数を h(x)、ハッシュ表の大きさを M とすると、k 回目の再ハッシュ関数 h<SUB>k</SUB>(x) は次の式で表すことができます。
+</p>
+<pre class="fig">
+h<SUB>k</SUB>(x) = (h(x) + k) mod M
+</pre>
+<p> 最初の再ハッシュ関数 h<SUB>1</SUB>(x) は (h(x) + 1) mod M で、2 回目の再ハッシュ関数 h<SUB>2</SUB>(x) は (h(x) + 2) mod M になります。つまり、線形走査法はハッシュ表の空き場所を順番に調べていく「線形探索」と同じです。本ページでは線形走査法でオープンアドレス法の仕組みを説明することにします。このほかに「二重ハッシュ法 (double hashing) 」という方法がありますが、これはあとで取り上げることにします。
+</p>
+<h4>●データの挿入と探索</h4>
+<p> 最初にデータの挿入から説明します。下図を見てください。
+<pre class="fig">
+   ハッシュ表                    ハッシュ表
+   ┌───┐                    ┌───┐
+   │  ／  │                    │  ／  │
+   ├───┤                    ├───┤
+   │  Ａ  │                    │  Ａ  ┼─┐ 衝突 (E)
+   ├───┤                    ├───┤  │
+   │  ／  │                    │  Ｅ  │←┘
+   ├───┤                    ├───┤
+   │  ／  │                    │  ／  │
+   ├───┤                    ├───┤
+   │  Ｂ  │                    │  Ｂ  ┼─┐ 衝突 (D, F)
+   ├───┤                    ├───┤  │
+   │  ／  │                    │  Ｄ  ┼←┤ 衝突 (F)
+   ├───┤                    ├───┤  │
+   │  Ｃ  │                    │  Ｃ  ┼←┤ 衝突 (F)
+   ├───┤                    ├───┤  │
+   │  ／  │                    │  Ｆ  │←┘
+   └───┘                    └───┘
+
+  A (1), B (4), C (6) を挿入    D (4), E (1), F (4) を挿入
+
+    図 : オープンアドレス法（線形走査法）
+</pre>
+<p> 最初にデータ A, B, C を挿入します。ハッシュ値の場所 (1, 4, 6 番目) にデータをセットします。次に、データ D を挿入します。ハッシュ値は 4 ですが、B と衝突しています。線形走査法の場合、次の場所は (4 + 1) mod 8 で 5 になります。そこで、D を 5 番目にセットします。同様に E を挿入しますが A と衝突しているので、その隣の場所 (2) に E をセットします。
+</p>
+<p> 最後に F を挿入しますが、B と衝突しています。そこで再ハッシュを行いますが、1 回目は (4 + 1) mod 8 = 5 で D と衝突します。2 回目は (4 + 2) mod 8 = 6 ですが、C と衝突します。3 回目で (4 + 3) mod 8 = 7 になり、この場所に F を挿入します。
+</p>
+<p> データの探索も簡単です。データのハッシュ値 n を求め、ハッシュ表の n 番目に格納されているデータと比較します。等しい場合は探索成功です。そうでなければ、再ハッシュを行って次のデータと比較します。そこが空き場所ならば、探索は失敗となります。
+</p>
+<p> たとえば B を探す場合、ハッシュ値は 4 なので、ハッシュ表の 4 番目に格納されている値と比較します。この場合は等しいので探索成功です。F を探索する場合、最初に B と比較します。次に、再ハッシュを行い 5, 6, 7 番目と順番にデータを比較していきます。そして、7 番目の F で探索成功となります。ハッシュ値が 1 のデータ G を探索する場合は、最初に A と比較し、次に E と比較します。その次に 3 番目のデータと比較しますが、空き場所なので探索は失敗となります。
+</p>
+<h4>●データの削除</h4>
+<p> オープンアドレス法の場合、データの探索と挿入だけならば簡単なのですが、データの削除処理がからむとちょっと複雑になります。次の図を見てください。
+</p>
+<pre class="fig">
+   ハッシュ表            ハッシュ表
+   ┌───┐            ┌───┐
+   │  ／  │            │  ／  │
+   ├───┤            ├───┤
+   │  Ａ  │            │  Ａ  │
+   ├───┤            ├───┤
+   │  Ｅ  │            │  Ｅ  │
+   ├───┤            ├───┤
+   │  ／  │            │  ／  │
+   ├───┤            ├───┤
+   │  Ｂ  │            │  Ｂ  ┼─┐Ｆの探索
+   ├───┤            ├───┤  │
+   │  Ｄ  │            │  Ｄ  ┼←┤探索継続
+   ├───┤            ├───┤  │
+   │  Ｃ  │─Ｃを削除→│  ／  │←┘終了（失敗）
+   ├───┤            ├───┤
+   │  Ｆ  │            │  Ｆ  │
+   └───┘            └───┘
+
+  データを挿入した順番
+  A (1), B (4), C (6), D (4), E (1), F (4)
+
+    図 : データの削除 (1)
+</pre>
+<p> データ C を削除します。単純に考えると、ハッシュ表の 6 番目を空き場所にすればよさそうですが、実はそうはいかないのです。6 番目を空き場所にした状態で、データ F を探索してみましょう。F のハッシュ値は 4 で B と衝突します。そこで、再ハッシュを行うと (4 + 1) mod 8 = 5 になりますが、ここでも D と衝突します。そして、再ハッシュを行い (4 + 2) mod 8 = 6 になりますが、この場所は空き場所なので探索は失敗となります。
+</p>
+<p> このように、データを単純に削除すると、再ハッシュを行ったデータをたどることができなくなるのです。そこで、削除したことを表すデータ DEL を用意します。そして、データが DEL のときは探索を続けるように手順を変更します。次の図を見てください。
+</p>
+<pre class="fig">
+   ハッシュ表            ハッシュ表
+   ┌───┐            ┌───┐
+   │  ／  │            │  ／  │
+   ├───┤            ├───┤
+   │  Ａ  │            │  Ａ  │
+   ├───┤            ├───┤
+   │  Ｅ  │            │  Ｅ  │
+   ├───┤            ├───┤
+   │  ／  │            │  ／  │
+   ├───┤            ├───┤
+   │  Ｂ  │            │  Ｂ  ┼─┐Ｆの探索
+   ├───┤            ├───┤  │
+   │  Ｄ  │            │  Ｄ  ┼←┤探索継続
+   ├───┤            ├───┤  │
+   │  Ｃ  │─Ｃを削除→│ＤＥＬ┼←┤探索継続
+   ├───┤            ├───┤  │
+   │  Ｆ  │            │  Ｆ  │←┘成功
+   └───┘            └───┘
+
+  データを挿入した順番
+  A (1), B (4), C (6), D (4), E (1), F (4)
+
+    図 : データの削除 (2)
+</pre>
+<p> データ C を削除する場合、その場所に DEL を書き込みます。そのあと、データ F を探索する場合、D と衝突したあとの再ハッシュで (4 + 2) mod 8 = 6 になります。今度は空き場所ではなく DEL になっているので、再ハッシュを行って探索を続けます。今度はデータ F を見つけることができます。
+<p> なお、新しいデータを挿入する場合は、空き場所または削除した場所を探して、そこにデータを書き込むだけです。
+</p>
+<h4>●オープンアドレス法の問題点</h4>
+<p> オープンアドレス法の場合、データの最大数はハッシュ表の大きさに制限されます。また、データ数が多くなるとハッシュ値の衝突が頻発するため、その性能は劣化してしまいます。とくに線形走査法の場合、再ハッシュのたびに連続した領域を使用するため、データがハッシュ表に分散するのではなく、特定の領域に偏って存在するようになります。このような現象を「クラスター (clustering) 」といいます。これがハッシュ値の衝突をさらに増やすことになり、線形走査法では性能が急激に悪くなります。<a href="clang.html#cite">参考文献 7</a> によると、線形走査法の場合ハッシュ表の最大使用率は 80 % を目安にするとよいそうです。
+</p>
+<p> それから、データの削除を行う場合、データだけではなく削除データ (DEL) が増えても性能が劣化することに注意してください。ようするに、オープンアドレス法の場合、ハッシュ表の空き場所が少なくなると性能が劣化するのです。データの挿入と削除を繰り返すと空き場所は減少していくので、データ数が少ない状態でも探索が遅くなる場合もあるのです。このため、オープンアドレス法で削除処理を行うときは、ハッシュ表の再構築を考慮する必要があると思われます。削除処理を行う場合は、チェイン法を使ったほうが簡単かもしれません。
+</p>
+<h4>●データ型の定義</h4>
+<p> それではプログラムを作りましょう。最初にデータ構造を定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+#define EMPTY 0
+#define DEL   1
+#define ANY   2
+
+// ハッシュ表の要素
+typedef struct {
+  int kind;
+  char *key;
+  int value;
+} Item;
+
+// ハッシュ表
+typedef struct {
+  int size, count;
+  Item *table;
+} HashTable1;
+</pre>
+<p> ハッシュ表の名前は HashTable1 としました。ハッシュ表の本体 table の要素を構造体 Item で表します。table のデータ型は Item * になります。メンバ変数 kind は空き場所 (EMPTY)、削除データ (DEL)、データ有り (ANY) を表します。メンバ変数 key がキーを、value が値を表します。
+</p>
+<h4>●ハッシュ表の生成</h4>
+<p> 次はハッシュ表を生成する関数 make_hash_table1 を作ります。
+</p>
+<pre class="list">
+リスト : ハッシュ表の生成と廃棄
+
+// ハッシュ表の生成
+HashTable1 *make_hash_table1(int size)
+{
+  HashTable1 *ht = malloc(sizeof(HashTable1));
+  if (ht != NULL) {
+    ht-&gt;table = malloc(sizeof(Item) * size);
+    if (ht-&gt;table == NULL) {
+      free(ht);
+      return NULL;
+    }
+    ht-&gt;size = size;
+    ht-&gt;count = 0;
+    for (int i = 0; i &lt; size; i++) {
+      ht-&gt;table[i].kind = EMPTY;
+      ht-&gt;table[i].key = NULL;
+    }
+  }
+  return ht;
+}
+</pre>
+<p> 最初に HashTable1 の領域を malloc で取得します。次に、table の本体を取得します。大きさは sizeof(Item) * size になります。そのあと、table を空き場所 (EMPTY) で初期化します。このとき、いっしょに key も NULL に初期化しておきます。
+</p>
+<h4>●キーの探索</h4>
+<p> 次は作業用の関数として、ハッシュ関数 hash_func1 とキーを探索する関数 search_keyを作ります。
+</p>
+<pre class="list">
+リスト : 作業用関数
+
+// ハッシュ関数
+int hash_func1(HashTable1 *ht, const char *key)
+{
+  unsigned int value = 0;
+  for (; *key != '\0'; key++)
+    value = (value &lt;&lt; 3) + *key;
+  return value % ht-&gt;size;
+}
+
+// キーの探索
+int search_key(HashTable1 *ht, const char *key)
+{
+  int n = hash_func1(ht, key);
+  int c = 0;
+  Item *table = ht-&gt;table;
+  while (c &lt; ht-&gt;size) {
+    if (table[n].kind == EMPTY) break;
+    if (table[n].kind == ANY &amp;&amp; strcmp(key, table[n].key) == 0)
+      return n;
+    n = (n + 1) % ht-&gt;size;
+    c++;
+  }
+  return -1;
+}
+</pre>
+<p> hash_func1 は前回作成したハッシュ関数と同じです。search_key はハッシュ表からキー key を探索し、見つけた場合はその位置 (添字) を返します。見つからない場合は -1 を返します。
+</p>
+<p> 最初にハッシュ値を求め変数 n にセットし、while ループでキーを探索します。table[n].kind が EMPTY であれば探索は失敗です。break で while ループを脱出して -1 を返します。kind が ANY で table[n].key と引数 key が等しい場合、探索は成功です。return で n を返します。そうでなければ、再ハッシュ (n + 1) % ht-&gt;size を行って探索を続行します。c が ht-&gt;size 以上になる場合は探索失敗です。while ループを終了して -1 を返します。
+</p>
+
+<h4>●データの探索</h4>
+<p> データの探索は search_key を使うと簡単です。
+</p>
+<PRE class="list">
+リスト : データの探索
+
+int search_hash1(HashTable1 *ht, const char *key, bool *err)
+{
+  int n = search_key(ht, key);
+  if (n &gt;= 0) {
+    *err = true;
+    return ht-&gt;table[n].value;
+  }
+  *err = false;
+  return 0;
+}
+</PRE>
+<p> search_key を呼び出して、返り値 n が 0 以上であれば、その位置に格納されている value を返します。そうでなければ、*err に false をセットして return で 0 を返します。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次はデータを挿入する関数 insert_hash1 を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの挿入
+
+bool insert_hash1(HashTable1 *ht, const char *key, int val)
+{
+  int n = search_key(ht, key);
+  if (n &gt;= 0) {
+    ht-&gt;table[n].value = val;
+    return true;
+  }
+  int c = 0;
+  Item *table = ht-&gt;table;
+  n = hash_func1(ht, key);
+  while (c &lt; ht-&gt;size) {
+    if (table[n].kind != ANY) {
+      table[n].key = malloc(strlen(key) + 1);
+      if (table[n].key == NULL) break;
+      strcpy(table[n].key, key);
+      table[n].kind = ANY;
+      table[n].value = val;
+      ht-&gt;count++;
+      return true;
+    }
+    n = (n + 1) % ht-&gt;size;
+    c++;
+  }
+  return false;
+}
+</pre>
+<p> 最初に search_key を呼び出して同じキーがないか調べます。同じキーが見つかった場合は、キーに対応する値を引数 val に書き換えます。見つからない場合は、while ループで空き場所または削除した場所を探して、そこにデータを書き込みます。
+</p>
+<p> kind が ANY でなければ、そこにデータを書き込むことができます。キーの領域を malloc で取得して、table[n].key にセットします。strcpy でキーをコピーして、kind に ANY を、value に val をセットします。そして、ht-&gt;count を +1 して true を返します。
+</p>
+<p> データがセットされていれば再ハッシュ (n + 1) % ht-&gt;size を行って、空き場所または削除した場所を探します。c が ht-&gt;size 以上になったら、空き場所がないので while ループを終了して false を返します。
+</p>
+<h4>●データの削除</h4>
+<p> 次はデータの削除を行う関数 delete_hash1 を作ります。
+</p>
+<pre class="list">
+リスト : データの削除
+
+bool delete_hash1(HashTable1 *ht, const char *key)
+{
+  int n = search_key(ht, key);
+  if (n &gt;= 0) {
+    ht-&gt;table[n].kind = DEL;
+    free(ht-&gt;table[n].key);
+    ht-&gt;table[n].key = NULL;
+    ht-&gt;count--;
+    return true;
+  }
+  return false;
+}
+</pre>
+<p> メソッド search_key でハッシュ表からキー (key) を探します。見つかった場合は、kind を DEL に書き換えて、key の領域を free で解放します。それから、key を NULL に書き換えて、count を -1 してから return で true を返します。キーが見つからない場合は false を返します。
+</p>
+<p> あとはとくに難しいところはないので説明は割愛いたします。詳細は <A href="clang21.html#list1">プログラムリスト１</A> をお読みください。
+</p>
+<h4>●実行例１</h4>
+<p> それでは簡単な例題として、前回と同様のテストを行ってみましょう。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+void test1(void)
+{
+  char buff[8][12];
+  HashTable1 *ht = make_hash_table1(13);
+  bool err;
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("----- insert -----\n");
+  for (int i = 0; i &lt; 8; i++) {
+    sprintf(buff[i], "%d", rand());
+    printf("%s, %d\n", buff[i], insert_hash1(ht, buff[i], i));
+  }
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("------ search ------\n");
+  for (int i = 0; i &lt; 8; i++) 
+    printf("%s, %d\n", buff[i], search_hash1(ht, buff[i], &amp;err)); 
+  printf("------ delete ------\n");
+  for (int i = 0; i &lt; 8; i++) {
+    printf("%s %d\n", buff[i], delete_hash1(ht, buff[i]));
+    int x = search_hash1(ht, buff[i], &amp;err);
+    printf("%s, %d, %d\n", buff[i], x, err);
+  } 
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("----- delete hash -----\n");
+  delete_hash_table1(ht);
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./hash1
+-- 1, 0 --
+----- insert -----
+1804289383, 1
+846930886, 1
+1681692777, 1
+1714636915, 1
+1957747793, 1
+424238335, 1
+719885386, 1
+1649760492, 1
+-- 0, 8 --
+------ search ------
+1804289383, 0
+846930886, 1
+1681692777, 2
+1714636915, 3
+1957747793, 4
+424238335, 5
+719885386, 6
+1649760492, 7
+------ delete ------
+1804289383 1
+1804289383, 0, 0
+846930886 1
+846930886, 0, 0
+1681692777 1
+1681692777, 0, 0
+1714636915 1
+1714636915, 0, 0
+1957747793 1
+1957747793, 0, 0
+424238335 1
+424238335, 0, 0
+719885386 1
+719885386, 0, 0
+1649760492 1
+1649760492, 0, 0
+-- 1, 0 --
+----- delete hash -----
+</pre>
+
+<h4>●実行例２</h4>
+<p> 次はキーの個数を増やして実行時間を計測してみましょう。
+</p>
+<pre class="list">
+リスト : 簡単なテスト２
+
+void test2(int size)
+{
+  HashTable1 *ht = make_hash_table1(100003);
+  bool err;
+  char buff[12];
+  while (length_hash1(ht) &lt; size) {
+    sprintf(buff, "%d", rand());
+    search_hash1(ht, buff, &amp;err);
+    if (!err) insert_hash1(ht, buff, 1);
+  }
+  delete_hash_table1(ht);
+}
+
+int main(void)
+{
+  test1();
+  for (int i = 95000; i &lt;= 100000; i += 250) {
+    clock_t s = clock();
+    test2(i);
+    printf("%d, %.3f\n", i, (double)(clock() - s) / CLOCKS_PER_SEC);
+  }
+  return 0;
+}
+</pre>
+<p> ハッシュ表の大きさは 100003 (素数) とし、作成するデータ数を 95000 から 100000 まで増やして実行時間を計測します。結果は次のようになりました。
+</p>
+<pre>
+  表 : 実行結果 (単位 : 秒)
+
+  個数 : OPEN   CHAIN
+------------------------
+ 95000 : 0.094  0.063
+ 95250 : 0.081  0.039
+ 95500 : 0.077  0.042
+ 95750 : 0.083  0.041
+ 96000 : 0.086  0.039
+ 96250 : 0.086  0.043
+ 96500 : 0.115  0.040
+ 96750 : 0.098  0.040
+ 97000 : 0.106  0.043
+ 97250 : 0.125  0.042
+ 97500 : 0.133  0.042
+ 97750 : 0.127  0.042
+ 98000 : 0.177  0.040
+ 98250 : 0.184  0.043
+ 98500 : 0.208  0.040
+ 98750 : 0.228  0.044
+ 99000 : 0.201  0.042
+ 99250 : 0.260  0.045
+ 99500 : 0.306  0.041
+ 99750 : 0.991  0.043
+100000 : 0.823  0.043
+</pre>
+<p> ハッシュ表の大きさはチェイン法も同じです。オープンアドレス法の場合、ハッシュ表に占めるデータ数が少ないうちはチェイン法と同等以上の性能を発揮しますが、空き場所が少なくなってくると性能はどんどん劣化していきます。そこで、次は｢二重ハッシュ法」を試してみましょう。
+</p>
+<h4>●二重ハッシュ法</H4>
+<p> 「二重ハッシュ法 (double hashing) 」は二種類のハッシュ関数を使う方法です。最初のハッシュ関数を h(x), 二番目のハッシュ関数を g(x), ハッシュ表の大きさを M とすると、二重ハッシュ法は次のような手順になります。
+</p>
+<pre class="fig">
+h<SUB>0</SUB>(x) = h(x) mod M
+h<SUB>1</SUB>(x) = (h(x) + 1 * g(x)) mod M
+h<SUB>2</SUB>(x) = (h(x) + 2 * g(x)) mod M
+h<SUB>3</SUB>(x) = (h(x) + 3 * g(x)) mod M
+   ・・・・・・・・
+h<SUB>k</SUB>(x) = (h(x) + k * g(x)) mod M
+</pre>
+<p> 二重ハッシュ法で g(x) = 1 とすると線形走査法になります。g(x) は簡単な関数にしないと時間がかかってしまいます。実際、g(x) は次に示すような簡単な関数で十分なようです。
+</p>
+<pre class="fig">
+g(x) = q - (h(x) mod q)
+</pre>
+<p> q は M よりも小さな非負整数値が選ばれます。たとえば、q = 7 とすると、g(x) の値は 1 から 7 までの範囲になります。つまり、二重ハッシュ法は n (1 &lt;= n &lt;= q) 個おきにハッシュ表を調べていくことになります。そして、ハッシュ値によって n の値を変えることで、クラスターの発生を回避することができます。
+</p>
+<p> ただし、M と n は互いに素になっていないと、ハッシュ表をすべて調べることはできません。このため、M は素数とするのが普通です。また、g(x) の値が 1 にならないように、値を +1 する方法もあります。
+</p>
+<p> プログラムは次のようになります。
+<pre class="list">
+リスト : 二重ハッシュ法
+
+int hash_func2(HashTable1 *ht, const char *key, int *m)
+{
+  unsigned int value = 0;
+  for (; *key != '\0'; key++)
+    value = (value &lt;&lt; 3) + *key;
+  *m = 8 - value % 7;
+  return value % ht-&gt;size;
+}
+
+// キーの探索
+int search_sub(HashTable1 *ht, const char *key)
+{
+  int val;
+  int n = hash_func2(ht, key, &amp;val);
+  int c = 0;
+  Item *table = ht-&gt;table;
+  while (c &lt; ht-&gt;size) {
+    if (table[n].kind == EMPTY) break;
+    if (table[n].kind == ANY &amp;&amp; strcmp(key, table[n].key) == 0)
+      return n;
+    n = (n + val) % ht-&gt;size;
+    c++;
+  }
+  return -1;    
+}
+</pre>
+<p> 関数 hash_func2 の返り値は今までと同じハッシュ値ですが、引数 *m に 2 番目のハッシュ関数 1 + (7 - n % 7) の値をセットとします。関数 search_key は、hash_func2 でハッシュ値を求めて、変数 n と val にセットします。val がハッシュ表を探索するときの増分値になります。したがって、再ハッシュの計算は (n + val) % ht-&gt;size になります。
+</p>
+<p> 再ハッシュの計算が異なるだけで、あとは線形走査法のプログラムと同じです。プログラムの説明は割愛しますので、詳細は <A href="clang21.html#list2">プログラムリスト２</A> をお読みください。
+</p>
+<h4>●実行結果</H4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+  表 : 実行結果 (単位 : 秒)
+
+  個数 : OPEN   CHAIN  DOUBLE
+-----------------------------
+ 95000 : 0.094  0.063  0.056
+ 95250 : 0.081  0.039  0.059
+ 95500 : 0.077  0.042  0.052
+ 95750 : 0.083  0.041  0.061
+ 96000 : 0.086  0.039  0.067
+ 96250 : 0.086  0.043  0.057
+ 96500 : 0.115  0.040  0.079
+ 96750 : 0.098  0.040  0.063
+ 97000 : 0.106  0.043  0.066
+ 97250 : 0.125  0.042  0.071
+ 97500 : 0.133  0.042  0.071
+ 97750 : 0.127  0.042  0.069
+ 98000 : 0.177  0.040  0.088
+ 98250 : 0.184  0.043  0.080
+ 98500 : 0.208  0.040  0.089
+ 98750 : 0.228  0.044  0.101
+ 99000 : 0.201  0.042  0.096
+ 99250 : 0.260  0.045  0.110
+ 99500 : 0.306  0.041  0.131
+ 99750 : 0.991  0.043  0.327
+100000 : 0.823  0.043  0.266
+</pre>
+<p> 線形走査法よりも二重ハッシュ法の方が速くなりました。二重ハッシュ法は簡単な関数でも大きな効果を発揮するようです。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+/*
+ * hash1.c : ハッシュ法 (オープンアドレス法)
+ *
+ *           Copyright (C) 2015 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;time.h&gt;
+
+#define EMPTY 0
+#define DEL   1
+#define ANY   2
+
+// ハッシュ表の要素
+typedef struct {
+  int kind;
+  char *key;
+  int value;
+} Item;
+
+// ハッシュ表
+typedef struct {
+  int size, count;
+  Item *table;
+} HashTable1;
+
+// ハッシュ表の生成
+HashTable1 *make_hash_table1(int size)
+{
+  HashTable1 *ht = malloc(sizeof(HashTable1));
+  if (ht != NULL) {
+    ht-&gt;table = malloc(sizeof(Item) * size);
+    if (ht-&gt;table == NULL) {
+      free(ht);
+      return NULL;
+    }
+    ht-&gt;size = size;
+    ht-&gt;count = 0;
+    for (int i = 0; i &lt; size; i++) {
+      ht-&gt;table[i].kind = EMPTY;
+      ht-&gt;table[i].key = NULL;
+    }
+  }
+  return ht;
+}
+
+// ハッシュ表の廃棄
+void delete_hash_table1(HashTable1 *ht)
+{
+  free(ht-&gt;table);
+  free(ht);
+}
+
+// ハッシュ関数
+int hash_func1(HashTable1 *ht, const char *key)
+{
+  unsigned int value = 0;
+  for (; *key != '\0'; key++)
+    value = (value &lt;&lt; 3) + *key;
+  return value % ht-&gt;size;
+}
+
+// 見つけた位置を返す、未発見は -1
+int search_key(HashTable1 *ht, const char *key)
+{
+  int n = hash_func1(ht, key);
+  int c = 0;
+  Item *table = ht-&gt;table;
+  while (c &lt; ht-&gt;size) {
+    if (table[n].kind == EMPTY) break;
+    if (table[n].kind == ANY &amp;&amp; strcmp(key, table[n].key) == 0)
+      return n;
+    n = (n + 1) % ht-&gt;size;
+    c++;
+  }
+  return -1;    
+}
+
+// 探索
+int search_hash1(HashTable1 *ht, const char *key, bool *err)
+{
+  int n = search_key(ht, key);
+  if (n &gt;= 0) {
+    *err = true;
+    return ht-&gt;table[n].value;
+  }
+  *err = false;
+  return 0;
+}
+
+// 挿入
+bool insert_hash1(HashTable1 *ht, const char *key, int val)
+{
+  int n = search_key(ht, key);
+  if (n &gt;= 0) {
+    ht-&gt;table[n].value = val;
+    return true;
+  }
+  int c = 0;
+  Item *table = ht-&gt;table;
+  n = hash_func1(ht, key);
+  while (c &lt; ht-&gt;size) {
+    if (table[n].kind != ANY) {
+      table[n].key = malloc(strlen(key) + 1);
+      if (table[n].key == NULL) break;
+      strcpy(table[n].key, key);
+      table[n].kind = ANY;
+      table[n].value = val;
+      ht-&gt;count++;
+      return true;
+    }
+    n = (n + 1) % ht-&gt;size;
+    c++;
+  }
+  return false;
+}
+
+// 削除
+bool delete_hash1(HashTable1 *ht, const char *key)
+{
+  int n = search_key(ht, key);
+  if (n &gt;= 0) {
+    ht-&gt;table[n].kind = DEL;
+    free(ht-&gt;table[n].key);
+    ht-&gt;table[n].key = NULL;
+    ht-&gt;count--;
+    return true;
+  }
+  return false;
+}
+
+// ハッシュ表は空か
+bool is_empty_hash1(HashTable1 *ht)
+{
+  return ht-&gt;count == 0;
+}
+
+// ハッシュ表のデータ数を返す
+int length_hash1(HashTable1 *ht)
+{
+  return ht-&gt;count;
+}
+
+// 巡回
+void foreach_hash1(void (*func)(const char *, int), HashTable1 *ht)
+{
+  Item *table = ht-&gt;table;
+  for (int i = 0; i &lt; ht-&gt;size; i++) {
+    if (table[i].kind == ANY)
+      func(table[i].key, table[i].value);
+  }
+}
+
+// ハッシュ表をクリアする
+void clear_hash1(HashTable1 *ht)
+{
+  ht-&gt;count = 0;
+  for (int i = 0; i &lt; ht-&gt;size; i++) {
+    if (ht-&gt;table[i].kind == ANY) {
+      free(ht-&gt;table[i].key);
+      ht-&gt;table[i].key = NULL;
+    }
+    ht-&gt;table[i].kind = EMPTY;
+  }
+}
+
+// 簡単なテスト
+void test1(void)
+{
+  char buff[8][12];
+  HashTable1 *ht = make_hash_table1(13);
+  bool err;
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("----- insert -----\n");
+  for (int i = 0; i &lt; 8; i++) {
+    sprintf(buff[i], "%d", rand());
+    printf("%s, %d\n", buff[i], insert_hash1(ht, buff[i], i));
+  }
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("------ search ------\n");
+  for (int i = 0; i &lt; 8; i++) 
+    printf("%s, %d\n", buff[i], search_hash1(ht, buff[i], &amp;err)); 
+  printf("------ delete ------\n");
+  for (int i = 0; i &lt; 8; i++) {
+    printf("%s %d\n", buff[i], delete_hash1(ht, buff[i]));
+    int x = search_hash1(ht, buff[i], &amp;err);
+    printf("%s, %d, %d\n", buff[i], x, err);
+  } 
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("----- delete hash -----\n");
+  delete_hash_table1(ht);
+}
+
+void test2(int size)
+{
+  HashTable1 *ht = make_hash_table1(100003);
+  bool err;
+  char buff[12];
+  while (length_hash1(ht) &lt; size) {
+    sprintf(buff, "%d", rand());
+    search_hash1(ht, buff, &amp;err);
+    if (!err) insert_hash1(ht, buff, 1);
+  }
+  delete_hash_table1(ht);
+}
+
+int main(void)
+{
+  test1();
+  for (int i = 95000; i &lt;= 100000; i += 250) {
+    clock_t s = clock();
+    test2(i);
+    printf("%d, %.3f\n", i, (double)(clock() - s) / CLOCKS_PER_SEC);
+  }
+  return 0;
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+/*
+ * hash2.c : ハッシュ法 (二重ハッシュ法)
+ *
+ *           Copyright (C) 2015 Makoto Hiroi
+ */
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;string.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;time.h&gt;
+
+#define EMPTY 0
+#define DEL   1
+#define ANY   2
+
+// ハッシュ表の要素
+typedef struct {
+  int kind;
+  char *key;
+  int value;
+} Item;
+
+// ハッシュ表
+typedef struct {
+  int size, count;
+  Item *table;
+} HashTable1;
+
+// ハッシュ表の生成
+HashTable1 *make_hash_table1(int size)
+{
+  HashTable1 *ht = malloc(sizeof(HashTable1));
+  if (ht != NULL) {
+    ht-&gt;table = malloc(sizeof(Item) * size);
+    if (ht-&gt;table == NULL) {
+      free(ht);
+      return NULL;
+    }
+    ht-&gt;size = size;
+    ht-&gt;count = 0;
+    for (int i = 0; i &lt; size; i++) {
+      ht-&gt;table[i].kind = EMPTY;
+      ht-&gt;table[i].key = NULL;
+    }
+  }
+  return ht;
+}
+
+// ハッシュ表の廃棄
+void delete_hash_table1(HashTable1 *ht)
+{
+  free(ht-&gt;table);
+  free(ht);
+}
+
+// ハッシュ関数
+int hash_func2(HashTable1 *ht, const char *key, int *m)
+{
+  unsigned int value = 0;
+  for (; *key != '\0'; key++)
+    value = (value &lt;&lt; 3) + *key;
+  *m = 8 - value % 7;
+  return value % ht-&gt;size;
+}
+
+// キーの探索
+int search_sub(HashTable1 *ht, const char *key)
+{
+  int val;
+  int n = hash_func2(ht, key, &amp;val);
+  int c = 0;
+  Item *table = ht-&gt;table;
+  while (c &lt; ht-&gt;size) {
+    if (table[n].kind == EMPTY) break;
+    if (table[n].kind == ANY &amp;&amp; strcmp(key, table[n].key) == 0)
+      return n;
+    n = (n + val) % ht-&gt;size;
+    c++;
+  }
+  return -1;    
+}
+
+// 探索
+int search_hash1(HashTable1 *ht, const char *key, bool *err)
+{
+  int n = search_sub(ht, key);
+  if (n &gt;= 0) {
+    *err = true;
+    return ht-&gt;table[n].value;
+  }
+  *err = false;
+  return 0;
+}
+
+// 挿入
+bool insert_hash1(HashTable1 *ht, const char *key, int val)
+{
+  int n = search_sub(ht, key);
+  if (n &gt;= 0) {
+    ht-&gt;table[n].value = val;
+    return true;
+  }
+  int m, c = 0;
+  Item *table = ht-&gt;table;
+  n = hash_func2(ht, key, &amp;m);
+  while (c &lt; ht-&gt;size) {
+    if (table[n].kind != ANY) {
+      table[n].key = malloc(strlen(key) + 1);
+      if (table[n].key == NULL) break;
+      strcpy(table[n].key, key);
+      table[n].kind = ANY;
+      table[n].value = val;
+      ht-&gt;count++;
+      return true;
+    }
+    n = (n + m) % ht-&gt;size;
+    c++;
+  }
+  return false;
+}
+
+// 削除
+bool delete_hash1(HashTable1 *ht, const char *key)
+{
+  int n = search_sub(ht, key);
+  if (n &gt;= 0) {
+    ht-&gt;table[n].kind = DEL;
+    free(ht-&gt;table[n].key);
+    ht-&gt;table[n].key = NULL;
+    ht-&gt;count--;
+    return true;
+  }
+  return false;
+}
+
+// ハッシュ表は空か
+bool is_empty_hash1(HashTable1 *ht)
+{
+  return ht-&gt;count == 0;
+}
+
+// ハッシュ表の要素の個数
+int length_hash1(HashTable1 *ht)
+{
+  return ht-&gt;count;
+}
+
+// 巡回
+void foreach_hash1(void (*func)(const char *, int), HashTable1 *ht)
+{
+  Item *table = ht-&gt;table;
+  for (int i = 0; i &lt; ht-&gt;size; i++) {
+    if (table[i].kind == ANY)
+      func(table[i].key, table[i].value);
+  }
+}
+
+// ハッシュ表をクリアする
+void clear_hash1(HashTable1 *ht)
+{
+  ht-&gt;count = 0;
+  for (int i = 0; i &lt; ht-&gt;size; i++) {
+    if (ht-&gt;table[i].kind == ANY) {
+      free(ht-&gt;table[i].key);
+      ht-&gt;table[i].key = NULL;
+    }
+    ht-&gt;table[i].kind = EMPTY;
+  }
+}
+
+// 簡単なテスト
+void test1(void)
+{
+  char buff[8][12];
+  HashTable1 *ht = make_hash_table1(13);
+  bool err;
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("----- insert -----\n");
+  for (int i = 0; i &lt; 8; i++) {
+    sprintf(buff[i], "%d", rand());
+    printf("%s, %d\n", buff[i], insert_hash1(ht, buff[i], i));
+  }
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("------ search ------\n");
+  for (int i = 0; i &lt; 8; i++) 
+    printf("%s, %d\n", buff[i], search_hash1(ht, buff[i], &amp;err)); 
+  printf("------ delete ------\n");
+  for (int i = 0; i &lt; 8; i++) {
+    printf("%s %d\n", buff[i], delete_hash1(ht, buff[i]));
+    int x = search_hash1(ht, buff[i], &amp;err);
+    printf("%s, %d, %d\n", buff[i], x, err);
+  } 
+  printf("-- %d, %d --\n", is_empty_hash1(ht), length_hash1(ht));
+  printf("----- delete hash -----\n");
+  delete_hash_table1(ht);
+}
+
+void test2(int size)
+{
+  HashTable1 *ht = make_hash_table1(100003);
+  bool err;
+  char buff[12];
+  while (length_hash1(ht) &lt; size) {
+    sprintf(buff, "%d", rand());
+    search_hash1(ht, buff, &amp;err);
+    if (!err) insert_hash1(ht, buff, 1);
+  }
+  delete_hash_table1(ht);
+}
+
+int main(void)
+{
+  test1();
+  for (int i = 95000; i &lt;= 100000; i += 250) {
+    clock_t s = clock();
+    test2(i);
+    printf("%d, %.3f\n", i, (double)(clock() - s)/CLOCKS_PER_SEC);
+  }
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="clang20.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang22.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

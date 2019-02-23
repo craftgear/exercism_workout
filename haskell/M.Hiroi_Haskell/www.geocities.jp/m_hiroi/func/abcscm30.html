@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881783</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm29.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm31.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>Scheme で作る micro Scheme</h3>
+<p> 今回は Scheme で小さな Scheme インタプリタ "micro Scheme" を作りましょう。
+</p>
+<h4>●最小の Lisp</h4>
+Lisp で小さな Lisp 処理系を作ることは簡単です。では、Lisp に必要な最低限の機能には何があるでしょうか。<a href="abcscm30.html#cite">参考文献 [1]</a> によると、次に示す機能だけを含む Lisp を「純 LISP (pure LISP) 」と呼ぶそうです。196 頁より引用します。
+</p>
+<blockquote>
+<p> 純 LISP の機能としては, 次のようなものだけが含まれます。
+</p>
+<ol>
+  <li>CAR, CDR, CONS という基本的リスト処理機能。
+  <li>ATOM, NULL, EQUAL という基本的述語。
+  <li>プログラムの実行は, 再帰呼び出しを含めた関数呼び出しだけで, PROG などの順次処理を含まない。
+  <li>変数値はラムダ式による束縛によってのみ与えられる。SETQ は存在しない。<BR>
+このほかに, さらに次のような制限を設ける人もいます。
+  <li>数値を含まない。自然数は (A A ... A) というように n 個の要素を持つリストで表す。
+  <li>関数定義関数の存在を許さない。関数に相当するものはラムダ式で与える。
+</ol>
+</blockquote>
+<p> このほかにも、<a href="http://ja.wikipedia.org/wiki/%E7%B4%94LISP">純LISP - Wikipedia</a> には <CITE>『純LISPには二種のデータ(リスト、アトム)、及びそれらを操作する五つの基本関数だけが存在する』</CITE> と書かれています。基本関数は car, cdr, cons, eq, atom の 5 つです。
+</p>
+<p> 5 つの基本関数とラムダ式だけでプログラムを作るのは大変です。そこで、条件分岐 cond と関数定義 defun を追加することにします。<a href="http://ja.wikipedia.org/wiki/LISP">LISP - Wikipedia</a> によると、これを<CITE>『最小の Lisp』</CITE> というそうです。
+</p>
+<p> 今回は最小の Lisp にならって、次に示す関数を持つ小さな Scheme 処理系を作ることにします。
+</p>
+<ul>
+  <li>car
+  <li>cdr
+  <li>cons
+  <li>quote
+  <li>eq?
+  <li>pair?
+  <li>if
+  <li>define
+</ul>
+<p> データは Scheme のデータをそのまま使います。このようにすると、プログラムの読み込みは関数 read で、データの出力も display で行うことができます。あとは読み込んだ S 式を評価する処理を作ればいいわけです。ただし、末尾再帰最適化など実装が難しい機能は省略します。また、エラーチェックも可能な限り省くことにします。厳密な意味で Scheme とはいえませんが、その分だけ簡単にプログラムを作ることができます。
+</p>
+
+<h4>●S 式の評価</h4>
+<p> micro Scheme インタプリタの主役は関数 m-eval と m-apply です。この 2 つの関数は Scheme の関数 eval と apply に相当します。m- は micro- を省略したものです。m-eval は評価する S 式と環境 (environment) を受け取り、渡された環境の下で S 式を評価します。環境はアクセス可能な局所変数の集合のことで、今回は連想リストで表すことにします。
+</p>
+<p> m-eval の仕事は簡単です。S 式が自己評価フォームであれば、それをそのまま返します。シンボル (変数) であれば環境からその値を求めて返します。リストの場合はちょっと複雑です。先頭の要素を評価して、それが関数値であればそれを呼び出します。今回は関数値をリストで表すことにします。関数値の種類を下記に示します。
+</p>
+<pre class="item">
+関数値 : (tag ... )
+tag の種類
+syntax    : シンタックス形式 (if, quote, define, lambda)
+primitive : Scheme の関数を呼び出す (car, cdr, cons, eq?, pair?) 
+closure   : クロージャ (ラムダ式)
+macro     : マクロ (予約)
+</pre>
+<p> syntax はシンタックス形式を表します。tag の後ろにその処理を担当する関数を格納しておきます。m-eval は引数を評価しないで、処理を担当する関数にそのまま渡します。このとき、環境も必要になるのでいっしょに渡します。
+</p>
+<p> primitive は Scheme の関数を呼び出します。tag の後ろに呼び出す関数値をセットします。closure はクロージャを表します。tag の後ろにはラムダ式とクロージャを生成したときの環境をセットします。primitive と clousre の評価は m-apply で行います。m-eval は引数を評価して m-apply に渡します。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : S 式の評価
+
+; 自己評価フォームか
+(define (self-evaluation? expr)
+  (and (not (pair? expr)) (not (symbol? expr))))
+
+; eval
+(define (m-eval expr env)
+  (cond ((self-evaluation? expr) expr)
+        ((symbol? expr)
+         (cdr (lookup expr env)))
+        ((pair? expr)
+         (let ((procedure (m-eval (car expr) env)))
+           (case (car procedure)
+             ((syntax) ((cadr procedure) expr env))
+             (else
+              (m-apply procedure
+                       (map (lambda (x) (m-eval x env)) (cdr expr)))))))
+        (else
+         (error "unknown expression type -- m-eval" expr))))
+</pre>
+<p> m-eval の引数 expr が評価する S 式、env が環境です。self-evaluation? は自己評価フォームかチェックします。今回はリストとシンボル以外は自己評価フォームとしましたが、micro Scheme が扱うデータ型だけを自己評価フォームとしてもかまいません。その場合は boolean (#t, #f) を忘れないように注意してください。
+</p>
+<p> expr がシンボルの場合は環境 env から変数を探します。この処理を関数 lookup で行います。変数が見つからない場合は大域変数から探します。大域変数は *global-environment* に格納します。大域変数も連想リストで管理します。lookup はコンスセル (変数 . 値) を返すので、cdr で値を取り出して返します。
+</p>
+<p> expr がリストの場合は、その先頭要素を m-eval で評価して procedure にセットします。procedure がリストでその先頭要素が syntax の場合は、procedure の第 2 要素を呼び出します。このとき、引数として expr と env をそのまま渡します。そうでなければ、procedure を m-apply に渡して評価します。このとき、procedure に渡す引数 (cdr expr) を m-eval で評価し、その結果をリストに格納して渡します。この処理は map を使うと簡単です。
+</p>
+
+<h4>●関数適用</h4>
+<p> 次は m-apply を作りましょう。
+</p>
+
+<pre class="list">
+リスト : 関数適用
+
+(define (m-apply procedure actuals)
+  (case (car procedure)
+    ((primitive)
+     (apply (cadr procedure) actuals))
+    ((closure)
+     (let ((expr (cadr procedure)))
+       ; body の評価
+       (eval-body (cddr expr)
+                  (add-binding (cadr expr) actuals (caddr procedure)))))
+    (else
+     (error "unknown procedure type -- m-apply" procedure))))
+
+; body の評価
+(define (eval-body body env)
+  (cond ((null? (cdr body))
+         (m-eval (car body) env))   ; 最後の S 式の評価結果を返す
+        (else
+         (m-eval (car body) env)
+         (eval-body (cdr body) env))))
+</pre>
+<p> m-apply の引数 procedure は micro Scheme の関数値、actuals は引数を格納したリストです。引数は評価済みであることに注意してください。procedure が primitive の場合、2 番目の要素に関数が格納されています。apply でその関数を呼び出します。
+</p>
+<p> procedure が closure の場合、2 番目の要素にラムダ式、3 番目の要素に環境が格納されています。まず最初にラムダ式を取り出して、変数 expr にセットします。expr の 2 番目の要素が仮引数です。関数 add-binding は変数束縛を行います。そして、それを環境に追加して返します。このとき、ラムダ式を生成したときの環境が使われることに注意してください。
+</p>
+<p> ラムダ式の本体はこの新しい環境で評価されます。この処理を関数 eval-body で行います。引数 body は S 式を格納したリスト、env が環境です。eva-body は複数の S 式を順番に m-eval で評価して、最後に評価した S 式の結果を返します。
+</p>
+
+<h4>●変数束縛と値の取得</h4>
+<p> 次は変数束縛を行う関数 add-binding を作ります。
+</p>
+
+<pre class="list">
+リスト : 変数束縛
+
+(define (add-binding vars vals env)
+  (cond ((null? vars) env)    ; 実引数が多い場合は無視する
+        ((symbol? vars)
+         (cons (cons vars vals) env))
+        (else
+         (cons (cons (car vars) (car vals))
+               (add-binding (cdr vars) (cdr vals) env)))))
+</pre>
+
+<p> add-binding は仮引数のシンボルと実引数の値を組にして環境 env に追加します。仮引数のリスト vars が空リストの場合は env を返します。vars がシンボルの場合は可変個引数なので、vars と vals を組にして env に追加します。それ以外の場合は vars の先頭要素と vals の先頭要素を組にします。なお、引数の個数についてエラーチェックは行っていません。興味のある方はプログラムを改造してみてください。
+</p>
+
+<p> 変数値の取得は関数 lookup で行います。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 変数値の取得
+
+(define (lookup var env)
+  ; 局所変数から探す
+  (let ((value (assoc var env)))
+    (if value
+        value
+      ; 大域変数から探す
+      (assoc var *global-environment*))))
+</pre>
+<p> 環境 env は連想リストなので、assoc で env から var を探索するだけです。見つからない場合は大域変数 *gloal-environment* から探します。
+</p>
+
+<h4>●シンタックス形式の処理</h4>
+<p> 次はシンタックス形式を処理する関数を作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : シンタックス形式の処理
+
+; (quote x)
+(define (m-quote expr env) (cadr expr))
+
+; (if test then else)
+(define (m-if expr env)
+  (if (m-eval (cadr expr) env)
+      (m-eval (caddr expr) env)
+    (if (null? (cdddr expr))
+        '*undef*
+      (m-eval (cadddr expr) env))))
+
+; (lambda (args ...) body ...)
+(define (m-lambda expr env)
+  (list 'closure expr env))
+
+; (define name s-expr)
+(define (m-define expr env)
+  ; 内部 define は考慮しない
+  (set! *global-environment*
+        (cons (cons (cadr expr)
+                    (m-eval (caddr expr) env))
+              *global-environment*))
+  ; シンボルを返す
+  (cadr expr))
+</pre>
+<p> quote の処理は m-quote で行います。引数 expr には (quote x) が渡されるので、expr の第 2 要素を返します。if の処理は m-if で行います。expr の第 2 要素を m-eval で評価し、それが真ならば expr の第 3 要素を m-eval で評価して、その結果を返します。偽の場合は expr に第 4 要素があるかチェックし、あればそれを m-eval で評価します。そうでなければシンボル *undef* を返します。*undef* は未定義を表すシンボルとして使います。ちなみに Gauche の場合は #&lt;undef&gt; が返されます。
+</p>
+<p> lambda の処理は m-lambda で行います。これはクロージャを生成する処理です。m-lambda はシンタックス形式なので引数 env に環境が渡されます。これとラムダ式 expr をリストに格納し、それにタグ closure を付けて返します。define の処理は m-define で行います。define は変数と値を組にして大域変数 *global-environment* に追加します。このとき、値 (caddr expr) を m-eval で評価します。これでラムダ式を使って関数を定義することができます。
+</p>
+
+<h4>●read-eval-print-loop</h4>
+<p> 最後に read - eval - print - loop (REPL) を作ります。
+</p>
+
+<pre class="list">
+リスト : read - eval - print - loop
+
+; 初期化
+(define *global-environment*
+        (list
+          (list 'car   'primitive car)
+          (list 'cdr   'primitive cdr)
+          (list 'cons  'primitive cons)
+          (list 'eq?   'primitive eq?)
+          (list 'pair? 'primitive pair?)
+          (list 'if     'syntax m-if)
+          (list 'quote  'syntax m-quote)
+          (list 'lambda 'syntax m-lambda)
+          (list 'define 'syntax m-define)
+        ))
+
+; read-eval-print-loop
+(define (repl)
+  (let loop ()
+    (display "\n&gt;&gt;&gt; ")
+    (display (m-eval (read) '()))
+    (newline)
+    (loop)))
+
+; 実行
+(define (main args)
+  ; ファイルの読み込み
+  (for-each
+    (lambda (name)
+      (with-input-from-file name
+        (lambda ()
+          (let loop ()
+            (let ((output (m-eval (read) '())))
+              (if (not (eof-object? output))
+                  (loop)))))))
+    (cdr args))
+  ; 実行
+  (repl))
+</pre>
+<p> 最初に大域変数 *global-environment* を初期化します。関数 repl は簡単です。プロンプトを表示して、read で S 式を読み込み、それを m-eval で評価します。このとき、環境は空リストを渡します。
+</p>
+<p> repl を実行する前に、プログラムをロードできると便利です。コマンドラインでファイル名を指定して、そのファイルを読み込みます。この処理は repl と同じですが、ファイルが終了したら次のファイルを読み込みます。それから repl を実行します。
+</p>
+
+<h4>●簡単な実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+C&gt;gosh micro.scm
+
+&gt;&gt;&gt; (quote a)
+a
+
+&gt;&gt;&gt; (if #t 'a 'b)
+a
+
+&gt;&gt;&gt; (if #f 'a 'b)
+b
+
+&gt;&gt;&gt; (car '(a b c))
+a
+
+&gt;&gt;&gt; (cdr '(a b c))
+(b c)
+
+&gt;&gt;&gt; (cons 'a 'b)
+(a . b)
+
+&gt;&gt;&gt; (eq? 'a 'a)
+#t
+
+&gt;&gt;&gt; (eq? 'a 'b)
+#f
+
+&gt;&gt;&gt; (pair? '(a b c))
+#t
+
+&gt;&gt;&gt; (pair? 'a)
+#f
+</pre>
+<p> quote, if, car, cdr, cons, eq?, pair? は正常に動作していますね。次は lambda と define を試してみます。
+</p>
+
+<pre>
+&gt;&gt;&gt; (define a 'b)
+a
+
+&gt;&gt;&gt; a
+b
+
+&gt;&gt;&gt; (lambda (x) x)
+(closure (lambda (x) x) ())
+
+&gt;&gt;&gt; ((lambda (x) x) 'a)
+a
+
+&gt;&gt;&gt; (define list (lambda x x))
+list
+
+&gt;&gt;&gt; (list 'a 'b 'c 'd 'e)
+(a b c d e)
+</pre>
+<p> define で変数 a を定義して、その値を求めることができます。lambda はクロージャを生成し、ラムダ式で関数呼び出しも可能です。そして、define と lambda を使って関数を定義することができます。
+</p>
+<h4>●レキシカルスコープとクロージャの動作</h4>
+<p> 次は、レキシカルスコープとクロージャが正常に動作するか試してみましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (define x 'a)
+x
+
+&gt;&gt;&gt; x
+a
+
+&gt;&gt;&gt; (define foo (lambda () x))
+foo
+
+&gt;&gt;&gt; (foo)
+a
+
+&gt;&gt;&gt; (define bar (lambda (x) (foo)))
+bar
+
+&gt;&gt;&gt; (bar 'b)
+a
+</pre>
+<p> まず大域変数 x を a に初期化します。次に、関数 foo を定義します。foo の引数はないので、x は大域変数を参照します。したがって、foo を評価すると返り値は a になります。次に、関数 bar から foo を呼び出します。bar は引数 x を受け取ります。(bar 'b) を評価すると a が返ってきます。確かにレキシカルスコープになっています。
+</p>
+<p> foo と bar の値を表示すると次のようになります。
+</p>
+<pre>
+&gt;&gt;&gt; foo
+(closure (lambda () x) ())
+
+&gt;&gt;&gt; bar
+(closure (lambda (x) (foo)) ())
+</pre>
+<p> どちらの関数も環境が空リストになっています。(bar 'b) を評価するとき、この環境に (x . b) が追加されます。そして、(foo) を呼び出しますが、foo に引数はないので、環境は空リストのままです。したがって、(foo) の返り値は大域変数の値 a になるのです。
+</p>
+<p> 今度はクロージャの動作を確かめます。
+</p>
+<pre>
+&gt;&gt;&gt; (define baz (lambda (x) (lambda (y) (cons x y))))
+baz
+
+&gt;&gt;&gt; (define baz-a (baz 'a))
+baz-a
+
+&gt;&gt;&gt; (baz-a 'b)
+(a . b)
+
+&gt;&gt;&gt; (baz-a 'c)
+(a . c)
+</pre>
+<p> 関数 baz はクロージャを生成して返します。このとき、baz の引数 x の値が保存されます。(baz 'a) の返り値を baz-a にセットすると、baz-a は a と baz-a の引数を組にしたものを返す関数となります。したがって、(baz-a 'b) は (a . b) を、(baz-a 'c) は (a . c) を返します。クロージャも正常に動作していますね。
+</p>
+<p> baz と baz-a の値を表示すると、次のようになります。
+</p>
+<pre>
+&gt;&gt;&gt; baz
+(closure (lambda (x) (lambda (y) (cons x y))) ())
+
+&gt;&gt;&gt; baz-a
+(closure (lambda (y) (cons x y)) ((x . a)))
+</pre>
+<p> baz の環境は空リストですが、baz-a の環境は ((x . a)) となります。(baz-a 'b) を評価するとき、クロージャの環境に (y . b) が追加され、その下で (cons x y) が評価されます。したがって、x の値は a で y の値が b になるのです。
+</p>
+
+<h4>●再帰定義とリスト操作</h4>
+<p> define で定義する関数は再帰呼び出しが可能です。簡単なリスト操作関数を再帰定義で作ってみました。プログラムリストと実行結果を示します。
+</p>
+
+<pre class="list">
+リスト : append と reverse
+
+; 空リストか
+(define null? (lambda (x) (eq? x '())))
+
+; 否定
+(define not (lambda (x) (if (eq? x #f) #t #f)))
+
+; リストの結合
+(define append
+  (lambda (xs ys)
+    (if (null? xs)
+        ys
+      (cons (car xs) (append (cdr xs) ys)))))
+
+; リストの反転
+(define reverse
+  (lambda (ls)
+    (if (null? ls)
+        '()
+      (append (reverse (cdr ls)) (list (car ls))))))
+</pre>
+<pre>
+&gt;&gt;&gt; (append '(a b c) '(d e f))
+(a b c d e f)
+
+&gt;&gt;&gt; (append '((a b) (c d)) '(e f g))
+((a b) (c d) e f g)
+
+&gt;&gt;&gt; (reverse '(a b c d e))
+(e d c b a)
+
+&gt;&gt;&gt; (reverse '((a b) c (d e)))
+((d e) c (a b))
+</pre>
+<pre class="list">
+リスト : 探索
+
+; リストの探索
+(define memq
+  (lambda (x ls)
+    (if (null? ls)
+        #f
+        (if (eq? x (car ls))
+            ls
+          (memq x (cdr ls))))))
+
+; 連想リストの探索
+(define assq
+  (lambda (x ls)
+    (if (null? ls)
+        #f
+      (if (eq? x (car (car ls)))
+          (car ls)
+        (assq x (cdr ls))))))
+</pre>
+<pre>
+&gt;&gt;&gt; (memq 'a '(a b c d e))
+(a b c d e)
+
+&gt;&gt;&gt; (memq 'c '(a b c d e))
+(c d e)
+
+&gt;&gt;&gt; (memq 'f '(a b c d e))
+#f
+
+&gt;&gt;&gt; (assq 'a '((a 1) (b 2) (c 3) (d 4) (e 5)))
+(a 1)
+
+&gt;&gt;&gt; (assq 'e '((a 1) (b 2) (c 3) (d 4) (e 5)))
+(e 5)
+
+&gt;&gt;&gt; (assq 'f '((a 1) (b 2) (c 3) (d 4) (e 5)))
+#f
+</pre>
+<pre class="list">
+リスト : 高階関数
+
+; マッピング
+(define map
+  (lambda (fn ls)
+    (if (null? ls)
+        '()
+      (cons (fn (car ls)) (map fn (cdr ls))))))
+
+; フィルター
+(define filter
+  (lambda (fn ls)
+    (if (null? ls)
+        '()
+      (if (fn (car ls))
+          (cons (car ls) (filter fn (cdr ls)))
+        (filter fn (cdr ls))))))
+
+; 畳み込み
+(define fold-right
+  (lambda (fn a ls)
+    (if (null? ls)
+        a
+      (fn (car ls) (fold-right fn a (cdr ls))))))
+
+(define fold-left
+  (lambda (fn a ls)
+    (if (null? ls)
+        a
+      (fold-left fn (fn a (car ls)) (cdr ls)))))
+</pre>
+<pre>
+&gt;&gt;&gt; (map car '((a 1) (b 2) (c 3) (d 4) (e 5)))
+(a b c d e)
+
+&gt;&gt;&gt; (map cdr '((a 1) (b 2) (c 3) (d 4) (e 5)))
+((1) (2) (3) (4) (5))
+
+&gt;&gt;&gt; (map (lambda (x) (cons x x)) '(a b c d e))
+((a . a) (b . b) (c . c) (d . d) (e . e))
+
+&gt;&gt;&gt; (filter (lambda (x) (not (eq? x 'a))) '(a b c a b c a b c))
+(b c b c b c)
+
+&gt;&gt;&gt; (fold-left cons '() '(a b c d e))
+(((((() . a) . b) . c) . d) . e)
+
+&gt;&gt;&gt; (fold-right cons '() '(a b c d e))
+(a b c d e)
+</pre>
+<h4>●ダイナミックスコープと funarg 問題</h4>
+<p> ところで、スコープを「ダイナミックスコープ」に変更することも簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : apply (ダイナミックスコープ版)
+
+(define (m-apply procedure actuals env)
+  (case (car procedure)
+    ((primitive)
+     (apply (cadr procedure) actuals))
+    ((closure)
+     (let ((expr (cadr procedure)))
+       ; body の評価
+       (eval-body (cddr expr)
+                  (add-binding (cadr expr)
+                               actuals
+                               env))))   ; (1)
+                               ; (2) (append (caddr procedure) env)))))
+    (else
+     (error "unknown procedure type -- m-apply" procedure))))
+</pre>
+<p> m-apply を呼び出すとき環境 env を渡します。そして、add-binding で変数束縛するとき、(1) のように env を渡します。これで昔の Lisp と同じダイナミックスコープになります。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (define x 0)
+x
+
+&gt;&gt;&gt; (define foo (lambda () x))
+foo
+
+&gt;&gt;&gt; (foo)
+0
+
+&gt;&gt;&gt; (define bar (lambda (x) (foo)))
+bar
+
+&gt;&gt;&gt; (bar 10)
+10
+</pre>
+<p> このように、関数 foo から関数 bar の局所変数にアクセスすることができます。ただし、このままではクロージャが機能しません。また、ラムダ式を定義するときの環境とラムダ式を実行するときの環境が異なることで問題が発生する場合があります。このような問題を "funarg 問題" といいます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : funarg 問題
+
+; フィルター
+(define filter
+  (lambda (x y)
+    (if (null? y)
+        '()
+      (if (x (car y))
+          (cons (car y) (filter x (cdr y)))
+        (filter x (cdr y))))))
+
+; 削除
+(define remove
+  (lambda (y z)
+    (filter (lambda (x) (not (eq? x y))) z)))
+</pre>
+<p> filter と remove を定義します。ここで変数 y に注目してください。remove で filter に渡すラムダ式で変数 y を参照しています。この y は remove の引数 y を参照するべきです。ダイナミックスコープでは、クロージャがなくても引数 y にアクセスすることは可能です。
+</p>
+<p> ところが、filter でも変数 y を使っていますね。この変数 y の値は remove の引数 z になり、引数 x の値が (lambda (x) (not (eq? x y))) になります。そして、x を評価するとき y の値を参照しますが、ダイナミックスコープでは filter の引数 y の値になります。つまり、remove の引数 y は隠蔽されてアクセスできなくなるのです。
+</p>
+<p> 実際に試してみると、remove は正常に動作しません。
+</p>
+<pre>
+&gt;&gt;&gt; (remove 'a '(a b c a b c))
+(a b c a b c)
+
+&gt;&gt;&gt; (remove 'b '(a b c a b c))
+(a b c a b c)
+</pre>
+<p> この問題はラムダ式を生成するとき、その時点での環境を保存することで解決することができます。つまり、クロージャがあればよいのです。実際、apply のリストで (1) から (2) のようにクロージャに保存しておいた環境を加えると、ダイナミックスコープでも remove は正常に動作します。
+</p>
+<p> Common Lisp 以前の Lisp では funarg 問題を解決するため、クロージャを生成するときはラムダ式の前に #' 付けることにしました。これを function 式といいます。#' は function の省略形です。そして、生成されたクロージャのことを「レキシカルクロージャ」といいます。ちなみに、function 式は Common Lisp に受け継がれています。
+</p>
+<p> この結果、ラムダ式は単なるリストで表されたものとレキシカルクロージャを生成するものとが混在するようになりました。これを統一したのが Scheme です。Scheme は関数 (ラムダ式) をクロージャとして扱い、レキシカルスコープを採用した最初の Lisp 処理系です。Scheme に funarg 問題は存在しません。
+</p>
+
+<p> 今回はここまでです。次回は micro Scheme に伝統的なマクロを追加してみましょう。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>黒川利明, 『LISP 入門』, 培風館, 1982
+  <li>Patrick Henry Winston, Berthold Klaus Paul Horn, 『LISP 原書第 3 版 (1)』, 培風館, 1992<br>
+18. Lisp で書く Lisp
+  <li>R. Kent Dybvig (著), 村上雅章 (訳), 『プログラミング言語 SCHEME』, 株式会社ピアソン・エデュケーション, 2000<br>
+9.2 Scheme のメタ循環インタプリタ
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』, アジソンウェスレイ, 1995<br>
+第 11 章 定義インタプリタ
+  <li>小西弘一, 清水剛, 『ＣプログラムブックⅢ』, アスキー, 1986
+  <li>Harold Abelson, Gerald Jay Sussman, Julie Sussman, <a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs"</a>, <BR><a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-26.html#%_sec_4.1">4.1  The Metacircular Evaluator</a>
+  <li><a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/index-j.html">稲葉雅幸</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/index-j.html">ソフトウェア特論</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/soft4-scheme-interp/index.html">Scheme インタプリタ</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; micro.scm : micro Scheme
+;
+;             Copyright (C) 2009 Makoto Hiroi
+;
+
+; 変数束縛
+(define (add-binding vars vals env)
+  (cond ((null? vars) env)    ; 実引数が多い場合は無視する
+        ((symbol? vars)
+         (cons (cons vars vals) env))
+        (else
+         (cons (cons (car vars) (car vals))
+               (add-binding (cdr vars) (cdr vals) env)))))
+
+; 変数を環境から探す
+(define (lookup var env)
+  ; 局所変数から探す
+  (let ((value (assoc var env)))
+    (if value
+        value
+      ; 大域変数から探す
+      (assoc var *global-environment*))))
+
+;;; syntax
+
+; (quote x)
+(define (m-quote expr env) (cadr expr))
+
+; (if test then else)
+(define (m-if expr env)
+  (if (m-eval (cadr expr) env)
+      (m-eval (caddr expr) env)
+    (if (null? (cdddr expr))
+        '*undef*
+      (m-eval (cadddr expr) env))))
+
+; (lambda (args ...) body ...)
+(define (m-lambda expr env)
+  (list 'closure expr env))
+
+; (define name s-expr)
+(define (m-define expr env)
+  ; 内部 define は考慮しない
+  (set! *global-environment*
+        (cons (cons (cadr expr)
+                    (m-eval (caddr expr) env))
+              *global-environment*))
+  ; シンボルを返す
+  (cadr expr))
+
+
+;;; 関数適用
+
+; 関数値 : (tag ...)
+; tag
+; syntax    : シンタックス形式 (syntax m-xxx)
+; primitive : プリミティブ     (primitive #&lt;subr ...&gt;)
+; closure   : クロージャ       (closure (lambda (args ...) body ...) env)
+
+; apply
+; procedure := 関数値
+(define (m-apply procedure actuals)
+  (case (car procedure)
+    ((primitive)
+     (apply (cadr procedure) actuals))
+    ((closure)
+     (let ((expr (cadr procedure)))
+       ; body の評価
+       (eval-body (cddr expr)
+                  (add-binding (cadr expr) actuals (caddr procedure)))))
+    (else
+     (error "unknown procedure type -- m-apply" procedure))))
+
+; body の評価
+(define (eval-body body env)
+  (cond ((null? (cdr body))
+         (m-eval (car body) env))   ; 最後の S 式の評価結果を返す
+        (else
+         (m-eval (car body) env)
+         (eval-body (cdr body) env))))
+
+
+;;; S 式の評価
+
+; 自己評価フォームか
+(define (self-evaluation? expr)
+  (and (not (pair? expr)) (not (symbol? expr))))
+
+; eval
+(define (m-eval expr env)
+  (cond ((self-evaluation? expr) expr)
+        ((symbol? expr)
+         (cdr (lookup expr env)))
+        ((pair? expr)
+         (let ((procedure (m-eval (car expr) env)))
+           (case (car procedure)
+             ((syntax) ((cadr procedure) expr env))
+             (else
+              (m-apply procedure
+                       (map (lambda (x) (m-eval x env)) (cdr expr)))))))
+        (else
+         (error "unknown expression type -- m-eval" expr))))
+
+; 初期化
+(define *global-environment*
+        (list
+          (list 'car   'primitive car)
+          (list 'cdr   'primitive cdr)
+          (list 'cons  'primitive cons)
+          (list 'eq?   'primitive eq?)
+          (list 'pair? 'primitive pair?)
+          (list 'if     'syntax m-if)
+          (list 'quote  'syntax m-quote)
+          (list 'lambda 'syntax m-lambda)
+          (list 'define 'syntax m-define)
+        ))
+
+;;; read-eval-print-loop
+(define (repl)
+  (let loop ()
+    (display "\n&gt;&gt;&gt; ")
+    (display (m-eval (read) '()))
+    (newline)
+    (loop)))
+
+; 実行
+(define (main args)
+  ; ファイルの読み込み
+  (for-each
+    (lambda (name)
+      (with-input-from-file name
+        (lambda ()
+          (let loop ()
+            (let ((output (m-eval (read) '())))
+              (if (not (eof-object? output))
+                  (loop)))))))
+    (cdr args))
+  ; 実行
+  (repl))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm29.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm31.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

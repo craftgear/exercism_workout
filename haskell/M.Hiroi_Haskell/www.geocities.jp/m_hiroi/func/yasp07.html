@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Yet Another Scheme Problems</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881786</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scheme Programming</h1>
+<h2>Yet Another Scheme Problems</h2>
+<div class="small">
+[ <a href="yasp06.html">PrevPage</a> | <a href="scheme.html#yasp">Scheme</a> | <a href="yasp08.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h4>●問題101</h4>
+<p> リストを使ってシンプルな無符号多倍長整数 (bignum) を実装します。基数を 65536 (#x10000) とし、リストの先頭が下位の桁、末尾を上位の桁とします。簡単な例を示します。
+</p>
+<pre class="item">
+0 =&gt; (0)
+1 =&gt; (1)
+65535 =&gt; (65535)
+65536 =&gt; (0 1)
+4294967295 =&gt; (65535 65535)
+4294967296 =&gt; (0 0 1)
+</pre>
+<p> 整数を多倍長整数に変換する関数 integer-&gt;bignum n を定義してください。
+</p>
+
+<pre>
+gosh&gt; (integer-&gt;bignum 0)
+(0)
+gosh&gt; (integer-&gt;bignum 1)
+(1)
+gosh&gt; (integer-&gt;bignum 65535)
+(65535)
+gosh&gt; (integer-&gt;bignum 65536)
+(0 1)
+gosh&gt; (integer-&gt;bignum #x100000000)
+(0 0 1)
+</pre>
+<p><a href="yasp07.html#ans101">解答</a>
+</p>
+
+<h4>●問題102</h4>
+<p> 多倍長整数を整数に変換する関数 bignum-&gt;integer xs を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-&gt;integer '(0))
+0
+gosh&gt; (bignum-&gt;integer '(1))
+1
+gosh&gt; (bignum-&gt;integer '(0 1))
+65536
+gosh&gt; (bignum-&gt;integer '(65535 1))
+131071
+gosh&gt; (bignum-&gt;integer '(65535 65535))
+4294967295
+gosh&gt; (bignum-&gt;integer '(0 0 1))
+4294967296
+</pre>
+<p><a href="yasp07.html#ans102">解答</a>
+</p>
+
+<h4>●問題103</h4>
+<p> 2 つの多倍長整数 xs, ys の論理積を求める関数 bignum-and xs ysを定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-and '(#xffff #xffff #xffff) '(#xf0f0 #x0f0f #xffff))
+(61680 3855 65535)
+gosh&gt; (bignum-and '(#xffff #xffff #xffff) '(#xf0f0 #x0f0f))
+(61680 3855)
+gosh&gt; (bignum-and '(#xffff #xffff #xffff) '(#xf0f0))
+(61680)
+gosh&gt; (bignum-and '(#xffff #xffff #xffff) '(0))
+(0)
+</pre>
+<p><a href="yasp07.html#ans103">解答</a>
+</p>
+
+<h4>●問題104</h4>
+<p> 2 つの多倍長整数 xs, ys の論理和を求める関数 bignum-or xs ys を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-or '(#xff00 #xf0f0 #x00ff) '(#x00ff #x0f0f #xff00))
+(65535 65535 65535)
+gosh&gt; (bignum-or '(#xff00 #xf0f0 #x00ff) '(#x00ff #x0f0f))
+(65535 65535 255)
+gosh&gt; (bignum-or '(#xff00 #xf0f0 #x00ff) '(#x00ff))
+(65535 61680 255)
+gosh&gt; (bignum-or '(#xff00 #xf0f0 #x00ff) '(0))
+(65280 61680 255)
+</pre>
+<p><a href="yasp07.html#ans104">解答</a>
+</p>
+
+<h4>●問題105</h4>
+<p> 2 つの多倍長整数 xs, ys の排他的論理和を求める関数 bignum-xor xs ys を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-xor '(#xff00 #xf0f0 #x00ff) '(#xffff #xffff #xffff))
+(255 3855 65280)
+gosh&gt; (bignum-xor '(#xff00 #xf0f0 #x00ff) '(0))
+(65280 61680 255)
+gosh&gt; (bignum-xor '(#xff00 #xf0f0 #x00ff) '(#x00ff #x0f0f #xff00))
+(65535 65535 65535)
+gosh&gt; (bignum-xor '(#xff00 #xf0f0 #x00ff) '(#xff00 #xf0f0 #x00ff))
+(0)
+</pre>
+<p><a href="yasp07.html#ans105">解答</a>
+</p>
+
+<h4>●問題106</h4>
+<p> 多倍長整数 xs を左へ n bit シフトする関数 bignum-shift-left xs n を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-shift-left '(#xf0f0) 8)
+(61440 240)
+gosh&gt; (bignum-shift-left '(#xf0f0) 16)
+(0 61680)
+gosh&gt; (bignum-shift-left '(#xf0f0) 24)
+(0 61440 240)
+gosh&gt; (bignum-shift-left '(#xf0f0) 32)
+(0 0 61680)
+</pre>
+<p><a href="yasp07.html#ans106">解答</a>
+</p>
+
+<h4>●問題107</h4>
+<p> 多倍長整数 xs を右へ n bit シフトする関数 bignum-shift-right xs n を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-shift-right '(0 #xffff) 8)
+(65280 255)
+gosh&gt; (bignum-shift-right '(0 #xffff) 16)
+(65535)
+gosh&gt; (bignum-shift-right '(0 #xffff) 24)
+(255)
+gosh&gt; (bignum-shift-right '(0 #xffff) 32)
+(0)
+</pre>
+<p><a href="yasp07.html#ans107">解答</a>
+</p>
+
+<h4>●問題108</h4>
+<p> 下表に示す多倍長整数を比較する述語を定義してください。
+</p>
+<table border=1>
+<caption>表 : 多倍長整数の比較関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>bignum=? xs ys</td><td>xs と ys が等しいとき #t を返す</td></tr>
+  <tr><td>bignum&gt;? xs ys</td><td>xs が ys より大きいとき #t を返す</td></tr>
+  <tr><td>bignum&lt;? xs ys</td><td>xs が ys より小さいとき #t を返す</td></tr>
+  <tr><td>bignum&gt;=? xs ys</td><td>xs が ys 以上のとき #t を返す</td></tr>
+  <tr><td>bignum&lt;=? xs ys</td><td>xs が ys 以下のとき #t を返す</td></tr>
+  <tr><td>bignum-zero? xs</td><td>xs が 0 のとき #t を返す</td></tr>
+</tbody>
+</table>
+<pre>
+gosh&gt; (bignum=? '(1 1 1) '(1 1 1))
+#t
+gosh&gt; (bignum=? '(1 1 1) '(1 1))
+#f
+gosh&gt; (bignum&lt;? '(1 0 1) '(1 1 1))
+#t
+gosh&gt; (bignum&lt;? '(1 0 1) '(1 1))
+#f
+gosh&gt; (bignum&gt;? '(2 1 1) '(1 1 1))
+#t
+gosh&gt; (bignum&gt;? '(1 1) '(1 1 1))
+#f
+gosh&gt; (bignum&lt;=? '(1 1 1) '(1 1 1))
+#t
+gosh&gt; (bignum&lt;=? '(2 1 1) '(1 1 1))
+#f
+gosh&gt; (bignum&gt;=? '(1 1 1) '(1 1 1))
+#t
+gosh&gt; (bignum&gt;=? '(1 0 1) '(1 1 1))
+#f
+gosh&gt; (bignum-zero? '(0))
+#t
+gosh&gt; (bignum-zero? '(0 1))
+#f
+</pre>
+<p><a href="yasp07.html#ans108">解答</a>
+</p>
+
+<h4>●問題109</h4>
+<p> 多倍長整数 xs と基数未満の整数 n を加算する関数 bignum-add-int xs n を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-add-int '(#xffff #xffff) 0)
+(65535 65535)
+gosh&gt; (bignum-add-int '(#xffff #xffff) 1)
+(0 0 1)
+gosh&gt; (bignum-add-int '(#xffff #xffff) #xffff)
+(65534 0 1)
+</pre>
+<p><a href="yasp07.html#ans109">解答</a>
+</p>
+
+<h4>●問題110</h4>
+<p> 多倍長整数 xs. ys を加算する関数 bignum-add xs ys を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-add '(#xffff #xffff) '(0 0 1))
+(65535 65535 1)
+gosh&gt; (bignum-add '(#xffff #xffff) '(1 0 1))
+(0 0 2)
+gosh&gt; (bignum-add '(#xffff #xffff) '(0 1 1))
+(65535 0 2)
+</pre>
+<p><a href="yasp07.html#ans110">解答</a>
+</p>
+
+<h4>●問題111</h4>
+<p> 多倍長整数 xs と基数未満の整数 n を減算する関数 bignum-sub-int xs n を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-sub-int '(1) 1)
+(0)
+gosh&gt; (bignum-sub-int '(0 1) 1)
+(65535)
+gosh&gt; (bignum-sub-int '(0 0 1) 1)
+(65535 65535)
+gosh&gt; (bignum-sub-int '(0 0 1) 65535)
+(1 65535)
+gosh&gt; (bignum-sub-int '(0) 1)
+*** ERROR: oops!, underflow
+</pre>
+<p><a href="yasp07.html#ans111">解答</a>
+</p>
+
+<h4>●問題112</h4>
+<p> 多倍長整数 xs. ys を減算する関数 bignum-sub xs ys を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-sub '(0 0 0 1) '(0 0 0 1))
+(0)
+gosh&gt; (bignum-sub '(0 0 0 1) '(0 0 1))
+(0 0 65535)
+gosh&gt; (bignum-sub '(0 0 0 1) '(#xffff #xffff #xffff))
+(1)
+gosh&gt; (bignum-sub '(0 0 1) '(#xffff #xffff #xffff))
+*** ERROR: oops!, underflow
+</pre>
+<p><a href="yasp07.html#ans112">解答</a>
+</p>
+
+<h4>●問題113</h4>
+<p> 多倍長整数 xs と基数未満の整数 n を乗算する関数 bignum-mul-int xs n を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-mul-int '(1 2 3 4 5) 2)
+(2 4 6 8 10)
+gosh&gt; (bignum-mul-int '(1 2 3 4 5) 1)
+(1 2 3 4 5)
+gosh&gt; (bignum-mul-int '(1 2 3 4 5) 0)
+(0)
+gosh&gt; (bignum-mul-int '(#xffff #xffff #xffff) 2)
+(65534 65535 65535 1)
+gosh&gt; (bignum-mul-int '(#xffff #xffff #xffff) #xffff)
+(1 65535 65535 65534)
+</pre>
+<p><a href="yasp07.html#ans113">解答</a>
+</p>
+
+<h4>●問題114</h4>
+<p> 多倍長整数 xs. ys を乗算する関数 bignum-mul xs ys を定義してください。
+</p>
+<pre>
+gosh&gt; (bignum-mul '(1 1 1) '(1 1 1))
+(1 2 3 2 1)
+gosh&gt; (bignum-mul '(#xffff #xffff #xffff) '(1 1 1))
+(65535 65534 65534 0 1 1)
+gosh&gt; (bignum-mul '(#xffff #xffff #xffff) '(1 0 1))
+(65535 65535 65534 0 0 1)
+gosh&gt; (bignum-mul '(#xffff #xffff #xffff) '(0))
+(0)
+</pre>
+<p><a href="yasp07.html#ans114">解答</a>
+</p>
+
+<h4>●問題115</h4>
+<p> 多倍長整数 xs と基数未満の整数 n を除算する関数 bignum-div-int xs n を定義してください。返り値は商と剰余を多値で返すものとします。
+</p>
+<pre>
+gosh&gt; (bignum-div-int '(2 4 6 8) 2)
+(1 2 3 4)
+(0)
+gosh&gt; (bignum-div-int '(1 2 3 4) 2)
+(0 32769 1 2)
+(1)
+gosh&gt; (bignum-div-int '(1 2 3 4) 0)
+*** ERROR: oops!, division by zero
+</pre>
+<p><a href="yasp07.html#ans115">解答</a>
+</p>
+
+<h4>●問題116</h4>
+<p> 多倍長整数 xs. ys を除算する関数 bignum-div xs ys を定義してください。返り値は商と剰余を多値で返すものとします。
+</p>
+<pre>
+gosh&gt; (bignum-div '(0 0 0 1) '(0 0 0 1))
+(1)
+(0)
+gosh&gt; (bignum-div '(0 0 0 1) '(0 0 1))
+(0 1)
+(0)
+gosh&gt; (bignum-div '(0 0 0 1) '(0 1))
+(0 0 1)
+(0)
+gosh&gt; (bignum-div '(0 0 0 1) '(#xffff #xffff))
+(0 1)
+(0 1)
+gosh&gt; (bignum-div '(0 0 0 1) '(0))
+*** ERROR: oops!, division by zero
+</pre>
+<p><a href="yasp07.html#ans116">解答</a>
+</p>
+
+<h4>●問題117</h4>
+<p> 多倍長整数 xs を文字列に変換する関数 bignum-&gt;string xs r を定義してください。r は基数を表す整数値 (r &lt;= 16) です。
+</p>
+<pre>
+gosh&gt; (bignum-&gt;string '(722 18838) 10)
+"1234567890"
+gosh&gt; (bignum-&gt;string '(65535 65535) 16)
+"FFFFFFFF"
+gosh&gt; (bignum-&gt;string '(0 0 0 1) 16)
+"1000000000000"
+gosh&gt; (bignum-&gt;string '(0 0 0 1) 10)
+"281474976710656"
+</pre>
+<p><a href="yasp07.html#ans117">解答</a>
+</p>
+
+<h4>●問題118</h4>
+<p> 文字列 str を多倍長整数に変換する関数 string-&gt;bignum str r を定義してください。r は基数を表す整数値 (r &lt;= 16) です。
+</p>
+<pre>
+gosh&gt; (string-&gt;bignum "1234567890" 10)
+(722 18838)
+gosh&gt; (string-&gt;bignum "ffffffff" 16)
+(65535 65535)
+gosh&gt; (string-&gt;bignum "ffffffffg" 16)
+*** ERROR: oops!, illegal char
+</pre>
+<p><a href="yasp07.html#ans118">解答</a>
+</p>
+
+<h4>●問題119</h4>
+<p> 今まで作成した多倍長整数を使って階乗を求める関数 bignum-fact n を定義してください。ただし、引数 n は基数 (65536) 未満の整数とします。
+</p>
+<pre>
+gosh&gt; (dotimes (x 20) (print (bignum-&gt;integer (bignum-fact x))))
+1
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+39916800
+479001600
+6227020800
+87178291200
+1307674368000
+20922789888000
+355687428096000
+6402373705728000
+121645100408832000
+#t
+</pre>
+<p><a href="yasp07.html#ans119">解答</a>
+</p>
+<h4>●問題120</h4>
+<p> 今まで作成した多倍長整数を使って累乗を求める関数 bignum-power xs n を定義してください。引数 xs は多倍長整数、n は整数とします。
+</p>
+<pre>
+gosh&gt; (bignum-&gt;string (bignum-power (integer-&gt;bignum 2) 8) 10)
+"256"
+gosh&gt; (bignum-&gt;string (bignum-power (integer-&gt;bignum 2) 32) 10)
+"4294967296"
+gosh&gt; (bignum-&gt;string (bignum-power (integer-&gt;bignum 2) 64) 10)
+"18446744073709551616"
+gosh&gt; (bignum-&gt;string (bignum-power (integer-&gt;bignum 2) 128) 10)
+"340282366920938463463374607431768211456"
+</pre>
+<p><a href="yasp07.html#ans120">解答</a>
+</p>
+<hr>
+<h4 id="ans101">●解答101</h4>
+<pre class="list">
+リスト : 整数を多倍長整数に変換する
+
+; SRFI 1 を使用する
+(use srfi-1)
+
+; 定数
+(define *base* #x10000)
+(define *zero* '(0))
+
+; 整数を bignum に変換
+(define (integer-&gt;bignum n)
+  (let loop ((n n) (a '()))
+    (if (zero? n)
+        (if (null? a) *zero* (reverse! a))
+      (loop (quotient n *base*) (cons (modulo n *base*) a)))))
+
+; 別解
+(define (integer-&gt;bignum1 n)
+  (do ((n n (quotient n *base*))
+       (a '() (cons (modulo n *base*) a)))
+      ((zero? n)
+       (if (null? a) *zero* (reverse! a)))))
+</pre>
+<p> integer-&gt;bignum は簡単です。整数 n を基数 *base* で割り算していき、剰余を累積変数 a に格納します。あとは n が 0 になったら、a を reverse! で反転するだけです。このとき、a が空リストであれば、多倍長整数の 0 を表す *zero* を返します。別解は do ループで書き直したものです。
+</p>
+
+<h4 id="ans102">●解答102</h4>
+<pre class="list">
+リスト : 多倍長整数を整数に変換する
+
+(define (bignum-&gt;integer xs)
+  (let loop ((xs xs) (x 1) (a 0))
+    (if (null? xs)
+        a
+      (loop (cdr xs) (* x *base*) (+ (* (car xs) x) a)))))
+
+; 別解
+(define (bignum-&gt;integer1 xs)
+  (do ((xs xs (cdr xs))
+       (x 1 (* x *base*))
+       (a 0 (+ (* (car xs) x) a)))
+      ((null? xs) a)))
+</pre>
+
+<p> bignum-&gt;integer も簡単です。named let で xs から要素を順番に取り出し、位を表す引数 x と掛け算して累積変数 a に加算します。別解は do ループで書き直したものです。
+</p>
+
+<h4 id="ans103">●解答103</h4>
+<pre class="list">
+リスト : 多倍長整数の論理積
+
+; 先頭から連続している 0 を取り除く
+; 最後尾の 0 は取り除かない
+(define (remove-zero xs)
+  (if (or (null? (cdr xs)) (not (zero? (car xs))))
+      xs
+    (remove-zero (cdr xs))))
+
+; 論理積
+(define (bignum-and xs ys)
+  (let loop ((xs xs) (ys ys) (a '()))
+    (if (or (null? xs) (null? ys))
+        (reverse! (remove-zero a))
+      (loop (cdr xs) (cdr ys) (cons (logand (car xs) (car ys)) a)))))
+
+; 別解
+(define (bignum-and1 xs ys)
+  (reverse! (remove-zero (fold (lambda (x y a) (cons (logand x y) a)) '() xs ys))))
+</pre>
+<p> bignum-and は xs と ys の要素を順番に取り出して論理積を計算し、その結果を累積変数 a のリストに追加します。xs または ys が空リストになった場合、残りの要素は 0 との論理積になり結果は 0 になるので、ここで計算を打ち切ります。このとき、a をそのまま反転すると、末尾に余分な 0 が連続する場合があります。関数 remove-zero で先頭から連続している余分な 0 を取り除いてから、a を reverse! で反転します。
+</p>
+<p> 別解は畳み込みを行う関数 fold を使って書き直したものです。
+</p>
+
+<h4 id="ans104">●解答104</h4>
+<pre class="list">
+リスト : 多倍長整数の論理和
+
+; xs を反転して ys と連結
+(define (reverse-append xs ys)
+  (let loop ((xs xs) (ys ys))
+    (if (null? xs)
+        ys
+      (loop (cdr xs) (cons (car xs) ys)))))
+
+; 論理和
+(define (bignum-or xs ys)
+  (let loop ((xs xs) (ys ys) (a '()))
+    (cond ((null? xs)
+           (reverse-append a ys))
+          ((null? ys)
+           (reverse-append a xs))
+          (else
+           (loop (cdr xs) (cdr ys) (cons (logior (car xs) (car ys)) a))))))
+</pre>
+<p> bignum-or は xs と ys の要素を順番に取り出して論理和を計算し、その結果を累積変数 a のリストに追加します。xs が空リストになった場合、ys の残りの要素は 0 との論理和になり結果は ys と同じになります。関数 reverse-append で a を反転して ys と連結します。(reverse-append a ys) は (append (reverse a) ys) と同じです。ys が空リストになった場合は、a を反転して xs と連結します。
+</p>
+
+<p> 畳み込みによる別解は次のようになります。
+</p>
+<pre class="list">
+リスト : 多倍長整数の論理和 (別解)
+
+; 畳み込み (畳み込みの値と残りのリストを多値で返す)
+(define (fold-left2 fn a xs ys)
+  (if (or (null? xs) (null? ys))
+      (values a xs ys)
+    (fold-left2 fn (fn (car xs) (car ys) a) (cdr xs) (cdr ys))))
+
+(define (bignum-or1 xs ys)
+  (receive (zs rxs rys)
+      (fold-left2 (lambda (x y a) (cons (logior x y) a)) '() xs ys)
+    (reverse-append zs (if (pair? rxs) rxs rys))))
+</pre>
+<p> fold-left2 は 2 つのリスト xs と ys を受け取って畳み込みを行い、その結果と残ったリストを多値で返します。別解 bignum-or1 は fold-left2 の返り値を receive で受け取り、それを reverse-append で連結するだけです。
+</p>
+
+<h4 id="ans105">●解答105</h4>
+<pre class="list">
+リスト : 多倍長整数の排他的論理和
+
+(define (bignum-xor xs ys)
+  (let loop ((xs xs) (ys ys) (a '()))
+    (cond ((and (null? xs) (null? ys))
+           (reverse! (remove-zero a)))
+          ((null? xs)
+           (reverse-append a ys))
+          ((null? ys)
+           (reverse-append a xs))
+          (else
+           (loop (cdr xs) (cdr ys) (cons (logxor (car xs) (car ys)) a))))))
+
+; 別解
+(define (bignum-xor1 xs ys)
+  (receive (zs rxs rys)
+      (fold-left2 (lambda (x y a) (cons (logxor x y) a)) '() xs ys)
+    (if (and (null? rxs) (null? rys))
+        (reverse! (remove-zero zs))
+      (reverse-append zs (if (pair? rxs) rxs rys)))))
+</pre>
+<p> bignum-or は xs と ys の要素を順番に取り出して排他的論理和を計算し、その結果を累積変数 a のリストに追加します。xs と ys が空リストになった場合、remove-zero で連続する 0 を取り除いてから、reverse! で a を反転します。xs だけが空リストになった場合、ys の残りの要素は 0 との排他的論理和になり、結果は ys と同じになります。関数 reverse-append で a を反転して ys と連結します。ys だけが空リストになった場合は、a を反転して xs と連結します。
+</p>
+<p> 別解は fold-left2 を使って書き直したものです。
+</p>
+<h4 id="ans106">●解答106</h4>
+<pre class="list">
+リスト : 多倍長整数の左シフト
+
+; 定数
+(define *mask* #xffff)
+(define *base-bit* 16)
+
+; b (b &lt; 16) ビット左シフトする
+(define (bignum-shift-left-bit xs b)
+  (let loop ((xs xs) (c 0) (a '()))
+    (if (null? xs)
+        (reverse! (if (zero? c) a (cons c a)))
+      (loop (cdr xs)
+            (ash (car xs) (- b *base-bit*))
+            (cons (logand (logior (ash (car xs) b) c) *mask*) a)))))
+
+; n ビット左シフトする
+(define (bignum-shift-left xs n)
+  (cond ((zero? n) xs)
+        ((negative? n)
+         (error "oops!, out of range"))
+        ((&lt; n *base-bit*)
+         (bignum-shift-left-bit xs n))
+        (else
+         (let ((a (quotient n *base-bit*))
+               (b (modulo n *base-bit*)))
+           (append (make-list a 0)
+                   (bignum-shift-left-bit xs b))))))
+
+; 別解
+(define (bignum-shift-left-bit1 xs b)
+  (let ((ys (fold (lambda (x a)
+                    (list* (ash x (- b *base-bit*))
+                           (logand (logior (ash x b) (car a)) *mask*)
+                           (cdr a)))
+                  '(0)
+                  xs)))
+    (reverse! (if (zero? (car ys)) (cdr ys) ys))))
+</pre>
+<p> bignum-shift-left は引数 n が 0 の場合は xs をそのまま返します。負の場合はエラーを送出します。*base-bit* 未満の場合は関数 bignum-shift-left-bit を呼び出します。そうでなければ、n を *base-bit* で除算し、商を a に、剰余を b にセットします。そして、xs を b ビットシフトした結果に a 個の 0 を先頭に追加します。
+</p>
+<p> 実際のビットシフトは関数 bignum-shift-left-bit で行います。named let で xs の要素を順番に取り出します。変数 c には左ビットシフトしたときに溢れるビットをセットします。実際には、*base-bit* - b ビット右シフトして、下位 b ビットにセットしておきます。あとは要素 (car x) と c の論理和を求め、それと *mask* の論理積を累積変数 a のリストに格納します。xs が空リストになったら、a を reverse! で反転します。このとき、c が 0 でなければ、a に c を追加します。
+</p>
+<p> 別解は bignum-shift-left-bit を fold で書き直したものです。
+</p>
+
+<h4 id="ans107">●解答107</h4>
+<pre class="list">
+リスト : 多倍長整数の右シフト
+
+; b (b &lt; 16) ビット右シフトする
+(define (bignum-shift-right-bit xs b)
+  (let loop ((xs xs) (a '()))
+    (if (null? xs)
+        (reverse! (remove-zero a))
+      (loop (cdr xs)
+            (cons (logior (ash (car xs) (- b))
+                          (if (null? (cdr xs))
+                              0
+                            (logand (ash (cadr xs) (- *base-bit* b)) *mask*)))
+                  a)))))
+
+; n ビット右シフトする
+(define (bignum-shift-right xs n)
+  (cond ((zero? n) xs)
+        ((negative? n)
+         (error "oops!, out of range"))
+        ((&lt; n *base-bit*)
+         (bignum-shift-right-bit xs n))
+        (else
+         (let ((a (drop xs (quotient n *base-bit*)))
+               (b (modulo n *base-bit*)))
+           (if (null? a)
+               *zero*
+             (bignum-shift-right-bit a b))))))
+</pre>
+<p> bignum-shift-right は引数 n が 0 のときは xs をそのまま返し、負の場合はエラーを送出します。*base-bit* 未満の場合は関数 bignum-shift-right-bit を呼び出します。そうでなければ、n を *base-bit* で除算し、xs の先頭から商の数だけ要素を取り除き、それを a にセットします。剰余は b にセットします。もし a が空リストならば *zero* を返します。そうでなければ、bignum-shift-rigth-bit を呼び出して、a を b ビット右へシフトします。
+</p>
+<p> 実際のビットシフトは関数 bignum-shift-right-bit で行います。named let で xs の要素を順番に取り出し、ビットシフトした結果を累積変数 a のリストに格納します。xs が空リストになったら、remove-zero で a の先頭にある 0 を削除してから reverse! で反転します。ビットシフトは簡単です。(car xs) を b ビット右シフトし、次の要素を *base-bit* - b ビット左シフトして *mask* との論理積を求め、その 2 つの値の論理和を求めるだけです。
+</p>
+
+<h4 id="ans108">●解答108</h4>
+<pre class="list">
+リスト : 多倍長整数の比較
+
+(define (bignum-compare xs ys)
+  (let loop ((xs xs) (ys ys) (r 0))
+    (cond ((null? xs)
+           (if (null? ys) r -1))
+          ((null? ys) 1)
+          (else
+           (loop (cdr xs)
+                 (cdr ys)
+                 (let ((n (- (car xs) (car ys))))
+                   (if (not (zero? n)) n r)))))))
+
+(define (bignum=? xs ys) (equal? xs ys))
+(define (bignum&lt;? xs ys) (negative? (bignum-compare xs ys)))
+(define (bignum&gt;? xs ys) (positive? (bignum-compare xs ys)))
+(define (bignum&lt;=? xs ys) (&lt;= (bignum-compare xs ys) 0))
+(define (bignum&gt;=? xs ys) (&gt;= (bignum-compare xs ys) 0))
+(define (bignum-zero? xs) (equal? xs *zero*))
+
+; 別解
+(define (bignum-compare1 xs ys)
+  (receive (r rxs rys)
+      (fold-left2 (lambda (x y a)
+                    (let ((n (- x y)))
+                      (if (not (zero? n)) n a)))
+                  0 xs ys)
+    (cond ((pair? rxs) 1)
+          ((pair? rys) -1)
+          (else r))))
+</pre>
+<p> bignum=? は xs と ys を equal? で比較し、bignum-zero? は xs と *zero* を equal? で比較するだけです。あとの述語は関数 bignum-compare を呼び出して比較します。bignum-compare は xs と ys が等しい場合は 0 を、xs のほうが大きい場合は正の値を、xs のほうが小さい場合は負の値を返します。
+</p>
+<p> bignum-compare は 2 つのリストを順番にたどっていき、xs が先に空リストになったら -1 を、ys が先に空リストになったら 1 を返します。両方とも空リストになった場合、リストの長さが等しいので要素の値を比較します。リストをたどるとき、(- (car xs) (car ys)) を計算し、その値が 0 でなければ変数 r の値を更新します。もし、r の値が 0 ならば xs と ys は同じ値であることがわかります。負の場合、ys には xs よりも大きい要素が上位の桁にあるので、ys のほうが大きいことがわかります。逆に正の場合は xs が大きいことになります。
+</p>
+<p> 別解は bignum-compare を fold-left2 で書き直したものです。
+</p>
+
+<h4 id="ans109">●解答109</h4>
+<pre class="list">
+リスト : 多倍長整数と整数の加算
+
+(define (integer-add x y c)
+  (let ((n (+ x y c)))
+    (if (&lt; n *base*)
+        (values n 0)
+      (values (- n *base*) 1))))
+
+(define (bignum-add-int xs c)
+  (let loop ((xs xs) (c c) (a '()))
+    (cond ((null? xs)
+           (reverse! (remove-zero (cons c a))))
+          ((zero? c)
+           (reverse-append a xs))
+          (else
+           (receive (n m)
+               (integer-add (car xs) 0 c)
+             (loop (cdr xs) m (cons n a)))))))
+</pre>
+<p> bignum-add-int は最下位の桁と引数 c を加算し、桁上がりがあればそれを上位の桁に加算します。あとは、桁上げの処理を繰り返すだけです。整数同士の加算は関数 integer-add で行います。引数 x, y, c を加算し、その値 n が *base* 未満であれば n と 0 を values で返します。そうでなければ、(- n *base*) と 1 を values で返します。
+</p>
+
+<h4 id="ans110">●解答110</h4>
+<pre class="list">
+リスト : 多倍長整数の加算
+
+(define (bignum-add xs ys)
+  (let loop ((xs xs) (ys ys) (c 0) (a '()))
+    (cond ((null? xs)
+           (if (null? ys)
+               (reverse! (remove-zero (cons c a)))
+             (reverse-append a (bignum-add-int ys c))))
+          ((null? ys)
+           (reverse-append a (bignum-add-int xs c)))
+          (else
+           (receive (n m)
+               (integer-add (car xs) (car ys) c)
+             (loop (cdr xs) (cdr ys) m (cons n a)))))))
+
+; 別解
+(define (bignum-add1 xs ys)
+  (receive (zs rxs rys)
+      (fold-left2 (lambda (x y a)
+                    (receive (n m)
+                        (integer-add x y (car a))
+                      (list* m n (cdr a))))
+                  '(0) xs ys)
+    (cond ((null? rxs)
+           (if (null? rys)
+               (reverse! (remove-zero zs))
+             (reverse-append (cdr zs) (bignum-add-int rys (car zs)))))
+          (else
+           (reverse-append (cdr zs) (bignum-add-int rxs (car zs)))))))
+</pre>
+<p> bignum-add は xs と ys の要素と桁上げを表す変数 c を integer-add で加算し、その結果を累積変数 a のリストに格納していきます。xs が空リストで、かつ ys も空リストの場合、a に c を追加して、remove-zero で 0 を取り除いてから reverse! で反転します。ys が空リストでない場合、bignum-add-int で ys に c を加算し、その結果に a を反転したリストを連結します。ys が空リストの場合、xs は空リストではないので、xs に c を加算して、その結果に a を反転したリストを連結します。
+</p>
+<p> 別解は fold-left2 で書き直したものです。
+</p>
+
+<h4 id="ans111">●解答111</h4>
+<pre class="list">
+リスト : 多倍長整数と整数の減算
+
+(define (integer-sub x y c)
+  (let ((n (- x y c)))
+    (if (negative? n)
+        (values (+ n *base*) 1)
+      (values n 0))))
+
+(define (bignum-sub-int xs c)
+  (let loop ((xs xs) (c c) (a '()))
+    (cond ((null? xs)
+           (if (positive? c)
+               (error "oops!, underflow")
+             (reverse! (remove-zero a)))) 
+          ((zero? c)
+           (reverse-append a xs))
+          (else
+           (receive (n m)
+               (integer-sub (car xs) 0 c)
+             (loop (cdr xs) m (cons n a)))))))
+</pre>
+<p> bignum-sub-int は最下位の桁と引数 c を減算し、桁借りがあればそれを上位の桁から減算します。あとは、桁借りの処理を繰り返すだけです。xs が空リストで、桁借りの値 c が正であれば、計算結果は負になるのでエラーを送出します。そうでなければ、remove-zero で 0 を取り除いてから a を反転します。
+</p>
+<p> integer-sub は x から y と c を減算して変数 n にセットします。もし、n が負になったならば、n + *base* と桁借りを表す 1 を valuse で返します。そうでなければ、n と 0 を values で返します。
+</p>
+
+<h4 id="ans112">●解答112</h4>
+<pre class="list">
+リスト : 多倍長整数の減算
+
+(define (bignum-sub xs ys)
+  (let loop ((xs xs) (ys ys) (c 0) (a '()))
+    (cond ((null? ys)
+           (let ((zs (bignum-sub-int xs c)))
+             (if (bignum-zero? zs)
+                 (reverse! (remove-zero a))
+               (reverse-append a zs))))
+          ((null? xs)
+           (error "oops!, underflow"))
+          (else
+           (receive (n m)
+               (integer-sub (car xs) (car ys) c)
+             (loop (cdr xs) (cdr ys) m (cons n a)))))))
+
+; 別解
+(define (bignum-sub1 xs ys)
+  (receive (r rxs rys)
+      (fold-left2 (lambda (x y a)
+                    (receive (n m)
+                        (integer-sub x y (car a))
+                      (list* m n (cdr a))))
+                  '(0) xs ys)
+    (cond ((null? rys)
+           (let ((zs (bignum-sub-int rxs (car r))))
+             (if (bignum-zero? zs)
+                 (reverse! (remove-zero (cdr r)))
+               (reverse-append (cdr r) zs))))
+          (else
+           (error "oops!, underflow")))))
+</pre>
+<p> bignum-sub は xs と ys の要素と桁借りを表す変数 c を integer-sub で減算し、その結果を累積変数 a のリストに格納していきます。ys が空リストで xs が空リストでない場合、bignum-sub-int で xs から c を減算し、その結果を変数 zs にセットします。zs が 0 の場合、remove-zero で 0 を取り除いてから reverse! で反転します。zs が 0 でなければ、reverse-append で zs に a を反転したリストを連結します。xs が空リストの場合、結果は負になるのでエラーを送出します。
+</p>
+<p> 別解は fold-left2 で書き直したものです。
+</p>
+
+<h4 id="ans113">●解答113</h4>
+<pre class="list">
+リスト : 多倍長整数と整数の乗算
+
+(define (integer-mul x y c)
+  (let ((n (+ (* x y) c)))
+    (if (&lt; n *base*)
+        (values n 0)
+      (values (modulo n *base*) (quotient n *base*)))))
+
+(define (bignum-mul-int xs x)
+  (cond ((zero? x) *zero*)
+        ((= x 1) xs)
+        (else
+         (let loop ((xs xs) (c 0) (a '()))
+           (cond ((null? xs)
+                  (reverse! (remove-zero (cons c a))))
+                 (else
+                  (receive (n m)
+                      (integer-mul (car xs) x c)
+                    (loop (cdr xs) m (cons n a)))))))))
+</pre>
+<p> bignum-mul-int は引数 x が 0 ならば *zero* を、1 ならば xs をそのまま返します。それ以外の場合、xs の最下位の桁から順番に x と掛け算して、値を累積変数 a のリストに格納します。桁上がりは変数 c に格納して、上位の桁に足し算します。整数の乗算は関数 integer-mul で行います。引数 x, y が乗算する整数、c が桁上がりで加算する値です。x * y + c を n にセットし、値が *base* 未満であれば n と 0 を valuse で返します。そうでなければ、n と *base* の剰余と商を values で返します。
+</p>
+
+<h4 id="ans114">●解答114</h4>
+<pre class="list">
+リスト : 多倍長整数の乗算
+
+; fixed integer か
+(define (fixint? xs) (null? (cdr xs)))
+
+; 多倍長整数の乗算
+(define (bignum-mul xs ys)
+  (cond ((fixint? xs)
+         (bignum-mul-int ys (car xs)))
+        ((fixint? ys)
+         (bignum-mul-int xs (car ys)))
+        (else
+         (let loop ((xs xs) (ys ys) (a *zero*))
+           (if (null? ys)
+               a
+             (loop
+               (cons 0 xs)
+               (cdr ys)
+               (bignum-add (bignum-mul-int xs (car ys)) a)))))))
+</pre>
+<p> 多倍長整数同士の乗算は筆算と同じ方法で行います。簡単な例を示しましょう。
+</p>
+<pre class="fig">
+xs : (4 3 2 1)
+ys : (7 6 5)
+
+        1   2   3   4
+*           5   6   7
+----------------------
+        7  14  21  28
+    6  12  18  24   0
+5  10  15  20   0   0
+----------------------
+5  16  34  52  45  28
+
+図 : 多倍長整数の乗算
+</pre>
+<p> 上図のように、xs を 16 bit 左シフトしながら ys の要素を掛け算し、その値を加算していけばいいわけです。
+</p>
+<p> bignum-mul は引数 xs, ys が *base* 未満の整数であれば、bignum-mul-int を呼び出して計算します。そうでなければ、xs と ys の要素の乗算を bignum-mul-int で求め、累積変数 a にその値を bignum-add で加算します。ys の次の要素を乗算するとき、xs の先頭に 0 を挿入して 16 bit 左シフトします。
+</p>
+
+<p> なお、今回の方法は桁数が多くなると遅くなります。これよりも高速な方法として「Karatsuba 法」や「高速フーリエ変換」を使った方法があります。これらのアルゴリズムについては、<a href="http://www1.s2.starcat.ne.jp/fussy/">Fussy さん</a> の <a href="http://fussy.web.fc2.com/algo/algo10-3.htm">乗算処理の高速化</a>, <a href="http://fussy.web.fc2.com/algo/algo10-4.htm">高速フーリエ変換</a>、<a href="http://homepage2.nifty.com/m_kamada/">M.Kamada さん</a> の <a href="http://homepage2.nifty.com/m_kamada/math/fftmul.htm">離散フーリエ変換を用いた多倍長乗算の話</a> が参考になると思います。
+</p>
+<h4 id="ans115">●解答115</h4>
+<pre class="list">
+リスト : 多倍長整数と整数の除算
+
+(define (integer-div x y c)
+  (let ((n (+ (* c *base*) x)))
+    (values (quotient n y) (modulo n y))))
+
+(define (bignum-div-int xs x)
+  (cond ((zero? x)
+         (error "oops!, division by zero"))
+        ((= x 1) (values xs *zero*))
+        (else
+         (let loop ((xs (reverse xs)) (c 0) (a '()))
+           (if (null? xs)
+               (values (if (null? a) *zero* a) (list c))
+             (receive (n m)
+                 (integer-div (car xs) x c)
+               (loop (cdr xs)
+                     m
+                     (if (or (positive? n) (pair? a)) (cons n a) a))))))))
+</pre>
+<p> bignum-div-int は引数 x が 0 の場合はエラーを送出し、1 の場合は xs と 0 を valuse で返します。それ以外の場合は、xs の上位の桁から順番に整数 x で除算していきます。このため、xs を reverse で反転しています。named let の変数 c には上位の桁の余りをセットします。あとは、関数 integer-sub で xs の要素と x の除算を行います。このとき、c * *base* を加えてから x で割ることに注意してください。あとは商と剰余を values で返します。
+</p>
+<p> bignum-div-int は上位の桁から処理を行うため、リストの末尾に 0 が付加されないように工夫する必要があります。値が 0 でない場合、または累積変数 a が空リストでない場合、値を a に追加します。それ以外の場合、つまり、a が空リストで値が 0 の場合は追加しません。最後に、a が空リストであれば *zero* と (list c) を、そうでなければ a と (list c) を valuse で返します。
+</p>
+<h4 id="ans116">●解答116</h4>
+<p> 多倍長整数の除算は筆算と同じ方法で行いますが、かなり複雑な処理になります。ここではアルゴリズムの概略を説明するだけにとどめます。詳細は <a href="yasp07.html#cite">参考文献</a> をお読みください。
+</p>
+<pre class="list">
+リスト : 多倍長整数の除算 (擬似コード)
+
+xs = (x1 x2 ... xn), ys = (y1 y2 ... ym) とし、xs / ys の商と剰余を求める
+
+*base* / 2 &lt;= ym * d &lt; *base* を満たす d を求め、(xs * d) / (ys * d) を計算する
+
+xs1 = xs * d とする
+xs1 と同じ桁数になるよう (ys * d) の下位に 0 を追加たものを ys1 とする
+このとき、追加した 0 の個数を s とする
+
+qs = ()
+while( s &gt;= 0 ){
+  xs1 / ys1 の仮の商 q' を求める。
+    (1) xs1 が ys1 よりも少ない桁数の場合、q' は 0 である
+    (2) xs1 と ys1 の桁数 (n) が同じ場合、q' = xn / yn とする
+    (3) xs1 が n 桁, ys1 が n - 1 桁の場合、q' = min( (xn * *base* + xn-1) / yn-1, *base* - 1 ) とする
+
+  if( q' > 0 ){
+    ys2 = ys1 * q'
+    while( xs1 &lt; ys2 ){
+      q' = q' - 1
+      ys2 = ys2 - ys1
+    }
+    xs1 = xs1 - ys2
+  }
+
+  q' を qs に追加する
+  ys1 の最下位から 0 を取り除く
+  s = s - 1
+}
+
+商は qs, 剰余は xs1 / d となる。
+</pre>
+<p> ポイントは仮の商 q' を求める処理です。ys1 の最上位の桁 ym が条件 (A) *base* / 2 &lt;= ym &lt; *base* を満たしている場合、(2) であれば q' は 0 か 1 になります。(3) であれば xs1 の上位 2 桁と ys1 の上位 1 桁 (ym) から仮の商を求めます。このとき、真の商を q とすると、条件 (A) を満たしているならば次の式が成り立ちます。
+</p>
+<pre class="item">
+q &lt;= q' &lt;= q + 2
+</pre>
+<p> したがって、q の値は q', q' - 1, q' - 2 のどれかになります。ys2 = ys1 * q' を計算し、xs1 &lt; ys2 であれば q' から 1 を、ys2 から ys1 を引き算します。これを xs1 &gt;= ys2 になるまで繰り返しますが、最悪でも 2 回の繰り返しで済むわけです。
+</p>
+<p> 商 q が q' - 1 と q' - 2 になる例を示します。
+</p>
+<pre class="fig">
+xs1 = (65535 65535 32767)
+ys1 = (65535 32768)
+
+q' = (32767 * *base* + 65535) / 32768 = 65535
+ys2 = (65535 32768) * 65535 = (1 32766 32768) &gt; xs1
+
+q' = q' - 1 = 65534
+ys2 = ys2 - ys1 = (2 65533 32767) &lt; xs1
+
+q' = 65534, xs1 = xs1 - ys2 = (65533 2)
+
+-----------------------------------------------------
+xs1 = (65535 0 32767)
+ys1 = (65535 32768)
+
+q' = (32767 * *base* + 0) / 32768 = 65534
+ys2 = (65535 32768) 65534 = (2 65533 32767) &gt; xs1
+
+q' = q' - 1
+ys2 = ys2 - ys1 = (3 32764 32767) &gt; xs1
+q' = q' - 1
+ys2 = ys2 - ys1 = (4 65531 32766) &lt; xs1
+
+q' = 65532, xs1 = xs1 - ys2 = (65531 5)
+</pre>
+
+<p> なお、(3) を満たしているとき、より高い精度で仮の商 q' を求める方法があります。有名なクヌース先生のアルゴリズムＤはこの方法を使っています。除算のアルゴリズムについては、<a href="yasp07.html#cite">参考文献 [2]</a> がわかりやすくまとまっていると思います。また、乗算の処理が高速な場合、ニュートン法で ys の逆数 1 / ys を求め、xs * (1 / ys) を計算することで除算を高速に実行することができます。
+</p>
+
+<p> 擬似コードをそのままプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 多倍長整数の除算
+
+; 定数
+(define *half-base* #x8000)
+
+; シフトするビット数を求める
+(define (get-shift-bit n)
+  (let loop ((n n) (c 0))
+    (if (&lt;= *half-base* n)
+        c
+      (loop (ash n 1) (+ c 1)))))
+
+; 仮の商を求める
+(define (get-quot xs ys)
+  (cond ((null? xs) 0)
+        ((null? (cdr ys))
+         (if (null? (cdr xs))
+             ; 同じ桁だから商は 0 または 1
+             (quotient (car xs) (car ys))
+           ; 2 桁と 1 桁
+           (quotient (+ (* (cadr xs) *base*) (car xs)) (car ys))))
+        (else
+         (get-quot (cdr xs) (cdr ys)))))
+
+; 多倍長整数の除算
+(define (bignum-div xs ys)
+  (cond ((fixint? ys)
+         (bignum-div-int xs (car ys)))
+        ((bignum&lt;? xs ys)
+         (values *zero* xs))
+        (else
+         (let* ((d (get-shift-bit (last ys)))
+                (xs1 (bignum-shift-left xs d))
+                (s (- (length xs1) (length ys)))
+                (ys1 (bignum-shift-left ys (+ (* *base-bit* s) d)))
+                (q '()))
+           (do ((s s (- s 1))
+                (ys1 ys1 (cdr ys1)))
+               ((negative? s) (values q (bignum-shift-right xs1 d)))
+              (let ((quot (min (get-quot xs1 ys1) (- *base* 1))))
+                (if (positive? quot)
+                    (do ((quot quot (- quot 1))
+                         (ys2 (bignum-mul-int ys1 quot)
+                              (bignum-sub ys2 ys1)))
+                        ((bignum&gt;=? xs1 ys2)
+                         (push! q quot)
+                         (set! xs1 (bignum-sub xs1 ys2))))
+                  (if (pair? q) (push! q 0))))))))) 
+</pre>
+<p> 関数 get-shift-bit は ys の最上位の値が *base* / 2 以上になるよう、左シフトするビット数を求めます。関数 get-quot は仮の商を求めます。xs が空リストならば、xs の桁は ys よりも少ないので 0 を返します。ys が末尾の要素で、かつ xs も末尾の要素であれば、同じ桁数なので (car xs) / (car ys) を返します。そうでなければ、xs の上位 2 桁を求め、それを (car ys) で割り算します。関数 bignum-div は説明をそのままプログラムしただけなので、とくに難しいところはないと思います。
+</p>
+<div class="note">
+-- <a name="cite">参考文献</a> --------<BR>
+[1] <a href="http://www1.s2.starcat.ne.jp/fussy/">Fussy's HOMEPAGE</a>, <a href="http://fussy.web.fc2.com/algo/algo10-2.htm">多倍長整数の演算</a><BR>
+[2] 野呂春文, <a href="http://research.n-fukushi.ac.jp/ps/research/usr/db/pdfs/00070-00010.pdf">大きな整数の除算アルゴリズム (PDF)</a>
+</div>
+<h4 id="ans117">●解答117</h4>
+<pre class="list">
+リスト : 多倍長整数を文字列に変換する
+
+(define *char-table*
+  '(#\0 #\1 #\2 #\3 #\4 #\5 #\6 #\7 #\8 #\9 #\A #\B #\C #\D #\E #\F))
+
+(define (bignum-&gt;string xs r)
+  (let loop ((xs xs) (a '()))
+    (if (bignum-zero? xs)
+        (list-&gt;string a)
+      (receive (n m)
+          (bignum-div-int xs r)
+        (loop n (cons (list-ref *char-table* (car m)) a))))))
+</pre>
+<p> bignum-&gt;string は簡単です。bignum-div-int で xs を基数 r で割り算し、*char-table* から (car m) 番目の要素を求め、それを累積変数 a のリストに追加します。この処理を xs が 0 になるまで繰り返し、最後に関数 list-&gt;string で a を文字列に変換します。
+</p>
+<h4 id="ans118">●解答118</h4>
+<pre class="list">
+リスト : 文字列を多倍長整数に変換する
+
+(define (position x xs)
+  (let loop ((xs xs) (n 0))
+    (cond ((null? xs) #f)
+          ((eqv? (car xs) x) n)
+          (else
+           (loop (cdr xs) (+ n 1))))))
+
+(define (string-&gt;bignum str r)
+  (let loop ((xs (string-&gt;list str)) (a *zero*))
+    (if (null? xs)
+        a
+      (let ((n (position (char-upcase (car xs)) *char-table*)))
+        (if (or (not n) (&lt;= r n))
+            (error "oops!, illegal char"))
+        (loop (cdr xs)
+              (bignum-add-int (bignum-mul-int a r) n))))))
+</pre>
+<p> string-&gt;bignum も簡単です。文字列 str を関数 string-&gt;list でリストに変換し、named let で 1 文字ずつ順番に取り出します。そして、関数 position で文字を数値 n に変換します。このとき、英小文字を char-upcase で英大文字に変換しています。文字が見つからない場合、または n が基数 r 以上の場合はエラーを送出します。あとは、bignum-mul-int で累積変数 a と基数 r を掛け算し、それに bignum-add-int で n を加算していくだけです。最後に a を返します。
+</p>
+
+<h4 id="ans119">●解答119</h4>
+<pre class="list">
+リスト : 階乗
+
+(define (bignum-fact n)
+  (if (zero? n)
+      (integer-&gt;bignum 1)
+    (bignum-mul-int (bignum-fact (- n 1)) n)))
+</pre>
+<p> bignum-fact は引数 n が *base* 未満の整数なので、bignum-fact の返り値と n を bignum-mul-int で掛け算していくだけです。
+</p>
+
+<h4 id="ans120">●解答120</h4>
+<pre class="list">
+リスト : 累乗
+
+(define (bignum-power xs n)
+  (if (zero? n)
+      (integer-&gt;bignum 1)
+    (let* ((ys (bignum-power xs (quotient n 2)))
+           (zs (bignum-mul ys ys)))
+      (if (even? n)
+          zs
+        (bignum-mul zs xs)))))
+</pre>
+<p> bignum-power を再起呼び出しして xs<SUP>n/2</SUP> を求め ys にセットし、bignum-mul で ys * ys を求めて zs にセットします。n が偶数の場合は zs を返し、そうでなければ、bignum-mul で xs * zs を求めて返します。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="yasp06.html">PrevPage</a> | <a href="scheme.html#yasp">Scheme</a> | <a href="yasp08.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 OCaml プログラミング入門</title>
+  <meta name="description" content="OCaml,ML,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881750</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 OCaml プログラミング入門</h2>
+<div class="small">
+[ <a href="ocaml08.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml10.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">モジュール</h3>
+<p> 「モジュール (module) 」はデータ構造とそれを操作する関数を一つにまとめるための仕組みです。最近はモジュールに相当する機能を持つプログラミング言語が多くなりました。もちろん、OCaml にもモジュールがあります。List や Array などの標準ライブラリはモジュールにまとめられています。
+</p>
+
+<h4>●スタック</h4>
+<p> 簡単な例として「スタック (stack) 」というデータ構造を考えてみましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+   |-----|     |[ A ]|     |[ B ]|     |[ A ]|     |-----|
+   |  |  |     |-----|     |[ A ]|     |-----|     |  |  |
+   |  |  |     |  |  |     |-----|     |  |  |     |  |  |
+   |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+   |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+   +-----+     +-----+     +-----+     +-----+     +-----+
+(1) 空の状態 (2) PUSH A  (3) PUSH B  (4) POP B   (5) POP A  
+
+                図 1 : スタックの動作例
+</pre>
+<p> 上図は、バネがついた容器を表していて、上から品物を出し入れすることができます。初めは空の状態です。ここに品物を乗せると、重さによってバネを圧縮し、品物が容器に格納されます。さらにもう一つ品物を上に乗せると、さらにバネを圧縮し、その品物も容器に格納することができます。バネが限界まで圧縮されると、もう品物は追加できなくなります。取り出す場合は、上にある品物から行います。一つ取り出すと、その分バネが伸びて下にある品物が上に押し出されます。
+</p>
+
+<p> この容器の動作が、スタックの動作なのです。スタックにデータを追加する操作をプッシュ (PUSH) といい、スタックからデータを取り出す操作をポップ (POP) といいます。品物をデータに見立てれば、データ A をスタックにプッシュし (2)、次にデータ B をプッシュします (3)。データを取り出す場合、あとから入れたデータ B が先にポップされ (4)、その次にデータ A がポップされてスタックが空になります (5)。このように、スタックはあとから入れたデータが先に取り出されるので、後入れ先出し (LIFO : Last-In, First-Out) と呼ばれます。
+</p>
+
+<p> なお、OCaml には標準ライブラリにモジュール Stack が用意されています。今回は OCaml の勉強ということで、実際にスタックを作ってみましょう。
+</p>
+<h4>●スタックの定義</h4>
+<p> OCaml の場合、スタックはリストを使って簡単に実現することができます。データを追加するときはリストの先頭に追加し、データを取り出すときはリストの先頭から行うように操作を限定すると、スタックの動作と同じになります。
+</p>
+
+<p> 最初はモジュールを使わずにプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 1 : スタック
+
+(* 例外 *)
+exception Empty
+
+(* スタックの定義 *)
+type 'a stack = SNil | SCell of 'a * 'a stack
+
+(* 空のスタック *)
+let create = SNil
+
+(* データの追加 *)
+let push st x = SCell (x, st)
+
+(* データの取得 *)
+let top = function
+  SNil -&gt; raise Empty
+| SCell (x, _) -&gt; x
+
+(* データの削除 *)
+let pop = function
+  SNil -&gt; raise Empty
+| SCell (_, xs) -&gt; xs
+
+(* スタックは空か *)
+let is_empty st = st = SNil
+</pre>
+
+<p> 最初に type でスタック 'a stack を定義します。リストを使ってもいいのですが、ここではヴァリアントで stack 型を定義しています。データ構造はリストと同じです。空のスタックを返す create は関数ではなく変数として定義します。
+</p>
+<p> スタックの操作関数は簡単です。push はデータを stack の先頭に追加します。pop は stack の先頭要素を取り除きます。データの取得は関数 top で行います。スタックが空の場合、pop と top を適用することができないので、例外 Empty を送出します。関数 is_empty はスタックが空かチェックする述語です。
+</p>
+
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+# let a0 = create;;
+val a0 : 'a stack = SNil
+# let a1 = push a0 1;;
+val a1 : int stack = SCell (1, SNil)
+# let a2 = push  a1 2;;
+val a2 : int stack = SCell (2, SCell (1, SNil))
+# top a2;;
+- : int = 2
+# let a3 = pop a2;;
+val a3 : int stack = SCell (1, SNil)
+# is_empty a3;;
+- : bool = false
+# let a4 = pop a3;;
+val a4 = int stack = SNil
+# is_empty a4;;
+- : bool = true
+</pre>
+<p> 正常に動作していますね。関数型言語の場合、変数の値を書き換えることができないので、push や pop の返り値を別の変数に格納する必要があります。このとき、参照型の変数にスタックを格納すれば、値を書き換えることができるので便利なように思います。実際、OCaml のモジュール Stack は mutable なレコードにリストを格納しています。これはあとで試してみましょう。
+</p>
+
+<h4>●モジュールの定義</h4>
+<p> それでは、モジュールを使ってスタックを定義してみましょう。OCaml の場合、キーワード module を使ってモジュールを定義することができますが、もう一つ簡単な方法があります。OCaml はソースファイルをモジュールとして扱うことができす。
+</p>
+
+<p> たとえば、スタックのプログラムがファイル stack.ml に格納されているとしましょう。ここで stack.ml を ocamlc で次のようにバイトコンパイルします。
+</p>
+<pre>
+C&gt;ocamlc -c stack.ml
+
+C&gt;dir /B stack.*
+stack.cmi
+stack.cmo
+stack.ml
+</pre>
+<p> stack.cmi は stack.ml のインターフェースを記述したもので、stack.cmo は stack.ml をコンパイルしたオブジェクトファイルです。cmo ファイルはディレクティブ #load でロードすることができます。このとき、cmo ファイルはファイル名の先頭を英大文字に変えたモジュールとして扱われます。つまり stack.cmo をロードすると、そこに定義されている関数や変数は Stack というモジュールに格納されます。
+</p>
+<pre>
+# #load "stack.cmo";;
+# let a = Stack.create;;
+val a = 'a Stack.stack = Stack.SNil
+</pre>
+<p> このように、cmo ファイルをロードすると、そこに定義されている関数や変数は "モジュール名 + ドット ( . ) + 名前" でアクセスすることができます。また、open 宣言を使うと、モジュール名を省略することができます。
+</p>
+<pre>
+# open Stack;;
+# let b = create;;
+val b = 'a Stack.stack = SNil
+</pre>
+<p> open 宣言は同じ名前が既に存在している場合、元の名前を隠蔽してしまいます。ご注意ください。
+</p>
+<p> このように、ソースファイルをモジュールとして扱うことができると、複数の関数や変数を簡単にまとめることができるのでとても便利です。たとえば、標準ライブラリの List モジュールはこの方法で定義されています。
+</p>
+
+<h4>●module による実装</h4>
+<p> 次は module 宣言を使ってモジュールを定義する方法を説明します。module の構文を示します。
+</p>
+<pre class="item">
+module 名前 = struct ... end
+</pre>
+<p> struct ... end がモジュールの本体です。この中で変数、関数、例外、データ型などを定義します。モジュール名を Stack とすると、スタックのプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 2 : モジュールの定義
+
+module Stack = struct
+  (* 例外 *)
+  exception Empty
+
+  (* スタックの定義 *)
+  type 'a stack = SNil | SCell of 'a * 'a stack
+
+  (* 空のスタック *)
+  let create = SNil
+
+  (* データの追加 *)
+  let push st x = SCell (x, st)
+
+  (* データの取得 *)
+  let top = function
+    SNil -&gt; raise Empty
+  | SCell (x, _) -&gt; x
+
+  (* データの削除 *)
+  let pop = function
+    SNil -&gt; raise Empty
+  | SCell (_, xs) -&gt; xs
+
+  (* スタックは空か *)
+  let is_empty st = st = SNil
+end
+</pre>
+<p> OCaml の場合、モジュール名は英大文字で始めます。リスト 2 はstruct と end の間にスタックのプログラム (リスト 1) をそのまま書いただけです。とても簡単ですね。実際に Stack を定義すると次のように表示されます。
+</p>
+<pre>
+module Stack :
+  sig
+    exception Empty
+    type 'a stack = SNil | SCell of 'a * 'a stack
+    val create : 'a stack
+    val push : 'a stack -&gt; 'a -&gt; 'a stack
+    val top : 'a stack -&gt; 'a
+    val pop : 'a stack -&gt; 'a stack
+    val is_empty : 'a stack -&gt; bool
+  end
+</pre>
+<p> sig ... end を「シグネチャ (signature) 」といいます。シグネチャはモジュールの仕様を記述するものですが、OCaml のシグネチャはモジュールの型も表しています。モジュールを定義するとシグネチャが生成されますが、ユーザーがシグネチャを定義して、それをモジュールに設定することもできます。シグネチャは次節で詳しく説明します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+# let a0 = Stack.create;;
+val a0 : 'a Stack.stack = Stack.SNil
+# let a1 = Stack.push a0 1;;
+val a1 : int Stack.stack = Stack.SCell (1, Stack.SNil)
+# let a2 = Stack.push  a1 2;;
+val a2 : int Stack.stack = Stack.SCell (2, Stack.SCell (1, Stack.SNil))
+# Stack.top a2;;
+- : int = 2
+# let a3 = Stack.pop a2;;
+val a3 : int Stack.stack = Stack.SCell (1, Stack.SNil)
+# Stack.is_empty a3;;
+- : bool = false
+# let a4 = Stack. pop a3;;
+val a4 = int Stack.stack = Stack.SNil
+# Stack.is_empty a4;;
+- : bool = true
+</pre>
+<p> Stack を open すると、もっと簡単にアクセスできるようになります。
+</p>
+<h4>●シグネチャとデータ抽象</h4>
+<p> 次はシグネチャについて説明します。シグネチャは module type 宣言を使って定義します。
+</p>
+<pre class="item">
+module type 名前 = sig ... end
+</pre>
+<p> sig ... end がシグネチャの本体です。この間にモジュールの仕様を書きます。主な仕様は次のように記述します。
+</p>
+<ul>
+  <li>データ型は type で記述する。
+  <li>例外は exception で記述する。
+  <li>関数、変数は "val 名前 : 型式" で記述する。
+</ul>
+<p> シグネチャはモジュールの仕様を記述したものですが、もう一つ重要な役割として外部とのインターフェースがあります。たとえば、モジュールの内部だけで使用する変数や関数は、外部から使われることがないように隠した方がよいでしょう。このような場合、外部に公開する関数や変数だけをシグネチャに記述すればよいのです。シグネチャに記述されていない変数や関数は非公開となり、外部からアクセスすることができなくなります。
+</p>
+
+<p> また、type で定義されているコンストラクタも、シグネチャに記述しなければ隠蔽することができます。たとえば Stack の場合、次のように type でデータ型が宣言されています。
+</p>
+<pre class="item">
+type 'a stack = SNil | SCell of 'a * 'a stack
+</pre>
+<p> この場合、コンストラクタ SNil や SCell が公開されるので、パターンマッチングを使って要素を取り出すことができます。
+</p>
+<pre>
+# a1;;
+- : int Stack.stack = SCell(1, SNil)
+# let SCell(x, _) = a1;;
+
+... 警告 ...
+
+val x : int = 1
+</pre>
+<p> 警告が出ますが無視してください。このように、スタックを直接操作してデータを取り出すことができます。データ構造を隠蔽したい場合、シグネチャで宣言する type の右辺を記述しません。具体的には次のようにシグネチャを定義します。
+</p>
+<pre class="list">
+リスト 3 : データ構造の隠蔽
+
+module type STACK = sig
+  type 'a stack 
+  exception Empty
+  val create : 'a stack
+  val push : 'a stack -&gt; 'a -&gt; 'a stack  
+  val pop : 'a stack -&gt; 'a stack
+  val top : 'a stack -&gt; 'a
+  val is_empty : 'a stack -&gt; bool
+end
+
+module Stack1: STACK = Stack
+</pre>
+
+<p> シグネチャの名前はモジュールと同様に英大文字から始めます。ここでは STACK としました。モジュールにシグネチャを指定する場合、モジュール名の後ろにコロン ( : ) を付けて、その後ろにシグネチャを指定します。
+</p>
+<p> OCaml の場合、変数の型を指定するときは "変数名 : 型式" で行います。シグネチャはモジュールの型を表すので、"モジュール名 : シグネチャ" でシグネチャを指定することができます。
+</p>
+
+<p> この他にも、シグネチャは名前を付けずに指定することもできます。簡単な例を示します。
+</p>
+<pre class="item">
+module Foo : sig ... end = struct ... end
+module Foo = (struct ... end : sig ... end)
+</pre>
+<p> struct の後ろにシグネチャを定義する場合はカッコで囲む必要があります。コロン ( : ) の後ろにシグネチャを指定するところは、どちらの方法でも同じです。
+</p>
+
+<p> これでコンストラクタを利用することができなくなります。簡単な例を示しましょう。
+</p>
+<pre>
+# let a0 = Stack1.create;;
+val a0 : 'a Stack1.stack = &lt;abstr&gt;
+</pre>
+<p> &lt;abstr&gt; はデータ構造が隠蔽されていることを表しています。この状態でコンストラクタ SCell や SNil を使うとエラーになります。
+</p>
+
+<p> このように、データ構造の詳細を隠蔽し、操作関数を使ってデータ構造にアクセスすることを「データ抽象 (data abstraction) 」とか「カプセル化 (encapsulation) 」といいます。わざわざ操作関数を用意するのは面倒なように思われますが、そのことによりプログラムも読みやすくなり、修正にも強いプログラムを作ることができます。
+</p>
+<p> たとえば、スタックの実装をリスト構造から配列に変更することを考えてみましょう。この場合、type の定義はリスト構造から配列に変更されます。もしも、コンストラクタ SCell や SNil を使って直接スタックを操作しているプログラムがあるならば、その箇所を探して修正する必要があります。操作関数だけを使っていて、操作関数の仕様が変わらなければ、スタックを使うプログラムを修正する必要はありません。モジュール Stack を変更するだけで済むわけです。
+</p>
+
+<h4>●mli ファイルの定義</h4>
+<p> ソースファイルをモジュールとして扱う場合、拡張子が mli のファイルを定義することで、シグネチャと同様にデータ構造を隠蔽することができます。スタックの場合、次のように定義します。
+</p>
+<pre class="list">
+リスト 4 : stack.mli の内容
+
+type 'a stack 
+exception Empty
+val create : 'a stack
+val push : 'a stack -&gt; 'a -&gt; 'a stack  
+val pop : 'a stack -&gt; 'a stack
+val top : 'a stack -&gt; 'a
+val is_empty : 'a stack -&gt; bool
+</pre>
+<p> mli ファイルの書き方はシグネチャと同じです。このファイルから ocmalc で cmi ファイルを作成します。それから、stack.ml をコンパイルします。
+</p>
+<pre>
+C&gt;ocamlc stack.mli
+
+C&gt;ocamlc -c stack.ml
+</pre>
+<p> これで stack.mli の仕様を満たしたモジュール Stack を生成することができます。なお、ocamlc はソースファイルをコンパイルせずに型情報を出力する -i オプションがあります。シグネチャを定義するときは、このオプションを使うと便利です。
+</p>
+
+<h4>●参照型を使ったスタックの実装</h4>
+<p> ところで、スタックを参照型の変数に格納しておいて、その値を書き換えることでスタックの状態を更新することができます。手続き型言語のプログラミングスタイルになりますが、for ループや while ループと組み合わせて使うときには便利でしょう。次のリストを見てください。
+</p>
+<p> 
+</p>
+<pre class="list">
+リスト 5 : 参照型のスタック
+
+(* シグネチャ *)
+module type STACK = sig
+  exception Empty
+  type 'a stack
+  val create : unit -&gt; 'a stack ref
+  val push : 'a stack ref -&gt; 'a -&gt; unit
+  val top : 'a stack ref -&gt; 'a
+  val pop : 'a stack ref -&gt; 'a
+  val is_empty : 'a stack ref -&gt; bool
+end
+
+(* モジュール *)
+module Stack: STACK = struct
+  (* 例外 *)
+  exception Empty
+
+  (* スタックの定義 *)
+  type 'a stack = SNil | SCell of 'a * 'a stack
+
+  (* 空のスタック *)
+  let create () = ref SNil
+
+  (* データの追加 *)
+  let push st x = st := SCell (x, !st)
+
+  (* データの取得 *)
+  let top st =
+    match !st with
+      SNil -&gt; raise Empty
+    | SCell (x, _) -&gt; x
+
+  (* データの削除 *)
+  let pop st =
+    match !st with
+      SNil -&gt; raise Empty
+    | SCell (x, xs) -&gt; st := xs; x
+
+  (* スタックは空か *)
+  let is_empty st = !st = SNil
+end
+</pre>
+
+<p> create は空のスタックの参照を返す関数として定義します。操作関数はスタックを格納した参照型の変数を受け取ります。この変数を書き換えることで、スタックを操作することができます。関数 pop は仕様を変更して、取り除いたデータを返すことにします。あとは特に難しいところはないでしょう。
+</p>
+
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+# open Stack;;
+# let a = create ();;
+val a : '_a Stack.stack ref = {contents = &lt;abstr&gt;}
+# for i = 1 to 10 do push a done;;
+- : unit = ()
+# while not (is_empty a) do print_int (pop a); print_string " " done;;
+10 9 8 7 6 5 4 3 2 1 - : unit = ()
+</pre>
+<p> 正常に動作してますね。
+</p>
+
+
+<h4>●キュー</h4>
+<p> もう一つ簡単な例として、「キュー (queue) 」という基本的なデータ構造を作ってみましょう。OCaml には標準ライブラリにモジュール Queue がありますが、私達でも簡単にプログラムすることができます。
+</p>
+<p> キューは「待ち行列」といわれるデータ構造です。たとえばチケットを買う場合、窓口に長い列ができますが、それと同じだと考えてください。チケットを買うときは、列の途中に割り込むことはできませんね。いちばん後ろに並んで順番を待たなければいけません。列の先頭まで進むと、チケットを購入することができます。
+</p>
+<p> このように、要素を取り出す場合は列の先頭から行い、要素を追加する場合は列の後ろに行うデータ構造がキューなのです。キューは「先入れ先出し (FIFO : first-in, first-out) 」とも呼ばれます。
+</p>
+
+<pre class="fig">
+                  先頭                      最後尾
+                    ---------------------------
+                 &lt;=  1  2  3  4  5  .  .  .  n  &lt;= 
+                    ---------------------------
+
+            先頭                                          最後尾
+ 変数      ┌─┬─┐    ┌─┬─┐    ┌─┬─┐        ┌─┬─┐
+ queue ─→│・│・┼─→│・│・┼─→│・│・┼・・・→│・│／│  
+           └┼┴─┘    └┼┴─┘    └┼┴─┘        └┼┴─┘
+             ↓            ↓            ↓                ↓
+             １            ２            ３                ｎ
+
+                        図 2 : キューの構造
+</pre>
+
+<p> キューにデータを入れることを enqueue といい、キューからデータを取り出すことを dequeue といいます。リストを使ってキューを実装する場合、上図のようにキューの先頭とリストの先頭を対応させます。すると、キューからデータを取り出すには、リストの先頭からデータを取り出すだけですみます。これはとても簡単ですね。
+</p>
+<p> ただし、キューにデータを入れるには、リストの最後尾にデータを追加することになるため、ちょっとした工夫が必要になります。たとえば、データの追加に演算子 @ を使うと、データを追加するたびにリスト（キュー）がコピーされてしまいます。このため、キューに格納されているデータが多くなると時間がかかるようになります。
+</p>
+
+<p> この場合、対策として次のような方法が考えられます。
+</p>
+<pre class="item">
+(1) 最後尾のセルを参照する変数を用意する。
+(2) 循環リスト (circular list) というデータ構造を使う。
+</pre>
+<p> <a href="index.html#cite_ocaml">参考文献 [1]</a> は (1) の方法でキューを実装しています。また、OCaml のモジュール Queue は (2) の方法を使っています。どちらの方法も簡単にキューを実装できますが、参照型変数 (または mutable のレコード) を使う必要があります。
+</p>
+<p> そこで、今回はちょっと変わった方法ですが、連結リストを 2 つ使ってキューを作ってみましょう。なお、この方法は SML/NJ のライブラリを参考にしました。
+</p>
+<p> 次の図を見てください。
+</p>
+
+<pre class="fig">
+            先頭
+ 変数      ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ front ─→│０│・┼─→│１│・┼─→│２│／│  
+           └─┴─┘    └─┴─┘    └─┴─┘
+           最後尾
+           ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ rear  ─→│５│・┼─→│４│・┼─→│３│／│  
+           └─┴─┘    └─┴─┘    └─┴─┘
+
+            図 3 : キューの構造 (改良版)
+</pre>
+
+<p> 上図は 2 つのリストでキューを表しています。データを取り出すときは front のリストを、データを追加するときは rear のリストを使います。front と rear で一つのキューを構成し、rear のリストはデータを逆順で格納することになります。ようするに、front が先頭で rear が最後尾になるわけです。上図のキューを一つのリストで表すと [0; 1; 2; 3; 4; 5] になります。
+</p>
+<p> したがって、front が空リストでも rear にデータがあれば、キューは空ではありません。rear のリストを逆順にして front にセットし、rear を空リストにします。これで front からデータを取り出すことができます。キューが空の状態は front と rear が両方とも空リストの場合です。
+</p>
+
+<h4>●キューの実装</h4>
+<p> それではプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 6 : キュー
+
+module Queue:
+  sig
+    exception Empty
+    type 'a queue
+    val create : 'a queue
+    val enqueue : 'a -&gt; 'a queue -&gt; 'a queue
+    val dequeue : 'a queue -&gt; 'a queue
+    val top : 'a queue -&gt; 'a
+    val is_empty : 'a queue -&gt; bool
+  end
+= struct
+  (* 例外 *)
+  exception Empty
+
+  (* データ型の定義 *)
+  type 'a queue = Q of 'a list * 'a list
+
+  (* 空のキューを返す *)
+  let create = Q ([], [])
+
+  (* データの挿入 *)
+  let enqueue a = function Q (front, rear) -&gt; Q (front, a::rear)
+
+  (* データの削除 *)
+  let rec dequeue = function
+    Q ([], []) -&gt; raise Empty
+  | Q ([], rear) -&gt; dequeue (Q (List.rev rear, []))
+  | Q (x::front, rear) -&gt; Q (front, rear)
+
+  (* 先頭のデータを取得 *)
+  let rec top = function
+    Q ([], []) -&gt; raise Empty
+  | Q ([], rear) -&gt; top (Q (List.rev rear, []))
+  | Q (x::_, _) -&gt; x
+
+  (* キューは空か *)
+  let is_empty q = q = create
+end
+</pre>
+
+<p> キューを表すデータ型は 'a queue としました。型式は 'a list * 'a list で、組の第 1 要素が front で第 2 要素が rear になります。例外 Empty は空のキューからデータを取り出そうとしたときに送出します。キューの生成には変数 create を使います。create の値は空のキュー Q ([], []) です。
+</p>
+
+<p> 関数 enqueue はキューにデータ x を追加します。これは x を rear の先頭に追加するだけです。関数 dequeue はキューからデータを取り除きます。キューが空の場合は例外 Empty を送出します。front が空リストの場合は、キュー Q (List.rev rear, []) を作って dequeue を再帰呼び出しします。front にデータがある場合は先頭要素を取り除くだけです。関数 top はキューの先頭要素を返します。処理は dequeue とほとんど同じで、違いは front の先頭データ x を返すだけです。関数 is_empty は、キューが空であれば true を、そうでなければ false を返します。
+</p>
+
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+# let a0 = Queue.create;;
+val a0 = 'a Queue.queue = &lt;abstr&gt;
+# Queue.is_empty a0;;
+- : bool = true
+# let a1 = Queue.enqueue 1 a0;;
+val a1 = int Queue.queue = &lt;abstr&gt;
+# let a2 = Queue.enqueue 2 a0;;
+val a2 = int Queue.queue = &lt;abstr&gt;
+# Queue.is_empty a2;;
+- : bool = false
+# Queue.top a2;;
+- : int = 1
+# let a3 = Queue.dequeue a2;;
+val a3 = int Queue.queue = &lt;abstr&gt;
+# Queue.top a3;;
+- : int = 2
+# let a4 = Queue.dequeue a3;;
+val a4 = int Queue.queue = &lt;abstr&gt;
+# Queue.is_empty a4;;
+- : bool = true
+</pre>
+<p> きちんと動作していますね。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ocaml08.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml10.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

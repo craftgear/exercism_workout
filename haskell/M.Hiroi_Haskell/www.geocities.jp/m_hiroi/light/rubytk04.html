@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Ruby/Tk 超入門</title>
+  <meta name="description" content="Ruby,Tk,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881801</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lightweigth Language</h1>
+<h2>お気楽 Ruby/Tk 超入門</h2>
+<div class="small">
+[ <a href="rubytk03.html">PrevPage</a> | <a href="ruby.html#ruby_tk">Ruby</a> | <a href="rubytk05.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap13">Toplevel と Message</h3>
+<h4>●複数のウィンドウを作る</h4>
+<p> Ruby/Tk は自動的にメインウィンドウを生成しますが、このほかにも複数のウィンドウを生成することができます。新しいウィンドウは TkRoot.new() で生成することができますが、この方法では最初のメインウィンドウとは独立したウィンドウ、つまり、新しいメインウィンドウとして扱われます。このため、最初のウィンドウを閉じても、新しいウィンドウはそのまま存在します。メインウィンドウと連動したウィンドウを生成するには TkToplevel を使います。
+</p>
+<pre class="item">
+sub_win = TkToplevel.new
+</pre>
+<p> これで新しいウィンドウが生成されます。メインウィンドウが閉じられると sub_win も閉じられます。また、メインウィンドウで設定したオプションは sub_win でも有効です。あとはいままでのように、ウィンドウ sub_win にウィジェットを配置します。
+</p>
+
+<p> それでは簡単な例題として、アプリケーションの情報などを表示するためのウィンドウを作ってみましょう。メインウィンドウのメニュー About が選択されたら、新しいウィンドウを開いてメッセージを表示します。まず、メインウィンドウとメニューを設定します。
+</p>
+
+<pre class="list">
+リスト：メインウィンドウとメニュー
+
+# coding: utf-8
+require 'tk'
+
+# フォントの設定
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+
+# メニューの設定
+m = TkMenu.new
+Tk.root.configure(menu: m)
+m.add_command(label: 'About', under: 0, command: proc {message_window})
+
+# ラベルの設定
+TkLabel.new(text: 'メニュー About を選んでね').pack
+
+Tk.mainloop
+</pre>
+
+<p> ここまでは簡単ですね。ウィンドウの生成は関数 message_window() で行います。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：ウィンドウの生成
+
+def message_window()
+  sub_win = TkToplevel.new
+  TkMessage.new(sub_win, text: 'TkMessageのサンプルプログラムです').pack
+end
+</pre>
+
+<p> 最初に TkToplevel.new() で新しいウィンドウ sub_win を生成します。次に、TkMessage.new() でメッセージウィジェットを作りテキストを表示します。メッセージウィジェットはラベルと違い、複数行の文字列を表示することができます。デフォルトでは、縦と横の比率が 150 % になるように、文字列を表示する領域を調整します。この例では、text で指定した文字列は 4 行に渡って表示されます。この比率を指定するオプションが aspect です。
+</p>
+<ul>
+  <li>aspect<br> 文字列を表示する領域の縦横比、100 より大きいと横長で、デフォルトは 150。
+  <li>justify<br> 文字列の揃えを指定。center (中央寄せ)、right (右寄せ)、left (左寄せ) が指定できる。
+</ul>
+<p> aspect は width よりも優先順位が低いので、width の値が優先されます。メッセージウィジェットの場合、width の値は文字数ではなくドット数になるので注意してください。
+</p>
+
+<p> これでプログラムは完成です。たったこれだけで、メニュー About をクリックするとウィンドウが表示されます。
+</p>
+
+<p><img src="ruby_img/win0.png" alt="メインウィンドウ"> メインウィンドウ
+</p>
+<p><img src="ruby_img/win1.png" alt="サブウィンドウ"> About をクリックしてサブウィンドウを表示
+</p>
+
+<p> ところが、このままでは都合の悪いことがあるのです。このウィンドウを表示したまま、もう一度 About をクリックしてみてください。もうひとつ同じウィンドウが表示されてしまいます。それから、ウィンドウに表示されるタイトルが w00002 になっています。きちんとしたタイトルをつけた方が良いでしょう。
+</p>
+<h4>●ウィジェットの状態を調べる</h4>
+<p> ウィンドウの状態を調べる場合、Tcl/Tk ではコマンド winfo を使いますが、 Ruby/Tk では winfo のサブコマンドに相当するメソッドがモジュール TkWinfo に多数用意されています。ウィンドウの状態を調べるメソッドの一部を表に示します。
+</p>
+
+<table border=1>
+<caption>表：ウィジェットの状態を調べるメソッド</caption>
+<tbody>
+<tr><td>geometry(w)</td><td>ウィジェットの位置を文字列 (幅x高さ+x+y) で返す</td></tr>
+<tr><td>width(w)</td><td>ウィジェットの幅を返す</td></tr>
+<tr><td>height(w)</td><td>ウィジェットの高さを返す</td></tr>
+<tr><td>x(w)</td><td>親ウィンドウ内での x 座標を返す</td></tr>
+<tr><td>y(w)</td><td>親ウィンドウ内での y 座標を返す</td></tr>
+<tr><td>rootx(w)</td><td>ディスプレイ上での x 座標を返す</td></tr>
+<tr><td>rooty(w)</td><td>ディスプレイ上での y 座標を返す</td></tr>
+<tr><td>exist?(w)</td><td>ウィジェットが存在するか </td></tr>
+</tbody>
+</table>
+<p> geometry() でウィジェットを指定した場合、返される座標はディスプレイを基準にした座標ではなく、そのウィジェットが配置されたウィンドウを基準にした座標となります。また、x(), y() でメインウィンドウを指定すると、ディスプレイ上での座標を返します。このほかにも多数のメソッドがあるので詳細は Ruby/Tk のマニュアルをお読みください。
+</p>
+
+<p> このプログラムで必要になる、ウィンドウの存在を調べるメソッドは exist?() です。たとえば、sub_win を調べるには、TkWinfo.exist?(sub_win) とすればいいわけです。sub_win が開いていれば真を、そうでなければ偽を返します。
+</p>
+
+<h4>●ウィンドウの状態を設定する</h4>
+<p> Tcl/Tk の場合、ウィンドウの設定はコマンド wm (Window Manager) で行いますが、 Ruby/Tk では wm のサブコマンドに相当するメソッドがモジュール Tk::Wm に多数用意されています。ウィンドウの状態を設定するメソッドの一部を表に示します。
+</p>
+
+<table border=1>
+<caption>表：ウィンドウの設定を行うメソッド (一部)</caption>
+<tbody>
+<tr><td>window.withdraw()</td><td>ウィンドウを画面から取り除く</td></tr>
+<tr><td>window.deiconify()</td><td>ウィンドウを見える状態に戻す</td></tr>
+<tr><td>window.iconify()</td><td>ウィンドウをアイコン化する</td></tr>
+<tr><td>window.geometry(string)</td><td>ウィンドウを表示する位置を文字列で (幅x高さ+x+y) で指定する</td></tr>
+<tr><td>window.maxsize(幅, 高さ)</td><td>ウィンドウの最大値を指定</td></tr>
+<tr><td>window.minsize(幅, 高さ)</td><td>ウィンドウの最小値を指定</td></tr>
+<tr><td>window.title(タイトル名)</td><td>ウィンドウのタイトルを指定</td></tr>
+</tbody>
+</table>
+
+<p> このほかにも多数のメソッドがあるので詳細は Ruby/Tk のマニュアルをお読みください。
+</p>
+
+<p> タイトルを設定するにはメソッド title() を使います。ウィンドウ sub_win にタイトルをつけるには、sub_win.title('タイトル') とすればいいわけです。なお、ウィンドウの状態はオプションとして保持されていることが多いので、タイトルであれば sub_win['title'] = 'タイトル' でも設定することができます。
+</p>
+
+<h4>●プログラムの改良</h4>
+<p> それではプログラムを改良してみましょう。
+</p>
+
+<pre class="list">
+リスト：ウィンドウの生成（改良版）
+
+# coding: utf-8
+require 'tk'
+
+# フォントの設定
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+
+# サブウィンドウ
+$sub_win = nil
+
+# メニューの設定
+m = TkMenu.new
+Tk.root.configure(menu: m)
+m.add_command(label: 'About', under: 0, command: proc {message_window})
+
+# ラベルの設定
+TkLabel.new(text: 'メニュー About を選んでね').pack
+
+# メッセージの表示
+def message_window()
+  if !$sub_win || !TkWinfo.exist?($sub_win)
+    $sub_win = TkToplevel.new
+    $sub_win.title('About')
+    TkMessage.new($sub_win, aspect: 200,
+                  text: 'Tkmessageのサンプルプログラムです').pack
+  end
+end
+
+Tk.mainloop
+</pre>
+
+<p> $sub_win はグローバル変数として定義し、nil で初期化しておきます。$sub_win が nil でなければ、メソッド TkWinfo.exists() でウィンドウ $sub_win が開いているかチェックします。まだ開いていないのであれば、TkToplevel.new() でウィンドウを生成します。次に、title() でタイトルを設定します。あとはいままでと同じです。実際にプログラムを実行すると、ウィンドウが開いた状態でメニュー about をクリックしても、新しいウィンドウは開きません。
+</p>
+
+<p><img src="ruby_img/win2.png" alt="サブウィンドウ"> サブウィンドウ（改良版）
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap14">ウィジェットの状態</h3>
+<h4>●state オプション</h4>
+<p> Tk にはいろいろなウィジェットが用意されていますが、場合によっては、ウィジェットの機能を無効にしたいことがあります。たとえば、ボタンやメニューに割り当てた機能が動作しない場合、ボタンやメニューの選択を無効にしなければいけませんが、そのことをユーザーに知らせた方が使いやすいアプリケーションになります。この場合、ウィジェットの状態を制御する state オプションを使うと便利です。state の値を表に示します。
+</p>
+
+<table border=1>
+<caption>表：state の値</caption>
+<tbody>
+<tr><td>normal</td><td>通常の状態</td></tr>
+<tr><td>active</td><td>アクティブな状態</td></tr>
+<tr><td>disabled</td><td>無効な状態</td></tr>
+</tbody>
+</table>
+
+<p> ボタンなどのウィジェットでは、その上にマウスカーソルがくるとアクティブな状態になります。Tk では、ウィジェットがアクティブな状態になったときに、そのウィジェットを強調表示することができます。そのことで、マウスボタンを押したときに何か処理が行われることを表すことができます。
+</p>
+
+<p> state に disabled を設定すると、そのウィジェットは無効な状態になります。ボタンウィジェットであれば、ラベルの色が変わりマウスでボタンをクリックしても押すことができなくなります。テキストの色はオプションで指定することができます。
+</p>
+
+<table border=1>
+<caption>表：テキストの色を指定するオプション</caption>
+<tbody>
+<tr><td>activeforeground</td><td>アクティブ時の色を指定</td></tr>
+<tr><td>activebackground</td><td>アクティブ時の背景色を指定</td></tr>
+<tr><td>disabledforeground</td><td>無効時の色を指定</td></tr>
+</tbody>
+</table>
+
+<p> 無効時の背景色は通常の背景色と同じになります。
+</p>
+
+<h4>●ボタンの状態を変更する</h4>
+<p> それでは簡単な例を示しましょう。ラジオボタンを使ってボタンの状態を設定します。
+</p>
+
+<pre class="list">
+リスト：ボタンの状態を変更する
+
+# coding: utf-8
+require 'tk'
+
+# フォントの設定
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+
+# 変数
+var = TkVariable.new('normal')
+
+# ボタン
+b = TkButton.new(text: 'button',
+                 activeforeground: 'green', disabledforeground: 'red')
+b.pack(fill: 'x')
+
+# ラジオボタンの設定
+for x in ['normal', 'active', 'disabled']
+  TkRadiobutton.new(text: x, value: x, variable: var,
+                    command: proc {b.configure(state: var.value)}).pack(anchor: 'w')
+end
+
+Tk.mainloop
+</pre>
+
+<p> ラジオボタンで選択した値は変数 var に格納し、コールバック関数でボタンの状態を変更します。変数 var は、あらかじめ normal に初期化しておきます。コールバック関数では、configure() を使って state に変数 var の値をセットするだけです。これでボタンの状態を変更することができます。
+</p>
+
+<p>
+<img src="ruby_img/state0.png" alt="normal button">
+<img src="ruby_img/state1.png" alt="active button">
+<img src="ruby_img/state2.png" alt="disable button">
+ボタンの状態を変更
+</p>
+<h4>●メニューの状態を変更する</h4>
+<p> 次はメニューの状態を変更してみましょう。一般に、メニューには複数の項目を登録しますが、それらの項目に対していろいろなオプションを設定することができます。項目を操作するために複数のメソッドが用意されていますが、オプションを設定するメソッドが entryconfigure() です。
+</p>
+<pre class="item">
+entryconfigure(項目, option, value)
+</pre>
+<p> メニュー項目に対する configure コマンドと考えてください。項目の指定には次の方法があります。
+</p>
+<table border=1>
+<caption>表：entryconfigure の項目</caption>
+<tbody>
+<tr><td>N</td><td>数値で指定 (先頭の項目が 0 番目となる)</td></tr>
+<tr><td>@N</td><td>画面上端から N ピクセルだけ下にある項目</td></tr>
+<tr><td>end, last</td><td>最後の項目</td></tr>
+<tr><td>active</td><td>アクティブな状態にある項目</td></tr>
+<tr><td>none</td><td>どれでもない項目<br>(全ての項目を非アクティブにするために使用する)</td></tr>
+<tr><td>パターン</td><td>パターンと一致するラベル名を持つ項目</td></tr>
+</tbody>
+</table>
+
+<p> 簡単な例として、次のようなメニューを考えてみましょう。
+</p>
+
+<pre class="list">
+リスト：メニューの状態を変更する
+
+# coding: utf-8
+require 'tk'
+
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+
+var = TkVariable.new('normal')
+
+def dummy()
+  print "dummy\n"
+end
+
+# メニューの設定
+m0 = TkMenu.new
+Tk.root.configure(menu: m0)
+
+m1 = TkMenu.new(m0, tearoff: false)
+m0.add_cascade(label: 'Menu', under: 0, menu: m1)
+m1.add_command(label: 'Menu1', command: proc {dummy})
+m1.add_command(label: 'Menu2', command: proc {dummy})
+m1.add_command(label: 'Menu3', command: proc {dummy})
+
+# ラジオボタンの設定
+for x in ['normal', 'active', 'disabled']
+  TkRadiobutton.new(text: x, value: x, variable: var,
+                    command: proc {m1.entryconfigure('Menu1', state: var.value)}).pack(anchor: 'w')
+end
+
+Tk.mainloop
+</pre>
+
+<p> Menu1 の状態をラジオボタンで設定します。ラジオボタンが選択されたら、コールバック関数でメニューの状態を変更します。項目の指定にはパターンを使いました。数値を使うよりもこの方がわかりやすいでしょう。メニューも色を指定することができますが、無効時の色を指定する disabledforeground は用意されていません。メニューの状態を disabled に設定すると、Menu1 が灰色に表示され選択することができなくなります。
+</p>
+
+<p><img src="ruby_img/state3.png" alt="normal menu"> 通常のメニュー
+</p>
+<p><img src="ruby_img/state4.png" alt="disable menu"> disabled に設定 (Menu1 が灰色)
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap15">ウィンドウのリサイズ</h3>
+<p> 今回はウィンドウの大きさを変更してみましょう。もちろん、Tk はデフォルトでウィンドウのリサイズに対応しています。いままでのサンプルプログラムでも、マウスでウィンドウの大きさを変更することができます。ただし、ウィジェットの大きさは変化しません。ウィンドウを小さくしたらウィジェットが表示されなくなった、ということも起こります。まあ、これはウィンドウの大きさを制限することで回避することができます。ですが、アプリケーションによっては、ウィンドウのリサイズに合わせてウィジェットの大きさを変更した方がよい場合もあるでしょう。
+</p>
+
+<h4>●Packer のリサイズ</h4>
+<p> ところで、ウィジェットのリサイズは面倒だな、と思われた方はいませんか。まじめに考えると、ウィンドウのサイズからウィジェットのサイズを計算して、大きさを変更する処理が必要になるのですが、Tk ではそんな難しいことをする必要はありません。ジオメトリマネージャーに用意されているオプションを設定するだけで、ウィンドウのサイズに合わせてウィジェットの大きさを変更することができます。Packer を使う場合は、次のオプションを設定します。
+</p>
+<ul>
+  <li>expand: boolean<br>
+       ウィンドウに余白が生じたとき、boolean が真であれば余白をウィジェットに割り当てる。
+</ul>
+<p> 余白をウィジェットに割り当てただけでは、ウィジェットは大きくなりません。ウィジェットを引き伸ばすための fill オプションを設定してください。それでは簡単な例を示しましょう。次のプログラムを見てください。
+</p>
+
+<pre class="list">
+リスト：Packer のリサイズ
+
+require 'tk'
+
+TkButton.new(text: 'button 0').pack(expand: true, fill: 'both')
+TkButton.new(text: 'button 1').pack(expand: true, fill: 'both')
+
+Tk.mainloop
+</pre>
+<p> <img src="ruby_img/packer0.png" alt="2 つのボタン"> Packer によるボタンの配置
+</p>
+<p> <img src="ruby_img/packer1.png" alt="2 つのボタン（大）"> ウィンドウを拡大する
+</p>
+
+<p> ウィンドウ全体に 2 つのボタンが表示されます。マウスでウィンドウの大きさを変えてみてください。ウィンドウに合わせてボタンの大きさも変化します。このように、Tk ではオプションを設定するだけで、ウィンドウのリサイズにも簡単に対応することができるのです。
+</p>
+<p> ウィジェットを配置する順番も大切です。Packer はウィンドウが小さくなるとウィジェットを圧縮しますが、本当にスペースが無くなるとウィジェットは表示されなくなります。このとき、配置された逆順でウィジェットが削除されます。つまり、最初に配置されたウィジェットが最後まで残るのです。大切なウィジェットは最初に配置した方がいいでしょう。
+</p>
+
+<h4>●Gridder のリサイズ</h4>
+<p> Gridder のリサイズは、マスの状態を設定するメソッド grid_columnconfigure() と grid_rowconfigure() で行います。
+</p>
+<pre class="item">
+window.grid_columnconfigure(column_index, options, ...)
+window.grid_rowconfigure(row_index, options, ...)
+</pre>
+<table border=1>
+<caption>表：オプションの種類</caption>
+<tbody>
+<tr><td>minsize</td><td>最小の幅/高さを数値で指定する</td></tr>
+<tr><td>weight</td><td>余白を配分するときの割合を数値で指定する</td></tr>
+<tr><td>pad</td><td>詰め物を数値で指定する</td></tr>
+</tbody>
+</table>
+
+<p> リサイズに対応するには、オプション weight に 1 以上の整数値を指定します。簡単な使用例を示しましょう。ボタンを 4 つ Gridder で配置します。
+</p>
+
+<pre class="list">
+リスト：Gridder のリサイズ
+
+require 'tk'
+
+column_data = [0, 0, 1, 1]
+row_data = [0, 1, 0, 1]
+
+for x in 0..3
+  b = TkButton.new(text: "button #{x}")
+  b.grid(column: column_data[x], row: row_data[x], sticky: 'nsew')
+end
+
+Tk.root.grid_columnconfigure(0, weight: 1)
+Tk.root.grid_columnconfigure(1, weight: 2)
+
+Tk.mainloop()
+</pre>
+<p><img src="ruby_img/grider0.png" alt="4 つのボタン"> Gridder によるボタンの配置
+</p>
+<p> grid_columnconfigure() は縦方向に配置されたマスのオプションを設定します。次のように、0 列に weight = 1 を設定します。
+</p>
+<pre class="item">
+Tk.root.grid_columnconfigure(0, weight: 1)
+</pre>
+<p> ボタンはメインウィンドウに配置されているので、grid_columnconfigure() はメインウィンドウのオブジェクト root のメソッドとして呼び出します。これで、ウィンドウが横に大きくなると、0 列に配置されたボタン button 0 と button 1 も横に大きくなります。
+</p>
+
+<p> <img src="ruby_img/grider1.png" alt="4 つのボタン"> button 0, 1 は横方向に伸びる
+</p>
+
+<p> 1 列目は weight オプションを設定していないので、余白は割り当てられません。それでは、次のプログラムを追加してみましょう。
+</p>
+<pre class="item">
+Tk.root.grid_columnconfigure(1, weight: 2)
+</pre>
+<p> <img src="ruby_img/grider2.png" alt="4 つのボタン"> 4 つのボタンが横方向に伸びる
+</p>
+<p> 今度は、1 列目にも余白が割り当てられますが、-weight オプションの設定が 2 なので 0 列の 2 倍の余白が割り当てられます。つまり、ボタン button 2 と button 3 の方が大きく伸びるわけです。
+
+</p>
+
+<p> このままではウィジェットの縦方向が大きくなりません。これに対応するには grid_rowconfigure() を使います。次のプログラムを追加してください。
+</p>
+
+<pre class="item">
+Tk.root.grid_rowconfigure(0, weight: 1)
+Tk.root.grid_rowconfigure(1, weight: 2)
+</pre>
+<p> <img src="ruby_img/grider3.png" alt="4 つのボタン"> 4 つのボタンが縦横方向に伸びる
+</p>
+<p> 縦に増えた余白は、0 行と 1 行に 1 対 2 の割合で配分されます。したがって、ウィンドウを大きくするとボタン button 3 がいちばん大きくなります。縦と横の関係で混乱しそうですが、実際にプログラムを動かしてみてください。納得してもらえると思います。
+</p>
+
+<h4>●キャンバスウィジェットのリサイズ</h4>
+<p> 次に、キャンバスウィジェットのリサイズを行ってみましょう。キャンバスもウィジェットなので、pack() や grid() のオプションを指定することで、ウィンドウのリサイズに対応することができます。次のプログラムを実行してください。
+</p>
+
+<pre class="list">
+リスト：キャンバスウィジェットのリサイズ (1)
+
+require 'tk'
+
+c0 = TkCanvas.new(bg: 'darkgreen', width: 200, height: 200)
+TkcRectangle.new(c0, 20, 20, 180, 180) {
+  fill 'red'
+}
+c0.pack(fill: 'both', expand: true)
+
+Tk.mainloop
+</pre>
+
+<p> <img src="ruby_img/canvas0.png" alt="キャンバス"> キャンバスウィジェットを配置
+</p>
+<p> <img src="ruby_img/canvas1.png" alt="キャンバス"> ウィンドウを縮小
+</p>
+<p> <img src="ruby_img/canvas2.png" alt="キャンバス"> ウィンドウを拡大
+</p>
+
+<p> キャンバスウィジェットの背景は darkgreen で、その上には赤い四角形が描かれています。ご覧のように、マウスでウィンドウの大きさを変えると、キャンバスウィジェットの大きさは変わりますが、図形の大きさは変わりません。
+</p>
+<p> 図形は pack() で配置されているわけではないので、Packer はキャンバスウィジェットを引き伸ばすことはできても、その中の図形を操作することはできないのです。図形はユーザーが定義したものですから、Packer が関知しないのは当然のことですね。したがって、ウィンドウのリサイズに対応するには、ユーザー側で図形を再描画する処理をプログラムする必要があるのです。
+</p>
+
+<h4>●図形の再描画</h4>
+<p> 図形を再描画するには、ウィンドウがリサイズされたときに発生するイベント Configure を使います。このイベントをバインドして、ウィンドウの大きさが変わったら図形を再描画します。バインドはメインウィンドウに対して設定します。
+</p>
+<pre class="item">
+Tk.root.bind('Configure', callback, ...)
+</pre>
+<p> キャンバスウィジェットは fill と expand を設定して pack されているので、ウィンドウの大きさが変わると、キャンバスの大きさも変わります。このときに図形の大きさを変える関数を callback に登録して実行すればいいわけです。
+</p>
+
+<p> キャンバスウィジェットの大きさですが、これはメソッド cget() では求めることができません。実際、ウィンドウがリサイズされキャンバスウィジェットが引き伸ばされても、最初に設定されたオプションの値そのままになっています。キャンバスウィジェットの大きさを求めるには、ウィジェットの情報を取得するメソッド TkWinfo.width() と TkWinfo.height() を使います。
+</p>
+
+<p> また、ウィンドウが小さくなると図形が見えなくなるので、ウィンドウの大きさを制限します。これはメソッド minsize() と maxsize() で設定することができます。幅と高さはピクセル単位で指定します。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：キャンバスウィジェットのリサイズ (2)
+
+# coding: utf-8
+require 'tk'
+
+Tk.root.minsize(100, 100)
+Tk.root.maxsize(400, 400)
+
+# キャンバスの設定
+$c0 = TkCanvas.new(bg: 'darkgreen', width: 200, height: 200)
+$rt = TkcRectangle.new($c0, 20, 20, 180, 180) {
+  fill 'red'
+}
+$c0.pack(fill: 'both', expand: true)
+
+# 図形の大きさを変更
+def change_size
+  w = TkWinfo.width($c0)
+  h = TkWinfo.height($c0)
+  $c0.coords($rt, 20, 20, w - 20, h - 20)
+end
+
+# バインディングの設定
+Tk.root.bind('Configure', proc { change_size })
+
+Tk.mainloop()
+</pre>
+
+<p> 関数 change_size() の処理は簡単です。メソッド width() と height() でキャンバスの大きさを求めたら、メソッド coords() で図形の位置を変更するだけです。とても簡単ですね。たったこれだけの処理で、ウィンドウの大きさに合わせて図形の大きさを変更することができます。
+</p>
+
+<p> <img src="ruby_img/canvas3.png" alt="キャンバス"> ウィンドウを縮小
+</p>
+<p> <img src="ruby_img/canvas4.png" alt="キャンバス"> ウィンドウを拡大
+</p>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="rubytk03.html">PrevPage</a> | <a href="ruby.html#ruby_tk">Ruby</a> | <a href="rubytk05.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

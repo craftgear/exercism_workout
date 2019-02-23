@@ -1,0 +1,1198 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / AA 木 (Arne Andersson tree)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881797</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>AA 木 (Arne Andersson tree)</h2>
+<div class="small">
+[ <a href="pyalgo52.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo54.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 「AA 木 (Arne Andersson tree) 」は 1993 年に Arne Andersson が発表した平衡木です。拙作のページ <a href="pyalgo03.html">二分木とヒープ</a> で説明したように、二分木は左右の部分木のバランスが崩れると性能が劣化する欠点があります。極端な例ですが、ソートされたデータを二分木に挿入していくと、データは右側の部分木にしか挿入されず、連結リストと同じ線形探索になってしまいます。
+</p>
+<p> これを補うために、木のバランスを一定の範囲に収める平衡木が考案されています。有名なところでは、二分木をベースにした <a href="pyalgo12.html">AVL 木</a> や <a href="pyalgo16.html">赤黒木</a>、多分木をベースにした <a href="pyalgo14.html">2-3 木</a>、B 木、B* 木などがあります。赤黒木は 2-3-4 木の動作を二分木で実現したものですが、そのプログラムはとても複雑になりす。
+</p>
+<p> これに対して、AA 木は 2-3 木の動作を二分木で実現したものですが、とても簡単にプログラムを実装できる、という特徴があります。なお、赤黒木は 2008 年に Robert Sedgewick が "Left-Leaning Red Black Trees" という改良版を発表しています。この方法を使うと、赤黒木も簡単にプログラムすることができるようです。
+</p>
+
+<p> 今回は AA 木について簡単に説明します。詳細は Arne Andersson の論文 <cite><a href="http://user.it.uu.se/~arnea/abs/simp.html">"Balanced Search Trees Made Simple"</a></cite> をお読みください。
+</p>
+
+<h4>●AA 木とは？</h4>
+<p> AA 木の基本を説明するため、赤黒木と同様に節を赤と黒で塗り分けてみましょう。すると、AA 木は次の条件を満たす「二分木」になります。
+</p>
+<ol>
+  <li>各節は赤または黒に区分される。
+  <li>ある節が赤ならばその子は必ず黒である。
+  <li>黒節の左の子の色は赤にならない。右の子の色は赤でも黒でもよい。
+  <li>ルートから葉までの黒節の個数を「黒高さ」という。AA 木はどの経路でも黒高さが同じになる。
+  <li>ルートの節は黒である。
+</ol>
+<p> 赤黒木との違いは 3 番目の「黒節の左の子の色は赤にならない」だけです。赤黒木は「2-3-4 木」という多分木の動作を二分木で実現したものです。2-3-4 木は最小で 2 つ、最大で 4 つの子を持ちます。2-3-4 木の節を赤節と黒節で表したものが赤黒木です。対応関係を図で表すと、次のようになります。
+</p>
+<pre class="fig">
+   ┌─┐
+   │Ａ│            <font color="black">●</font> Ａ
+   └─┘          ／  ＼
+   ／  ＼
+
+    (a) 子が 2 つの節
+
+ ┌─┬─┐
+ │Ａ│Ｂ│       <font color="black">●</font> Ａ           <font color="black">●</font> Ｂ
+ └─┴─┘     ／  ＼          ／  ＼
+   ／│＼             <font color="red">■</font> Ｂ   <font color="red">■</font> Ａ
+                    ／  ＼  ／  ＼
+
+                 (b-1)          (b-2)
+
+    (b) 子が 3 つの節
+
+ ┌─┬─┬─┐            <font color="black">●</font> Ｂ
+ │Ａ│Ｂ│Ｃ│          ／  ＼
+ └─┴─┴─┘        <font color="red">■</font> Ａ   <font color="red">■</font> Ｃ
+   ／ ││ ＼        ／  ＼  ／  ＼
+
+    (c) 子が 4 つの節
+
+        図 : 2-3-4 木と赤黒木の関係
+</pre>
+<p> AA 木は 2-3 木の動作を二分木で実現したものなので、上図 (c) の状態は存在しません。そして、AA 木は子を 3 つ持つ (b) の状態を (b-1) だけに限定します。このことを 3 番目の条件「黒節の左の子の色は赤にならない」で表しています。このように条件を限定することで、プログラムの実装が簡単になるのです。
+</p>
+<p> ちなみに、Robert Sedgewick の "Left-Leaning Red Black Trees" では、(b) の状態を (b-2) だけに限定することにより、赤黒木を簡単にプログラムできるように改良しています。
+</p>
+
+<h4>●木のレベル</h4>
+<p> Arne Andersson の論文 <CITE>"Balanced Search Trees Made Simple"</CITE> では、節を赤と黒に塗り分けるのではなく、木のレベル (黒高さ) を使った実装方法が示されています。AA 木は葉のレベルを 1 とし、赤節のレベルは親の黒節と同じに値になります。次の図を見てください。
+</p>
+
+<pre class="fig">
+        ／
+      <font color="black">●</font>───<font color="red">■</font>      ---- レベル N + 1
+    ／      ／  ＼
+  <font color="black">●</font>      <font color="black">●</font>      <font color="black">●</font>  ---- レベル N
+／  ＼  ／  ＼  ／  ＼
+
+        図 : 木のレベル
+</pre>
+<p> 黒節の右隣に赤節を書くとわかりやすいと思います。黒節と赤節で 2-3 木の一つの節を表しているので、2 つの節のレベルは同じ値になるわけです。逆にいうと、黒節の子のレベルが親と同じ値であれば、その節の色は「赤」と判断できるわけです。したがって、左の子のレベルは親節よりも必ず一つ少なくなり、右の子は親節のレベルと同じか一つ少なくなります。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データの挿入について詳しく説明します。赤黒木と比較した方がわかりやすいと思うので、AA 木の節は赤と黒で塗り分けて示すことにします。新しいデータは赤節として AA 木に挿入します。これは赤黒木と同じです。親が黒節で左の子に挿入する場合は簡単です。AA 木の条件を満たしているので、そのまま挿入するだけです。
+</p>
+<p> 問題は黒節の左の子に挿入する場合と親が赤節の場合です。各々の場合について詳しく説明しましょう。最初は黒節 A に赤節 B を挿入する場合です。次の図を見てください。
+</p>
+<pre class="fig">
+          ／                ／
+        <font color="black">●</font>P,2             <font color="black">●</font>P,2
+      ／                ／
+    <font color="black">●</font>A,1       =&gt;    <font color="black">●</font>B,1
+  ／          右回転    ＼
+<font color="red">■</font>B,1         (skew)      <font color="red">■</font>A,1
+
+      図：データの挿入(1)
+</pre>
+<p> 数字はレベルを表します。AA 木の場合、節 A と B のレベルが同じことから、赤節が挿入されたことがわかります。この場合、部分木 A を右回転します。AA 木ではこの操作を skew といいます。A はレベルが同じまま B の右の子になるので赤節となり、AA 木の条件を満たします。
+</p>
+<p> 次は A に右の子 B がある場合です。
+</p>
+<pre class="fig">
+  ／                 ／                        ／
+<font color="black">●</font>P,2              <font color="black">●</font>P,2                     <font color="black">●</font>P,2
+  ＼                 ＼                        ＼
+    <font color="black">●</font>A,1        =&gt;    <font color="black">●</font>C,1          =&gt;         <font color="red">■</font>A,2
+  ／  ＼       右回転    ＼         左回転     ／  ＼
+<font color="red">■</font>C,1   <font color="red">■</font>B,1  (skew)      <font color="red">■</font>A,1    (split)  <font color="black">●</font>C,1   <font color="black">●</font>B,1
+                             ＼
+                               <font color="red">■</font>B,1
+
+(a)
+
+          ／                 ／                        ／
+        <font color="black">●</font>P,2              <font color="black">●</font>P,2                     <font color="black">●</font>P,2
+      ／                 ／                        ／
+    <font color="black">●</font>A,1        =&gt;    <font color="black">●</font>C,1          =&gt;         <font color="red">■</font>A,2
+  ／  ＼       右回転    ＼         左回転     ／  ＼
+<font color="red">■</font>C,1   <font color="red">■</font>B,1  (skew)      <font color="red">■</font>A,1    (split)  <font color="black">●</font>C,1   <font color="black">●</font>B,1
+                             ＼
+                               <font color="red">■</font>B,1
+
+(b)
+
+                  図：データの挿入(2)
+</pre>
+<p> A の左に赤節 C を挿入します。すると、2-3-4 木で 4 つの子を持つ節と同じ状態になります。最初に部分木 A を skew するところは同じです。次に、節 C と節 B のレベルを比較します。レベルが同じなので、赤節が 2 つ続いていることがわかります。この状態も 2-3-4 木で 4 つの子を持つ節と考えることができます。そこで、部分木 C を左回転して、A のレベルを +1 します。AA 木ではこの操作を split といいます。
+</p>
+<p> (a) の場合、A は親節 P の右の子になりレベルも同じ (赤節) なので AA 木の条件を満たします。(b) の場合、P の左の子が赤節になるので、P で木のバランスを修正します。なお、この処理は回転操作をせずに A のレベルを +1 するだけでいいのですが、オリジナルのプログラムでは skew と split を連続で適用することにより、場合分けを省いてプログラムを簡単にしています。
+</p>
+<p> 次は赤節の右にデータを挿入する場合です。
+</p>
+<pre class="fig">
+  ／                            ／
+<font color="black">●</font>P,2                         <font color="black">●</font>P,2
+  ＼                            ＼
+    <font color="black">●</font>──<font color="red">■</font>B,1        =&gt;         <font color="red">■</font>B,2
+    A,1     ＼       左回転     ／  ＼
+              <font color="red">■</font>C,1  (split)  <font color="black">●</font>A,1   <font color="black">●</font>C,1
+
+(a)
+
+      ／                            ／
+    <font color="black">●</font>P,2                         <font color="black">●</font>P,2
+  ／                            ／
+<font color="black">●</font>──<font color="red">■</font>B,1        =&gt;         <font color="red">■</font>B,2
+A,1     ＼       左回転     ／  ＼
+          <font color="red">■</font>C,1  (split)  <font color="black">●</font>A,1   <font color="black">●</font>C,1
+
+(b)
+
+          図：データの挿入(3)
+</pre>
+<p> 赤節 B の右に節 C を挿入します。B と C は同じレベルなので、ここでは修正処理を行いません。次に、B の親節 A を調べます。A と C は同じレベルなので、赤節が 2 つ続いているとがわかります。部分木 A を split で左回転します。(a) はこれで AA 木の条件を満たしますが、(b) は親節 P で修正処理を行います。
+</p>
+<p> 次は赤節 B の左に節 C を挿入する場合です。
+</p>
+<pre class="fig">
+  ／                        ／                             ／
+<font color="black">●</font>P,2                     <font color="black">●</font>P,2                          <font color="black">●</font>P,2
+  ＼                        ＼                             ＼
+    <font color="black">●</font>───<font color="red">■</font>B,1   =&gt;        <font color="black">●</font>──<font color="red">■</font>C,1         =&gt;         <font color="red">■</font>C,2
+    A,1   ／      右回転      A,1      ＼       左回転     ／  ＼
+        <font color="red">■</font>C,1     (skew)                 <font color="red">■</font>B,1  (split)  <font color="black">●</font>A,1   <font color="black">●</font>B,1
+
+(a)
+
+      ／                     ／                            ／
+    <font color="black">●</font>P,2                  <font color="black">●</font>P,2                         <font color="black">●</font>P,2
+  ／                     ／                            ／
+<font color="black">●</font>───<font color="red">■</font>B,1   =&gt;     <font color="black">●</font>──<font color="red">■</font>C,1        =&gt;         <font color="red">■</font>C,2
+A,1   ／      右回転  A,1      ＼       左回転     ／  ＼
+    <font color="red">■</font>C,1     (skew)             <font color="red">■</font>B,1  (split)  <font color="black">●</font>A,1   <font color="black">●</font>B,1
+
+(b)
+
+                  図：データの挿入(4)
+</pre>
+
+
+<p> まず赤節 C を挿入した節 B を skew で右回転します。次に、その親節 A を調べます。すると、A と B のレベルが同じなので、split で左回転します。(a) の場合、これで AA 木の条件を満たしますが、(b) の場合は親節 P で修正が必要になります。
+</p>
+
+<p> データ挿入のパターンはこれで全部です。このように、AA 木はデータを挿入した部分木の親節に skew と split を連続で適用していくことで、木のバランスを修正することができます。
+</p>
+<h4>●AA 木のプログラム</h4>
+<p> それでは、AA 木にデータを挿入するプログラムを Python で作ってみましょう。最初に、節を表すクラスを定義します。
+</p>
+<pre class="list">
+リスト : 節と終端の定義
+
+# 終端
+null = None
+
+# 節
+class Node:
+    def __init__(self, x):
+        self.data = x
+        self.height = 1
+        self.left = null
+        self.right = null
+
+# 終端の設定
+def make_null():
+    global null
+    if null is None:
+        null = Node(None)
+        null.height = 0
+        null.left = null
+        null.right = null
+    return null
+</pre>
+
+<p> クラス名は Node としました。インスタンス変数 height には木のレベルをセットします。関数 make_null は終端オブジェクトを生成して返します。終端オブジェクトはグローバル変数 null に格納します。null が None の場合は終端オブジェクトがまだないので、Node() で終端オブジェクトを生成します。節のレベルは 0 で、left と right には null をセットしておきます。
+</p>
+<h4>●データの挿入処理</h4>
+<p> 次はデータを挿入する関数 insert を作成します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの挿入
+
+# 右回転による修正
+def skew(node):
+    if node.left.height == node.height:
+        node = rotate_right(node)
+    return node
+
+# 左回転による修正
+def split(node):
+    if node.height == node.right.right.height:
+        node = rotate_left(node)
+        node.height += 1
+    return node
+
+# データの挿入
+def insert(node, x):
+    if node is null: return Node(x)
+    elif x == node.data: return node
+    elif x &lt; node.data:
+        node.left = insert(node.left, x)
+    else:
+        node.right = insert(node.right, x)
+    return split(skew(node))
+</pre>
+
+<p> 関数 skew は節 node と node.left のレベルが同じ場合、node を rotate_right で右回転してバランスを修正します。関数 split は節 node と node.right.right のレベルが同じ場合、node を rotate_left で左回転して、その返り値の node のレベルを +1 します。
+</p>
+
+<p> 関数 insert は AA 木のルートと挿入するデータを受け取り、データを挿入したあとの木を返します。これは二分木の場合と同じです。挿入処理も二分木と同じですが、node を返すときに skew と split を適用します。これでたどってきた節に skew と split が適用され、木のバランスを修正することができます。
+</p>
+<p> データの挿入処理はこれだけです。驚くほど簡単ですね。
+</p>
+
+<h4>●データ挿入のテスト</h4>
+<p> それでは、ここでデータ挿入のテストを行ってみましょう。テストプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データ挿入の簡単なテスト
+
+import aanode
+
+# 表示
+def print_node(node, x):
+    if node is not aanode.null:
+        print_node(node.left, x)
+        print "    " * (x - node.height), node.data
+        print_node(node.right, x)
+
+root = aanode.make_null()
+buff = range(8)
+for x in buff:
+    root = aanode.insert(root, x)
+    print_node(root, root.height)
+    print '-----'
+</pre>
+<p> print_node は AA 木を表示する関数です。引数 x にはルートのレベルを渡します。終端は None ではなく null なので、node と aanode.null を比較していることに注意してください。0 から 7 までの整数値を順番に AA 木に挿入します。実行結果は次のようになります。
+</p>
+<pre>
+ 0
+-----
+ 0
+ 1
+-----
+     0
+ 1
+     2
+-----
+     0
+ 1
+     2
+     3
+-----
+     0
+ 1
+     2
+ 3
+     4
+-----
+     0
+ 1
+     2
+ 3
+     4
+     5
+-----
+         0
+     1
+         2
+ 3
+         4
+     5
+         6
+-----
+         0
+     1
+         2
+ 3
+         4
+     5
+         6
+         7
+-----
+</pre>
+<p> どの経路でも木のレベル (黒高さ) が同じになっていることはすぐにわかると思います。このように、AA 木ではどのようなデータでも木のバランスが大きく崩れることはありません。
+</p>
+
+<p> 今度は木の高さを比較してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データ挿入の簡単なテスト (2)
+
+# coding: utf-8
+
+import node
+import avlnode
+import rbnode
+import aanode
+import random
+
+# 木の高さを求める
+def get_height(node, term = None):
+    if node is not term:
+        a = get_height(node.left, term)
+        b = get_height(node.right, term)
+        return max(a, b) + 1
+    return 0
+
+for x in [1000, 2000, 4000, 8000, 16000]:
+    buff = [random.randint(0, 100000) for _ in xrange(x)]
+    a = None                # AVL tree
+    b = None                # Binary tree
+    c = rbnode.make_null()  # 赤黒木
+    d = aanode.make_null()  # AA 木
+    # buff.sort()
+    for n in buff:
+        a = avlnode.insert(a, n)
+        b = node.insert(b, n)
+        c = rbnode.insert(c, n)
+        d = aanode.insert(d, n)
+    print x, get_height(a), get_height(b),
+    print get_height(c, rbnode.null), get_height(d, aanode.null)
+</pre>
+<p> 関数 get_height は木の高さを求めます。引数 term には木の終端を表すデータを渡します。赤黒木 (rbnode.py) の場合は rbnode.null を、AA 木 (aanode.py) の場合は aanode.null を指定します。
+</p>
+
+<p> それでは、実行結果を示します。
+</p>
+<pre>
+    表 : 木の高さ
+
+  N   : AVL  BIN  R-B  AA
+--------------------------
+ 1000 : 12   22   13   13
+ 2000 : 13   22   13   14
+ 4000 : 15   25   15   17
+ 8000 : 16   29   16   18
+16000 : 17   32   17   19
+</pre>
+<p> AA 木の高さは AVL 木や赤黒木よりも少しだけ高くなりましたが、単純な二分木に比べると木の高さは低く抑えられていて、平衡木として動作していることがわかります。AA 木の場合、データの探索は二分木と同じなので、AVL 木や赤黒木と同様にデータの探索は高速に処理できると思われます。
+</p>
+<p> 次はソート済みデータで試してみましょう。結果は次のようになりました。
+</p>
+<pre>
+  表 : 木の高さ
+  
+ (a) 昇順
+
+  N   : AVL  R-B  AA
+---------------------
+ 1000 : 10   17   15
+ 2000 : 11   19   16
+ 4000 : 12   21   17
+ 8000 : 13   23   18
+16000 : 14   25   19
+
+
+ (b) 逆順
+
+  N   : AVL  R-B  AA
+---------------------
+ 1000 : 10   17   10
+ 2000 : 11   19   11
+ 4000 : 12   21   12
+ 8000 : 13   23   13
+16000 : 14   25   14
+</pre>
+<p> AA 木の場合、木の高さは赤黒木よりも低くなりました。AA 木の赤節は黒節の右の子にしかなれないので、昇順と逆順では木の高さが異なる結果になりました。逆順のデータで、木の高さが AVL 木と同じになるとは驚きました。ソート済みデータは赤黒木よりも AA 木の方が適しているのかもしれません。
+</p>
+
+<h4>●データの削除</h4>
+<p> 次はデータの削除について説明します。AA 木の場合、二分木と同様にデータを削除して、そのあと AA 木の条件を満たすように木のバランスを修正します。実際に削除される節は「葉」の場合か、子を一つだけ持っている場合です。葉の場合は親節に終端 (null) が挿入され、子を一つだけ持っている場合は、その子が親節に挿入されます。このとき、親と子のレベルが 1 よりも大きくなったならば、バランスが崩れているので修正が必要になります。
+</p>
+
+<p> AA 木のバランスは次の操作で修正することができます。
+</p>
+
+<pre class="list">
+リスト : バランスの修正処理
+
+if node.left.height &lt; node.height - 1 or node.right.height &lt; node.height - 1:
+    node.height -= 1
+    if node.right.height &gt; node.height:
+        node.right.height = node.height
+    node = skew(node)                          # skew1
+    node.right = skew(node.right)              # skew2
+    node.right.right = skew(node.right.right)  # skew3
+    node = split(node)                         # split1
+    node.right = split(node.right)             # split2
+</pre>
+
+<p> node とその右部分木に対して skew を 3 回、split を 2 回を適用して木のバランスをチェックします。これでバランスを修正できない場合は、node の親節で修正を行います。筆者のような凡人には思いつかない方法ですね。これで本当に木のバランスを修正できるのか、削除パターンをすべて列挙して調べてみましょう。
+</p>
+
+<h4>●葉または子を一つ持つ節の場合</h4>
+<p> 葉または子を一つ持つ節を削除する場合は簡単です。次の図を見てください。
+</p>
+<pre class="fig">
+＼               ＼
+  <font color="black">●</font>A,1      =&gt;    <font color="black">●</font>A,1
+    ＼               ＼
+      <font color="red">■</font>B,1           null,0
+
+(a)
+
+＼               ＼
+  <font color="black">●</font>A,1      =&gt;    <font color="black">●</font>B,1
+    ＼               ＼
+      <font color="red">■</font>B,1           null,0
+
+(b)
+
+      ／               ／               ／
+    <font color="black">●</font>A,2    =&gt;      <font color="black">●</font>A,2    =&gt;      <font color="black">●</font>A,1    height =&gt; -1
+  ／  ＼           ／  ＼           ／  ＼
+<font color="black">●</font>      <font color="black">●</font>       null    <font color="black">●</font>       null    <font color="red">■</font>
+B,1     C,1       0      C,1       0      C,1
+
+(c)
+
+      ／               ／                ／
+    <font color="black">●</font>A,2    =&gt;      <font color="black">●</font>A,1    =&gt;       <font color="black">●</font>B,1   height =&gt; -1
+  ／  ＼           ／  ＼    skew1   ／  ＼
+<font color="black">●</font>      <font color="black">●</font>       <font color="black">●</font>     null       null    <font color="red">■</font>
+B,1     C,1      B,1     0          0      A,1
+
+(d)
+
+        図 : 葉または子を一つ持つ節の削除
+</pre>
+<p> もしも、削除する節が (a) のように「赤」ならば簡単です。AA 木の条件により、子を一つだけ持つ赤節は存在しないので、その赤節は「葉」であることがわかります。したがって、その節を削除するだけで OK です。黒高さに変化はないので、木のバランスを修正する必要もありません。
+</p>
+<p> (b) は子を一つ持つ黒節 A を削除する場合です。子 B は赤節しかありえないので、A を B に置き換えるだけです。B は黒節となるので、木のバランスを修正する必要はありません。
+</p>
+<p> (c), (d) は黒節の葉を削除する場合です。(c) は左の子 B を削除します。A の左の子は終端 null になるので、レベル差が 1 より大きくなり、バランスの修正が必要になります。まず、A のレベル (height) を -1 します。次に、skew と split を順番に適用しますが、部分木 A は AA 木の条件を満たしているので、ここでバランスを修正することはできません。A の親節でバランスを修正します。
+</p>
+<p> (d) は右の子 C を削除します。A のレベルを -1 すると、左の子 B と同じレベルになります。そこで、skew を適用して木のバランスを修正します。これで部分木 B は AA 木の条件を満たしますが、部分木のレベルは -1 されているので、親節で木のバランスを修正します。
+</p>
+<h4>●子を 2 つ持つ節の場合</h4>
+<p> 次は子を 2 つ持つ節で、部分木の高さが -1 された場合を説明します。次の図を見てください。
+</p>
+<pre class="fig">
+      ／     k2-1       ／          
+    <font color="black">●</font>A,k2    =&gt;      <font color="black">●</font>A,k1        height =&gt; -1
+  ／  ＼            ／  ＼          
+<font color="black">●</font>      <font color="black">●</font>C,k1    <font color="black">●</font>      <font color="red">■</font>C,k1    
+B,k0  ／  ＼      B,k0  ／  ＼      
+    <font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="black">●</font>    
+    D,k0    E,k0      D,k0    E,k0  
+
+(a)
+
+          ／     k2-1       ／                  ／      
+        <font color="black">●</font>A,k2    =&gt;      <font color="black">●</font>A,k1     =&gt;       <font color="black">●</font>B,k1    height =&gt; -1
+      ／  ＼            ／  ＼      skew1   ／  ＼      
+B,k1<font color="black">●</font>      <font color="black">●</font>C,k0    <font color="black">●</font>B,k1  <font color="black">●</font>C,k0      <font color="black">●</font>D,k0  <font color="red">■</font>A,k1
+  ／  ＼            ／  ＼                      ／  ＼  
+<font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="black">●</font>                  <font color="black">●</font>      <font color="black">●</font>
+D,k0    E,k0      D,k0    E,k0                E,k0    C,k0
+
+(b)
+
+        図 : 子を 2 つ持つ節の修正 (1)
+</pre>
+<p> (a) は節 B のレベルが k1 から k0 (= k1 - 1) に下がり、節 C の子が黒節の場合です。この場合、節 A のレベルを -1 (k1 = k2 - 1) するだけで、部分木 A のバランスは保たれます。あとは A の親節で修正を行います。
+</p>
+<p> (b) は節 C のレベルが k1 から k0 に下がり、節 B の子が黒節の場合です。まず、節 A のレベルを k1 に下げます。すると、節 B と同じレベルになるので skew を適用します。これで部分木 B は AA 木の条件を満たすので、B の親節で修正を行います。
+</p>
+
+<p> 次は節 A の孫が赤節の場合です。
+</p>
+<pre class="fig">
+      ／        k2-1       ／     split1          ／  
+    <font color="black">●</font>A,k2       =&gt;      <font color="black">●</font>A,k1     =&gt;          <font color="black">●</font>C,k2
+  ／  ＼               ／  ＼                 ／  ＼  
+<font color="black">●</font>      <font color="black">●</font>C,k1       <font color="black">●</font>      <font color="red">■</font>C,k1     A,k1<font color="black">●</font>      <font color="black">●</font>E,k1
+B,k0  ／  ＼        B,k0   ／  ＼         ／  ＼  
+    <font color="black">●</font>      <font color="red">■</font>           <font color="black">●</font>      <font color="red">■</font>     <font color="black">●</font>      <font color="black">●</font>
+    D,k0    E,k1        D,k0    E,k1    B,k0    D,k0
+
+(a)
+
+          ／       k2-1         ／                  ／      
+        <font color="black">●</font>A,k2      =&gt;        <font color="black">●</font>A,k1     =&gt;       <font color="black">●</font>B,k1     =&gt; skew2 A
+      ／  ＼                ／  ＼     skew1 A  ／  ＼      
+B,k1<font color="black">●</font>      <font color="black">●</font>C,k0        <font color="black">●</font>B,k1  <font color="black">●</font>C,k0      <font color="black">●</font>D,k0  <font color="red">■</font>A,k1
+  ／  ＼                ／  ＼                      ／  ＼  
+<font color="black">●</font>      <font color="red">■</font>E,k1        <font color="black">●</font>      <font color="red">■</font>                  <font color="red">■</font>     <font color="black">●</font> 
+D,k0  ／  ＼          D,k0    E,k1                E,k1   C,k0
+    <font color="black">●</font>F,k0  <font color="black">●</font>G,k0
+
+
+      ／        split1 B            ／     
+    <font color="black">●</font>B,k1        =&gt;              <font color="black">●</font>E,k2   
+  ／  ＼                        ／  ＼     
+<font color="black">●</font>D,k0  <font color="red">■</font>E,k1                ／      ＼     
+      ／  ＼                <font color="black">●</font>B,k1      <font color="black">●</font>A,k1
+    <font color="black">●</font>      <font color="red">■</font>A,k1        ／  ＼      ／  ＼ 
+    F,k0  ／  ＼        <font color="black">●</font>      <font color="black">●</font>  <font color="black">●</font>      <font color="black">●</font>
+        <font color="black">●</font>      <font color="black">●</font>      D,k0   F,k0 G,k0    C,k0
+        G,k0    C,k0 
+
+(b)
+
+        図 : 子を 2 つ持つ節の修正 (2)
+</pre>
+<p> (a) は孫節 E が赤節の場合です。まず、A のレベルを k1 に下げます。skew の操作は適用されませんが、A に split1 が適用されます。すると、C のレベルが k2 に上がるため、木のバランスは保たれます。
+</p>
+<p> (b) は孫節 E が赤節の場合です。まず、A のレベルを k1 に下げます。次に、A に skew1 を適用します。すると、B の右の子が A になり、ここでも skew2 を適用します。次に、B に split1 を適用すると、木のバランスを保つことができます。
+</p>
+
+<h4>●子を 3 つ持つ節の場合</h4>
+<p> 次は子を 3 つ持つ節、つまり、節 A の右の子が赤節の場合です。
+</p>
+<pre class="fig">
+      ／     k2-1       ／                      ／               
+    <font color="black">●</font>A,k2    =&gt;      <font color="black">●</font>A,k1                  <font color="black">●</font>A,k1             
+  ／  ＼            ／  ＼                  ／  ＼               
+<font color="black">●</font>      <font color="red">■</font>C,k2    <font color="black">●</font>      <font color="red">■</font>C,k1  skew2 C <font color="black">●</font>      <font color="black">●</font>D,k1    split1 A 
+B,k0  ／  ＼      B,k0  ／  ＼      =&gt;    B,k0  ／  ＼         =&gt;   
+    <font color="black">●</font>D,k1  <font color="black">●</font>        <font color="black">●</font>D,k1  <font color="black">●</font>              <font color="black">●</font>      <font color="red">■</font>C,k1
+  ／  ＼    E,k1    ／  ＼    E,k1            F,k0  ／  ＼    
+<font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="black">●</font>                      <font color="black">●</font>      <font color="black">●</font>  
+F,k0    G,k0      F,k0    G,k0                    G,k0    E,k1
+
+            ／                            ／            
+          <font color="black">●</font>D,k2       I が k1          <font color="black">●</font>D,k2          
+        ／  ＼         split2 C       ／  ＼            
+      ／      ＼         =&gt;         ／      ＼          
+A,k1<font color="black">●</font>          <font color="black">●</font>C,k1        A,k1<font color="black">●</font>          <font color="red">■</font>E,k2    
+  ／  ＼      ／  ＼            ／  ＼      ／  ＼      
+<font color="black">●</font>      <font color="black">●</font>  <font color="black">●</font>  E,k1<font color="red">■</font>        <font color="black">●</font>  F,k0<font color="black">●</font>  <font color="black">●</font>C,k1  <font color="black">●</font>    
+B,k0  F,k0 G,k0   ／  ＼      B,k0      ／  ＼    I,k1  
+                H,k0    Ｉ            G,k0   H,k0
+
+(a)
+
+      ／     k2-1       ／                      ／               
+    <font color="black">●</font>A,k2    =&gt;      <font color="black">●</font>A,k1                  <font color="black">●</font>A,k1             
+  ／  ＼            ／  ＼                  ／  ＼               
+<font color="black">●</font>      <font color="red">■</font>C,k2    <font color="black">●</font>      <font color="red">■</font>C,k1  skew2 C <font color="black">●</font>      <font color="black">●</font>D,k1    skew3 C
+B,k0  ／  ＼      B,k0  ／  ＼      =&gt;    B,k0  ／  ＼         =&gt;   
+    <font color="black">●</font>D,k1  <font color="black">●</font>        <font color="black">●</font>D,k1  <font color="black">●</font>              <font color="black">●</font>      <font color="red">■</font>C,k1
+  ／  ＼    E,k1    ／  ＼    E,k1            F,k0  ／  ＼    
+<font color="black">●</font>      <font color="red">■</font>        <font color="black">●</font>      <font color="red">■</font>                      <font color="red">■</font>G,k1  <font color="black">●</font>  
+F,k0    G,k1      F,k0    G,k1                  ／  ＼    E,k1
+                                              H,k0   I,k0
+
+
+          ／                             ／
+        <font color="black">●</font>A,k1         split1 A         <font color="black">●</font>D,k2          split2 G
+      ／  ＼              =&gt;         ／  ＼               =&gt;
+B,k0<font color="black">●</font>      <font color="black">●</font>D,k1                 ／      ＼ 
+          ／  ＼                 <font color="black">●</font>A,k1      <font color="black">●</font>G,k1
+    F,k0<font color="black">●</font>      <font color="red">■</font>G,k1         ／  ＼      ／  ＼ 
+              ／  ＼         <font color="black">●</font>B,k0  <font color="black">●</font>  H,k0    <font color="red">■</font>C,k1
+            H,k0    <font color="red">■</font>C,k1          F,k0       ／  ＼
+                  ／  ＼                     I,k0    <font color="black">●</font>E,k1
+                I,k0    <font color="black">●</font>E,k1
+
+            ／
+          <font color="black">●</font>D,k2
+        ／  ＼
+      ／      ＼ 
+    <font color="black">●</font>A,k1      <font color="red">■</font>C,k2
+  ／  ＼      ／  ＼ 
+<font color="black">●</font>B,k0  <font color="black">●</font>  <font color="black">●</font>G,k1  <font color="black">●</font>E,k1
+       F,k0
+
+(b)
+
+        図 : 子を 3 つ持つ節の修正 (1)
+</pre>
+<p> (a), (b) は 3 つの子のうちの左の子 B のレベルが下がった場合です。(a) と (b) は節 G の色が異なります。まず、節 A と C のレベルを k1 に下げます。すると、C に skew2 が適用され、その後 A に split1 が適用されます。ここで、E の右の子 I が赤節であれば、さらに split2 が適用されます。これで木のバランスを保つことができます。
+</p>
+<p> (b) は節 G の色が赤の場合です。節 C に skew2 を適用するのは (a) と同じです。節 G が赤なので、さらに skew3 を適用します。その後、A に split1 を、G に split2 を適用して、木のバランスを保つことができます。
+</p>
+
+<p> 次は中央の子のレベルが下がった場合です。
+</p>
+<pre class="fig">
+  ／                  ／                
+<font color="black">●</font>A,k2              <font color="black">●</font>A,k2              
+  ＼                  ＼                
+    <font color="red">■</font>B,k2              <font color="black">●</font>B,k1
+  ／  ＼              ／  ＼            
+<font color="black">●</font>C,k0  <font color="black">●</font>D,k1      <font color="black">●</font>C,k0  <font color="red">■</font>D,k1      
+      ／  ＼              ／  ＼        
+    <font color="black">●</font>E,k0  <font color="black">●</font>F,k0      <font color="black">●</font>E,k0  <font color="black">●</font>F,k0  
+
+(a)
+
+  ／                  ／                        ／
+<font color="black">●</font>A,k2              <font color="black">●</font>A,k2                    <font color="black">●</font>A,k2
+  ＼                  ＼          split1 B      ＼
+    <font color="red">■</font>B,k2              <font color="black">●</font>B,k1      =&gt;            <font color="red">■</font>D,k2
+  ／  ＼              ／  ＼                    ／  ＼
+<font color="black">●</font>C,k0  <font color="black">●</font>D,k1      <font color="black">●</font>C,k0  <font color="red">■</font>D,k1            <font color="black">●</font>B,k1  <font color="black">●</font>F,k1
+      ／  ＼              ／  ＼            ／  ＼
+    <font color="black">●</font>E,k0  <font color="red">■</font>F,k1      <font color="black">●</font>E,k0  <font color="red">■</font>F,k1    <font color="black">●</font>C,k0  <font color="black">●</font>E,k0
+
+(b)
+
+        図 : 子を 3 つ持つ節の修正 (2)
+</pre>
+<p> 節 C が中央の子で、(a) と (b) では節 F の色が違います。(a) の場合、B のレベルを k1 に下げるだけで木のバランスを修正することができます。(b) の場合、B のレベルを下げて split を適用すると木のバランスを修正することができます。
+</p>
+
+<p> 最後に、右の子のレベルが下がった場合を説明します。
+</p>
+<pre class="fig">
+      ／                  ／                      ／        
+    <font color="black">●</font>A,k2              <font color="black">●</font>A,k2                  <font color="black">●</font>A,k2      
+      ＼                  ＼          skew1 B     ＼        
+        <font color="red">■</font>B,k2              <font color="red">■</font>B,k1      =&gt;          <font color="black">●</font>C,k1  
+      ／  ＼              ／  ＼                  ／  ＼    
+    <font color="black">●</font>C,k1  <font color="black">●</font>D,k0      <font color="black">●</font>C,k1  <font color="black">●</font>D,k0          <font color="black">●</font>E,k0  <font color="red">■</font>B,k1
+  ／  ＼              ／  ＼                          ／  ＼
+<font color="black">●</font>E,k0  <font color="black">●</font>F,k0      <font color="black">●</font>E,k0  <font color="black">●</font>F,k0                  <font color="black">●</font>F,k0  <font color="black">●</font>D,k0
+
+(a)
+
+      ／                  ／                      ／        
+    <font color="black">●</font>A,k2              <font color="black">●</font>A,k2                  <font color="black">●</font>A,k2      
+      ＼                  ＼          skew1 B     ＼          skew2 B
+        <font color="red">■</font>B,k2              <font color="red">■</font>B,k1      =&gt;          <font color="black">●</font>C,k1      =&gt;
+      ／  ＼              ／  ＼                  ／  ＼    
+    <font color="black">●</font>C,k1  <font color="black">●</font>D,k0      <font color="black">●</font>C,k1  <font color="black">●</font>D,k0          <font color="black">●</font>E,k0  <font color="red">■</font>B,k1
+  ／  ＼              ／  ＼                          ／  ＼
+<font color="black">●</font>E,k0  <font color="red">■</font>F,k1      <font color="black">●</font>E,k0  <font color="red">■</font>F,k1                  <font color="red">■</font>F,k1  <font color="black">●</font>D,k0
+                                                  ／  ＼
+                                                 H,k0  I,k0
+
+      ／                            ／  
+    <font color="black">●</font>A,k2                        <font color="black">●</font>A,k2
+      ＼          split1 C          ＼  
+        <font color="black">●</font>C,k1      =&gt;                <font color="red">■</font>F,k2
+      ／  ＼                        ／  ＼
+    <font color="black">●</font>E,k0  <font color="red">■</font>F,k1                ／      ＼
+          ／  ＼                <font color="black">●</font>C,k1      <font color="black">●</font>B,k1
+        H,k0    <font color="red">■</font>B,k1        ／  ＼      ／  ＼
+              ／  ＼        <font color="black">●</font>E,k0 H,k0  I,k0   <font color="black">●</font>D,k0                   
+            I,k0    <font color="black">●</font>D,k0
+
+(b)
+
+        図 : 子を 3 つ持つ節の修正 (3)
+</pre>
+<p> (a) と (b) は節 F の色が違います。(a) の場合、b のレベルを k1 に下げ、skew1 を適用します。これで木のバランスを修正することができます。(b) の場合、skew1 を適用したあと、節 F が赤なので再度 skew2 を適用します。それから、split1 を適用します。これで木のバランスを修正することができます。
+</p>
+
+<p> このように skew と split を順番に適用することで、すべてのパターンに対して木のバランスを修正することができます。ただし、この方法が最適というわけではありません。もっと少ない回転操作で木のバランスを修正できる場合もあるからです。そのかわり、プログラムの実装はとても簡単になります。
+</p>
+
+<h4>●データ削除のプログラム</h4>
+<p> それでは、データを削除する関数 delete を作成します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データの削除
+
+# 最小値を探す
+def search_min(node):
+    while node.left is not null: node = node.left
+    return node.data
+
+# 削除
+def delete(node, x):
+    if node is not null:
+        if x == node.data:
+            if node.left is null: return node.right
+            elif node.right is null: return node.left
+            else:
+                node.data = search_min(node.right)
+                node.right = delete(node.right, node.data)
+        elif x &lt; node.data:
+            node.left = delete(node.left, x)
+        else:
+            node.right = delete(node.right, x)
+        # バランスのチェックと修正処理
+        if node.left.height &lt; node.height - 1 or node.right.height &lt; node.height - 1:
+            node.height -= 1
+            if node.right.height &gt; node.height:
+                node.right.height = node.height
+            node = skew(node)
+            node.right = skew(node.right)
+            node.right.right = skew(node.right.right)
+            node = split(node)
+            node.right = split(node.right)
+    return node
+</pre>
+<p> 二分木のデータ削除処理に、AA 木のバランスをチェックする処理を追加しただけなので、特に難しいところはないと思います。このように簡単にプログラムを実装できるところが AA 木の長所です。
+</p>
+
+<h4>●データ削除のテスト</h4>
+<p> それでは、ここでデータ削除のテストを行ってみましょう。テストプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データ削除の簡単なテスト
+
+# coding: utf-8
+import aanode
+
+# AA 木の表示
+def print_node(node, x):
+    if node is not aanode.null:
+        print_node(node.left, x)
+        print "    " * (x - node.height), node.data
+        print_node(node.right, x)
+
+root = aanode.make_null()
+buff = range(8)
+for x in buff:
+    root = aanode.insert(root, x)
+print_node(root, root.height)
+print '-----'
+for x in buff:
+    root = aanode.delete(root, x)
+    print_node(root, root.height)
+    print '-----'
+</pre>
+<p> 実行結果を示します。
+</p>
+<pre>
+         0
+     1
+         2
+ 3
+         4
+     5
+         6
+         7
+-----
+     1
+     2
+ 3
+     4
+ 5
+     6
+     7
+-----
+     2
+ 3
+     4
+ 5
+     6
+     7
+-----
+     3
+ 4
+     5
+ 6
+     7
+-----
+     4
+ 5
+     6
+     7
+-----
+     5
+ 6
+     7
+-----
+ 6
+ 7
+-----
+ 7
+-----
+-----
+</pre>
+<p> このように、データを削除しても AA 木のバランスが大きく崩れることはありません。
+</p>
+<h4>●AAtree クラスの作成</h4>
+<p> 最後に、AA 木を表すクラスを作成します。次のリストを見てください。
+</p>
+<pre class="list">
+# coding: utf-8
+#
+# aatree.py : AA tree
+#
+#             Copyright (C) 2009 Makoto Hiroi
+#
+import aanode
+
+# AA tree
+class AAtree:
+    def __init__(self):
+        self.root = aanode.make_null()
+
+    # 探索
+    def search(self, x):
+        return aanode.search(self.root, x)
+
+    # 挿入
+    def insert(self, x):
+        self.root = aanode.insert(self.root, x)
+
+    # 削除
+    def delete(self, x):
+        self.root = aanode.delete(self.root, x)
+
+    # 巡回
+    def traverse(self):
+        for x in aanode.traverse(self.root):
+            yield x
+
+    # 表示
+    def __str__(self):
+        if self.root is aanode.null: return 'AAtree()'
+        buff = 'AAtree('
+        for x in aanode.traverse(self.root):
+            buff += '%s, ' % x
+        buff = buff.rstrip(',  ')
+        buff += ')'
+        return buff
+
+# テスト
+if __name__ == '__main__':
+    import random
+    tree = AAtree()
+    data = [random.randint(0, 100) for x in range(10)]
+    print data
+    print tree
+    for x in data: tree.insert(x)
+    print tree
+    for x in data:
+        print 'search', x, tree.search(x)
+        print 'delete', x
+        tree.delete(x)
+        print 'search', x, tree.search(x)
+        print tree
+</pre>
+<p> クラス名は AAtree としました。AAtree のメソッドはモジュール aanode の操作関数を呼び出すだけです。メソッド __init__ で root を初期化するとき、モジュール aanode の関数 make_null を呼び出して、終端オブジェクトを設定することに注意してください。あとは、とくに難しいところはないでしょう。
+</p>
+<p> それでは、テストの実行結果を示します。
+</p>
+<pre>
+[85, 67, 37, 40, 23, 64, 80, 68, 32, 51]
+AAtree()
+AAtree(23, 32, 37, 40, 51, 64, 67, 68, 80, 85)
+search 85 True
+delete 85
+search 85 False
+AAtree(23, 32, 37, 40, 51, 64, 67, 68, 80)
+search 67 True
+delete 67
+search 67 False
+AAtree(23, 32, 37, 40, 51, 64, 68, 80)
+search 37 True
+delete 37
+search 37 False
+AAtree(23, 32, 40, 51, 64, 68, 80)
+search 40 True
+delete 40
+search 40 False
+AAtree(23, 32, 51, 64, 68, 80)
+search 23 True
+delete 23
+search 23 False
+AAtree(32, 51, 64, 68, 80)
+search 64 True
+delete 64
+search 64 False
+AAtree(32, 51, 68, 80)
+search 80 True
+delete 80
+search 80 False
+AAtree(32, 51, 68)
+search 68 True
+delete 68
+search 68 False
+AAtree(32, 51)
+search 32 True
+delete 32
+search 32 False
+AAtree(51)
+search 51 True
+delete 51
+search 51 False
+AAtree()
+</pre>
+<h4>●AA 木の評価</h4>
+<p> それでは、AVL 木、赤黒木、AA 木の性能を比較してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : AVL 木、AA 木、赤黒木のテスト
+
+from avltree import *
+from rbtree import *
+from aatree import *
+import time, random
+
+def insert_test(tree, buff):
+    s = time.clock()
+    for x in buff:
+        tree.insert(x)
+    e = time.clock()
+    return e - s
+
+def search_test(tree, buff):
+    s = time.clock()
+    for x in buff:
+        tree.search(x)
+    e = time.clock()
+    return e - s
+
+def delete_test(tree, buff):
+    s = time.clock()
+    for x in buff:
+        tree.delete(x)
+    e = time.clock()
+    return e - s
+
+for x in [1000, 2000, 4000, 8000, 16000]:
+    buff = range(x)
+    random.shuffle(buff)
+    print x,
+    for tree in [AVLtree, RBtree, AAtree]:
+        a = tree()
+        print '%.3f' % insert_test(a, buff),
+        print '%.3f' % search_test(a, buff),
+        print '%.3f' % delete_test(a, buff),
+    print
+</pre>
+<p> データを乱数で生成します。そして、木にデータを挿入する (insert_test)、データを探索する (search_test)、データを削除する (delete_test) 時間を計測します。結果は次のようになりました。
+</p>
+<pre>
+        表 : 実行結果 (単位 : 秒)
+
+      :      AVL tree       :   red-black tree    :      AA tree
+ 個数 : 挿入   探索   削除  : 挿入   探索   削除  : 挿入   探索   削除
+-----------------------------------------------------------------------
+ 1000 : 0.019  0.005  0.016 : 0.020  0.005  0.016 : 0.025  0.005  0.022
+ 2000 : 0.040  0.011  0.033 : 0.040  0.012  0.034 : 0.055  0.012  0.048
+ 4000 : 0.085  0.024  0.071 : 0.085  0.026  0.075 : 0.122  0.026  0.103
+ 8000 : 0.185  0.054  0.154 : 0.185  0.058  0.167 : 0.272  0.059  0.231
+16000 : 0.407  0.126  0.336 : 0.416  0.136  0.377 : 0.614  0.139  0.524
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<div class="note">
+[<a href="pyalgo53.html#update">改訂</a> 2010/10/10]
+</div>
+
+<p> データの探索は AA 木でも高速に処理できますが、データの挿入と削除は AVL 木や赤黒木よりも遅くなりました。再帰を繰り返しに変換するともう少し速くなるかもしれません。
+</p>
+<p> 次はソート済みのデータで試してみましょう。実行結果は次のようになりました。
+</p>
+<pre>
+        表 : ソート済みデータの実行結果 (単位 : 秒)
+
+  (a) 昇順
+
+      :      AVL tree       :  red-black tree     :      AA tree
+ 個数 : 挿入   探索   削除  : 挿入   探索   削除  : 挿入   探索   削除
+-----------------------------------------------------------------------
+ 1000 : 0.020  0.005  0.013 : 0.030  0.005  0.014 : 0.031  0.005  0.021
+ 2000 : 0.042  0.011  0.028 : 0.061  0.012  0.032 : 0.068  0.012  0.044
+ 4000 : 0.088  0.023  0.059 : 0.134  0.025  0.069 : 0.152  0.026  0.095
+ 8000 : 0.184  0.050  0.123 : 0.290  0.055  0.149 : 0.332  0.056  0.204
+16000 : 0.386  0.107  0.258 : 0.628  0.118  0.319 : 0.723  0.120  0.434
+
+  (b) 逆順
+
+      :      AVL tree       :  red-black tree     :      AA tree
+ 個数 : 挿入   探索   削除  : 挿入   探索   削除  : 挿入   探索   削除
+-----------------------------------------------------------------------
+ 1000 : 0.020  0.005  0.013 : 0.027  0.005  0.014 : 0.024  0.005  0.025
+ 2000 : 0.042  0.011  0.028 : 0.057  0.012  0.031 : 0.053  0.011  0.054
+ 4000 : 0.088  0.023  0.058 : 0.123  0.026  0.068 : 0.116  0.025  0.118
+ 8000 : 0.185  0.050  0.123 : 0.266  0.056  0.148 : 0.251  0.055  0.257
+16000 : 0.385  0.107  0.259 : 0.576  0.119  0.317 : 0.540  0.117  0.554
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<div class="note">
+-- <a name="update">改訂</a> --------<BR>
+2010/10/10 Python のバージョンを 2.5.2 から 2.7 に変更して実行時間を計測
+</div>
+<p> ソート済みデータの場合、AA 木は昇順でデータの挿入に時間がかかり、逆順ではデータの削除に時間がかかります。この結果を見ると、AA 木は赤黒木よりもソート済みデータに適しているとはいえないようです。データの探索は AA 木と赤黒木で大きな違いはないので、AA 木は平衡木として機能していることがわかります。
+</p>
+
+<p> 拙作のページ <a href="pyalgo13.html">AVL 木 [2]</a> の Appendix で説明しましたが、木の高さを使った AVL 木の実装では、実行速度がとても遅くなりました。木の高さを使った実装方法で、ここまで高い性能をたたきだす AA 木は優れたアルゴリズムだと思います。
+</p>
+
+<p> なお、これらの結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+# coding: utf-8
+#
+# aanode.py : AA tree 操作関数
+#
+#             Copyright (C) 2009 Makoto Hiroi
+#
+
+# 終端
+null = None
+
+# 節の定義
+class Node:
+    def __init__(self, x):
+        self.data = x
+        self.height = 1
+        self.left = null
+        self.right = null
+
+# 終端の生成
+def make_null():
+    global null
+    if null is None:
+        null = Node(None)
+        null.height = 0
+        null.left = null
+        null.right = null
+    return null
+
+# 右回転
+def rotate_right(node):
+    lnode = node.left
+    node.left = lnode.right
+    lnode.right = node
+    return lnode
+
+# 左回転
+def rotate_left(node):
+    rnode = node.right
+    node.right = rnode.left
+    rnode.left = node
+    return rnode
+
+# 左の子が赤の場合
+def skew(node):
+    if node.left.height == node.height:
+        node = rotate_right(node)
+    return node
+
+# 右の孫節が赤の場合
+def split(node):
+    if node.height == node.right.right.height:
+        node = rotate_left(node)
+        node.height += 1
+    return node
+
+# 探索
+def search(node, x):
+    while node is not null:
+        if x == node.data: return True
+        elif x &lt; node.data:
+            node = node.left
+        else:
+            node = node.right
+    return False
+
+# 挿入
+def insert(node, x):
+    if node is null: return Node(x)
+    elif x == node.data: return node
+    elif x &lt; node.data:
+        node.left = insert(node.left, x)
+    else:
+        node.right = insert(node.right, x)
+    return split(skew(node))
+
+# 最小値を探す
+def search_min(node):
+    while node.left is not null: node = node.left
+    return node.data
+
+# 削除
+def delete(node, x):
+    if node is not null:
+        if x == node.data:
+            if node.left is null: return node.right
+            elif node.right is null: return node.left
+            else:
+                node.data = search_min(node.right)
+                node.right = delete(node.right, node.data)
+        elif x &lt; node.data:
+            node.left = delete(node.left, x)
+        else:
+            node.right = delete(node.right, x)
+        # バランスのチェックと修正処理
+        if node.left.height &lt; node.height - 1 or node.right.height &lt; node.height - 1:
+            node.height -= 1
+            if node.right.height &gt; node.height:
+                node.right.height = node.height
+            node = skew(node)
+            node.right = skew(node.right)
+            node.right.right = skew(node.right.right)
+            node = split(node)
+            node.right = split(node.right)
+    return node
+
+# 巡回
+def traverse(node):
+    if node is not null:
+        for x in traverse(node.left):
+            yield x
+        yield node.data
+        for x in traverse(node.right):
+            yield x
+
+# AA 木のチェック
+def check_tree(node):
+    if node is not null:
+        if node.height != node.left.height + 1:
+            raise 'aa tree error1'
+        if node.height != node.right.height and node.height != node.right.height + 1:
+            raise 'aa tree error2'
+        if node.height == node.right.right.height:
+            raise 'aa tree error3'
+        check_tree(node.left)
+        check_tree(node.right)
+
+# test
+if __name__ == '__main__':
+    import random, time
+    root = make_null()
+    buff = range(1000)
+    random.shuffle(buff)
+    print 'insert test'
+    for x in buff:
+        root = insert(root, x)
+        check_tree(root)
+    print 'search test'
+    random.shuffle(buff)
+    for x in buff:
+        if not search(root, x):
+            raise 'search test error'
+    print 'delete test'
+    for x in buff:
+        root = delete(root, x)
+        check_tree(root)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009-2010 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo52.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo54.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

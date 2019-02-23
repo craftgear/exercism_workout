@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門 / オブジェクト指向編</title>
+  <meta name="description" content="Lisp,Scheme,オブジェクト指向,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881787</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<h2>オブジェクト指向編</h2>
+<div class="small">
+[ <a href="abcobj08.html">PrevPage</a> | <a href="scheme.html#abcobj">Scheme</a> | <a href="abcobj10.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>ヒープ</h3>
+<p> 今回は簡単な例題として、「ヒープ (heap) 」というデータ構造を作ってみましょう。拙作の Scheme 入門講座 <a href="abcscm16.html">ヒープとハッシュ法</a> ではベクタとクロージャを使ってヒープを実装しましたが、オブジェクト指向を使っても簡単にプログラムを作ることができます。そして、ヒープを使った例題として「ハフマン符号」という古典的なデータ圧縮アルゴリズムを取り上げます。
+</p>
+<h4>●ヒープとは？</h4>
+<p> 「ヒープ (heap) 」は「半順序木 (partial ordered tree) 」をベクタで実現したデータ構造です。一般的な二分木では、親よりも左側の子のほうが小さく、親よりも右側の子が大きい、という関係を満たすように作ります。「半順序木」の場合、親は子より小さいか等しい、という関係を満たすように作ります。したがって、木の根（ベクタの添字 0）には、必ず最小値のデータが格納されます。下図にヒープとベクタの関係を示します。
+</p>
+<pre class="fig">
+            0  1  2  3  4  5  6
+    TABLE [10 20 30 40 50 60 70]
+
+         (root)
+           10 (0)
+         ／   ＼            親の添字を k とすると
+       ／       ＼          その子は 2*k+1, 2*k+2 になる。
+     20 (1)       30 (2)    子の添字を k とすると
+   ／  ＼       ／  ＼      その親は (k - 1) / 2 になる。
+ 40     50   60      70     親の値 &lt;= 子の値 の関係を満たす。
+ (3)    (4)  (5)     (6)
+
+    図 1 : ヒープとベクタの対応関係
+</pre>
+<p> ヒープを利用すると、最小値をすぐに見つけることができ、新しくデータを挿入する場合も、高々要素の個数 (n) の対数 (log<SUB>2</SUB> n) に比例する程度の時間で済みます。アルゴリズムの説明は拙作のページ <a href="abcscm16.html">ヒープとハッシュ法</a> をお読みください。
+</p>
+
+<h4>●ヒープの仕様</h4>
+<p> クラス名は &lt;heap&gt; としました。ヒープはデータの大小関係を比較する関数が必要になりますが、ここでデータの比較に算術演算子を使うと、そのヒープは数値データだけにしか適用できなくなります。データの種類に合わせて比較関数を選択できると便利です。
+</p>
+<p> この場合、2 つの方法が考えられます。ひとつは比較関数をメソッドで定義する方法です。たとえば、データの大小関係をメソッド compare で比較するようにプログラムを作成します。データの種類に合わせてメソッド compare を定義しておけば、あとは Gauche の方で適切なメソッドを選択してくれます。
+</p>
+<p> もうひとつは、ヒープを生成するときに比較関数を指定する方法です。たとえば、比較関数を格納するスロット compare を用意し、引数で指定した比較関数をそこにセットします。データを比較するときは、スロット compare に格納されている関数を呼び出せばいいわけです。どちらの方法でも簡単にプログラムできますが、今回は Scheme らしく後者の方法でプログラムを作ってみましょう。
+</p>
+<p> ところで、これだけでは面白くないので、要素からキーを取り出す関数をキーワード :key で指定できるようにします。たとえば、コンスセル (a . b) を要素とする場合、:key に car を指定すると、コンスセルの CAR 部をキーとしてヒープが構成されるわけです。:key のデフォルトは (lambda (x) x) とします。
+</p>
+
+<p> 次はクラス &lt;heap&gt; で公開するメソッドを表 1 に示します。
+</p>
+<table border=1>
+<caption>表 1 : ヒープのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>heap-push! h x</td><td>ヒープ h にデータ x を追加する</td></tr>
+  <tr><td>heap-pop! h </td><td>ヒープ h からデータを取り出す</td></tr>
+  <tr><td>heap-peek h </td><td>ヒープ h の先頭データを参照する</td></tr>
+  <tr><td>heap-length h </td><td>ヒープ h に格納されている要素数を返す</td></tr>
+  <tr><td>heap-clear! h </td><td>ヒープ h を空にする</td></tr>
+  <tr><td>heap-empty? h </td><td>ヒープ h が空ならば #t を返す</td></tr>
+</tbody>
+</table>
+<p> ヒープは可変長配列クラス &lt;vlvector&gt; を使って実装することにします。
+</p>
+
+<h4>●クラスの定義</h4>
+<p> まず最初にクラス &lt;heap&gt; を定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 1 : クラス定義
+
+(define-class &lt;heap&gt; ()
+  ((buff  :accessor heap-buff :init-form (make &lt;vlvector&gt;))
+   (key   :accessor get-key :init-value (lambda (x) x) :init-keyword :key)
+   (obj&gt;? :accessor get-obj&gt;? :init-value &gt; :init-keyword :obj&gt;?)))
+</pre>
+<p> スロット buff にはデータを格納する &lt;vlvector&gt; のインスタンスを、key にはキーを取り出す関数を、obj&gt;? にはデータを比較する関数をセットします。obj&gt;? は第 1 引数が第 2 引数よりも大きいとき #t を返す関数で、デフォルト値は &gt; とします。これで小さいデータから順番に取り出すことができます。
+</p>
+
+<h4>●メソッドの定義</h4>
+<p> 次はメソッド heap-push!, heap-peek, heap-pop! を作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 2 : メソッドの定義
+
+; データの追加
+(define-method heap-push! ((h &lt;heap&gt;) x)
+  (vlvector-push! (heap-buff h) x)
+  (upheap (heap-buff h) (- (heap-length h) 1) (get-obj&gt;? h)))
+
+; 先頭データの参照
+(define-method heap-peek ((h &lt;heap&gt;))
+  (if (heap-empty? h)
+      (error "&lt;heap&gt; : heap is empty")
+    (vlvector-ref (heap-buff h) 0)))
+
+; データの取り出し
+(define-method heap-pop! ((h &lt;heap&gt;))
+  (begin0
+    (heap-peek h)
+    (if (positive? (heap-length h))
+        (let ((buff (heap-buff h)))
+           (vlvector-set! buff 0 (vlvector-pop! buff))
+           (downheap buff 0 (vlvector-length buff) (get-obj&gt;? h))))))
+</pre>
+<p> heep-push! は vlvector-push! で可変長ベクタの末尾にデータ x を追加します。それから、関数 upheap で x をルート方向に移動してヒープを修正します。upheap にはスロット obj&gt;? に格納されている比較関数を渡します。処理内容は拙作のページ <a href="abcscm16.html">ヒープとハッシュ法</a> と同じです。
+</p>
+<p> heap-peek! は heap-empty? を呼び出してヒープが空かチェックします。空の場合はエラーを送出します。データがある場合は可変長ベクタの 0 番目の要素を返します。heap-pop! は heap-peek で可変長ベクタの 0 番目の要素を求め、その後で 0 番目の要素を削除します。vlvector-pop! で最後尾のデータを求め、それを 0 番目にセットします。そして、そのデータを関数 downheap でルートから葉の方向へ移動してヒープを修正します。downheap も <a href="abcscm16.html">ヒープとハッシュ法</a> のプログラムと同じです。
+</p>
+<p> 後のメソッドは簡単なので説明は割愛いたします。詳細は <a href="abcobj09.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (use heap)
+#&lt;undef&gt;
+gosh&gt; (define a (make &lt;heap&gt;))
+a
+gosh&gt; (heap-length a)
+0
+gosh&gt; (heap-empty? a)
+#t
+gosh&gt; (dolist (x '(5 6 4 7 3 8 2 9 1 0)) (heap-push! a x))
+()
+gosh&gt; (heap-length a)
+10
+gosh&gt; (heap-empty? a)
+#f
+gosh&gt; (heap-peek a)
+0
+gosh&gt; (dotimes (x 10) (format #t "~D " (heap-pop! a)))
+0 1 2 3 4 5 6 7 8 9 #t
+gosh&gt; (heap-empty? a)
+#t
+gosh&gt; (heap-length a)
+0
+</pre>
+<p> このように、ヒープを使うと最小値のデータを簡単に求めることができます。
+</p>
+<h4>●ハフマン符号</h4>
+<p> それでは、簡単な例題として「ハフマン符号」を取り上げます。ハフマン符号は 1952 年にハフマン (D. Huffman) が考案した、平均符号長を最小にすることができる符号化法です。古典的なデータ圧縮アルゴリズムですが、ほかのアルゴリズムと簡単に組み合わせることができるため、ハフマン符号は今でも現役のアルゴリズムです。 
+</p>
+
+<p> 最初にハフマン符号のアルゴリズムを簡単に説明します。なお、この説明は拙作のページ <a href="../light/index.html#python_alog">Algorithms with Python</a> <a href="../light/pyalgo31.html">シャノン符号とハフマン符号</a> と同じ内容です。ハフマン符号について理解されている方は読み飛ばしてもらってかまいません。
+</p>
+<p><a href="abcobj09.html#next_chap">次へ</a>
+</p>
+<h4>●ハフマン符号のアルゴリズム</h4>
+<p> ハフマン符号の構成は符号木を作ることで行います。ハフマン符号を構成するアルゴリズムを以下に示します。
+</p>
+<ol>
+ <li>各記号に対応する葉を作成する。この葉には、記号の出現頻度をあらかじめ格納しておく。
+ <li>出現頻度の小さい方から 2 つの葉を取り出す。この葉を格納する新しい節を一つ作り、左右の枝に符号 0 と 1 を割り当てる。この節には 2 つの葉の出現頻度を足した値を格納し、新しい葉として追加する。
+ <li>葉が一つになるまで手順 2 を繰り返すと、二分木を作成することができる。これをハフマン木と呼ぶ。根から記号に達するまでの枝をたどったときに得られる 0 と 1 の系列が、その記号の符号となる。
+</ol>
+
+<p> それでは、記号列 abccddeeeeffffgggggggghhhhhhhh を入力したときの、ハフマン符号化の具体的な構成例を示しましょう。
+</p>
+<pre class="fig">
+(８) (８) (４) (４) (２) (２) ─→(１) (１)
+ ｈ   ｇ   ｆ   ｅ   ｄ   ｃ       ｂ   ａ
+
+1. ａとｂを取り出す。
+
+                                     N1
+(８) (８) (４) (４) (２) (２)       (２)
+ ｈ   ｇ   ｆ   ｅ   ｄ   ｃ       ／  ＼
+                                (１)    (１)
+                                 ｂ      ａ
+
+2. 新しい節 N1 を作りａとｂを格納する。
+
+                         N1
+(８) (８) (４) (４)     (２)    (２) (２)
+ ｈ   ｇ   ｆ   ｅ     ／  ＼    ｄ   ｃ
+                    (１)    (１)
+                     ｂ      ａ
+3. N1 を登録する。
+
+
+   図 2 : ハフマン符号の構成（その１）
+</pre>
+<p> まず、各記号の出現頻度を求めて「節」の集合を構成します。この集合の中から、出現頻度の小さい方から 2 つ取り出して、新しい節に格納します。最初は、a と b を取り出して N1 に格納します。このとき、N1 の出現頻度は a と b を足した値をセットします。そして、この節 N1 を節の集合に登録します。この時点で節の集合は、{ c, d, N1, e, f, g, h } となります。あとは、この操作を節が一つになるまで繰り返します。
+</p>
+<pre class="fig">
+              N2                   N1
+(８) (８)    (４)    (４) (４)    (２)
+ ｈ   ｇ    ／  ＼    ｆ   ｅ    ／  ＼
+         (２)    (２)         (１)    (１)
+          ｄ      ｃ           ｂ      ａ
+
+4. ｄとｃを取り出して新しい節 N2 を作る。
+
+          N4                    N3
+         (８)      (８) (８)   (６)
+        ／  ＼      ｈ   ｇ   ／  ＼
+     (４)    (４)          (２)    (４)
+    ／  ＼    ｆ          ／  ＼    ｅ
+ (２)    (２)          (１)    (１)
+  ｄ      ｃ            ｂ      ａ
+
+5. N1 とｅを取り出して新しい節 N3 を作る。
+6. N2 とｆを取り出して新しい節 N4 を作る。
+
+
+   図 3 : ハフマン符号の構成（その２）
+</pre>
+<p> 同様に、節の集合の中から d と c を取り出して、新しい節 N2 にセットして集合に登録します。節の集合は {N1, e, f, N2, g, h} となり、この中から頻度 2 の N1 と頻度 4 の e を取り出して N3 を登録します。すると、節の集合は {f, N2, N3, g, h} となり、その中から頻度 4 の N2 と f を取り出して N4 を登録します。
+</p>
+<pre class="fig">
+                   ROOT:N7          左の枝を 0 とすると
+                  ／  ＼
+                ／      ＼              a : 1101
+           N6(16)        (14)N5         b : 1100
+            ／  ＼      ／  ＼          c : 0001
+         (８)    (８)(８)    (６)       d : 0000
+        ／  ＼    ｈ  ｇ    ／  ＼      e : 111
+     (４)    (４)        (２)    (４)   f : 001
+    ／  ＼    ｆ        ／  ＼    ｅ    g : 10
+ (２)    (２)        (１)    (１)       h : 01
+  ｄ      ｃ          ｂ      ａ        平均符号長 = 80 / 30
+
+ 7. N3 とｇを取り出して新しい節 N5 を作る。
+ 8. N4 とｈを取り出して新しい節 N6 を作る。
+ 9. N5 と N6 を取り出して新しい節 N7 を作る。
+10. 節が N7 の一つしかなくなったので終了。
+
+
+           図 4 : ハフマン符号の構成（その３）
+</pre>
+<p> この時点で節の集合は {N3, g, h, N4} の 4 つあります。小さい方から N3 と g を取り出して N5 を登録します。次に、h と N4 を取り出して N6 を登録します。節の集合は {N5, N6} となり、この 2 つを一つにまとめてハフマン木が完成します。
+</p>
+<p> 各記号の符号語は、ハフマン木の ROOT から葉に向かってたどっていくことで求めることができます。左右の枝にラベル 0 と 1 を割り当てることにすると、記号 a は「右、右、左、右」と枝をたどって葉に到達するので、符号語は 1101 となります。ほかの記号も同様に求めることができます。
+</p>
+<p> なお、シャノン・ファノ符号のときにも説明しましたが、ハフマン符号も「葉」の組み合わせ方によって、異なる符号が得られます。しかしながら、どのハフマン符号でも同一の平均符号長が得られるので、圧縮率は同じになります。
+</p>
+
+<h4 id="next_chap">●節の定義</h4>
+<p> それでは、ハフマン符号のプログラムを作りましょう。最初に二分木の節を定義します。
+</p>
+
+<pre class="list">
+リスト 3 : 符号木の節
+
+(define-class &lt;node&gt; ()
+  ((sym :accessor get-sym :init-value #f :init-keyword :sym)
+   (cnt :accessor get-cnt :init-value 0  :init-keyword :cnt)
+   (left  :accessor node-left  :init-value #f :init-keyword :left)
+   (right :accessor node-right :init-value #f :init-keyword :right)))
+</pre>
+
+<p> 節を表すクラスは &lt;node&gt; としました。スロット sym に記号を、cnt に出現回数をセットします。left と right には左右の子を格納します。終端は #f で表します。ハフマン符号は、ヒープを使うと簡単にプログラムを作ることができます。
+</p>
+
+<h4>●出現頻度表の作成</h4>
+<p> 次は記号の出現頻度表を作成する関数 make-frequency を作ります。
+</p>
+<pre class="list">
+リスト 4 : 出現頻度表の作成
+
+(define (make-frequency ls)
+  (let loop ((ls ls) (a '()))
+    (if (null? ls)
+        a
+      (let ((cell (assoc (car ls) a)))
+        (cond (cell
+               (inc! (cdr cell))
+               (loop (cdr ls) a))
+              (else
+               (loop (cdr ls) (cons (cons (car ls) 1) a))))))))
+</pre>
+<p> 出現頻度表は連想リストで表します。コンスセルの CAR 部に記号を、CDR 部に出現回数を格納します。符号化するデータはリスト ls で受け取ります。ls から要素をひとつずつ取り出し、assoc で連想リスト a から記号を探索します。連想リスト内に記号がある場合、inc! で出現回数を +1 します。見つからなかった場合、新しいセル (cons (car ls) 1) を生成して、連想リスト a に追加します。
+</p>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+gosh> (make-frequency '(a a a a b c c c d d))
+((d . 2) (c . 3) (b . 1) (a . 4))
+gosh> (make-frequency '(a b c d a b c d e a b))
+((e . 1) (d . 2) (c . 2) (b . 3) (a . 3))
+</pre>
+<h4>●ハフマン木の生成</h4>
+<p> 次は符号木を作る関数 make-huffman-tree を作ります。
+</p>
+
+<pre class="list">
+リスト 5 : ハフマン木の生成
+
+(define (make-huffman-tree ls)
+  (if (null? (cdr ls))
+      (push! ls (cons 'eof 0)))
+  (let ((hp (make &lt;heap&gt; :key get-cnt)))
+    (for-each
+      (lambda (x) (heap-push! hp (make &lt;node&gt; :sym (car x) :cnt (cdr x))))
+      ls)
+    (let loop ()
+      (if (= (heap-length hp) 1)
+          (heap-pop! hp)
+        (let ((a (heap-pop! hp)) (b (heap-pop! hp)))
+          (heap-push!
+            hp
+            (make &lt;node&gt; :cnt (+ (get-cnt a) (get-cnt b))
+                         :left a
+                         :right b))
+          (loop))))))
+</pre>
+
+<p> 引数 ls には make-frequency で作成した出現頻度表 (連想リスト) を渡します。ls に要素がひとつしかないとハフマン木を構成できないので、ダミーのデータ (eof . 0) を追加します。次に、make &lt;heap&gt; でヒープを生成して変数 hp にセットします。このとき、キーは記号の出現回数になるので、節 node から出現回数を求めるメソッド get-cnt を :key に指定します。それから、make &lt;node&gt; で節を生成し、heap-push! でヒープに追加ます。
+</p>
+
+<p> 次に、ヒープからデータを取り出して、ハフマン木を構成します。ヒープにデータがひとつしかない場合、それがハフマン木のルートになります。heap-pop! で節を取り出して返します。そうでなければ、ヒープから節を 2 つ取り出して変数 a と b にセットします。そして、新しい節を生成してヒープに追加します。このとき、a と b を左右の子にセットし、その節の出現回数は (+ (get-cnt a) (get-cnt b)) となります。これで、ハフマン木を構成することができます。
+</p>
+
+<p> それでは、ここでハフマン木を表示する関数 print-huffman-tree を作成し、簡単なテストを行ってみましょう。
+</p>
+<pre class="list">
+リスト 6 : ハフマン木の表示
+
+(define (print-huffman-tree node n)
+  (if node
+      (begin
+        (print-huffman-tree (node-left node) (+ n 1))
+        (dotimes (x n) (display "    "))
+        (display (get-sym node))
+        (newline)
+        (print-huffman-tree (node-right node) (+ n 1)))))
+</pre>
+<pre>
+gosh> (print-huffman-tree (make-huffman-tree
+(make-frequency '(a a b a b c a b c d))) 0)
+    a
+#f
+        b
+    #f
+            d
+        #f
+            c
+#&lt;undef&gt;
+</pre>
+<p> このように、ハフマン符号では出現回数が多い記号ほど経路長 (符号語長) が短くなります。
+</p>
+<h4>●符号化と復号</h4>
+<p> 最後に、符号化と復号を行う関数 huffman-encode と huffman-decode を作ります。符号化を行う関数 huffman-encode は次のようになります。
+</p>
+
+<pre class="list">
+リスト 7 : 符号化処理
+
+; ハフマン符号を求める
+(define (make-huffman-code node cs code)
+  (if (leaf? node)
+      (cons (cons (get-sym node) (reverse cs)) code)
+    (make-huffman-code (node-right node)
+                       (cons 1 cs)
+                       (make-huffman-code (node-left node)
+                                          (cons 0 cs)
+                                          code))))
+
+; 符号化
+(define (huffman-encode ls)
+  (let* ((tree (make-huffman-tree (make-frequency ls)))
+         (code (make-huffman-code tree '() '())))
+    (values tree (apply append (map (lambda (x) (cdr (assoc x code))) ls)))))
+</pre>
+<p> 関数 make-huffman-code は符号木を巡回して、記号と符号語を連想リストに格納して返します。code が連想リストで、cs が記号の符号語を表します。node が葉の場合、記号と符号語を cons でセルにまとめて code に追加します。そうでなければ、make-huffman-code を再帰呼び出しして符号木をたどります。左の枝をたどるときは cs に 0 を追加し、右の枝をたどるときは cs に 1 を追加します。
+</p>
+
+<p> 符号化を行う huffman-encode は簡単です。変数 tree にハフマン木を、code にハフマン符号をセットします。あとは、map で記号を符号語に変換するだけです。(apply append ,,,) でリストを平坦化していることに注意してください。最後に values でハフマン木と符号を返します。
+</p>
+<p> 復号を行う関数 huffman-decode は次のようになります。
+</p>
+<pre class="list">
+リスト 8 : 復号
+
+(define (huffman-decode tree ls)
+  (let loop ((node tree) (ls ls) (a '()))
+    (cond ((leaf? node)
+           (loop tree ls (cons (get-sym node) a)))
+          ((null? ls) (reverse a))
+          ((zero? (car ls))
+           (loop (node-left node) (cdr ls) a))
+          (else
+           (loop (node-right node) (cdr ls) a)))))
+</pre>
+<p> 引数 tree がハフマン木で ls が符号を格納したリストです。loop でハフマン木をたどり、node が葉に到達したら記号を get-sym で取り出して累積変数 a にセットします。ls が空リストになれば復号は終了です。累積変数 a を reverse で反転して返します。あとは、符号 0 の場合は左の部分木をたどり、1 の場合は右の部分木をたどります。
+</p>
+
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+gosh> (receive (a b) (huffman-encode '(a a b a b c a b c d a b c d e))
+(print-huffman-tree a 0) (print b) (huffman-decode a b))
+        c
+    #f
+            e
+        #f
+            d
+#f
+        b
+    #f
+        a
+(1 1 1 1 1 0 1 1 1 0 0 0 1 1 1 0 0 0 0 1 1 1 1 1 0 0 0 0 1 1 0 1 0)
+(a a b a b c a b c d a b c d e)
+</pre>
+<p> 正常に動作していますね。ところで、実際にハフマン符号でデータを圧縮する場合、問題点がひとつあります。データを圧縮する場合、記号の出現頻度を調べて符号木を構成しますが、符号化されたデータを復号する場合も、符号化した時に構成した符号木が必要になります。このため、圧縮データには符号木の情報を付加しなければならず、圧縮率が低下することになります。 
+</p>
+<p> 簡単な方法は出現頻度表をそのまま付加することですが、そのほかに符号木を符号化して付加する方法もあります。詳しい説明は拙作のページ<a href="../light/index.html#python_alog">Algorithms with Python</a> <a href="../light/pyalgo31.html">シャノン符号とハフマン符号</a> の「符号木の取り扱い」をお読みください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; heap.scm : ヒープ
+;
+;            Copyright (C) 2010 Makoto Hiroi
+;
+
+(define-module heap
+  (use vlvector)
+  (export &lt;heap&gt;
+          heap-push! heap-pop! heap-peek
+          heap-empty? heap-length heap-clear!))
+
+(select-module heap)
+
+;;; クラス定義
+(define-class &lt;heap&gt; ()
+  ((buff  :accessor heap-buff :init-form (make &lt;vlvector&gt;))
+   (key   :accessor get-key :init-value (lambda (x) x) :init-keyword :key)
+   (obj&gt;? :accessor get-obj&gt;? :init-value &gt; :init-keyword :obj&gt;?)))
+
+;;; 操作関数
+
+; 要素の交換
+(define (swap buff x y)
+  (let ((temp (vlvector-ref buff x)))
+    (vlvector-set! buff x (vlvector-ref buff y))
+    (vlvector-set! buff y temp)))
+
+; ヒープの構築
+(define (upheap buff n key-of object&gt;?)
+  (let loop ((n n) (p (quotient (- n 1) 2)))
+    (cond ((and (&lt;= 0 p)
+                (object&gt;? (key-of (vlvector-ref buff p))
+                          (key-of (vlvector-ref buff n))))
+           (swap buff p n)
+           (loop p (quotient (- p 1) 2))))))
+
+; ヒープの再構築
+(define (downheap buff n nums key-of object&gt;?)
+  (let loop ((n n) (c (+ (* n 2) 1)))
+    (cond ((&lt; c nums)
+           (if (and (&lt; (+ c 1) nums)
+                    (object&gt;? (key-of (vlvector-ref buff c))
+                              (key-of (vlvector-ref buff (+ c 1)))))
+               (inc! c))
+           (cond ((object&gt;? (key-of (vlvector-ref buff n))
+                            (key-of (vlvector-ref buff c)))
+                  (swap buff n c)
+                  (loop c (+ (* c 2) 1))))))))
+
+;;; メソッドの定義
+
+; 空か
+(define-method heap-empty? ((h &lt;heap&gt;))
+  (vlvector-empty? (heap-buff h)))
+
+; 要素数
+(define-method heap-length ((h &lt;heap&gt;))
+  (vlvector-length (heap-buff h)))
+
+; クリア
+(define-method heap-clear! ((h &lt;heap&gt;))
+  (vlvector-clear! (heap-buff h)))
+
+; データの追加
+(define-method heap-push! ((h &lt;heap&gt;) x)
+  (vlvector-push! (heap-buff h) x)
+  (upheap (heap-buff h) (- (heap-length h) 1) (get-key h) (get-obj&gt;? h)))
+
+; 先頭データの参照
+(define-method heap-peek ((h &lt;heap&gt;))
+  (if (heap-empty? h)
+      (error "&lt;heap&gt; : heap is empty")
+    (vlvector-ref (heap-buff h) 0)))
+
+; データの取り出し
+(define-method heap-pop! ((h &lt;heap&gt;))
+  (begin0
+    (heap-peek h)
+    (if (positive? (heap-length h))
+        (let ((buff (heap-buff h)))
+           (vlvector-set! buff 0 (vlvector-pop! buff))
+           (downheap buff 0 (vlvector-length buff) (get-key h) (get-obj&gt;? h))))))
+
+(provide "heap")
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+;
+; huffman.scm : ハフマン符号
+;
+;               Copyright (C) 2010 Makoto Hiroi
+;
+(use heap)
+
+;;; 二分木の定義
+(define-class &lt;node&gt; ()
+  ((sym :accessor get-sym :init-value #f :init-keyword :sym)
+   (cnt :accessor get-cnt :init-value 0  :init-keyword :cnt)
+   (left  :accessor node-left  :init-value #f :init-keyword :left)
+   (right :accessor node-right :init-value #f :init-keyword :right)))
+
+; 葉のチェック
+(define (leaf? node) (get-sym node))
+
+; 出現頻度表の作成
+(define (make-frequency ls)
+  (let loop ((ls ls) (a '()))
+    (if (null? ls)
+        a
+      (let ((cell (assoc (car ls) a)))
+        (cond (cell
+               (inc! (cdr cell))
+               (loop (cdr ls) a))
+              (else
+               (loop (cdr ls) (cons (cons (car ls) 1) a))))))))
+
+; ハフマン木の生成
+; ls = ((sym . num) ...)
+(define (make-huffman-tree ls)
+  (if (null? (cdr ls))
+      (push! ls (cons 'eof 0)))
+  (let ((hp (make &lt;heap&gt; :key get-cnt)))
+    (for-each
+      (lambda (x) (heap-push! hp (make &lt;node&gt; :sym (car x) :cnt (cdr x))))
+      ls)
+    (let loop ()
+      (if (= (heap-length hp) 1)
+          (heap-pop! hp)
+        (let ((a (heap-pop! hp)) (b (heap-pop! hp)))
+          (heap-push!
+            hp
+            (make &lt;node&gt; :cnt (+ (get-cnt a) (get-cnt b))
+                         :left a
+                         :right b))
+          (loop))))))
+
+; ハフマン木の表示
+(define (print-huffman-tree node n)
+  (if node
+      (begin
+        (print-huffman-tree (node-left node) (+ n 1))
+        (dotimes (x n) (display "    "))
+        (display (get-sym node))
+        (newline)
+        (print-huffman-tree (node-right node) (+ n 1)))))
+
+; ハフマン符号を求める
+(define (make-huffman-code node cs code)
+  (if (leaf? node)
+      (cons (cons (get-sym node) (reverse cs)) code)
+    (make-huffman-code (node-right node)
+                       (cons 1 cs)
+                       (make-huffman-code (node-left node)
+                                          (cons 0 cs)
+                                          code))))
+
+; 符号化
+(define (huffman-encode ls)
+  (let* ((tree (make-huffman-tree (make-frequency ls)))
+         (code (make-huffman-code tree '() '())))
+    (values tree (apply append (map (lambda (x) (cdr (assoc x code))) ls)))))
+
+; 復号
+(define (huffman-decode tree ls)
+  (let loop ((node tree) (ls ls) (a '()))
+    (cond ((leaf? node)
+           (loop tree ls (cons (get-sym node) a)))
+          ((null? ls) (reverse a))
+          ((zero? (car ls))
+           (loop (node-left node) (cdr ls) a))
+          (else
+           (loop (node-right node) (cdr ls) a)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2010 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcobj08.html">PrevPage</a> | <a href="scheme.html#abcobj">Scheme</a> | <a href="abcobj10.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

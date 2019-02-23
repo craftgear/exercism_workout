@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881756</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj05.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap14">レコード</h3>
+<p> 今まで、新しいデータ型を定義する方法として、組と datatype を説明しました。今回は「レコード (record) 」を説明します。実をいうと、レコードは SML/NJ の基本的なデータ型の一つで、今まで使ってきた「組」はレコードの特殊な場合なのです。
+</p>
+
+<h4>●レコードの定義</h4>
+<p> レコードは中カッコ { } で囲み、要素をカンマで区切ります。要素は次の形式で定義します。
+</p>
+<pre class="item">
+ラベル = 値
+</pre>
+<p> ラベルは数字または名前です。"ラベル = 値" を「フィールド」、ラベルを「フィールド名」と呼ぶ場合があります。値の部分に式を書いてもかまいません。式の評価結果がラベルの値になります。次の例を見てください。
+</p>
+<pre>
+- {foo=10, bar=20};
+val it = {bar=20,foo=10} : {bar:int, foo:int}
+- {baz=100, 5=200};
+val it = {5=200,baz=100} : {5:int, baz:int}
+
+- {1=10, 2=20, 3=30};
+val it = (10,20,30) : int * int * int
+
+- {1=10, 2=20, 4=40};
+val it = {1=10,2=20,4=40} : {1:int, 2:int, 4:int}
+</pre>
+<p> レコードの型は {ラベル1 : 型式, ラベル2 : 型式, ... } で表されます。{ foo=10, bar=20 } の型は { bar:int, foo:int } になります。要素の順番は関係ありません。{bar:int, foo:int} も { foo:int, bar:int } も同じ型になります。SML/NJ は要素を昇順に並べて表示します。
+</p>
+<p> 組はラベルが 1 から n までの整数で表されている特別な場合です。したがって、レコード { 1=10, 2=20, 3=30 } は組 (10, 20, 30) と同じです。{ 1=10, 2=20, 4=40 } は 3 が抜けているので組にはなりません。
+</p>
+
+<p> SML/NJ の場合、コロン ( : ) を使ってデータ型を指定することができます。次の例を見てください。
+</p>
+<pre>
+- fun square( x ) = x * x;
+val square = fn : int -&gt; int
+- fun square1( x : real ) = x * x;
+val square1 = fn : real -&gt; real
+
+- val a = nil;
+val a = [] : 'a list
+- val b = nil : int list;
+val b = [] : int list
+</pre>
+<p> 関数 square の型は int -&gt; int になりますが、引数 x の型を指定すると real -&gt; real になります。また、空リスト (nil) の型は 'a list ですが、特定の型を指定することもできます。
+</p>
+
+<p> レコードの値を参照するには #ラベル を使います。
+</p>
+<pre>
+- val a = {foo=10, bar=20};
+val a = {bar=20,foo=10} : {bar:int, foo:int}
+- #foo a;
+val it = 10 : int
+- #bar a ;
+val it = 20 : int
+</pre>
+<p> レコードに #ラベル を適用すると、ラベルの値を参照することができます。組は番号がラベルのレコードなので #番号 で値を参照できるわけです。
+</p>
+<h4>●レコードのパターン</h4>
+<p> もちろん、レコードでもパターンを使うことができます。次の例を見てください。
+</p>
+<pre>
+- val {foo=x, bar=y} = {foo=100, bar=200};
+val y = 200 : int
+val x = 100 : int
+
+- val {foo, bar} = {foo=1, bar=2};
+val bar = 2 : int
+val foo = 1 : int
+</pre>
+<p> "ラベル = パターン" とするとラベルの値とパターンがマッチングします。{ foo=x, bar=y } は変数 x とラベル foo の値、変数 y とラベル bar の値がマッチングして、x = 100, y = 200 になります。パターンを省略してラベルだけ指定すると、ラベルがパターンの変数になります。{ foo, bar } は変数 foo とラベル foo の値がマッチングして foo = 1 になり、変数 bar とラベル bar の値がマッチングして bar = 2 になります。
+</p>
+<p> ただし、ラベルが数字の場合はパターンを省略することができません。次の例を見てください。
+</p>
+<pre>
+- val a = {1=10, bar=20};
+val a = {1=10,bar=20} : {1:int, bar:int}
+- val {1, bar} = a;
+stdIn:23.7-23.13 Error: syntax error: deleting  COMMA ID RBRACE
+- val {1=z, bar} = a;
+val z = 10 : int
+val bar = 20 : int
+</pre>
+<p> ラベルが数字の場合、パターンの指定を省略するとエラーになります。必ずパターンを指定してください。
+</p>
+<p> レコードのパターンは、フィールドの指定に ... を使うことができます。... はワイルドカードで、不要なフィールドの指定を省略することができます。次の例を見てください。
+</p>
+<pre>
+- datatype foo = Bar of {abc:int, def:int, ghi:int};
+datatype foo = Bar of {abc:int, def:int, ghi:int}
+
+- val Bar{abc,...} = Bar{abc=1, def=2, ghi=3};
+val abc = 1 : int
+</pre>
+<p> datatype で新しい型 foo を作成します。レコードはデータ型の一つなので、datatype の型式に使用することができます。データ構成子 Bar の型式は { abc:int, def:int, ghi:int } になります。このレコードからラベル abc の値を取り出したいとき、Bar { abc, ... } のように ... を指定すると、def と ghi の指定を省略することができます。
+</p>
+<p> ただし、フィールド指定の省略は、レコードの型が特定できる場合にのみ可能です。単純に val { abc, ... } と指定すると、レコードの型を特定できずにエラーになります。ご注意くださいませ。
+</p>
+
+<h4>●データの個数を求める</h4>
+<p> それでは簡単な例題として、データをカウントするプログラムを作ってみましょう。たとえば、入力データが [ "a", "b", "c", "a", "c" ] であれば、"a", "b", "c" の個数を求めます。この場合、"a" が 2 個、"b" が 1 個、"c" が 2 個になります。
+</p>
+
+<p> 一番簡単な方法は連想リストを使うことです。データとその個数を組にし、それをリストに格納にします。連想リストからデータを探索し、データが見つかればその個数を +1 します。見つからなければ、新しい組を生成して連想リストに追加します。
+</p>
+<p> 今回はレコードの例題なので、組ではなくレコードを使いましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの数え上げ
+
+(* カウンタの定義 *)
+datatype 'a counter = Cnt of {data:'a, count:int ref}
+
+(* カウントアップ *)
+fun countup( Cnt{count, ...} ) = count := !count + 1
+
+(* データの探索 *)
+fun find_data( w, nil ) = NONE
+|   find_data( w, (R as Cnt{data, ...})::xs ) =
+    if w = data then SOME R else find_data( w, xs )
+
+(* データの個数を求める *)
+fun data_count( nil, result ) = result
+|   data_count( x::xs, result ) =
+    let
+      val v = find_data( x, result )
+    in
+      if isSome( v ) then (countup( valOf v ); data_count( xs, result ))  
+      else data_count( xs, Cnt{data=x, count=ref 1}::result )
+    end
+</pre>
+
+<p> 最初に datatype で counter を定義します。データ型を限定する必要はないので、'a counter としました。レコードの型は { data:'a, count:int ref } とします。データの個数を書き換えるため、count は参照を使って int ref にします。count の書き換えは関数 countup で行います。
+</p>
+
+<p> データの探索は関数 find_data で行います。第 1 引数の w が探索するデータ、第 2 引数がレコードを格納しているリスト（連想リスト）です。パターンでレコードの data を取り出し、w と等しいかチェックします。そうであれば、レコード R をoption 型に格納して返します。そうでなければ、find_data を再帰呼び出しして次のレコードを調べます。データが見つからなければ NONE を返します。
+</p>
+
+<p> 関数 data_count はデータの個数を数えて、データと個数を格納した連想リストを返します。第 1 引数が入力データのリストで、第 2 引数の result がレコードを格納する連想リストです。まず、find_data で連想リストからデータ x を探します。関数 isSome で option をチェックし、データがあれば関数 countup で count を +1 します。関数 valOf は option からデータを取り出す関数です。見つからなければ、レコードを生成して result に追加します。
+</p>
+
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre>
+- data_count( ["a", "b", "c", "a", "c"], nil );
+val it =
+  [Cnt {count=ref 2,data="c"},Cnt {count=ref 1,data="b"},
+   Cnt {count=ref 2,data="a"}] : string counter list
+
+- data_count( [1, 2, 3, 2, 3, 4, 3, 4, 5], nil );
+val it =
+  [Cnt {count=ref 1,data=5},Cnt {count=ref 2,data=4},Cnt {count=ref 3,data=3},
+   Cnt {count=ref 2,data=2},Cnt {count=ref 1,data=1}] : int counter list
+</pre>
+
+<p> 正常に動作していますね。ところで、このプログラムはデータの種類が増えると実行速度が遅くなります。実は、データの種類が増えると、データを探索する find_data の処理に時間がかかるのです。find_data は列の先頭から順番に要素を比較してデータを探します。これを「線形探索」といいます。
+</p>
+<p> データ数が少なければ線形探索でも何とかなりますが、データ数が多くなると探索に時間がかかるようになります。このような場合、あらかじめデータを整理整頓しておくことで、特定のデータを高速に見つけることができるようになります。この代表的なアルゴリズムが「ハッシュ法」と「二分探索木」です。これらのアルゴリズムは次節以降で取り上げることにします。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap15">モジュール (1)</h3>
+<p> 「モジュール (module) 」は、データ構造とそれを操作する関数を一つにまとめるための仕組みです。最近は、モジュールに相当する機能を持つプログラミング言語が多くなりました。SML/NJ の場合、モジュールに相当する機能が「ストラクチャ (structure) 」です。
+</p>
+
+<h4>●スタックとは？</h4>
+<p> 簡単な例として「スタック (stack) 」というデータ構造を考えてみましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+    |-----|     |[ A ]|     |[ B ]|     |[ A ]|     |-----|
+    |  |  |     |-----|     |[ A ]|     |-----|     |  |  |
+    |  |  |     |  |  |     |-----|     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    +-----+     +-----+     +-----+     +-----+     +-----+
+ (1) 空の状態 (2) PUSH A  (3) PUSH B  (4) POP B   (5) POP A  
+
+                    図 : スタックの動作例
+</pre>
+
+<p> 上図は、バネがついた容器を表していて、上から品物を出し入れすることができます。初めは空の状態です。ここに品物を乗せると、重さによってバネを圧縮し、品物が容器に格納されます。さらにもう一つ品物を上に乗せると、さらにバネを圧縮し、その品物も容器に格納することができます。バネが限界まで圧縮されると、もう品物は追加できなくなります。取り出す場合は、上にある品物から行います。一つ取り出すと、その分バネが伸びて下にある品物が上に押し出されます。
+</p>
+
+<p> この容器の動作が、スタックの動作なのです。スタックにデータを追加する操作をプッシュ (PUSH) といい、スタックからデータを取り出す操作をポップ (POP) といいます。品物をデータに見立てれば、データ A をスタックにプッシュし (2)、次にデータ B をプッシュします (3)。データを取り出す場合、あとから入れたデータ B が先にポップされ (4)、その次にデータ A がポップされてスタックが空になります (5)。このように、スタックはあとから入れたデータが先に取り出されるので、後入れ先出し (LIFO : Last-In, First-Out) と呼ばれます。
+</p>
+
+<h4>●スタックの定義</h4>
+<p> SML/NJ の場合、スタックはリストを使って簡単に実現することができます。データを追加するときはリストの先頭に追加し、データを取り出すときはリストの先頭から行うように操作を限定すると、それはスタックの動作と同じになります。
+</p>
+
+<p> 最初はストラクチャを使わずにプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : スタック
+
+(* 例外 *)
+exception Stack
+
+(* スタックの定義 *)
+datatype 'a stack = S of 'a list
+
+(* 空のスタック *)
+val create = S( nil )
+
+(* データの追加 *)
+fun push( S(x), data ) = S(data::x)  
+
+(* データの削除 *)
+fun pop( S( nil ) ) = raise Stack  
+|   pop( S( _::xs ) ) = S( xs )
+
+(* データの取得 *)
+fun top( S( nil ) ) = raise Stack
+|   top( S( x::_ ) ) = x
+
+(* スタックは空か *)
+fun isEmpty( S( nil ) ) = true
+|   isEmpty( S( _ ) )   = false
+</pre>
+<p> 最初に datatype でスタック 'a stack を定義します。空のスタックを返す create は関数ではなく変数として定義します。この理由は後で説明します。スタックの操作関数は簡単です。push はデータをリストの先頭に追加します。pop はリストの先頭要素を取り除きます。データの取得は関数 top で行います。スタックが空の場合、pop と top を適用することができないので、例外 Stack を送出します。関数 isEmpty はスタックが空かチェックする述語です。
+</p>
+
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+- val a0 = create;
+val a0 = S [] : 'a stack
+- val a1 = push( a0, 1 );
+val a1 = S [1] : int stack
+- val a2 = push( a1, 2 );
+val a2 = S [2,1] : int stack
+- top( a2 );
+val it = 2 : int
+- val a3 = pop( a2 );
+val a3 = S [1] : int stack
+- isEmpty( a3 );
+val it = false : bool
+- val a4 = pop( a3 );
+val a4 = S [] : int stack
+- isEmpty( a4 );
+val it = true : bool
+</pre>
+<p> 正常に動作していますね。関数型言語の場合、変数の値を書き換えることができないので、push や pop の返り値を別の変数に格納する必要があります。このとき、参照型の変数にスタックを格納すれば、値を書き換えることができるので便利なように思います。ところが、多相的なデータは参照にすることができません。
+</p>
+<p> 実をいうと、ML (SML/NJ や Ocaml など) の多相性には制限があるのです。create が関数ではなく変数なのも、多相性が制限されているからです。これはあとで説明します。
+</p>
+
+<h4>●ストラクチャの定義</h4>
+<p> それでは、ストラクチャを使ってスタックを定義してみましょう。ストラクチャの定義は次のようになります。
+</p>
+<pre class="fig">
+structure 名前 = struct
+  .....
+end
+</pre>
+<p> struct ... end がストラクチャの本体です。この間にプログラムを書きます。そこで定義された変数、関数、例外はストラクチャに属します。structure を使うとストラクチャに名前を付けることができます。ストラクチャ名を Stack とすると、プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : ストラクチャ 
+
+structure Stack = struct
+  (* 例外 *)
+  exception Stack
+
+  (* スタックの定義 *)
+  datatype 'a stack = S of 'a list
+
+  (* 空のスタック *)
+  val create = S( nil )
+
+  (* データの追加 *)
+  fun push( S(x), data ) = S(data::x)  
+
+  (* データの削除 *)
+  fun pop( S( nil ) ) = raise Stack    
+  |   pop( S( _::xs ) ) = S( xs )
+
+  (* データの取得 *)
+  fun top( S( nil ) ) = raise Stack
+  |   top( S( x::_ ) ) = x
+
+  (* スタックは空か *)
+  fun isEmpty( S( nil ) ) = true
+  |   isEmpty( S( _ ) )   = false
+end
+</pre>
+<p> SML/NJ の場合、ストラクチャ名は英大文字で始める習慣があります。struct と end の間にスタックのプログラムを書いただけです。とても簡単ですね。実際に Stack を定義すると次のように表示されます。
+</p>
+<pre>
+structure Stack :
+  sig
+    datatype 'a stack = S of 'a list
+    exception Stack
+    val create : 'a stack
+    val isEmpty : 'a stack -&gt; bool
+    val pop : 'a stack -&gt; 'a stack
+    val push : 'a stack * 'a -&gt; 'a stack
+    val top : 'a stack -&gt; 'a
+  end
+</pre>
+<p> sig ... end を「シグネチャ (signature) 」といいます。シグネチャはストラクチャの仕様を記述するものです。ストラクチャを定義するとシグネチャが生成されますが、ユーザがシグネチャを定義して、それをストラクチャに設定することもできます。シグネチャは次節で詳しく説明します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+- val a0 = Stack.create;
+val a0 = S [] : 'a Stack.stack
+- val a1 = Stack.push( a0, 10 );
+val a1 = S [10] : int Stack.stack
+- Stack.top( a1 );
+val it = 10 : int
+- Stack.isEmpty( a1 );
+val it = false : bool
+- val a2 = Stack.pop( a1 );
+val a2 = S [] : int Stack.stack
+- Stack.isEmpty( a2 );
+val it = true : bool
+</pre>
+<p> ストラクチャで定義された変数や関数は、Stack.create のように「ストラクチャ名 + ドット ( . ) + 名前」でアクセスすることができます。
+</p>
+<h4>●シグネチャの使い方</h4>
+<p> シグネチャの定義は次のようになります。
+</p>
+<pre class="fig">
+signature 名前 = sig
+  .....
+end
+</pre>
+<p> sig ... end がシグネチャの本体です。この間にストラクチャの仕様を書きます。signature を使うとシグネチャに名前を付けることができます。主な仕様は次のように記述します。
+</p>
+<ul>
+  <li>データ型は type, eqtype で記述する。eqtype は等値型を示す。
+  <li>例外は exception で記述する。
+  <li>関数、変数は "val 名前 : 型式" で記述する。
+</ul>
+<p> シグネチャはストラクチャの仕様を記述したものですが、外部とのインターフェースの役割も持っています。たとえば、ストラクチャの内部だけで使用する変数や関数は、外部から使われることがないように隠した方がよいでしょう。このような場合、外部に公開する関数や変数だけをシグネチャに記述すればよいのです。シグネチャに記述されていない変数や関数は非公開となり、外部からアクセスすることができなくなります。
+</p>
+
+<p> シグネチャにはもう一つ重要な機能があります。それはストラクチャの「型」としての機能です。たとえば、ストラクチャ Stack の型は 'a Stack.stack という多相型になります。データ型を特定したい場合、シグネチャに記述することで実現できます。簡単な例として、整数を格納するストラクチャ IntStack を作ってみましょう。次のプログラムを見てください。
+</p>
+
+<pre class="list">
+リスト : シグネチャ
+
+signature INTSTACK = sig
+  type 'a stack
+  exception Stack
+  val create : int stack
+  val push : int stack * int -&gt; int stack  
+  val pop : int stack -&gt; int stack
+  val top : int stack -&gt; int
+  val isEmpty : int stack -&gt; bool
+end
+
+structure IntStack: INTSTACK = Stack
+</pre>
+<p> IntStack のシグネチャ INTSTACK を定義します。SML/NJ の場合、シグネチャの名前を英大文字で記述する習慣があります。type で指定するデータ型は Stack のデータ型 'a stack になります。そして、関数と変数の仕様を 'a stack から int stack に変更します。これで IntStack の仕様になります。
+</p>
+<p> ストラクチャにシグネチャを指定する場合、ストラクチャ名の後ろにコロン ( : ) を付けて、その後ろにシグネチャを指定します。SML/NJ の場合、変数の型を指定するときは "変数名 : 型式" で行いました。シグネチャはストラクチャの型を表すので、"ストラクチャ名 : シグネチャ" でシグネチャを指定することができます。これで、データ型を int に特定した IntStack を生成することができます。
+</p>
+<p> この他にも、シグネチャの指定方法はいくつかあります。また、シグネチャに名前を付けずに指定することもできます。簡単な例を示します。
+</p>
+<pre class="item">
+structure Foo : sig ... end = struct ... end
+structure Foo = struct ... end : sig ... end
+</pre>
+<p> コロン ( : ) の後ろにシグネチャを指定するところは、どの方法でも同じです。
+</p>
+<p> それでは、実際に IntStack を実行してみましょう。
+</p>
+<pre>
+- val a0 = IntStack.create;
+val a0 = S [] : int Stack.stack
+- val a1 = IntStack.push( a0, 10 );
+val a1 = S [10] : int Stack.stack
+- val a2 = IntStack.pop( a1 );
+val a2 = S [] : int Stack.stack
+</pre>
+<p> IntStack.create のデータ型が int Stack.stack になっていますね。このように、シグネチャを使ってデータ型を特定したストラクチャを作ることができます。
+</p>
+
+<h4>●補足１：多相性の制限</h4>
+<p> たとえば、空リスト nil の参照を考えてみましょう。実際に ref nil で参照を生成すると次のようになります。
+</p>
+<pre>
+- val a = ref nil;
+stdIn:13.1-13.16 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+val a = ref [] : ?.X1 list ref
+</pre>
+<p> このように、'a list のような多相的な型ではなく、ダミーな型が割り当てられます。もしも、'a list のような多相的な型の参照を許すと、次のような代入操作が可能になります。
+</p>
+<pre class="fig">
+val a = ref nil      (* 型が 'a list とする *)
+
+a := [1, 2, 3]       (* int list に書き換える *)
+a := ["abc", "def"]  (* string list に書き換える *)
+</pre>
+
+<p> 変数 a の型が int list から string list に変わってしまいます。つまり、プログラムの実行中に変数の型が変化する可能性があるわけです。SML/NJ はコンパイル時にデータ型を厳密にチェックするプログラミング言語です。実行中にデータ型が変化するような処理は、SML/NJ には想定外のことです。参照を使う場合は多相性を制限する必要があるのです。
+</p>
+
+<p> 実際にはもう少し制限が厳しくて、変数に「値」を束縛するときに限り、多相性を許すようになっています。<a href="smlnj06.html#cite1">参考文献 [1]</a> によると、これを「値多相」といいます。この場合の「値」とは、変数、定数、関数定義、要素が値の組やレコードなどです。逆に、関数や ref の適用、if など評価が行われる式は「値」になりません。次の例を見てください。
+</p>
+<pre>
+- fun foo() = nil;
+val foo = fn : unit -&gt; 'a list
+
+- val a = nil;
+val a = [] : 'a list
+- val b = foo();
+stdIn:15.1-15.14 Warning: type vars not generalized because of
+   value restriction are instantiated to dummy types (X1,X2,...)
+val b = [] : ?.X1 list
+</pre>
+<p> 関数 foo は nil を返します。val a = nil の場合、変数 a の型は 'a list になりますが、val b = foo() は右辺が関数適用なので、変数 b の型は 'a list にはなりません。
+</p>
+
+<div class="note">
+<a name="cite1">-- 参考文献 --------</a><br>
+[1] 五十嵐淳, 『Objective Caml 入門』, <a href="http://www.sato.kuis.kyoto-u.ac.jp/~igarashi/class/isle4/mltext/ocaml.html">http://www.sato.kuis.kyoto-u.ac.jp/~igarashi/class/isle4/mltext/ocaml.html</a>
+</div>
+<h4>●補足２：参照を使ったスタックの実装例</h4>
+<p> ところで、シグネチャでデータ型を決定すれば、スタックを参照型の変数に格納することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : スタック
+
+structure Stack = struct
+  exception Stack
+
+  datatype 'a stack = S of 'a list
+
+  fun create() = ref( S( nil ) )
+
+  fun push( x as ref( S(y) ), data ) = x := S(data::y)
+
+  fun pop( ref( S( nil ) ) ) = raise Stack
+  |   pop( x as ref( S( y::ys ) ) ) = y before (x := S( ys ))  
+
+  fun top( ref( S( nil ) ) ) = raise Stack
+  |   top( ref( S( x::_ ) ) ) = x
+
+  fun isEmpty( ref( S( nil ) ) ) = true
+  |   isEmpty( ref( S( _ ) ) )   = false
+end
+</pre>
+<p> create は空のスタックの参照を返す関数として定義します。操作関数はスタックを格納した参照型の変数を受け取ります。この変数を書き換えることで、スタックを操作することができます。つまり、「値渡し」ではなく「参照渡し」になります。
+</p>
+<p> 関数 pop は仕様を変更して、取り除いたデータを返すことにします。pop で使っている演算子 befor は Common Lisp の関数 prog1 と同じ働きをします。
+</p>
+<pre class="item">
+expr1 before expr2
+</pre>
+<pre>
+- op before;
+val it = fn : 'a * unit -&gt; 'a
+</pre>
+<p> before は expr1 を評価し、その次に expr2 を評価します。そして、expr1 の評価結果が before の値になります。expr2 の返り値はユニットでなければいけません。before は変数の値を取り出しておいてから、変数の値を更新する処理などで役に立ちます。pop の場合、スタックの先頭データを求め、その後でスタックからデータを取り除きます。この処理は before を使うと簡単に実現できます。
+</p>
+
+<p> 次はシグネチャを定義してストラクチャ IntStack を作ります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : シグネチャの定義
+
+signature INTSTACK = sig
+    type 'a stack
+    exception Stack
+    val create : unit -&gt; int stack ref
+    val isEmpty : int stack ref -&gt; bool
+    val pop : int stack ref -&gt; int
+    val push : int stack ref * int -&gt; unit  
+    val top : int stack ref -&gt; int
+end
+
+structure IntStack : INTSTACK = Stack
+</pre>
+
+<p> データ型を決めているだけなので、難しいところないと思います。それでは、実行例を示します。
+</p>
+<pre>
+- val a = IntStack.create();
+val a = ref (S []) : int Stack.stack ref
+
+- IntStack.push(a,10);
+val it = () : unit
+- a;
+val it = ref (S [10]) : int Stack.stack ref
+- IntStack.push(a,20);
+val it = () : unit
+- a;
+val it = ref (S [20,10]) : int Stack.stack ref
+
+- IntStack.pop(a);
+val it = 20 : int
+- a;
+val it = ref (S [10]) : int Stack.stack ref
+</pre>
+<p> 正常に動作してますね。これで、real 用のシグネチャを定義すれば、real を格納するスタックができますし、string 用のシグネチャを定義すれば、string を格納するスタックを用意することができます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori06">ちょっと寄り道</h3>
+<h4>■8 クイーン</h4>
+<p> 今回はパズルの解法に挑戦してみましょう。「8 クイーン」はコンピュータに解かせるパズルの中でも特に有名な問題です。8 クイーンは、8 行 8 列のチェスの升目に、8 個のクイーンを互いの利き筋が重ならないように配置する問題です。クイーンは将棋の飛車と角をあわせた駒で、縦横斜めに任意に動くことができます。解答の一例を次に示します。
+</p>
+
+<pre class="fig">
+               列           
+         1 2 3 4 5 6 7 8    
+       *-----------------*  
+     1 | Q . . . . . . . |  
+     2 | . . . . Q . . . |  
+     3 | . . . . . . . Q |  
+  行 4 | . . . . . Q . . |  
+     5 | . . Q . . . . . |  
+     6 | . . . . . . Q . |  
+     7 | . Q . . . . . . |  
+     8 | . . . Q . . . . |  
+       *-----------------*  
+
+    図 : 8 クイーンの解答例
+</pre>
+
+<p> 8 クイーンを解くには、すべての置き方を試してみるしか方法はありません。最初のクイーンは、盤上の好きなところへ置くことができるので、64 通りの置き方があります。次のクイーンは 63 通り、その次は 62 通りあります。したがって、置き方の総数は 64 から 57 までの整数を掛け算した 178462987637760 通りもあります。
+</p>
+<p> ところが、解答例を見ればわかるように、同じ行と列に 2 つ以上のクイーンを置くことはできません。上図の解答例をリストを使って表すと、 次のようになります。
+</p>
+
+<pre class="fig">
+  1  2  3  4  5  6  7  8    &lt;--- 列の位置
+---------------------------
+ [1, 7, 5, 8, 2, 4, 6, 3]   &lt;--- 要素が行の位置を表す  
+
+        図 : リストでの行と列の表現方法
+</pre>
+
+<p> 列をリストの位置に、行番号を要素に対応させれば、各要素には 1 から 8 までの数字が重複しないで入ることになります。すなわち、1 から 8 までの順列の総数である 8! = 40320 通りの置き方を調べるだけでよいのです。パズルを解く場合は、そのパズル固有の性質をうまく使って、調べなければならない場合の数を減らすように工夫することが大切です。
+</p>
+
+<p> 順列を生成するプログラムは <a href="smlnj04.html#yori03">ちょっと寄り道「順列の生成」</a> で作成しました。あとは、その順列が 8 クイーンの条件を満たしているかチェックすればいいわけです。このように、正解の可能性があるデータを作りそれをチェックするという方法を「生成検定法 (generate and test) 」といいます。
+</p>
+
+<p> 可能性のあるデータをもれなく作る場合、「バックトラック (backtrack) 」という方法が適しています。たとえば、簡単な例として迷路を考えてみましょう。ある地点 A で道が左右に分かれているとします。ここで、左の道を選んで先へ進むと、行き止まりになってしまいました。この場合は A 地点まで戻って右の道へ進まないといけません。つまり、失敗したら後戻りして別の道を選ぶ、という試行錯誤をゴールに行き着くまで繰り返すわけです。これが「バックトラック」です。
+</p>
+
+<p> バックトラックは再帰定義で簡単にプログラムを作ることができます。順列を生成するプログラムもバックトラックを使っています。バックトラックはパズルの解法だけではなく、いろいろな分野の問題に応用できる方法です。ただし、「生成するデータ数が多くなると時間がとてもかかる」という弱点があるので注意してください。
+</p>
+
+<h4>■プログラムの作成</h4>
+<p> それでは、プログラムを作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 8 クイーンの解法
+
+fun safe( nil ) = true
+|   safe( x::xs ) =
+    if attack( x, xs ) then safe( xs ) else false
+
+fun queen( nil, board ) =
+    if safe( board ) then print_intlist( board ) else ()
+|   queen( nums, board ) =
+    app (fn(x) =&gt; queen( remove( x, nums ), x::board )) nums  
+</pre>
+
+<p> 関数 queen は順列を生成するプログラムと同じです。順列を一つ生成したら、述語 safe で 8 クイーンの条件を満たしているかチェックします。そうであれば、関数 print_intlist でリストを出力します。
+</p>
+<p> 述語 safe はリストの先頭の要素からチェックしていきます。衝突のチェックは斜めの利き筋を調るだけです。端にあるクイーンから順番に調べるとすると、斜めの利き筋は次のように表せます。
+</p>
+
+<pre class="fig">
+    1 2 3    --&gt; 調べる方向
+  *-------------
+  | . . . . . .
+  | . . . -3. .  5 - 3 = 2
+  | . . -2. . .  5 - 2 = 3
+  | . -1. . . .  5 - 1 = 4
+  | Q . . . . .  Q の位置は 5  
+  | . +1. . . .  5 + 1 = 6
+  | . . +2. . .  5 + 2 = 7
+  | . . . +3. .  5 + 2 = 8
+  *-------------
+
+    図 : 衝突の検出
+</pre>
+
+<p> 図を見てもらえばおわかりのように、Q が行 5 にある場合、ひとつ隣の列は 4 と 6 が利き筋に当たります。2 つ隣の列の場合は 3 と 7 が利き筋に当たります。このように単純な足し算と引き算で、利き筋を計算することができます。これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 衝突の検出
+
+fun attack( x, xs ) = 
+    let
+      fun attack_sub( x, n, nil ) = true
+      |   attack_sub( x, n, y::ys ) =
+          if x = y + n orelse x = y - n
+          then false
+          else attack_sub( x, n + 1, ys )  
+    in
+      attack_sub( x, 1, xs )
+    end
+</pre>
+
+<p> attack は、斜めの利き筋に当たった場合に false を返し、利き筋に当たらない場合は true を返します。実際の処理は関数 attack_sub で行います。attack_sub は、リストの先頭から斜めの利き筋に当たるか調べます。第 1 引数がクイーンの位置、第 2 引数が位置の差分、第 3 引数がリストになります。
+</p>
+<p> 最初の定義がクイーンを全て調べた場合です。クイーンは衝突していないので true を返します。次の定義で、リストから先頭の要素 y を取りだし、利き筋に当たるか調べます。これは、y + n または y - n が x と等しいかチェックするだけです。衝突している場合は false を返します。そうでなければ、attack_sub を再帰呼び出しして次のクイーンを調べます。このとき、差分 n の値を +1 することをお忘れなく。
+</p>
+
+<h4>■実行結果</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+<pre>
+- queen([1, 2, 3, 4, 5, 6, 7, 8], nil);
+4 2 7 3 6 8 5 1 
+
+・・・・・省略・・・・・
+
+5 7 2 6 3 1 4 8 
+val it = () : unit
+</pre>
+<p> 解は全部で 92 通りあります。実行時間は M.Hiroi のオンボロマシン (Windows 95, Pentium 166 MHz) で約 1 秒です。SML/NJ の処理速度からすると、けっこう時間がかかりますね。実はこのプログラム、とても非効率なことをやっているのです。
+</p>
+<h4>■8 クイーンの高速化</h4>
+<p> 実行速度が遅い理由は、失敗することがわかっている順列も生成してしまうからです。
+</p>
+<p> たとえば、最初 (1, 1) の位置にクイーンを置くと、次のクイーンは (2, 2) の位置に置くことはできませんね。したがって、[1, 2, X, X, X, X, X, X,] という配置はすべて失敗するのですが、順列を発生させてからチェックする方法では、このような無駄を省くことができません。
+</p>
+<p> そこで、クイーンの配置を決めるたびに衝突のチェックを行うことにします。これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 8 クイーン (改良版)
+
+fun queen_f( nil, board ) = print_intlist( board )
+|   queen_f( nums, board ) = 
+    app (fn(x) =&gt; if attack( x, board )
+                  then queen_f( remove( x, nums ), x::board ) else ()) nums  
+</pre>
+
+<p> 匿名関数の中で、追加したクイーンが board 内のクイーンと衝突していないか関数 attack でチェックします。順列を生成している途中でチェックを入れることで、無駄な順列を生成しないようにするわけです。この場合、safe は必要ありません。
+</p>
+
+<p> このように、できるだけ早い段階でチェックを入れることで、無駄なデータをカットすることを「枝刈り」と呼びます。バックトラックを使って問題を解く場合、この枝刈りのよしあしによって実行時間が大きく左右されます。ところが、枝刈りの方法はパズルによって違います。パズル固有の性質をよく調べて、適切な枝刈りを考えることが重要なのです。パズル自体はコンピュータに解かせるのですが、枝刈りの条件は私達が考えるのです。これも「パズルの解法」の面白いところでしょう。解を求めるだけでなく、いかに効率の良い条件を見つけて実行時間を短縮するか、ということでも楽しむことができます。
+</p>
+
+<p> さっそく実行してみたところ、時間は約 0.3 秒まで短縮しました。結果を画面に出力しているので、その分だけ少し時間がかかるようです。ところで、今回は単純にリストを出力するだけなので、ちょっと面白くありません。興味のある方は、解答例のような図を出力するプログラムを作ってみてください。
+</p>
+<hr>
+<h4 id="list">■プログラムリスト</h4>
+<pre class="list">
+(*
+ * queen.sml : 8 クイーンの解法
+ *
+ *             Copyright (C) 2005 Makoto Hiroi
+ *)
+
+(* 要素の削除 *)
+fun remove( _, nil ) = nil
+|   remove( n, x::xs ) =
+    if x = n then xs else x::remove( n, xs )
+
+(* int list の表示 *)
+fun print_intlist( nil ) = print( "\n" )
+|   print_intlist( x::xs ) =
+    ( print( Int.toString(x) ^ " " ); print_intlist( xs ) )
+
+(* 衝突のチェック *)
+fun attack( x, xs ) = 
+    let
+      fun attack_sub( x, n, nil ) = true
+      |   attack_sub( x, n, y::ys ) =
+          if x = y + n orelse x = y - n
+          then false
+          else attack_sub( x, n + 1, ys )
+    in
+      attack_sub( x, 1, xs )
+    end
+
+(* 8 クイーンの条件を満たしているか *)
+fun safe( nil ) = true
+|   safe( x::xs ) =
+    if attack( x, xs ) then safe( xs ) else false
+
+(* 8 クイーンの解法 *)
+fun queen( nil, board ) =
+    if safe( board ) then print_intlist( board ) else ()
+|   queen( nums, board ) =
+    app (fn(x) =&gt; queen( remove( x, nums ), x::board )) nums
+
+(* 高速版 *)
+fun queen_f( nil, board ) = print_board( board )
+|   queen_f( nums, board ) = 
+    app (fn(x) =&gt; if attack( x, board )
+                  then queen_f( remove( x, nums ), x::board ) else ()) nums
+
+(* 時間計測 *)
+fun queen_solve() =
+    let
+      val a = Timer.startRealTimer()
+    in
+      queen_f( [1, 2, 3, 4, 5, 6, 7, 8], nil );
+      Timer.checkRealTimer(a)
+    end
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2005 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj05.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj07.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

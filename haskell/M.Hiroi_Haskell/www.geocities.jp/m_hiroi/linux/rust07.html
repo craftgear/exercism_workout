@@ -1,0 +1,1759 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881816</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>簡単なプログラム</h3>
+<h4 id="chap67">●三目並べ</h4>
+<p> 皆さんお馴染みのゲーム「三目並べ」で、両者が最善を尽くすと引き分けになることを示すプログラムです。詳しい説明は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/tictactoe.html">三目並べ</a> をお読みください。
+</p>
+<pre class="list">
+//
+// tictactoe.rs : 三目並べ
+//
+//                Copyright (C) 2017 Makoto Hiroi
+//
+
+// 駒
+#[derive(PartialEq, Copy, Clone)]
+enum Piece {
+    Maru, Batu, Free
+}
+
+// 盤面の型
+type Board = [Piece; 9];
+
+// 定数
+static MAX_VALUE: i32 = 2;
+static MIN_VALUE: i32 = -2;
+static MARU_WIN: i32 = 1;
+static BATU_WIN: i32 = -1;
+static DRAW: i32 = 0;
+
+// 盤面
+// 0 1 2
+// 3 4 5
+// 6 7 8
+
+// 勝利の判定
+fn check_win(board: &amp;Board) -&gt; i32 {
+    let line_table = vec![[0, 1, 2], [3, 4, 5], [6, 7, 8],
+                          [0, 3, 6], [1, 4, 7], [2, 5, 8],
+                          [0, 4, 8], [2, 4, 6]];
+    let mut result = DRAW;
+    for ls in line_table {
+        let p = board[ls[0]];
+        if p != Piece::Free {
+            if p == board[ls[1]] &amp;&amp; p == board[ls[2]] {
+                result = if p == Piece::Maru { MARU_WIN } else { BATU_WIN };
+                break;
+            }
+        }
+    }
+    result
+}
+
+// 先手の思考
+fn think_maru(n: usize, board: &amp;mut Board) -&gt; i32 {
+    let mut value = MIN_VALUE;
+    for i in 0 .. board.len() {
+        if board[i] == Piece::Free {
+            board[i] = Piece::Maru;
+            let mut v = check_win(board);
+            if v == DRAW &amp;&amp; n &lt; board.len() - 1 {
+                v = think_batu(n + 1, board);
+            }
+            if v &gt; value {
+                value = v;
+            }
+            board[i] = Piece::Free;
+        }
+    }
+    value
+}
+
+// 後手の思考
+fn think_batu(n: usize, board: &amp;mut Board) -&gt; i32 {
+    let mut value = MAX_VALUE;
+    for i in 0 .. board.len() {
+        if board[i] == Piece::Free {
+            board[i] = Piece::Batu;
+            let mut v = check_win(board);
+            if v == DRAW &amp;&amp; n &lt; board.len() - 1 {
+                v = think_maru(n + 1, board);
+            }
+            if v &lt; value {
+                value = v;
+            }
+            board[i] = Piece::Free;
+        }
+    }
+    value
+}
+
+fn main() {
+    let mut board: Board = [Piece::Free; 9];
+    for i in 0 .. board.len() {
+        board[i] = Piece::Maru;
+        println!("{} =&gt; {}", i, think_batu(1, &amp;mut board));
+        board[i] = Piece::Free;
+    }
+}
+</pre>
+<pre>
+0 =&gt; 0
+1 =&gt; 0
+2 =&gt; 0
+3 =&gt; 0
+4 =&gt; 0
+5 =&gt; 0
+6 =&gt; 0
+7 =&gt; 0
+8 =&gt; 0
+</pre>
+<p> ところで、ルールを 3 つ並んだほうが負けに変更すると、初手が中央以外は後手必勝になります。プログラムの修正は関数 check_win() の返り値 result を -result に変更するだけです。
+</p>
+<pre>
+0 =&gt; -1
+1 =&gt; -1
+2 =&gt; -1
+3 =&gt; -1
+4 =&gt; 0
+5 =&gt; -1
+6 =&gt; -1
+7 =&gt; -1
+8 =&gt; -1
+</pre>
+<h4 id="chap68">●カークマンの 15 人の女生徒</h4>
+<div class="question">
+<b>[問題]</b>
+<p> 15 人の女生徒が毎日 3 人ずつ 5 組に分かれて散歩をするとき、1 週間 (7 日) のうちに、どの女生徒も他のすべての女生徒と 1 回ずつ同じ組になるような組み合わせを作ってください。
+</p>
+<p>出典 : 大村平 (著), 『数理パズルの話』, 日科技連出版社, 1998
+</p>
+</div>
+<p> 「カークマンの 15 人の女生徒」の解法プログラムは <a href="rust05.html#chap66">集合のグループ分け</a> で作成したプログラムを改造すると簡単です。
+</p>
+<pre class="list">
+//
+// kirkman.rs : カークマンの 15 人の女生徒
+//
+//              Copyright (C) 2017 Makoto Hiroi
+//
+
+// 重複チェック
+fn check_student(xs: &amp;Vec&lt;usize&gt;, y: usize, chk: &amp;Vec&lt;Vec&lt;usize&gt;&gt;) -&gt; bool {
+    for x in xs {
+        if chk[*x].contains(&amp;y) {
+            return false;
+        }
+    }
+    true
+}
+
+// 生徒の追加
+fn add_student(xs: &amp;Vec&lt;usize&gt;, y: usize, chk: &amp;mut Vec&lt;Vec&lt;usize&gt;&gt;) {
+    for x in xs {
+        chk[*x].push(y);
+        chk[y].push(*x);
+    }
+}
+
+// 生徒の削除
+fn del_student(xs: &amp;Vec&lt;usize&gt;, y: usize, chk: &amp;mut Vec&lt;Vec&lt;usize&gt;&gt;) {
+    for x in xs {
+        chk[*x].pop();
+        chk[y].pop();
+    }
+}
+
+// 生徒 (0 以外の 14 人)
+static STUDENT: [usize; 14] = [1,2,3,4,5,6,7,8,9,10,11,12,13,14];
+
+// 解法
+fn kirkman(ls: &amp;[usize], a: &amp;mut Vec&lt;Vec&lt;usize&gt;&gt;, b: &amp;mut Vec&lt;Vec&lt;Vec&lt;usize&gt;&gt;&gt;, chk: &amp;mut Vec&lt;Vec&lt;usize&gt;&gt;) {
+    if ls.len() == 0 {
+        b.push(a.clone());
+        if b.len() == 7 {
+            for xs in b {
+                println!("{:?}", xs);
+            }
+            std::process::exit(0);  // 解を一つ見つけたら終了
+        }
+        kirkman(&amp;STUDENT, &amp;mut vec![vec![0]], b, chk);
+        b.pop();
+    } else {
+        for i in 0 .. a.len() {
+            if a[i].len() &lt; 3 &amp;&amp; check_student(&amp;a[i], ls[0], chk) {
+                add_student(&amp;a[i], ls[0], chk);
+                a[i].push(ls[0]);
+                kirkman(&amp;ls[1..], a, b, chk);
+                a[i].pop();
+                del_student(&amp;a[i], ls[0], chk);
+            }
+        }
+        if a.len() &lt; 5 {
+            a.push(vec![ls[0]]);
+            kirkman(&amp;ls[1..], a, b, chk);
+            a.pop();
+        }
+    }
+}
+
+fn main() {
+    let mut chk: Vec&lt;Vec&lt;usize&gt;&gt; = vec![vec![]; 15];
+    kirkman(&amp;STUDENT, &amp;mut vec![vec![0]], &amp;mut vec![], &amp;mut chk);
+}
+</pre>
+<pre>
+[[0, 1, 2], [3, 4, 5], [6, 7, 8], [9, 10, 11], [12, 13, 14]]
+[[0, 3, 6], [1, 4, 9], [2, 5, 12], [7, 10, 13], [8, 11, 14]]
+[[0, 4, 13], [1, 3, 14], [2, 7, 11], [5, 8, 10], [6, 9, 12]]
+[[0, 8, 12], [1, 6, 11], [2, 3, 10], [4, 7, 14], [5, 9, 13]]
+[[0, 7, 9], [1, 10, 12], [2, 4, 8], [3, 11, 13], [5, 6, 14]]
+[[0, 5, 11], [1, 8, 13], [2, 9, 14], [3, 7, 12], [4, 6, 10]]
+[[0, 10, 14], [1, 5, 7], [2, 6, 13], [3, 8, 9], [4, 11, 12]]
+</pre>
+<h4 id="chap69">●11 パズル</h4>
+<p> 「11 パズル」を反復深化と下限値枝刈り法で解くプログラムです。詳しい説明は拙作のページ <a href="clang23.html">Ｃ言語超入門: スライドパズル (2)</a> をお読みください。
+</p>
+<pre class="list">
+//
+// eleven.rs : 11 パズル
+//
+//             Copyright (C) 2017 Makoto Hiroi
+//
+
+// 盤面
+// 0  1  2  3
+// 4  5  6  7
+// 8  9 10 11
+//
+
+// 盤面の型
+type Board = [usize; 12];
+
+// 距離
+static DISTANCE: [[usize; 12]; 12] = [
+  [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],  // 0 dummy
+  [0, 1, 2, 3, 1, 2, 3, 4, 2, 3, 4, 5],  // 1
+  [1, 0, 1, 2, 2, 1, 2, 3, 3, 2, 3, 4],  // 2
+  [2, 1, 0, 1, 3, 2, 1, 2, 4, 3, 2, 3],  // 3
+  [3, 2, 1, 0, 4, 3, 2, 1, 5, 4, 3, 2],  // 4
+  [1, 2, 3, 4, 0, 1, 2, 3, 1, 2, 3, 4],  // 5
+  [2, 1, 2, 3, 1, 0, 1, 2, 2, 1, 2, 3],  // 6
+  [3, 2, 1, 2, 2, 1, 0, 1, 3, 2, 1, 2],  // 7
+  [4, 3, 2, 1, 3, 2, 1, 0, 4, 3, 2, 1],  // 8
+  [2, 3, 4, 5, 1, 2, 3, 4, 0, 1, 2, 3],  // 9
+  [3, 2, 3, 4, 2, 1, 2, 3, 1, 0, 1, 2],  // 10
+  [4, 3, 2, 3, 3, 2, 1, 2, 2, 1, 0, 1],  // 11
+];
+
+// 深さ優先探索 (反復深化)
+fn dfs(board: &amp;mut Board, goal: &amp;Board, s: usize, adj: &amp;Vec&lt;Vec&lt;usize&gt;&gt;, limit: usize, low: usize, move_piece: &amp;mut Vec&lt;usize&gt;) {
+    let n = move_piece.len() - 1;
+    if n == limit {
+        if *board == *goal {
+            println!("{:?}", &amp;move_piece[1..]);
+            std::process::exit(0);  // 解を一つ見つけたら終了
+        }
+    } else {
+        for x in &amp;adj[s] {
+            let p = board[*x];
+            if move_piece[n] == p { continue; }
+            move_piece.push(p);
+            board[s] = p;
+            board[*x] = 0;
+            let new_low = low - DISTANCE[p][*x] + DISTANCE[p][s];
+            if new_low + n &lt;= limit {
+                dfs(board, goal, *x, adj, limit, new_low, move_piece);
+            }
+            board[*x] = p;
+            board[s] = 0;
+            move_piece.pop();
+        }
+    }
+}
+
+fn main() {
+    // 隣接リスト
+    let adjacent: Vec&lt;Vec&lt;usize&gt;&gt; = vec![
+        vec![1, 4],        // 0
+        vec![0, 2, 5],     // 1
+        vec![1, 3, 6],     // 2
+        vec![2, 7],        // 3
+        vec![0, 5, 8],     // 4
+        vec![1, 4, 6, 9],  // 5
+        vec![2, 5, 7, 10], // 6
+        vec![3, 6, 11],    // 7
+        vec![4, 9],        // 8
+        vec![5, 8, 10],    // 9
+        vec![6, 9, 11],    // 10
+        vec![7, 10]        // 11 
+    ];
+    let mut start: Board = [0, 3, 2, 1, 8, 7, 6, 5, 4, 11, 10, 9];
+    let goal: Board = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 0];
+    let parity = [
+        true,  false, true,  false,
+        false, true,  false, true,
+        true,  false, true,  false,
+    ];
+    let mut lower = 0;
+    for i in 0 .. 12 {
+        lower += DISTANCE[start[i]][i];
+    }
+    if (parity[0] == parity[11] &amp;&amp; lower % 2 != 0) ||
+       (parity[0] != parity[11] &amp;&amp; lower % 2 == 0) {
+        lower += 1;
+    }
+    let mut limit = lower;
+    while limit &lt;= 53 {
+        println!("----- {} -----", limit);
+        dfs(&amp;mut start, &amp;goal, 0, &amp;adjacent, limit, lower, &amp;mut vec![0]);
+        limit += 2;
+    }
+}
+</pre>
+<pre>
+----- 23 -----
+----- 25 -----
+----- 27 -----
+----- 29 -----
+----- 31 -----
+----- 33 -----
+----- 35 -----
+----- 37 -----
+----- 39 -----
+----- 41 -----
+----- 43 -----
+----- 45 -----
+----- 47 -----
+----- 49 -----
+----- 51 -----
+----- 53 -----
+[3, 2, 6, 5, 1, 6, 2, 7, 5, 1, 9, 10, 11, 4, 8, 5, 1, 9, 10, 11,
+ 4, 8, 5, 1, 9, 10, 11, 4, 8, 9, 10, 2, 7, 3, 1, 5, 9, 10, 2, 11,
+ 4, 8, 11, 7, 6, 4, 7, 6, 3, 2, 6, 7, 8]
+</pre>
+<h4 id="chap70">●ラテン方陣</h4>
+<p> 「ラテン方陣」は数独の枠の条件を無くした方陣です。ラテン方陣の定義を <a href="rust07.html#cite37">参考文献</a> より引用します。
+</p>
+<cite>
+<p>『ラテン方陣を一般的にいうなら、n 行 n 列の正方形の枡に n 種類の記号を n 個ずつ配列して、各行各列に記号の重複のないものを n 次のラテン方陣というのです。』
+</p>
+</cite>
+<p> このラテン方陣をパズルに応用したものが数独というわけです。
+</p>
+<p> 簡単な例を示しましょう。3 次のラテン方陣は次に示す 12 通りになります。
+</p>
+<pre class="fig">
+ 0 1 2    0 1 2    0 2 1    0 2 1    1 0 2    1 0 2 
+ 1 2 0    2 0 1    1 0 2    2 1 0    0 2 1    2 1 0 
+ 2 0 1    1 2 0    2 1 0    1 0 2    2 1 0    0 2 1 
+ 標準形
+
+ 1 2 0    1 2 0    2 0 1    2 0 1    2 1 0    2 1 0 
+ 0 1 2    2 0 1    0 1 2    1 2 0    0 2 1    1 0 2 
+ 2 0 1    0 1 2    1 2 0    0 1 2    1 0 2    0 2 1 
+
+               図 : 3 次のラテン方陣
+</pre>
+<p> この中で、最初の行と列の要素を昇順に並べたものを「標準形」といいます。3 次のラテン方陣の場合、標準形は 1 種類しかありません。ラテン方陣は任意の行を交換する、または任意の列を交換してもラテン方陣になります。3 次のラテン方陣の場合、標準形から行または列を交換することで、残りの 11 種類のラテン方陣を生成することができます。
+</p>
+<p> 今回は標準形ラテン方陣の総数を求めるプログラムを作ります。
+</p>
+
+<pre class="list">
+//
+// latin.rs : ラテン方陣
+//
+//            Copyright (C) 2017 Makoto Hiroi
+//
+use std::time::Instant;
+
+static mut CNT: i32 = 0;
+
+fn check(board: &amp;Vec&lt;Vec&lt;usize&gt;&gt;, x: usize, y: usize, m: usize) -&gt; bool {
+    for i in 0 .. board.len() {
+        if board[x][i] == m || board[i][y] == m {
+            return false;
+        }
+    }
+    true
+}
+
+fn latin(board: &amp;mut Vec&lt;Vec&lt;usize&gt;&gt;, x: usize, y: usize) {
+    let n = board.len();
+    if y == n {
+        unsafe { CNT += 1; }
+    } else if x == n {
+        latin(board, 1, y + 1);
+    } else {
+        for m in 1 .. n + 1 {
+            if check(board, x, y, m) {
+                board[x][y] = m;
+                latin(board, x + 1, y);
+                board[x][y] = 0;
+            } 
+        }
+    }
+}
+
+fn main() {
+    for n in 3 .. 8 {
+        let mut a: Vec&lt;Vec&lt;usize&gt;&gt; = vec![vec![0; n]; n];
+        // 初期化
+        for m in 0 .. n {
+            a[0][m] = m + 1;
+            a[m][0] = m + 1;
+        }
+        let start = Instant::now();
+        unsafe { CNT = 0; }
+        latin(&amp;mut a, 1, 1);
+        unsafe { println!("{}", CNT); }
+        let end = start.elapsed();
+        println!("{}.{:03}秒経過しました。", end.as_secs(), end.subsec_nanos() / 1_000_000);
+    }
+}
+</pre>
+<p> プログラムは簡単なので説明は割愛します。実行結果は次のようになりました。
+<pre>
+1
+0.000秒経過しました。
+4
+0.000秒経過しました。
+56
+0.000秒経過しました。
+9408
+0.015秒経過しました。
+16942080
+33.331秒経過しました。
+
+実行環境 : Rust 1.18.0, xubuntu 16.10 on VirtualBox, Intel Core i5-6200U 2.30GHz
+</pre>
+<p> 単純なプログラムなので実行時間は遅いですね。高次の標準形ラテン方陣の総数は、簡単に求めることができない非常にハードな問題だといわれています。興味のある方は挑戦してみてください。
+</p>
+<div class="note">
+<a name="cite37">-- 参考文献 --------</a><br>
+大村平, 『数理パズルのはなし』, 日科技連出版社, 1998
+</div>
+<h4 id="chap71">●キュー (リングバッファ)</h4>
+<p> 「循環配列 (リングバッファ)」によるキューの実装です。アルゴリズムの詳しい説明は拙作のページ <a href="cpp20.html">お気楽Ｃ++プログラミング超入門: キュー</a> をお読みください。なお、Rust の標準ライブラリには VecDequeu&lt;T&gt; が用意されているので、私たちがキューを自作する必要はありませんが、Rust のお勉強ということで、なるべく unsafe な機能を使わないでプログラムを作ってみましょう。
+</p>
+<table border=1>
+<caption>表 : Queue&lt;T&gt; のメソッド</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>fn new(n: usize) -&gt; Queue&lt;T&gt;</td><td>指定した大きさのキューを作る (コンストラクタ)</td></tr>
+  <tr><td>fn dequeue(&amp;mut self) -&gt; Option&lt;T&gt;</td><td>キューからデータを取り出して返す</td></tr>
+  <tr><td>fn enqueue(&amp;mut self, x: T) -&gt; bool</td><td>キューにデータを追加する</td></tr>
+  <tr><td>fn front(&amp;self) -&gt; Option&lt;&amp;T&gt;</td><td>キューの先頭データの参照を返す</td></tr>
+  <tr><td>fn is_empty(&amp;self) -&gt; bool</td><td>キューが空の場合は true を、そうでなければ false を返す</td></tr>
+  <tr><td>fn is_full(&amp;self) -&gt; bool</td><td>キューが満杯の場合は true を、そうでなければ false を返す</td></tr>
+  <tr><td>fn len(&amp;self) -&gt; usize</td><td>キューに格納されたデータ数を返す</td></tr>
+  <tr><td>fn clear(&amp;mut self)</td><td>キューを空にする</td></tr>
+</tbody>
+</table>
+<pre class="list">
+//
+// queue.rs : キュー (リングバッファ) の簡単な実装
+//
+//            Copyright (C) 2017 Makoto Hiroi
+//
+
+// キュー
+struct Queue&lt;T&gt; {
+    buff: Vec&lt;Option&lt;T&gt;&gt;,
+    front: usize,
+    rear: usize,
+    size: usize
+}
+
+// キューのメソッド
+impl&lt;T&gt; Queue&lt;T&gt; {
+    // キューの生成
+    fn new(n: usize) -&gt; Queue&lt;T&gt; {
+        let mut b = Vec::new();
+        for _ in 0 .. n { b.push(None); }
+        Queue {
+            buff: b,  // vec![None; n] で初期化すると T に Clone の指定が必要になる
+            front: 0,
+            rear: 0,
+            size: 0
+        }
+    }
+
+    // データの挿入
+    fn enqueue(&amp;mut self, x: T) -&gt; bool {
+        if self.size == self.buff.len() {
+            return false;
+        }
+        self.buff[self.rear] = Some(x);
+        self.rear += 1;
+        self.size += 1;
+        if self.rear == self.buff.len() {
+            self.rear = 0;
+        }
+        true
+    }
+
+    // データの取り出し
+    fn dequeue(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.size == 0 {
+            return None;
+        }
+        let x = self.buff[self.front].take();
+        self.front += 1;
+        self.size -= 1;
+        if self.front == self.buff.len() {
+            self.front = 0;
+        }
+        x
+    }
+
+    // 先頭データの参照を返す
+    fn front(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.size == 0 {
+            None
+        } else {
+            self.buff[self.front].as_ref()
+        }
+    }
+
+    // 要素数を返す
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // キューは空か？
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // キューは満杯か？
+    fn is_full(&amp;self) -&gt; bool { self.size == self.buff.len() }
+
+    // キューを空にする
+    fn clear(&amp;mut self) {
+        self.front = 0;
+        self.rear = 0;
+        self.size = 0;
+        for i in 0 .. self.buff.len() {
+            self.buff[i] = None;
+        }
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut que = Queue::new(10);
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+    for i in 0 .. 5 {
+        que.enqueue(i);
+    }
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+    while !que.is_empty() {
+        println!("{:?}", que.front());
+        println!("{:?}", que.dequeue());
+    }
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+
+    for i in 0 .. 10 {
+        que.enqueue(i + 10);
+    }
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+    for _ in 0 .. 8 {
+        println!("{:?}", que.front());
+        println!("{:?}", que.dequeue());
+    }
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+
+    que.clear();
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+}
+</pre>
+<pre>
+true
+false
+0
+false
+false
+5
+Some(0)
+Some(0)
+Some(1)
+Some(1)
+Some(2)
+Some(2)
+Some(3)
+Some(3)
+Some(4)
+Some(4)
+true
+false
+0
+false
+true
+10
+Some(10)
+Some(10)
+Some(11)
+Some(11)
+Some(12)
+Some(12)
+Some(13)
+Some(13)
+Some(14)
+Some(14)
+Some(15)
+Some(15)
+Some(16)
+Some(16)
+Some(17)
+Some(17)
+false
+false
+2
+true
+false
+0
+</pre>
+<h4 id="chap72">●キュー (連結リスト)</h4>
+<p> 連結リストを使ったキューの実装です。メソッドはリングバッファと同じです。アルゴリズムの詳しい説明は拙作のページ <a href="cpp20.html">お気楽Ｃ++プログラミング超入門: キュー</a> をお読みください。なお、Rust の標準ライブラリには LinkedList&lt;T&gt; が用意されているので、私たちがキューを自作する必要はありませんが、Rust のお勉強ということで、なるべく unsafe な機能を使わないでプログラムを作ってみましょう。
+</p>
+<pre class="list">
+//
+// queue1.rs : 連結リストによるキューの実装
+//
+//             Copyright (C) 2017 Makoto Hiroi
+//
+use std::rc::Rc;
+use std::cell::RefCell;
+
+// 連結リスト
+struct List&lt;T&gt; {
+    car: T,
+    cdr: RefCell&lt;Link&lt;T&gt;&gt;
+}
+
+type Link&lt;T&gt; = Option&lt;Rc&lt;List&lt;T&gt;&gt;&gt;;
+
+/*
+ * 連結リストを次のように定義する方法もある
+ *
+ * struct List&lt;T&gt; {
+ *     car: T,
+ *     cdr: Link&lt;T&gt;
+ * }
+ *
+ * type Link&lt;T&gt; = Option&lt;Rc&lt;RefCell&lt;List&lt;T&gt;&gt;&gt;&gt;;
+ *
+ * 参考 URL : <a href="http://cglab.ca/~abeinges/blah/too-many-lists/book/">Learning Rust With Entirely Too Many Linked Lists</a>
+ *
+ */
+
+// キュー
+struct Queue&lt;T&gt; {
+    front: Link&lt;T&gt;,
+    rear: Link&lt;T&gt;,
+    size: usize
+}
+
+// キューのメソッド
+impl&lt;T&gt; Queue&lt;T&gt; {
+    // キューの生成
+    fn new() -&gt; Queue&lt;T&gt; {
+        Queue { front: None, rear: None, size: 0 }
+    }
+
+    // データの挿入
+    fn enqueue(&amp;mut self, item: T) {
+        let new_node = Rc::new(List {car: item, cdr: RefCell::new(None)});
+        if self.size == 0 {
+            self.front = Some(new_node.clone());
+        } else {
+            let node = self.rear.take().unwrap();
+            let mut ptr = node.cdr.borrow_mut();
+            *ptr = Some(new_node.clone());
+        }
+        self.rear = Some(new_node);
+        self.size += 1;
+    }
+
+    // データの取り出し
+    fn dequeue(&amp;mut self) -&gt; Option&lt;T&gt; {
+        self.front.take().map(|node| {
+            if self.size == 1 {
+                self.rear = None;  // リファレンスカウントを -1 するため
+            }
+            match Rc::try_unwrap(node) {
+                Ok(node) =&gt; {
+                    self.front = node.cdr.into_inner();
+                    self.size -= 1;
+                    node.car
+                },
+                Err(_) =&gt; panic!("dequeue error")
+            }
+        })
+    }
+
+    // 先頭要素の参照を返す
+    fn front(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.front.as_ref().map(|node| {
+            &amp;node.car
+        })
+    }
+
+    // キューの要素数を求める
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // キューは空か？
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // キューは満杯か？
+    fn is_full(&amp;self) -&gt; bool { false }
+
+    // キューを空にする
+    fn clear(&amp;mut self) {
+        self.front = None;
+        self.rear = None;
+        self.size = 0;
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut que = Queue::new();
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+    for i in 0 .. 5 {
+        que.enqueue(i);
+    }
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+    while !que.is_empty() {
+        println!("{:?}", que.front());
+        println!("{:?}", que.dequeue());
+    }
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+
+    for i in 0 .. 10 {
+        que.enqueue(i + 10);
+    }
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+    for _ in 0 .. 8 {
+        println!("{:?}", que.front());
+        println!("{:?}", que.dequeue());
+    }
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+    que.clear();
+    println!("{}", que.is_empty());
+    println!("{}", que.is_full());
+    println!("{}", que.len());
+}
+</pre>
+<pre>
+true
+false
+0
+false
+false
+5
+Some(0)
+Some(0)
+Some(1)
+Some(1)
+Some(2)
+Some(2)
+Some(3)
+Some(3)
+Some(4)
+Some(4)
+true
+false
+0
+false
+false
+10
+Some(10)
+Some(10)
+Some(11)
+Some(11)
+Some(12)
+Some(12)
+Some(13)
+Some(13)
+Some(14)
+Some(14)
+Some(15)
+Some(15)
+Some(16)
+Some(16)
+Some(17)
+Some(17)
+false
+false
+2
+true
+false
+0
+</pre>
+<h4 id="chap73">●両端キュー</h4>
+<p> 「循環配列 (リングバッファ)」による両端キュー (ディーキュー, deque) の実装です。アルゴリズムの詳しい説明は拙作のページ <a href="cpp20.html">お気楽Ｃ++プログラミング超入門: キュー</a> をお読みください。なお、Rust の標準ライブラリには VecDeque&lt;T&gt; が用意されているので、私たちが両端キューを自作する必要はありません。Rust のお勉強ということで、なるべく unsafe な機能を使わないでプログラムを作ってみましょう。
+</p>
+<table border=1>
+<caption>表 : Deque&lt;T&gt; メソッド</caption>
+<thead>
+  <tr><th>メソッド名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>fn new(n: usize) -&gt; Deque&lt;T&gt;</td><td>指定した大きさのディーキューを作る (コンストラクタ)</td></tr>
+  <tr><td>fn push_front(&amp;mut self, x: T) -&gt; bool</td><td>先頭にデータを追加する</td></tr>
+  <tr><td>fn push_back(&amp;mut self, x: T) -&gt; bool</td><td>末尾にデータを追加する</td></tr>
+  <tr><td>fn pop_front(&amp;mut self) -&gt; Option&lt;T&gt;</td><td>先頭からデータを取り出す</td></tr>
+  <tr><td>fn pop_back(&amp;mut self) -&gt; Option&lt;T&gt;</td><td>末尾からデータを取り出す</td></tr>
+  <tr><td>fn front(&amp;self) -&gt; Option&lt;&amp;T&gt;</td><td>先頭データへの参照を返す</td></tr>
+  <tr><td>fn back(&amp;self) -&gt; Option&lt;&amp;T&gt;</td><td>末尾データへの参照を返す</td></tr>
+  <tr><td>fn len(&amp;self) -&gt; usize</td><td>ディーキューの要素数を返す</td></tr>
+  <tr><td>fn is_empty(&amp;self) -&gt; bool</td><td>ディーキューが空ならば true を返す</td></tr>
+  <tr><td>fn is_full(&amp;self) -&gt; bool</td><td>ディーキューが満杯ならば true を返す</td></tr>
+  <tr><td>fn clear(&amp;mut self) </td><td>ディーキューを空にする</td></tr>
+</tbody>
+</table>
+<pre class="list">
+//
+// deque.rs : 両端キュー (リングバッファ) の簡単な実装
+//
+//            Copyright (C) 2017 Makoto Hiroi
+//
+
+// ディーキュー
+struct Deque&lt;T&gt; {
+    buff: Vec&lt;Option&lt;T&gt;&gt;,
+    front: usize,
+    rear: usize,
+    size: usize
+}
+
+// ディーキューのメソッド
+impl&lt;T&gt; Deque&lt;T&gt; {
+    // ディーキューの生成
+    fn new(n: usize) -&gt; Deque&lt;T&gt; {
+        let mut b = Vec::new();
+        for _ in 0 .. n { b.push(None); }
+        Deque {
+            buff: b, front: 0, rear: 0, size: 0
+        }
+    }
+
+    // 末尾にデータを挿入
+    fn push_back(&amp;mut self, x: T) -&gt; bool {
+        if self.buff.len() == self.size {
+            return false;
+        }
+        self.buff[self.rear] = Some(x);
+        self.rear += 1;
+        self.size += 1;
+        if self.rear == self.buff.len() { self.rear = 0; }
+        true
+    }
+
+    // 先頭からデータを取り出す
+    fn pop_front(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.size == 0 {
+            return None;
+        }
+        let x = self.buff[self.front].take();
+        self.front += 1;
+        self.size -= 1;
+        if self.front == self.buff.len() {
+            self.front = 0;
+        }
+        x
+    }
+
+    // 先頭にデータを挿入
+    fn push_front(&amp;mut self, x: T) -&gt; bool {
+        if self.buff.len() == self.size {
+            return false;
+        }
+        if self.front == 0 {
+            self.front = self.buff.len() - 1;
+        } else {
+            self.front -= 1;
+        }
+        self.size += 1;
+        self.buff[self.front] = Some(x);
+        true
+    }
+
+    // 末尾からデータを取り出す
+    fn pop_back(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.size == 0 {
+            return None;
+        }
+        if self.rear == 0 {
+            self.rear = self.buff.len() - 1;
+        } else {
+            self.rear -= 1;
+        }
+        self.size -= 1;
+        self.buff[self.rear].take()
+    }
+
+    // 先頭データへの参照を返す
+    fn front(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.size == 0 {
+            None
+        } else {
+            self.buff[self.front].as_ref()
+        }
+    }
+
+    // 末尾データへの参照を返す
+    fn back(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.size == 0 {
+            None
+        } else {
+            let i = if self.rear == 0 { self.buff.len() - 1 } else { self.rear - 1 };
+            self.buff[i].as_ref()
+        }
+    }
+
+    // 要素数を返す
+    fn len(&amp;self) -&gt; usize { self.size }
+    
+    // ディーキューは空か？
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // ディーキューは満杯か？
+    fn is_full(&amp;self) -&gt; bool { self.size == self.buff.len() }
+
+    // ディーキューを空にする
+    fn clear(&amp;mut self) {
+        self.front = 0;
+        self.rear = 0;
+        self.size = 0;
+        for i in 0 .. self.buff.len() {
+            self.buff[i] = None;
+        }
+    }
+}
+
+// 簡単なテスト
+fn main() {
+    let mut deq = Deque::new(8);
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    for i in 0 .. 4 {
+        deq.push_back(i);
+        deq.push_front(i + 10);
+    }
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    println!("{:?}", deq.back());
+    println!("{:?}", deq.front());
+    for _ in 0 .. 3 {
+        println!("{:?}", deq.pop_back());
+        println!("{:?}", deq.pop_front());
+    }
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    deq.clear();
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+}
+</pre>
+<pre>
+0
+true
+false
+8
+false
+true
+Some(3)
+Some(13)
+Some(3)
+Some(13)
+Some(2)
+Some(12)
+Some(1)
+Some(11)
+2
+false
+false
+0
+true
+false
+</pre>
+<h4 id="chap74">●両端キュー (双方向リスト)</h4>
+<p> 双方向リストによる両端キュー (ディーキュー, deque) の実装です。メソッドはリングバッファと同じです。双方向リストは循環リストによる実装方法を拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo02.html">連結リストとキュー</a> で説明していますが、このプログラムは循環リストを使っていません。実装方法がちょっと異なるので注意してください。なお、Rust の標準ライブラリには LinkedList&lt;T&gt; が用意されているので、私たちが両端キューを自作する必要はありません。Rust のお勉強ということで、なるべく unsafe な機能を使わないでプログラムを作ってみましょう。
+</p>
+<pre class="list">
+//
+// deque1.rs : 双方向リストによる両端キューの実装
+//
+//             Copyright (C) 2017 Makoto Hiroi
+//
+use std::rc::Rc;
+use std::cell::RefCell;
+
+// 双方向リスト
+struct List&lt;T&gt; {
+    item: T,
+    prev: RefCell&lt;Link&lt;T&gt;&gt;,
+    next: RefCell&lt;Link&lt;T&gt;&gt;
+}
+
+type Link&lt;T&gt; = Option&lt;Rc&lt;List&lt;T&gt;&gt;&gt;;
+
+/*
+ * 双方向リストを次のように定義する方法もある
+ *
+ * struct List&lt;T&gt; {
+ *     item: T,
+ *     prev: Link&lt;T&gt;,
+ *     next: Link&lt;T&gt;
+ * }
+ *
+ * type Link&lt;T&gt; = Option&lt;Rc&lt;RefCell&lt;List&lt;T&gt;&gt;&gt;&gt;;
+ *
+ * 参考 URL : <a href="http://cglab.ca/~abeinges/blah/too-many-lists/book/">Learning Rust With Entirely Too Many Linked Lists</a>
+ *
+ */
+
+ // キュー
+struct Deque&lt;T&gt; {
+    front: Link&lt;T&gt;,
+    rear: Link&lt;T&gt;,
+    size: usize
+}
+
+// キューのメソッド
+impl&lt;T&gt; Deque&lt;T&gt; {
+    // キューの生成
+    fn new() -&gt; Deque&lt;T&gt; {
+        Deque { front: None, rear: None, size: 0 }
+    }
+
+    // 末尾にデータを挿入
+    fn push_back(&amp;mut self, x: T) {
+        let new_node = Rc::new(List {item: x, prev: RefCell::new(None), next: RefCell::new(None)});
+        if self.size == 0 {
+            self.front = Some(new_node.clone());
+        } else {
+            let node = self.rear.take().unwrap();
+            let mut ptr1 = node.next.borrow_mut();
+            *ptr1 = Some(new_node.clone());
+            let mut ptr2 = new_node.prev.borrow_mut();
+            *ptr2 = Some(node.clone());
+        }
+        self.rear = Some(new_node);
+        self.size += 1;
+    }
+
+    // 先頭にデータを挿入
+    fn push_front(&amp;mut self, x: T) {
+        let new_node = Rc::new(List {item: x, prev: RefCell::new(None), next: RefCell::new(None)});
+        if self.size == 0 {
+            self.rear = Some(new_node.clone());
+        } else {
+            let node = self.front.take().unwrap();
+            let mut ptr1 = node.prev.borrow_mut();
+            *ptr1 = Some(new_node.clone());
+            let mut ptr2 = new_node.next.borrow_mut();
+            *ptr2 = Some(node.clone());
+        }
+        self.front = Some(new_node);
+        self.size += 1;
+    }
+
+    // 先頭からデータを取得する
+    fn pop_front(&amp;mut self) -&gt; Option&lt;T&gt; {
+        self.front.take().map(|node| {
+            if self.size == 1 {
+                self.rear = None;  // リファレンスカウントを -1 するため
+            } else {
+                // next の prev を None に書き換える
+                let ptr0 = node.next.borrow();
+                let ptr1 = ptr0.as_ref().unwrap();
+                let mut ptr2 = ptr1.prev.borrow_mut();
+                *ptr2 = None;
+            }
+            match Rc::try_unwrap(node) {
+                Ok(node) =&gt; {
+                    self.front = node.next.into_inner();
+                    self.size -= 1;
+                    node.item
+                },
+                Err(_) =&gt; panic!("pop_front error")
+            }
+        })
+    }
+
+    // 末尾からデータを取得する
+    fn pop_back(&amp;mut self) -&gt; Option&lt;T&gt; {
+        self.rear.take().map(|node| {
+            if self.size == 1 {
+                self.front = None;  // リファレンスカウントを -1 するため
+            } else {
+                // prev の next を None に書き換える
+                let ptr0 = node.prev.borrow();
+                let ptr1 = ptr0.as_ref().unwrap();
+                let mut ptr2 = ptr1.next.borrow_mut();
+                *ptr2 = None;
+            }
+            match Rc::try_unwrap(node) {
+                Ok(node) =&gt; {
+                    self.rear = node.prev.into_inner();
+                    self.size -= 1;
+                    node.item
+                },
+                Err(_) =&gt; panic!("pop_back error")
+            }
+        })
+    }
+
+    // 先頭要素の参照を返す
+    fn front(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.front.as_ref().map(|node| {
+            &amp;node.item
+        })
+    }
+
+    // 末尾要素の参照を返す
+    fn back(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        self.rear.as_ref().map(|node| {
+            &amp;node.item
+        })
+    }
+
+    // キューの要素数を求める
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // キューは空か？
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // キューは満杯か？
+    fn is_full(&amp;self) -&gt; bool { false }
+
+    // キューを空にする
+    fn clear(&amp;mut self) {
+        while !self.is_empty() { self.pop_front(); }
+    }
+}
+
+// Deque が drop されたときは双方向リストも drop する
+impl&lt;T&gt; Drop for Deque&lt;T&gt; {
+    fn drop(&amp;mut self) { self.clear();  }
+}
+
+fn main() {
+    let mut deq = Deque::new();
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    for i in 0 .. 4 {
+        deq.push_back(i);
+        deq.push_front(i + 10);
+    }
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    println!("{:?}", deq.back());
+    println!("{:?}", deq.front());
+    for _ in 0 .. 3 {
+        println!("{:?}", deq.pop_back());
+        println!("{:?}", deq.pop_front());
+    }
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+    deq.clear();
+    println!("{}", deq.len());
+    println!("{}", deq.is_empty());
+    println!("{}", deq.is_full());
+}
+</pre>
+<pre>
+0
+true
+false
+8
+false
+false
+Some(3)
+Some(13)
+Some(3)
+Some(13)
+Some(2)
+Some(12)
+Some(1)
+Some(11)
+2
+false
+false
+0
+true
+false
+</pre>
+
+<h4 id="chap75">●ハッシュ表 (オープンアドレス法)</h4>
+<p> ハッシュ表 (オープンアドレス法) の簡単な実装です。Rust の標準ライブラリには HashMap (HashSet) が用意されているので、私たちがハッシュ表を作成する必要はありませんが、Rust のお勉強ということで、あえてプログラムを作ってみましょう。アルゴリズムの詳しい説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo04.html">ハッシュ法</a> をお読みくださいませ。
+</p>
+<table border="1">
+<caption>表 : HashTable&lt;K, V&gt; のメソッド</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>fn new(n: usize) -&gt; HashTable&lt;K, V&gt;</td><td>大きさ n のハッシュ表を生成する</td></tr>
+  <tr><td>fn contains_key(&amp;self, key: &amp;K) -&gt; bool</td><td>ハッシュ表にキーがあれば true を返す</td></tr>
+  <tr><td>fn get(&amp;self, key: &amp;K) -&gt; Option&lt;&amp;V&gt;</td><td>キーに対応する値の参照を返す</td></tr>
+  <tr><td>fn insert(&amp;mut self, key: K, value: V) -&gt; bool</td><td>ハッシュ表にキーと値を登録する</td></tr>
+  <tr><td>fn remove(&amp;mut self, key: &amp;K) -&gt; bool</td><td>ハッシュ表からキーと値を削除する</td></tr>
+  <tr><td>fn len(&amp;self) -&gt; usize</td><td>ハッシュ表の要素数を返す</td></tr>
+  <tr><td>fn is_empty(&amp;self) -&gt; bool</td><td>ハッシュ表が空であれば true を返す</td></tr>
+  <tr><td>fn is_full(&amp;self) -&gt; bool</td><td>ハッシュ表が満杯であれば true を返す</td></tr>
+  <tr><td>fn clear(&amp;mut self)</td><td>ハッシュ表を空にする</td></tr>
+</tbody>
+</table>
+<pre class="list">
+//
+// hash.rs : ハッシュ表 (オープンアドレス法)
+//
+//           Copyright (C) 2017 Makoto Hiroi
+//
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+// ハッシュ表の要素
+enum HashItem&lt;K: Hash + PartialEq + Eq, V&gt; {
+    Empty,
+    Delete,
+    Item(K, V)
+}
+
+use HashItem::*;
+
+// ハッシュ表
+struct HashTable&lt;K: Hash + PartialEq + Eq, V&gt; {
+    table: Vec&lt;HashItem&lt;K, V&gt;&gt;,
+    limit: usize,
+    size: usize
+}
+
+// メソッドの定義
+impl&lt;K: Hash + PartialEq + Eq, V&gt; HashTable&lt;K, V&gt; {
+    // ハッシュ表の生成
+    fn new(n: usize) -&gt; HashTable&lt;K, V&gt; {
+        let mut ht = Vec::new();
+        // 10007 は素数
+        for _ in 0 .. n { ht.push(Empty); }
+        HashTable { table: ht, limit: n, size: 0 }
+    }
+
+    // インデックスの計算
+    fn get_index(&amp;self, key: &amp;K) -&gt; usize {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&amp;mut hasher);
+        hasher.finish() as usize % self.limit
+    }
+
+    // キーのインデックスを求める
+    fn get_key_index(&amp;self, key: &amp;K) -&gt; Option&lt;usize&gt; {
+        let mut i = self.get_index(key);
+        let mut cnt = 0;
+        while cnt &lt; self.limit {
+            match &amp;self.table[i] {
+                &amp;Empty =&gt; return None,
+                &amp;Item(ref k, _) if key == k =&gt; return Some(i),
+                _ =&gt; (),
+            }
+            cnt += 1;
+            i += 1;
+            if i == self.limit { i = 0; }
+        }
+        None
+    }
+
+    // データの有無を調べる
+    fn contains_key(&amp;self, key: &amp;K) -&gt; bool {
+        self.get_key_index(key).is_some()
+    }
+
+    // キーに対応する値を求める
+    fn get(&amp;self, key: &amp;K) -&gt; Option&lt;&amp;V&gt; {
+        match self.get_key_index(key) {
+            None =&gt; None,
+            Some(i) =&gt; match &amp;self.table[i] {
+                &amp;Item(_, ref v) =&gt; Some(v),
+                _ =&gt; None
+            }
+        }
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, key: K, value: V) -&gt; bool {
+        let mut i = self.get_index(&amp;key);
+        let mut cnt = 0;
+        while cnt &lt; self.limit {
+            let mut p = &amp;mut self.table[i];
+            match p {
+                &amp;mut Empty | &amp;mut Delete =&gt; {
+                    *p = Item(key, value);
+                    self.size += 1;
+                    return true;
+                },
+                &amp;mut Item(ref k, ref mut v) if *k == key =&gt; {
+                    *v = value;
+                    return true;
+                },
+                _ =&gt; ()
+            }
+            cnt += 1;
+            i += 1;
+            if i == self.limit { i = 0; }
+        }
+        false
+    }
+
+    // データの削除
+    fn remove(&amp;mut self, key: &amp;K) -&gt; bool {
+        match self.get_key_index(key) {
+            None =&gt; false,
+            Some(i) =&gt; {
+                self.table[i] = Delete;
+                self.size -= 1;
+                true
+            }
+        }
+    }
+
+    // 要素数を返す
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // ハッシュ表は空か？
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+    
+    // ハッシュ表は満杯か？
+    fn is_full(&amp;self) -&gt; bool { self.size == self.table.len() }
+
+    // ハッシュ表を空にする
+    fn clear(&amp;mut self) {
+        for i in 0 .. self.table.len() { self.table[i] = Empty; }
+        self.size = 0;
+    }
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct Foo {
+    num: i32
+}
+
+// 簡単なテスト
+fn main() {
+    let mut ht: HashTable&lt;Foo, i32&gt; = HashTable::new(11);
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+    for x in 1 .. 12 {
+        ht.insert(Foo { num: x }, x * 10);
+    }
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+
+    for x in 0 .. 13 {
+        let key = Foo { num: x };
+        println!("{}", ht.contains_key(&amp;key));
+        println!("{:?}", ht.get(&amp;key));
+        println!("{}", ht.remove(&amp;key));
+        println!("{}", ht.contains_key(&amp;key));
+    }
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+
+    for x in 0 .. 11 {
+        ht.insert(Foo { num: x }, x * 10);
+    }
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+    ht.clear();
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+}
+</pre>
+<pre>
+0
+true
+false
+11
+false
+true
+false
+None
+false
+false
+true
+Some(10)
+true
+false
+true
+Some(20)
+true
+false
+true
+Some(30)
+true
+false
+true
+Some(40)
+true
+false
+true
+Some(50)
+true
+false
+true
+Some(60)
+true
+false
+true
+Some(70)
+true
+false
+true
+Some(80)
+true
+false
+true
+Some(90)
+true
+false
+true
+Some(100)
+true
+false
+true
+Some(110)
+true
+false
+false
+None
+false
+false
+0
+true
+false
+11
+false
+true
+0
+true
+false
+</pre>
+<h4 id="chap76">●ハッシュ表 (チェイン法)</h4>
+<p> ハッシュ表 (チェイン法) の簡単な実装です。メソッドはオープンアドレス法と同じです。Rust の標準ライブラリには HashMap (HashSet) が用意されているので、私たちがハッシュ表を作成する必要はありませんが、Rust のお勉強ということで、あえてプログラムを作ってみましょう。アルゴリズムの詳しい説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo04.html">ハッシュ法</a> をお読みくださいませ。
+</p>
+<pre class="list">
+//
+// hash1.rs : ハッシュ表 (チェイン法)
+//
+//            Copyright (C) 2017 Makoto Hiroi
+//
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
+
+// 連結リスト
+enum List&lt;K: Hash + PartialEq + Eq, V&gt; {
+    Nil,
+    Cell(K, V, Box&lt;List&lt;K, V&gt;&gt;)
+}
+
+use List::*;
+
+impl&lt;K: Hash + PartialEq + Eq, V&gt; List&lt;K, V&gt; {
+    // リストの生成
+    fn new(key: K, value: V, node: List&lt;K, V&gt;) -&gt; List&lt;K, V&gt; {
+        Cell(key, value, Box::new(node))
+    }
+
+    // キーに対応する値の参照を返す (immutable)
+    fn get(&amp;self, key: &amp;K) -&gt; Option&lt;&amp;V&gt; {
+        let mut node = self;
+        loop {
+            match *node {
+                Cell(ref k, ref v, _) if k == key =&gt; return Some(v),
+                Cell(_, _, ref node1) =&gt; node = &amp;node1,
+                _ =&gt; return None
+            }
+        }
+    }
+
+    // キーに対応する値の参照を返す (mutable)
+    fn get_mut(&amp;mut self, key: &amp;K) -&gt; Option&lt;&amp;mut V&gt; {
+        match *self {
+            Cell(ref k, ref mut v, _) if k == key =&gt; Some(v),
+            Cell(_, _, ref mut node1) =&gt; node1.get_mut(key),
+            _ =&gt; None
+        }        
+    }
+
+    // キーを格納しているリストを削除する
+    fn remove(&amp;mut self, key: &amp;K) -&gt; bool {
+        let mut node = std::mem::replace(self, Nil);
+        match node {
+            Cell(ref k, _, ref mut node1) if k == key =&gt; {
+                let node2 = std::mem::replace(node1.as_mut(), Nil);
+                std::mem::replace(self, node2);
+                return true;
+            }
+            _ =&gt; *self = node  // 元に戻す
+        }
+        match *self {
+            Cell(_, _, ref mut node1) =&gt; node1.as_mut().remove(key),
+            _ =&gt; false
+        }
+        
+    }
+}
+
+// ハッシュ表
+struct HashTable&lt;K: Hash + PartialEq + Eq, V&gt; {
+    table: Vec&lt;List&lt;K, V&gt;&gt;,
+    limit: usize,
+    size: usize
+}
+
+// ハッシュ表のメソッド
+impl&lt;K: Hash + PartialEq + Eq, V&gt; HashTable&lt;K, V&gt; {
+    // ハッシュ表の生成
+    fn new(n: usize) -&gt; HashTable&lt;K, V&gt; {
+        let mut ht = Vec::new();
+        for _ in 0 .. n { ht.push(Nil); }
+        HashTable { table: ht, limit: n, size: 0 }
+    }
+
+    // キーのインデックスを求める
+    fn get_index(&amp;self, key: &amp;K) -&gt; usize {
+        let mut hasher = DefaultHasher::new();
+        key.hash(&amp;mut hasher);
+        hasher.finish() as usize % self.limit
+    }
+
+    // キーの有無をチェック
+    fn contains_key(&amp;self, key: &amp;K) -&gt; bool {
+        self.table[self.get_index(key)].get(key).is_some()
+    }
+    // キーに対応する値の参照を返す
+    fn get(&amp;self, key: &amp;K) -&gt; Option&lt;&amp;V&gt; {
+        self.table[self.get_index(key)].get(key)
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, key: K, value: V) {
+        let i = self.get_index(&amp;key);
+        {
+            match self.table[i].get_mut(&amp;key) {
+                Some(p) =&gt; { *p = value; self.size += 1; return; },
+                _ =&gt; ()
+            }
+        }
+        // 先頭に追加
+        let next = std::mem::replace(&amp;mut self.table[i], Nil);
+        self.table[i] = List::new(key, value, next);
+        self.size += 1;
+    }
+
+    // データの削除
+    fn remove(&amp;mut self, key: &amp;K) -&gt; bool {
+        let i = self.get_index(&amp;key);
+        if self.table[i].remove(key) {
+            self.size -= 1;
+            true
+        } else {
+            false
+        }
+    }
+
+    // 要素数を返す
+    fn len(&amp;self) -&gt; usize { self.size }
+
+    // ハッシュ表は空か？
+    fn is_empty(&amp;self) -&gt; bool { self.size == 0 }
+
+    // ハッシュ表は満杯か？ (常に false を返す)
+    fn is_full(&amp;self) -&gt; bool { false }
+
+    // ハッシュ表を空にする
+    fn clear(&amp;mut self) {
+        for i in 0 .. self.limit {
+            self.table[i] = Nil;
+        }
+        self.size = 0;
+    }
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct Foo {
+    num: i32
+}
+
+fn main() {
+    let mut ht: HashTable&lt;Foo, i32&gt; = HashTable::new(7);
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+    for x in 1 .. 12 {
+        ht.insert(Foo { num: x }, x * 10);
+    }
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+
+    for x in 0 .. 13 {
+        let key = Foo { num: x };
+        println!("{}", ht.contains_key(&amp;key));
+        println!("{:?}", ht.get(&amp;key));
+        println!("{}", ht.remove(&amp;key));
+        println!("{}", ht.contains_key(&amp;key));
+    }
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+
+    for x in 0 .. 11 {
+        ht.insert(Foo { num: x }, x * 10);
+    }
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+    ht.clear();
+    println!("{}", ht.len());
+    println!("{}", ht.is_empty());
+    println!("{}", ht.is_full());
+}
+</pre>
+<pre>
+0
+true
+false
+11
+false
+false
+false
+None
+false
+false
+true
+Some(10)
+true
+false
+true
+Some(20)
+true
+false
+true
+Some(30)
+true
+false
+true
+Some(40)
+true
+false
+true
+Some(50)
+true
+false
+true
+Some(60)
+true
+false
+true
+Some(70)
+true
+false
+true
+Some(80)
+true
+false
+true
+Some(90)
+true
+false
+true
+Some(100)
+true
+false
+true
+Some(110)
+true
+false
+false
+None
+false
+false
+0
+true
+false
+11
+false
+false
+0
+true
+false
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html><!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

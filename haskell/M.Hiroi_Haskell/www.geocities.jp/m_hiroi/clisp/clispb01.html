@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881769</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ PrevPage | <a href="index.html">Common Lisp</a> | <a href="clispb02.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">Lisp で算術符号</h3>
+<p> <a href="../xyzzy_lisp.html#abclisp">Common Lisp 入門</a> の番外編です。今回はデータ圧縮法のひとつである「算術符号」を取り上げます。なお、このドキュメントは拙作のページ Memorandum で説明した「Lisp で算術符号」をまとめたものです。内容は重複していますが、ご了承くださいませ。
+</p>
+
+<h4>●はじめに</h4>
+<p> 「ハフマン符号」は各記号（文字）の出現確率を調べ、頻繁に現れる記号は短いビットで表し、あまり現れない記号は長いビットで表すことで、データを圧縮する古典的な方法です。古典的とはいっても、ほかのアルゴリズムと簡単に組み合わせることができるため、ハフマン符号は今でも現役のアルゴリズムです。
+</p>
+
+<p> 記号の出現確率だけを利用してデータを圧縮する方法は、ハフマン符号のほかには <b>算術符号</b> という方法があります。一般に、算術符号はハフマン符号よりも性能が良いのですが、実現方法が難しくて実行速度がハフマン符号化よりも遅く、なおかつ特許の問題もあって、実際に使われることはあまりありませんでした。
+</p>
+
+<p> ところが最近になって、<b>レンジコーダ (RangeCoder)</b> という方法が注目されています。レンジコーダは原理的には算術符号と同じ方法ですが、<a href="clispb01.html#cite">参考文献 3</a> によると <cite>『（おそらく）特許フリー』</cite> とのことで、性能は算術符号に比べるとわずかに劣化しますが、実現方法はとても簡単で実行速度も高速です。もちろん、ハフマン符号よりも高性能です。
+</p>
+
+<p> レンジコーダのプログラムは、算術符号を理解していると簡単に作ることができます。そして、算術符号は Common Lisp の分数を使うと、算術符号の原理そのままにプログラムを作ることができます。そこで、今回は算術符号のプログラムを Common Lisp で作ってみましょう。これから作成するプログラムは学習用なので実用性はまったくありませんが、実際にプログラムを作ることで算術符号の理解は深まると思います。
+</p>
+
+<h4>●算術符号の符号化</h4>
+<p> 最初に「算術符号」の基本的な考え方について説明します。算術符号は記号（文字）列全体をひとつの符号語にする方法で、1960 年代に P. Elias によって提案されました。
+</p>
+
+<p> 算術符号は、記号列を実数 0 と 1 の間の区間を用いて表します。たとえば、記号は {a, b, c} の 3 種類があり、出現確率はそれぞれ 0.2, 0.6, 0.2 とします。算術符号は、区間を記号の出現確率に比例した小区間に分割していくことで符号化を行います。それでは、記号列 abbbc を符号化してみましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+  1.0 ┬ ┌→ 0.2 ┬ ┌→ 0.16 ┬ ┌→ 0.136 ┬ ┌→ 0.1216 ┬ ─→  0.1216 ┬  
+   c  │ │       │ │        │ │         │ │          │              │
+  0.8 ┼ │  0.16 ┼ ┘  0.136 ┼ ┘  0.1216 ┼ ┘  0.11296 ┼ ┐ 0.1198728 ┼
+      │ │       │           │            │             │ │           │
+   b  │ │       │           │            │             │ │           │
+      │ │       │           │            │             │ │           │
+  0.2 ┼ ┘  0.04 ┼ ┐  0.064 ┼ ┐  0.0784 ┼ ┐  0.08704 ┼ │  0.114688 ┼
+   a  │          │ │        │ │         │ │          │ │           │
+  0.0 ┴ ─→ 0.0 ┴ └→ 0.04 ┴ └→  0.64 ┴ └→ 0.0784 ┴ └→ 0.11296 ┴
+
+  記号    a          ab           abb            abbb           abbbc
+
+                図：符号化の過程（算術符号）
+</pre>
+<p> x 以上 y 未満の区間を [x, y) と表すことにします。区間の初期値は [0, 1) です。記号を読み込んだら区間 [0, 1) を分割します。記号が a ならば区間の 0 から 0.2 までの部分、b ならば 0.2 から 0.8 までの部分、c ならば 0.8 から 1.0 までの部分に分割します。
+</p>
+
+<p> 最初の記号は a なので区間は [0, 0.2) となります。次の記号は b なので、区間 [0, 0.2) の 0.2 から 0.8 までの部分 [0.04, 0.16) が新しい区間となります。このように、記号を読み込むたびに区間を分割していくと、記号列 abbbc を表す区間は [0.11296, 0.1216) となります。そして、実際の算術符号の符号語は、この区間に含まれるひとつの実数を指定します。
+</p>
+
+<p> ここで符号語を 2 進数で表して、区間内で小数点以下のビット数の少ない値を選ぶことにしましょう。たとえば、0.1171875 を 2 進数で表すと次のようになります。
+</p>
+
+<pre class="item">
+0.1171875 = 1/16 + 1/32 + 1/64 + 1/128 = (0.0001111)<SUb>2</SUb>
+</pre>
+<p> 0001111 の 7 bit を符号語として出力すれば、記号列 abbbc の 5 文字を 7 bit に圧縮することができるわけです。この例では 1 文字が 1.4 bit に圧縮されましたが、記号の出現確率によっては 1 文字が 1 bit 未満に圧縮できる場合もあります。ちなみに、ハフマン符号では 1 文字が 1 bit 未満になることはありえません。
+</p>
+
+<h4>●算術符号の復号</h4>
+<p> 次は復号を説明します。ここでは説明の都合上、符号語は下限値の 0.11296 とします。0.11296 は [0, 0.2) の間にあるので、最初の記号は a であることがわかります。次に、a を表す区間 [0, 0.2) を [0, 1.0) になるように拡大すると、符号語は次のように変換できます。
+</p>
+
+<pre class="item">
+新しい符号語 = (符号語 - 記号の下限値) / 記号の区間幅
+             = (0.11296 - 0) / 0.2
+             = 0.5648
+</pre>
+<p> 新しい符号語 0.5648 は [0.2, 0.8) の間にあるので、次の記号は b であることがわかります。このような操作を繰り返し行うことで、次のように記号列 abbbc を求めることができます。
+</p>
+
+<table border=1>
+<caption>表：復号の過程</caption>
+<thead>
+  <tr><th>符号語</th><th>記号</th><th>区間</th></tr>
+</thead>
+<tbody>
+  <tr><td>0.11296</td><td> a </td><td>[0, 0.2)</td></tr>
+  <tr><td>0.5648 </td><td> b </td><td>[0.2, 0.8)</td></tr>
+  <tr><td>0.608  </td><td> b </td><td>[0.2, 0.8)</td></tr>
+  <tr><td>0.68   </td><td> b </td><td>[0.2, 0.8)</td></tr>
+  <tr><td>0.8    </td><td> c </td><td>[0.8, 1)</td></tr>
+  <tr><td>0</td></tr>
+</tbody>
+</table>
+
+<p> ところで、算術符号には 2 つの問題点があります。ひとつは記号列の最後を判定できないことです。さきほどの復号の例では最後に符号語が 0 になりましたが、このあとも記号 a を復号することができます。つまり、符号語 0.11296 は記号列 abbbc だけではなく、abbbca, abbbcaa, abbcaaa... などにも復号することができるのです。この問題は、終端を表す記号を用意して終端記号を復号したら終了する、または、記号の総数をファイルの先頭に書き込んでおく、などといった方法で解決することができます。
+</p>
+
+<p> もうひとつは、入力する記号列が長くなるほど、より多くの桁数が必要になることです。また、浮動小数点演算の誤差も考慮しなければいけません。これはとても大きな問題点で、解決するまでに 10 年以上の時間がかかりました。1981 年に C. B. Jones によって発表された算術符号 (Jones 符号) は、実数のかわりに整数で演算するように工夫されています。Jones 符号に興味のある方は <a href="clispb01.html#cite">参考文献 1</a> をお読みください。<a href="clispb01.html#cite">参考文献 2</a> にも算術圧縮のプログラム (Ｃ言語) があります。
+</p>
+
+<h4>●符号化のプログラム</h4>
+<p> それでは、符号化のプログラムを作りましょう。最初に記号の出現確率を求めます。記号と記号列はシンボルとリストで表します。記号と出現確率は連想リストに格納して変数 *count-table* にセットします。たとえば、記号列 (a b b b c) は次のようになります。
+</p>
+
+<pre class="item">
+*count-table* =&gt; ((a 1/5 4/5 1) (b 3/5 1/5 4/5) (c 1/5 0 1/5))
+</pre>
+<p> 先頭要素が記号、2 番目の要素が出現確率、3, 4 番目の要素が区間を表します。*count-table* を作成する関数 make-count-table は次のようになります。
+</p>
+
+<pre class="list">
+リスト：出現頻度表の作成
+
+(defun make-count-table (buffer)
+  (setq *count-table* nil)
+  (let ((total 0) (sum 0) work data)
+    ; 記号をカウント
+    (dolist (code buffer)
+      (incf total)
+      (if (setq data (assoc code work))
+          (incf (cdr data))
+          (push (cons code 1) work)))
+    ; *count-table* の作成
+    (dolist (code work)
+      (push (list (car code)                    ; 記号
+                  (/ (cdr code) total)          ; 出現確率（区間の幅） 
+                  (/ sum total)                 ; 区間の下限 
+                  (/ (+ sum (cdr code)) total)) ; 区間の上限 
+            *count-table*)
+      (incf sum (cdr code)))))
+</pre>
+<p> 最初に記号をカウントします。この処理にも連想リストを使っています。(a b b b c) の場合、変数 work の値は ((c . 1) (b . 3) (a . 1)) となります。次に、各記号の出現確率を計算して *count-table* にセットします。この処理は work の先頭から記号を取り出し、出現確率と区間を計算してセットするだけです。
+</p>
+
+<p> 次は記号列を符号化する関数 encode を作ります。Common Lisp の分数を使うと、encode はとても簡単にプログラムできます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：符号化
+
+(defun encode (buffer)
+  (let ((high 1) (low 0) data wide)
+    (dolist (c buffer (print-code low high))
+      (setq data (assoc c *count-table*)
+            wide (- high low)
+            low  (+ (* wide (third data)) low)
+            high (+ (* wide (second data)) low))))) 
+</pre>
+
+<p> encode の引数 buffer には記号列を渡します。assoc は連想リストから記号 c を検索する関数です。あとのプログラムは算術符号の原理そのままで、区間 [low, high) を記号の出現確率で分割していくだけです。分数を使っているので桁数や計算誤差を気にする必要はありません。最後に print-code で符号語をビット列（要素が 1 と 0 だけのリスト）で出力します。print-code は次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：符号をビット列で出力
+
+(defun print-code (low high)
+  (let ((value 0) (n 1/2) buffer)
+    (loop
+      (cond ((and (&lt;= low value) (&lt; value high))
+             (return (reverse buffer))) 
+            ((&lt;= high (+ value n))
+             (push 0 buffer))
+            (t (incf value n)
+               (push 1 buffer)))
+      (setq n (/ n 2)))))
+</pre>
+
+<p> 1/2, 1/4, 1/8, 1/16, ... (1/2)<SUP>k</SUP> の値を使って、low 以上 high 未満の値 value を求めます。value に (1/2)<SUP>k</SUP> を加えた場合は buffer に 1 をセットし、そうでない場合は 0 をセットします。これで符号語をビット列で表すことができます。
+</p>
+
+<p> それでは実際に試してみましょう。
+</p>
+
+<pre class="item">
+(make-count-table '(a b b b c)) =&gt; nil
+(encode '(a b b b c))           =&gt; (1 1 1 0 0 0 1)
+</pre>
+<p> 記号列 abbbc を 7 bit で表すことができました。ちなみに、符号化の様子を表示すると次のようになります。
+</p>
+
+<pre class="item">
+          low = 0,       high = 1
+code = a, low = 4/5,     high = 1
+code = b, low = 21/25,   high = 24/25
+code = b, low = 108/125, high = 117/125
+code = b, low = 549/625, high = 576/625
+code = c, low = 549/625, high = 2772/3125
+</pre>
+<p> 区間を分割していく様子がよくわかると思います。もうひとつ例を示しましょう。
+</p>
+
+<pre class="item">
+(make-count-table '(a a a a a a a a a b)) =&gt; nil
+(encode '(a a a a a a a a a b))           =&gt; (1 0 1)
+
+符号化の様子
+        low = 0,  high = 1
+code a, low = 1/10, high = 1
+code a, low = 19/100, high = 1
+code a, low = 271/1000, high = 1
+code a, low = 3439/10000, high = 1
+code a, low = 40951/100000, high = 1
+code a, low = 468559/1000000, high = 1
+code a, low = 5217031/10000000, high = 1
+code a, low = 56953279/100000000, high = 1
+code a, low = 612579511/1000000000, high = 1
+code b, low = 612579511/1000000000, high = 6513215599/10000000000
+</pre>
+<p> 記号列 aaaaaaaaab を 101 の 3 bit に圧縮することができました。1 文字あたり 0.3 bit になります。これがハフマン符号にはない算術符号の特徴です。
+</p>
+
+<h4>●復号のプログラム</h4>
+<p> 次は、復号のプログラムを作ってみましょう。最初に、符号語（ビット列）を数値（分数）に変換するプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：符号を数値に変換
+
+(defun code-to-number (code)
+  (let ((value 0) (n 1/2))
+    (dolist (i code value)
+      (if (= i 1) (incf value n))
+      (setq n (/ n 2)))))
+</pre>
+
+<p> 要素が k 個のビット列は (1/2 1/4 1/8 1/16 ... (1/2)<SUP>k</SUP>) に対応しています。変数 value が求める値で、変数 n が (1/2)<SUP>k</SUP> を表します。ビット列の要素を先頭から順番に取り出し、値が 1 であれば value に n の値を加え、それから n の値を 1/2 にすればいいわけです。たとえば、記号列 abbbc の符号語 (1 1 1 0 0 0 1) は 113/128 になります。
+</p>
+
+<p> 次は数値から記号を求めるプログラムを作ります。
+</p>
+
+<pre class="list">
+リスト：数値から記号を見つける
+
+(defun find-code (num)
+  (find-if #'(lambda (data) (and (&lt;= (third data) num)
+                                 (&lt; num (fourth data)))) *count-table*))
+</pre>
+
+<p> 関数 find-code は *count-table* から数値に対応する記号を求めます。この処理は「第 3 要素（下限値）&lt;= 数値(num) &lt; 第 4 要素（上限値）」を満たす記号をfind-if で探すだけです。たとえば、記号列 abbbc の *count-table* の値は次のようになっています。
+</p>
+
+<pre class="item">
+*count-table* =&gt; ((a 1/5 4/5 1) (b 3/5 1/5 4/5) (c 1/5 0 1/5))
+</pre>
+<p> 113/128 は 4/5 &lt;= 113/128 &lt; 1 を満たすので記号は a となります。あとは、a を表す区間を [0, 1) になるように拡大すると、符号語は次の式で変換されます。
+</p>
+
+<pre class="item">
+新しい符号語 = (符号語 - 記号の下限値) / 記号の区間幅
+</pre>
+<p> そして、新しい符号語に対応する記号を探します。あとはこの処理を繰り返すだけです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：復号化
+
+(defun decode (n code)
+  (let ((value (code-to-number code)) data buffer)
+    (dotimes (i n (reverse buffer))
+      (setq data (find-code value))
+      (push (first data) buffer)
+      (setq value (/ (- value (third data)) (second data))))))
+</pre>
+
+<p> 関数 decode の引数 n が復号する記号の総数で、code が符号語（ビット列）を表します。最初に code-to-number で符号語を数値に変換します。find-code で求めた記号は buffer にセットし、それから数値 value を変換します。あとはこれを n 回繰り返すだけです。それでは実行してみましょう。
+</p>
+
+<pre class="item">
+(decode 5 '(1 1 1 0 0 0 1)) =&gt; (a b b b c)
+
+復号化の様子
+113/128  =&gt; a
+53/128   =&gt; b
+137/384  =&gt; b
+301/1152 =&gt; b
+353/3456 =&gt; c
+1765/3456
+</pre>
+<p> きちんと復号されましたね。もうひとつ例を示しましょう。
+</p>
+
+<pre class="item">
+(make-count-table '(a a a a a a a a a b)) =&gt; nil
+
+*count-table*                   =&gt; ((a 9/10 1/10 1) (b 1/10 0 1/10))
+(encode '(a a a a a a a a a b)) =&gt; (1 0 1)
+(decode 10 '(1 0 1)) =&gt; (a a a a a a a a a b)
+
+復号化の様子
+5/8 =&gt; a
+7/12 =&gt; a
+29/54 =&gt; a
+118/243 =&gt; a
+937/2187 =&gt; a
+7183/19683 =&gt; a
+52147/177147 =&gt; a
+344323/1594323 =&gt; a
+1848907/14348907 =&gt; a
+4140163/129140163 =&gt; b
+41401630/129140163
+</pre>
+<p> 今回のプログラムでは復号化で記号の総数が必要になりますが、終端を表す記号を用意して終端記号を復号したら終了する方法もあります。プログラムは簡単に改造できるので、興味のある方は試してみてください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">Lisp で適応型算術符号</h3>
+<p> <a href="../xyzzy_lisp.html#abclisp">Common Lisp 入門</a> の番外編です。今回はデータ圧縮法のひとつである「適応型算術符号」を取り上げます。なお、このドキュメントは拙作のページ Memorandum で説明した「Lisp で適応型算術符号」をまとめたものです。内容は重複していますが、ご了承くださいませ。
+</p>
+
+<h4>●はじめに</h4>
+<p> 今までに説明した算術符号は「静的符号化」といい、あらかじめ記号の出現確率を調べておいて、それに基づいて入力記号列を符号化していく方法です。この方法では、ハフマン符号がもっとも有名でしょう。
+</p>
+
+<p> これに対し「動的符号化」は、入力記号列の符号化を行いながら記号の出現確率を変化させる方法で、「適応型符号化」とも呼ばれています。最初は、どの記号も同じ確率で出現すると仮定して、記号列を読み込みながら記号の出現確率を修正し、その時点での出現確率に基づいて記号の符号化を行います。
+</p>
+
+<p> 動的符号化の特徴は、入力記号列の性質（出現確率）の変化に適応できることですが、このほかにも長所があります。静的符号化の場合、復号するときに符号化で用いた記号の出現確率が必要になります。このため、実際にファイルを圧縮するプログラムでは、記号の出現頻度表を出力ファイルの先頭に付加する方法が用いられます。ところが、動的符号化の場合、記号の出現確率は復号しながら求めることができるので、出現頻度表を付加する必要はありません。
+</p>
+
+<p> また、静的符号化でファイルを圧縮する場合、記号の出現頻度を求めるときにファイルからデータを読み込み、符号化を行うときに再度ファイルからデータを読み込む必要があります。このようにデータの入力が 2 回必要な圧縮アルゴリズムを「2 パスの圧縮アルゴリズム」といいます。動的符号化は 1 パスで済むので、オンラインでのデータ圧縮にも対応することができます。
+</p>
+
+<p> このように、動的符号化には有利な点があるため、ハフマン符号を動的符号化に対応させた「適応型ハフマン符号」が考案されています。しかしながら、適応型ハフマン符号は実装方法が難しく、処理速度も遅いという欠点があります。これに対し、適応型算術符号（レンジコーダ）は簡単な方法で実装することができ、適応型レンジコーダは処理速度も遅くありません。優れた実装方法なのです。
+</p>
+
+<p> そこで、今回は適応型算術符号のプログラムを Common Lisp で作ります。Common Lisp の分数を使うと、算術符号の原理そのままにプログラムを作ることができます。そして、適応型算術符号にも簡単に対応することができます。これから作成するプログラムは学習用なので実用性はありませんが、実際にプログラムを作ることで適応型算術符号の理解は深まると思います。
+</p>
+
+<h4>●符号化のプログラム</h4>
+<p> それでは、符号化のプログラムから作りましょう。最初に記号の出現頻度表を作成します。適応型算術符号の場合、最初はどの記号も同じ確率で出現すると仮定するのが一般的なので、出現する可能性がある記号はすべて出現頻度を 1 に初期化します。今回は学習用のプログラムなので、記号は a, b, c, d, e, f, g, h の 8 種類に限定します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：出現頻度表の作成
+
+(defun make-count-table ()
+  ; 記号は英小文字 a - h のみに限定
+  (let ((sum 0) buffer)
+    (dolist (code '(a b c d e f g h))
+      (push (list code      ; 記号
+                  1         ; 出現頻度（区間の幅）
+                  sum       ; 区間の下限
+                  (1+ sum)) ; 区間の上限
+            buffer)
+      (incf sum))
+    (setq *count-table* (reverse buffer)
+          *count-sum* sum)))
+</pre>
+<p> 出現頻度表はリストを使って表していて、要素は (記号 出現頻度 区間の下限 区間の上限) を表しているリストです。区間の上限と下限は累積度数で表します。したがって、出現頻度表を更新するときは、記号の出現頻度を増やすだけではなく、それ以降の記号の累積度数も増やす必要があります。出現頻度表は変数 *count-table* にセットし、出現頻度の合計値は変数 *count-sum* にセットします。出現頻度表は次のように初期化されます。
+</p>
+
+<pre class="item">
+*count-table* =&gt; ((a 1 0 1) (b 1 1 2) (c 1 2 3) (d 1 3 4)
+                  (e 1 4 5) (f 1 5 6) (g 1 6 7) (h 1 7 8))
+*count-sum*   =&gt; 8
+</pre>
+
+<p> 次は記号列を符号化する関数 encode を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：符号化
+
+(defun encode (buffer)
+  (make-count-table)
+  (let ((high 1) (low 0) data code wide)
+    (dolist (c buffer (print-code low high))
+      (setq data (member c *count-table* :key #'car)
+            code (car data)
+            wide (- high low)
+            low  (+ (* wide (/ (third code)  *count-sum*)) low)
+            high (+ (* wide (/ (second code) *count-sum*)) low))
+      ; 出現頻度表の更新
+      (update-count-table code (cdr data)))))
+</pre>
+
+<p> 関数 encode の引数 buffer には記号列を渡します。member はリストからデータを検索する関数です。記号を検索するため、キーワード :key に car を指定しています。適応型算術符号は記号を読み込むたびに出現頻度表を更新するので、member を使うことで記号 c のデータだけではなく、それ以降の記号のデータも求めています。
+</p>
+
+<p> あとのプログラムは算術符号の原理そのままで、区間 [low, high) を記号の出現確率で分割していくだけです。適応型算術符号の場合、出現確率は記号を読み込むたびに変化するので、その時点での出現確率を記号のデータと *count-sum* で計算していることに注意してください。そして、関数 update-count-table で出現頻度表を更新します。
+</p>
+
+<p> update-count-table は次のようになります。
+</p>
+
+<pre class="list">
+リスト：出現頻度表の更新
+
+(defun update-count-table (code data)
+  ; 読み込んだ記号を更新
+  (incf (second code))
+  (incf (fourth code))
+  ; それ以降の記号の累積度数を更新
+  (dolist (c data)
+    (incf (third c))
+    (incf (fourth c)))
+  (incf *count-sum*))
+</pre>
+
+<p> 最初に、読み込んだ記号の出現頻度とその区間の上限値を incf で増やします。incf は setf と同様にリストの要素を破壊的に修正することができます。ご注意くださいませ。それ以降の記号のデータは引数 data に渡されるので、各記号の区間の下限値と上限値を incf で増やすだけです。
+</p>
+
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+
+<pre class="item">
+(encode '(a b b b c))
+*count-table* = ((a 1 0 1) (b 1 1 2) (c 1 2 3) (d 1 3 4)
+                 (e 1 4 5) (f 1 5 6) (g 1 6 7) (h 1 7 8))
+low = 0, high = 1
+code = a
+low = 0, high = 1/8
+*count-table* = ((a 2 0 2) (b 1 2 3) (c 1 3 4) (d 1 4 5)
+                 (e 1 5 6) (f 1 6 7) (g 1 7 8) (h 1 8 9))
+code = b
+low = 1/36, high = 1/24
+*count-table* = ((a 2 0 2) (b 2 2 4) (c 1 4 5) (d 1 5 6)
+                 (e 1 6 7) (f 1 7 8) (g 1 8 9) (h 1 9 10))
+code = b
+low = 11/360, high = 1/30
+*count-table* = ((a 2 0 2) (b 3 2 5) (c 1 5 6) (d 1 6 7)
+                 (e 1 7 8) (f 1 8 9) (g 1 9 10) (h 1 10 11))
+code = b
+low = 41/1320, high = 7/220
+*count-table* = ((a 2 0 2) (b 4 2 6) (c 1 6 7) (d 1 7 8)
+                 (e 1 8 9) (f 1 9 10) (g 1 10 11) (h 1 11 12))
+code = c
+low = 83/2640, high = 499/15840
+*count-table* = ((a 2 0 2) (b 4 2 6) (c 2 6 8) (d 1 8 9)
+                 (e 1 9 10) (f 1 10 11) (g 1 11 12) (h 1 12 13))
+=&gt; (0 0 0 0 1 0 0 0 0 0 0 1)
+</pre>
+<p> 記号列が (a b b b c) の場合、静的符号化では 7 bit に符号化できましたが、適応型算術符号では 12 bit になりました。このように、出現する記号の種類が少なく記号列の長さが短いデータでは、適応型算術符号の圧縮率が低下するのはしょうがないでしょう。ですが、記号列が長くて記号の出現確率の違いが大きくなると、適応型算術符号でも圧縮率は向上するので大丈夫です。
+</p>
+
+<h4>●復号のプログラム</h4>
+<p>次は復号のプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：適応型算術符号の復号
+
+; 数値から記号を見つける
+(defun find-code (num)
+  (member-if #'(lambda (data) (and (&lt;= (/ (third data) *count-sum*) num)
+                                   (&lt; num (/ (fourth data) *count-sum*))))
+             *count-table*))
+
+; 復号
+(defun decode (n code)
+  (make-count-table)
+  (let ((value (code-to-number code)) code data buffer)
+    (dotimes (i n (reverse buffer))
+      (setq data (find-code value)
+            code (car data))
+      (push (first code) buffer)
+      (setq value (/ (- value (/ (third code) *count-sum*))
+                     (/ (second code) *count-sum*)))
+      (update-count-table code (cdr data)))))
+</pre>
+
+<p> 関数 find-code は *count-table* から数値 num に対応する記号を求めます。この処理は「第 3 要素（下限値）&lt;= 数値(num) &lt; 第 4 要素（上限値）」を満たす記号を member-if で探すだけです。上限値と下限値は累積度数で表されているので、*count-sum* で割り算していることに注意してください。
+</p>
+
+<p> 関数 decode の引数 n が復号する記号の総数、code が符号語（ビット列）を表します。最初に code-to-number で符号語を数値に変換します。find-code で求めた記号は buffer にセットし、それから数値 value を変換します。適応型算術符号の場合、出現確率は記号を読み込むたびに変化するので、その時点での出現確率を記号のデータと *count-sum* で計算していることに注意してください。そして、関数 update-count-table で出現頻度表を更新します。
+</p>
+<p> あとはこれを n 回繰り返すだけです。それでは実行してみましょう。
+</p>
+
+<pre class="item">
+(encode '(a b b b c)) =&gt; (0 0 0 0 1 0 0 0 0 0 0 1)
+
+(decode 5 '(0 0 0 0 1 0 0 0 0 0 0 1))
+*count-table* =&gt; ((a 1 0 1) (b 1 1 2) (c 1 2 3) (d 1 3 4)
+                 (e 1 4 5) (f 1 5 6) (g 1 6 7) (h 1 7 8))
+129/4096      =&gt; a
+*count-table* =&gt; ((a 2 0 2) (b 1 2 3) (c 1 3 4) (d 1 4 5)
+                  (e 1 5 6) (f 1 6 7) (g 1 7 8) (h 1 8 9))
+129/512       =&gt; b
+*count-table* =&gt; ((a 2 0 2) (b 2 2 4) (c 1 4 5) (d 1 5 6)
+                  (e 1 6 7) (f 1 7 8) (g 1 8 9) (h 1 9 10))
+137/512       =&gt; b
+*count-table* =&gt; ((a 2 0 2) (b 3 2 5) (c 1 5 6) (d 1 6 7)
+                  (e 1 7 8) (f 1 8 9) (g 1 9 10) (h 1 10 11))
+173/512       =&gt; b
+*count-table* =&gt; ((a 2 0 2) (b 4 2 6) (c 1 6 7) (d 1 7 8)
+                  (e 1 8 9) (f 1 9 10) (g 1 10 11) (h 1 11 12))
+293/512       =&gt; c
+*count-table* =&gt; ((a 2 0 2) (b 4 2 6) (c 2 6 8) (d 1 8 9)
+                  (e 1 9 10) (f 1 10 11) (g 1 11 12) (h 1 12 13))
+=&gt; (a b b b c)
+</pre>
+<p> きちんと復号されましたね。このように、算術符号は出現頻度表を更新するだけで簡単に適応型符号を実現することができます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="cite">参考文献</h3>
+<ol>
+  <li>植松友彦, 『文書データ圧縮アルゴリズム入門』, ＣＱ出版社, 1994
+  <li>奥村晴彦, 『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991
+  <li>奥村晴彦, 『データ圧縮の基礎から応用まで』, C MAGAZINE 2002 年 7 月号, ソフトバンク
+</ol>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ PrevPage | <a href="index.html">Common Lisp</a> | <a href="clispb02.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

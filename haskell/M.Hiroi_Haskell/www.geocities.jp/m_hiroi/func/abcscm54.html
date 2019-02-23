@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881784</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm53.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm55.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>電卓プログラムの作成 (5)</h3>
+<p> 今回は電卓プログラムの字句解析と構文解析の処理を分離して、複数の式を順番に実行する begin 式と、処理を繰り返し実行する while 式を追加してみましょう。
+</p>
+
+<h4>●字句解析と構文解析の分離</h4>
+<p> 電卓プログラムの場合、字句解析と構文解析の処理を分離するのは簡単です。入力の終了をセミコロンで表しているので、セミコロンまで字句解析した結果をリストに格納しておき、そのリストを使って構文解析を行えばいいのです。
+</p>
+<p> 最初に字句解析を行う関数 lex を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 字句解析
+
+(define (lex)
+  (let loop ((a '()))
+    (cond ((eq? *token* 'semic)
+           (reverse (cons 'semic a)))
+          ((or (eq? *token* 'number)
+               (eq? *token* 'ident))
+           (loop (begin0 (list* *value* *token* a) (get-token))))
+          (else
+           (loop (begin0 (cons *token* a) (get-token)))))))
+</pre>
+<p> 関数 lex は簡単です。字句解析して得られた結果を累積変数 a に格納して返すだけです。トークンが number と ident の場合は、トークンだけではなく *value* の値も格納することに注意してください。
+</p>
+
+<p> 構文解析を実行する場合、解析するコードを大域変数 *code* にセットして行うと簡単です。
+</p>
+<pre class="list">
+リスト : 大域変数 *code* とアクセス関数の定義
+
+; 構文解析するコード
+(define *code* #f)
+
+; アクセス関数
+(define (getcode) (car *code*))
+(define (nextcode) (pop! *code*))
+</pre>
+<p> lex の返り値を *code* にセットします。関数 getcode は *code* の先頭要素を返します。関数 nextcode は *code* の先頭要素を取り除きます。構文解析する場合、今までは大域変数 *token* を参照していましたが、その処理を (getcode) に置き換えます。次のトークンを求める場合、今までは関数 get-token を呼び出していましたが、それを (nextcode) に置き換えます。
+</p>
+<p> 基本的な修正はこれでいいのですが、字句解析した結果をリストに格納することになるので、ユーザー関数の定義と評価を行う処理は大きな修正が必要になります。
+</p>
+<h4>●ユーザー関数の定義</h4>
+<p> ユーザー関数を定義する処理は次のようになります。
+</p>
+<pre class="list">
+リスト : 式の入力と評価
+
+(define (toplevel)
+  (cond ((eq? (getcode) 'def)
+         ; 関数定義
+         (nextcode)
+         (unless (eq? (getcode) 'ident)
+           (error "invalid def form"))
+         (nextcode)
+         (let ((name (getcode)))
+           (push! *function* (cons name (cdr *code*)))
+           (display-value name)))
+        (else
+         ; 式
+         (let ((val (eval-var (expression))))
+           (if (eq? (getcode) 'semic)
+               (display-value val)
+             (error "invalid token:" (getcode))))))
+  (display "Calc&gt; ")
+  (flush))
+</pre>
+<p> toplevel の処理でトークンを求め、それが def ならばユーザー関数を定義します。nextcode で次のトークンを求め、それが ident であれば次の要素が関数名になります。関数 lex はセミコロン ( ; ) までトークンを取り出しているので、関数名の次のトークンから最後までが関数本体になります。getcode で関数名を取り出して name にセットし、そのあとで (cons name (cdr *code*)) を *function* に push! すればいいわけです。
+</p>
+
+<h4>●ユーザー関数の評価</h4>
+<p> 次はユーザー関数を評価する call-usrfunc を修正します。
+</p>
+<pre class="list">
+リスト : ユーザー関数の呼び出し
+
+(define (call-usrfunc code)
+  (let ((args (get-argument))   ; 実引数の取得
+        (save-code *code*)
+        (save-var  *variable*))
+    (set! *code* code)
+    (add-binding (get-parameter) args)
+    (unwind-protect
+      ; 本体の評価
+      (begin0
+        (eval-var (expression))
+        (unless (eq? (getcode) 'end)
+          (error "end expected")))
+      (begin
+        ; 環境の復帰
+        (set! *code* save-code)
+        (set! *variable* save-var)))))
+</pre>
+<p> 引数 code に関数本体のコードが渡されます。最初に、get-argument で実引数を取り出し、それから *code* と *variable* の値を save-code と save-var に保存します。次に、code を *code* にセットし、add-binding で変数束縛を行います。そして、unwind-protect の本体で expression を評価します。最後に cleanup の処理で *code* と *variable* を元の値に戻します。
+</p>
+<p> このように、関数本体を文字列で保持するよりも、プログラムはずいぶんと簡単になりました。あとの修正は簡単なので説明は割愛します。詳細は <a href="abcscm54.html#list1">プログラムリスト</a> をお読みください。
+</p>
+
+<h4>●begin 式と while 式</h4>
+<p> 次は begin と while の機能を追加しましょう。begin と while の構文を示します。
+</p>
+<pre class="item">
+begin 式1, 式2, ..., 式n end
+while 条件式 do 式 end
+</pre>
+<p> begin は複数の式を順番に評価し、最後に評価した式の返り値が begin の値になります。機能は Scheme の begin と同じです。while は条件式を評価して、その値が真であれば本体の式を繰り返し評価します。条件式が偽の場合は本体の式を評価しないで 0 を返します。
+</p>
+<p> 文法を EBNF で表すと次のようになります。
+</p>
+<pre class="item">
+[EBNF]
+   文    = 関数定義 | 式.
+関数定義 = "def", 関数, "(", [仮引数リスト], ")", 式, "end".
+   式    = 代入式 | 式１.
+ 代入式  = 変数, "=", 式.
+  式１   = 式２, { ("and" | "or"), 式２}.
+  式２   = 式３, ("==" | "!=" | "&lt;" | "&lt;=" | "&gt;" | "&gt;="), 式３.
+  式３   = 項, { ("+" | "-"), 項 }.
+   項    = 因子, { ("*" | "/"), 因子 }.
+  因子   = 数値 | ("+" | "-" | "not"), 因子 | "(", 式, ")" | 変数 | 関数, "(", [引数リスト], ")" |
+           if式 | begin式 | while式.
+  if式   = "if", 式, "then", 式, ["else", 式], "end".
+ begin式 = "begin", 式, { ",", 式 }, "end".
+ while式 = "while", 式, "do", 式, "end".
+  変数   = 識別子
+  関数   = 識別子
+
+仮引数リスト = 変数, { ",", 変数 }.
+引数リスト   = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+<p> begin と while の処理は関数 factor に追加します。
+</p>
+<pre class="list">
+リスト : 因子の処理
+
+(define (factor)
+  (case (getcode)
+    ((lpar)
+     (nextcode)
+     (let ((val (expression)))
+       (if (eq? (getcode) 'rpar)
+           (nextcode)
+         (error "')' expected"))
+       val))
+    ((number)
+     (nextcode)
+     (begin0 (getcode) (nextcode)))
+    ((+)
+     ; 単項演算子
+     (nextcode)
+     (eval-var (factor)))
+    ((-)
+     ; 単項演算子
+     (nextcode)
+     (- (eval-var (factor))))
+    ((not)
+     (nextcode)
+     (if (zero? (eval-var (factor)))
+         1
+       0))
+    ((if)
+     (nextcode)
+     (eval-if))
+    ((begin)
+     (nextcode)
+     (eval-begin))
+    ((while)
+     (nextcode)
+     (eval-while))
+    ((ident)
+     (nextcode)
+     (let ((func (lookup-function (getcode))))
+       (cond (func
+              ; 関数呼び出し
+              (nextcode)
+              (if (eq? (getcode) 'lpar)
+                  (if (pair? (cdr func))
+                      (call-usrfunc (cdr func))
+                    (apply (cdr func) (get-argument)))
+                (error "'(' expected")))
+             (else
+              ; 変数
+              (begin0 (getcode) (nextcode))))))
+    (else
+     (error "unexpected token" (getcode)))))
+</pre>
+<p> トークンが begin の場合は関数 eval-begin を呼び出します。while の場合は関数 eval-while を呼び出します。なお、関数 get-token では begin, while, do をトークンとして切り分けるように処理を追加します。
+</p>
+
+<h4>●begin 式の処理</h4>
+<p> 次は関数 eval-begin を作ります。
+</p>
+<pre class="list">
+リスト : begin の評価
+
+(define (eval-begin)
+  (let loop ((val 0))
+    (cond ((eq? (getcode) 'end)
+           (nextcode)
+           val)
+          (else
+           (when (eq? (getcode) 'comma)
+             (nextcode))
+           (loop (eval-var (expression)))))))
+
+; begin のスキップ
+(define (skip-begin)
+  (let loop ()
+    (cond ((eq? (getcode) 'end)
+           (nextcode))
+          (else
+           (skip-expression '(end comma))
+           (when (eq? (getcode) 'comma)
+             (nextcode))
+           (loop)))))
+</pre>
+<p> eval-begin の処理は簡単です。トークンが end になるまで、式を順番に expression で評価するだけです。式はカンマで区切られているので、トークンが comma の場合は nextcode でスキップしています。eval-begin は最後に評価した式の値を返します。skip-begin も簡単です。トークンが end になるまで式を skip-expression でスキップするだけです。
+</p>
+
+<h4>●while 式の処理</h4>
+<p> 次は関数 eval-while を作ります。
+</p>
+<pre class="list">
+リスト : while の評価
+
+(define (eval-while)
+  (let ((save-code *code*))
+    (let loop ()
+      ; 条件式の評価
+      (let ((result (expression)))
+        (unless (eq? (getcode) 'do)
+          (error "do expected"))
+        (nextcode)
+        (cond ((zero? result)
+               (skip-expression '(end semic))
+               (unless (eq? (getcode) 'end)
+                 (error "end expected"))
+               (nextcode)
+               0)
+              (else
+               (expression)
+               (unless (eq? (getcode) 'end)
+                 (error "end expected"))
+               (set! *code* save-code)
+               (loop)))))))
+</pre>
+<p> 最初に *code* を save-code に保存してから、named-let によるループに入ります。まず、条件式を expression で評価し、その結果を result にセットします。そして、トークンが do であることを確認します。そうでなければエラーを送出します。result が 0 の場合は繰り返しを終了します。skip-expression で本体の式をスキップし、トークンが end であることを確認してから 0 を返します。
+</p>
+<p> result が 0 でない場合は式を expression で評価し、トークンが end であることを確認します。そうでなければエラーを送出します。そして、*code* の値を save-code に書き換えます。これでコードは while の条件式の部分に戻るので、処理を繰り返すことができます。
+</p>
+
+<p> 次は while の処理ををスキップする関数 skip-while を作ります。
+</p>
+<pre class="list">
+リスト : while のスキップ
+
+(define (skip-while)
+  ; 条件式のスキップ
+  (skip-expression '(do end))
+  (unless (eq? (getcode) 'do)
+    (error "do expected"))
+  (nextcode)
+  ; 本体のスキップ
+  (skip-expression '(end semic))
+  (unless (eq? (getcode) 'end)
+    (error "end expected"))
+  (nextcode))
+</pre>
+<p> 最初に skip-expression で条件式をスキップします。それから、トークンが do であることを確認します。次に本体の式を skip-expression でスキップします。あとはトークンが end であることを確認するだけです。最後に、skip-begin と skip-while を関数 skip-expression に追加することをお忘れなく。
+</p>
+<h4>●関数 calc の修正</h4>
+<p> 次は関数 calc を修正します。
+</p>
+<pre class="list">
+リスト : 電卓プログラムの実行
+
+(define (calc)
+  (display "Calc&gt; ")
+  (flush)
+  (nextch)
+  (call/cc
+    (lambda (break)
+      (let loop ()
+        (guard (err
+                 ((&lt;error&gt; err)
+                  (format #t "ERROR: ~S~%" (condition-ref err 'message))
+                  (clear-input-data)))
+          (get-token)
+          (when (eqv? *token* 'eof) (break #t))
+          (set! *code* (lex))
+          (toplevel))
+        (loop)))))
+</pre>
+<p> 関数 lex の返り値を大域変数 *code* にセットしてから関数 toplevel を評価します。
+</p>
+<p> 大きな修正はこれだけです。あとの修正は簡単なので説明は割愛します。プログラムの詳細は <a href="abcscm54.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。組み込み関数に値を表示する print を追加して試してみました。
+</p>
+<pre>
+Calc&gt; print(10);
+10
+=&gt; 10
+Calc&gt; begin print(1), print(2), print(3) end;
+1
+2
+3
+=&gt; 3
+Calc&gt; a = 0;
+=&gt; 0
+Calc&gt; while a &lt; 10 do begin print(a), a = a + 1 end end;
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+=&gt; 0
+Calc&gt; a;
+=&gt; 10
+</pre>
+<p> print は引数を表示したあと、引数をそのまま返します。begin と while は正常に動作していますね。
+</p>
+<p> 次は while で階乗を計算する関数 fact を作ってみましょう。
+</p>
+<pre>
+Calc&gt; def fact(n, a) begin
+a = 1,
+while n &gt; 0 do begin
+a = a * n,
+n = n - 1 end end,
+a end end;
+=&gt; fact
+Calc&gt; x = 0;
+=&gt; 0
+Calc&gt; while x <= 10 do begin print(fact(x)), x = x + 1 end end;
+1
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+=&gt; 0
+</pre>
+<p> 電卓プログラムは関数内で局所変数を定義する機能がないので、局所変数の代用として関数の引数を使っています。fact は変数 a を 1 に初期化し、n が 0 よりも大きければ、a = a * n を計算して n の値を -1 します。最後に a を返します。これで階乗を計算することができます。
+</p>
+<p> 関数 fact を清書すると次のようになります。
+</p>
+<pre class="list">
+リスト : 階乗
+
+def fact(n, a)
+  begin
+    a = 1,
+    while n &gt; 0 do
+      begin
+        a = a * n,
+        n = n - 1
+      end
+    end,
+    a
+  end
+end;
+</pre>
+<p> begin の中では式をカンマで区切っているので、見た目はちょっと変わっていますが、雰囲気はずいぶんとプログラミング言語らしくなってきましたね。begin, if, while を「式」ではなく「文」として定義すると、もっとプログラミング言語らしくなるでしょう。
+</p>
+<p> そこで、次回は電卓プログラムの文法を変更して、仮想マシン用の中間コードを生成するインタプリタを作ってみましょう。
+</p>
+
+<h4>●参考文献</h4>
+<ol>
+  <li>松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li>水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li>松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li>高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li>久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; calc4.scm : 電卓プログラム
+;
+;             Copyright (C) 2011 Makoto Hiroi
+;
+; 字句解析と構文解析を分離する
+; while 式 do 式 end
+; beign 式, ... end
+; を追加
+
+;;;
+;;; 大域変数
+;;;
+(define *ch*    #f)
+(define *token* #f)
+(define *value* #f)
+(define *input* (standard-input-port))
+
+;;;
+;;; 関数
+;;;
+(define *function*
+  `((exp  . ,exp)
+    (log  . ,log)
+    (sin  . ,sin)
+    (cos  . ,cos)
+    (tan  . ,tan)
+    (asin . ,asin)
+    (acos . ,acos)
+    (atan . ,atan)
+    (sqrt . ,sqrt)
+    (expt . ,expt)
+    (print . ,(lambda (x) (print x) x))))
+
+; 関数を求める
+(define (lookup-function name)
+  (assoc name *function*))
+
+;;;
+;;; 変数
+;;;
+(define *variable* '())
+
+; 変数の値を求める
+(define (lookup-variable var)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (cdr cp)
+      (error "unbound variable:" var))))
+
+; 変数の値を更新する
+(define (update-variable var val)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (set-cdr! cp val)
+      (push! *variable* (cons var val)))))
+
+;;;
+;;; 入力処理
+;;;
+
+; 文字の読み込み
+(define (nextch)
+  (set! *ch* (read-char *input*))
+  (when (eof-object? *ch*)
+    (set! *ch* #\null)))
+
+; 先読み文字の取得
+(define (getch) *ch*)
+
+;;;
+;;; 字句解析
+;;;
+
+; 数値
+(define (get-number)
+  (let ((buff '()))
+    ; 整数を buff に格納
+    (define (get-numeric)
+      (while (char-numeric? (getch))
+        (push! buff (getch))
+        (nextch)))
+    ; 整数部
+    (get-numeric)
+    (case (getch)
+      ((#\.)
+       ; 小数部
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)
+       (case (getch)
+         ((#\d #\D #\e #\E)
+          ; 指数部
+          (push! buff (getch))
+          (nextch)
+          (when (or (eqv? (getch) #\+)
+                    (eqv? (getch) #\-))
+            (push! buff (getch))
+            (nextch))
+          ; 指数の数字
+          (get-numeric))))
+      ((#\/)
+       ; 分数
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)))
+    (string-&gt;number (list-&gt;string (reverse buff)))))
+
+; 識別子
+(define (get-ident)
+  (let loop ((a '()))
+    (if (not (char-alphabetic? (getch)))
+        (string-&gt;symbol (list-&gt;string (reverse a)))
+      (loop (begin0 (cons (getch) a) (nextch))))))
+
+; トークンの切り出し
+(define (get-token)
+  ; 空白文字の読み飛ばし
+  (while (char-whitespace? (getch))
+    (nextch))
+  (cond ((char-numeric? (getch))
+         (set! *token* 'number)
+         (set! *value* (get-number)))
+        ((char-alphabetic? (getch))
+         (set! *value* (get-ident))
+         (case *value*
+           ((def end if then else not and or begin while do)
+            (set! *token* *value*))
+           (else
+            (set! *token* 'ident))))
+        (else
+         (case (getch)
+          ((#\=)
+           (set! *token* '=)
+           (nextch)
+           (when (eqv? (getch) #\=)
+             (set! *token* '==)
+             (nextch)))
+          ((#\+)
+           (set! *token* '+)
+           (nextch))
+          ((#\-)
+           (set! *token* '-)
+           (nextch))
+          ((#\*)
+           (set! *token* '*)
+           (nextch))
+          ((#\/)
+           (set! *token* '/)
+           (nextch))
+          ((#\()
+           (set! *token* 'lpar)
+           (nextch))
+          ((#\))
+           (set! *token* 'rpar)
+           (nextch))
+          ((#\&lt;)
+           (set! *token* '&lt;)
+           (nextch)
+           (when (eqv? (getch) #\=)
+             (set! *token* '&lt;=)
+             (nextch)))
+          ((#\&gt;)
+           (set! *token* '&gt;)
+           (nextch)
+           (when (eqv? (getch) #\=)
+             (set! *token* '&gt;=)
+             (nextch)))
+          ((#\!)
+           (set! *token* 'not)
+           (nextch)
+           (when (eqv? (getch) #\=)
+             (set! *token* '!=)
+             (nextch)))
+          ((#\,)
+           (set! *token* 'comma)
+           (nextch))
+          ((#\;)
+           (set! *token* 'semic)
+           (nextch))
+          ((#\null)
+           (set! *token* 'eof))
+          (else
+           (set! *token* 'others))))))
+
+; 字句解析
+(define (lex)
+  (let loop ((a '()))
+    (cond ((eq? *token* 'semic)
+           (reverse (cons 'semic a)))
+          ((or (eq? *token* 'number)
+               (eq? *token* 'ident))
+           (loop (begin0 (list* *value* *token* a) (get-token))))
+          (else
+           (loop (begin0 (cons *token* a) (get-token)))))))
+
+;;;
+;;; 式の評価
+;;;
+
+; 構文解析するコード
+(define *code* #f)
+
+; アクセス関数
+(define (getcode) (car *code*))
+(define (nextcode) (pop! *code*))
+
+; 変数の評価
+(define (eval-var var)
+  (if (number? var)
+      var
+    (lookup-variable var)))
+
+; 演算子の評価
+(define (eval-op op var1 var2)
+  (op (eval-var var1) (eval-var var2)))
+
+;;;
+;;; while の評価
+;;;
+(define (eval-while)
+  (let ((save-code *code*))
+    ; 条件式の評価
+    (let loop ()
+      (let ((result (expression)))
+        (unless (eq? (getcode) 'do)
+          (error "do expected"))
+        (nextcode)
+        (cond ((zero? result)
+               (skip-expression '(end semic))
+               (unless (eq? (getcode) 'end)
+                 (error "end expected"))
+               (nextcode)
+               0)
+              (else
+               (expression)
+               (unless (eq? (getcode) 'end)
+                 (error "end expected"))
+               (set! *code* save-code)
+               (loop)))))))
+
+; while のスキップ
+(define (skip-while)
+  ; 条件式のスキップ
+  (skip-expression '(do end))
+  (unless (eq? (getcode) 'do)
+    (error "do expected"))
+  (nextcode)
+  ; 本体のスキップ
+  (skip-expression '(end semic))
+  (unless (eq? (getcode) 'end)
+    (error "end expected"))
+  (nextcode))
+
+
+;;;
+;;; begin の評価
+;;;
+(define (eval-begin)
+  (let loop ((val 0))
+    (cond ((eq? (getcode) 'end)
+           (nextcode)
+           val)
+          (else
+           (when (eq? (getcode) 'comma)
+             (nextcode))
+           (loop (eval-var (expression)))))))
+
+; begin のスキップ
+(define (skip-begin)
+  (let loop ()
+    (cond ((eq? (getcode) 'end)
+           (nextcode))
+          (else
+           (skip-expression '(end comma))
+           (when (eq? (getcode) 'comma)
+             (nextcode))
+           (loop)))))
+
+;;;
+;;; if の評価
+;;;
+(define (eval-if)
+  ; test の評価
+  (let ((result (eval-var (expression))))
+    (cond ((eq? (getcode) 'then)
+           (nextcode)
+           (cond ((zero? result)
+                  ; 偽
+                  (skip-expression '(else end))
+                  (cond ((eq? (getcode) 'else)
+                         (nextcode)
+                         (let ((val (eval-var (expression))))
+                           (unless (eq? (getcode) 'end)
+                             (error "end expected"))
+                           (nextcode)
+                           val))
+                        ((eq? (getcode) 'end)
+                         ; else 節は無し
+                         (nextcode)
+                         0)
+                        (else
+                         (error "end expected"))))
+                (else
+                 ; 真
+                 (let ((val (eval-var (expression))))
+                   (when (eq? (getcode) 'else)
+                     (nextcode)
+                     (skip-expression '(end semic)))
+                   (unless (eq? (getcode) 'end)
+                     (error "end expected"))
+                   (nextcode)
+                   val))))
+          (else
+           (error "then expected")))))
+
+; if 文のスキップ
+(define (skip-if)
+  ; 条件式をスキップ
+  (skip-expression '(then else end))
+  (unless (eq? (getcode) 'then)
+    (error "then expected"))
+  ; then 節をスキップ
+  (nextcode)
+  (skip-expression '(else end))
+  (when (eq? (getcode) 'else)
+    (nextcode)
+    ; else 節をスキップ
+    (skip-expression '(end)))
+  (unless (eq? (getcode) 'end)
+    (error "end expected"))
+  (nextcode))
+
+; 式のスキップ
+(define (skip-expression ends)
+  (let loop ()
+    (cond ((eq? (getcode) 'if)
+           (nextcode)
+           (skip-if)
+           (loop))
+          ((eq? (getcode) 'begin)
+           (nextcode)
+           (skip-begin)
+           (loop))
+          ((eq? (getcode) 'while)
+           (nextcode)
+           (skip-while)
+           (loop))
+          ((not (member (getcode) ends))
+           (nextcode)
+           (loop)))))
+
+; 式
+(define (expression)
+  (let ((val (expr1)))
+    (case (getcode)
+      ((=)
+       ; 代入式の処理
+       (unless (symbol? val)
+         (error "invalid = form"))
+       (nextcode)
+       (let ((val1 (eval-var (expression))))
+         (update-variable val val1)
+         val1))
+      (else val))))
+
+; 論理演算子 (and と or の優先順位は同じとする)
+(define (expr1)
+  (let loop ((val1 (expr2)))
+    (case (getcode)
+      ((and)
+       (nextcode)
+       (let ((val2 (expr2)))
+         (if (zero? (logand (eval-var val1) (eval-var val2)))
+             (loop 0)
+           (loop 1))))
+      ((or)
+       (nextcode)
+       (let ((val2 (expr2)))
+         (if (zero? (logior (eval-var val1) (eval-var val2)))
+             (loop 0)
+           (loop 1))))
+      (else val1))))
+
+; 比較演算子の取得
+(define (getcmp op)
+  (case op
+    ((==) =)
+    ((!=) (lambda (x y) (not (= x y))))
+    ((&lt;)  &lt;)
+    ((&lt;=) &lt;=)
+    ((&gt;)  &gt;)
+    ((&gt;=) &gt;=)
+    (else
+     (error "invalid operation:" op))))
+
+
+; 比較演算子 (==, !=, &lt;, &lt;=, &gt;, &gt;= の優先順位は同じとする)
+(define (expr2)
+  (let ((val1 (expr3)))
+    (case (getcode)
+      ((== != &lt; &lt;= &gt; &gt;=)
+       (let ((op (getcode)))
+         (nextcode)
+         (if ((getcmp op) (eval-var val1) (eval-var (expr3)))
+             1
+           0)))
+      (else val1))))
+
+(define (expr3)
+  (let loop ((val (term)))
+    (case (getcode)
+      ((+)
+       (nextcode)
+       (loop (eval-op + val (term))))
+      ((-)
+       (nextcode)
+       (loop (eval-op - val (term))))
+      (else val))))
+
+; 項
+(define (term)
+  (let loop ((val (factor)))
+    (case (getcode)
+      ((*)
+       (nextcode)
+       (loop (eval-op * val (factor))))
+      ((/)
+       (nextcode)
+       (loop (eval-op / val (factor))))
+      (else val))))
+
+; 実引数の取得
+(define (get-argument)
+  (nextcode)
+  (if (eq? (getcode) 'rpar)
+      ; 引数無し
+      (begin (nextcode) '())
+    (let loop ((a '()))
+      (let ((val (eval-var (expression))))
+        (case (getcode)
+          ((rpar)
+           (nextcode)
+           (reverse (cons val a)))
+          ((comma)
+           (nextcode)
+           (loop (cons val a)))
+          (else
+           (error "unexpected token in argument list" (getcode))))))))
+
+; 仮引数の取得
+(define (get-parameter)
+  (unless (eq? (getcode) 'lpar)
+    (error "'(' expected"))
+  (nextcode)
+  (let loop ((a '()))
+    (cond ((eq? (getcode) 'rpar)
+           (nextcode)
+           (reverse a))
+          ((eq? (getcode) 'comma)
+           (nextcode)
+           (loop a))
+          ((eq? (getcode) 'ident)
+           (nextcode)
+           (let ((val (getcode)))
+             (nextcode)
+             (loop (cons val a))))
+          (else
+           (error "unexpected token in parameter list" (getcode))))))
+
+; 変数束縛
+(define (add-binding pars args)
+  (let loop ((pars pars) (args args))
+    (cond ((and (pair? pars) (pair? args))
+           (push! *variable* (cons (car pars) (car args)))
+           (loop (cdr pars) (cdr args)))
+          ((and (pair? pars) (null? args))
+           (push! *variable* (cons (car pars) 0))
+           (loop (cdr pars) args)))))
+
+; ユーザー関数の呼び出し
+(define (call-usrfunc code)
+  (let ((args (get-argument))   ; 実引数の取得
+        (save-code *code*)
+        (save-var  *variable*))
+    (set! *code* code)
+    (add-binding (get-parameter) args)
+    (unwind-protect
+      ; 本体の評価
+      (begin0
+        (eval-var (expression))
+        (unless (eq? (getcode) 'end)
+          (error "end expected")))
+      (begin
+        ; 環境の復帰
+        (set! *code* save-code)
+        (set! *variable* save-var)))))
+
+; 因子
+(define (factor)
+  (case (getcode)
+    ((lpar)
+     (nextcode)
+     (let ((val (expression)))
+       (if (eq? (getcode) 'rpar)
+           (nextcode)
+         (error "')' expected"))
+       val))
+    ((number)
+     (nextcode)
+     (begin0 (getcode) (nextcode)))
+    ((+)
+     ; 単項演算子
+     (nextcode)
+     (eval-var (factor)))
+    ((-)
+     ; 単項演算子
+     (nextcode)
+     (- (eval-var (factor))))
+    ((not)
+     (nextcode)
+     (if (zero? (eval-var (factor)))
+         1
+       0))
+    ((if)
+     (nextcode)
+     (eval-if))
+    ((begin)
+     (nextcode)
+     (eval-begin))
+    ((while)
+     (nextcode)
+     (eval-while))
+    ((ident)
+     (nextcode)
+     (let ((func (lookup-function (getcode))))
+       (cond (func
+              ; 関数呼び出し
+              (nextcode)
+              (if (eq? (getcode) 'lpar)
+                  (if (pair? (cdr func))
+                      (call-usrfunc (cdr func))
+                    (apply (cdr func) (get-argument)))
+                (error "'(' expected")))
+             (else
+              ; 変数
+              (begin0 (getcode) (nextcode))))))
+    (else
+     (error "unexpected token" (getcode)))))
+
+;;;
+;;;
+;;;
+
+; 値を表示する
+(define (display-value value)
+  (display "=&gt; ")
+  (display value)
+  (newline))
+
+; 式の入力と評価
+(define (toplevel)
+  (cond ((eq? (getcode) 'def)
+         ; 関数定義
+         (nextcode)
+         (unless (eq? (getcode) 'ident)
+           (error "invalid def form"))
+         (nextcode)
+         (let ((name (getcode)))
+           (push! *function* (cons name (cdr *code*)))
+           (display-value name)))
+        (else
+         ; 式
+         (let ((val (eval-var (expression))))
+           (if (eq? (getcode) 'semic)
+               (display-value val)
+             (error "invalid token:" (getcode))))))
+  (display "Calc&gt; ")
+  (flush))
+
+; 入力をクリアする
+(define (clear-input-data)
+  (while (not (eqv? *ch* #\return))
+    (nextch))
+  (display "Calc&gt; ")
+  (flush))
+
+; 電卓プログラムの実行
+(define (calc)
+  (display "Calc&gt; ")
+  (flush)
+  (nextch)
+  (call/cc
+    (lambda (break)
+      (let loop ()
+        (guard (err
+                 ((&lt;error&gt; err)
+                  (format #t "ERROR: ~S~%" (condition-ref err 'message))
+                  (clear-input-data)))
+          (get-token)
+          (when (eqv? *token* 'eof) (break #t))
+          (set! *code* (lex))
+          (toplevel))
+        (loop)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm53.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm55.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

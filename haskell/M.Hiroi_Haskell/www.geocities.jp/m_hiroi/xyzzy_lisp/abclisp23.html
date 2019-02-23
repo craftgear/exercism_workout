@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門</title>
+  <meta name="description" content="xyzzy,xyzzy Lisp,Common Lisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881766</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>xyzzy Lisp Programming</h1>
+<h2>Common Lisp 入門</h2>
+<div class="small">
+[ <a href="abclisp22.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp24.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap38">記号のパターンマッチング (2)</h3>
+<h4>●ユニフィケーション</h4>
+<p> 前回作成した関数 match はパターンとデータを照合するものでした。今度はパターンとパターンを照合する<b>ユニフィケーション (unification)</b> <a href="abclisp23.html#note2"><sup>[*2]</sup></a> を作ってみましょう。関数名は unify とします。unify はパターン変数とパターン変数を照合する分だけ match よりも処理は複雑になります。パターンマッチングの応用では match で十分な場合もありますが、このあとで作成する Prolog 風の簡易エキスパートシステムではユニフィケーションが必要になります。次の実行例を見てください。
+</p>
+<pre>
+(unify '(太郎 好き コーヒー) '(太郎 好き ?x) nil)
+=&gt; ((?x . コーヒー))
+
+(unify '(太郎 好き コーヒー) '(太郎 ?y コーヒー) nil)
+=&gt; ((?y . 好き))
+
+(unify '(花子 好き 紅茶) '(花子 ?x ?y) nil)
+=&gt;  ((?y . 紅茶) (?x . 好き))
+</pre>
+
+<p> match では第 2 引数にパターンを与えることはできませんが、unify はパターンでもかまいません。unify は match と同様に、成功した場合は束縛リストを返し、失敗した場合は fail を返します。
+</p>
+<p> 次は、ユニフィケーションの特徴的な例を示しましょう。
+</p>
+<pre>
+(unify '(花子 ?x ?y) '(花子 ?a ?b) nil)
+=&gt; ((?y . ?b) (?x . ?a))
+
+(unify '(花子 ?x ?y) '(花子 ?x ?y) nil)
+=&gt; ((?y . ?y) (?x . ?x))
+</pre>
+<p> ユニフィケーションでは、パターン変数の値がパターン変数になることもあります。最後の例のように、自分自身が値となる場合もあります。このような場合でもユニフィケーションは成功するのです。
+</p>
+<div class="note">
+-- <a name="note2">note</a> --------<BR>
+[*2] 辞書を引くと統一化、単一化という意味ですが、これだけではよくわかりませんね。ここではパターン同士のマッチングがユニフィケーションと考えてください。
+</div>
+
+<h4>●unify の実装</h4>
+<p> それでは unify を作っていきましょう。処理は match とほぼ同じですが、第 2 引数にもパターン変数が含まれるため、その処理を追加することになります。
+</p>
+
+<pre class="list">
+List 1 : ユニフィケーション
+
+(defun unify (pattern datum binding)
+  (cond ((variablep pattern)
+         (unify-variable pattern datum binding))
+        ((variablep datum)
+         (unify-variable datum pattern binding))
+        ((and (atom pattern) (atom datum))
+         (unify-atoms pattern datum binding))
+        ((and (consp pattern) (consp datum))
+         (unify-pieces pattern datum binding))
+        (t 'fail)))
+</pre>
+
+<p> 引数 datum がパターン変数かチェックする処理を追加しています。unify-atoms と unify-pieces は match を unify に置き換えただけで、match-atoms と match-pieces と同じです。
+</p>
+
+<pre class="list">
+List 2 : アトムとリストのユニフィケーション
+
+; アトムとのユニフィケーション
+(defun unify-atoms (pattern datum binding)
+  (if (equal pattern datum) binding 'fail))
+
+; リストのユニフィケーション
+(defun unify-pieces (pattern datum binding)
+  (let ((result (unify (car pattern) (car datum) binding)))
+    (if (eq result 'fail)
+        'fail
+        (unify (cdr pattern) (cdr datum) result))))
+</pre>
+
+<p> 次は、パターン変数とのユニフィケーションを行う unify-variable を作ります。unify-variable は match-variable と処理が異なる箇所があります。ユニフィケーションの場合、パターン変数とパターン変数は一致しますが、パターン変数とそれと同じパターン変数を含むパターンとは一致しないからです。次の例を見てください。
+</p>
+<pre>
+(unify '(太郎 好き ?x) '(太郎 好き (コーヒー ブラック)) nil)
+=&gt; ((?x コーヒー ブラック))
+
+(unify '(太郎 好き (コーヒー ?x)) '(太郎 好き (コーヒー ブラック)) nil)
+=&gt; ((?x . ブラック))
+
+(unify '(太郎 好き ?x) '(太郎 好き (コーヒー ?x)) nil)
+=&gt; fail
+</pre>
+
+<p> コーヒーの種類をリストで表すことにしました。最初の例では、?x は (コーヒー ブラック) となります。2 番目の例では、?x はブラックとなり、コーヒーの種類を求めることができます。
+</p>
+<p> それでは、最後の例はどうなるのでしょうか。?x と (コーヒー ?x) を照合させることになります。この場合、最初の ?x は太郎が好きなものを表しているのに、次の ?x はコーヒーの種類を表すことになり矛盾してしまいます。したがって、?x と (コーヒー ?x) は不一致と判定しなくてはいけないのです。
+</p>
+<p> それでは unify-variable を作りましょう。パターン変数と値を束縛リストに追加するときに、値の中に同じパターン変数がないことを確認します。この処理を関数 insidep で行います。
+</p>
+
+<pre class="list">
+List 3 : パターン変数とのユニフィケーション
+
+(defun unify-variable (pattern datum binding)
+  (let ((value (assoc pattern binding)))
+    (if (and value
+             (not (eq pattern (cdr value))))
+        (unify (cdr value) datum binding)
+        (if (insidep pattern datum binding)
+            'fail
+            (add-binding pattern datum binding)))))
+</pre>
+
+<p> 実は、match-varibale との違いがもうひとつあります。ユニフィケーションの場合、同じパターン変数同士の照合は成功するので、束縛リストの中には、たとえば (?x . ?x) というドット対が含まれることがあります。このため、束縛リストから変数の値を探し、それを使って単純に unify を再帰呼び出しすると困ることが起こるのです。?x の値は ?x ですから、同じことをずっと繰り返すことになり、再帰呼び出しが停止しないのです。これを回避するために、最初の if でパターン変数とその値が異なることを確認しています。
+</p>
+<p> そして、束縛リストにパターン変数と値を追加する前に関数 insidep を呼び出して、同じパターン変数が値の中で使われていないかチェックします。それでは insidep を作りましょう。
+</p>
+
+<pre class="list">
+List 4 : 同じパターン変数が含まれているか
+
+(defun insidep (var datum binding)
+  (unless (eq var datum)
+    (inside-sub-p var datum binding)))
+</pre>
+
+<p> insidep は引数 datum (パターン変数の値) に引数 var (パターン変数) が含まれていれば t を返し、そうでなければ nil を返します。実際の処理は関数 inside-sub-p で行います。ユニフィケーションは同じパターン変数の照合であれば成功するので、var と datum が同じパターン変数であれば nil を返します。
+</p>
+
+<pre class="list">
+List 5 : insidep 本体
+
+(defun inside-sub-p (var datum binding)
+  (cond ((eq var datum) t)
+        ((atom datum) nil)
+        ((variablep datum)
+         (let ((value (assoc datum binding)))
+           (if value
+               (inside-sub-p var (cdr value) binding))))
+        (t
+           (or (inside-sub-p var (car datum) binding)
+               (inside-sub-p var (cdr datum) binding)))))
+</pre>
+
+<p> inside-sub-p はリストを car と cdr で分解しながら、パターン変数 var が含まれているかチェックします。最初に var と datum が等しいか eq でチェックします。結果が真であればデータの中に同じパターン変数を見つけたので t を返します。
+</p>
+<p> 次に、datum がアトムであれば、これ以上分解できないので nil を返します。datum がパターン変数の場合は、その値に var が含まれているかチェックします。assoc で束縛リストから datum を探索し、値が見つかれば inside-sub-p を再帰呼び出しします。そうでなければ nil を返します。
+</p>
+<p> それ以外の場合は datum はリストなので、car と cdr でリストを分解して inside-sub-p を再帰呼び出しします。変数 var が見つかったら探索を中断して t を返せばいいので、or を使っていることに注意してください。つまり、CAR 部を調べてた結果が t ならば or は t を返しますし、nil であれば次の CDR 部の探索が行われます。
+</p>
+<p> これでプログラムは完成です。実際にプログラムを動かして、いろいろ試してみてくださいね。
+</p>
+<p> <a name="unify_back1" href="abclisp23.html#unify_list1">プログラムリスト１</a>
+</p>
+<hr>
+<h4>●もうひとつの変数管理方法</h4>
+<p> 束縛リストによる管理方法は、リスト処理が得意な Lisp でよく使われる方法ですが、ここでもうひとつ別の方法を紹介しましょう。それはパターン変数を表すシンボルに値を格納する方法です。Lisp のシンボルは値を格納できますが、その機能はレキシカル変数とスペシャル変数に分かれます。今回の方法では、シンボルをスペシャル変数として使用します。
+</p>
+
+<h4>●スペシャル変数の操作</h4>
+<p>  Common Lisp にはスペシャル変数の値を操作する関数が用意されています。次の図を見てください。
+</p>
+
+<pre class="fig">
+
+                 ┌──シンボル──┐   set
+    boundp ←──│ スペシャル変数 │←─── data 
+ (束縛チェック)  └────────┘         ↑
+                       ↑   │  symbol-value  │
+                       │   └────────┘
+                       │
+                   makunbound (未束縛にする)
+
+        図 1 : スペシャル変数の操作関数
+</pre>
+
+<p> スペシャル変数には値がセットされていない場合があります。このとき、変数にアクセスするとエラーが発生します。シンボルがスペシャル変数の値を持っているか、つまり束縛されているかチェックする関数が boundp です。スペシャル変数の値を持たないようにする、つまり未束縛状態にする関数が makunbound です。値をセットする関数が set で、値を取り出す関数が symbol-value です。それでは、詳しく説明しましょう。
+</p>
+<pre class="item">
+boundp symbol
+makunbound symbol
+</pre>
+<p> boundp は symbol のスペシャル変数が値を持っていれば t を返し、そうでなければ nil を返します。makunbound は symbol のスペシャル変数を未束縛にします。スペシャル変数は値を持たなくなるので、そのシンボルを評価するとエラーになります。makunbound は未束縛にしたシンボルを返します。簡単な使用例を示しましょう。
+</p>
+<pre>
+(boundp 'a) =&gt; nil
+(setq a 10) =&gt; 10
+(boundp 'a) =&gt; t
+
+(makunbound 'a) =&gt; a
+(boundp 'a)     =&gt; nil
+</pre>
+
+<p> シンボル a には値がセットされていません。ここで setq で a に 10 をセットします。a はレキシカル変数ではないので、スペシャル変数に値がセットされます。したがって boundp で a を調べると t を返します。makubound で a を未束縛状態にすると boundp は nil を返します。
+</p>
+<pre class="item">
+set symbol value
+symbol-value symbol
+</pre>
+<p> set は引数 symbol のスペシャル変数の値を value に変更します。set は関数なので symbol は評価されることに注意してください。評価結果がシンボルでなければエラーとなります。set はレキシカル変数の値を変更できません。set は value を返します。
+</p>
+<p> symbol-value は symbol のスペシャル変数の値を取り出します。set と同じく、レキシカル変数にはアクセスできません。簡単な使用例を示しましょう。
+</p>
+<pre>
+(set 'a 10) =&gt; 10
+
+(let ((a 100))
+      (print (symbol-value 'a))
+      (set 'a 20)
+      (print a))
+10
+100
+
+a =&gt; 20
+</pre>
+<p> まず set でシンボル a のスペシャル変数に 10 をセットします。次に、let でレキシカル変数 a を 100 に設定します。symbol-value で a の値を取り出すと、スペシャル変数の値 10 となります。次に、set で a の値を 20 に変更します。この場合、スペシャル変数の値を変更するので、a の値を print しても 100 のままです。let の実行後、a を表示すると 20 に変更されています。
+</p>
+<p> ここで注意点がひとつあります。今まで説明した set や symbol-value の動作は、変数がレキシカルスコープで管理されていることが前提です。たとえば、defvar で宣言された変数はダイナミックスコープで管理されますが、この場合 set や symbol-value は今までの説明とは異なる動作になります。スコープの違いに十分注意してください。
+</p>
+<p> パターンマッチングの変数管理にスペシャル変数を使う場合、束縛・未束縛の状態をそのままパターン変数に当てはめることができるので便利なのです。ただし、スペシャル変数の値を変更するとその影響はずっと残るので、パターンマッチング終了後は未束縛状態に戻しておく必要があります。したがって、連想リストの場合と同じように、ユニフィケーションが成功したときは束縛した変数のリストを返し、失敗したときは fail を返すことにします。
+</p>
+
+<h4>●スペシャル変数を使ったユニフィケーション</h4>
+<p> それでは、スペシャル変数を使った管理方法でユニフィケーションを実現してみましょう。まず、パターン変数を束縛する add-binding から修正します。
+</p>
+
+<pre class="list">
+List 6 : 変数に値をセットする
+
+(defun add-binding (var datum binding)
+  (set var datum)
+  (cons var binding))
+</pre>
+
+<p> 値のセットは set を使えば簡単です。var にセットされているシンボルのスペシャル変数に datum の値がセットされます。最後に変数 var を binding に追加します。
+</p>
+<p> 次は、束縛された変数をクリアする関数 clear-binding を作ります。
+</p>
+
+<pre class="list">
+List 7 : 変数をクリアして 'fail を返す
+
+(defun clear-binding (binding)
+  (if (consp binding)
+    (map nil #'makunbound binding))
+  'fail)
+</pre>
+
+<p> binding がリストであれば、そこに格納されている変数を makunbound で未束縛にします。列関数 map を使って、各要素に makunbound を適用しています。最後に fail を返します。
+</p>
+<p> それでは、ユニフィケーションを修正しましょう。不一致と判定する処理で、今まで束縛されたパターン変数を未束縛にするため、clear-binding を呼び出すようにします。最初は unify です。
+</p>
+<pre class="list">
+List 8 : ユニフィケーション
+
+(defun unify (pattern datum binding)
+  (cond ((variablep pattern)
+         (unify-variable pattern datum binding))
+        ((variablep datum)
+         (unify-variable datum pattern binding))
+        ((and (atom pattern) (atom datum))
+         (unify-atoms pattern datum binding))
+        ((and (consp pattern) (consp datum))
+         (unify-pieces pattern datum binding))
+        (t (clear-binding binding))))
+</pre>
+<p> 最後の節で fail を返しますが、ここで clear-binding を呼び出して変数束縛をクリアします。
+</p>
+
+<pre class="list">
+List 9 : アトムとのユニフィケーション
+
+(defun unify-atoms (pattern datum binding)
+  (if (equal pattern datum)
+      binding
+      (clear-binding binding)))
+</pre>
+
+<p> unify-atoms は pattern と datum が等しくない場合、clear-binding を呼び出し、変数を未束縛にしてから fail を返します。
+</p>
+<p> リストのユニフィケーション unify-pieces は修正の必要はありません。次は unify-variable を変更します。
+</p>
+
+<pre class="list">
+List 10 : パターン変数とのユニフィケーション
+
+(defun unify-variable (var datum binding)
+  (if (and (boundp var)
+           (not (eq (symbol-value var) var)))
+      (unify (symbol-value var) datum binding)
+      (if (insidep var datum binding)
+          (clear-binding binding)
+          (add-binding var datum binding))))
+</pre>
+
+<p> unify-varibale はパターン変数の値を求める処理を修正します。まず boundp でスペシャル変数に値がセットされていることを確認し、次にその値が自分自身でないことを確認します。変数が束縛されていれば、値を取り出して再度 unify を呼び出します。未束縛の場合は、変数 var が datum 内で使われていないことを確認します。使われていれば clear-binding で束縛をクリアして failを返します。
+</p>
+<p> insidep はそのままでいいのですが、inside-sub-p は修正が必要です。
+</p>
+
+<pre class="list">
+List 11 : insidep 本体
+
+(defun inside-sub-p (var datum binding)
+  (cond ((eq var datum) t)
+        ((atom datum) nil)
+        ((variablep datum)
+         (if (and (boundp datum)
+                  (not (eq (symbol-value datum) datum)))
+             (inside-sub-p var (symbol-value datum) binding)))
+        (t
+         (or (inside-sub-p var (car datum) binding)
+             (inside-sub-p var (cdr datum) binding)))))
+</pre>
+
+<p> datum がパターン変数の場合、値を取り出す処理を symbol-value に変更します。
+</p>
+<p> これで修正は終わりましたが、このままだと unify は変数リストを返すだけで、その値を見ることができません。そこで、パターン変数から値を求める関数を作ります。
+</p>
+
+<pre class="list">
+List 12 : パターン変数の値を求める
+
+(defun variable-value (var)
+  (let (value)
+    (loop
+      (unless (boundp var) (return var))
+      (setq value (symbol-value var))
+      (cond
+        ((eq var value)
+         (return value))
+        ((variablep value)
+         (setq var value))
+        ((consp value)
+         (return (replace-variable value)))
+        (t (return value))))))
+</pre>
+
+<p> variable-value は変数のリンケージをたどって値を求めます。この処理は再帰定義を使わなくても、繰り返しで実現できます。まず boundp で変数 var が束縛されているかチェックします。未束縛であれば、その変数をそのまま返します。ユニフィケーションはパターン変数同士の照合が可能なので、ある変数が未束縛のままということもあるのです。
+</p>
+<p> 次に symbol-value で var の値を取り出して、その値をチェックします。もし、var と value が同じシンボルであれば、自分自身が値として格納されています。この場合は、そのシンボルを return で返します。次に value がパターン変数の場合は、value を var にセットして繰り返しを続行します。これで、変数間のリンケージをひとつたどったことになります。
+</p>
+<p> value がリストの場合は、その中にある変数を置換してその結果を return で返します。この処理を関数 replace-variable で行います。最後の節では value をそのまま return で返すだけです。
+</p>
+<p> 次は、リスト内のパターン変数をその値で置換する関数 replace-variable を作ります。
+</p>
+
+<pre class="list">
+List 13 : パターン変数を置換する
+
+(defun replace-variable (pattern)
+  (cond
+    ((variablep pattern)
+     (variable-value pattern))
+    ((atom pattern) pattern)
+    (t
+     (cons (replace-variable (car pattern))
+           (replace-variable (cdr pattern))))))
+</pre>
+
+<p> replace-variable は再帰を使えば簡単に作れます。pattern がリストの場合は car と cdr で分解し、repalce-varibale を再帰呼び出しします。そして、その返り値を cons で組み立てればよいわけです。
+</p>
+<p> 再帰呼び出しの停止条件は pattern が atom の場合ですが、その前に pattern がパターン変数かチェックします。その場合は variable-value で値を求め、その結果を返すようにします。これで、変数をその値に置き換えることができます。
+</p>
+<p> 最後に、ユニフィケーションを実行して変数の値を表示する関数 exec-unify を作ります。
+</p>
+
+<pre class="list">
+List 14 : ユニフィケーションの実行
+
+(defun exec-unify(pattern datum)
+  (let ((result (unify pattern datum nil)))
+    (when (consp result)
+      (dolist (var result)
+        (format t "~S = ~S~%" var (variable-value var)))
+      (clear-binding result))
+    result))
+</pre>
+<p> unify で引数 pattern と datum を照合し、その結果を変数 result にセットします。result がリストならばパターン変数に値がセットされています。result に格納された変数を dolist でひとつずつ取り出し、値を variable-value で求めて format で表示します。そして、clear-binding でパターン変数を未束縛の状態に戻してから result を返します。
+</p>
+<p> これでプログラムは完成です。簡単な実行例を示しましょう。
+</p>
+<pre>
+(exec-unify '(a b c) '(a b c))
+=&gt; nil
+
+(exec-unify '(a b c) '(a b d))
+=&gt; fail
+
+(exec-unify '(a b c) '(?x ?y ?z))
+?z = c
+?y = b
+?x = a
+=&gt; (?z ?y ?x)
+</pre>
+<p> 皆さんも実際にプログラムを実行して、動作を確認してみてくださいね。
+</p>
+<p> <a name="unify_back2" href="abclisp23.html#unify_list2">プログラムリスト２</a>
+</p>
+<hr>
+<h4><a name="unify_list1">●プログラムリスト１</a></h4>
+<pre class="list">
+;
+; unify.l : ユニフィケーション
+;
+;           Copyright (C) 2003 Makoto Hiroi
+;
+
+;
+; 要素はパターン変数か
+; 
+(defun variablep (pattern)
+  (and (symbolp pattern)
+       (char= #\? (char (string pattern) 0))))
+
+;
+; ユニフィケーション
+;
+(defun unify (pattern datum binding)
+  (cond ((variablep pattern)
+         (unify-variable pattern datum binding))
+        ((variablep datum)
+         (unify-variable datum pattern binding))
+        ((and (atom pattern) (atom datum))
+         (unify-atoms pattern datum binding))
+        ((and (consp pattern) (consp datum))
+         (unify-pieces pattern datum binding))
+        (t 'fail)))
+
+;
+; アトムとのユニフィケーション
+;
+(defun unify-atoms (pattern datum binding)
+  (if (equal pattern datum) binding 'fail))
+
+;
+; リストのユニフィケーション
+;
+(defun unify-pieces (pattern datum binding)
+  (let ((result (unify (car pattern) (car datum) binding)))
+    (if (eq result 'fail)
+        'fail
+        (unify (cdr pattern) (cdr datum) result))))
+
+;
+; 変数とのユニフィケーション
+;
+(defun unify-variable (pattern datum binding)
+  (let ((value (assoc pattern binding)))
+    (if (and value
+             (not (eq pattern (cdr value))))
+        (unify (cdr value) datum binding)
+        (if (insidep pattern datum binding)
+            'fail
+            (add-binding pattern datum binding)))))
+
+;
+; datum の中に var があるか
+;
+(defun insidep (var datum binding)
+  (unless (eq var datum)
+    (inside-sub-p var datum binding)))
+
+;
+; insidep 本体
+;
+(defun inside-sub-p (var datum binding)
+  (cond ((eq var datum) t)
+        ((atom datum) nil)
+        ((variablep datum)
+         (let ((value (assoc datum binding)))
+           (if value
+               (inside-sub-p var (cdr value) binding))))
+        (t
+         (or (inside-sub-p var (car datum) binding)
+             (inside-sub-p var (cdr datum) binding)))))
+</pre>
+<p> <a href="abclisp23.html#unify_back1">戻る</a>
+</p>
+<hr>
+<h4><a name="unify_list2">●プログラムリスト２</a></h4>
+<pre class="list">
+;
+; unify.l : スペシャル変数を使ったユニフィケーション
+;
+;           Copyright (C) 2003 Makoto Hiroi
+;
+
+;
+; 要素はパターン変数か
+;
+(defun variablep (pattern)
+  (and (symbolp pattern)
+       (char= #\? (char (string pattern) 0))))
+
+;
+; ユニフィケーション
+;
+(defun unify (pattern datum binding)
+  (cond ((variablep pattern)
+         (unify-variable pattern datum binding))
+        ((variablep datum)
+         (unify-variable datum pattern binding))
+        ((and (atom pattern) (atom datum))
+         (unify-atoms pattern datum binding))
+        ((and (consp pattern) (consp datum))
+         (unify-pieces pattern datum binding))
+        (t (clear-binding binding))))
+
+;
+; アトムとのユニフィケーション
+;
+(defun unify-atoms (pattern datum binding)
+  (if (equal pattern datum)
+      binding
+      (clear-binding binding)))
+
+;
+; リストのユニフィケーション
+;
+(defun unify-pieces (pattern datum binding)
+  (let ((result (unify (car pattern) (car datum) binding)))
+    (if (eq result 'fail)
+        'fail
+        (unify (cdr pattern) (cdr datum) result))))
+
+;
+; 変数とのユニフィケーション
+;
+(defun unify-variable (var datum binding)
+  (if (and (boundp var)
+           (not (eq (symbol-value var) var)))
+      (unify (symbol-value var) datum binding)
+      (if (insidep var datum binding)
+          (clear-binding binding)
+          (add-binding var datum binding))))
+
+;
+; datum の中に var(変数)があるか
+;
+(defun insidep (var datum binding)
+  (unless (eq var datum)
+    (inside-sub-p var datum binding)))
+
+;
+; insidep 本体
+;
+(defun inside-sub-p (var datum binding)
+  (cond ((eq var datum) t)
+        ((atom datum) nil)
+        ((variablep datum)
+         (if (and (boundp datum)
+                  (not (eq (symbol-value datum) datum)))
+             (inside-sub-p var (symbol-value datum) binding)))
+        (t
+         (or (inside-sub-p var (car datum) binding)
+             (inside-sub-p var (cdr datum) binding)))))
+
+;
+; 変数を置換する
+;
+(defun replace-variable (pattern)
+  (cond
+    ((variablep pattern)
+     (variable-value pattern))
+    ((atom pattern) pattern)
+    (t
+     (cons (replace-variable (car pattern))
+           (replace-variable (cdr pattern))))))
+
+;
+; 変数値を求める
+;
+(defun variable-value (var)
+  (let (value)
+    (loop
+      (unless (boundp var) (return var)) ; 未束縛
+      (setq value (symbol-value var))    ; スペシャル変数を取り出す
+      (cond
+        ((eq var value)
+         (return value))                 ; 自分自身が入っている
+        ((variablep value)
+         (setq var value))
+        ((consp value)                   ; リストの中に変数があるかもしれないので置換する
+         (return (replace-variable value)))
+        (t (return value))))))
+
+;
+; 変数値をセットする
+;
+(defun add-binding (var datum binding)
+  (set var datum)
+  (cons var binding))
+
+;
+; 変数をクリアして 'fail を返す
+;
+(defun clear-binding (binding)
+  (if (consp binding)
+    (map nil #'makunbound binding))
+  'fail)
+
+;
+; ユニフィケーションの実行
+;
+(defun exec-unify (pattern datum)
+  (let ((result (unify pattern datum nil)))
+    (when (consp result)
+      (dolist (var result)
+        (format t "~S = ~S~%" var (variable-value var)))
+      (clear-binding result))
+    result))
+</pre>
+<p> <a href="abclisp23.html#unify_back2">戻る</a>
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abclisp22.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp24.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

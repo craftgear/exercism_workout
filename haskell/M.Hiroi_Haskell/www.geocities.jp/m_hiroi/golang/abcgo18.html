@@ -1,0 +1,917 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Go 言語プログラミング入門</title>
+  <meta name="description" content="Go,Golang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881806</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Go Language Programming</h1>
+<h2>お気楽 Go 言語プログラミング入門</h2>
+<div class="small">
+[ <a href="abcgo17.html">PrevPage</a> | <a href="index.html">Golang</a> | <a href="abcgo19.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>電卓プログラムの作成 (3)</h3>
+<p> 今回は電卓プログラムに関数を定義する機能を追加してみましょう。
+</p>
+<p> なお、このドキュメントは拙作のページ <a href="../func/scheme.html">Scheme 入門</a> <a href="../func/abcscm52.html">電卓プログラムの作成 (3)</a> を Go 言語向けに書き直したものです。内容は重複していますが、あしからずご了承くださいませ。
+</p>
+
+<h4>●文法の変更</h4>
+<p> 関数を定義するために、文法を次のように修正します。
+</p>
+<pre class="item">
+[EBNF]
+   文    = 関数定義 | 式.
+関数定義 = "def", 関数, "(", [仮引数リスト], ")", 式, "end".
+   式    = 代入式 | 式１.
+ 代入式  = 変数, "=", 式.
+  式１   = 項, { ("+" | "-"), 項 }.
+   項    = 因子, { ("*" | "/"), 因子 }.
+  因子   = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数 | 関数, "(", [引数リスト], ")".
+  変数   = 識別子
+  関数   = 識別子
+
+仮引数リスト = 変数, { ",", 変数 }.
+引数リスト   = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+<p> ユーザが関数を定義するときは def ... end で行います。定義した関数は組み込み関数といっしょに大域変数 funcTable に格納します。引数は局所変数として扱うので、式を評価する処理は大幅な修正が必要になりますが、難しいことはないので心配しないでください。
+</p>
+
+<h4>●字句解析の修正</h4>
+<p> それではプログラムを作りましょう。まず最初に、トークンを切り分けるメソッド getToken を修正します。
+</p>
+<pre class="list">
+リスト : トークンの切り分け
+
+// トークン
+const (
+    DEF = -(iota+10)
+    END
+)
+
+// キーワード表
+var keyTable = make(map[string]rune)
+
+func initKeyTable() {
+    keyTable["def"] = DEF
+    keyTable["end"] = END
+}
+
+func (lex *Lex) getToken() {
+    lex.Token = lex.Scan()
+    if lex.Token == scanner.Ident {
+        key, ok := keyTable[lex.TokenText()]
+        if ok {
+            lex.Token = key
+        }
+    }
+}
+</pre>
+<p> キーワード def, end とそれを表すトークン DEF, END を大域変数 keyTable の map にセットします。この処理は関数 initKeyTable で行います。メソッド getToken では、lex.Token が Ident ならば、その識別子が keyTable に登録されているかチェックします。そうであれば、キーワードなのでその値 key を lex.Token にセットします。これで def, end をトークン DEF, END に変換することができます。
+</p>
+
+<h4>●局所変数と連想リスト</h4>
+<p> 局所変数は「連想リスト (association list : a-list) 」で管理します。連想リストは Lisp でよく使用されるデータ構造です。ここで簡単に説明しておきましょう。連想リストはキーとデータを格納した組 (pair) を要素とするリストのことです。次の図を見てください。
+</p>
+<pre class="fig">
+                    ┌───┬───┬───┬──→ データ 
+                    │      │      │      │
+ 連想リスト => [[a, 1], [b, 2], [c, 3], [d, 4]]
+                 │      │      │      │
+                 └───┴───┴───┴──→ キー
+
+                図 : 連想リストの構造
+</pre>
+<p> 上図の場合、リストと組を [ ] で表していて、a, b, c, d がキーで、1, 2, 3, 4 がデータとなります。局所変数の場合、キーが変数名で、データがその値となります。変数の値を求める場合、変数名をキーにして連想リストを線形探索し、変数名を格納している組を求めます。そこに格納されているデータが求める値になります。変数の値を書き換えるときも同じです。変数名を格納している組を求め、そのデータを書き換えればいいわけです。
+</p>
+
+<p> まず最初に、局所変数を表す連想リストを定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 環境の定義
+
+// 局所変数の環境
+type Env struct {
+    name Variable
+    val  Value
+    next *Env
+}
+
+func newEnv(name Variable, val Value, env *Env) *Env {
+    return &amp;Env{name, val, env}
+}
+
+// 構文木の型
+type Expr interface {
+    Eval(*Env) Value
+}
+</pre>
+<p> 一般に、アクセス可能な局所変数の集合のことを「環境 (environment)」といいます。今回は連想リストを表す構造体の名前を Env としました。Env は連結リストで、フィールド変数 name に変数名を、val にその値を格納します。
+</p>
+<p> 式を評価するときは環境が必要になるので、インターフェース Expr のメソッド Eval には引数に環境 *Env を渡すように修正します。
+</p>
+
+<p> 次は環境を生成する関数 makeBinding を作ります。
+</p>
+
+<pre class="list">
+リスト : 変数束縛
+
+func makeBinding(xs []Variable, es []Expr, env *Env) *Env {
+    var env1 *Env
+    for i := 0; i &lt; len(xs); i++ {
+        env1 = newEnv(xs[i], es[i].Eval(env), env1)
+    }
+    return env1
+}
+</pre>
+<p> 変数の値を格納するためにメモリ領域を確保することを「束縛 (binding) 」といいます。今回の電卓プログラムでは、環境を表す連想リストを作ることが束縛にあたります。makeBinding の引数 xs が変数名を格納したスライス、es が変数の初期値となる式を格納したスライス、env が関数を呼び出したときの環境です。es に格納された式は環境 env で評価することに注意してください。あとは、スライスから名前と式を取り出して、newEnv で名前と式の評価結果を連想リストに格納し、新しい環境 env1 の先頭に追加していくだけです。
+</p>
+
+<p> 次は局所変数の参照と更新を行う関数を作ります。
+</p>
+<pre class="list">
+リスト : 局所変数のアクセス関数
+
+// 局所変数の参照
+func lookup(name Variable, env *Env) (Value, bool) {
+    for ; env != nil; env = env.next {
+        if name == env.name {
+            return env.val, true
+        }
+    }
+    return 0.0, false
+}
+
+// 局所変数の更新
+func update(name Variable, val Value, env *Env) bool {
+    for ; env != nil; env = env.next {
+        if name == env.name {
+            env.val = val
+            return true
+        }
+    }
+    return false
+}
+</pre>
+<p> 関数 lookup は変数 name の値を求め、関数 update は変数 name の値を val に書き換えます。どちらの関数も環境 env を線形探索します。name を見つけたら、lookup はその値 env.val を返します。update は env.val の値を引数 val に書き換えます。name が見つからない場合、lookup はゼロ値 (0.0) と false を返し、update は false を返します。
+</p>
+
+<h4>●変数評価の修正</h4>
+<p> 次は変数の値を求める処理と書き換える処理を修正します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 変数の参照と更新
+
+// 変数の評価
+func (v Variable) Eval(env *Env) Value {
+    // 局所変数の探索
+    val, ok := lookup(v, env)
+    if ok {
+        return val
+    }
+    // 大域変数の探索
+    val, ok = globalEnv[v]
+    if !ok {
+        panic(fmt.Errorf("unbound variable: %v", v))
+    }
+    return val
+}
+
+// 代入式の評価
+func (a *Agn) Eval(env *Env) Value {
+    val := a.expr.Eval(env)
+    if !update(a.name, val, env) {
+        globalEnv[a.name] = val
+    }
+    return val
+}
+</pre>
+<p> 一般的なプログラミング言語の場合、関数の引数は局所変数として扱われ、その有効範囲は「レキシカルスコープ」になります。これを実現するため、メソッド Eval の引数 env に環境を渡します。変数の値を求めるとき、最初に env から変数を探します。見つけた場合はその値を返します。見つからない場合は大域変数の環境 globalEnv から変数を探します。それでも変数が見つからない場合は panic でエラーを送出します。
+</p>
+<p> 変数の値を書き換える場合も同様です。代入式の処理において、update で環境 env にある変数の値を更新します。見つからない場合は、大域変数 globalEnv の値を更新します。globalEnv に変数 name がない場合は、ここで新しく変数と値が追加されることになります。
+</p>
+
+<h4>●ユーザ関数のデータ構造</h4>
+<p> 次はユーザ関数を表す構造体を定義します。
+</p>
+<pre class="list">
+リスト : ユーザ定義関数
+
+type FuncU struct {
+    name string
+    xs   []Variable
+    body Expr
+}
+
+func newFuncU(name string, xs []Variable, body Expr) *FuncU {
+    return &amp;FuncU{name, xs, body}
+}
+
+func (f *FuncU) Argc() int {
+    return len(f.xs)
+}
+</pre>
+<p> ユーザが定義した関数は構造体 FuncU に格納します。フィールド変数 name が関数名、xs が仮引数リスト、body が関数本体を表します。FuncU もインターフェース Func として扱うので、仮引数の個数を求めるメソッド Argc を定義します。これは len(f.xs) を返すだけです。
+</p>
+
+<h4>●ユーザ関数の評価</h4>
+<p> 次はユーザが定義した関数を評価する処理を作ります。
+</p>
+<pre class="list">
+リスト : ユーザ関数の評価
+
+func (a *App) Eval(env *Env) Value {
+    switch f := a.fn.(type) {
+    case Func1:
+        x := float64(a.xs[0].Eval(env))
+        return Value(f(x))
+    case Func2:
+        x := float64(a.xs[0].Eval(env))
+        y := float64(a.xs[1].Eval(env))
+        return Value(f(x, y))
+    case *FuncU:
+        return f.body.Eval(makeBinding(f.xs, a.xs, env))
+    default:
+        panic(fmt.Errorf("function Eval error"))
+    }
+}
+</pre>
+<p> 型 switch で関数の型が *FuncU であれば、makeBinding で新しい環境を作り、その環境で関数 f の本体 body を評価するだけです。とても簡単ですね。
+</p>
+<h4>●関数定義文の評価</h4>
+<p> 最後に関数定義文を評価する処理を toplevel に追加します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 式の入力と評価
+func toplevel(lex *Lex) (r bool) {
+
+    ・・・省略・・・
+
+    for {
+        fmt.Print("Calc&gt; ")
+        lex.getToken()
+        if lex.Token == DEF {
+            defineFunc(lex)
+        } else {
+            e := expression(lex)
+            if lex.Token != ';' {
+                panic(fmt.Errorf("invalid expression"))
+            } else {
+                fmt.Println(e.Eval(nil))
+            }
+        }
+    }
+    return r
+}
+</pre>
+<p> lex.Token が DEF であれば関数定義文です。ユーザ関数の定義を関数 defineFunc で行います。defineFunc は次のようになります。
+</p>
+
+<pre class="list">
+リスト : ユーザ関数の定義
+
+func defineFunc(lex *Lex) {
+    lex.getToken()
+    if lex.Token != scanner.Ident {
+        panic(fmt.Errorf("invalid define form"))
+    }
+    name := lex.TokenText()
+    lex.getToken()
+    xs := getParameter(lex)
+    body := expression(lex)
+    if lex.Token != END {
+        panic(fmt.Errorf("'end' expected"))
+    }
+    v, ok := funcTable[name]
+    if ok {
+        switch f := v.(type) {
+        case *FuncU:
+            if len(f.xs) != len(xs) {
+                panic(fmt.Errorf("wrong number of arguments: %v", name))
+            }
+            f.xs = xs
+            f.body = body
+        default:
+            panic(fmt.Errorf("%v is built-in function", name))
+        }
+    } else {
+        funcTable[name] = newFuncU(name, xs, body)
+    }
+    fmt.Println(name)
+}
+</pre>
+<p> getToken で次のトークンを求め、それが Ident でなければ panic でエラーを送出します。関数名を TokenText で取り出して変数 name にセットします。次に、仮引数を関数 getParameter で、関数本体を expression で取り出して変数 xs と body にセットします。なお、関数定義は「式」ではなく「文」なので、最後にセミコロン ( ; ) を入力する必要はありません。end で終端していることを確認するだけです。
+</p>
+
+<p> 次に、関数 name が定義されているかチェックします。関数が未定義の場合、name, xs, body を FuncF に格納して funcTable[name] にセットするだけです。関数が定義されていて、それが組み込み関数の場合は書き換え禁止です。panic でエラーを送出します。ユーザ定義関数で引数の個数が同じ場合に限り書き換えを許可します。そうでなければ panic でエラーを送出します。
+</p>
+
+<p> 仮引数を取得する関数 getParameter は次のようになります。
+</p>
+<pre class="list">
+リスト : 仮引数の取得
+
+func getParameter(lex *Lex) []Variable {
+    e := make([]Variable, 0)
+    if lex.Token != '(' {
+        panic(fmt.Errorf("'(' expected"))
+    }
+    lex.getToken()
+    if lex.Token == ')' {
+        lex.getToken()
+        return e
+    }
+    for {
+        if lex.Token == scanner.Ident {
+            e = append(e, Variable(lex.TokenText()))
+            lex.getToken()
+            switch lex.Token {
+            case ')':
+                lex.getToken()
+                return e
+            case ',':
+                lex.getToken()
+            default:
+                panic(fmt.Errorf("unexpected token in parameter list"))
+            }
+        } else {
+            panic(fmt.Errorf("unexpected token in parameter list"))
+        }
+    }
+}
+</pre>
+<p> 最初に左カッコがあることを確認し、次に右カッコがあるかチェックします。この場合は引数なしの関数になります。仮引数がある場合、それは変数名 (識別子) でなければいけません。lex.Token が Ident でなければエラーを送出します。
+</p>
+<p> Ident であれば、TokenText で変数名を取り出して、Variable に変換してスライス e に追加します。それから、getToken で次のトークンを求めて、switch 文で lex.Token をチェックします。右カッコであれば仮引数リストは終了です。getToken で次のトークンを求めてからスライス e を返します。カンマ ( , ) であれば、次の変数名を求めます。それ以外の場合は panic でエラーを送出します。
+</p>
+
+<p> プログラムの大きな修正はこれだけです。あとは簡単なので説明は割愛します。詳細は <a href="abcgo18.html#list1">プログラムリスト</a> をお読みください。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+Calc&gt; def square(x) x * x end
+square
+Calc&gt; square(10);
+100
+Calc&gt; square(1.1111);
+1.23454321
+Calc&gt; square(square(10));
+10000
+Calc&gt; def add(x, y, z) x + y + z end
+add
+Calc&gt; add(square(10), square(20), square(30));
+1400
+Calc&gt; add(1, 2);
+wrong number of arguments: add
+Calc&gt; add(1, 2, 3, 4);
+wrong number of arguments: add
+</pre>
+<p> square は引数 x を 2 乗する関数です。square の引数で square を呼び出すこともできます。add は引数 x, y, z を足し算します。add の引数で square や他の組み込み関数を呼び出すこともできます。
+</p>
+
+<p> もうひとつ簡単な実行例を示しましょう。引数の有効範囲がレキシカルスコープになることを確認します。
+</p>
+<pre>
+Calc&gt; a = 10;
+10
+Calc&gt; def foo() a end
+foo
+Calc&gt; foo();
+10
+Calc&gt; def bar(a) foo() end
+bar
+Calc&gt; bar(100);
+10
+Calc&gt; a;
+10
+</pre>
+<p> 変数 a に 10 をセットします。関数 foo は a の値を返しますが、仮引数に a はないので、foo() を実行すると大域変数の値 10 を返します。関数 bar は仮引数 a に値を受け取り、関数 foo を呼び出します。レキシカルスコープの場合、foo は関数 bar の引数 a にアクセスできないので、bar(100) を実行すると foo() は 10 を返すことになります。したがって、bar の返り値は 10 になります。
+</p>
+
+<p> 今回はここまでです。次回は電卓プログラムに論理演算子、比較演算子、条件分岐の機能を追加してみましょう。
+</p>
+<h4>●参考文献</h4>
+<ol>
+  <li> 松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li> 水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li> 松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li> 高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li> 久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+  <li> <a href="http://www.oki-osk.jp/esc/index.htm">OKIソフトウェア エンジニアリングソリューションセンタ ESC</a>, <a href="http://www.oki-osk.jp/esc/golang/calc.html">『Go 言語による有理数電卓』</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// calc3.go : 電卓プログラム (ユーザ定義関数の追加)
+//
+//            Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import (
+    "fmt"
+    "os"
+    "math"
+    "text/scanner"
+)
+
+// トークン
+const (
+    DEF = -(iota+10)
+    END
+)
+
+// キーワード表
+var keyTable = make(map[string]rune)
+
+func initKeyTable() {
+    keyTable["def"] = DEF
+    keyTable["end"] = END
+}
+
+// 値
+type Value float64
+
+// 局所変数の環境
+type Env struct {
+    name Variable
+    val  Value
+    next *Env
+}
+
+func newEnv(name Variable, val Value, env *Env) *Env {
+    return &amp;Env{name, val, env}
+}
+
+// 構文木の型
+type Expr interface {
+    Eval(*Env) Value
+}
+
+// 局所環境の生成
+func makeBinding(xs []Variable, es []Expr, env *Env) *Env {
+    var env1 *Env
+    for i := 0; i &lt; len(xs); i++ {
+        env1 = newEnv(xs[i], es[i].Eval(env), env1)
+    }
+    return env1
+}
+
+// 局所変数の探索
+func lookup(name Variable, env *Env) (Value, bool) {
+    for ; env != nil; env = env.next {
+        if name == env.name {
+            return env.val, true
+        }
+    }
+    return 0.0, false
+}
+
+// 局所変数の更新
+func update(name Variable, val Value, env *Env) bool {
+    for ; env != nil; env = env.next {
+        if name == env.name {
+            env.val = val
+            return true
+        }
+    }
+    return false
+}
+
+// 評価
+func (e Value) Eval(_ *Env) Value {
+    return e
+}
+
+// 単項演算子
+type Op1 struct {
+    code rune
+    expr Expr
+}
+
+func newOp1(code rune, e Expr) Expr {
+    return &amp;Op1{code, e}
+}
+
+func (e *Op1) Eval(env *Env) Value {
+    v := e.expr.Eval(env)
+    if e.code == '-' {
+        v = -v
+    }
+    return v
+}
+
+// 二項演算子
+type Op2 struct {
+    code rune
+    left, right Expr
+}
+
+func newOp2(code rune, left, right Expr) Expr {
+    return &amp;Op2{code, left, right}
+}
+
+func (e *Op2) Eval(env *Env) Value {
+    x := e.left.Eval(env)
+    y := e.right.Eval(env)
+    switch e.code {
+    case '+': return x + y
+    case '-': return x - y
+    case '*': return x * y
+    case '/': return x / y
+    default:
+        panic(fmt.Errorf("invalid op code"))
+    }
+}
+
+// 変数
+type Variable string
+
+// 大域的な環境
+var globalEnv = make(map[Variable]Value)
+
+func (v Variable) Eval(env *Env) Value {
+    // 局所変数の探索
+    val, ok := lookup(v, env)
+    if ok {
+        return val
+    }
+    // 大域変数の探索
+    val, ok = globalEnv[v]
+    if !ok {
+        panic(fmt.Errorf("unbound variable: %v", v))
+    }
+    return val
+}
+
+// 代入演算子
+type Agn struct {
+    name Variable
+    expr Expr
+}
+
+func newAgn(v Variable, e Expr) *Agn {
+    return &amp;Agn{v, e}
+}
+
+func (a *Agn) Eval(env *Env) Value {
+    val := a.expr.Eval(env)
+    if !update(a.name, val, env) {
+        globalEnv[a.name] = val
+    }
+    return val
+}
+
+// 組み込み関数
+type Func interface {
+    Argc() int
+}
+
+type Func1 func(float64) float64
+
+func (f Func1) Argc() int {
+    return 1
+}
+
+type Func2 func(float64, float64) float64
+
+func (f Func2) Argc() int {
+    return 2
+}
+
+// ユーザ定義関数
+type FuncU struct {
+    name string
+    xs   []Variable
+    body Expr
+}
+
+func newFuncU(name string, xs []Variable, body Expr) *FuncU {
+    return &amp;FuncU{name, xs, body}
+}
+
+func (f *FuncU) Argc() int {
+    return len(f.xs)
+}
+
+
+// 関数呼び出し
+type App struct {
+    fn Func
+    xs []Expr
+}
+
+func newApp(fn Func, xs []Expr) *App {
+    return &amp;App{fn, xs}
+}
+
+func (a *App) Eval(env *Env) Value {
+    switch f := a.fn.(type) {
+    case Func1:
+        x := float64(a.xs[0].Eval(env))
+        return Value(f(x))
+    case Func2:
+        x := float64(a.xs[0].Eval(env))
+        y := float64(a.xs[1].Eval(env))
+        return Value(f(x, y))
+    case *FuncU:
+        return f.body.Eval(makeBinding(f.xs, a.xs, env))
+    default:
+        panic(fmt.Errorf("function Eval error"))
+    }
+}
+
+// 組み込み関数の初期化
+var funcTable = make(map[string]Func)
+
+func initFunc() {
+    funcTable["sqrt"]  = Func1(math.Sqrt)
+    funcTable["sin"]   = Func1(math.Sin)
+    funcTable["cos"]   = Func1(math.Cos)
+    funcTable["tan"]   = Func1(math.Tan)
+    funcTable["sinh"]  = Func1(math.Sinh)
+    funcTable["cosh"]  = Func1(math.Cosh)
+    funcTable["tanh"]  = Func1(math.Tanh)
+    funcTable["asin"]  = Func1(math.Asin)
+    funcTable["acos"]  = Func1(math.Acos)
+    funcTable["atan"]  = Func1(math.Atan)
+    funcTable["atan2"] = Func2(math.Atan2)
+    funcTable["exp"]   = Func1(math.Exp)
+    funcTable["pow"]   = Func2(math.Pow)
+    funcTable["log"]   = Func1(math.Log)
+    funcTable["log10"] = Func1(math.Log10)
+    funcTable["log2"]  = Func1(math.Log2)
+}
+
+
+// 字句解析
+type Lex struct {
+    scanner.Scanner
+    Token rune
+}
+
+func (lex *Lex) getToken() {
+    lex.Token = lex.Scan()
+    if lex.Token == scanner.Ident {
+        key, ok := keyTable[lex.TokenText()]
+        if ok {
+            lex.Token = key
+        }
+    }
+}
+
+// 仮引数の取得
+func getParameter(lex *Lex) []Variable {
+    e := make([]Variable, 0)
+    if lex.Token != '(' {
+        panic(fmt.Errorf("'(' expected"))
+    }
+    lex.getToken()
+    if lex.Token == ')' {
+        lex.getToken()
+        return e
+    }
+    for {
+        if lex.Token == scanner.Ident {
+            e = append(e, Variable(lex.TokenText()))
+            lex.getToken()
+            switch lex.Token {
+            case ')':
+                lex.getToken()
+                return e
+            case ',':
+                lex.getToken()
+            default:
+                panic(fmt.Errorf("unexpected token in parameter list"))
+            }
+        } else {
+            panic(fmt.Errorf("unexpected token in parameter list"))
+        }
+    }
+}
+
+
+// 引数の取得
+func getArgs(lex *Lex) []Expr {
+    e := make([]Expr, 0)
+    if lex.Token != '(' {
+        panic(fmt.Errorf("'(' expected"))
+    }
+    lex.getToken()
+    if lex.Token == ')' {
+        lex.getToken()
+        return e
+    }
+    for {
+        e = append(e, expression(lex))
+        switch lex.Token {
+        case ')':
+            lex.getToken()
+            return e
+        case ',':
+            lex.getToken()
+        default:
+            panic(fmt.Errorf("unexpected token in argument list"))
+        }
+    }
+}
+
+// 因子
+func factor(lex *Lex) Expr {
+    switch lex.Token {
+    case '(':
+        lex.getToken()
+        e := expression(lex)
+        if lex.Token != ')' {
+            panic(fmt.Errorf("')' expected"))
+        }
+        lex.getToken()
+        return e
+    case '+':
+        lex.getToken()
+        return newOp1('+', factor(lex))
+    case '-':
+        lex.getToken()
+        return newOp1('-', factor(lex))
+    case scanner.Int, scanner.Float:
+        var n float64
+        fmt.Sscan(lex.TokenText(), &amp;n)
+        lex.getToken()
+        return Value(n)
+    case scanner.Ident:
+        name := lex.TokenText()
+        lex.getToken()
+        if name == "quit" {
+            panic(name)
+        }
+        v, ok := funcTable[name]
+        if ok {
+            xs := getArgs(lex)
+            if len(xs) != v.Argc() {
+                panic(fmt.Errorf("wrong number of arguments: %v", name))
+            }
+            return newApp(v, xs)
+        } else {
+            return Variable(name)
+        }
+    default:
+        panic(fmt.Errorf("unexpected token: %v", lex.TokenText()))
+    }
+}
+
+// 項
+func term(lex *Lex) Expr {
+    e := factor(lex)
+    for {
+        switch lex.Token {
+        case '*':
+            lex.getToken()
+            e = newOp2('*', e, factor(lex))
+        case '/':
+            lex.getToken()
+            e = newOp2('/', e, factor(lex))
+        default:
+            return e
+        }
+    }
+}
+
+// 式
+func expr1(lex *Lex) Expr {
+    e := term(lex)
+    for {
+        switch lex.Token {
+        case '+':
+            lex.getToken()
+            e = newOp2('+', e, term(lex))
+        case '-':
+            lex.getToken()
+            e = newOp2('-', e, term(lex))
+        default:
+            return e
+        }
+    }
+}
+
+func expression(lex *Lex) Expr {
+    e := expr1(lex)
+    if lex.Token == '=' {
+        v, ok := e.(Variable)
+        if ok {
+            lex.getToken()
+            return newAgn(v, expression(lex))
+        } else {
+            panic(fmt.Errorf("invalid assign form"))
+        }
+    }
+    return e
+}
+
+// ユーザ関数の定義
+func defineFunc(lex *Lex) {
+    lex.getToken()
+    if lex.Token != scanner.Ident {
+        panic(fmt.Errorf("invalid define form"))
+    }
+    name := lex.TokenText()
+    lex.getToken()
+    xs := getParameter(lex)
+    body := expression(lex)
+    if lex.Token != END {
+        panic(fmt.Errorf("'end' expected"))
+    }
+    v, ok := funcTable[name]
+    if ok {
+        switch f := v.(type) {
+        case *FuncU:
+            if len(f.xs) != len(xs) {
+                panic(fmt.Errorf("wrong number of arguments: %v", name))
+            }
+            f.xs = xs
+            f.body = body
+        default:
+            panic(fmt.Errorf("%v is built-in function", name))
+        }
+    } else {
+        funcTable[name] = newFuncU(name, xs, body)
+    }
+    fmt.Println(name)
+}
+
+// 式の入力と評価
+func toplevel(lex *Lex) (r bool) {
+    r = false
+    defer func(){
+        err := recover()
+        if err != nil {
+            mes, ok := err.(string)
+            if ok &amp;&amp; mes == "quit" {
+                r = true
+            } else {
+                fmt.Fprintln(os.Stderr, err)
+                for {
+                    c := lex.Peek()
+                    if c == '\n' { break }
+                    lex.Next()
+                }
+            }
+        }
+    }()
+    for {
+        fmt.Print("Calc&gt; ")
+        lex.getToken()
+        if lex.Token == DEF {
+            defineFunc(lex)
+        } else {
+            e := expression(lex)
+            if lex.Token != ';' {
+                panic(fmt.Errorf("invalid expression"))
+            } else {
+                fmt.Println(e.Eval(nil))
+            }
+        }
+    }
+    return r
+}
+
+func main() {
+    var lex Lex
+    lex.Init(os.Stdin)
+    initKeyTable()
+    initFunc()
+    for {
+        if toplevel(&amp;lex) { break }
+    }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcgo17.html">PrevPage</a> | <a href="index.html">Golang</a> | <a href="abcgo19.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

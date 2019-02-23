@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Ruby プログラミング入門</title>
+  <meta name="description" content="Ruby,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881801</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>お気楽 Ruby プログラミング入門</h1>
+<h2>番外編 遅延評価と遅延ストリーム</h2>
+<div class="small">
+[ <a href="abcruby17.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby19.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>遅延評価</h3>
+<p> 一般的なプログラミング言語の場合、関数を呼び出す前に引数が評価され、その結果が関数に渡されます。これを「正格 (strict) な評価」といいます。これに対し、引数や変数の値が必要になるまで評価を行わない方法もあります。具体的には、引数や変数を参照するときに評価が行われます。これを「遅延評価 (delayed evaluation または lazy evaluation)」といいます。
+</p>
+<p> プログラミング言語では純粋な関数型言語である Haskell が遅延評価です。また、Scheme でも delay と force を使って遅延評価を行うことができます。そして、その評価結果は保存されることに注意してください。再度変数や引数を参照すると、保存されている値が返されます。
+</p>
+<p> なお、値の保存 (キャッシング) をしないでよければ、クロージャを使って遅延評価を行うこともできます。Ruby はクロージャ (手続きオブジェクト) をサポートしているので、遅延評価を実装することは簡単です。今回は Ruby で遅延評価を行うクラス Delay を作ってみましょう。
+</p>
+<h4>●遅延評価の実装</h4>
+<p> Delay.new() は遅延評価を行う処理を手続きオブジェクトで受け取ります。実行はメソッド force() で行います。このとき、評価結果がインスタンスに保存されることに注意してください。本稿では、Delay のインスタンスを「遅延オブジェクト」と呼ぶことにします。再度 force() を実行すると、保存された値が返されます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 遅延評価
+
+class Delay
+  def initialize(&amp;func)
+    @func = func
+    @flag = false
+    @value = false
+  end
+
+  def force
+    unless @flag
+      @value = @func.call
+      @flag = true
+    end
+    @value
+  end
+end
+</pre>
+<p> 遅延評価する処理はブロック引数 &amp;func で受け取って変数 @func にセットします。@flag は false で初期化します。メソッド force() は最初に @flag をチェックします。偽の場合、@func はまだ評価されていません。@func.call() を実行して、その返り値を @value にセットし、@flag を true に書き換えます。@flag が true ならば @func は評価済みなので @value を返します。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+irb&gt; p = Delay.new {
+irb&gt; puts "oops!"
+irb&gt; 10 + 20
+irb&gt; }
+=&gt; #&lt;Delay: ... @func=#&lt;Proc: ... &gt;, @flag=false, @value=false>
+irb&gt; p.force
+oops!
+=&gt; 30
+irb&gt; p.force
+=&gt; 30
+</pre>
+<p> 遅延オブジェクトを変数 p にセットします。このとき、手続きオブジェクトは実行されていません。p.force() を実行すると手続きオブジェクトが評価されるので、画面に oops! が表示されて計算結果の 30 が返されます。p.force() を再度実行すると、同じ式を再評価しないで @value に格納された値を返します。この場合 oops! は表示されません。
+</p>
+<h4>●たらいまわし関数</h4>
+<p> 遅延評価の簡単な例題として「たらいまわし関数」を取り上げます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : たらいまわし関数
+
+def tarai(x, y, z)
+  return y if x &lt;= y
+  tarai(tarai(x - 1, y, z), tarai(y - 1, z, x), tarai(z - 1, x, y))
+end
+
+def tak(x, y, z)
+  return z if x &lt;= y
+  tak(tak(x - 1, y, z), tak(y - 1, z, x), tak(z - 1, x, y))
+end
+</pre>
+
+<p> 関数 tarai() と tak() は「たらいまわし関数」といって、再帰的に定義されています。これらの関数は、引数の与え方によっては実行に時間がかかるため、Lisp などのベンチマークに利用されることがあります。Common Lisp のプログラムは <a href="http://www.nue.org/nue/index.html">ぬえ 鵺 NUE</a> の <a href="http://www.nue.org/nue/index.html#tak-function">TAK Function</a> にあります。
+</p>
+
+<p> tarai() は通称「竹内関数」と呼ばれていて、日本の代表的な Lisper である竹内郁雄先生によって考案されたそうです。そして、tak() は tarai() のバリエーションで、John Macarthy 先生によって作成されたそうです。たらいまわし関数が Lisp のベンチマークで使われていたことは知っていましたが、このような由緒ある関数だとは思ってもいませんでした。
+</p>
+
+<p> それでは、さっそく実行してみましょう。実行環境は Lubuntu 16.04 on VirtualBox, Core i7-2670QM 2.20GHz です。
+</p>
+
+<pre>
+irb&gt; require "benchmark"
+=&gt; true
+irb&gt; load "tarai.rb"
+=&gt; true
+irb&gt; Benchmark.realtime { tarai(12, 6, 0) }
+=&gt; 0.9319958629998837
+irb&gt; Benchmark.realtime { tak(18, 9, 0) }
+=&gt; 1.0928820149999865
+</pre>
+
+<p> このように、たらいまわし関数は引数の値が小さくても実行に時間がかかります。
+</p>
+<h4>●遅延評価による高速化</h4>
+<p> たらいまわし関数は遅延評価を使って高速化することができます。tarai() のプログラムを見てください。x &lt;= y のときに y を返しますが、このとき引数 z の値は必要ありませんね。引数 z の値は x &gt; y のときに計算するようにすれば、無駄な計算を省略することができます。ただし、tak() は遅延評価で高速化することはできません。ご注意くださいませ。
+</p>
+
+<p> クラス Delay を使うと、たらいまわし関数は次のようになります。
+</p>
+
+<pre class="list">
+リスト : Delay による遅延評価
+
+def tarai_lazy(x, y, z)
+  return y if x &lt;= y
+  tarai_lazy(tarai_lazy(x - 1, y, z),
+             tarai_lazy(y - 1, z.force, Delay.new { x }),
+             Delay.new { tarai_lazy(z.force - 1, x, Delay.new { y }) })
+end
+</pre>
+<p> tarai_lazy() のプログラムを見てください。遅延評価したい処理を Delay に包んで引数 z に渡します。そして、x &gt; y のときに引数 z を評価 (z.force()) します。すると、遅延オブジェクトが評価されて z の値を求めることができます。
+</p>
+<p> たとえば、{ 0 } を Delay に渡す場合、z.force() とすると返り値は 0 になります。{ x } を渡せば、x に格納されている値が返されます。{ tarai_lazy( ... ) } を渡せば、関数 tarai_lazy() が実行されてその値が返されるわけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+irb&gt; Benchmark.realtime { tarai_lazy(18, 9, Delay.new {0}) }
+=&gt; 0.0005394669999532198
+irb&gt; Benchmark.realtime { tarai_lazy(180, 90, Delay.new {0}) }
+=&gt; 0.036651302999871405
+</pre>
+<p> tarai() の場合、遅延評価の効果はとても大きいですね。
+</p>
+<h4>●クロージャによる遅延評価</h4>
+<p> ところで、Delay を使わなくても、手続きオブジェクト (クロージャ) だけで遅延評価を行うことができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : クロージャによる遅延評価
+
+def tarai_lazy1(x, y, z)
+  return y if x &lt;= y
+  zz = z.call
+  tarai_lazy1(tarai_lazy1(x - 1, y, z),
+              tarai_lazy1(y - 1, zz, proc { x }),
+              proc { tarai_lazy1(zz - 1, x, proc { y }) })
+end
+</pre>
+<pre>
+irb&gt; Benchmark.realtime { tarai_lazy1(180, 90, proc {0}) }
+=&gt; 0.032123816999956034
+</pre>
+<p> 遅延評価したい処理をクロージャに包んで引数 z に渡します。そして、x &gt; y のときに引数 z の関数を呼び出します。すると、クロージャ内の処理が評価されて z の値を求めることができます。たとえば、proc {0} を z に渡す場合、z.call とすると返り値は 0 になります。proc {x} を渡せば、x に格納されている値が返されます。proc { tarai_lazy1( ... ) } を渡せば、tarai_lazy1() が実行されてその値が返されるわけです。ただし、クロージャでは評価結果を保存 (キャッシュ) できないことに注意してください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">遅延ストリーム</h3>
+<p> 「ストリーム (stream)」はデータの流れを抽象化したデータ構造です。たとえば、ファイル入出力はストリームと考えることができます。また、配列や連結リストを使ってストリームを表すこともできます。ただし、単純な配列や連結リストでは有限個のデータの流れしか表すことができません。ところが、遅延評価を用いると擬似的に無限個のデータを表すことができるようになります。これを「遅延ストリーム」とか「遅延リスト」と呼びます。
+</p>
+<p> Ruby の Enumerator や Enumerator::Lazy は遅延リストですが、メソッド next() は状態を書き換えることで動作するので immutable ではありません。また、実行結果もキャッシュしていません。前回作成したクラス Delay を使うと、完全ではありませんが関数型言語のような immutable な遅延ストリームを作ることができます。まあ、immutable な遅延ストリームを Ruby で使うことはほとんどないと思いますが、今回は Ruby のお勉強ということで、実際にプログラムを作ってみましょう。
+</p>
+<h4>●遅延ストリームの構造</h4>
+<p> 遅延ストリームの基本的な考え方は、必要になったときに新しいデータを生成することです。このときに遅延評価を用います。具体的にはデータを生成するメソッドを用意し、それを遅延評価してストリームに格納しておきます。そして、必要になった時点で遅延評価しておいたメソッドを呼び出して値を求めればよいわけです。
+</p>
+<p> 今回作成する遅延ストリームはクラス名を LazyStream とします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 遅延ストリーム
+
+class LazyStreamError &lt; StandardError
+end
+
+class LazyStream
+  def initialize(x, &amp;func)
+    @item = x
+    @next = Delay.new &amp;func
+  end
+
+  def inspect                                                             
+    "(" + @item.to_s + ", ?)"                                             
+  end                              
+
+  # 終端
+  @@NIL = LazyStream.new(nil) { nil }
+
+  def empty?
+    self == @@NIL
+  end
+  
+  def LazyStream.empty
+    @@NIL
+  end
+
+  # メソッドの定義
+  ・・・省略・・・
+end
+</pre>
+<p> LazyStreamError はエラーを表すクラスです。LazyStream の変数 @item に先頭の要素を格納し、@next に遅延ストリームを生成する遅延オブジェクトを格納します。これを force() することで、次の要素を格納した遅延ストリームを生成します。クラス変数 @@NIL は遅延ストリームの終端 (空の遅延ストリーム) を表します。クラスメソッド empty() は空の遅延ストリームを返し、メソッド empty?() は遅延ストリームが空であれば真を返します。
+</p>
+<p> 次は遅延ストリームを操作する基本的なメソッドを定義します。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの基本的な操作メソッド
+
+  # 先頭要素を取り出す
+  def first
+    raise LazyStreamError, "Stream is empty" if empty?
+    @item
+  end
+
+  # 先頭要素を取り除く
+  def rest
+    raise LazyStreamError, "Stream is empty" if empty?
+    @next.force
+  end
+</pre>
+<p> メソッド first() は遅延ストリームから要素を取り出して返します。メソッド rest() は遅延ストリームの変数 @next を force() して、次の要素を格納した遅延ストリームを生成します。つまり、LazyStream.new(), first(), rest() は Lisp / Scheme でいうリスト操作関数 cons, car, cdr に対応します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+irb&gt; a = LazyStream.new(1) { LazyStream.empty }
+=&gt; (1, ?)
+irb&gt; b = LazyStream.new(2) { a }
+=&gt; (2, ?)
+irb&gt; c = LazyStream.new(3) { b }
+=&gt; (3, ?)
+irb&gt; c.first
+=&gt; 3
+irb&gt; c.rest.first
+=&gt; 2
+irb&gt; c.rest.rest.first
+=&gt; 1
+irb&gt; c.rest.rest.rest.empty?
+=&gt; true
+</pre>
+<h4>●遅延ストリームの生成</h4>
+<p> 次は、遅延ストリームを生成するクラスメソッドを作りましょう。たとえば、n 以上 m 以下の整数列を生成する遅延ストリームは次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 整数列を生成する遅延ストリーム
+
+  def LazyStream.iota(n, m, stepno = 1)
+    return @@NIL if n &gt; m
+    LazyStream.new(n) { iota(n + stepno, m) }
+  end
+</pre>
+<p> クラスメソッド iota() は遅延ストリームを生成して返します。new() の引数が現時点でのデータになり、ブロックの中で iota() を呼び出します。rest() を実行すると、遅延オブジェクトに格納された手続きオブジェクトが評価され、その本体である iota() が実行されて次のデータを格納した遅延ストリームが返されます。その遅延ストリームに対してさらに rest() を実行すると、その次のデータを取得することができます。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+irb&gt; xs = LazyStream.iota(1, 10)
+=&gt; (1, ?)
+irb&gt; xs.first
+=&gt; 1
+irb&gt; xs.rest.first
+=&gt; 2
+irb&gt; xs.rest.rest.first
+=&gt; 3
+irb&gt; xs1 = xs
+=&gt; (1, ?)
+irb&gt; 10.times {
+irb&gt; print xs1.first, " "
+irb&gt; xs1 = xs.rest
+irb&gt; }
+1 2 3 4 5 6 7 8 9 10 =&gt; 10
+irb&gt; xs.first
+=&gt; 1
+irb&gt; xs.rest.first
+=&gt; 2
+</pre>
+<p> 遅延ストリーム xs に rest() を適用することで、次々とデータを生成することができます。また、ループの中で変数 xs1 の値を書き換えれば、遅延ストリームの要素を順番に取り出していくことができます。このとき、遅延ストリーム自体の値は書き換えられていないことに注意してください。xs の値を書き換えない限り、xs.first の値は 1 で、xs.rest.first の値は 2 のままです。
+</p>
+<h4>●無限ストリームの生成</h4>
+<p> 次は無限ストリームを生成するクラスメソッドを作りましょう。次のリストを見てください。
+<pre class="list">
+リスト : 無限ストリームの生成
+
+  // 前項にメソッドを適用して次項を生成する
+  def LazyStream.iterate(a, &amp;func)
+    LazyStream.new(a) { iterate(func.call(a), &amp;func) }
+  end
+
+  // a から始まる整数列に関数 func を適用する
+  def LazyStream.tabulate(a = 0, &amp;func)
+    LazyStream.new(func.call(a)) { tabulate(a + 1, &amp;func) }
+  end
+</pre>
+<p> メソッド iterate() は、第 1 引数に初項を指定して、第 2 引数のメソッドで前項から次項を生成します。これは new() の引数に a を渡して、ブロックの中で iterate() の第 1 引数に func.call(a) の返り値をセットするだけです。これで、引数 a の値から次項の値を求めることができます。メソッド tabulate() は引数 a から始まる整数列に関数 func を適用し、その結果を格納する遅延ストリームを返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+irb&gt; xs = LazyStream.iterate(1) {|x| x + 1}
+=&gt; (1, ?)
+irb&gt; xs.first
+=&gt; 1
+irb&gt; xs.rest.first
+=&gt; 2
+irb&gt; xs.rest.rest.first
+=&gt; 3
+irb&gt; ys = LazyStream.tabulate(1) {|x| x * x}
+=&gt; (1, ?)
+irb&gt; ys.first
+=&gt; 1
+irb&gt; ys.rest.first
+=&gt; 4
+irb&gt; ys.rest.rest.first
+=&gt; 9
+</pre>
+<p> もう一つ、簡単な例を示しましょう。フィボナッチ数列を生成する遅延ストリームを作ります。
+</p>
+<pre>
+irb&gt; def fibo(a, b)
+irb&gt; LazyStream.new(a) { fibo(b, a + b) }
+irb&gt; end
+=&gt; :fibo
+irb&gt; fibos = fibo(0, 1)
+=&gt; (0, ?)
+irb&gt; 20.times {
+irb&gt; print fibos.first, " "
+irb&gt; fibos = fibos.rest
+irb&gt; }
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 =&gt; 20
+</pre>
+<p> 関数 fibo() の引数 a がフィボナッチ数列の最初の項で、b が次の項です。したがって、ブロックの中に fibo(b, a + b) を格納しておけば、rest() を実行することでフィボナッチ数列を生成することができます。
+</p>
+<p> また、次のように iterate() を使ってもフィボナッチ数列を生成することができます。
+</p>
+<pre>
+irb&gt; fibos = LazyStream.iterate([0, 1]){|x, y| [y, x + y]}
+=&gt; ([0, 1], ?)
+irb&gt; 20.times {
+irb&gt; print fibos.first, " "
+irb&gt; fibos = fibos.rest
+irb&gt; }
+[0, 1] [1, 1] [1, 2] [2, 3] [3, 5] [5, 8] [8, 13] [13, 21] [21, 34] [34, 55] [55, 89] 
+[89, 144] [144, 233] [233, 377] [377, 610] [610, 987] [987, 1597] [1597, 2584] 
+[2584, 4181] [4181, 6765] =&gt;20
+</pre>
+
+<h4>●遅延ストリームの操作メソッド</h4>
+<p> 次は遅延ストリームを操作するメソッドを作りましょう。最初は n 番目の要素を求めるメソッド get() です。
+</p>
+<pre class="list">
+リスト : n 番目の要素を求める
+
+  def get(n)
+    xs = self
+    n.times {
+      xs = xs.rest
+    }
+    xs.first
+  end
+</pre>
+<p> get() は rest() を n 回繰り返して n 番目の要素を求めるだけです。
+</p>
+<p> 遅延ストリームから n 個の要素を取り出して配列に格納して返すメソッド take() と、先頭から n 個の要素を取り除くメソッド drop() も同様にプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 要素を n 個取り出して配列に格納して返す
+
+  def take(n)
+    xs = self
+    ys = []
+    n.times {
+      break if xs.empty?
+      ys.push xs.first
+      xs = xs.rest
+    }
+    ys
+  end
+</pre>
+<pre class="list">
+リスト : 先頭から n 個要素を取り除く
+
+  def drop(n)
+    xs = self
+    n.times {
+      break if xs.empty?
+      xs = xs.rest
+    }
+    xs
+  end
+</pre>
+<p> take() は times() で first() と rest() を n 回繰り返し、要素を配列に格納して返します。drop() は rest() を n 回繰り返すだけです。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+irb&gt; fibos = fibo(0, 1)
+=&gt; (0, ?)
+irb&gt; 20.times {|x| print fibos.get(x), " "}
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 =&gt; 20
+irb&gt; fibos.take(20)
+=&gt; [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181]
+irb&gt; fibos.drop(30).take(10)
+=&gt; [832040, 1346269, 2178309, 3524578, 5702887, 9227465, 14930352, 24157817, 39088169, 63245986]
+</pre>
+<p> 変数 fibos にフィボナッチ数列を生成する遅延ストリームをセットします。get() で順番に要素を 20 個取り出すと、その値はフィボナッチ数列になっていますね。take() を使うと取り出した要素を配列に格納することができます。drop() で 30 個の要素を取り除き、take() で 10 個の要素を取り出します。すると、その要素は 30 番目以降のフィボナッチ数列になります。
+</p>
+
+<h4>●遅延ストリームの連結</h4>
+<p> 次は、2 つの遅延ストリームを受け取って 1 つの遅延ストリームを返すメソッドを考えてみましょう。一番簡単な操作は 2 つの遅延ストリームを連結することです。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの連結
+
+  def append(xs)
+    return xs if empty?
+    LazyStream.new(first) { rest.append(xs) }
+  end
+</pre>
+<p> メソッド append() は自分 (self) と引数の遅延ストリーム xs を連結した遅延ストリームを返します。処理は簡単で、自分の要素を順番に取り出していき、空になったら xs を返すだけです。
+</p>
+<p> 次は 2 つの遅延ストリームの要素を交互に出力する遅延ストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの要素を交互に出力
+
+  def interleave(xs)
+    return xs if empty?
+    LazyStream.new(first) { xs.interleave(rest) }
+  end  
+</pre>
+<p> メソッド interleave() は、自分の要素を新しい遅延ストリームに格納したら、次は引数 xs の要素を新しい遅延ストリームに格納します。これはブロックで interleave() を呼び出すとき、xs に対して interleave() を呼び出して、その引数に rest() の返り値を渡すだけです。これで要素を交互に出力することができます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+irb&gt; xs = LazyStream.iota(1, 8)
+=&gt; (1, ?)
+irb&gt; ys = LazyStream.iota(11, 18)
+=&gt; (11, ?)
+irb&gt; xs.append(ys).take(16)
+=&gt; [1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18]
+irb&gt; ones = LazyStream.iterate(1, &amp;:itself)
+=&gt; (1, ?)
+irb&gt; ones.take(16)
+=&gt; [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+irb&gt; twos = LazyStream.iterate(2, &amp;:itself)
+=&gt; (2, ?)
+irb&gt; twos.take(16)
+=&gt; [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
+irb&gt; ones.append(twos).take(16)
+=&gt; [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+irb&gt; ones.interleave(twos).take(16)
+=&gt; [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2]
+</pre>
+<p> append() の場合、無限ストリーム ones と twos を連結することはできません。ones の要素である 1 をずっと出力するだけです。ところが、interleave() ならば無限ストリームにも対応することができます。ones と twos を interleave() で連結すると、1 と 2 が交互に出力されます。
+</p>
+
+<h4>●高階関数</h4>
+<p> 次は、遅延ストリーム用の高階関数を作りましょう。
+</p>
+<pre class="list">
+リスト : 高階関数
+
+  # マッピング
+  def map(&amp;func)
+    return @@NIL if empty?
+    LazyStream.new(func.call(first)) { rest.map(&amp;func) }
+  end
+
+  # フィルター
+  def filter(&amp;func)
+    xs = self
+    while !xs.empty?
+      if func.call xs.first
+        return LazyStream.new(xs.first) { xs.rest.filter(&amp;func) }
+      end
+      xs = xs.rest
+    end
+    @@NIL
+  end
+
+  # 畳み込み
+  def reduce(a, &amp;func)
+    xs = self
+    while !xs.empty?
+      a = func.call a, xs.first
+      xs = xs.rest
+    end
+    a
+  end
+
+  # 巡回
+  def each(&amp;func)
+    xs = self
+    while !xs.empty?
+      func.call xs.first
+      xs = xs.rest
+    end
+  end
+</pre>
+<p> map() は遅延ストリームの要素にメソッド func を適用し、その返り値を新しい遅延ストリームに格納して返します。filter() はメソッド func が真を返す要素だけを新しい遅延ストリームに格納して返します。
+</p>
+<p> reduce() は遅延ストリームに対して畳み込みを行います。each() は遅延ストリームの要素にメソッド func を適用します。無限ストリームの場合、これらのメソッドは処理が終了しないので注意してください。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+irb&gt; xs = LazyStream.iota(1, 20)
+=&gt; (1, ?)
+irb&gt; xs.map{|x| x * x}.each{|x| print x, " "}
+1 4 9 16 25 36 49 64 81 100 121 144 169 196 225 256 289 324 361 400 =&gt; nil
+irb&gt; xs.filter{|x| x % 2 == 0}.each{|x| print x, " "}
+2 4 6 8 10 12 14 16 18 20 =&gt; nil
+irb&gt; xs.reduce(0){|a, b| a + b}
+=&gt; 210
+</pre>
+<p> 変数 xs に 1 から 20 までの整数列を生成する遅延ストリームをセットします。map() にブロック {|x| x * x} を渡すと、要素を 2 乗した遅延ストリームを生成することができます。filter() にブロック {|x| x % 2 == 0} を渡すと、偶数の要素を取り出すことができます。これらの遅延ストリームに each() を適用すると、要素を順番に取り出して出力することができます。xs は有限個の遅延ストリームなので畳み込みを行うことができます。reduce() で要素の合計値を求めると 210 になります。
+</p>
+
+<p> また、次のように FizzBuzz 問題も簡単に解くことができます。
+</p>
+<pre>
+irb&gt; def change(n)
+irb&gt; return "FizzBuzz" if n % 15 == 0
+irb&gt; return "Fizz" if n % 3 == 0
+irb&gt; return "Buzz" if n % 5 == 0
+irb&gt; n.to_s
+irb&gt; end
+=&gt; :change
+irb&gt; LazyStream.iota(1, 100).map{|x| change(x)}.take(100)
+=&gt; ["1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz", "11", "Fizz", 
+"13", "14", "FizzBuzz", "16", "17", "Fizz", "19", "Buzz", "Fizz", "22", "23", "Fizz", 
+"Buzz", "26", "Fizz", "28", "29", "FizzBuzz", "31", "32", "Fizz", "34", "Buzz", 
+"Fizz", "37", "38", "Fizz", "Buzz", "41", "Fizz", "43", "44", "FizzBuzz", "46", "47", 
+"Fizz", "49", "Buzz", "Fizz", "52", "53", "Fizz", "Buzz", "56", "Fizz", "58", "59", 
+"FizzBuzz", "61", "62", "Fizz", "64", "Buzz", "Fizz", "67", "68", "Fizz", "Buzz", 
+"71", "Fizz", "73", "74", "FizzBuzz", "76", "77", "Fizz", "79", "Buzz", "Fizz", "82", 
+"83", "Fizz", "Buzz", "86", "Fizz", "88", "89", "FizzBuzz", "91", "92", "Fizz", "94", 
+"Buzz", "Fizz", "97", "98", "Fizz", "Buzz"]
+</pre>
+<h4>●遅延ストリームへの変換</h4>
+<p> 次は配列を遅延ストリームに変換するクラスメソッド of() を作ります。
+</p>
+<pre class="list">
+リスト : 配列を遅延ストリームに変換
+
+  def LazyStream.of(xs, n = 0)
+    return @@NIL if xs.size == n
+    LazyStream.new(xs[n]) { of(xs, n + 1) }
+  end
+</pre>
+<p> of() は配列 xs の先頭から要素を順番に取り出して、遅延ストリームに格納して返すだけです。簡単な実行例を示します。
+</p>
+<pre>
+irb&gt; xs = LazyStream.of([1,2,3,4,5,6,7,8])
+=&gt; (1, ?)
+irb&gt; xs.each{|x| print x, " "}
+1 2 3 4 5 6 7 8 =&gt; nil
+irb&gt; ys = LazyStream.of(["foo", "bar", "baz", "oops"])
+=&gt; (foo, ?)
+irb&gt; ys.each{|x| print x, " "}
+foo bar baz oops =&gt; nil
+</pre>
+<h4>●flat_map()</h4>
+<p> 次は高階関数 flat_map() を作りましょう。このとき、次のように append() を使って flat_map() を定義すると問題が発生します。
+</p>
+<pre class="list">
+リスト : flat_map() の定義 (間違い)
+
+  def flat_map_bad(&amp;func)
+    return @@NIL if empty?
+    func.call(first).append(rest.flat_map_bad(&amp;func))
+  end
+</pre>
+<p> Ruby のメソッドは正格評価なので、append() を実行する前に引数が評価されます。つまり、flat_map_bad() の評価は遅延されるのではなく、遅延ストリームが空になるまで flat_map_bad() が再帰呼び出しされるのです。これでは無限ストリームに対応することができません。
+</p>
+<p> そこで、引数を遅延評価するメソッド lazy_append() を作ることにします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : lazy_append() と flat_map()
+
+  def lazy_append(ys)
+    return ys.force if empty?
+    LazyStream.new(first) { rest.lazy_append(ys) }
+  end
+
+  def flat_map(&amp;func)
+    return @@NIL if empty?
+    func.call(first).lazy_append(Delay.new { rest.flat_map(&amp;func) })
+  end
+</pre>
+<p> lazy_append() は append() とほぼ同じですが、遅延ストリームが空になったら遅延オブジェクト ys を force() で評価するところが異なります。flat_map() では、appned() のかわりに lazy_append() を呼び出します。このとき、Delay.new() で生成した遅延オブジェクトを引数に渡します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+irb&gt; xs = LazyStream.tabulate(1, &amp;:itself)
+=&gt; (1, ?)
+irb&gt; xs.flat_map{|x| LazyStream.of(Array.new(x){ x })}.take(55)
+=&gt; [1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 
+7, 7, 8, 8, 8, 8, 8, 8, 8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 10, 10, 10, 10, 10, 
+10, 10, 10]
+</pre>
+<p> xs は無限ストリームになりますが、flat_map() は正常に動作していますね。
+</p>
+<h4>●take_while() と drop_while()</h4>
+<p> 次は、遅延ストリームの先頭から述語が真を返す要素を取り出す take_while() と要素を取り除く drop_while() を作ります。
+</p>
+<pre class="list">
+リスト : take_while() と drop_while()
+
+  def take_while(&amp;func)
+    xs = self
+    ys = []
+    while !xs.empty? &amp;&amp; func.call(xs.first)
+      ys.push xs.first
+      xs = xs.rest
+    end
+    ys
+  end
+
+  def drop_while(&amp;func)
+    xs = self
+    while !xs.empty? &amp;&amp; func.call(xs.first)
+      xs = xs.rest
+    end
+    xs
+  end
+</pre>
+<p> どちらのメソッドも難しいところはないと思います。簡単な実行例を示しましょう。
+</p>
+<pre>
+irb&gt; xs = LazyStream.iota(1, 20)
+=&gt; (1, ?)
+irb&gt; xs.take_while{|x| x &lt; 10}
+=&gt; [1, 2, 3, 4, 5, 6, 7, 8, 9]
+irb&gt; xs.drop_while{|x| x &lt; 10}.each{|x| print x, " "}
+10 11 12 13 14 15 16 17 18 19 20 =&gt; nil
+</pre>
+<p> 今回はここまでです。次回は遅延ストリームを使っていろいろなプログラムを作ってみましょう。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li><a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs (SICP)"</a> <a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-24.html#%_sec_3.5">3.5  Streams</a>
+</ol>
+</section>
+<hr>
+<div align="right">
+初版 2011 年 5 月 14 日<br>
+改訂 2017 年 1 月 28 日
+</div>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011-2017 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcruby17.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby19.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

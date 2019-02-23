@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 ISLisp プログラミング超入門</title>
+  <meta name="description" content="Lisp,ISLisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881772</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>お気楽 ISLisp プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <A href="../index.html">Home</a> | <a href="index.html">Common Lisp</a> | <a href="islisp.html">ISLisp</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>簡単なプログラム</h3>
+<h4 id="chap17">●遅延評価</h4>
+<p> Scheme の delay と force は ISLisp でもマクロを使って簡単に実装することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : delay と force
+
+(defmacro delay (expr)
+  `(make-promise (lambda () ,expr)))
+
+(defun make-promise (f)
+  (let ((flag nil) (result nil))
+    (lambda ()
+      (if (not flag)
+        (let ((x (funcall f)))
+          (cond ((not flag)
+                 (setq flag t)
+                 (setq result x)))))
+      result)))
+
+(defun force (promise)
+  (funcall promise))
+</pre>
+
+<p> delay と force は <a href="islisp03.html#cite17">参考文献 1</a> に掲載されているプログラムを ISLisp で書き直したものです。delay の引数 expr をクロージャに格納して関数 make-promis に渡します。make-promise はクロージャを生成して返します。このデータを Scheme では「プロミス」といいます。本稿では遅延オブジェクトと呼ぶことにします。force は簡単で、引数 promise を funcall で評価するだけです。
+</p>
+<p> make-promise はクロージャを生成し、その中にクロージャ f の評価結果を格納します。flag が nil の場合は f を評価していないので、funcall で f を評価して、その返り値を result にセットし、flag の値を t に書き換えます。flag が t ならば f は評価済みなので result を返します。
+</p>
+
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre>
+ISLisp&gt;(defglobal a (delay (+ 10 20)))
+A
+ISLisp&gt;a
+#&lt;UFUNCTION 0026DE36: #&lt;LAMBDA&gt;&gt;
+ISLisp&gt;(force a)
+30
+</pre>
+<p> (delay (+ 10 20)) の返り値を変数 a にセットします。このとき、S 式 (+ 10 20) は評価されていません。遅延オブジェクトの値を実際に求める関数が force です。(force a) を評価すると、S 式 (+ 10 20) を評価して値 30 を返します。
+</p>
+<p> また、遅延オブジェクトは式の評価結果をキャッシュします。したがって、(force a) を再度実行すると、同じ式を再評価することなく値を求めることができます。次の例を見てください。
+</p>
+<pre>
+ISLisp&gt;(defglobal b (delay (progn (write "oops!") (+ 10 20))))
+B
+ISLisp&gt;(force b)
+"oops!"30
+ISLisp&gt;(force b)
+30
+</pre>
+<p> 最初に (force b) を実行すると、S 式 (progn (write "oops!") (+ 10 20)) が評価されるので、画面に oops! が表示されます。次に、(force b) を実行すると、式を評価せずにキャッシュした値を返すので oops! は表示されません。
+</p>
+<h4 id="cite17">●参考文献</h4>
+<ol>
+  <li>R. Kent Dybvig (著), 村上雅章 (訳), 『プログラミング言語 SCHEME』, 株式会社ピアソン・エデュケーション, 2000
+</ol>
+<hr>
+<h4 id="chap18">●遅延ストリーム</h4>
+<p> 「ストリーム (stream)」はデータの流れを抽象化したデータ構造です。たとえば、ファイル入出力はストリームと考えることができます。また、リストを使ってストリームを表すこともできます。ただし、単純なリストでは有限個のデータの流れしか表すことができません。ところが、遅延評価を用いると擬似的に無限個のデータを表すことができるようになります。これを「遅延ストリーム」とか「遅延リスト」と呼びます。
+</p>
+<h4>●遅延ストリームの構造</h4>
+<p> 遅延ストリームの基本的な考え方は、必要になったときに新しいデータを生成することです。このときに遅延評価を用います。具体的にはデータを生成する関数を用意し、それを遅延評価してストリームに格納しておきます。そして、必要になった時点で遅延評価しておいた関数を呼び出して値を求めればよいわけです。
+</p>
+<p> 今回は遅延ストリームをコンスセルで表すことにします。コンスセルの CAR が現時点での先頭データを表し、CDR が遅延ストリームを生成する関数を格納する遅延オブジェクトです。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリーム
+
+;; 遅延ストリームの生成
+(defmacro stream-cons (a b)
+  `(cons ,a (delay ,b)))
+
+;; 要素を取り出す
+(defun stream-car (s) (car s))
+
+;; 次の要素を求める
+(defun stream-cdr (s) (force (cdr s)))
+</pre>
+<p> マクロ stream-cons はコンスセルの CAR にストリームの要素 a を格納し、CDR に遅延オブジェクトを格納します。遅延オブジェクトにはストリームを生成する関数 b を格納します。遅延オブジェクトを force することで、次の要素を格納した遅延ストリームを生成します。ストリームの終端は nil で表すことにします。
+</p>
+<p> 関数 stream-car は遅延ストリーム s から要素を取り出して返します。関数 stream-cdr は s の遅延オブジェクトを force して、次の要素を格納した遅延ストリームを生成して返します。ようするに、これらのマクロと関数はリスト操作の cons, car, cdr に対応します。
+</p>
+<h4>●遅延ストリームの生成</h4>
+<p> それでは、遅延ストリームを生成する関数を作りましょう。たとえば、low から high までの整数列を生成するストリームは次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 整数列を生成するストリーム
+
+(defun intgen (low high)
+  (if (&gt; low high)
+      nil
+    (stream-cons low (intgen (+ low 1) high))))
+</pre>
+<p> 関数 intgen は遅延ストリームを生成して返します。stream-cons の第 1 引数が現時点でのデータになります。第 2 引数のプロミスを force すると、(intgen (+ low 1) high) が実行されて次のデータを格納した遅延ストリームが返されます。そして、その中の遅延オブジェクトを force すると、その次のデータを得ることができます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+ISLisp&gt;(defglobal s (intgen 1 4))
+S
+ISLisp&gt;(stream-car s)
+1
+ISLisp&gt;(setq s (stream-cdr s))
+(2 . #&lt;UFUNCTION 0026B636: #&lt;LAMBDA&gt;&gt;)
+ISLisp&gt;(stream-car s)
+2
+ISLisp&gt;(setq s (stream-cdr s))
+(3 . #&lt;UFUNCTION 0026B036: #&lt;LAMBDA&gt;&gt;)
+ISLisp&gt;(stream-car s)
+3
+ISLisp&gt;(setq s (stream-cdr s))
+(4 . #&lt;UFUNCTION 0026A836: #&lt;LAMBDA&gt;&gt;)
+ISLisp&gt;(stream-car s)
+4
+ISLisp&gt;(setq s (stream-cdr s))
+NIL
+ISLisp&gt;s
+NIL
+</pre>
+<p> もう一つ、簡単な例を示しましょう。フィボナッチ数列を生成する遅延ストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : フィボナッチ数列を生成する遅延ストリーム
+
+(defun fibgen (a b)
+  (stream-cons a (fibgen b (+ a b))))
+</pre>
+<p> 関数 fibgen の引数 a がフィボナッチ数列の最初の項で、b が次の項です。したがって、プロミスに (fibgen b (+ a b)) を格納しておけば、force することでフィボナッチ数列を生成することができます。
+</p>
+<pre>
+ISLisp&gt;(defglobal f (fibgen 0 1))
+F
+ISLisp&gt;(stream-car f)
+0
+ISLisp&gt;(setq f (stream-cdr f))
+(1 . #&lt;UFUNCTION 00269A36: #&lt;LAMBDA&gt;&gt;)
+ISLisp&gt;(stream-car f)
+1
+ISLisp&gt;(setq f (stream-cdr f))
+(1 . #&lt;UFUNCTION 00269436: #&lt;LAMBDA&gt;&gt;)
+ISLisp&gt;(stream-car f)
+1
+ISLisp&gt;(setq f (stream-cdr f))
+(2 . #&lt;UFUNCTION 00268C36: #&lt;LAMBDA&gt;&gt;)
+ISLisp&gt;(stream-car f)
+2
+ISLisp&gt;(setq f (stream-cdr f))
+(3 . #&lt;UFUNCTION 00268636: #&lt;LAMBDA&gt;&gt;)
+ISLisp&gt;(stream-car f)
+3
+ISLisp&gt;(setq f (stream-cdr f))
+(5 . #&lt;UFUNCTION 00267E36: #&lt;LAMBDA&gt;&gt;)
+ISLisp&gt;(stream-car f)
+5
+</pre>
+<h4>●遅延ストリームの操作関数</h4>
+<p> 次は遅延ストリームを操作する関数を作りましょう。最初は n 番目の要素を求める関数 stream_ref です。
+</p>
+<pre class="list">
+リスト : n 番目の要素を求める
+
+(defun stream-ref (s n)
+  (for ((n n (- n 1))
+        (s s (stream-cdr s)))
+       ((= n 0) (stream-car s))))
+</pre>
+<p> stream_ref は stream_tail を n 回繰り返すことで n 番目の要素を求めます。ストリームから n 個の要素を取り出してリストに格納して返す関数 stream_take() も同様にプログラムすることができます。
+</p>
+<pre class="list">
+リスト : n 個の要素を取り出す
+
+(defun stream-take (s n)
+  (for ((n n (- n 1))
+        (s s (stream-cdr s))
+        (a nil (cons (stream-car s) a)))
+       ((= n 0) (nreverse a))
+       (if (null s)
+           (error "Empty Stream"))))
+</pre>
+<p> それでは、簡単な実行例を示しましょう。
+</p>
+<pre>
+ISLisp&gt;(defglobal f (fibgen 0 1))
+F
+ISLisp&gt;(stream-ref f 0)
+0
+ISLisp&gt;(stream-ref f 1)
+1
+ISLisp&gt;(stream-ref f 2)
+1
+ISLisp&gt;(stream-ref f 3)
+2
+ISLisp&gt;(stream-ref f 4)
+3
+ISLisp&gt;(stream-ref f 5)
+5
+ISLisp&gt;(stream-ref f 6)
+8
+ISLisp&gt;(stream-ref f 7)
+13
+ISLisp&gt;(stream-ref f 8)
+21
+ISLisp&gt;(stream-ref f 9)
+34
+ISLisp&gt;(stream-ref f 10)
+55
+ISLisp&gt;(stream-take f 20)
+(0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181)
+ISLisp&gt;(stream-ref f 100)
+354224848179261915075
+</pre>
+<p> 変数 f にフィボナッチ数列を生成するストリームをセットします。stream_ref で順番に要素を 20 個取り出すと、その値はフィボナッチ数列になっていますね。同様に、stream_take で 20 個の要素を取り出すと、配列の要素はフィボナッチ数列になります。メモリの許す限り大きなフィボナッチ数でも求めることができます。
+</p>
+<p> このほかにも、便利な関数や高階関数などをいろいろ定義することができます。遅延ストリームに興味のある方は拙作のページ Common Lisp 入門 番外編 <a href="clispb10.html#chap14">遅延ストリーム (1)</a>, <a href="clispb11.html">(2)</a> をお読みくださいませ。
+</p>
+<h4 id="chap19">●クロージャで遊ぼう</h4>
+<p> クロージャをサポートしているプログラミング言語では、効率を考慮しないでよければ、クロージャを使って「連結リスト」を実装しすることができます。連結リストの操作関数 cons, car, cdr には次の関係が成り立ちます。
+</p>
+<pre class="item">
+(car (cons 'x 'y)) =&gt; x
+(cdr (cons 'x 'y)) =&gt; y
+</pre>
+<p> ここで、関数 cons で生成したオブジェクトがセルではない場合を考えてみましょう。もし、そのオブジェクトに car を適用すれば cons の第 1 引数 x を返し、cdr を適用すれば第 2 引数を返すことができれば、セルと同じことが実現できます。
+</p>
+<p> そこで、cons はセルではなくクロージャを返すことにしましょう。クロージャは引数 x, y の値を保持することができます。そして、このクロージャは引数に関数を受け取ることにします。あとは、この関数に引数 x, y を渡して評価すれば car と cdr を実現することができます。ISLisp で cons, car, cdr をプログラムすると次のようになります。
+</p>
+<pre>
+ISLisp&gt;(defun cons2 (x y) (lambda (z) (funcall z x y)))
+CONS2
+ISLisp&gt;(defun car2 (z) (funcall z (lambda (x y) x)))
+CAR2
+ISLisp&gt;(defun cdr2 (z) (funcall z (lambda (x y) y)))
+CDR2
+</pre>
+<p> 関数 cons2 はクロージャを返します。このクロージャは引数 z に関数を受け取り、その関数に x, y を渡して評価します。関数 car2 は引数 z にクロージャを渡して評価し、第 1 引数 x を返します。これで car と同じ動作になります。同様に、関数 cdr2 は引数 z にクロージャを渡して評価し、第 2 引数 y を返します。これで cdr と同じ動作になります。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+ISLisp&gt;(defglobal a (cons2 1 0))
+A
+ISLisp&gt;(car2 a)
+1
+ISLisp&gt;(cdr2 a)
+0
+ISLisp&gt;(defglobal b (cons2 2 a))
+B
+ISLisp&gt;(car2 b)
+2
+ISLisp&gt;(car2 (cdr2 b))
+1
+ISLisp&gt;(cdr2 (cdr2 b))
+0
+</pre>
+<p> このように、クロージャを使って連結リストを作成することができます。ご参考までに、簡単なリスト操作関数を下記リストに示します。
+</p>
+<pre class="list">
+;;
+;; list2.l : クロージャによる連結リストの実装
+;;
+;;           Copyright (C) 2016 Makoto Hiroi
+;;
+
+;; 基本関数
+(defun cons2 (x y) (lambda (z) (funcall z x y)))
+(defun car2 (z) (funcall z (lambda (x y) x)))
+(defun cdr2 (z) (funcall z (lambda (x y) y)))
+
+;; 述語
+(defun cons2p (x) (functionp x))
+(defun list2p (x) (or (null x) (cons2p x)))
+(defun atom2 (x) (not (cons2p x)))
+
+;; 簡単な入出力
+(defun display (x) (format (standard-output) "~A" x))
+(defun terpri () (format (standard-output) "~%"))
+
+;; リストの表示
+(defun printlist2(xs)
+  (display "(")
+  (while (cons2p xs)
+    (if (list2p (car2 xs))
+        (printlist2 (car2 xs))
+      (display (car2 xs)))
+    (if (cons2p (cdr2 xs))
+        (display " "))
+    (setq xs (cdr2 xs)))
+  (cond ((not (null xs))
+         (display " . ")
+         (display xs)))
+  (display ")")
+  (terpri))
+
+;; リストの生成
+(defun list2 (&rest xs)
+  (for ((xs (reverse xs) (cdr xs))
+        (a nil (cons2 (car xs) a)))
+       ((null xs) a)))
+
+;; リストの連結
+(defun append2 (xs ys)
+  (if (null xs)
+      ys
+    (cons2 (car2 xs) (append2 (cdr2 xs) ys))))
+
+;; マッピング
+(defun mapcar2 (f xs)
+  (if (null xs)
+      nil
+    (cons2 (funcall f (car2 xs)) (mapcar2 f (cdr2 xs)))))
+
+;; フィルター
+(defun remove2 (f xs)
+  (cond ((null xs) nil)
+        ((funcall f (car2 xs))
+         (remove2 f (cdr2 xs)))
+        (t (cons2 (car2 xs) (remove2 f (cdr2 xs))))))
+
+;; 畳み込み
+(defun fold-left2 (f a xs)
+  (if (null xs)
+      a
+    (fold-left2 f (funcall f a (car2 xs)) (cdr2 xs))))
+
+(defun fold-right2 (f a xs)
+  (if (null xs)
+      a
+    (funcall f (car2 xs) (fold-right2 f a (cdr2 xs)))))
+</pre>
+<pre>
+ISLisp&gt;(defglobal a (list2 1 2 3 4 5))
+A
+ISLisp&gt;(printlist2 a)
+(1 2 3 4 5)
+NIL
+ISLisp&gt;(defglobal b (list2 6 7 8 9 10))
+B
+ISLisp&gt;(printlist2 (append2 a b))
+(1 2 3 4 5 6 7 8 9 10)
+NIL
+ISLisp&gt;(printlist2 (mapcar2 (lambda (x) (* x x)) a))
+(1 4 9 16 25)
+NIL
+ISLisp&gt;(printlist2 (remove2 (lambda (x) (= (mod x 2) 0)) a))
+(1 3 5)
+NIL
+ISLisp&gt;(fold-left2 #'+ 0 a)
+15
+ISLisp&gt;(fold-right2 #'+ 0 a)
+15
+ISLisp&gt;(printlist2 (fold-right2 #'cons2 nil a))
+(1 2 3 4 5)
+NIL
+ISLisp&gt;(printlist2 (fold-left2 (lambda (x y) (cons2 y x)) nil a))
+(5 4 3 2 1)
+NIL
+</pre>
+<hr>
+<h4 id="chap20">●チャーチ数</h4>
+<p> 「ラムダ計算 (lambda calculus)」は、文字λを使って関数を表す「λ記法」という表記法を用いた抽象的な計算モデルで、1930 年代に A. Church 氏によって考案されました。ラムダ計算は Lisp, Scheme, ML, Haskell など多くの関数型言語の基礎理論として、大きな役割を果たしています。ラムダ計算とか計算モデルというと難しい話のように思われるかもしれません。Lisp / Scheme では無名関数のことを「ラムダ式」といいますが、実をいうとこのラムダ式の考え方がラムダ計算の基本なのです。
+</p>
+<p> 純粋なラムダ計算の定義はとても単純です。ラムダ計算で扱う式は、次に示す 3 通りしかありません。
+</p>
+<ul>
+  <li>変数<br>
+      x, y, z, ...
+  <li>関数抽象 (λ抽象)<br>
+      λx.M (λの後ろの x が仮引数、ドット ( . ) の後ろの M が関数本体)
+  <li>関数適用<br>
+      (M<sub>1</sub>M<sub>2</sub>)
+</ul>
+<p> 関数抽象は関数定義、関数適用は関数呼び出し、変数は関数の仮引数のことと考えてください。つまり、純粋なラムダ計算には関数しかないのです。したがって、ラムダ計算では数を表すのにも関数を使います。これを「チャーチ数 (Church numerals)」と呼びます。
+</p>
+<p> ラムダ計算とラムダ式はまったく同じではありせんが、今回は難しいことを考えずに ISLisp のラムダ式を使って「チャーチ数」を試してみましょう。
+</p>
+<h4>●チャーチ数の基本</h4>
+<p> チャーチ数は関数 f と x を受け取り、x に f を適用した回数で数 (自然数) を表します。たとえば、自然数 n は (f (f (f (...(f x)) ...))) のように f を n 回呼び出すことで表します。ただし、Common Lisp や ISLisp は funcall が必要になるので、プログラムは Scheme よりもちょっと複雑になります。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+ISLisp&gt;(defun zero (f) (lambda (x) x))
+ZERO
+ISLisp&gt;(defun one (f) (lambda (x) (f x)))
+ONE
+ISLisp&gt;(defun one (f) (lambda (x) (funcall f x)))
+ONE
+ISLisp&gt;(defun two (f) (lambda (x) (funcall f (funcall f x))))
+TWO
+ISLisp&gt;(defun three (f) (lambda (x) (funcall f (funcall f (funcall f x)))))
+THREE
+</pre>
+<p> 関数 zero は、引数 f を受け取ったら関数 (lambda (x) x) を返します。つまり、zero の返り値 (関数) に引数 x を渡して評価すると x をそのまま返すだけです。このとき、x に f を適用していないことに注意してください。これで 0 を表すことができます。
+</p>
+<p> 同様に、one は f を 1 回適用しているので 1 を、two は 2 回適用しているので 2 を、three は 3 回適用しているので 3 を表すことができます。そうはいっても、このままではよくわからないので、実際に引数として関数 (lambda (n) (+ n 1)) と 0 を渡して実行してみましょう。実行結果は次のようになります。
+</p>
+<pre>
+ISLisp&gt;(funcall (zero (lambda (n) (+ n 1))) 0)
+0
+ISLisp&gt;(funcall (one (lambda (n) (+ n 1))) 0)
+1
+ISLisp&gt;(funcall (two (lambda (n) (+ n 1))) 0)
+2
+ISLisp&gt;(funcall (three (lambda (n) (+ n 1))) 0)
+3
+</pre>
+<p> (lambda (n) (+ n 1)) は引数 n に 1 を加算するので、もう一つの引数に 0 を渡せば (lambda (n) (+ n 1)) を適用した回数、つまりチャーチ数を ISLisp の数に変換することができます。
+</p>
+<h4>●足し算</h4>
+<p> 次は数 n に 1 を加える関数 (succ f n) を定義してみましょう。このとき、n はチャーチ数であることに注意してください。プログラムは次のようになります。
+</p>
+<pre>
+ISLisp&gt;(defun succ (f n) (lambda (x) (funcall f (funcall (funcall n f) x))))
+SUCC
+</pre>
+<p> (funcall (funcall n f) x) は数 n を表しているので、それに関数 f を再度適用すれば、n に 1 を加えることができます。簡単な実行例を示します。
+</p>
+<pre>
+ISLisp&gt;(funcall (succ (lambda (n) (+ n 1)) #'zero) 0)
+1
+ISLisp&gt;(funcall (succ (lambda (n) (+ n 1)) #'one) 0)
+2
+ISLisp&gt;(funcall (succ (lambda (n) (+ n 1)) #'two) 0)
+3
+ISLisp&gt;(funcall (succ (lambda (n) (+ n 1)) #'three) 0)
+4
+</pre>
+<p> このように、succ でチャーチ数 zero, one, two, three に 1 を加算することができます。
+</p>
+<p> 次は 2 つのチャーチ数 m, n を足し算する関数 (plus f m n) を作りましょう。この場合、(funcall (funcall n f) x) で n を表すチャーチ数になるので、この結果に関数 (funcall m f) を適用すれば m + n を実現することができます。プログラムは次のようになります。
+</p>
+<pre>
+ISLisp&gt;(defun plus (f m n) (lambda (x) (funcall (funcall m f) (funcall (funcall
+n f) x))))
+PLUS
+ISLisp&gt;(funcall (plus (lambda (n) (+ n 1)) #'zero #'one) 0)
+1
+ISLisp&gt;(funcall (plus (lambda (n) (+ n 1)) #'one #'one) 0)
+2
+ISLisp&gt;(funcall (plus (lambda (n) (+ n 1)) #'one #'three) 0)
+4
+ISLisp&gt;(funcall (plus (lambda (n) (+ n 1)) #'three #'three) 0)
+6
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●掛け算</h4>
+<p> 次はチャーチ数 m と n を掛け算する関数 (mult f m n) を定義してみましょう。m * n は n を m 回足し算すればいいので、関数 (funcall n f) を m に渡して (funcall m (funcall n f)) とするだけです。プログラムと実行結果を示します。
+<pre>
+ISLisp&gt;(defun mult (f n m) (lambda (x) (funcall (funcall m (funcall n f)) x)))
+MULT
+ISLisp&gt;(funcall (mult (lambda (n) (+ n 1)) #'zero #'three) 0)
+0
+ISLisp&gt;(funcall (mult (lambda (n) (+ n 1)) #'one #'three) 0)
+3
+ISLisp&gt;(funcall (mult (lambda (n) (+ n 1)) #'two #'three) 0)
+6
+ISLisp&gt;(funcall (mult (lambda (n) (+ n 1)) #'three #'three) 0)
+9
+</pre>
+<p> このように、チャーチ数の足し算と掛け算は簡単なのですが、引き算はとても難しくなります。本稿の範囲を超える (M.Hiroi が理解できない) ので、チャーチ数はここまでにしておきましょう。興味のある方は調べてみてください。
+</p>
+
+<h4>●参考文献, URL</h4>
+<ol>
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』,アジソンウェスレイ, 1995
+  <li><a href="http://www.kb.ecei.tohoku.ac.jp/~sumii/class/keisanki-software-kougaku-2005/lambda.pdf">ラムダ計算入門 (PDF)</a>, (住井英二郎さん)
+  <li><a href="https://ja.wikipedia.org/wiki/%E3%83%A9%E3%83%A0%E3%83%80%E8%A8%88%E7%AE%97">ラムダ計算 - Wikipedia</a>
+</ol>
+<hr>
+<h4 id="chap21">●数で遊ぼう</h4>
+<p> 今回は簡単な数理パズルを出題します。プログラムを作って解いてもかまいませんが、なかには筆算 (電卓) で解くことができる問題もあるので、興味のある方は挑戦してみてください。
+</p>
+<ol>
+  <li> 1000000 以下の自然数で、3 の倍数になっている数字の和を求めてください。
+  <li> 10000! の末尾に付く 0 の個数を求めてください。
+  <li> 7<sup>654321</sup> の末尾の数字を求めてください。
+  <li> 将棋盤の１ずつのマスに米粒を置きます。最初のマスへは１粒、次のマスへは２粒、そのつぎのマスへは４粒というようにして、つぎつぎに倍増していきます。最後のマス (81 マス) まで置き終わったときの米粒の総数を求めてください。
+  <li> 7 以上の素数で割り切れない N 以下の正の整数を求めるプログラムを作ってください (ハミングの問題)。
+</ol>
+<ul>
+  <li><a href="islisp03.html#ans01">解答１</a>
+  <li><a href="islisp03.html#ans02">解答２</a>
+  <li><a href="islisp03.html#ans03">解答３</a>
+  <li><a href="islisp03.html#ans04">解答４</a>
+  <li><a href="islisp03.html#ans05">解答５</a>
+</ul>
+<div class="note">
+-- 参考文献 --------<br>
+1. Steven G. krantz (著), 関沢正躬 (訳), 『問題解決への数学』, 丸善, 2001<br>
+2. 中村義作, 『どこまで解ける日本の算法』, ブルーバックス, 1994<br>
+3. 大村平, 『数学公式のはなし』, 日科技連, 1996<br>
+4. 奥村晴彦,『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991
+</div>
+<hr>
+<h4 id="ans01">●解答１</h4>
+<p> 今のパソコンは高性能なので、次のようにプログラムしても瞬時に答えを求めることができます。
+</p>
+<pre>
+ISLisp&gt;(defun sum-of-multiples (n m)
+  (for ((x m (+ x m))
+        (a 0 (+ a x)))
+       ((> x n) a)))
+SUM-OF-MULTIPLES
+ISLisp&gt;(sum-of-multiples 1000000 3)
+166666833333
+</pre>
+<p> ところが、数列の和を求める公式を使うと、もっと簡単に答えを求めることができます。
+</p>
+<pre class="item">
+1 + 2 + 3 + ... + n = n(n + 1)/ 2
+</pre>
+<p> 上記公式より n 個の 3 の倍数の和は 3 + 6 + 9 + ... + 3n = 3n(n + 1) / 2 となります。したがって、1000000 以下の 3 の倍数の和は 1 から (div 1000000 3) =&gt; 333333 までの和を 3 倍することで求めることができます。
+</p>
+<pre class="item">
+3 * 333333 * (333333 + 1) / 2 = 166666833333
+</pre>
+<p> これをプログラムすると次のようになります。
+</p>
+<pre>
+ISLisp&gt;(defun sum-of-multiples (n m)
+(let ((x (div n m))) (div (* m x (+ x 1)) 2)))
+SUM-OF-MULTIPLES
+ISLisp&gt;(sum-of-multiples 1000000 3)
+166666833333
+</pre>
+<h4>●等差数列の和</h4>
+<p> 次のように、一定の差で並んだ数列を「等差数列」といいます。
+</p>
+<pre class="item">
+a, a + d, a + 2d, a + 3d, ..., a + (n - 1)d
+</pre>
+<p> a を「初項」、d を「公差」といいます。等差数列の一般項は次の式で表すことができます。
+</p>
+<pre class="item">
+a<sub>n</sub> = a + (n - 1)d
+</pre>
+<p> 初項から a<sub>n</sub> までの和 S<sub>n</sub> は次の式で求めることができます。
+</p>
+<pre class="item">
+S<sub>n</sub> = n(2a + (n - 1)d) / 2
+</pre>
+<p> 初項を 1, 公差 を 1 とすると、1 から n までの和は n(n + 1)/ 2 となります。
+</p>
+<p> この公式は次のように導出することができます。
+</p>
+<pre class="item">
+S<sub>n</sub> = a              + (a + d)        + ,,, + (a + (n - 2)d) + (a + (n - 1)d)
+S<sub>n</sub> = (a + (n - 1)d) + (a + (n - 2)d) + ... + (a + d)        + a
+
+足し算すると
+
+2S<sub>n</sub> = (2a + (n - 1)d) + (2a + (n - 1)d) + ... (2a + (n - 1)d) + (2a + (n - 1)d)
+2S<sub>n</sub> = n(2a + (n - 1)d)
+ S<sub>n</sub> = n(2a + (n - 1)d)/2
+</pre>
+<p> このように、右辺を逆順に並べ替えて足し算すると、2a + (n - 1)d が n 個並ぶことになります。あとは、これを 2 で割り算すればいいわけです。
+</p>
+<hr>
+<h4 id="ans02">●解答２</h4>
+<p> 10000! であれば、次のようなプログラムでも瞬時に答えを求めることができます。
+</p>
+<pre>
+ISLisp&gt;(defun fact (n) (for ((n n (- n 1)) (a 1 (* a n))) ((= n 0) a)))
+FACT
+ISLisp&gt;(let ((a (fact 10000)) (c 0))
+ (while (= (mod a 10) 0) (setq c (+ c 1)) (setq a (div a 10))) c)
+2499
+</pre>
+<p> 単純に n! を求めて、10 で割れる回数を求めているだけです。ところが、この方法では n が大きくなると極端に遅くなります。多倍長整数の場合、除算や余りを求める処理は乗算よりもはるかに時間がかかります。たとえば、1 桁増やした 100000! の場合、階乗の値は短時間で求めることができても、(div a 10) の回数が増えることにより実行時間が極端に遅くなるのです。
+</p>
+<p> そこで、他の方法を考えてみましょう。階乗を計算するとき、末尾に 0 が付くのは値を 10 倍したときです。これは数字 10 や 100 を乗算するときだけではありません。次の例を見てください。
+</p>
+<pre class="item">
+1 = 1
+1 * 2 = 2
+1 * 2 * 3 = 6
+1 * 2 * 3 * 4 = 24
+1 * 2 * 3 * 4 * 5 = 120
+1 * 2 * 3 * 4 * 5 * 6 = 720
+1 * 2 * 3 * 4 * 5 * 6 * 7 = 5040
+1 * 2 * 3 * 4 * 5 * 6 * 7 * 8 = 40320 
+1 * 2 * 3 * 4 * 5 * 6 * 7 * 8 * 9 = 362880 
+1 * 2 * 3 * 4 * 5 * 6 * 7  * 8 * 9 * 10 = 3628800 
+</pre>
+<p> 10 は 2 * 5 に素因数分解することができます。つまり、2 と 5 の組があれば、末尾に 0 がひとつ追加されるわけです。また、0 が複数追加されることもあります。次の例を見てください。
+</p>
+<pre>
+24! = 620448401733239439360000
+25! = 15511210043330985984000000
+</pre>
+<p> 25 は 5 * 5 と素因数分解することができます。このとき、2 * 5 の組が 2 つできるので、末尾に 0 が 2 つ付くわけです。階乗を素因数分解したとき、因数 2 の個数は因数 5 の個数よりも多くなるので、2 と 5 は必ず組にすることができます。つまり、因数 5 の個数が末尾に付く 0 の 個数になるわけです。
+</p>
+<p> 階乗の場合、因数の個数を求めるのは簡単です。10000! の場合、10000 / 5 で 5 の倍数の個数 2000 を求めることができます。次に、25 (= 5 * 5) の倍数の個数を 10000 / 25 で求めます。さらに、125 (= 5 * 5 * 5) の倍数の個数を 10000 / 125 で求めます、これを 10000 &gt; 5<sup>m</sup> が成立する m まで繰り返し、その総和が 5 の因子の個数になります。
+</p>
+<pre class="item">
+10000 / 5    = 2000
+10000 / 25   =  400
+10000 / 125  =   80
+10000 / 625  =   16
+10000 / 3125 =    3.2 (小数点切捨て)
+----------------------
+        合計 = 2499
+</pre>
+<p> プログラムと実行結果を示します。
+</p>
+<pre>
+ISLisp&gt;(defun solver (n)
+(for ((m 5 (* m 5)) (a 0 (+ a (div n m)))) ((> m n) a)))
+SOLVER
+ISLisp&gt;(solver 10000)
+2499
+ISLisp&gt;(solver 100000)
+24999
+ISLisp&gt;(solver 1000000)
+249998
+ISLisp&gt;(solver 10000000)
+2499999
+ISLisp&gt;(solver 100000000)
+24999999
+ISLisp&gt;(solver 1000000000)
+249999998
+ISLisp&gt;(solver 10000000000)
+2499999997
+</pre>
+<hr>
+<h4 id="ans03">●解答３</h4>
+<p> ISLisp の場合、次のように簡単に求めることができます。
+<pre>
+ISLisp&gt;(mod (expt 7 654321) 10)
+7
+</pre>
+<p> ただし、OKI-ISLisp は実行速度がちょっと遅いので、答えが出るまでに少々時間がかかります。実をいうと、この問題は筆算で簡単に求めることができます。7<sup>n</sup> (n &gt; 0) の末尾の数字は次のように 7, 9, 3, 1, ... と巡回します。
+</p>
+<pre class="item">
+7^1 = 7
+7^2 = 49
+7^3 = 343
+7^4 = 2401
+7^5 = 16807
+7^6 = 117649
+7^7 = 823543
+7^8 = 5764801
+</pre>
+<p> ここで、7<sup>4</sup> の末尾は 1 になることに注目してください。末尾が 1 の数字を何回乗算しても、その結果の末尾は 1 になります。7<sup>654321</sup> は (7<sup>4</sup>)<sup>163580</sup> * 7 なので、末尾の数字は 7 と求めることができます。
+</p>
+<hr>
+<h4 id="ans04">●解答４</h4>
+<p> 米粒の合計値は 1 + 2 + 2<sup>2</sup> + 2<sup>3</sup> + ... + 2<sup>80</sup> になります。これを素直にプログラムすると次のようになります。
+</p>
+<pre>
+ISLisp&gt; (for ((x 0 (+ x 1)) (a 0 (+ a (expt 2 x)))) ((> x 80) a))
+2417851639229258349412351
+</pre>
+<p> とても大きな数になるので、普通の電卓では計算できません。Windows の電卓を使用するときは関数電卓に切り替えてください。もちろん、数学の公式を使うともっと簡単に求めることができます。
+</p>
+<h4>●等比数列の和</h4>
+<p> 次のように、一定の比で並んだ数列を「等比数列」といいます。
+</p>
+<pre class="item">
+a, ar, ar<sup>2</sup>, ..., ar<sup>n-1</sup>, ...
+</pre>
+<p> a を「初項」、d を「公比」といいます。等比数列の一般項は次の式で表すことができます。
+</p>
+<pre class="item">
+a<sub>n</sub> = ar<sup>n-1</sup>
+</pre>
+<p> 初項から a<sub>n</sub> までの和 S<sub>n</sub> は次の式で求めることができます。
+</p>
+<pre class="item">
+S<sub>n</sub> = a(1 - r<sup>n</sup>) / (1 - r)
+</pre>
+<p> 問題は初項 1 で公比 2 なので、米粒の合計は次のようになります。
+</p>
+<pre class="item">
+(1 - 2<sup>81</sup>) / (1 - 2) = 2<sup>81</sup> - 1
+</pre>
+<pre>
+ISLisp&gt;(- (expt 2 81) 1)
+2417851639229258349412351
+</pre>
+<p> この公式は次のように導出することができます。
+</p>
+<pre class="item">
+S<sub>n</sub> = a + ar + ar<sup>2</sup> + ... + ar<sup>n-1</sup>
+両辺を r 倍すると
+rS<sub>n</sub> =    ar + ar<sup>2</sup> + ... + ar<sup>n-1</sup> + ar<sup>n</sup>
+これを引き算すると
+S<sub>n</sub> - rS<sub>n</sub> = a - ar<sup>n</sup> =&gt; S<sub>n</sub> = a(1 - r<sup>n</sup>) / (1 - r)
+</pre>
+<p> 右辺を引き算すると ar から ar<sup>n-1</sup> の項がなくなって、a - ar<sup>n</sup> だけになります。あとは、1 - r で割り算すればいいわけです。
+</p>
+<hr>
+<h4 id="ans05">●解答５</h4>
+<p> 7 以上の素数で割り切れない正の整数は、素因子が 2, 3, 5 しかない自然数のことです。これを「ハミング数 (Hamming Numbers)」といいます。ハミング数は素因数分解したとき、2<sup>i</sup> * 3<sup>j</sup> * 5<sup>k</sup> (i, j, k &gt;= 0) の形式になります。たとえば、100 以下のハミング数は次のようになります。
+</p>
+<pre class="item">
+1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30, 32, 36, 40, 45, 48, 50, 
+54, 60, 64, 72, 75, 80, 81, 90, 96, 100
+</pre>
+<p> それではプログラムを作りましょう。一番簡単な方法は、1 から n までの整数列を生成して、そこからハミング数を取り出していくことです。これを ISLisp でプログラムすると次のようになります。
+</p>
+<pre>
+ISLisp&gt;(defun check (n)
+(while (= (mod n 2) 0) (setq n (div n 2)))
+(while (= (mod n 3) 0) (setq n (div n 3)))
+(while (= (mod n 5) 0) (setq n (div n 5)))
+(= n 1))
+CHECK
+ISLisp&gt;(load "list.l")
+T
+ISLisp&gt;(remove-if (lambda (x) (not (check x))) (iota 1 100))
+(1 2 3 4 5 6 8 9 10 12 15 16 18 20 24 25 27 30 32 36 40 45 48 50 54 60 64 72 75
+80 81 90 96 100)
+ISLisp&gt;(length (remove-if (lambda (x) (not (check x))) (iota 1 100)))
+34
+ISLisp&gt;(length (remove-if (lambda (x) (not (check x))) (iota 1 1000)))
+86
+ISLisp&gt;(length (remove-if (lambda (x) (not (check x))) (iota 1 10000)))
+175
+ISLisp&gt;(length (remove-if (lambda (x) (not (check x))) (iota 1 100000)))
+313
+ISLisp&gt;(length (remove-if (lambda (x) (not (check x))) (iota 1 1000000)))
+507
+</pre>
+<p> 関数 check は引数 n がハミング数かチェックします。これは 2, 3, 5 だけで割り切れるか試しているだけです。プログラムはとても簡単ですが、引数 n の値が大きくなると時間がかかるようになります。n に比べてハミング数の個数は少ないようなので、式 2<sup>i</sup> * 3<sup>j</sup> * 5<sup>k</sup> (i, j, k &gt;= 0) を使ってハミング数を生成したほうがよさそうです。引数 n に対して i, j, k の上限値は log<sub>2</sub> n, log<sub>3</sub> n, log<sub>5</sub> n で求めることができます。たとえば、100000000 の場合は次のようになります。
+</p>
+<pre class="item">
+i : 0 - 26
+j : 0 - 16
+k : 0 - 11
+</pre>
+<p> 全体で 27 * 17 * 12 = 5508 個しかありません。この中から 100000000 以下の数を選べばいいわけです。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ハミングの問題 (2)
+
+(load "list.l")
+
+(defun product (f xs ys)
+  (for ((xs xs (cdr xs))
+        (a nil))
+       ((null xs) (nreverse a))
+       (for ((ys ys (cdr ys)))
+            ((null ys))
+            (setq a (cons (funcall f (car xs) (car ys)) a)))))
+
+(defun hamming-sub(n m)
+  (mapcar (lambda (x) (expt m x)) (iota 0 (floor (quotient (log n) (log m))))))
+
+(defun hamming (n)
+  (let ((xs (hamming-sub n 5)))
+    (setq xs (product #'* xs (hamming-sub n 3)))
+    (setq xs (remove-if (lambda (x) (&lt; n x)) xs))
+    (setq xs (product #'* xs (hamming-sub n 2)))
+    (setq xs (remove-if (lambda (x) (&lt; n x)) xs))
+    (quick-sort xs)))
+</pre>
+<p> 関数 product はリスト xs, ys の直積集合を生成し、その要素に関数 f を適用した結果をリストに格納して返します。簡単な実行例を示します。
+</p>
+<pre>
+ISLisp&gt;(product #'cons '(1 2 3) '(4 5 6))
+((1 . 4) (1 . 5) (1 . 6) (2 . 4) (2 . 5) (2 . 6) (3 . 4) (3 . 5) (3 . 6))
+ISLisp&gt;(product #'+ '(1 2 3) '(4 5 6))
+(5 6 7 6 7 8 7 8 9)
+</pre>
+<p> 関数 hamming-sub は m<sup>i</sup> (i = 0, 1, 2, ... log<sub>m</sub> n) をリストに格納して返します。あとは関数 hamming で直積集合を求め、remove-if で n より大きい値を取り除くだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+ISLisp&gt;(hamming 100)
+(1 2 3 4 5 6 8 9 10 12 15 16 18 20 24 25 27 30 32 36 40 45 48 50 54 60 64 72 75
+80 81 90 96 100)
+ISLisp&gt;(length (hamming 100))
+34
+ISLisp&gt;(length (hamming 1000))
+86
+ISLisp&gt;(length (hamming 10000))
+175
+ISLisp&gt;(length (hamming 100000))
+313
+ISLisp&gt;(length (hamming 1000000))
+507
+ISLisp&gt;(length (hamming 10000000))
+768
+ISLisp&gt;(length (hamming 100000000))
+1105
+ISLisp&gt;(length (hamming 1000000000))
+1530
+ISLisp&gt;(length (hamming 10000000000))
+2053
+</pre>
+<p> この方法だと短時間で答えを求めることができます。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<hr>
+<div class="small">
+[ <A href="../index.html">Home</a> | <a href="index.html">Common Lisp</a> | <a href="islisp.html">ISLisp</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

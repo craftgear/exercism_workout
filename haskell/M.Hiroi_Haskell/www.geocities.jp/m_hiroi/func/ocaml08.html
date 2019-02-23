@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 OCaml プログラミング入門</title>
+  <meta name="description" content="OCaml,ML,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881750</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 OCaml プログラミング入門</h2>
+<div class="small">
+[ <a href="ocaml07.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml09.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">ファイル入出力</h3>
+<p> OCaml は「チャネル (channel) 」というデータ型を介して入出力処理を行います。チャネルは、いわゆるチャンネルのことで、もともとは水路とか海峡という意味ですが、コンピュータの世界では通信路とか伝送路の意味で使われています。
+</p>
+<p> Ｃ言語や Common Lisp など近代的なプログラミング言語は、「ストリーム (stream) 」とういデータ型を介してデータの入出力を行います。OCaml のチャネルはストリームと同じものです。今回はファイルの入出力について簡単に説明します。
+</p>
+
+<h4>●標準入出力</h4>
+<p> OCaml では、チャネルを介してファイルにアクセスします。チャネルはファイルと 1 対 1 に対応していて、ファイルからデータを入力するときは、チャネルを経由してデータが渡されます。逆に、ファイルへデータを出力するときもストリームを経由します。入力チャネル表すデータ型が in_channel で、出力チャネルを表すデータ型が out_channel です。
+</p>
+
+<p> 通常のファイルは、チャネルを生成しないとアクセスすることはできません。ただし、標準入出力は OCaml の起動時にチャネルが自動的に生成されるので、簡単に利用することができます。一般に、キーボードからの入力を「標準入力」、画面への出力を「標準出力」といいます。標準入出力に対応するチャネルは大域変数に格納されています。表 1 に変数名を示します。
+</p>
+<table border=1>
+<caption>表 1 : 標準入出力</caption>
+<thead>
+  <tr><th>変数名</th><th>ファイル</th></tr>
+</thead>
+<tbody>
+  <tr><td>stdin  </td><td>標準入力</td></tr>
+  <tr><td>stdout </td><td>標準出力</td></tr>
+  <tr><td>stderr </td><td>標準エラー出力</td></tr>
+</tbody>
+</table>
+
+<p> データの入出力処理は標準入出力を使うと簡単です。たとえば、print_string は文字列を標準出力へ出力する関数でしたが、入力チャネルから文字列を読み込む関数が read_line です。
+</p>
+<pre class="item">
+val read_string : unit -&gt; string = &lt;fun&gt;
+</pre>
+<pre>
+# read_line ();;
+hello, world
+- : string = "hello, world"
+</pre>
+<p> hello, world と入力してリターンキーを押すと、read_line は入力データを文字列にして返します。このとき、改行文字が取り除かれることに注意してください。また、read_line はファイルの終了を検出すると例外 End_of_file を送出します。
+</p>
+<p> それでは簡単な例題として、入力をそのままエコーバックする関数 echo を作ってみましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 1 : エコーバック
+
+let echo () =
+  let rec echo_sub () =
+    print_string (read_line ());
+    print_newline ();
+    echo_sub ()
+  in
+    try echo_sub () with End_of_file -&gt; ()
+</pre>
+
+<p> 実際の処理は局所関数 echo_sub で行っています。標準入力から read_line で 1 行読み込み、それを print_string で標準出力へ出力します。改行は取り除かれているので、print_newline で改行を付け加えます。そして、echo_sub を再帰呼び出します。
+</p>
+<p> あとは echo_sub を呼び出すだけですが、ファイルの終了時には例外 End_of_file が送出されるので、それを try 式で受け取ります。echo_sub は再帰呼び出しの停止条件がない、つまり「無限ループ」になっているので、例外を送出しないとプログラムを停止できないことに注意してください。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre class="item">
+val echo : unit -&gt; unit = &lt;fun&gt;
+</pre>
+<pre>
+# echo ();;
+abcd    &lt;-- 入力
+abcd
+efgh    &lt;-- 入力
+efgh
+hello, world    &lt;-- 入力
+hello, world
+</pre>
+<p> Windows の場合、echo を終了するには Ctrl-Z を入力してください。
+</p>
+
+<h4>●ファイルのオープンとクローズ</h4>
+<p> ファイルにアクセスする場合、次の 3 つの操作が基本になります。
+</p>
+<ol>
+  <li>アクセスするファイルをオープンする
+  <li>入出力関数を使ってファイルを読み書きする。
+  <li>ファイルをクローズする。
+</ol>
+<p> 「ファイルをオープンする」とは、アクセスするファイルを指定して、それと 1 対 1に対応するチャネルを生成することです。入出力関数はオープンしたチャネルを経由してファイルにアクセスします。OCaml の場合、ファイルをオープンするには関数 open_in と open_out を使います。オープンしたファイルは必ずクローズしてください。この操作を行う関数が close_in と close_out です。
+</p>
+<pre class="item">
+val open_in   : string -&gt; in_channel = &lt;fun&gt;
+val open_out  : string -&gt; out_channel = &lt;fun&gt;
+val close_in  : in_channel -&gt; unit = &lt;fun&gt;
+val close_out : out_channel -&gt; unit = &lt;fun&gt;
+</pre>
+
+<p> ファイル名は文字列で指定し、ファイル名のパス区切り記号にはスラッシュ ( / ) を使います。\ は文字列のエスケープコードに割り当てられているため、そのままではパス区切り記号に使うことはできません。ご注意ください。ファイルのオープンやクローズに失敗した場合は例外 Sys_error が送出されます。
+</p>
+<h4>●input_char と output_char</h4>
+<p> OCaml で用意されている、主な入出力関数を次に示します。
+</p>
+<pre class="item">
+読み込み
+val intput_char : in_channel -&gt; char = &lt;fun&gt;
+val intput_line : in_channel -&gt; string = &lt;fun&gt;
+val intput_byte : in_channel -&gt; int = &lt;fun&gt;
+
+書き込み
+val output_char : out_channel -&gt; char -&gt; unit = &lt;fun&gt;
+val output_line : out_channel -&gt; string -&gt; unit = &lt;fun&gt;
+val output_byte : out_channel -&gt; int -&gt; unit = &lt;fun&gt;
+</pre>
+<p> 関数 input_char は入力チャネルから 1 文字 (1 byte) 読み込みます。関数 input_line は入力チャネルから 1 行読み込みます。このとき、改行は削除されます。関数 intput_byte は入力チャネルから 1 バイト読み込みます。返り値は整数 (0 - 255) になります。ファイルの終了を検出すると、これらの入力関数は例外 End_of_file を送出します。
+</p>
+<p> 関数 output_char は出力チャネルに 1 文字 (1 byte) 書き込みます。関数 output_line は出力チャネルに 1 行書き込みます。関数 output_byte は整数 (n mod 256) を出力チャネルに書き込みます。
+</p>
+
+<p> それでは簡単な例題として、ファイルの内容を画面へ出力する関数 cat を作ってみましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 2 : ファイルの表示 (1)
+
+let cat filename =
+  let fin = open_in filename in
+  let rec cat_sub () =
+    output_char stdout (input_char fin);
+    cat_sub ()
+  in
+    try cat_sub () with End_of_file -&gt; close_in fin
+</pre>
+
+<p> 関数 cat の引数 filename はファイル名を表す文字列です。failename をオープンして入力チャネルを変数 fin にセットします。ファイルの表示は局所関数 cat_sub で行います。input_char で 1 文字読み込み、それを output_char で標準出力へ出力します。この処理は関数 print_char を使ってもかまいません。あとは cat_sub を再帰呼び出しします。cat_sub には再帰呼び出しの停止条件がないので、この処理は「無限ループ」になることに注意してください。
+</p>
+<p> cat では cat_sub を呼び出して、例外 End_of_file を try 式で受け取ります。そして、close_in で入力チャネル fin をクローズします。
+</p>
+
+<p> ところで、cat は再帰呼び出しを使いましたが、繰り返しでも簡単にプログラムを作ることができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 3 : ファイルの表示 (2)
+
+let cat1 filename =
+  let fin = open_in filename in
+  let cat_sub () =
+    while true do
+      output_char stdout (input_char fin)
+    done
+  in
+    try cat_sub () with End_of_file -&gt; close_in fin
+</pre>
+
+<p> cat_sub では while の条件式に true を指定して「無限ループ」を構成していることに注意してください。例外を使ってファイルの終了をチェックしているので、プログラムはとても簡単になります。
+</p>
+<p> なお、input_char と output_char のかわりに input_line と output_line を使って行単位で入出力を行っても同じようにプログラムを作ることができます。
+</p>
+
+<h4>●ファイルの書き込み</h4>
+<p> データをファイルに書き込むには、ファイルを open_out でオープンします。このとき、注意事項が一つあります。既に同じ名前のファイルが存在している場合は、そのファイルの長さを 0 に切り詰めてからデータを書き込みます。既存のファイルは内容が破壊されることに注意してください。
+</p>
+
+<p> それでは簡単な例題として、string list の要素を 1 行ずつファイルに書き込む関数 output_stringlist を作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 4 : ファイルの書き込み
+
+let output_stringlist filename xs =
+  let fout = open_out filename in
+  List.iter (fun x -&gt; output_string fout (x ^ "\n")) xs;
+  close_out fout
+</pre>
+
+<p> 最初に open_out でファイル filename をオープンします。あとは、高階関数 List.iter を使ってリスト xs から要素を一つずつ取り出し、改行文字を付加してから output_string で出力するだけです。
+</p>
+
+<p> このほかにも、OCaml にはいろいろな入出力関数が用意されています。詳しい説明は OCaml のリファレンスを参照してください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">バックトラック法</h3>
+<p> 複雑な問題を厳密に解こうとするときや、条件を満たす解をすべて求める必要があるとき、可能性のあるパターンをすべて生成して、条件を満たしているかチェックするしか方法がない場合があります。このようなとき用いる手法に「バックトラック法 (backtracking)」があります。
+</p>
+
+<p> たとえば、簡単な例として迷路を考えてみましょう。ある地点 A で道が左右に分かれているとします。ここで、左の道を選んで先へ進むと、行き止まりになってしまいました。この場合は A 地点まで戻って右の道へ進まないといけません。
+</p>
+<p> このように、失敗したら元に戻って別の選択枝を選ぶ、という試行錯誤を繰り返して解を見つける方法がバックトラック法なのです。バックトラック法は、いろいろな分野の問題に応用できる方法です。そして、再帰定義を使うと簡単にプログラムを作ることができます。今回は簡単な例題として、バックトラック法でパズルを解いてみましょう。
+</p>
+
+<h4>●小町算</h4>
+<p> パズルの世界では、1 から 9 までの数字を 1 個ずつすべて使った数字を「小町数」といいます。123456789 とか 321654987 のような数字が小町数です。「小町算」というものもあり、123 + 456 + 789 とか 321 * 654 + 987 のようなものです。今回は小町算の中でも特に有名なパズルを解いてみましょう。
+</p>
+<div class="question">
+<b>[問題]</b> 小町算
+<p> 1 から 9 までの数字を順番に並べ、間に + と - を補って 100 になる式をすべて求めよ。
+</p>
+<p>例：1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 = 100
+</p>
+</div>
+<h4>●データ型の定義</h4>
+<p> この問題は演算子が + と - だけしかないので、式はリストで表すことにします。OCaml の場合、異なるデータ型をリストに格納することはできないので、+ と - と数値を表すデータ型を定義します。
+</p>
+
+<pre class="list">
+リスト 5 : データ型の定義
+
+type term =  Plus | Minus | Num of int  
+</pre>
+
+<p> term を使うと数式は次のように表すことができます。
+</p>
+<pre class="item">
+1 + 2 + 3 - 4 + 5 + 6 + 78 + 9
+=&gt; [Num 1; Plus; Num 2; Plus; Num 3; Minus; Num 4; Plus; 
+    Num 5; Plus; Num 6; Plus; Num 78; Plus; Num 9]
+</pre>
+<p> あとは、式を生成して値を計算するだけです。式を生成するとき、リストを逆順で管理すると簡単です。次の図を見てください。
+</p>
+<pre class="fig">
+[Num 1] =&gt; [Num 2, Plus, Num 1]  =&gt; [Num 3, Plus, Num 2, Plus, Num 1]
+                                 =&gt; [Num 3, Minus, Num 2, Plus, Num 1]
+                                 =&gt; [Num 23, Plus, Num 1]
+        =&gt; [Num 2, Minus, Num 1] =&gt; [Num 3, Plus, Num 2, Minus, Num 1]
+                                 =&gt; [Num 3, Minus, Num 2, Minus, Num 1]
+                                 =&gt; [Num 23, Minus, Num 1]
+        =&gt; [Num 12]              =&gt; [Num 3, Plus, Num 12]
+                                 =&gt; [Num 3, Minus, Num 12]
+                                 =&gt; [Num 123]
+
+                        図 1 : 式の生成
+</pre>
+<p> 式を生成するとき、リストに数字と演算子を順番に追加していきます。Num と Plus, Minus を追加する処理は簡単です。プログラムのポイントは数字を連結する処理、たとえば 1 と 2 を連結して一つの数値 12 にする処理です。この処理はリストの先頭の数字 Num 1 を Num 12 (= 1 * 10 + 2) に置き換えることで実現できます。リストが [Num 2, Plus, Num 1] であれば、Num 2 を Num 23 (= 2 * 10 + 3) に置き換えます。
+</p>
+
+<h4>●式の生成</h4>
+<p> 式を生成するプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 6 : 式の生成
+
+let rec make_expr n expr =
+  if n = 10 then
+    let expr1 = List.rev expr in
+    if calc_expr expr1 = 100 then print_expr expr1 else ()
+  else
+    match expr with
+      Num x :: xs -&gt;
+        make_expr (n + 1) (Num n :: Plus :: expr);
+        make_expr (n + 1) (Num n :: Minus :: expr);
+        make_expr (n + 1) (Num (x * 10 + n) :: xs)
+    | _ -&gt; raise (Failure "make_expr")
+</pre>
+
+<p> 式の生成はバックトラック法を使うと簡単です。関数 make_exp の引数 n が追加する数字、expr が生成する式（リスト）です。n が 10 になったら式が完成したので値を計算します。関数 List.rev で式を元に戻し、関数 calc_expr で式 expr1 を計算します。その結果が 100 になれば関数 print_expr で式を出力します。
+</p>
+<p> n が 10 より小さい場合は数値と演算子をリストにセットします。最初に Num n と Plus をセットして make_expr を再帰呼び出しします。その次に、Num n と Minsu をセットして make_expr を呼び出します。最後に、Num x を Num (x * 10 + n) に置き換えてから make_expr を呼び出します。これで、全部の数式を生成することができます。
+</p>
+<h4>●式の計算</h4>
+<p> 次は式を計算する関数 calc_exp を作ります。今回の問題は演算子に + と - しかないので、リストで表現した式を計算することは簡単です。次のプログラムを見てください。
+</p>
+
+<pre class="list">
+リスト 7 : 式の計算
+
+let calc_expr expr =
+  let rec calc_expr_sub expr a =
+    match expr with
+      [] -&gt; a
+    | Plus :: Num x :: xs -&gt; calc_expr_sub xs (a + x)
+    | Minus :: Num x :: xs -&gt; calc_expr_sub xs (a - x)
+    | _ -&gt; raise (Failure "calc_expr_sub")
+  in
+    match expr with
+      Num x :: xs -&gt; calc_expr_sub xs x
+    | _ -&gt; raise (Failure "calc_expr")
+</pre>
+
+<p> 実際の計算処理は局所関数 calc_expr_sub で行います。第 1 引数が数式 (リスト) で、第 2 引数が計算結果です。calc_expr は先頭の数値 x を取り出し、残りの数式を calc_expr_sub の第 1 引数に、x を第 2 引数に渡します。すると、数式の先頭は Plus か Minus になります。calc_expr_sub では、Plus の場合は次の数値 x を sum に加算し、Minus の場合は sum から減算します。あとは calc_expr_sub を再帰呼び出しするだけです。
+</p>
+<p> あとのプログラムは簡単なので説明は省略いたします。詳細は <a href="ocaml08.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+# make_expr 2 [Num 1];;
+1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 = 100
+1 + 2 + 34 - 5 + 67 - 8 + 9 = 100
+1 + 23 - 4 + 5 + 6 + 78 - 9 = 100
+1 + 23 - 4 + 56 + 7 + 8 + 9 = 100
+12 + 3 + 4 + 5 - 6 - 7 + 89 = 100
+12 + 3 - 4 + 5 + 67 + 8 + 9 = 100
+12 - 3 - 4 + 5 - 6 + 7 + 89 = 100
+123 + 4 - 5 + 67 - 89 = 100
+123 + 45 - 67 + 8 - 9 = 100
+123 - 4 - 5 - 6 - 7 + 8 - 9 = 100
+123 - 45 - 67 + 89 = 100
+- : unit = ()
+</pre>
+<p> 全部で 11 通りの解が出力されます。この他にも、いろいろな解き方があると思います。興味のある方は、もっとクールな方法を考えてみてください。
+</p>
+
+<h4>●8 クイーン</h4>
+<p> もう一つ、有名なパズルを解いてみましょう。8 クイーンはコンピュータに解かせるパズルの中でも特に有名な問題です。8 クイーンは、8 行 8 列のチェスの升目に、8 個のクイーンを互いの利き筋が重ならないように配置する問題です。クイーンは将棋の飛車と角をあわせた駒で、縦横斜めに任意に動くことができます。解答の一例を示します。
+</p>
+
+<pre class="fig">
+             列           
+       1 2 3 4 5 6 7 8    
+     *-----------------*  
+   1 | Q . . . . . . . |  
+   2 | . . . . Q . . . |  
+   3 | . . . . . . . Q |  
+行 4 | . . . . . Q . . |  
+   5 | . . Q . . . . . |  
+   6 | . . . . . . Q . |  
+   7 | . Q . . . . . . |  
+   8 | . . . Q . . . . |  
+     *-----------------*  
+
+  図 2 : 8 クイーンの解答例
+</pre>
+
+<p> 8 クイーンを解くには、すべての置き方を試してみるしか方法はありません。最初のクイーンは、盤上の好きなところへ置くことができるので、64 通りの置き方があります。次のクイーンは 63 通り、その次は 62 通りあります。したがって、置き方の総数は 64 から 57 までの整数を掛け算した 178462987637760 通りもあります。
+</p>
+<p> ところが、解答例を見ればわかるように、同じ行と列に 2 つ以上のクイーンを置くことはできません。上図の解答例をリストを使って表すと、 次のようになります。
+</p>
+
+<pre class="fig">
+  1  2  3  4  5  6  7  8    &lt;--- 列の位置
+---------------------------
+ [1, 7, 5, 8, 2, 4, 6, 3]   &lt;--- 要素が行の位置を表す  
+
+        図 3 : リストでの行と列の表現方法
+</pre>
+
+<p> 列をリストの位置に、行番号を要素に対応させれば、各要素には 1 から 8 までの数字が重複しないで入ることになります。すなわち、1 から 8 までの順列の総数である 8! = 40320 通りの置き方を調べるだけでよいのです。パズルを解く場合は、そのパズル固有の性質をうまく使って、調べなければならない場合の数を減らすように工夫することが大切です。
+</p>
+
+<p> 順列を生成するプログラムは <a href="ocaml05.html#chap02">順列と組み合わせ</a> で作成しました。あとは、その順列が 8 クイーンの条件を満たしているかチェックすればいいわけです。このように、正解の可能性があるデータを作りそれをチェックするという方法を「生成検定法 (generate and test) 」といいます。
+</p>
+
+<p> 可能性のあるデータをもれなく作るような場合、バックトラック法は最適です。ただし、「生成するデータ数が多くなると時間がとてもかかる」という弱点があるので注意してください。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは、プログラムを作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 8 : 8 クイーンの解法
+
+let rec safe = function
+  [] -&gt; true
+| x :: xs -&gt; if attack x xs then safe xs else false
+
+let rec queen nums board =
+  if nums = [] then
+    if safe board then print_board board else ()
+  else
+    List.iter (fun x -&gt; queen (remove x nums) (x :: board)) nums
+</pre>
+
+<p> 関数 queen は順列を生成するプログラムと同じです。順列を一つ生成したら、述語 safe で 8 クイーンの条件を満たしているかチェックします。そうであれば、関数 print_board でリストを出力します。
+</p>
+<p> 述語 safe はリストの先頭の要素からチェックしていきます。衝突のチェックは斜めの利き筋を調るだけです。端にあるクイーンから順番に調べるとすると、斜めの利き筋は次のように表せます。
+</p>
+<pre class="fig">
+  1 2 3    --&gt; 調べる方向
+*-------------
+| . . . . . .
+| . . . -3. .  5 - 3 = 2
+| . . -2. . .  5 - 2 = 3
+| . -1. . . .  5 - 1 = 4
+| Q . . . . .  Q の位置は 5  
+| . +1. . . .  5 + 1 = 6
+| . . +2. . .  5 + 2 = 7
+| . . . +3. .  5 + 2 = 8
+*-------------
+
+Fig : 衝突の検出
+</pre>
+
+<p> 図を見てもらえばおわかりのように、Q が行 5 にある場合、ひとつ隣の列は 4 と 6 が利き筋に当たります。2 つ隣の列の場合は 3 と 7 が利き筋に当たります。このように単純な足し算と引き算で、利き筋を計算することができます。これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト 9 : 衝突の検出
+
+let attack x xs =
+  let rec attack_sub x n = function
+      [] -&gt; true
+    | y :: ys -&gt; if x = y + n || x = y - n then false
+                 else attack_sub x (n + 1) ys
+  in
+    attack_sub x 1 xs
+</pre>
+
+<p> attack は、斜めの利き筋に当たった場合に false を返し、利き筋に当たらない場合は true を返します。実際の処理は局所関数 attack_sub で行います。attack_sub はリストの先頭から斜めの利き筋に当たるか調べます。第 1 引数がクイーンの位置、第 2 引数が位置の差分、第 3 引数がリストになります。
+</p>
+
+<p> 最初の節がクイーンを全て調べた場合です。クイーンは衝突していないので true を返します。次の節で、リストから先頭の要素 y を取りだし、利き筋に当たるか調べます。これは、y + n または y - n が x と等しいかチェックするだけです。衝突している場合は false を返します。そうでなければ、attack_sub を再帰呼び出しして次のクイーンを調べます。このとき、差分 n の値を +1 することをお忘れなく。
+</p>
+
+<h4>●実行結果</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+<pre>
+# queen [1; 2; 3; 4; 5; 6; 7; 8] [];;
+4 2 7 3 6 8 5 1 
+
+... 省略 ...
+
+5 7 2 6 3 1 4 8 
+val it = () : unit
+</pre>
+<p> 解は全部で 92 通りあります。ところで、このプログラムはクイーンの個数を増やすと極端に遅くなります。プログラムを ocamlc でバイトコンパイルして実行時間を計測したところ、次のようになりました。
+</p>
+
+<table border=1>
+<caption>表 2 : 実行時間 (秒)</caption>
+<thead>
+  <tr><th>個数</th><th> 8 </th><th> 9 </th><th> 10 </th></tr>
+</thead>
+<tbody>
+  <tr><td>queen() </td><td> 0.015 </td><td> 0.188 </td><td> 1.593 </td></tr>
+</tbody>
+</table>
+<ul>
+  <li>実行環境 : Windows XP, celeron 1.40 GHz
+</ul>
+<p> 実はこのプログラム、とても非効率なことをやっているのです。
+</p>
+<h4>●8 クイーンの高速化</h4>
+<p> 実行速度が遅い理由は、失敗することがわかっている順列も生成してしまうからです。たとえば、最初 (1, 1) の位置にクイーンを置くと、次のクイーンは (2, 2) の位置に置くことはできませんね。したがって、[1; 2; X; X; X; X; X; X] という配置はすべて失敗するのですが、順列を発生させてからチェックする今の方法では、このような無駄を省くことができません。
+</p>
+<p> そこで、クイーンの配置を決めるたびに衝突のチェックを行うことにします。これをプログラムすると次のようになります。
+</p>
+
+
+<pre class="list">
+リスト：8 クイーン (改良版)
+
+let rec queen_fast nums board =
+  if nums = [] then print_board board
+  else List.iter (fun x -&gt;
+    if attack x board then queen_fast (remove x nums) (x :: board) else ()) nums
+</pre>
+
+<p> 匿名関数の中で、追加したクイーンが board 内のクイーンと衝突していないか関数 attack でチェックします。順列を生成している途中でチェックを入れることで、無駄な順列を生成しないようにするわけです。この場合、safe は必要ありません。
+</p>
+
+<p> このように、できるだけ早い段階でチェックを入れることで、無駄なデータをカットすることを「枝刈り」と呼びます。バックトラックを使って問題を解く場合、この枝刈りのよしあしによって実行時間が大きく左右されます。ところが、枝刈りの方法はパズルによって違います。パズル固有の性質をよく調べて、適切な枝刈りを考えることが重要なのです。パズル自体はコンピュータに解かせるのですが、枝刈りの条件は私達が考えるわけです。これも「パズルの解法」の面白いところでしょう。解を求めるだけでなく、いかに効率の良い条件を見つけて実行時間を短縮するか、ということでも楽しむことができます。
+</p>
+
+<p> それでは、実行結果を表 3 に示します。
+</p>
+
+<table border=1>
+<caption>表 3 : 実行時間 (秒)</caption>
+<thead>
+  <tr><th>個数</th><th> 8 </th><th> 9 </th><th> 10 </th></tr>
+</thead>
+<tbody>
+  <tr><td>queen </td><td> 0.015 </td><td> 0.188 </td><td> 1.593 </td></tr>
+  <tr><td>queen_fast </td><td> --- </td><td> 0,015 </td><td> 0.031 </td></tr>
+</tbody>
+</table>
+
+<p> このように、枝刈りを行うことで実行時間を大幅に短縮することができます。ところで、今回は単純にリストを出力するだけなので、ちょっと面白くありません。興味のある方は、解答例のような図を出力するプログラムを作ってみてください。
+</p>
+<ul>
+  <li><a href="ocaml08.html#list2">プログラムリスト(8 Queen)</a>
+</ul>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+(* 
+ *  komachi.ml : 小町算の解法
+ *
+ *               Copyright (C) 2008 Makoto Hiroi
+ *)
+
+(* データ型の定義 *)
+type term = Plus | Minus | Num of int
+
+(* 式の計算 *)
+let calc_expr expr =
+  let rec calc_expr_sub expr a =
+    match expr with
+      [] -&gt; a
+    | Plus :: Num x :: xs -&gt; calc_expr_sub xs (a + x)
+    | Minus :: Num x :: xs -&gt; calc_expr_sub xs (a - x)
+    | _ -&gt; raise (Failure "calc_expr_sub")
+  in
+    match expr with
+      Num x :: xs -&gt; calc_expr_sub xs x
+    | _ -&gt; raise (Failure "calc_expr")
+
+(* 式の表示 *)
+let rec print_expr = function
+  [] -&gt; print_string " = 100\n"
+| Num x :: xs -&gt; print_int x; print_expr xs
+| Plus :: xs -&gt; print_string " + "; print_expr xs
+| Minus :: xs -&gt; print_string " - "; print_expr xs
+
+(* 式の組み立て *)
+let rec make_expr n expr =
+  if n = 10 then
+    let expr1 = List.rev expr in
+    if calc_expr expr1 = 100 then print_expr expr1 else ()
+  else
+    match expr with
+      Num x :: xs -&gt;
+        make_expr (n + 1) (Num n :: Plus :: expr);
+        make_expr (n + 1) (Num n :: Minus :: expr);
+        make_expr (n + 1) (Num (x * 10 + n) :: xs)
+    | _ -&gt; raise (Failure "make_expr")
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+(* 
+ *  queen.ml : ８クイーンの解法
+ *
+ *               Copyright (C) 2008 Makoto Hiroi
+ *)
+
+(* 盤面の表示 *)
+let rec print_board = function
+  [] -&gt; print_newline ()
+| x :: xs -&gt; print_int x; print_string " "; print_board xs
+
+(* 要素の削除 *)
+let rec remove n xs = List.filter (fun x -&gt; x &lt;&gt; n) xs
+
+(* 衝突の検出 *)
+let attack x xs =
+  let rec attack_sub x n = function
+      [] -&gt; true
+    | y :: ys -&gt; if x = y + n || x = y - n then false
+                 else attack_sub x (n + 1) ys
+  in
+    attack_sub x 1 xs
+
+(* 安全確認 *)
+let rec safe = function
+  [] -&gt; true
+| x :: xs -&gt; if attack x xs then safe xs else false
+
+(* 単純な生成検定法 *)
+let rec queen nums board =
+  if nums = [] then
+    if safe board then print_board board else ()
+  else
+    List.iter (fun x -&gt; queen (remove x nums) (x :: board)) nums
+
+(* 高速バージョン *)
+let rec queen_fast nums board =
+  if nums = [] then print_board board
+  else List.iter (fun x -&gt;
+    if attack x board then queen_fast (remove x nums) (x :: board) else ()) nums
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ocaml07.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml09.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

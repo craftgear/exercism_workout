@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Go 言語プログラミング入門 / Puzzle DE Go!</title>
+  <meta name="description" content="Go,Golang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881807</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Go Language Programming</h1>
+<h2>お気楽 Go 言語プログラミング入門</h2>
+<h2>Puzzle DE Go!</h2>
+<div class="small">
+[ <a href="puzgo03.html">PrevPage</a> | <a href="index.html#puzgo">Golang</a> | <a href="puzgo05.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>反復深化と下限値枝刈り法</h3>
+<p> 今回は「ペグ・ソリティア」というパズルを「反復深化」で解いてみましょう。
+</p>
+
+<h4>●ペグ・ソリテアとは？</h4>
+<p> ペグ・ソリテアは盤上に配置されたペグ (駒) を、最後にはひとつ残るように取り除いていく古典的なパズルです。ペグは、次のルールに従って移動し、除去することができます。
+</p>
+<ol>
+  <li> ペグは隣にあるペグをひとつだけ跳び越して、空き場所へ着地する。
+  <li> 跳び越されたペグは盤上から取り除かれる。
+  <li> 移動方向はふつう縦横のみの 4 方向だが、ルールによっては斜め方向の移動を許す場合もある。
+  <li> 同じペグの連続跳び越しは 1 手と数える。
+</ol>
+<p> 盤は今までに多数考案されていますが、33 穴英国盤、37 穴フランス盤、41 穴盤が有名です。下図に 33 穴英国盤を示します。
+</p>
+
+<pre class="fig">
+        ●─●─●
+        │  │  │
+        ●─●─●
+        │  │  │
+●─●─●─●─●─●─●
+│  │  │  │  │  │  │
+●─●─●─○─●─●─●
+│  │  │  │  │  │  │
+●─●─●─●─●─●─●
+        │  │  │
+        ●─●─●
+        │  │  │
+        ●─●─●
+
+    図 : 33 穴英国盤
+</pre>
+
+<p> 33 のマスにペグがありますが、そこからひとつペグを取り除いてゲームを始めます。上図では黒丸でペグを表し、白丸で空き場所を表しています。ルールに従ってペグを移動し、最後にひとつだけ残ればクリアとなります。ただし、ペグを取り除く位置によって、解けない場合もあるので注意してください。
+</p>
+
+<p> <a href="puzgo04.html#cite">橋本哲氏の記事 (3)</a> によると、最初の空き位置と最後に残ったペグの位置が同じになることを「補償型の解」といい、最初の空き位置が盤の中央で、なおかつ、補償型の解がある場合を「中央補償型の解」と呼ぶそうです。33 穴英国盤には、中央補償型の解があるそうです。
+</p>
+
+<p> ペグ・ソリテアの場合、昔から補償型や中央補償型の解の最小手数を求めることが行われてきました。33 穴英国盤のように、ペグの数が多くなるとパソコンで解くのは大変になります。そこで、今回はサイズを小さくした簡単なペグ・ソリテアを反復深化で解いてみましょう。
+</p>
+
+<h4>●変形三角盤</h4>
+<p> 下図は「変形三角盤」と呼ばれるペグ・ソリテアです。21 個のマスが少し変わった三角形に並んでいて、そこにペグを配置します。ペグは別のペグをひとつだけ跳び越えることで、任意の方向へ移動することができます。もちろん、着地する地点が空いていなければ、跳び越すことはできません。
+</p>
+
+<pre class="fig">
+                    ●───●
+                      ＼  ／
+                        ●
+                      ／  ＼
+                    ●───●
+                  ／  ＼  ／  ＼
+                ●───○───●
+              ／  ＼  ／  ＼  ／  ＼
+            ●───●───●───●
+          ／  ＼  ／  ＼  ／  ＼  ／  ＼
+●───●───●───●───●───●───●
+  ＼  ／                                  ＼  ／
+    ●                                      ●
+
+                 図 : 変形三角盤
+</pre>
+
+<p> 今回は上図のように 21 個のペグの中からひとつのペグを取り除き、最初の空き位置と最後に残ったペグの位置が同じになる「補償型の解」の最短手数を、反復深化で求めることにします。
+</p>
+
+<h4>●ペグの跳び先表</h4>
+<p> ペグ・ソリテアの場合、ペグの「跳び先表」を用意すると簡単にプログラムできます。盤面は 1 次元配列を使って表し、座標を下図のように定義すると、跳び先表は次のようになります。
+</p>
+
+<pre class="fig">
+                    ０───１
+                      ＼  ／
+                        ２
+                      ／  ＼
+                    ３───４
+                  ／  ＼  ／  ＼
+                ５───６───７
+              ／  ＼  ／  ＼  ／  ＼
+            ８───９───10───11
+          ／  ＼  ／  ＼  ／  ＼  ／  ＼
+12───13───14───15───16───17───18
+  ＼  ／                                  ＼  ／
+    19                                      20
+
+                図 : 変形三角盤の座標
+</pre>
+<pre class="list">
+リスト : 跳び先表
+
+// 跳び先表
+var jumpTable = [][]int {
+    { 2,  4},                         /*  0 */
+    { 2,  3},                         /*  1 */
+    { 3,  5,  4,  7},                 /*  2 */
+    { 2,  1,  5,  8,  6, 10},         /*  3 */
+    { 2,  0,  6,  9,  7, 11},         /*  4 */
+    { 3,  2,  6,  7,  8, 13,  9, 15}, /*  5 */
+    { 9, 14, 10, 16},                 /*  6 */
+    { 4,  2,  6,  5, 10, 15, 11, 17}, /*  7 */
+    { 5,  3,  9, 10, 13, 19},         /*  8 */
+    { 6,  4, 10, 11},                 /*  9 */
+    { 6,  3,  9,  8},                 /* 10 */
+    { 7,  4, 10,  9, 17, 20},         /* 11 */
+    {13, 14},                         /* 12 */
+    { 8,  5, 14, 15},                 /* 13 */
+    { 9,  6, 13, 12, 15, 16},         /* 14 */
+    { 9,  5, 10,  7, 14, 13, 16, 17}, /* 15 */
+    {10,  6, 15, 14, 17, 18},         /* 16 */
+    {11,  7, 16, 15},                 /* 17 */
+    {17, 16},                         /* 18 */
+    {13,  8},                         /* 19 */
+    {17, 11},                         /* 20 */
+}
+</pre>
+<p> 跳び先表 jumpTable は二次元配列 (スライスのスライス) です。データは跳び越す位置と着地する位置の 2 個 1 セットで表しています。たとえば、10 のペグは 6 を跳び越して 3 に着地するという跳び方と、9 を跳び越して 8 に着地する跳び方があります。
+</p>
+
+<h4>●大域変数の定義</h4>
+<p> それでは、必要になる大域変数を定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 大域変数の定義
+
+// 定数
+const (
+    Size = 21
+    MaxJump = 19
+    Hole = 6
+)
+
+// 大域変数
+var board [Size]bool
+var move  [MaxJump][2]int
+var count int
+</pre>
+
+<p> 盤面は配列 board で表します。ペグの有無は真偽値 (true, false) で表します。探索はこの配列を直接書き換え、バックトラックする時に元の値に戻します。ペグが 19 回移動すると、盤上のペグはひとつになります。その値を MaxJump で表します。move は手順を格納する二次元配列です。move[n][0] に n 手目で跳ぶペグの位置、move[n][1] に跳び先の位置を格納します。count は解の個数をカウントします。
+</p>
+
+<h4>●ペグの移動</h4>
+<p> 次はペグを動かす関数 movePeg と restorePeg を作ります。
+</p>
+<pre class="list">
+リスト : ペグを動かす
+
+// ペグの移動
+func movePeg(n, from, del, to int) {
+    board[from] = false
+    board[del] = false
+    board[to] = true
+    move[n][0] = from
+    move[n][1] = to
+}
+
+// ペグを元に戻す
+func restorePeg(from, del, to int) {
+    board[from] = true
+    board[del] = true
+    board[to] = false
+}
+</pre>
+<p> movePeg の引数 n が手数、from が跳ぶペグの位置、del は跳び越されるペグの位置、to は跳び先のペグの位置です。from から del を跳び越して to に着地するので、board[from], board[del] を false に、board[to] を true に書き換えます。そして、move[n][0] に from を、move[n][1] に to をセットします。restorePeg は board[from], board[del] を true に、board[to] を false に戻すだけです。
+</p>
+
+<h4>●移動手順の表示</h4>
+<p> 次は移動手順を表示する関数 printAnswer を作ります。
+</p>
+<pre class="list">
+リスト : 手順の表示
+
+func printAnswer() {
+    for i := 0 ; i &lt; MaxJump; i++ {
+        fmt.Print("[", move[i][0], ",", move[i][1])
+        for ; i + 1 &lt; MaxJump; i++ {
+            if move[i][1] != move[i + 1][0] { break }
+            fmt.Print(",", move[i + 1][1])
+        }
+        fmt.Print("]")
+    }
+    fmt.Println("")
+    count++
+}
+</pre>
+<p> 移動手順は 1 手を [from, to] で表し、連続跳びの場合は [from, to1, to2, ..., toN] とします。2 番目の for ループで、move[i][1] と move[i + 1][0] が等しければ連続跳びです。カンマと跳び先を表示します。異なる場合は break で for ループを脱出して ] を表示します。最後に解の個数をカウントするため count を +1 します。
+</p>
+
+<h4>●反復深化による解法</h4>
+<p> 次は、反復深化でペグ・ソリテアを解く関数 idSearch を作ります。
+</p>
+<pre class="list">
+リスト : 反復深化
+
+func idSearch() {
+    for i := 0; i &lt; Size; i++ {
+        board[i] = true
+    }
+    movePeg(0, 14, 9, 6)
+    for limit := 2; limit &lt;= MaxJump; limit++ {
+        fmt.Println("-----", limit, "-----")
+        dfs(1, 1, limit)
+        if count &gt; 0 { break }
+    }
+    fmt.Println(count)
+}
+</pre>
+<p> 最初に board を true で初期化します。はじめに動かすことができるペグは 14 番と 16 番の 2 つがありますが、盤面は左右対称なので、初手は 14 番のペグを 6 番に動かすこととします。あとは for ループで上限値 limit を 1 つずつ増やしながら関数 dfs を呼び出します。count が 0 より大きくなれば解が見つかったので break で for ループを脱出します。
+</p>
+<p> 最後に、上限値まで深さ優先探索する関数 dfs を作ります。
+</p>
+<pre class="list">
+リスト : 反復深化 (2)
+
+func dfs(n, jc, limit int) {
+    if jc &gt; limit {
+        return
+    } else if n == MaxJump {
+        if board[Hole] { printAnswer() }
+    } else {
+        for from := 0; from &lt; Size; from++ {
+            if !board[from] { continue }
+            jumpT := jumpTable[from]
+            for i := 0; i &lt; len(jumpT); i += 2 {
+                del, to := jumpT[i], jumpT[i + 1]
+                if board[del] &amp;&amp; !board[to] {
+                    movePeg(n, from, del, to)
+                    jc1 := jc
+                    if move[n - 1][1] != from {
+                        jc1++
+                    }
+                    dfs(n + 1, jc1, limit)
+                    restorePeg(from, del, to)
+                }
+            }
+        }
+    }
+}
+</pre>
+<p> 引数 n が手数、jc はペグが跳んだ回数、limit が上限値です。最初に、jc が limit よりも大きくなったら return で探索を打ち切ります。ここで、jc が limit に達していても連続跳びすることで解ける場合があることに注意してください。jc &gt;= limit とすると最短手順を求めることができなくなります。
+</p>
+
+<p> n が MaxJump で board[Hole] が true であれば、解をひとつ見つけることができました。printAnswer で移動手順を表示します。そうでなければ、for ループでペグを選んで動かします。from, del の位置にペグがあり、to の位置にペグがない場合、from のペグを動かすことができます。
+</p>
+
+<p> このプログラムのポイントは連続跳びを判断するところです。直前に移動した場所 move[n - 1][1] からペグを動かすときは、連続跳びと判断することができますね。したがって、move[n - 1][1] と from が等しい場合は跳んだ回数 jc を増やしません。異なっている場合は連続跳びではないので jc をひとつ増やします。あとは dfs を再帰呼び出しして、上限値 limit まで深さ優先探索を行うだけです。
+</p>
+<p> <a href="puzgo04.html#list1">プログラムリスト１</a>
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+C&gt;go run peg21.go
+----- 2 -----
+----- 3 -----
+----- 4 -----
+----- 5 -----
+----- 6 -----
+----- 7 -----
+----- 8 -----
+----- 9 -----
+----- 10 -----
+----- 11 -----
+----- 12 -----
+[14,6][11,9][3,10][1,3][7,2][0,4][12,14,6][5,2,7,5,13][20,11,9][15,17][19,8,10][18,16,6]
+
+  ・・・ 省略 ・・・
+
+[14,6][11,9][3,10][12,14,6][20,11,9][15,17][1,3][7,2][0,4][5,7,2,5,13][19,8,10][18,16,6]
+96
+</pre>
+<p> 最短手数は 12 手、解は全部で 96 通りあります。実行時間は Windows 7, Core i7-2670QM 2.20GHz で約 3 分 32 秒かかりました。やっぱり、単純な反復深化では時間がかかりますね。そこで、反復深化の常套手段である「下限値枝刈り法」を使ってプログラムの高速化に挑戦しましょう。
+</p>
+
+<h4>●下限値枝刈り法</h4>
+<p> 下限値枝刈り法は難しいアルゴリズムではありません。たとえば、5 手進めた局面を考えてみます。探索の上限が 10 手とすると、あと 5 手だけ動かすことができますね。このとき、パズルを解くのに 6 手以上かかることがわかれば、ここで探索を打ち切ることができます。このように、必要となる最低限の手数が明確にわかる場合、この値を「下限値 (Lower Bound) 」と呼びます。この下限値を求めることができれば、「今の移動手数 + 下限値」が探索手数を超えた時点で、枝刈りすることが可能になります。これが下限値枝刈り法の基本的な考え方です。
+</p>
+
+<p> 一般に、このような手法を「分岐限定法」とか「分岐制約法」といいます。<a href="puzgo04.html#cite">参考文献 1</a> には、「巡回セールスマン問題 (TSP) 」を例題にした分岐制約法の説明があります。また、思考ルーチンを作るときの常套手段である「αβ枝刈り」も分岐制約法のひとつです。
+</p>
+
+<p> ペグ・ソリテアの場合、コーナーにあるペグは他のペグから跳び越されることはありません。コーナーのペグは自分でジャンプするしか移動する方法がないのです。したがって、コーナーにペグが残っていれば、最低でもその個数だけ移動手数が必要になります。変形三角盤の場合、コーナーは 0, 1, 12, 18, 19, 20 の 6 つあります。これを下限値として利用することにしましょう。
+</p>
+
+<p> コーナーペグを判定するため配列 corner を定義します。
+</p>
+<pre class="list">
+リスト : コーナーペグの位置
+
+var corner = [Size]bool{
+    true,  true,  false, false, false, false, false,
+    false, false, false, false, false, true,  false,
+    false, false, false, false, true,  true,  true,
+}
+</pre>
+<p> 0, 1, 12, 18, 19, 20 を true に、あとは false に設定します。
+</p>
+
+<h4>●解法プログラム</h4>
+<p> 下限値枝刈り法のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 下限値枝刈り法による探索
+
+func dfs(n, jc, limit, lower int) {
+    if jc + lower &gt; limit {
+        return
+    } else if n == MaxJump {
+        if board[Hole] { printAnswer() }
+    } else {
+        for from := 0; from &lt; Size; from++ {
+            if !board[from] { continue }
+            jumpT := jumpTable[from]
+            for i := 0; i &lt; len(jumpT); i += 2 {
+                del, to := jumpT[i], jumpT[i + 1]
+                if board[del] &amp;&amp; !board[to] {
+                    movePeg(n, from, del, to)
+                    jc1 := jc
+                    if move[n - 1][1] != from { jc1++ }
+                    lower1 := lower
+                    if corner[from] { lower1-- }
+                    dfs(n + 1, jc1, limit, lower1)
+                    restorePeg(from, del, to)
+                }
+            }
+        }
+    }
+}
+</pre>
+
+<p> 引数 lower が下限値を表します。jc + lower が limit より大きくなったら return で探索を打ち切ります。ペグを動かすとき、from の位置がコーナーかチェックします。そうであれば、新しい下限値 lower1 の値は lower - 1 になります。そうでなければ lower1 の値は lower のままです。これだけの修正で下限値枝刈り法が機能します。とても簡単ですね。
+</p>
+
+<p> 最後に dfs を呼び出す関数 idSearch を修正します。
+</p>
+<pre class="list">
+リスト : 下限値枝刈り法
+
+func idSearch() {
+    for i := 0; i &lt; Size; i++ {
+        board[i] = true
+    }
+    movePeg(0, 14, 9, 6)
+    for limit := 7; limit &lt;= MaxJump; limit++ {
+        fmt.Println("-----", limit, "-----")
+        dfs(1, 1, limit, 6)
+        if count &gt; 0 { break }
+    }
+    fmt.Println(count)
+}
+</pre>
+<p> 下限値の初期値は 6 で初手に移動するペグはコーナーにはありません。上限値 limit は 6 + 1 = 7 から始めます。
+</p>
+
+<p> あとは特に難しいところはないので説明は割愛いたします。詳細は <a href="puzgo04.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+
+<h4>●実行結果 (2)</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+----- 7 -----
+----- 8 -----
+----- 9 -----
+----- 10 -----
+----- 11 -----
+----- 12 -----
+[14,6][11,9][3,10][1,3][7,2][0,4][12,14,6][5,2,7,5,13][20,11,9][15,17][19,8,10][18,16,6]
+
+  ・・・ 省略 ・・・
+
+[14,6][11,9][3,10][12,14,6][20,11,9][15,17][1,3][7,2][0,4][5,7,2,5,13][19,8,10][18,16,6]
+96
+</pre>
+<p> 実行時間は 2.1 秒でした。約 100 倍の高速化に成功しました。下限値枝刈り法の効果はとても高いですね。
+</p>
+
+<h4>●ペグのグループ分け</h4>
+<p> 下限値枝刈り法のほかに、ペグをグループに分けることで、さらに枝刈りを行うことができます。ペグは移動できる場所が決まっていて、下図に示すグループに分けることができます。
+</p>
+<pre class="fig">
+                    ０───１
+                      ＼  ／
+                        ３
+                      ／  ＼
+                    １───０
+                  ／  ＼  ／  ＼
+                ３───２───３
+              ／  ＼  ／  ＼  ／  ＼
+            １───０───１───０
+          ／  ＼  ／  ＼  ／  ＼  ／  ＼
+２───３───２───３───２───３───２
+  ＼  ／                                  ＼  ／
+    １                                      ０
+
+              図 : ペグのグループ分け
+</pre>
+
+<p> 盤面の座標と見比べてください。たとえば、座標 0 番のペグは 4, 9, 11,　20 番にしか移動することができません。逆にいえば、この場所にあるペグは、これ以外の場所へ移動することはできないのです。これらのペグをひとつのグループとして考えましょう。同じようにペグの移動場所によって、上図のように 4 つのグループに分けることができます。
+</p>
+
+<p> ペグは移動しても所属するグループは変わりませんし、跳び越すペグは必ずほかのグループのペグになります。ここで、グループ 3 とコーナーペグの個数に注目してください。コーナーペグの移動にはグループ 3 のペグが必要になりますが、コーナーペグの数は 6 つ、グループ 3 のペグの数も 6 つですから同じ個数しかありません。したがって、コーナー以外のペグがグループ 3 のペグを跳び越すと、コーナーペグの移動ができなくなります。つまり、3, 4, 8, 11, 14, 16 番のペグは、グループ 3 のペグを跳び越すことはできないのです。グループ 3 のペグを跳び越すことができるのはコーナーペグだけです。
+</p>
+
+<p> この枝刈りは跳び先表を変更することで実現できます。修正は次のようになります。
+</p>
+
+<pre class="list">
+リスト : ペグの跳び先表 (修正)
+
+var jumpTable = [][]int {
+    { 2,  4},                         /*  0 */
+    { 2,  3},                         /*  1 */
+    { 3,  5,  4,  7},                 /*  2 */
+    // { 2,  1,  5,  8,  6, 10},      /*  3 */
+    { 6, 10},
+    // { 2,  0,  6,  9,  7, 11},      /*  4 */
+    { 6, 9},
+    { 3,  2,  6,  7,  8, 13,  9, 15}, /*  5 */
+    { 9, 14, 10, 16},                 /*  6 */
+    { 4,  2,  6,  5, 10, 15, 11, 17}, /*  7 */
+    // { 5,  3,  9, 10, 13, 19},      /*  8 */
+    { 9, 10},
+    { 6,  4, 10, 11},                 /*  9 */
+    { 6,  3,  9,  8},                 /* 10 */
+    // { 7,  4, 10,  9, 17, 20},      /* 11 */
+    {10, 9},
+    {13, 14},                         /* 12 */
+    { 8,  5, 14, 15},                 /* 13 */
+    // { 9,  6, 13, 12, 15, 16},      /* 14 */
+    { 9, 6},
+    { 9,  5, 10,  7, 14, 13, 16, 17}, /* 15 */
+    // {10,  6, 15, 14, 17, 18},      /* 16 */
+    {10, 6},
+    {11,  7, 16, 15},                 /* 17 */
+    {17, 16},                         /* 18 */
+    {13,  8},                         /* 19 */
+    {17, 11},                         /* 20 */
+}
+</pre>
+
+<p> さっそく実行してみたところ、実行時間は 2.1 秒から 0.78 秒に短縮しました。このほかに下限値の精度を高める方法もありますが、実行時間が 1 秒を切ったので、今回はここまでにしておきましょう。
+</p>
+<p> 下限値枝刈り法の場合、下限値の精度によって実行時間が大きく左右されます。今回は単純な方法で下限値を求めましたが、盤面が大きくなるとコーナーペグの下限値では不十分で、より精度の高い方法が必要になります。興味のある方は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/peg5.html">ペグ・ソリテア「トライトライ」</a> をお読みください。
+</p>
+
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li> A.V.Aho,J.E.Hopcroft,J.D.Ullman, 『データ構造とアルゴリズム』, 培風館, 1987
+  <li> 高橋謙一郎, 『特集 悩めるプログラマに効くアルゴリズム』, C MAGAZINE 2000 年 11 月号, ソフトバンク
+  <li> 橋本哲, 『特集コンピュータパズルへの招待 ペグ・ソリテア編』, C MAGAZINE 1996 年 2 月号, ソフトバンク
+</OL>
+<HR>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+//
+// peg21.go : ペグ・ソリティア (変形三角盤)
+//
+//            Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import "fmt"
+
+const (
+    Size = 21
+    MaxJump = 19
+    Hole = 6
+)
+
+// 跳び先表
+var jumpTable = [][]int {
+    { 2,  4},                         /*  0 */
+    { 2,  3},                         /*  1 */
+    { 3,  5,  4,  7},                 /*  2 */
+    { 2,  1,  5,  8,  6, 10},         /*  3 */
+    { 2,  0,  6,  9,  7, 11},         /*  4 */
+    { 3,  2,  6,  7,  8, 13,  9, 15}, /*  5 */
+    { 9, 14, 10, 16},                 /*  6 */
+    { 4,  2,  6,  5, 10, 15, 11, 17}, /*  7 */
+    { 5,  3,  9, 10, 13, 19},         /*  8 */
+    { 6,  4, 10, 11},                 /*  9 */
+    { 6,  3,  9,  8},                 /* 10 */
+    { 7,  4, 10,  9, 17, 20},         /* 11 */
+    {13, 14},                         /* 12 */
+    { 8,  5, 14, 15},                 /* 13 */
+    { 9,  6, 13, 12, 15, 16},         /* 14 */
+    { 9,  5, 10,  7, 14, 13, 16, 17}, /* 15 */
+    {10,  6, 15, 14, 17, 18},         /* 16 */
+    {11,  7, 16, 15},                 /* 17 */
+    {17, 16},                         /* 18 */
+    {13,  8},                         /* 19 */
+    {17, 11},                         /* 20 */
+}
+
+// 大域変数
+var board [Size]bool
+var move  [MaxJump][2]int
+var count int
+
+// ペグの移動
+func movePeg(n, from, del, to int) {
+    board[from] = false
+    board[del] = false
+    board[to] = true
+    move[n][0] = from
+    move[n][1] = to
+}
+
+// ペグを元に戻す
+func restorePeg(from, del, to int) {
+    board[from] = true
+    board[del] = true
+    board[to] = false
+}
+
+// 手順の表示
+func printAnswer() {
+    for i := 0 ; i &lt; MaxJump; i++ {
+        fmt.Print("[", move[i][0], ",", move[i][1])
+        for ; i + 1 &lt; MaxJump; i++ {
+            if move[i][1] != move[i + 1][0] { break }
+            fmt.Print(",", move[i + 1][1])
+        }
+        fmt.Print("]")
+    }
+    fmt.Println("")
+    count++
+}
+
+// 反復深化
+func dfs(n, jc, limit int) {
+    if jc &gt; limit {
+        return
+    } else if n == MaxJump {
+        if board[Hole] { printAnswer() }
+    } else {
+        for from := 0; from &lt; Size; from++ {
+            if !board[from] { continue }
+            jumpT := jumpTable[from]
+            for i := 0; i &lt; len(jumpT); i += 2 {
+                del, to := jumpT[i], jumpT[i + 1]
+                if board[del] &amp;&amp; !board[to] {
+                    movePeg(n, from, del, to)
+                    jc1 := jc
+                    if move[n - 1][1] != from {
+                        jc1++
+                    }
+                    dfs(n + 1, jc1, limit)
+                    restorePeg(from, del, to)
+                }
+            }
+        }
+    }
+}
+
+func idSearch() {
+    for i := 0; i &lt; Size; i++ {
+        board[i] = true
+    }
+    movePeg(0, 14, 9, 6)
+    for limit := 2; limit &lt;= MaxJump; limit++ {
+        fmt.Println("-----", limit, "-----")
+        dfs(1, 1, limit)
+        if count &gt; 0 { break }
+    }
+    fmt.Println(count)
+}
+
+func main() {
+    idSearch()
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+//
+// peg21a.go : ペグ・ソリティア (変形三角盤)
+//             反復深化＋下限値枝刈り法
+//
+//             Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import "fmt"
+
+const (
+    Size = 21
+    MaxJump = 19
+    Hole = 6
+)
+
+// 跳び先表
+var jumpTable = [][]int {
+    { 2,  4},                         /*  0 */
+    { 2,  3},                         /*  1 */
+    { 3,  5,  4,  7},                 /*  2 */
+    // { 2,  1,  5,  8,  6, 10},      /*  3 */
+    { 6, 10},
+    // { 2,  0,  6,  9,  7, 11},      /*  4 */
+    { 6, 9},
+    { 3,  2,  6,  7,  8, 13,  9, 15}, /*  5 */
+    { 9, 14, 10, 16},                 /*  6 */
+    { 4,  2,  6,  5, 10, 15, 11, 17}, /*  7 */
+    // { 5,  3,  9, 10, 13, 19},      /*  8 */
+    { 9, 10},
+    { 6,  4, 10, 11},                 /*  9 */
+    { 6,  3,  9,  8},                 /* 10 */
+    // { 7,  4, 10,  9, 17, 20},      /* 11 */
+    {10, 9},
+    {13, 14},                         /* 12 */
+    { 8,  5, 14, 15},                 /* 13 */
+    // { 9,  6, 13, 12, 15, 16},      /* 14 */
+    { 9, 6},
+    { 9,  5, 10,  7, 14, 13, 16, 17}, /* 15 */
+    // {10,  6, 15, 14, 17, 18},      /* 16 */
+    {10, 6},
+    {11,  7, 16, 15},                 /* 17 */
+    {17, 16},                         /* 18 */
+    {13,  8},                         /* 19 */
+    {17, 11},                         /* 20 */
+}
+
+// コーナーペグの位置
+var corner = [Size]bool{
+    true,  true,  false, false, false, false, false,
+    false, false, false, false, false, true,  false,
+    false, false, false, false, true,  true,  true,
+}
+
+// 大域変数
+var board [Size]bool
+var move  [MaxJump][2]int
+var count int
+
+// ペグの移動
+func movePeg(n, from, del, to int) {
+    board[from] = false
+    board[del] = false
+    board[to] = true
+    move[n][0] = from
+    move[n][1] = to
+}
+
+// ペグを元に戻す
+func restorePeg(from, del, to int) {
+    board[from] = true
+    board[del] = true
+    board[to] = false
+}
+
+// 手順の表示
+func printAnswer() {
+    for i := 0 ; i &lt; MaxJump; i++ {
+        fmt.Print("[", move[i][0], ",", move[i][1])
+        for ; i + 1 &lt; MaxJump; i++ {
+            if move[i][1] != move[i + 1][0] { break }
+            fmt.Print(",", move[i + 1][1])
+        }
+        fmt.Print("]")
+    }
+    fmt.Println("")
+    count++
+}
+
+// 反復深化＋下限値枝刈り法
+func dfs(n, jc, limit, lower int) {
+    if jc + lower &gt; limit {
+        return
+    } else if n == MaxJump {
+        if board[Hole] { printAnswer() }
+    } else {
+        for from := 0; from &lt; Size; from++ {
+            if !board[from] { continue }
+            jumpT := jumpTable[from]
+            for i := 0; i &lt; len(jumpT); i += 2 {
+                del, to := jumpT[i], jumpT[i + 1]
+                if board[del] &amp;&amp; !board[to] {
+                    movePeg(n, from, del, to)
+                    jc1 := jc
+                    if move[n - 1][1] != from { jc1++ }
+                    lower1 := lower
+                    if corner[from] { lower1-- }
+                    dfs(n + 1, jc1, limit, lower1)
+                    restorePeg(from, del, to)
+                }
+            }
+        }
+    }
+}
+
+func idSearch() {
+    for i := 0; i &lt; Size; i++ {
+        board[i] = true
+    }
+    movePeg(0, 14, 9, 6)
+    for limit := 7; limit &lt;= MaxJump; limit++ {
+        fmt.Println("-----", limit, "-----")
+        dfs(1, 1, limit, 6)
+        if count &gt; 0 { break }
+    }
+    fmt.Println(count)
+}
+
+func main() {
+    idSearch()
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="puzgo03.html">PrevPage</a> | <a href="index.html#puzgo">Golang</a> | <a href="puzgo05.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

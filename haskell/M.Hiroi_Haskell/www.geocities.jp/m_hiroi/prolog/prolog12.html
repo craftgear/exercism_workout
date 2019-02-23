@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Prolog プログラミング入門</title>
+  <meta name="description" content="Prolog,Prolog入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881780</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>お気楽 Prolog プログラミング入門</h2>
+<div class="small">
+[ <a href="prolog11.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog13.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap34">パズルに挑戦！</h3>
+<p> 今回は 3 つのパズルを出題します。Prolog で解法プログラムを作成してください。
+</p>
+<h4>●問題１「騎士の巡歴 (Knight's Tour) 」</h4>
+<p> 騎士 (ナイト) はチェスの駒のひとつで、将棋の桂馬の動きを前後左右にとることができます。次の図を見てください。
+</p>
+<pre class="fig">
+    ┌─┬─┬─┬─┬─┐
+    │  │●│  │●│  │
+    ├─┼─┼─┼─┼─┤    ┌─┬─┬─┐ 
+    │●│  │  │  │●│    │Ｋ│  │  │ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤ 
+    │  │  │Ｋ│  │  │    │  │  │  │ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤ 
+    │●│  │  │  │●│    │  │  │  │ 
+    ├─┼─┼─┼─┼─┤    ├─┼─┼─┤ 
+    │  │●│  │●│  │    │  │  │  │ 
+    └─┴─┴─┴─┴─┘    └─┴─┴─┘ 
+
+ ●：ナイト (K) が動ける位置       問題 
+
+                図：ナイトの巡歴
+</pre>
+<p> このナイトを動かして、N 行 M 列の盤面のどのマスにもちょうど一回ずつ訪れるような経路を求めるのが問題です。ちなみに、3 行 3 列、4 行 4 列の盤面には解がありませんが、5 行 5 列の盤面には解があります。大きな盤面を解くのは大変なので、3 行 4 列の盤面でナイトの移動経路を求めてください。プログラムを作る前に、自分で考えてみるのも面白いでしょう。
+</p>
+<p> <A href="prolog12.html#answer1">解答</A>
+</p>
+<h4>●問題２「Hoppers」</h4>
+<p> Hoppers は「ペグ・ソリテア」と呼ばれるパズルのひとつです。出典は C magazine 2000 年 2 月号の「Ｃマガ電脳クラブ第 107 回 Hoppers 」です。
+</p>
+<p> ペグ・ソリテアは、盤上に配置されたペグ (駒) を、最後にはひとつ残るように取り除いていく古典的なパズルです。ペグは次のルールに従って移動し、除去することができます。
+</p>
+<ul>
+  <li> ペグは隣にあるペグをひとつだけ跳び越して、空いている場所へ着地します。
+  <li> 跳び越されたペグは盤上から取り除かれます。
+  <li> 移動方向は、ふつう縦横のみの 4 方向ですが、
+       ルールによっては斜め方向の移動を許す場合もあります。
+  <li> 同じペグの連続跳び越しは 1 手と数えます。
+</ul>
+<p> 盤は今までに多数考案されていますが、33 穴英国盤、37 穴フランス盤、41 穴盤が有名でしょう。33 穴英国盤と Hoppers を図に示します。
+</p>
+<pre class="fig">
+          ●─●─●
+          │  │  │
+          ●─●─●            ●───●───●  
+          │  │  │            │＼  ／│＼  ／│  
+  ●─●─●─●─●─●─●    │  ●  │  ●  │  
+  │  │  │  │  │  │  │    │／  ＼│／  ＼│  
+  ●─●─●─○─●─●─●    ●───○───●  
+  │  │  │  │  │  │  │    │＼  ／│＼  ／│  
+  ●─●─●─●─●─●─●    │  ●  │  ●  │  
+          │  │  │            │／  ＼│／  ＼│  
+          ●─●─●            ●───●───●  
+          │  │  │
+          ●─●─●               (2) Hoppers
+
+      (1) 33 穴英国盤
+
+                図：ペグ・ソリテア
+</pre>
+<p> それぞれのマスにペグがありますが、そこからひとつペグを取り除いてゲームを始めます。図では黒丸でペグを表し、白丸で空き場所を表しています。ルールに従ってペグを移動し、最後にひとつだけ残ればクリアとなります。ただし、ペグを取り除く位置によって、解けない場合もあるので注意してください。
+</p>
+<p> それでは問題です。図 (2) に示したように、Hoppers の中央のペグを取り除きます。この状態から始めて、最後のペグが中央の位置に残る跳び方の最小手数を求めてください。
+</p>
+<p> <A href="prolog12.html#answer2">解答</A>
+</p>
+<h4>●問題３「ニム(nim)」</h4>
+<p> ニムは「三山くずし」とも呼ばれている「石取りゲーム」です。ルールはとても簡単です。石の山を 3 つ作り、交互にどれかひとつの山から 1 個以上の石を取っていきます。複数の山から石を取ることはできません。そして、最後に石を取った方が勝ちとなります。
+</p>
+<p> 問題は、ニムをプレイするプログラムを作ることです。いきなり「作れ」といわれても困ってしまいますね。そこで、ヒントを出しましょう。ニムはとても簡単な方法で、とても強いプログラムを作ることができます。
+</p>
+<p> 各山の石の数を N1, N2, N3 として、ビットごとの排他的論理和 N1 xor N2 xor N3 を計算します。これを「ニム和」といいます。そして、ニム和を 0 にすることができれば、勝つことができるのです。ここで、石を全部取った状態は、ニム和が 0 になることに注意してください。ニム和が 0 の状態では、どのような石の取り方をしても、ニム和は 0 になりません。したがって、自分の手番でニム和を 0 にすることができれば、相手に最後の石を取られることはないわけです。もし、ニム和を 0 にできなければ、最大の山から石をひとつだけとって、相手のミスを待ちます。
+</p>
+<p> これで本当に強くなるのか、実際にプログラムを作って確かめてください。
+</p>
+<p> <A href="prolog12.html#answer3">解答</A>
+</p>
+<hr>
+<h4 id="answer1">●問題１「騎士の巡歴 (Knight's Tour) 」解答</h4>
+<p> それではプログラムを作りましょう。次の図を見てください。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐ 
+  │ａ│ｂ│ｃ│     ａ──ｈ──ｃ  
+  ├─┼─┼─┤     │          │  
+  │ｄ│ｅ│ｆ│     ｆ──ｋ──ｄ  
+  ├─┼─┼─┤     │          │  
+  │ｇ│ｈ│ｉ│     ｇ──ｂ──ｉ  
+  ├─┼─┼─┤     │          │  
+  │ｊ│ｋ│ｌ│     ｌ──ｅ──ｊ  
+  └─┴─┴─┘
+
+（Ａ）３行４列盤  （Ｂ）ナイトの移動
+
+        図：ナイトの移動
+</pre>
+<p> 図 (A) のように、3 行 4 列盤の各マスに名前を付けて表します。すると、ナイトの移動は (B) のようにグラフで表すことができます。これならば、コンピュータを使わなくても解くことができますね。プログラムも隣接関係を定義すれば簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト：ナイトの移動
+
+next(a, f). next(a, h). next(b, g). next(b, i).
+next(c, d). next(c, h). next(d, i). next(d, k).
+next(e, j). next(e, l). next(f, g). next(f, k).
+next(g, l). next(i, j).
+
+jump(X, Y) :- next(X, Y).
+jump(X, Y) :- next(Y, X).
+</pre>
+
+<p> あとは単純な深さ優先探索でナイトの経路を探すだけです。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：ナイトの巡歴
+
+search(12, Path) :-
+    reverse(Answer, Path), write(Answer), nl, !, fail.
+
+search(N, [Postion | Rest]) :-
+    jump(Postion, NextPostion),
+    not(member(NextPostion, Rest)),
+    N1 is N + 1,
+    search(N1, [NextPostion, Postion | Rest]).
+</pre>
+
+<p> 経路はリストで表します。述語 search の最初の引数 N が訪れたマスの個数を表し、
+次の引数が経路を表します。最初の規則で、N が 12 になったら見つけた経路を write で表示します。次の経路を探すため、fail で強制的にバックトラックします。また、これ以上ナイトを動かす必要はないので、次の規則を実行しないようにカット (!) を使っていることに注意してください。
+</p>
+<p> 次の規則でナイトを移動します。次の移動地点を述語 jump で求め、その場所が経路に含まれていないか述語 member を使ってチェックします。あとは search を再帰呼び出しするだけです。
+</p>
+<p> プログラムはこれだけです。とても簡単ですね。それでは実行してみましょう。
+</p>
+<pre>
+test :- search(1, [a]).
+
+?- test.
+[a, h, c, d, k, f, g, l, e, j, i, b]
+[a, h, c, d, k, f, g, b, i, j, e, l]
+
+No
+</pre>
+<p> 2 通りの経路を見つけることができました。
+</p>
+<p> このほかに、どのマスにもちょうど一回ずつ訪れたのち、最初のマスに戻ってくることを条件にする場合もあります。この場合、3 行 4 列盤には解がありません。また、N 行 M 列の盤面でマスの個数が奇数のときにも、最初のマスに戻ることはできません。これは簡単に証明できるので、息抜きや気分転換に考えてみてください。
+</p>
+<p> <a href="../puzzle/knight2.html#update">答えはこちら</a>
+</p>
+<hr>
+<h4 id="answer2">●問題２「Hoppers」解答</h4>
+<p> それでは、プログラムを作りましょう。今回は、Hoppers の盤面をリストではなく、整数値のビットを使って表すことにします。つまり、ペグがある状態をビットオンで、ペグがない状態をビットオフで表します。位置とビットの対応は、下図の座標を見てください。
+</p>
+<pre class="fig">
+●───●───●    ０───１───２  
+│＼  ／│＼  ／│    │＼  ／│＼  ／│  
+│  ●  │  ●  │    │  ３  │  ４  │  
+│／  ＼│／  ＼│    │／  ＼│／  ＼│  
+●───○───●    ５───６───７  
+│＼  ／│＼  ／│    │＼  ／│＼  ／│  
+│  ●  │  ●  │    │  ８  │  ９  │  
+│／  ＼│／  ＼│    │／  ＼│／  ＼│  
+●───●───●    10───11───12  
+ 
+  (1) Hoppers             (2) 座標
+
+            図：Hoppers
+</pre>
+<p> ペグの移動は跳び先表を用意すると簡単です。次のプログラムを見てください。
+</p>
+<pre class="list">
+リスト：跳び先表
+
+/* 跳び先表 */
+jump_table(0, 1, 2).  jump_table(0, 3, 6).   jump_table(0, 5, 10).
+jump_table(1, 3, 5).  jump_table(1, 6, 11).  jump_table(1, 4, 7).
+jump_table(2, 4, 6).  jump_table(2, 7, 12).
+jump_table(3, 6, 9).
+jump_table(4, 6, 8).
+jump_table(5, 6, 7).  jump_table(5, 8, 11).
+jump_table(6, 8, 10). jump_table(6, 9, 12).
+jump_table(7, 9, 11).
+jump_table(10, 11, 12).
+
+/* ペグの移動 */
+jump(From, Del, To) :- jump_table(From, Del, To).
+jump(From, Del, To) :- jump_table(To, Del, From).
+</pre>
+
+<p> ペグの跳び先表は jump_table で定義します。jump_table は一方向ではなく双方向の関係を表していることに注意してください。たとえば、jump_table(0, 1, 2) は 0 から 1 を跳び越して 2 へ移動するだけではなく、2 から 1 を跳び越して 0 へ移動することも表しています。述語 jump(From, Del, To) は jump_table を使って、From の位置にあるペグが Del の位置にあるペグを飛び越して To に移動することを表しています。
+</p>
+<p> 実際にペグを動かす場合、動かすペグと跳び越すペグがあり、移動先の位置にペグがないことを確認しなければいけません。ペグを動かして新しい盤面を生成するプログラムは、次のようになります。
+</p>
+<pre class="list">
+リスト：ペグの移動
+
+jump_peg(Peg, Del, To, Board, NewBoard) :-
+    PegBit is 1 &lt;&lt; Peg,
+    Board /\ PegBit &gt; 0,    % Peg の位置にペグがある
+    DelBit is 1 &lt;&lt; Del,
+    Board /\ DelBit &gt; 0,    % Del の位置にペグがある
+    ToBit is 1 &lt;&lt; To,
+    Board /\ ToBit =:= 0,   % To の位置は空いている
+    NewBoard is (Board /\ ((\ PegBit) /\ (\ DelBit))) \/ ToBit.
+</pre>
+
+<p> ビット操作でペグの有無をチェックしています。条件を満たしていたら、Peg と Del のビットをオフに、To のビットをオンにして、新しい盤面 NewBoard を生成します。
+</p>
+<p> あとは単純な反復深化で最短手順を求めます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：反復深化による解法
+
+search_id(Limit, Limit, Board, Move) :-
+    Board =:= 0b1000000, !, reverse(Move, Ans), write(Ans), nl.
+
+search_id(N, Limit, Board, [[PrevFrom, PrevTo] | Rest]) :-
+<b>    N =&lt; Limit,</b>
+    jump(From, Del, To),
+    jump_peg(From, Del, To, Board, NewBoard),
+<b>    ((PrevTo =:= From) -&gt; N1 is N ; N1 is N + 1),</b>
+    search_id(N1, Limit, NewBoard, [[From, To], [PrevFrom, PrevTo] | Rest]).
+</pre>
+
+<p> 述語 search_id の引数 N が跳んだ回数、Limit は反復深化の上限値、Board が盤面で、最後の引数が移動手順を格納するリストです。移動手順は、[移動元の位置, 移動先の位置] で表します。
+</p>
+<p> このプログラムのポイントは連続跳びを判断するところです。直前に移動した場所 PrevTo からペグを動かすときは、連続跳びと判断することができますね。したがって、PrevTo と From が等しい場合は跳んだ回数 N を増やしません。異なっている場合は連続跳びではないので N をひとつ増やします。
+</p>
+<p> あとは search_id を再帰呼び出しして、上限値 Limit まで深さ優先探索を行います。上限値に達したとき、最初の規則で 6 の位置にペグがひとつ残っているかチェックします。条件を満たしていれば、移動手順 Move を reverse で逆にしてから write で表示します。すべての解を表示すると時間がかかりそうなので、今回は解をひとつ見つけたら探索を終了することにします。
+</p>
+<p> それから、跳び回数 N が上限値 Limit に達していても、2 番目の規則は実行されることに注意してください。回数が Limit に達していても連続跳びすることで解ける場合もあるので、N =&lt; Limit を N &lt; Limit にすると最短手順を求めることができなくなります。ご注意くださいませ。
+</p>
+<p> これでプログラムは完成です。それでは実行してみましょう。最初の移動は、四隅にあるペグのひとつを中央に動かす手順しかありません。そこで、最初は 0 のペグを 6 へ動かすことに決めて、その状態から探索を開始します。
+</p>
+<pre>
+test :- between(4, 11, Limit), 
+        write(Limit), nl,
+        search_id(1, Limit, 0b1111111110110, [[0, 6]]).
+
+?- test.
+4
+5
+6
+7
+[[0, 6], 
+ [9, 3], 
+ [2, 6], 
+ [8, 4], 
+ [10, 0], [0, 2], [2, 6], 
+ [11, 1],
+ [12, 2], [2, 0], [0, 6]]
+</pre>
+<p> 7 手で解くことができました。移動手順はリストを表示しているだけなので、連続跳びがわかるように手作業でちょっと直してみました。プログラムの改良は皆さんにお任せいたしますね。実行時間は Pentium 166 MHz のオンボロマシンで約 27 秒かかりました。ちょっと遅いですね。そこで、プログラムの高速化に挑戦しましょう。
+</p>
+<h4 id="answer21">●Hoppers の高速化</h4>
+<p> 反復深化の高速化といえば「下限値枝刈り法」が常套手段ですが、その前に無駄な処理があるので、それを先に修正しましょう。
+</p>
+<p> ペグを動かすとき、jump(From, Del, To) でペグの位置を求めてから、jump_peg でペグを移動できるかチェックしています。そして、From の位置にペグがないと jump_peg は失敗し、jump を再試行することになります。このとき、From には前と同じ位置が求まる場合があるのです。これは、実際に jump を実行してみるとわかります。
+</p>
+<pre>
+?- jump(From, Del, To).
+
+From = 0
+Del = 1
+To = 2 ;
+
+From = 0
+Del = 3
+To = 6 
+
+Yes
+</pre>
+<p> 0 にペグがない場合、次の再試行は無駄になります。そこで、動かすペグを決めてから jump で跳び先の位置を求めることにします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：動かすペグを求める
+
+get_move_peg(Board, Peg) :-
+    between(0, 12, Peg), PegBit is 1 &lt;&lt; Peg, Board /\ PegBit &gt; 0.
+</pre>
+
+<p> 述語 get_move_peg は、Board を調べてペグがある位置を変数 Peg にセットします。bewteen を使って失敗駆動ループを構成していることに注意してください。これで、マスにペグがあるか順番に調べることができます。あとは、search_id に get_move_peg を追加します。
+</p>
+<pre class="list">
+リスト：反復深化による解法
+
+search_id(Limit, Limit, Board, Move) :-
+    Board =:= 0b1000000, !, write(Limit), reverse(Move, Ans), write(Ans), nl.
+
+search_id(N, Limit, Board, [[PrevFrom, PrevTo] | Rest]) :-
+    N =&lt; Limit,
+<b>    get_move_peg(Board, From),</b>
+    jump(From, Del, To),
+    jump_peg(From, Del, To, Board, NewBoard),
+    ((PrevTo =:= From) -&gt; N1 is N ; N1 is N + 1),
+    search_id(N1, Limit, NewBoard, [[From, To], [PrevFrom, PrevTo] | Rest]).
+</pre>
+
+<p> jump の前に get_move_peg を追加します。これで、変数 From には動かすペグの位置がセットされるので、jump では From からの跳び先だけを求めることができます。それから、jump_peg でペグの有無をチェックしていますが、動かすペグ From のチェックは不要になります。
+</p>
+<p> プログラムの修正はこれだけです。実行時間は約 12 秒と半分以下に短縮することができました。ペグは動かすたびにひとつずつ取り除かれていくので、jump だけで動かすペグを求めるのは無駄が多すぎたようです。
+</p>
+<h4>●下限値枝刈り法による高速化</h4>
+<p> 次は、「下限値枝刈り法」を使って高速化してみましょう。ペグ・ソリテアの場合、コーナーにあるペグはほかのペグから跳び越されることはありません。つまり、コーナーのペグは自分でジャンプするしか移動する方法がないのです。したがって、コーナーにペグが残っていれば、最低でもその個数だけ移動手数が必要になります。
+</p>
+<p> Hoppers の場合、コーナーは 0, 2, 10, 12 の 4 か所あります。これを下限値として利用することにしましょう。ただし、注意点がひとつだけあります。それは、ペグが連続跳びしている場合です。次の移動手順を見てください。
+</p>
+<pre class="fig">
+ 1: [0, 6]
+ 2: [9, 3]
+ 3: [2, 6]
+ 4: [8, 4]
+ 5: [10, 0], [0, 2], [2, 6] 
+ 6: [11, 1]
+ 7: [12, 2], [2, 0], [0, 6] 
+
+    図：ペグの移動手順
+</pre>
+<pre class="fig">
+  ○───●───○    ０───１───２  
+  │＼  ／│＼  ／│    │＼  ／│＼  ／│  
+  │  ●  │  ○  │    │  ３  │  ４  │  
+  │／  ＼│／  ＼│    │／  ＼│／  ＼│  
+  ○───○───●    ５───６───７  
+  │＼  ／│＼  ／│    │＼  ／│＼  ／│  
+  │  ○  │  ○  │    │  ８  │  ９  │  
+  │／  ＼│／  ＼│    │／  ＼│／  ＼│  
+  ○───○───●    10───11───12  
+ 
+    (1) 6 手の局面          (2) 座標
+
+            図：最後の移動
+</pre>
+
+<p> 最後で、コーナーにあるペグが連続跳びしていますね。12 から 2 へ跳んだとき、手数は 7 手になり反復深化の上限値に達します。このとき、コーナー 2 にペグがあるので下限値に 1 を加えると、上限値を越えるため枝刈りされてしまうのです。これでは解を求めることができませんね。
+</p>
+<p> そこで、効率は悪くなりますが、コーナーのペグが跳んでいるときは下限値枝刈り法を適用しないことにします。この処理は、ペグをグループに分けることで簡単にプログラムできます。
+</p>
+<pre class="fig">
+  ０───１───０  
+  │＼  ／│＼  ／│  
+  │  ２  │  ２  │  
+  │／  ＼│／  ＼│  
+  １------０------１  
+  │＼  ／│＼  ／│  
+  │  ２  │  ２  │  
+  │／  ＼│／  ＼│  
+  ０------１------０  
+
+図：ペグのグループ分け
+</pre>
+
+<p> ペグは移動できる場所が決まっていて、Hoppers は左図に示す 3 つのグループに分けることができます。ほかのペグ・ソリテア、たとえば <a href="../puzzle/peg4.html">変形三角盤</a> では 4 つのグループに分けることができます。
+</p>
+<p> コーナーのペグはグループ 0 に属しています。このグループのペグが移動したときは、下限値をカウントしなければいいわけです。下限値を求めるプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：下限値を求める
+
+/* グループ 0 の定義 */
+zero_group(0).  zero_group(2). zero_group(6).
+zero_group(10). zero_group(12).
+
+/* 下限値を求める */
+get_lower_value(Board, PrevMove, Low) :-
+    (zero_group(PrevMove) -&gt; Low is 0 ;
+     Low is (Board /\ 0x01) + ((Board &gt;&gt; 2) /\ 0x01)
+          + ((Board &gt;&gt; 10) /\ 0x01) + ((Board &gt;&gt; 12) /\ 0x01)).
+</pre>
+<p> 述語 zero_group でグループ 0 を定義します。そして、get_lower_value で下限値を求めます。直前に動かしたペグ PrevMove がグループ 0 であれば下限値 Low を 0 にし、そうでなければコーナーペグの個数を求めます。あとは、search_id に get_lower_value を追加します。
+</p>
+<pre class="list">
+リスト：反復深化による解法
+
+search_id_low(Limit, Limit, Board, Move) :-
+    Board =:= 0b1000000, !, write(Limit), reverse(Move, Ans), write(Ans), nl.
+
+search_id_low(N, Limit, Board, [[PrevFrom, PrevTo] | Rest]) :-
+<b>    get_lower_value(Board, PrevTo, Low),
+    (N + Low) =&lt; Limit,</b>
+    get_move_peg(Board, From),
+    jump(From, Del, To),
+    jump_peg(From, Del, To, Board, NewBoard),
+    ((PrevTo =:= From) -&gt; N1 is N ; N1 is N + 1),
+    search_id_low(N1, Limit, NewBoard, [[From, To], [PrevFrom, PrevTo] | Rest]).
+</pre>
+<p> get_lower_value で下限値 Low を求め、手数 N と Low を足した値が上限値 Limit 以上になれば枝刈りを行います。プログラムの修正はこれだけです。実行時間は約 3.5 秒にまで短縮されました。やっぱり、下限値枝刈り法の効果は大きいですね。
+</p>
+<p> このほかにも、ペグのグループを使って枝刈りを行うことができます。グループ 0 の場合、最後には 6 番にひとつだけペグが必要になります。すなわち、このグループのペグの個数が 0 になると、パズルを解くことができないわけです。これを枝刈りとして利用することができます。どのくらい速くなるか、興味のある方は試してみてください。
+</p>
+<hr>
+<h4 id="answer3">●問題３「ニム(nim)」解答</h4>
+<p> それではプログラムを作りましょう。ポイントは、ニム和を 0 にする指し手を求める処理です。次の図を見てください。
+</p>
+<pre class="fig">
+三山：[1, 2, 4] 
+
+ニム和： 0b001 xor 0b010 xor 0b100 = 0b111 (7)
+
+指し手の決定
+
+0b001 (1) xor 0b111 = 0b110 (6)  1 - 6 = -5 NG 
+0b010 (2) xor 0b111 = 0b101 (5)  2 - 5 = -3 NG 
+0b100 (4) xor 0b111 = 0b011 (3)  4 - 3 = 1  OK 
+
+最後の山から石をひとつ取る
+
+ニム和：0b001 xor 0b010 xor 0b011 = 0
+
+        図：指し手の決定
+</pre>
+
+<p> 三山をリストで表します。今、石は 1, 2, 4 個あるとします。この場合、ニム和は 0b111 (7) になります。ニム和を 0 にするには、同じ数値 0b111 と排他的論理和をとります。つまり、0b001 xor 0b010 xor 0b100 xor 0b111 とすればいいわけです。ここで、論理演算は交換法則と結合法則が成立するので、0b111 の位置を入れ替えて、各山の石数と 0b111 の排他的論理和を先に計算してみましょう。
+</p>
+<p> 最初の山は 0b001 xor 0b111 = 0b110 になります。ここで、最初の山の石数 0b001 を 0b110 にすることができれば、ニム和が 0 になることに注意してください。この場合は石を 1 個から 6 個へと 5 個増やすことになり、残念ながら実現できません。次の山も 0b010 xor 0b111 = 0b101 になり、石を 3 個増やさないといけません。最後の山は 0b100 xor 0b111 = 0b011 ですから、石を 4 個から 3 個へ 1 個減らせばニム和を 0 にすることができますね。したがって、指し手は「最後の山から石を 1 個取る」となります。
+</p>
+<p> このように、簡単な方法でコンピュータの指し手を求めることができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：コンピュータの指し手
+
+/* コンピュータの指し手 */
+com_move(Nim, Move) :-
+    nim_sum(Nim, Sum),
+    (Sum =:= 0 -&gt; unsafe_move(Nim, Move) ; safe_move(0, Nim, Sum, Move)).
+
+/* ニム和を計算 */
+nim_sum([N0, N1, N2], NimSum) :- NimSum is N0 xor N1 xor N2.
+
+/* ニム和を 0 にする取り方 */
+safe_move(Pos, [M | _], Sum, [Pos, Num]) :-
+    Num is M - (M xor Sum), Num &gt; 0.
+safe_move(Pos, [_ | Rest], Sum, Move) :-
+    Pos1 is Pos + 1, safe_move(Pos1, Rest, Sum, Move).
+
+/* 石がいちばん多い山からひとつ取る */
+unsafe_move(Nim, [Pos, 1]) :- max_sum(Nim, Pos).
+
+/* 石がいちばん多い山を求める */
+max_sum([N0, N1, N2], 0) :- N0 &gt; 0, N0 &gt;= N1, N0 &gt;= N2.
+max_sum([N0, N1, N2], 1) :- N1 &gt; 0, N1 &gt;= N0, N1 &gt;= N2.
+max_sum([N0, N1, N2], 2) :- N2 &gt; 0, N2 &gt;= N0, N2 &gt;= N1.
+</pre>
+
+<p> 指し手はリスト [山, 取る石の数] で表すことにします。コンピュータの指し手は述語 com_move で求めます。引数 Nim が三山を表すリスト、Move が求める指し手を表します。まず、述語 nim_sum でニム和を求めます。その値が 0 ならば、石がいちばん多い山からひとつだけ取ります。この処理を述語 unsafe_move で行います。ニム和が 0 でなければ、述語 safe_move でニム和が 0 になるように石を取ります。
+</p>
+<p> safe_move の引数 Pos が山の位置、次の引数が三山を表すリスト、Sum がニム和で、最後の引数が指し手を表しています。石の個数 (M) を調べて M - (M xor Sum) が 0 より大きければ、その山から石を取ることができます。そうでなければ、次の規則でほかの山を調べます。unsafe_move は、石がいちばん多い山から石をひとつ取ります。山は 3 つしかないので、述語 max_sum では単純な方法でいちばん多い山を求めています。
+</p>
+<p> あとはとくに難しいところはないでしょう。詳細は <a href="prolog12.html#ans3list">プログラムリスト</a> をご覧ください。それでは実行してみましょう。
+</p>
+<pre>
+?- start.
+turn is human : Nim is (5, 2, 3)
+
+input [Postion, Number] &gt; [0,3].
+Move is (0, 3) : Nim is (2, 2, 3)
+turn is com : Nim is (2, 2, 3)
+Move is (0, 1) : Nim is (1, 2, 3)
+turn is human : Nim is (1, 2, 3)
+
+input [Postion, Number] &gt; [2,1].
+Move is (2, 1) : Nim is (1, 2, 2)
+turn is com : Nim is (1, 2, 2)
+Move is (0, 1) : Nim is (0, 2, 2)
+turn is human : Nim is (0, 2, 2)
+
+input [Postion, Number] &gt; [1,2].
+Move is (1, 2) : Nim is (0, 0, 2)
+turn is com : Nim is (0, 0, 2)
+Move is (2, 2) : Nim is (0, 0, 0)
+com win!!
+</pre>
+<p> うーん、やっぱりニム和を計算しないと勝てませんね。皆さんも挑戦してみてください。
+</p>
+<h4 id="ans3list">●プログラムリスト</h4>
+<pre class="list">
+リスト：ニム(nim)
+
+/* 三山を作る */
+make_nim(3, Nim, Nim).
+make_nim(N, Lst, Nim) :-
+    N &lt; 3,
+    M  is 1 + random(10),   % 1 - 10 まで
+    N1 is N + 1,
+    make_nim(N1, [M | Lst], Nim).
+
+/* 入力のチェック */
+check_move(Nim, [Postion, Number]) :-
+    0 =&lt; Postion, Postion =&lt; 2,
+     nth0(Postion, Nim, M), M &gt; 0, M &gt;= Number.
+
+/* 指し手の入力 [位置, 個数] */
+input_move(Nim, Move) :-
+    repeat,
+    format('~ninput [Postion, Number] &gt; '),
+    read(Move), length(Move, 2), check_move(Nim, Move), !.
+
+/* 石がいちばん多い山を求める */
+max_sum([N0, N1, N2], 0) :- N0 &gt; 0, N0 &gt;= N1, N0 &gt;= N2.
+max_sum([N0, N1, N2], 1) :- N1 &gt; 0, N1 &gt;= N0, N1 &gt;= N2.
+max_sum([N0, N1, N2], 2) :- N2 &gt; 0, N2 &gt;= N0, N2 &gt;= N1.
+
+/* 石がいちばん多い山からひとつ取る */
+unsafe_move(Nim, [Pos, 1]) :- max_sum(Nim, Pos).
+
+/* ニム和を 0 にする取り方 */
+safe_move(Pos, [M | _], Sum, [Pos, Num]) :-
+    Num is M - (M xor Sum), Num &gt; 0.
+safe_move(Pos, [_ | Rest], Sum, Move) :-
+    Pos1 is Pos + 1, safe_move(Pos1, Rest, Sum, Move).
+
+/* ニム和を計算 */
+nim_sum([N0, N1, N2], NimSum) :- NimSum is N0 xor N1 xor N2.
+
+/* コンピュータの指し手 */
+com_move(Nim, Move) :-
+    nim_sum(Nim, Sum),
+    (Sum =:= 0 -&gt; unsafe_move(Nim, Move) ; safe_move(0, Nim, Sum, Move)).
+
+/* 石を取る */
+get_stone(Pos, [Pos, N1], [N2 | Rest], [M | Rest]) :- M is N2 - N1.
+get_stone(N0, [Pos, N1], [N2 | Rest], [N2 | Result]) :-
+    M is N0 + 1, get_stone(M, [Pos, N1], Rest, Result).
+
+/* ゲームの実行 */
+play_nim(Turn, Nim) :-
+    format('turn is ~a : Nim is (~d, ~d, ~d)~n', [Turn | Nim]),
+    (Turn == com -&gt; (com_move(Nim, Move), Next = human) ;
+                    (input_move(Nim, Move), Next = com)),
+    get_stone(0, Move, Nim, NewNim),
+    format('Move is (~d, ~d) ', Move),
+    format(': Nim is (~d, ~d, ~d)~n', NewNim),
+    (NewNim == [0, 0, 0] -&gt; format('~a win!!~n', [Turn]) ;
+                            play_nim(Next, NewNim)).
+
+/* ゲームの開始 */
+start :- make_nim(0, [], Nim), play_nim(human, Nim).
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="prolog11.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog13.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

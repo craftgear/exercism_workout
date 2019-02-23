@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881756</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj07.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj09.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap18">モジュール (3)</h3>
+<p> 前回までで、ストラクチャ、シグネチャ、ファンクタというモジュールの基本的な機能を一通り説明しました。このほかにも、SML/NJ のモジュールには便利な機能がいくつかあります。今回は「キュー (queue) 」というデータ構造を例題にして、いろいろなモジュール機能を紹介します。
+</p>
+
+<h4>●キューとは？</h4>
+<p> キューは「待ち行列」といわれるデータ構造です。たとえばチケットを買う場合、窓口に長い列ができますが、それと同じだと考えてください。チケットを買うときは、列の途中に割り込むことはできませんね。いちばん後ろに並んで順番を待たなければいけません。列の先頭まで進むと、チケットを購入することができます。
+</p>
+<p> このように、要素を取り出す場合は列の先頭から行い、要素を追加する場合は列の後ろに行うデータ構造がキューなのです。キューは「先入れ先出し (FIFO : first-in, first-out) 」とも呼ばれます。
+</p>
+
+<pre class="fig">
+                  先頭                      最後尾
+                    ---------------------------
+                 &lt;=  1  2  3  4  5  .  .  .  n  &lt;= 
+                    ---------------------------
+
+            先頭                                          最後尾
+ 変数      ┌─┬─┐    ┌─┬─┐    ┌─┬─┐        ┌─┬─┐
+ queue ─→│・│・┼─→│・│・┼─→│・│・┼・・・→│・│／│  
+           └┼┴─┘    └┼┴─┘    └┼┴─┘        └┼┴─┘
+             ↓            ↓            ↓                ↓
+             １            ２            ３                ｎ
+
+                        図 : キューの構造
+</pre>
+
+<p> キューにデータを入れることを enqueue といい、キューからデータを取り出すことを dequeue といいます。リストを使ってキューを実装する場合、上図のようにキューの先頭とリストの先頭を対応させます。すると、キューからデータを取り出すには、リストの先頭からデータを取り出すだけですみます。これはとても簡単ですね。
+</p>
+<p> ただし、キューにデータを入れるには、リストの最後尾にデータを追加することになるため、ちょっとした工夫が必要になります。たとえば、データの追加に演算子 @ を使うと、データを追加するたびにリスト（キュー）がコピーされてしまいます。このため、キューに格納されているデータが多くなると時間がかかるようになります。
+</p>
+<p> これを回避する方法はいろいろ考えられるのですが、今回は SML/NJ でよく使われている方法を紹介します。次の図を見てください。
+</p>
+
+<pre class="fig">
+            先頭                        
+ 変数      ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ front ─→│０│・┼─→│１│・┼─→│２│／│  
+           └─┴─┘    └─┴─┘    └─┴─┘
+           最後尾                  
+           ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+ rear  ─→│５│・┼─→│４│・┼─→│３│／│  
+           └─┴─┘    └─┴─┘    └─┴─┘
+
+        図 : キューの構造（改良版）
+</pre>
+
+<p> 上図は 2 つのリストでキューを表しています。データを取り出すときは front のリストを、データを追加するときは rear のリストを使います。front と rear で一つのキューを構成し、rear のリストはデータを逆順で格納することになります。ようするに、front が先頭で rear が最後尾になるわけです。上図のキューを一つのリストで表すと [0, 1, 2, 3, 4, 5] になります。
+</p>
+<p> したがって、front が空リストでも rear にデータがあれば、キューは空ではありません。rear のリストを逆順にして front にセットし、rear を空リストにします。これで front からデータを取り出すことができます。キューが空の状態は front と rear が両方とも空リストの場合です。
+</p>
+
+<h4>●キューの実装</h4>
+<p> それではプログラムを作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : キューの実装
+
+structure Queue = struct
+    datatype 'a queue = Q of 'a list * 'a list
+    exception EmptyQueue
+
+    val create = Q(nil, nil)
+
+    fun enqueue( Q(front, rear), x ) = Q(front, x::rear)
+
+    fun dequeue( Q(nil, nil) ) = raise EmptyQueue
+    |   dequeue( Q(nil, rear) ) = dequeue( Q(rev rear, nil) )  
+    |   dequeue( Q(x::xs, rear) ) = Q(xs, rear)
+
+    fun front( Q(nil, nil) ) = raise EmptyQueue
+    |   front( Q(nil, rear) ) = front( Q(rev rear, nil) )
+    |   front( Q(x::xs, _) ) = x
+
+    fun isEmpty( Q(nil, nil) ) = true
+    |   isEmpty( _ ) = false
+end
+</pre>
+<p> まず datatype でデータ型 'a queue を定義します。型式は 'a list * 'a list で、組の第 1 要素が front で第 2 要素が rear になります。例外 EmptyQueue は、空のキューからデータを取り出そうとしたときに送出します。キューの生成には変数 create を使います。create の値は空のキュー Q(nil, nil) です。
+</p>
+
+<p> 関数 equeue はキューにデータ x を追加します。これは x を rear の先頭に追加するだけです。関数 dequeue はキューからデータを取り除きます。キューが空の場合は例外 EmptyQueue を送出します。front が空リストの場合は、キュー Q(rev rear, nil) を作って dequeue を再帰呼び出しします。front にデータがある場合は先頭要素を取り除くだけです。関数 front はキューの先頭要素を返します。処理は dequeue とほとんど同じで、違いは front の先頭データ x を返すだけです。関数 isEmpty は、キューが空であれば true を、そうでなければ false を返します。
+</p>
+
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+- val a = Queue.create;
+val a = Q ([],[]) : 'a Queue.queue
+- val b = Queue.enqueue( a, 1 );
+val b = Q ([],[1]) : int Queue.queue
+- val c = Queue.enqueue( b, 2 );
+val c = Q ([],[2,1]) : int Queue.queue
+- val d = Queue.dequeue( c );
+val d = Q ([2],[]) : int Queue.queue
+- Queue.front( d );
+val it = 2 : int
+</pre>
+<p> きちんと動作していますね。ところで、キューは配列を使っても実装することができます。興味のある方は <a href="smlnj08.html#yori08">ちょっと寄り道「配列によるキューの実装」</a> をお読みください。それから、拙作のページ Common Lisp 入門 <a href="../xyzzy_lisp/abclisp11.html#yori16">スタックとキュー</a> でも詳しく説明しています。よろしければ参考にしてください。
+</p>
+
+<h4>●データ抽象</h4>
+<p> ストラクチャで定義された変数や関数は、シグネチャを定義することで外部から隠すことができます。datatype で定義されたデータ構成子も、シグネチャに datatype を記述しなければ利用することはできません。たとえば、次のようにシグネチャを定義して IntQueue を作ります。
+</p>
+
+<pre class="list">
+リスト : シグネチャの定義
+
+signature INTQUEUE = sig
+  type 'a queue
+  val create : int queue
+  val dequeue : int queue -&gt; int queue
+  val enqueue : int queue * int -&gt; int queue  
+  val front : int queue -&gt; int
+  val isEmpty : int queue -&gt; bool
+end
+
+structure IntQueue: INTQUEUE = Queue
+</pre>
+
+<p> ストラクチャ Queue は datatype が公開されるので、データ構成子 Q を利用することができます。IntQueue はシグネチャ INTQUEUE に datatype を記述していないので、データ構成子 Q を使うことはできません。簡単な例を示します。
+</p>
+<pre>
+- val a = Queue.Q(nil, nil);
+val a = Q ([],[]) : 'a Queue.queue
+
+- val b = IntQueue.Q(nil, nil);
+stdIn:14.9-14.19 Error: unbound variable or constructor: Q in path IntQueue.Q
+
+- val c = IntQueue.create;
+val c = Q ([],[]) : int Queue.queue
+</pre>
+<p> このように、IntQueue のデータ構成子 Q は使うことができません。しかしながら、キューのデータ構造が表示されるところは変わりありません。データ構造も隠しておきたい場合は abstype を使います。
+</p>
+<pre class="fig">
+abstype データ型定義 with
+  ...
+end
+</pre>
+<p> abstype は「抽象型 (abstract type) 」といい、データ構成子を隠すことができます。データ型の定義は datatype とほとんど同じで、その後ろに with を続けます。そして、with と end の間に、データ構成子を使う関数、変数、例外などを記述します。abstype はストラクチャの中でも定義することができます。abstype を使って Queue を書き直すと次のようになります。
+</p>
+
+<pre class="list">
+リスト : 抽象型データの定義
+
+structure Queue = struct
+  abstype 'a queue = Q of 'a list * 'a list with
+    exception EmptyQueue
+    val create = Q(nil, nil)
+
+    fun enqueue( Q(front, rear), x ) = Q(front, x::rear)
+
+    fun dequeue( Q(nil, nil) ) = raise EmptyQueue
+    |   dequeue( Q(nil, rear) ) = dequeue( Q(rev rear, nil) )  
+    |   dequeue( Q(x::xs, rear) ) = Q(xs, rear)
+
+    fun front( Q(nil, nil) ) = raise EmptyQueue
+    |   front( Q(nil, rear) ) = front( Q(rev rear, nil) )
+    |   front( Q(x::xs, _) ) = x
+
+    fun isEmpty( Q(nil, nil) ) = true
+    |   isEmpty( _ )    = false
+  end
+end
+</pre>
+<p> datatype を abstype に変更し、with と end の間に変数、関数、例外を定義しただけです。とても簡単ですね。実行例は次のようになります。
+</p>
+<pre>
+structure Queue :
+  sig
+    type 'a queue
+    exception EmptyQueue
+    val create : 'a queue
+    val dequeue : 'a queue -&gt; 'a queue
+    val enqueue : 'a queue * 'a -&gt; 'a queue
+    val front : 'a queue -&gt; 'a
+    val isEmpty : 'a queue -&gt; bool
+  end
+</pre>
+<pre>
+- val a = Queue.create;
+val a = - : 'a Queue.queue
+- val b = Queue.enqueue( a, 10 );
+val b = - : int Queue.queue
+- Queue.front( b );
+val it = 10 : int
+</pre>
+<p> ストラクチャ Queue を定義すると、そのシグネチャにはデータ構造の定義が記述されていません。また、Queue のデータ構造も表示されません。
+</p>
+
+<p> このように、データ構造の詳細を隠蔽し、操作関数を使ってデータ構造にアクセスすることを「データ抽象 (data abstraction) 」とか「カプセル化 (encapsulation) 」といいます。わざわざ操作関数を用意するのは面倒なように思われますが、そのことによりプログラムも読みやすくなり、修正にも強いプログラムを作ることができます。
+</p>
+<p> たとえば、キューの実装をリストから配列に変更することを考えてみましょう。この場合、datatype の定義はリストから配列に変更されます。もしも、データ構成子 Q を使って直接キューを操作しているプログラムがあるならば、その箇所を探して修正する必要があります。操作関数だけを使っていて、操作関数の仕様が変わらなければ、キューを使うプログラムを修正する必要はありません。ストラクチャ Queue を変更するだけで済むわけです。
+</p>
+
+<h4>●local と open</h4>
+<p> 関数や変数を非公開にする方法は、ストラクチャとシグネチャのほかに local 宣言があります。
+</p>
+<pre class="item">
+local ... in ... end
+</pre>
+<p> local と in の間に定義された関数や変数は非公開になり、in と end の間に定義された関数や変数が公開されます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : local による局所定義
+
+local
+  fun facti( 0, a ) = a
+  |   facti( n, a ) = facti( n - 1, n * a ) 
+in
+  fun fact( n ) = facti( n, 1 )
+end
+</pre>
+
+<p> local と in の間に定義されている関数 facti は外部に公開されません。facti を呼び出すことができるのは、in と end の間に定義されている関数 fact だけです。実際に実行すると、次のようになります。
+</p>
+<pre class="item">
+val fact = fn : int -&gt; int
+</pre>
+<pre>
+- fact(10);
+val it = 3628800 : int
+</pre>
+<p> local は式ではないので、値を返しません。この例では関数 facti と fact が定義されますが、外部に公開されるのは fact だけです。local はストラクチャの内部や abstype の with ... end の内部などで用いることができます。
+</p>
+
+<p> ところで、ストラクチャ内で定義されている変数や関数は、ストラクチャ名とドット ( . ) を付加して参照することができます。IntQueue 内の関数であれば、IntQueue.create や IntQueue.enqueue のようになります。ストラクチャ名をつけるのが面倒な場合は open 宣言を使います。
+</p>
+<pre class="item">
+open ストラクチャ名
+</pre>
+<p> open はストラクチャをオープンして、ストラクチャ名をつけなくてもストラクチャ内の関数や変数を参照することができます。次の例を見てください。
+</p>
+<pre>
+- open IntQueue;
+opening IntQueue
+  datatype 'a queue = ...
+  val create : int queue
+  val dequeue : int queue -&gt; int queue
+  val enqueue : int queue * int -&gt; int queue
+  val front : int queue -&gt; int
+  val isEmpty : int queue -&gt; bool
+
+- val a = create;
+val a = Q ([],[]) : int queue
+- val b = enqueue( a, 1 );
+val b = Q ([],[1]) : int queue
+</pre>
+<p> このように、open を使うと IntQueue をつけなくても変数や関数を参照することができます。ただし、注意事項があります。open はストラクチャ内で定義されている「変数束縛」を、現在の「環境」に追加しているだけです。つまり、次の動作と同じです。
+</p>
+<pre class="item">
+val create = IntQueue.create;
+val dequeue = IntQueue.dequeue;
+val enqueue = IntQueue.enqueue;
+val front = IntQueue.front;
+val isEmpty = IntQueue.isEmpty;
+</pre>
+<p> 対話モードで open を実行すると、ストラクチャ内の変数束縛は対話モードの環境に追加されます。対話モードの環境を「トップレベルの環境」といいます。トップレベルの環境には、あらかじめ定義されている関数や変数があります。open でストラクチャ内の変数や関数を環境に追加するとき、同じ名前が存在している場合はどうなるのでしょうか。次の例を見てください。
+</p>
+<pre>
+- val a = 10;
+val a = 10 : int
+- a;
+val it = 10 : int
+
+- val a = "foo";
+val a = "foo" : string
+- a;
+val it = "foo" : string
+</pre>
+<p> val による変数の定義は、変数束縛を生成して環境に追加するだけです。変数束縛を変数名と値の組で、環境を連想リストで表すとわかりやすいと思います。最初、環境は空リスト (nil) とします。次の図を見てください。
+</p>
+<pre class="fig">
+                    環境
+---------------------------------------
+                  [ ]
+val a = 10    ==&gt; [(a, 10)]
+val a = "foo" ==&gt; [(a, "foo"), (a, 10)]
+</pre>
+<p> val a = 10 は変数束縛 (a, 10) を生成して環境に追加します。環境は [ (a, 10) ] になります。環境から値を求める場合は、連想リストの探索と同じです。連想リストの先頭から変数 a を探し、最初に見つけた変数束縛の値を返します。この場合、変数 a の値は 10 になります。
+</p>
+<p> 次の val a = "foo" も同様に、(a, "foo") を生成して環境に追加します。このとき、連想リストの先頭に追加するので、環境は [ (a, "foo"), (a, 10) ] になります。変数 a の値を求めると、最初に見つかる変数束縛は (a, "foo") なので、変数 a の値は "foo" になります。
+</p>
+<p> 結果だけを見ると、変数 a の値を書き換えているように見えますが、実際は新しい変数束縛を生成して環境に追加しているだけなのです。環境には前の変数束縛も残っています。しかしながら、追加した変数束縛によって隠されてしまうので、前の変数束縛にアクセスすることはできません。
+</p>
+<p> open を使う場合、環境に同じ名前があると、その名前を隠してしまうので、元の変数の値や関数を使うことができなくなります。ご注意くださいませ。
+</p>
+
+<p> open はストラクチャの中で使うと便利です。このとき、注意点が一つあります。次の例を見てください。
+</p>
+<pre class="list">
+structure Foo = struct
+  val foo = "foo"
+end
+
+structure Bar = struct
+  open Foo
+  val bar = foo
+end
+</pre>
+<p> ストラクチャ Bar は、ストラクチャ Foo を open して変数 foo の値を参照しています。実際に SML/NJ で定義すると、次のように表示されます。
+</p>
+<pre>
+structure Foo : sig val foo : string end
+structure Bar :
+  sig
+    val bar : string
+    val foo : string
+  end
+</pre>
+<p> Bar のシグネチャには 2 つの変数 bar と foo があります。Foo をオープンしたため、Foo 内で定義された変数や関数も Bar.foo のように参照することができます。つまり、Bar をオープンすると、いっしょに Foo もオープンされてしまうのです。
+</p>
+<p> このような場合、local を使うと Foo を非公開にすることができます。次の例を見てください。
+</p>
+<pre class="list">
+structure Baz = struct
+  local
+    open Foo
+  in
+    val baz = foo
+  end
+end
+</pre>
+<p> ストラクチャ Baz の中で、local を使って Foo をオープンします。変数 baz の定義では foo を参照することができますが、foo は外部に公開されません。実際に SML/NJ で定義すると、次のようになります。
+</p>
+<pre class="item">
+structure Baz : sig val baz : string end
+</pre>
+<p> Baz のシグネチャで公開されているのは変数 baz だけで、変数 foo は非公開になります。
+</p>
+
+<h4>●ファンクタの引数</h4>
+<p> ところで、ストラクチャ IntQueue はシグネチャ INTQUEUE を使って Queue の型を指定しました。ファンクタを使うともっと簡単に Queue の型を指定することができます。ファンクタの引数はストラクチャだけではなく、type や val などの宣言的な要素を受け取ることができます。また、複数のストラクチャも受け取ることができます。ファンクタの一般形を示します。
+</p>
+<pre class="item">
+(1) functor name(structure Sa: S1; structure Sb: S2; val x: int; val y: real ... ) = struct
+      .....
+    end
+
+(2) functor name(structure Sa: S1 and Sb: S2; val x: int and y: real; ... ) = struct
+      .....
+    end
+</pre>
+<p> ファンクタに複数の引数を渡す場合はセミコロン ( ; ) で区切ります。この場合、ストラクチャは structure と明示します。Sa がストラクチャ名で S1 がシグネチャ名です。val x: int と val y: real のように、変数 x と y を渡すこともできます。また、(2) のように and を使って同じ宣言をつなぐこともできます。これらの方式は、今まで説明したストラクチャを一つ渡す方式 "functor name( ストラクチャ: シグネチャ )" と混在させることはできません。ご注意くださいませ。
+</p>
+
+<p> ファンクタを呼び出す場合、引数は次のように指定します。
+</p>
+<pre class="item">
+(1) name( structure Sa = StructA; structure Sb = StructB; val x = 1; val y = 2.0 )
+(2) name( structure Sa = StructA and Sb = structB; val x = 1 and y = 2.0 )
+</pre>
+<p> ストラクチャは "sturcture 引数名 = ストラクチャ名" で指定します。引数名はファンクタで指定したものと同じです。ストラクチャ名のところは struct ... end で記述することもできます。変数は "val 引数名 = 値" で指定します。一般に、ファンクタで "宣言 引数名" で指定した場合、呼び出し時の指定は "宣言 引数名 = 値" となります。
+</p>
+
+<p> ストラクチャ Queue の型はファンクタの引数に type を指定することで実現できます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ファンクタでデータ型を指定する (1)
+
+functor makeQueue( type item ) : sig
+  type 'a queue
+  val create : item queue
+  val dequeue : item queue -&gt; item queue
+  val enqueue : item queue * item -&gt; item queue
+  val front : item queue -&gt; item
+  val isEmpty : item queue -&gt; bool
+end
+= struct
+  datatype 'a queue = Q of 'a list * 'a list
+  exception EmptyQueue
+
+  val create = Q(nil, nil)
+
+  fun enqueue( Q(front, rear), x ) = Q(front, x::rear)
+
+  fun dequeue( Q(nil, nil) ) = raise EmptyQueue
+  |   dequeue( Q(nil, rear) ) = dequeue( Q(rev rear, nil) )  
+  |   dequeue( Q(x::xs, rear) ) = Q(xs, rear)
+
+  fun front( Q(nil, nil) ) = raise EmptyQueue
+  |   front( Q(nil, rear) ) = front( Q(rev rear, nil) )
+  |   front( Q(x::xs, _) ) = x
+
+  fun isEmpty( Q(nil, nil) ) = true
+  |   isEmpty( Q(_, _ ) )    = false
+end
+</pre>
+
+<p> ファンクタはストラクチャの一種なので、ファンクタにシグネチャを指定することができます。シグネチャ sig ... end の中では、ファンクタの引数を参照することができます。ファンクタで生成されたストラクチャのシグネチャは、ファンクタで指定したシグネチャになります。したがって、ファンクタの引数 item に int を指定すれば、シグネチャの item は int になり、キューに格納されるデータは int になります。
+</p>
+
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre>
+- structure IntQueue = makeQueue( type item = int );
+structure IntQueue :
+  sig
+    datatype 'a queue = ...
+    val create : item queue
+    val dequeue : item queue -&gt; item queue
+    val enqueue : item queue * item -&gt; item queue
+    val front : item queue -&gt; item
+    val isEmpty : item queue -&gt; bool
+  end
+- val a = IntQueue.create;
+val a = Q ([],[]) : int IntQueue.queue
+</pre>
+<p> ファンクタ makeQueue に type item = int を与えてストラクチャ IntQueue を生成します。create でキューを生成すると、キューに格納するデータ型が int になっていることがわかります。
+</p>
+
+<p> また、次のように create でキューのデータ型を指定する方法もあります。この場合、シグネチャを定義しなくても動作します。
+</p>
+<pre class="list">
+リスト : ファンクタでデータ型を指定する (2)
+
+functor makeQueue( type item ) = struct
+  abstype 'a queue = Q of 'a list * 'a list with
+    exception EmptyQueue
+    val create = Q(nil: item list, nil: item list)
+
+    fun enqueue( Q(front, rear), x ) = Q(front, x::rear)
+
+    fun dequeue( Q(nil, nil) ) = raise EmptyQueue
+    |   dequeue( Q(nil, rear) ) = dequeue( Q(rev rear, nil) )  
+    |   dequeue( Q(x::xs, rear) ) = Q(xs, rear)
+
+    fun front( Q(nil, nil) ) = raise EmptyQueue
+    |   front( Q(nil, rear) ) = front( Q(rev rear, nil) )
+    |   front( Q(x::xs, _) ) = x
+
+    fun isEmpty( Q(nil, nil) ) = true
+    |   isEmpty( _ ) = false
+  end
+end
+</pre>
+
+<p> create で nil のデータ型を item list に指定しています。これでキューに格納されるデータ型は item になります。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+- structure IntQueue = makeQueue( type item = int );
+structure IntQueue :
+  sig
+    type 'a queue
+    exception EmptyQueue
+    val create : item queue
+    val dequeue : 'a queue -&gt; 'a queue
+    val enqueue : 'a queue * 'a -&gt; 'a queue
+    val front : 'a queue -&gt; 'a
+    val isEmpty : 'a queue -&gt; bool
+  end
+
+- val a = IntQueue.create;
+val a = - : int IntQueue.queue
+</pre>
+<p> このように、int を格納するキューを生成することができます。
+</p>
+<h4>●その他</h4>
+<p> SML/NJ のモジュールは高機能で、このほかにもサブストラクチャの定義、データ型やサブストラクチャの共有化 (sharing) などを行うことができます。これらの機能は、必要になったときに説明することにします。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap19">ファイル入出力</h3>
+<p> SML/NJ の入出力は Common Lisp などの近代的なプログラミング言語と同様に「ストリーム (stream) 」を介して行われます。入力ストリームを表すデータ型が instream で、出力ストリームを表すデータ型が outstream です。テキストファイルの入出力関数はストラクチャ TextIO にまとめられています。今回はファイルの入出力について説明します。
+</p>
+<h4>●ストリーム</h4>
+<p> ファイルからデータを入力、逆にデータをファイルへ出力する場合、SML/NJ では「ストリーム (stream) 」を使います。ストリームは「流れ」や「小川」という意味ですが、プログラミング言語の場合は「ファイルとプログラムの間でやりとりされるデータの流れ」という意味で使われています。
+</p>
+<p> SML/NJ では、ストリーム型データを介してファイルにアクセスします。ストリームはファイルと一対一に対応していて、ファイルからデータを入力する場合は、ストリームを経由してデータが渡されます。逆に、ファイルへデータを出力するときも、ストリームを経由して行われます。
+</p>
+<h4>●ファイルのオープンとクローズ</h4>
+<p> ファイルにアクセスする場合、次の 3 つの操作が基本になります。
+</p>
+<OL>
+  <LI>アクセスするファイルをオープンする
+  <LI>入出力関数を使ってファイルを読み書きする。
+  <LI>ファイルをクローズする。
+</OL>
+<p> 「ファイルをオープンする」とは、アクセスするファイルを指定して、それと一対一に対応するストリームを生成することです。入出力関数は、そのストリームを経由してファイルにアクセスします。SML/NJ の場合、ファイルをオープンするには関数 openIn と openOut を使います。オープンしたファイルは必ずクローズしてください。この操作を行う関数が closeIn と closeOut です。
+</p>
+<pre class="item">
+val openIn   : string -&gt; instream
+val openOut  : string -&gt; outstream
+val closeIn  : instream -&gt; unit
+val closeOut : outstream -&gt; unit
+</pre>
+
+<p> ファイル名は文字列で指定し、ファイル名のパス区切り記号にはスラッシュ ( / ) を使います。\ は文字列のエスケープコードに割り当てられているため、そのままではパス区切り記号に使うことはできません。ご注意ください。ファイルのオープンやクローズに失敗した場合は例外 Io が送出されます。
+</p>
+<h4>●input1 と output1</h4>
+<p> 主な入出力関数を次に示します。
+</p>
+<pre class="item">
+読み込み
+val TextIO.input1    : instream -&gt; char option 
+val TextIO.inputLine : instream -&gt; string
+書き込み
+val TextIO.output1 : outstream * char -&gt; unit
+val TextIO.output  : outstream * string -&gt; unit
+</pre>
+<p> 関数 input1 は入力ストリームから 1 文字 (1 byte) 読み込みます。関数 inputLine はファイルから 1 行読み込みます。改行文字は削除されません。関数 output1 は出力ストリームに 1 文字 (1 byte) 書き込みます。関数 output は出力ストリームに 1 行書き込みます。
+</p>
+
+<p> 入力ストリームの場合、ファイルに格納されているデータには限りがあるので、ストリームからデータを取り出していくと、いつかはデータがなくなります。この状態を「ファイルの終了 (end of file : EOF) 」 といいます。ファイルが終了したとき、input1 は NONE を返します。inputLine は空文字列 "" を返します。また、ファイルの終了は次の関数でチェックすることができます。
+</p>
+<pre class="item">
+val TextIO.endOfStream : instream -&gt; bool
+</pre>
+<p> ファイルが EOF の場合、endOfStream は true を返します。そうでなければ false を返します。
+</p>
+<p> 簡単な例題として、ファイルの内容を画面へ出力する関数 cat を作ってみましょう。input1 と output1 を使うと、プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : ファイルの表示 (1)
+
+fun cat1( filename ) =
+    let
+      open TextIO
+      val a = openIn( filename )
+      fun cat_sub( NONE ) = ()
+      |   cat_sub( SOME c ) = (output1( stdOut, c ); cat_sub( input1( a ) ))  
+    in
+      cat_sub( input1( a ) );
+      closeIn( a )
+    end
+</pre>
+
+<p> 関数 cat1 の引数 filename はファイル名を表す文字列です。最初にストラクチャ TextIO をオープンします。open は宣言なので、let と in の間に書くことができます。有効範囲は局所変数の場合と同じです。次に、openIn でファイルをオープンします。
+</p>
+<p> ファイルの表示は関数 cat_sub で行います。cat_sub の引数は input1( a ) の返り値 (char option) です。NONE の場合はファイルが終了したのでユニットを返します。データがある場合は、パターンマッチングで文字 c を取り出し、output1 で c を標準出力 (stdOut) へ出力します。そして、input1( a ) で 1 文字読み込んで cat_sub を再帰呼び出しします。最後に、closeIn でファイルを閉じます。
+</p>
+
+<p> cat1 は再帰呼び出しを使いましたが、繰り返しでも簡単にプログラムできます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ファイルの表示 (2)
+
+fun cat2( filename ) =
+    let
+      open TextIO
+      val a = openIn( filename )
+      val c = ref (NONE: char option)
+    in
+      while (c := input1( a ); isSome( !c ) ) do output1( stdOut, valOf( !c ) );  
+      closeIn( a )
+    end
+</pre>
+
+<p> まず、option 型を格納する ref 変数 c を用意します。NONE は多相的なデータなので、型を char option に指定します。while ループの条件部は複文を使っています。最初に、ref 変数 c に input1 の返り値をセットし、次に関数 isSome でデータがあるかチェックします。これが複文の返り値になるので、isSome が false を返すと while ループが終了します。データがある間は output1 でデータを stdOut へ出力します。
+</p>
+
+<h4>●inputLine と output</h4>
+<p> 次は、inputLine と output を使ってみましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : ファイルの表示 (3)
+
+fun cat3( filename ) =
+    let
+      open TextIO
+      val a = openIn( filename )
+      val b = ref ""
+    in
+      while (b := inputLine( a ); !b &lt;&gt; "") do output( stdOut, !b );
+      closeIn( a )
+    end
+
+fun cat4( filename ) =
+    let
+      open TextIO
+      val a = openIn( filename )
+    in
+      while ( not( endOfStream( a ) ) ) do output( stdOut, inputLine( a ) );  
+      closeIn( a )
+    end
+</pre>
+
+<p> 関数 cat3 は cat2 を行単位の入出力に改造しただけです。文字列を格納する ref 変数 b を用意します。while ループの条件部で、inputLine の返り値を b にセットし、それが空文字列かチェックします。データが空文字列であれば while ループを終了します。そうでなければ、データを output で stdOut へ出力します。
+</p>
+<p> 関数 cat4 は endOfStream でファイルの終了をチェックしています。endOfStream はファイルが終了すると true を返すので、while ループの条件部では述語 not で結果を反転していることに注意してください。あとは inputLine の返り値を output で stdOut へ出力するだけです。
+</p>
+
+<h4>●ファイルの書き込み</h4>
+<p> データをファイルに書き込むには、ファイルを openOut でオープンします。このとき、注意事項が一つあります。既に同じ名前のファイルが存在している場合は、そのファイルの長さを 0 に切り詰めてからデータを書き込みます。既存のファイルは内容が破壊されることに注意してください。
+</p>
+
+<p> それでは簡単な例題として、string list の要素を 1 行ずつファイルに書き込む関数 output_stringList を作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ファイルの書き込み
+
+fun output_stringList( data, filename ) =
+    let
+      open TextIO
+      val a = openOut( filename )
+    in
+      app (fn(x) =&gt; output( a, x ^ "\n")) data;  
+      closeOut( a )
+    end
+</pre>
+
+<p> 最初に openOut でファイルをオープンします。あとは、高階関数 app を使って data から要素を一つずつ取り出し、改行文字を付加してから output で出力するだけです。
+</p>
+
+<p> このほかにも、SML/NJ にはいろいろな入出力関数が用意されています。詳しい説明は SML/NJ ライブラリのマニュアル <a href="http://www.smlnj.org//doc/basis/index.html">The Standard ML Basis Library</a> を参照してください。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori08">ちょっと寄り道</h3>
+<h4>■配列によるキューの実装</h4>
+<p> <a href="smlnj08.html#chap18">モジュール (3)</a> では、リストを使ってキュー (queue) を実現しました。キューは配列を使っても簡単に実現することができます。SML/NJ の場合、配列を使う機会はあまりないと思うので、配列を使ったプログラムの例題としてキューを作ってみましょう。
+</p>
+
+<p> 配列を使ってキューを実装する場合、先頭位置を示す front と末尾を示す rear を用意し、front と rear の間にあるデータをキューに格納されているデータとするのがポイントです。次の図を見てください。
+</p>
+
+<pre class="fig">
+             0  1  2  3  4  5  6  7  8  9
+  rear = 0  ↓
+  queue    [                              ]  : queue は空
+  front= 0  ↑
+
+  rear = 3           ↓
+  queue    [10 20 30                      ]  : データの追加
+  front= 0  ↑
+
+  rear = 3           ↓
+  queue    [10 20 30                      ]  : 10を取り出す
+  front= 1     ↑
+
+  rear = 3           ↓
+  queue    [10 20 30                      ]  : 20,30を取り出す  
+  front= 3           ↑
+
+                図 : キューの動作
+</pre>
+
+<p> 最初、キューは空の状態で、rear, front ともに 0 です。データの追加は、rear が示す位置にデータを書き込み、rear の値を +1 します。データ 10, 20, 30 を追加すると、図のようにデータが追加され rear は 3 になります。このとき front は 0 のままなので、先頭のデータは 10 ということになります。
+</p>
+<p> 次に、データを取り出す場合、front の示すデータを取り出しから front の値を +1 します。この場合、front が 0 なので 10 を取り出して front の値は 1 となり、次のデータ 20 が先頭になります。データを順番に 20, 30 と取り出していくと、3 つしかデータを書き込んでいないので当然キューは空になります。このとき front は 3 になり rear と同じ値になります。このように、front と rear の値が 0 の場合だけが空の状態ではなく、front と rear の値が等しくなると、キューは空になることに注意してください。
+</p>
+<p> rear, fornt ともに値は増加していく方向なので、いつかは配列の範囲をオーバーします。このため、配列を先頭と末尾が繋がっているリング状と考え、rear, front が配列の範囲を超えたら 0 に戻すことにします。これを「循環配列」とか「リングバッファ」と呼びます。一般に、配列を使ってキューを実現する場合は、リングバッファとするのが普通です。
+</p>
+
+<h4>■プログラムの作成</h4>
+<p> それでは実際にプログラムを作ってみましょう。最初に、基本的な操作関数を説明します。
+</p>
+
+<UL>
+  <LI><B>val clear : 'a queue -&gt; unit</B><BR>
+      キューを空にする。
+  <LI><B>val create : int -&gt; item queue</B><BR>
+     指定した大きさのキューを作る。
+  <LI><B>val dequeue : 'a queue -&gt; 'a</B><BR>
+      キューからデータを取り出して返す。
+  <LI><B>val enqueue : 'a queue * 'a -&gt; unit</B><BR>
+      キューにデータを追加する。
+  <LI><B>val front : 'a queue -&gt; 'a</B><BR>
+      キューの先頭データを返す。データはキューから削除されない。
+  <LI><B>val isEmpty : 'a queue -&gt; bool</B><BR>
+      キューが空の場合は true を、そうでなければ false を返す。
+  <LI><B>val isFull : 'a queue -&gt; bool</B><BR>
+      キューが満杯の場合は true を、そうでなければ false を返す。
+  <LI><B>val length : 'a queue -&gt; int</B><BR>
+      キューに格納されたデータ数を返す。
+</UL>
+<p> 次に、キューを生成するファンクタを定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ファンクタの定義
+
+functor makeQueue( type item; val init: item ) = struct
+  abstype 'a queue = Q of {front: int ref, rear: int ref,
+                           count: int ref, size: int, buff:'a array} with
+    exception Queue
+
+    fun create( n ) = Q{front = ref 0, rear = ref 0, count = ref 0, size = n,  
+                        buff = Array.array( n, init )}
+
+    ・・・・・操作関数の定義・・・・・
+
+  end
+end
+</pre>
+<p> ファンクタの引数 type item でキューに格納するデータ型を指定します。配列は関数 array で作成しますが、このとき配列の大きさと初期値が必要になります。大きさはキューを生成する関数 create の引数で指定することにし、配列の初期値はファンクタの引数 val init: item で指定することにします。
+</p>
+<p> キューはレコードを使って定義します。count はキューに格納されたデータ数をカウントします。この変数を用意することで、キューの状態を簡単にチェックすることができます。front, rear, count は値を書き換えるので ref 変数で定義します。size はキューの大きさを表します。buff がキューの本体（配列）です。
+</p>
+
+<p> 関数 create はキューを生成します。引数 n がキューの大きさです。front, rear, count を 0 に初期化し、size を n に初期化します。あとは Array.array( n, init ) で配列を生成するだけです。
+</p>
+
+<p> 次はデータを追加する enqueue を作ります。
+</p>
+
+<pre class="list">
+リスト : キューにデータを追加する
+
+fun enqueue(Q{rear, count, size, buff, ...}, data) =  
+    if !count &gt;= size then raise Queue
+    else (
+      Array.update( buff, !rear, data );
+      rear := !rear + 1;
+      count := !count + 1;
+      if !rear &gt;= size then rear := 0 else ())
+</pre>
+
+<p> 最初に count と size を比較して、キューが満杯かチェックします。そうであれば、例外 Queue を送出します。データは rear の位置に格納し、count と rear の値を更新します。そして、rear の値が配列の範囲を超えたならば 0 に戻します。rear の値を更新する処理は、次のようにプログラムしてもかまいません。
+</p>
+<pre class="item">
+rear := (!rear + 1) mod size
+</pre>
+<p> 剰余を求める関数 mod を使うのがポイントです。
+</p>
+
+<p> 次は、キューからデータを取り出す関数 dequeue を作ります。
+</p>
+<pre class="list">
+リスト : キューからデータを取り出す
+
+fun dequeue(Q{front, count, size, buff, ...}) =
+    if !count = 0 then raise Queue
+    else Array.sub( buff, !front ) before (
+      front := !front + 1;
+      count := !count - 1;
+      if !front &gt;= size then front := 0 else ())  
+</pre>
+
+<p> まず、キューにデータがあるか count の値をチェックします。キューが空の場合は例外 Queue を送出します。データがある場合は関数 sub で front の位置にあるデータを取り出します。before を使っているので、sub で取り出したデータが dequeue の返り値になることに注意してください。あとは、count と front の値を更新し、front の値が配列の範囲を超えたら 0 に戻します。
+</p>
+<p> あとの操作関数は簡単なので説明は省略します。リストをお読みくださいませ。
+</p>
+
+<pre class="list">
+リスト : キューの操作関数
+
+fun front(Q{front=top, count, buff, ...}) = 
+    if !count = 0 then raise Queue
+    else Array.sub( buff, !top )
+
+fun clear(Q{count, front, rear, ...}) = (count := 0; front := 0; rear := 0)  
+
+fun length(Q{count, ...}) = !count
+
+fun isEmpty(Q{count, ...}) = !count = 0
+
+fun isFull(Q{count, size, ...}) = !count = size
+</pre>
+<h4>■使用例</h4>
+<p> これでプログラムは完成です。それでは、簡単な使用例を示しましょう。
+</p>
+<pre>
+structure IntQueue = makeQueue( type item = int; val init = 0 )
+
+- val q = IntQueue.create( 10 );
+val q = - : int IntQueue.queue
+
+- app (fn(x)=&gt;IntQueue.enqueue(q,x)) [0,1,2,3,4,5,6,7,8,9];
+val it = () : unit
+
+- while not(IntQueue.isEmpty(q)) do print(Int.toString(IntQueue.dequeue(q))^"\n");
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+val it = () : unit
+</pre>
+<p> create でキューを作成して変数 q にセットします。app でキューにデータを 10 個セットします。これでキューは満杯になるので、これ以上データを追加することはできません。次に、dequeue でデータを取り出します。先に入れたデータから順番に取り出されていることがわかりますね。これでキューは空の状態になります。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2005 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj07.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj09.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

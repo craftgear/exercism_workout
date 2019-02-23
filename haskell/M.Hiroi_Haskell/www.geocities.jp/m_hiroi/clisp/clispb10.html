@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881767</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb09.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb11.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap14">遅延ストリーム (1)</h3>
+<p> 「ストリーム (stream)」はデータの流れを抽象化したデータ構造です。たとえば、ファイル入出力はストリームと考えることができます。また、リストを使ってストリームを表すこともできます。ただし、単純なリストでは有限個のデータの流れしか表すことができません。ところが、遅延評価を用いると擬似的に無限個のデータを表すことができるようになります。これを「遅延ストリーム」とか「遅延リスト」と呼びます。今回は遅延ストリームについて説明します。
+</p>
+
+<h4>●遅延ストリームの構造</h4>
+<p> 遅延ストリームの基本的な考え方は、必要になったときに新しいデータを生成することです。このときに遅延評価を用います。具体的にはデータを生成する関数を用意し、それを遅延評価してストリームに格納しておきます。そして、必要になった時点で遅延評価しておいた関数を呼び出して値を求めればよいわけです。
+</p>
+
+<p> 今回は遅延ストリームをコンスセルで表すことにします。コンスセルの CAR が現時点での先頭データを表し、CDR が遅延ストリームを生成する関数を格納する遅延オブジェクトです。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 遅延ストリーム
+
+;; 遅延ストリームの生成
+(defmacro stream-cons (a b)
+  `(cons ,a (delay ,b)))
+
+;; 先頭要素を参照する
+(defun stream-car (s) (car s))
+
+;; 先頭要素を取り除く
+(defun stream-cdr (s) (force (cdr s)))
+</pre>
+
+<p> マクロ stream-cons はコンスセルの CAR にストリームの要素 a を格納し、CDR に遅延オブジェクトを格納します。遅延オブジェクトにはストリームを生成する関数 b を格納します。遅延オブジェクトを force することで、次の要素を格納した遅延ストリームを生成します。ストリームの終端は nil で表すことにします。
+</p>
+
+<p> 関数 stream-car は遅延ストリーム s から要素を取り出して返します。関数 stream-cdr は s の遅延オブジェクトを force して、次の要素を格納した遅延ストリームを生成して返します。ようするに、これらのマクロと関数はリスト操作の cons, car, cdr に対応するわけです。
+</p>
+<h4>●遅延ストリームの生成</h4>
+<p> それでは、遅延ストリームを生成する関数を作りましょう。たとえば、low から high までの整数列を生成するストリームは次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 整数列を生成するストリーム
+
+(defun range (low high)
+  (if (&gt; low high)
+      nil
+    (stream-cons low (range (1+ low) high))))
+</pre>
+
+<p> 関数 range は遅延ストリームを生成して返します。stream-cons の第 1 引数がストリームの初期値になります。そして、遅延オブジェクトを force すると、(range (1+ low) high) が評価されて次のデータを格納した遅延ストリームが返されます。そして、その中の遅延オブジェクトを force すると、その次のデータを得ることができます。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+* (defvar *a* (range 1 10))
+
+*A*
+* (stream-car *a*)
+
+1
+* (stream-car (stream-cdr *a*))
+
+2
+* (stream-car (stream-cdr (stream-cdr *a*)))
+
+3
+* (stream-car (stream-cdr (stream-cdr (stream-cdr *a*))))
+
+4
+</pre>
+<p> このように、CDR 部の遅延オブジェクトを force することで、次々とデータを生成することができます。
+</p>
+
+<p> もう一つ、簡単な例を示しましょう。フィボナッチ数列を生成する遅延ストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : フィボナッチ数列を生成する遅延ストリーム
+
+(defun fibonacci (a b)
+  (stream-cons a (fibonacci b (+ a b))))
+</pre>
+<p> 関数 fibonacci の引数 a がフィボナッチ数列の最初の項で、b が次の項です。したがって、遅延オブジェクトに (fibonacci b (+ a b)) を格納しておけば、force することでフィボナッチ数列を生成することができます。Common Lisp は多倍長整数をサポートしているので、メモリの許す限りフィボナッチ数列を生成することができます。
+</p>
+<pre>
+* (defvar *b* (fibonacci 0 1))
+
+*B*
+* (stream-car *b*)
+
+0
+* (stream-car (stream-cdr *b*))
+
+1
+* (stream-car (stream-cdr (stream-cdr *b*)))
+
+1
+* (stream-car (stream-cdr (stream-cdr (stream-cdr *b*))))
+
+2
+</pre>
+<p> これらの関数の動作を一般化すると、次のような関数を定義することができます。
+</p>
+<pre class="list">
+リスト : 無限ストリームの生成
+
+(defun iterate (proc a)
+  (stream-cons a (iterate proc (funcall proc a))))
+</pre>
+<p> 関数 iterate は初項 a を受け取り、次項を関数 proc で生成します。stream-cons の第 1 引数に a を渡して、第 2 引数で iterate を呼び出すときに (funcall proc a) の返り値を渡します。これで、無限のストリームを生成することができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (defvar *c* (iterate #'1+ 1))
+
+*C*
+* (stream-car *c*)
+
+1
+* (stream-car (stream-cdr *c*))
+
+2
+* (stream-car (stream-cdr (stream-cdr *c*)))
+
+3
+* (stream-car (stream-cdr (stream-cdr (stream-cdr *c*))))
+
+4
+* (defvar *d* (iterate #'(lambda (xs) (list (second xs) (apply #'+ xs))) '(0 1)))
+
+*D*
+* (stream-car *d*)
+
+(0 1)
+* (stream-car (stream-cdr *d*))
+
+(1 1)
+* (stream-car (stream-cdr (stream-cdr *d*)))
+
+(1 2)
+* (stream-car (stream-cdr (stream-cdr (stream-cdr *d*))))
+
+(2 3)
+</pre>
+<h4>●遅延ストリームへの変換</h4>
+<p> リストを遅延ストリームに変換することも簡単にできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : リストを遅延ストリームに変換
+
+(defun list-to-stream (xs)
+  (if (null xs)
+      nil
+    (stream-cons (car xs) (list-to-stream (cdr xs)))))
+</pre>
+<p> 関数 list-to-stream はリスト xs の先頭から要素を順番に取り出して、遅延ストリームに格納して返すだけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (defvar *e* (list-to-stream '(1 2 3 4 5)))
+
+*E*
+* (stream-car *e*)
+
+1
+* (stream-car (stream-cdr *e*))
+
+2
+* (stream-car (stream-cdr (stream-cdr *e*)))
+
+3
+* (defvar *f* (list-to-stream '("foo" "bar" "baz" "oops")))
+
+*F*
+* (stream-car *f*)
+
+"foo"
+* (stream-car (stream-cdr *f*))
+
+"bar"
+* (stream-car (stream-cdr (stream-cdr *f*)))
+
+"baz"
+</pre>
+
+<h4>●遅延ストリームの操作関数</h4>
+<p> 次は遅延ストリームを操作する関数を作りましょう。最初は n 番目の要素を求める関数 stream-ref です。本稿では Common Lisp のリストに合わせて先頭の要素を 0 番目とします。
+</p>
+
+<pre class="list">
+リスト : n 番目の要素を求める
+
+(defun stream-ref (s n)
+  (do ((s s (stream-cdr s))
+       (n n (1- n)))
+      ((zerop n) (stream-car s))))
+</pre>
+<p> stream-ref は stream-cdr でデータを生成し、それを n 回繰り返すことで n 番目の要素を求めます。stream-cdr は遅延ストリームを返すことに注意してください。あとは、n が 0 になったら stream-car でストリームの要素を取り出せばいいわけです。
+</p>
+
+<p> ストリームから n 個の要素を取り出してリストに格納して返す関数 stream-take と、n 個の要素を取り除く関数 stream-drop も同様にプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 先頭から n 個の要素を取り出す
+
+(defun stream-take (s n)
+  (do ((s s (stream-cdr s))
+       (n n (1- n))
+       (a nil))
+      ((or (null s) (zerop n)) (nreverse a))
+    (push (stream-car s) a)))
+</pre>
+<pre class="list">
+リスト : 先頭から n 個の要素を取り除く
+
+(defun stream-drop (s n)
+  (do ((s s (stream-cdr s))
+       (n n (1- n)))
+      ((or (null s) (zerop n)) s)))
+</pre>
+<p> 引数 s が遅延ストリームで、引数 n が取り出す要素の個数です。s が空になるか、n が 0 になるまで処理を繰り返します。stream-take は stream-car で要素を取り出しで、それを累積変数 a に追加します。最後に nreverse でリスト a を反転して返します。stream-drop は stream-cdr を n 回繰り返すだけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (defvar *fibo* (fibonacci 0 1))
+
+*FIBO*
+* (dotimes (x 10) (print (stream-ref *fibo* x)))
+
+0
+1
+1
+2
+3
+5
+8
+13
+21
+34
+NIL
+* (stream-take *fibo* 10)
+
+(0 1 1 2 3 5 8 13 21 34)
+* (stream-take (stream-drop *fibo* 40) 10)
+
+(102334155 165580141 267914296 433494437 701408733 1134903170 1836311903
+ 2971215073 4807526976 7778742049)
+</pre>
+<p> 変数 *fibo* にフィボナッチ数列を生成するストリームをセットします。stream-ref で順番に要素を 10 個求めると、その値はフィボナッチ数列になります。同様に、stream-take で 10 個の要素を取り出すと、リストの要素はフィボナッチ数列になります。stream-drop で 40 個の要素を取り除き、そのあと stream-take で 10 個の要素を取り出すと、41 番目以降のフィボナッチ数列を求めることができます。
+</p>
+<h4>●遅延ストリームの連結</h4>
+<p> 次は、2 つの遅延ストリームを受け取って 1 つの遅延ストリームを返す関数を考えます。一番簡単な操作は 2 つの遅延ストリームを結合することです。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 遅延ストリームの結合
+
+(defun stream-append (s1 s2)
+  (if (null s1)
+      s2
+    (stream-cons (stream-car s1)
+                 (stream-append (stream-cdr s1) s2))))
+</pre>
+
+<p> 関数 stream-append はストリーム s1 と s2 を結合したストリームを返します。処理は簡単で、s1 の要素を順番に取り出していき、s1 が空になったら s2 を返すだけです。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+* (defvar *s1* (range 1 4))
+
+*S1*
+* (defvar *s2* (range 5 8))
+
+*S2*
+* (defvar *s3* (stream-append *s1* *s2*))
+
+*S3*
+* (stream-take *s3* 8)
+
+(1 2 3 4 5 6 7 8)
+</pre>
+<p> 次は遅延ストリーム s1 と s2 の要素を交互に出力するストリームを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 遅延ストリームの要素を交互に出力
+
+(defun interleave (s1 s2)
+  (if (null s1)
+      s2
+    (stream-cons (stream-car s1)
+                 (interleave s2 (stream-cdr s1)))))
+</pre>
+
+<p> 関数 interleave はストリーム s1 と s2 を受け取ります。そして、s1 の要素を新しい遅延ストリームに格納したら、次は s2 の要素を新しい遅延ストリームに格納します。これは遅延オブジェクトで interleave を呼び出すとき、引数 s1 と s2 の順番を交換するだけです。このとき、s1 は stream-cdr で次の要素を求めます。これで s1 と s2 の要素を交互に出力することができます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+* (defvar *s4* (interleave *s1* *s2*))
+
+*S4*
+* (stream-take *s4* 8)
+
+(1 5 2 6 3 7 4 8)
+</pre>
+
+<p> stream-append の場合、無限ストリームを結合することはできませんが、interleave ならば無限ストリームにも対応することができます。簡単な例を示しましょう。
+</p>
+<pre>
+* (defvar *ones*)
+
+*ONES*
+* (setq *ones* (stream-cons 1 *ones*))
+
+(1 . #&lt;CLOSURE ...&gt;)
+* (stream-take *ones* 10)
+
+(1 1 1 1 1 1 1 1 1 1)
+* (defvar *twos*)
+
+*TWOS*
+* (setq *twos* (stream-cons 2 *twos*))
+
+(2 . #&lt;CLOSURE ...&gt;)
+* (stream-take *twos* 10)
+
+(2 2 2 2 2 2 2 2 2 2)
+* (stream-take (interleave *ones* *twos*) 10)
+
+(1 2 1 2 1 2 1 2 1 2)
+</pre>
+
+<p> *ones* は 1 を無限に出力するストリームで、*twos* は 2 を無限に出力するストリームです。stream-append で *ones* と *twos* を結合しても無限に 1 を出力するだけですが、interleave で *ones* と *twos* を結合すれば、1 と 2 を交互に出力することができます。これで無限ストリームの要素を混ぜ合わせることができます。
+</p>
+
+<h4>●高階関数</h4>
+<p> 次は遅延ストリーム用の高階関数を作りましょう。
+</p>
+<pre class="list">
+リスト : 高階関数
+
+(defun stream-map (proc &rest s)
+  (if (member nil s)
+      nil
+    (stream-cons (apply proc (mapcar #'stream-car s))
+                 (apply #'stream-map proc (mapcar #'stream-cdr s)))))
+
+;; フィルター
+(defun stream-filter (pred s)
+  (cond ((null s) nil)
+        ((funcall pred (stream-car s))
+         (stream-cons (stream-car s)
+                      (stream-filter pred (stream-cdr s))))
+        (t (stream-filter pred (stream-cdr s)))))
+
+;; 畳み込み
+(defun stream-fold-left (proc a s)
+  (if (null s)
+      a
+    (stream-fold-left proc (funcall proc a (stream-car s)) (stream-cdr s))))
+
+(defun stream-fold-right (proc a s)
+  (if (null s)
+      a
+    (funcall proc (stream-car s) (stream-fold-right proc a (stream-cdr s)))))
+
+;; 巡回
+(defun stream-for-each (proc s)
+  (cond ((not (null s))
+         (funcall proc (stream-car s))
+         (stream-for-each proc (stream-cdr s)))))
+</pre>
+<p> stream-map は引数のストリームの要素に関数 proc を適用した結果を新しいストリームに格納して返します。stream-map は複数の遅延ストリームを受け取ることができます。stream-filter は述語 pred が真を返す要素だけを新しいストリームに格納して返します。
+</p>
+<p> stream-fold-left と stream-fold-right は遅延ストリームに対して畳み込み処理を行います。stream-for-each は遅延ストリームの要素に関数 proc を適用します。無限ストリームの場合、これらの関数は処理が終了しないので注意してください。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+
+<pre>
+* (setq *s1* (iterate #'1+ 1))
+
+(1 . #&lt;CLOSURE ...&gt;)
+* (setq *s2* (stream-map #'(lambda (x) (* x x)) *s1*))
+
+(1 . #&lt;CLOSURE ...&gt;)
+* (stream-take *s2* 10)
+
+(1 4 9 16 25 36 49 64 81 100)
+* (setq *s3* (stream-filter #'evenp *s1*))
+
+(2 . #&lt;CLOSURE ...&gt;)
+* (stream-take *s3* 10)
+
+(2 4 6 8 10 12 14 16 18 20)
+* (stream-fold-left #'+ 0 (range 1 100))
+
+5050
+* (stream-fold-right #'+ 0 (range 1 100))
+
+5050
+* (stream-for-each #'print (range 1 10))
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+NIL
+</pre>
+<p> 変数 *s1* に 1 から始まる整数列を生成する遅延ストリームをセットします。次に、*s1* の要素を 2 乗する遅延ストリームを stream-map で生成して変数 *s2* にセットします。stream-take で *s2* から要素を 10 個取り出すと、*s1* の要素を 2 乗した値になります。
+</p>
+<p> *s1* から偶数列の遅延ストリームを得るには、引数が偶数のときに真を返す述語を stream-filter に渡します。その返り値を変数 *s3* にセットして、stream-take で 10 個の要素を取り出すと、リストの要素は 2 から 20 までの値になります。
+</p>
+<p> range で有限個の遅延ストリームを生成すると畳み込みを行うことができます。stream-fold-left と stream-fold-right で要素の合計値を求めると 5050 になります。もちろん、stream-for-each も正常に動作します。
+</p>
+<h4>●stream-map の便利な使い方</h4>
+<p> stream-map は複数の遅延ストリームを受け取ることができるので、それらの遅延ストリームに対していろいろな処理を定義することができます。次の例を見てください。
+</p>
+<pre>
+* (defun add-stream (s1 s2) (stream-map #'+ s1 s2))
+
+ADD-STREAM
+* (setq *s1* (range 1 4))
+
+(1 . #&lt;CLOSURE ...&gt;)
+* (setq *s2* (range 11 14))
+
+(11 . #&lt;CLOSURE ...&gt;)
+* (setq *s3* (add-stream *s1* *s2*))
+
+(12 . #&lt;CLOSURE ...&gt;)
+* (stream-take *s3* 4)
+
+(12 14 16 18)
+</pre>
+<p> add-stream は s1 と s2 の要素を加算した遅延ストリームを返します。この add-stream を使うと、整数を生成する遅延ストリームは次のように定義することができます。
+</p>
+<pre>
+* *ones*
+
+(1 . #&lt;CLOSURE ...&gt;)
+* (defvar *ints*)
+
+*INTS*
+* (setq *ints* (stream-cons 1 (add-stream *ones* *ints*)))
+
+(1 . #&lt;CLOSURE ...&gt;)
+* (stream-take *ints* 10)
+
+(1 2 3 4 5 6 7 8 9 10)
+</pre>
+<p> ストリーム *ints* は、現在の *ints* に 1 を足し算することで整数を生成しています。これで整数が生成できるとは不思議ですね。*ints* の動作を図に示すと、次のようになります。
+</p>
+<pre class="fig">
+*ones* = Cons(1, delay *ones*)
+       = Cons(1, lazy_obj1)
+
+*ints* = Cons(1, delay (add-stream *ones* *ints*))
+       = Cons(1, lazy_obj2)
+
+lazy_obj2 = Cons(1 + 1, delay (add-stream (force lazy_obj1) (force lazy_obj2)))
+          =&gt; Cons(2, delay (add-stream (force lazy_obj1) (force lazy_obj2)))
+          =&gt; Cons(2, lazy_obj3)
+
+lazy_obj3 =&gt; Cons(3, lazy (add-stream (force lazy_obj1) (force lazy_obj3)))
+          =&gt; Cons(3, lazy_obj4)
+
+        図 : ストリーム ints の動作
+</pre>
+<p> *ones* を Cons(1, lazy_obj1) と表し、*ints* を Cons(1, lazy_obj2) と表します。lazy_obj は遅延オブジェクトを表します。*ints* で次の要素を生成するとき、lazy_obj2 を force します。すると、add-stream に *ones* と *ints* が適用され、ストリームの要素 2 と遅延オブジェクト lazy_obj3 が生成されます。このとき、lazy_obj3 の内容は add-stream (force lazy_obj1) (force lazy_obj2) になります。
+</p>
+<p> 次の要素を生成するときは、lazy_obj3 を force します。lazy_obj1 は Cons(1, lazy_obj1) に、lazy_obj2 は Cons(2, lazy_obj3) に評価されるので、ストリームの要素は 1 + 2 = 3 になり、遅延オブジェクト lazy_obj4 の内容は add-stream (force lazy_obj1) (force lazy_obj3) になります。そして、この遅延オブジェクトを force することで次の要素を求めることができます。
+</p>
+<p> このように、遅延オブジェクトの中に現時点の整数を保持しておき、そこに 1 を足し算することで整数列を生成しているわけです。ここで、遅延オブジェクトは評価結果をキャッシュしているので、整数 n の次の値を簡単に計算できることに注意してください。もしも、遅延オブジェクトを単純なクロージャで実装した場合、整数 n を求めるため再計算が行われるので、効率はとても悪くなります。
+</p>
+
+<p> 同様の方法でフィボナッチ数列を生成するストリームを定義することができます。
+</p>
+<pre class="list">
+リスト : フィボナッチ数列の生成
+
+(setq *fibs* (stream-cons 0 (stream-cons 1 (add-stream (stream-cdr *fibs*) *fibs*))))
+</pre>
+
+<p> *fibs* が現在のフィボナッチ数列を表していて、(stream-cdr *fibs*) で次の要素を求めます。そして、それらを足し算することで、その次の要素を求めています。この場合、ストリームの初期値として 2 つの要素が必要になることに注意してください。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+* (defvar *fibs*)
+
+*FIBS*
+* (setq *fibs* (stream-cons 0 (stream-cons 1 (add-stream (stream-cdr *fibs*) *fibs*))))
+
+(0 . #&lt;CLOSURE ...&gt;)
+* (stream-take *fibs* 20)
+
+(0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181)
+</pre>
+<p> このように、2 つのストリームを使ってフィボナッチ数列を生成することができます。
+</p>
+
+
+<h4>●stream-flatmap</h4>
+<p> 次は高階関数 stream-flatmap を作りましょう。flatmap は map の結果を平坦化する関数で、具体的には map が返すリストの要素を append で連結する動作になります。引数がリストの場合、次のように定義することができます。
+</p>
+<pre class="list">
+リスト : マッピングした結果を平坦化する
+
+(defun flatmap (proc xs)
+  (apply #'append (mapcar proc xs)))
+</pre>
+<p> 拙作のページ <a href="clispb08.html">継続渡しスタイル</a> で作成した関数 flatten を使うと、すべてのリストに対して平坦化を行いますが、apply を使ってリストの要素を append でつなげば、リストを一段階だけ平坦化することができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+* (defun flatmap (proc xs) (apply #'append (mapcar proc xs)))
+
+FLATMAP
+* (flatmap #'(lambda (x) (list x x)) '(1 2 3 4 5 6 7 8))
+
+(1 1 2 2 3 3 4 4 5 5 6 6 7 7 8 8)
+</pre>
+<p> stream-flatmap を定義する場合、次のように stream-append を使うと問題が発生します。
+</p>
+<pre class="list">
+リスト : stream-flatmap の定義 (間違い)
+
+(defun stream-flatmap (proc s)
+  (if (null s)
+      nil
+    (stream-append (funcall proc (stream-car s))
+                   (stream-flatmap proc (stream-cdr s)))))
+</pre>
+<p> Common Lisp の関数は正格評価なので、stream-append を実行する前に引数が評価されます。つまり、stream-flatmap の評価は遅延されるのではなく、遅延ストリームが空になるまで stream-flatmap が再帰呼び出しされるのです。これでは無限ストリームに対応することができません。
+</p>
+<p> そこで、引数を遅延評価する関数 stream-append-delay を作ることにします。プログラムは次のようになります。
+<pre class="list">
+リスト : stream-append-delay と stream-flatmap
+
+;; 遅延ストリームの連結 (遅延評価版)
+(define (stream-append-delay s1 s2)
+  (if (empty? s1)
+      (force s2)
+    (stream-cons (stream-car s1)
+                 (stream-append-delay (stream-cdr s1) s2))))
+
+;; マッピングの結果を平坦化する
+(defun stream-flatmap (proc s)
+  (if (null s)
+      nil
+    (stream-append-delay (funcall proc (stream-car s))
+                         (delay (stream-flatmap proc (stream-cdr s))))))
+</pre>
+<p> stream-append-delay は stream-append とほぼ同じですが、遅延ストリーム s1 が空になったら遅延オブジェクト s2 を force で評価するところが異なります。stream-flatmap では、stream-appned のかわりに stream-append-delay を使います。このとき、delay で生成した遅延オブジェクトを引数に渡します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+* (setq *s1* (iterate #'1+ 1))
+
+(1 . #<CLOSURE (LAMBDA () :IN MAKE-PROMISE) {2417E115}>)
+* (setq *s2* (stream-flatmap #'(lambda (x) (range 1 x)) *s1*))
+
+(1 . #<CLOSURE (LAMBDA () :IN MAKE-PROMISE) {241989FD}>)
+* (stream-take *s2* 55)
+
+(1 1 2 1 2 3 1 2 3 4 1 2 3 4 5 1 2 3 4 5 6 1 2 3 4 5 6 7 1 2 3 4 5 6 7 8 1 2 3
+ 4 5 6 7 8 9 1 2 3 4 5 6 7 8 9 10)
+</pre>
+<p> s1 は無限ストリームになりますが、stream-flatmap は正常に動作していますね。
+</p>
+<h4>●stream-take-while と stream-drop-while</h4>
+<p> 次は、遅延ストリームの先頭から述語が真を返す要素を取り出す stream-take-while と要素を取り除く stream-drop-while を作ります。
+</p>
+<pre class="list">
+リスト : stream-take-while と stream-drop-while
+
+(defun stream-take-while (pred s)
+  (do ((s s (stream-cdr s))
+       (a nil))
+      ((not (funcall pred (stream-car s))) (nreverse a))
+    (push (stream-car s) a)))
+
+(defun stream-drop-while (pred s)
+  (do ((s s (stream-cdr s)))
+      ((not (funcall pred (stream-car s))) s)))
+</pre>
+<p> どちらの関数も難しいところはないと思います。簡単な実行例を示しましょう。
+</p>
+<pre>
+* (setq *s1* (iterate #'1+ 1))
+
+(1 . #<CLOSURE (LAMBDA () :IN MAKE-PROMISE) {24222D8D}>)
+* (stream-take-while #'(lambda (x) (&lt; x 10)) *s1*)
+
+(1 2 3 4 5 6 7 8 9)
+* (stream-take (stream-drop-while #'(lambda (x) (&lt; x 10)) *s1*) 10)
+
+(10 11 12 13 14 15 16 17 18 19)
+</pre>
+<h4>●エラトステネスの篩</h4>
+<p> 最後に簡単な例題として、ストリームを使って素数を求めるプログラムを作ってみましょう。考え方は簡単です。最初に、2 から始まる整数列を生成するストリームを用意します。2 は素数なので、素数ストリームの要素になります。次に、この整数列から 2 で割り切れる整数を取り除き除きます。これは stream-filter を使うと簡単です。2 で割り切れる整数が取り除かれたので、次の要素は 3 になります。今度は 3 で割り切れる整数を取り除けばいいのです。これも stream-filter を使えば簡単です。このとき、入力用のストリームは 2 で割り切れる整数が取り除かれています。したがって、このストリームに対して 3 で割り切れる整数を取り除くように stream-filter を設定すればいいわけです。
+</p>
+
+<p> このように、素数を見つけたらそれで割り切れる整数を取り除いていくアルゴリズムを「エラトステネスの篩」といいます。ようするに、2 から始まる整数ストリームに対して、見つけた素数 2, 3, 5, 7, 11, ... を順番に stream-fiter で設定して素数でない整数をふるい落としていくわけです。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 素数の生成
+
+(defun sieve (s)
+  (stream-cons (stream-car s)
+               (sieve (stream-filter #'(lambda (x) (/= (mod x (stream-car s)) 0))
+                                     (stream-cdr s)))))
+</pre>
+<p> sieve には 2 から始まる整数列を生成するストリームを渡します。stream-cdr で遅延オブジェクトを force すると、stream-filter により整数列から 2 で割り切れる整数を取り除いたストリームが返されます。次の要素 3 を取り出すとき、このストリームに対して 3 で割り切れる整数を取り除くことになるので、2 と 3 で割り切れる整数が取り除かれることになります。次の要素は 5 になりますが、そのストリームからさらに 5 で割り切れる整数が stream-filter で取り除かれることになります。
+</p>
+
+<p> このように stream-filter を重ねて設定していくことで、素数でない整数をふるい落としていくことができるわけです。それでは実行してみましょう。
+</p>
+<pre>
+* (defvar *ps* (sieve (iterate #'1+ 2)))
+
+*PS*
+* (stream-take *ps* 25)
+
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+* (stream-take *ps* 100)
+
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103
+ 107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199
+ 211 223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313
+ 317 331 337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433
+ 439 443 449 457 461 463 467 479 487 491 499 503 509 521 523 541)
+</pre>
+<p> iterate で 2 から始まる整数列を sieve に渡します。100 以下の素数は全部で 25 個あります。
+</p>
+
+<h4>●より高速な方法</h4>
+<p> 関数 sieve は簡単にプログラムできますが、生成する素数の個数が多くなると、その実行速度はかなり遅くなります。実をいうと、sieve なみに簡単で sieve よりも高速な方法があります。
+</p>
+
+<p> 整数 n が素数か確かめる簡単な方法は、√n 以下の素数で割り切れるか試してみることです。割り切れる素数 m があれば、n は素数ではありません。そうでなければ、n は素数であることがわかります。
+</p>
+<p> これをそのままプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 素数列の生成
+
+(defvar *primes* (stream-cons 2 (stream-cons 3 (stream-cons 5 (primes-from 7)))))
+
+(defun primes-from (n)
+  (if (primep n)
+      (stream-cons n (primes-from (+ n 2)))
+    (primes-from (+ n 2))))
+
+(defun primep (n)
+  (every #'(lambda (p) (/= (mod n p) 0))
+         (stream-take-while #'(lambda (p) (&lt;= (* p p) n)) *primes*)))
+</pre>
+<p> 変数 *primes* は無限の素数列を表します。実際に素数を生成する処理は関数 primes-from で行います。primes-from は述語 primep を呼び出して n が素数かチェックします。そうであれば、stream-cons で n を遅延ストリームに追加します。そうでなければ primes-from を再帰呼び出しするだけです。偶数は素数ではないので、引数 n には奇数を与えていることに注意してください。
+</p>
+<p> primep も簡単です。stream-take-while で *primes* から √n 以下の素数列を取り出します。√n 以下の素数は生成済みなので、*primes* から stream-take-while で取り出すことが可能です。ここでは√n のかわりに条件を x * x &lt;= n としています。あとは、関数 every を使って、取り出した素数で n が割り切れないことを確認するだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+* (stream-take *primes* 25)
+
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+* (stream-ref *primes* 99)
+
+541
+* (stream-ref *primes* 500)
+
+3581
+</pre>
+<p> 100 以下の素数は全部で 25 個あります。また、100 番目の素数は 541 になります。Common Lisp のリストは 0 から数えるので、(stream-ref primes 99) で 100 番目の素数になります。
+</p>
+<p> 実行時間ですが、stream-ref で 3001 番目の素数を求めてみました。実行環境は Windows 7, Core i7-2670QM 2.20GHz, sbcl version 1.3.12 です。
+</p>
+<pre>
+* (time (stream-ref (sieve (iterate #'1+ 2)) 3000))
+
+Evaluation took:
+  4.554 seconds of real time
+  4.555229 seconds of total run time (3.868825 user, 0.686404 system)
+  [ Run times consist of 3.837 seconds GC time, and 0.719 seconds non-GC time. ]
+
+  100.02% CPU
+  9,995,065,492 processor cycles
+  300,390,976 bytes consed
+
+27457
+* (time (stream-ref *primes* 3000))
+
+Evaluation took:
+  0.050 seconds of real time
+  0.062401 seconds of total run time (0.031200 user, 0.031201 system)
+  124.00% CPU
+  109,536,671 processor cycles
+  3,424,112 bytes consed
+
+27457
+</pre>
+<p> sieve よりも primes のほうが高速になりました。興味のある方はいろいろ試してみてください。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li><a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs (SICP)"</a> <a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-24.html#%_sec_3.5">3.5  Streams</a>
+  <li><a href="http://practical-scheme.net/gauche/man/gauche-refj_57.html">Gauche ユーザリファレンス: 6.19 遅延評価</a>
+</ol>
+
+</section>
+<hr>
+<div align="right">
+初版 2008 年 11 月 9 日<br>
+改訂 2017 年 2 月 19 日
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008-2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb09.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb11.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

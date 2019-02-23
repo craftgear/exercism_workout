@@ -1,0 +1,1142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881768</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb12.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb14.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap16">Common Lisp で作る micro Scheme (2)</h3>
+<p> 今回は micro Scheme に「伝統的なマクロ」を追加します。効率を考慮しないでよければ、伝統的なマクロを実装するのはとても簡単です。S 式を評価してマクロ展開したあと、その結果を再度評価すればいいのです。この方法は実行速度が遅くなるので実用的ではありませんが、マクロの基本的な仕組みはこれで十分に理解できると思います。
+</p>
+<p> なお、このプログラムは拙作のページ <a href="../func/scheme.html">お気楽 Scheme プログラミング入門</a> <a href="../func/abcscm31.html">Scheme で作る micro Scheme (2)</a> のプログラムを Common Lisp で書き直したものです。内容は重複しますが、ご了承くださいませ。
+</p>
+<h4>●マクロの定義</h4>
+<p> マクロはシンタックス形式 define-macro で定義します。マクロの本体はラムダ式で表します。そして、リストに次の形式で格納します。
+</p>
+<pre class="item">
+(macro closure (lambda (args ...) body ...) env)
+</pre>
+<p> micro Scheme のクロージャを作り、それがマクロであることを表すため、その先頭にシンボル macro を付加します。この処理を関数 m-define-macro で行います。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : マクロの定義
+
+(defun m-define-macro (exp env)
+  (setq *global-environment*
+        (cons (cons (cadr exp)
+                    (cons 'macro (m-eval (caddr exp) env)))
+              *global-environment*))
+  ; symbol を返す
+  (cadr exp))
+</pre>
+<p> 処理内容は define とほぼ同じですが、m-eval の返り値 (クロージャ) にシンボル macro を追加し、それと変数を組にして *global-environment* に追加します。
+</p>
+
+<h4>●バッククオートの処理</h4>
+<p> 次はバッククオートを処理する関数 m-quasiquote を作ります。バッククオートで使う記号 (` , ,@) は省略形です。CLISP の場合、次に示す S 式に変換されます。
+</p>
+<pre class="item">
+`(...) : (SYSTEM::BACKQUOTE (...))
+,expr  : (SYSTEM::UNQUOTE expr)
+,@expr : (SYSTEM::SPLICE expr)
+</pre>
+
+<p> 実をいうと、これらの変換結果は Common Lisp 処理系によって異なります。そこで、Common Lisp のリードテーブルを変更して、これらの記号 (` , ,@) は backquote unquote splice に変換することにします。このような機能を「リードマクロ」と呼びます。リードマクロはあとで説明します。
+</p>
+
+<p> バッククオートの中でシンボル unquote と unquote-splicing があれば、引数 expr を評価した値に置換します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : バッククオートの処理
+
+(defun m-backquote (exp env)
+  (labels ((transfer (ls)
+    (cond ((consp ls)
+           (cond ((consp (car ls))
+                  (cond ((eq (caar ls) 'unquote)
+                         (cons (m-eval (cadar ls) env)
+                               (transfer (cdr ls))))
+                        ((eq (caar ls) 'splice)
+                         (append (m-eval (cadar ls) env)
+                                 (transfer (cdr ls))))
+                        (t (cons (transfer (car ls))
+                                 (transfer (cdr ls))))))
+                 (t (cons (car ls) (transfer (cdr ls))))))
+          (t ls))))
+    (transfer (cadr exp))))
+</pre>
+<p> 実際の処理は内部関数 transfer で行います。ls がリストでその先頭要素がリストの場合、先頭の要素が unquote または splice であれば置換処理を行います。どちらの場合も 2 番目の要素を m-eval で評価します。そして、残りのリスト (cdr ls) を transfer で置換して、その結果と m-eval の返り値を結合します。unquote の処理は cons で結合し、append で結合すると splice の処理になります。あとはとくに難しいところはないでしょう。
+</p>
+
+<div class="note">
+-- <a name="#note">追記 (2013/08/24)</a> --------<br>
+今回のバッククォートの動作は Scheme の仕様書 (R5RS など) とは異なります。このあと定義するマクロが動作するだけの簡略版にすぎません。詳しい説明は <a href="clispb19.html#appendix1">Common Lisp で作る micro Scheme コンパイラ (4) : バッククォートの修正</a> をお読みください。
+</div>
+<h4>●マクロの評価</h4>
+<p> 次は m-eval にマクロを評価する処理を追加します。
+</p>
+<pre class="list">
+リスト : m-eval の修正
+
+(defun m-eval (expr env)
+  (cond ((self-evaluationp expr) expr)
+        ((symbolp expr)
+         (let ((cell (lookup expr env)))
+           (if cell
+               (cdr cell)
+             (error "unbound variable: ~S" expr))))
+        ((consp expr)
+         (let ((procedure (m-eval (car expr) env)))
+           (case (car procedure)
+             ((syntax) (funcall (cadr procedure) expr env))
+             ((macro)
+              (m-eval (m-apply (cdr procedure) (cdr expr)) env))
+             (t
+              (m-apply procedure
+                       (mapcar #'(lambda (x) (m-eval x env)) (cdr expr)))))))
+        (t
+         (error "unknown expression type -- m-eval: ~S" expr))))
+</pre>
+<p> 関数 procedure の先頭要素が macro の場合、その後ろにラムダ式が格納されているので、それを m-apply で評価します。このとき、引数 (cdr expr) は評価しないでそのまま渡すことに注意してください。m-apply の返り値は S 式なので、それを m-eval で再度評価します。
+</p>
+<p> もし、S 式の中でマクロが使われていたら、そこでまたマクロ展開が行われ、組み立てられた S 式が評価されます。これでマクロの再帰呼び出しも処理することができます。実行速度は遅くなりますが、たったこれだけの処理でマクロの強力な機能を実現することができます。
+</p>
+
+<h4>●set! と eqv? の追加</h4>
+<p> 次はマクロを作るときに使用するため、関数 eqv? とシンタックス形式 set! を作ります。eqv? は Common Lisp の関数 eql に相当する Scheme の関数です。set! は変数に値を代入します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : set! の処理
+
+(defun m-set! (expr env)
+  (let ((cell (lookup (cadr expr) env)))
+    (setf (cdr cell) (m-eval (caddr expr) env))
+    (cdr cell)))
+</pre>
+<p> set! の処理は関数 m-set! で行います。lookup で変数と値を格納したコンスセルを求めて cell にセットします。そして、m-eval で S 式を評価し、その値を setf で CDR 部にセットします。これで変数の値を書き換えることができます。なお、変数が見つからなかったときのエラーチェックは行っていません。ご注意くださいませ。
+</p>
+
+<p> あとは *global-environment* に必要なデータを追加します。
+</p>
+<pre class="list">
+リスト : 初期化処理
+
+(setf *global-environment*
+      (list
+       (cons 'true  'true)
+       (cons 'false 'false)
+       (cons 'nil   'nil)
+       (cons 'quit  'quit)
+       (list 'car   'primitive #'(lambda (x)
+                                   (if (null x)
+                                       (error "type error -- car: NIL")
+                                     (car x))))
+       (list 'cdr   'primitive #'(lambda (x)
+                                   (if (null x)
+                                       (error "type error -- cdr: NIL")
+                                     (cdr x))))
+       (list 'cons  'primitive #'cons)
+       (list 'eq?   'primitive #'(lambda (x y) (if (eq x y) 'true 'false)))
+       (list 'eqv?  'primitive #'(lambda (x y) (if (eql x y) 'true 'false)))
+       (list 'pair? 'primitive #'(lambda (x) (if (consp x) 'true 'false)))
+       (list 'if     'syntax #'m-if)
+       (list 'quote  'syntax #'m-quote)
+       (list 'lambda 'syntax #'m-lambda)
+       (list 'define 'syntax #'m-define)
+       (list 'set!   'syntax #'m-set!)
+       (list 'define-macro 'syntax #'m-define-macro)
+       (list 'backquote   'syntax #'m-backquote)
+       ))
+</pre>
+<h4>●リードマクロ</h4>
+<p> 関数 read は Common Lisp の構文に従ってデータを読み込み、それを S 式に変換して返します。この read の動作を制御するため、Common Lisp には「リードテーブル (readtable) 」というデータ構造が用意されています。リードテーブルを変更することで、S 式を読み込む動作をカスタマイズすることができます。これを「リードマクロ」といいます。
+</p>
+<p> 具体的には、ある文字を読み込んだときの変換動作を関数で指定します。この文字を「マクロ文字」といいます。たとえば、'x は (quote x) に変換されますが、このときのクオート ( ' ) がマクロ文字です。そして、クオート以降の S 式 x を読み込み、それを (quote x) に変換して返します。この動作を変更することで、read をカスタマイズすることができるわけです。
+</p>
+<p> リードテーブルはグローバル変数 *readtable* に格納されています。CLISP では次のように表示されます。
+</p>
+<pre>
+&gt; *readtable*
+#&lt;READTABLE #x100B5C85&gt;
+</pre>
+<p> リードテーブルは関数 copy-readtable でコピーすることができます。
+</p>
+<pre class="item">
+copy-readtable &amp;optional from-readtable to-readtable
+</pre>
+<p> copy-readtable は from-readtable のコピーを作ります。to-readtable はコピー先のリードテーブルで、その内容はコピーによって破壊されます。form-readtable が省略された場合は *readtable* のコピーが作られます。from-readtable が nil の場合は、標準の Common Lisp リードテーブルのコピーが作られます。したがって、次のプログラムはリードテーブルを標準の状態に戻します。
+</p>
+<pre class="list">
+(setq *readtable* (copy-readtable nil))
+</pre>
+
+<p> マクロ文字の設定は関数 set-macro-character で行います。また、マクロ文字の動作 (関数) は get-macro-character で求めることができます。
+</p>
+<pre class="item">
+set-macro-character char function &amp;optional non-terminating-p readtable
+get-macro-character char &amp;optional readtable
+</pre>
+<p> 引数 char はマクロ文字です。function は入力データを変換する関数です。たとえば、クオート文字の動作は次のように定義されます。<a href="clispb13.html#cite">参考文献 [7]</a> (479 頁) より引用します。
+</p>
+<pre class="list">
+リスト : クオート文字の動作
+
+(defun single-quote-reader (stream char)
+  (declare (igonre char))
+  (list 'quote (read stream t nil t)))
+
+(set-macro-character #\' #'single-quote-reader)
+</pre>
+<p> set-macro-character は関数に入力ストリームとマクロ文字 char を渡します。マクロ文字は stream から取り除かれているので、stream から read で S 式を読み込み、quote といっしょにリストに格納して返します。これで 'x を (quote x) に変換することができます。
+</p>
+<p> read は eof-err と eof-value の後に recursive-p という引数を取ることができます。
+</p>
+<pre class="item">
+read 入力ストリーム eof-err eof-value recursive-p
+     eof-err     : ファイルの終了を検出した場合の処理指定
+     eof-value   : ファイルの終了を検出した場合の返り値
+     recursive-p : nil 以外の場合 read は再帰呼び出しされる
+</pre>
+<p> リードマクロの場合、read は再帰呼び出しされることになるので、recursive-p の値は t に設定してください。
+</p>
+<p> なお、このほかにもリードマクロには便利な機能があります。興味のある方は <a href="clispb13.html#cite">参考文献 [7]</a> や Paul Graham (著)，野田 開 (訳), 『On Lisp』 をお読みください。
+</p>
+
+<p> それでは、バッククオートのマクロ文字を設定しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : マクロ文字の設定
+
+(defun change-readtable ()
+  ; ` の設定
+  (set-macro-character
+   #\`
+   #'(lambda (stream char)
+       (declare (ignore char))
+       (list 'backquote (read stream t nil t))))
+  ; , と ,@ の設定
+  (set-macro-character
+   #\,
+   #'(lambda (stream char)
+       (declare (ignore char))
+       (cond ((char= (peek-char nil stream) #\@)
+              (read-char stream)
+              (list 'splice (read stream t nil t)))
+             (t (list 'unquote (read stream t nil t)))))))
+</pre>
+<p> #\` は簡単です。クオート文字と同じように S 式を読み込んで backquote といっしょにリストに格納して返します。#\, の場合、peek-char で次の文字が #\@ かチェックします。peek-char は stream から 1 文字読み込みますが、それを stream から取り出すことはしません。#\@ の場合、@ を読み捨ててから read で S 式を読み込み、splice といっしょにリストに格納して返します。#\@ でなければ、S 式を読み込んで unquote といっしょにリストに格納して返します。
+</p>
+
+<p> 最後に REPL (read-eval-print-loop) を修正します。
+</p>
+<pre class="list">
+リスト : read-eval-print-loop
+
+(defun repl (&amp;rest file-list)
+  (unwind-protect
+      (progn
+        (change-readtable)
+        (dolist (file file-list)
+          (with-open-file (in file :direction :input)
+            (do ((output t))
+                ((eq output nil) (terpri))
+              (setf output (m-eval (read in nil) '()))
+              (print output))))
+        (do ((output nil))
+            ((eq output 'quit))
+          (princ "&gt;&gt;&gt; ")
+          (force-output)
+          (setf output (m-eval (read) '()))
+          (princ output)
+          (terpri)))
+    (setq *readtable* (copy-readtable nil))))
+</pre>
+<p> unwind-protect を使って、micro Scheme の実行が終了したらリードテーブルを元に戻すようにします。あとは change-readtable でマクロ文字を設定してから REPL を実行するだけです。
+</p>
+<h4>●let</h4>
+<p> それでは実際にマクロを使ってみましょう。まずは let を作ります。let は次に示すようにラムダ式を使って実現することができます。
+</p>
+<pre class="fig">
+(let ((a 0) (b 1) (c 2) ...) body  ...)
+                   │
+                   ↓ 
+((lambda (a b c ...) body ...) 0 1 2 ...)
+</pre>
+<p> これをマクロでプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : let
+
+; 関数 cxxr
+(define cadr (lambda (x) (car (cdr x))))
+(define cdar (lambda (x) (cdr (car x))))
+(define caar (lambda (x) (car (car x))))
+(define cddr (lambda (x) (cdr (cdr x))))
+
+; let
+(define-macro let
+  (lambda (args . body)
+    `((lambda ,(map car args) ,@body) ,@(map cadr args))))
+</pre>
+<p> (map car args) で変数名を、(map cadr args) で初期値を取り出します。関数 cadr が必要になるので、ついでに cdar, caar, cddr も定義しておきます。 あとはラムダ式を組み立て、それに初期値を渡せばいいわけです。とても簡単ですね。名前付き let はあとから作ります。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; (define a 0)
+A
+&gt;&gt;&gt; (define b 1)
+B
+&gt;&gt;&gt; a
+0
+&gt;&gt;&gt; b
+1
+&gt;&gt;&gt; (let ((a 10) (b 20)) (cons a b))
+(10 . 20)
+&gt;&gt;&gt; a
+0
+&gt;&gt;&gt; b
+1
+</pre>
+<p> Scheme の場合、処理系によっては let をシンタックス形式で定義していますが、このようにマクロでも let を実装することができます。
+</p>
+<h4>●and と or</h4>
+<p> 次は and と or を作ります。
+</p>
+<pre class="list">
+リスト ; and と or
+
+(define-macro and
+  (lambda args
+    (if (null? args)
+        true
+      (if (null? (cdr args))
+          (car args)
+        `(if ,(car args) (and ,@(cdr args)) false)))))
+
+(define-macro or
+  (lambda args
+    (if (null? args)
+        false
+      (if (null? (cdr args))
+          (car args)
+        `(let ((+value+ ,(car args)))
+          (if +value+ +value+ (or ,@(cdr args))))))))
+</pre>
+<p> and は引数 args の長さを調べ、空リストならば true がマクロ展開後の S 式となり、それを評価するので結果は true になります。長さが 1 ならば、リスト args の先頭要素がマクロ展開後の S 式になり、それを評価します。それ以外の場合は args の先頭の要素を評価して、真ならば args の残りの要素を and に渡してマクロ展開します。偽ならば false がマクロ展開後の S 式となり、その評価結果は false になります。
+</p>
+<p> たとえば、(and 1 2 3) は次のようにマクロ展開されます。
+</p>
+<pre class="fig">
+     (and 1 2 3)
+
+         ↓
+
+   (if 1 (and 2 3) false)
+
+         ↓
+
+(if 1 (if 2 (and 3) false) false)
+
+         ↓
+
+   (if 1 (if 2 3 false) false)
+
+ 図 : (and 1 2 3) のマクロ展開
+</pre>
+
+<p> or は引数の評価結果を局所変数 +value+ に格納し、それが真ならば +value+ を返すようにします。変数捕捉を避けるため、<a href="http://www.sampou.org/scheme/t-y-scheme/">独習 Scheme 三週間</a> にならって変数名に + を付けています。gensym を使いたい方は、プログラムを改造してみてください。
+</p>
+<p> それでは実行例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; (and 1 2 3)
+3
+&gt;&gt;&gt; (and false 2 3)
+FALSE
+&gt;&gt;&gt; (and 1 false 3)
+FALSE
+&gt;&gt;&gt; (and 1 2 false)
+FALSE
+&gt;&gt;&gt; (or 1 2 3)
+1
+&gt;&gt;&gt; (or false 2 3)
+2
+&gt;&gt;&gt; (or false false 3)
+3
+&gt;&gt;&gt; (or false false false)
+FALSE
+</pre>
+<h4>●let*</h4>
+<p> 次は let* を作ります。let* は let を入れ子にすることで実現することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : let*
+
+(define-macro let*
+  (lambda (args . body) 
+    (if (null? (cdr args))
+        `(let (,(car args)) ,@body)
+      `(let (,(car args)) (let* ,(cdr args) ,@body)))))
+</pre>
+<p> args に要素が 1 個しかない場合は、それを let に変換します。複数ある場合は、先頭の要素を let に変換し、let の本体でマクロ let* を再帰呼び出しします。これで let* を入れ子の let に変換することができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; (let* ((a 10) (b 20) (c (cons a b))) c)
+(10 . 20)
+</pre>
+<h4>●letrec</h4>
+<p> 次は letrec を作ります。letrec は定義する変数を初期値の中で参照することができます。Common Lisp の labels のように、letrec で再帰関数を定義することができます。let ではこれを実現することはできません。
+</p>
+<p> let は最初に初期値を評価しますが、このとき環境には定義する変数がまだ存在していないためエラーになるのです。そこで、letrec は変数を *undef* で初期化してから、あらためて set! で初期値を代入することにします。つまり、次のように変換します。
+</p>
+<pre class="fig">
+(letrec ((a expr-a) (b expr-b) ...) body ...)
+                   │
+                   ↓ 
+(let ((a '*undef*) (b '*undef*) ...)
+  (set! a expr-a)
+  (set! b expr-b)
+  ...
+  body
+  ... )
+</pre>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : letrec
+
+; 2 つのリストを受け取る map 関数
+(define map-2
+  (lambda (fn xs ys)
+    (if (null? xs)
+        '()
+      (cons (fn (car xs) (car ys)) (map-2 fn (cdr xs) (cdr ys))))))
+
+(define-macro letrec
+  (lambda (args . body)
+    (let ((vars (map car args))
+          (vals (map cadr args)))
+      `(let ,(map (lambda (x) `(,x '*undef*)) vars)
+            ,@(map-2 (lambda (x y) `(set! ,x ,y)) vars vals)
+            ,@body))))
+</pre>
+<p> args から map で変数名を取り出して vars に、初期値を取り出して vals にセットします。次に、let で局所変数を定義して *undef* で初期化します。そして、その変数に set! で初期値を代入します。Scheme の map は複数のリストを受け取ることができますが、前回作成した map は 1 つのリストしか受け取ることができません。そこで、2 つのリストを受け取る関数 map-2 を定義しました。
+</p>
+
+<p> 簡単な例として、リストを反転する関数 reverse を letrec で書き直します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : リストの反転
+
+(define reverse
+  (lambda (ls)
+    (letrec ((iter (lambda (ls a)
+                     (if (null? ls)
+                         a
+                       (iter (cdr ls) (cons (car ls) a))))))
+      (iter ls '()))))
+</pre>
+<p> letrec を使うことで、iter を再帰呼び出しすることができます。簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (reverse '(a b c d e))
+(E D C B A)
+&gt;&gt;&gt; (reverse '())
+NIL
+</pre>
+<p> ただし、このプログラムには問題があります。次の例を見てください。
+</p>
+<pre>
+&gt;&gt;&gt; (letrec ((a a)) a)
+*UNDEF*
+</pre>
+<p> この場合、Gauche (Scheme) ではエラーになります。この問題は <a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">Structure and Interpretation of Computer Programs (SICP)</a> <a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-26.html#%_sec_4.1.6">4.1.6  Internal Definitions</a> で説明されています。興味のある方は SICP を参考に、プログラムを改造してみてください。
+</p>
+<h4>●名前付き let</h4>
+<p> 次は名前付き let を作ります。名前付き let はその名が示すように let に名前を付けたもので、Common Lisp の let には無い機能です。名前付き let の構文を示します。
+</p>
+<pre class="fig">
+(let 名前
+     ((変数１ 初期値１)
+      (変数２ 初期値２)
+        ・・・・・・
+      (変数Ｍ 初期値Ｍ))
+
+    Ｓ式１
+  ・・・・・・
+    Ｓ式Ｍ
+  (名前 引数１ ... 引数Ｍ))
+
+図 : 名前付き let の構文
+</pre>
+<p> 名前付き let は、let の後ろに名前を指定します。この名前が関数名になると考えてください。その後ろに定義される変数がその関数の引数になり、let の中の S 式がその関数の処理内容になります。そして、let の中でその関数を呼び出すことができ、let の最後で再帰呼び出しを行えば末尾再帰になります。
+</p>
+<p> 名前付き let は letrec に変換すると簡単です。
+</p>
+<pre class="fig">
+(let name ((a init-a) (b init-b) ...) body ...)
+                   │
+                   ↓
+(letrec ((name (lambda (a b ...) body ...)))
+  (name init-a init-b ...))
+</pre>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 名前付き let
+
+(define-macro let
+  (lambda (args . body)
+    (if (pair? args)
+        `((lambda ,(map car args) ,@body) ,@(map cadr args))
+      ; named-let
+      `(letrec ((,args (lambda ,(map car (car body)) ,@(cdr body))))
+        (,args ,@(map cadr (car body)))))))
+</pre>
+<p> args の先頭要素がリストでなければ名前付き let と判断します。args が名前で、body の先頭要素が変数と初期値を格納したリストになります。あとは letrec でラムダ式を定義して、それに初期値を渡して呼び出すだけです。
+</p>
+<p> 簡単な例として、名前付き let で reverse を作ります。プログラムリストと実行結果を示します。
+</p>
+<pre class="list">
+リスト : リストの反転
+
+(define reverse
+  (lambda (ls)
+    (let loop ((ls ls) (a '()))
+      (if (null? ls)
+          a
+          (loop (cdr ls) (cons (car ls) a))))))
+</pre>
+<pre>
+&gt;&gt;&gt; (reverse '(a b c d e))
+(E D C B A)
+&gt;&gt;&gt; (reverse '())
+NIL
+</pre>
+<h4>●begin</h4>
+<p> 次は begin を作ります。begin は Common Lisp の progn のことで、引数なしのラムダ式に変換するだけです。プログラムリストと実行結果を示します。
+</p>
+<pre class="list">
+リスト : begin
+
+(define-macro begin
+  (lambda args
+    (if (null? args)
+        `((lambda () '*undef*))
+      `((lambda () ,@args)))))
+</pre>
+<pre>
+&gt;&gt;&gt; (begin)
+*UNDEF*
+&gt;&gt;&gt; (begin 1 2 3 4 5)
+5
+</pre>
+<h4>●cond</h4>
+<p> 次は cond を作ります。再帰定義を使うと cond も簡単に定義することができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : cond
+
+(define-macro cond
+  (lambda args
+    (if (null? args)
+        '*undef*
+      (if (eq? (caar args) 'else)
+          `(begin ,@(cdar args))
+        (if (null? (cdar args))
+            `(let ((+value+ ,(caar args)))
+              (if +value+ +value+ (cond ,@(cdr args))))
+          `(if ,(caar args)
+               (begin ,@(cdar args))
+            (cond ,@(cdr args))))))))
+</pre>
+<p> args が空リストの場合は *undef* を返します。条件部が else の場合は、残りの S 式を無条件に実行します。これは begin を使えば簡単です。そうでなければ、条件部を評価します。このとき、条件部しかない場合は評価結果を +value+ にセットし、真であればその値を返します。S 式がある場合は、begin で S 式を順番に評価します。条件部が偽の場合は、次の節をチェックします。これは cond を再帰呼び出しするだけです。
+</p>
+<p> cond の簡単なテストプログラムと実行結果を示します。
+</p>
+<pre class="list">
+リスト : cond のテスト
+
+(define cond-test
+  (lambda (x)
+    (cond ((eq? x 'a) 1)
+          ((eq? x 'b) 2)
+          ((eq? x 'c) 3)
+          (else 0))))
+</pre>
+<pre>
+&gt;&gt;&gt; (cond-test 'a)
+1
+&gt;&gt;&gt; (cond-test 'b)
+2
+&gt;&gt;&gt; (cond-test 'c)
+3
+&gt;&gt;&gt; (cond-test 'd)
+0
+&gt;&gt;&gt; (cond-test 'e)
+0
+</pre>
+<h4>●case</h4>
+<p> 次は case を作ります。case も再帰定義を使うと簡単です。
+</p>
+<pre class="list">
+リスト : case
+
+; 探索
+(define memv
+  (lambda (x ls)
+    (if (null? ls)
+        false
+        (if (eqv? x (car ls))
+            ls
+          (memv x (cdr ls))))))
+
+(define-macro case
+  (lambda (key . args)
+    (if (null? args)
+        '*undef*
+      (if (eq? (caar args) 'else)
+          `(begin ,@(cdar args))
+        `(if (memv ,key ',(caar args))
+             (begin ,@(cdar args))
+           (case ,key ,@(cdr args)))))))
+</pre>
+<p> キーを探索するため、関数 memv を定義します。memv は要素の比較に eqv? を使います。case の引数 args が空リストの場合は *undef* を返します。節の先頭要素が else の場合は、begin で残りの要素を順番に評価します。そうでなければ、memv で key を探索します。見つけたら残りの S 式を begin で順番に評価します。見つからない場合は次の節をチェックします。これは case を再帰呼び出しするだけです。
+</p>
+<p> 簡単な case のテストプログラムと実行結果を示します。
+</p>
+<pre class="list">
+リスト : case のテスト
+
+(define case-test
+  (lambda (x)
+    (case x
+      ((a b c) 1)
+      ((d e f) 2)
+      ((g h i) 3)
+      (else    0))))
+</pre>
+<pre>
+&gt;&gt;&gt; (case-test 'a)
+1
+&gt;&gt;&gt; (case-test 'e)
+2
+&gt;&gt;&gt; (case-test 'i)
+3
+&gt;&gt;&gt; (case-test 'j)
+0
+</pre>
+<h4>●do</h4>
+<p> 最後に do を作りましょう。Common Lisp の場合、do は tagbody と go を使ってマクロ定義することができますが、go のようなジャンプ命令は Scheme に存在しないので、単純な繰り返しも再帰呼び出しで定義します。do の場合は letrec に変換すると簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : do
+
+(define-macro do
+  (lambda (var-form test-form . args)
+    (let ((vars (map car var-form))
+          (vals (map cadr var-form))
+          (step (map cddr var-form)))
+      `(letrec ((loop (lambda ,vars
+                        (if ,(car test-form)
+                            (begin ,@(cdr test-form))
+                          (begin
+                            ,@args
+                            (loop ,@(map-2 (lambda (x y)
+                                             (if (null? x) y (car x)))
+                                           step
+                                           vars)))))))
+        (loop ,@vals)))))
+</pre>
+<p> まず引数 var-form から変数、初期値、更新式 (step-form) を取り出して vars, vals, step にセットします。step の要素は、step-form が存在しない場合は空リストになることに注意してください。あとは letrec で lambda 式を組み立てます。test-form の先頭要素を評価して、その結果が真であれば begin で残りの要素を評価して返します。
+</p>
+<p> そうでなければ、begin で do の本体を評価して loop を再帰呼び出します。ここで、step-form がない場合、ラムダ式の引数 x は空リストになるので、対応する変数 y をそのまま渡します。そうでなければ、(car x) で step-form を取り出して渡します。これで繰り返しを実現することができます。
+</p>
+<p> 簡単な例として do を使って reverse をプログラムします。リストと実行結果を示します。
+</p>
+<pre class="list">
+リスト : do のテスト
+
+(define reverse-do
+  (lambda (xs)
+    (do ((ls xs (cdr ls)) (result '()))
+        ((null? ls) result)
+      (set! result (cons (car ls) result)))))
+</pre>
+<pre>
+&gt;&gt;&gt; (reverse-do '(a b c d e))
+(E D C B A)
+</pre>
+<p> 今回はここまでです。次回は「継続」の実装に挑戦してみましょう。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>黒川利明, 『LISP 入門』, 培風館, 1982
+  <li>Patrick Henry Winston, Berthold Klaus Paul Horn, 『LISP 原書第 3 版 (1)』, 培風館, 1992<br>
+18. Lisp で書く Lisp
+  <li>R. Kent Dybvig (著), 村上雅章 (訳), 『プログラミング言語 SCHEME』, 株式会社ピアソン・エデュケーション, 2000<br>
+9.2 Scheme のメタ循環インタプリタ
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』, アジソンウェスレイ, 1995<br>
+第 11 章 定義インタプリタ
+  <li>Harold Abelson, Gerald Jay Sussman, Julie Sussman, <a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs"</a>, <BR><a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-26.html#%_sec_4.1">4.1  The Metacircular Evaluator</a>
+  <li><a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/index-j.html">稲葉雅幸</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/index-j.html">ソフトウェア特論</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/soft4-scheme-interp/index.html">Scheme インタプリタ</a>
+  <li>Guy L. Steele Jr., 『COMMON LISP 第 2 版』, 共立出版, 1991
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; micro.l : micro Scheme with Common Lisp
+;
+;           (1) 基本機能の実装
+;           (2) 伝統的なマクロの追加
+;
+;           Copyright (C) 2009 Makoto Hiroi
+;
+
+; 大域変数
+(defvar *global-environment*)
+
+; 変数束縛
+(defun add-binding (vars vals env)
+  (cond ((null vars) env)
+        ((symbolp vars)
+         (cons (cons vars vals) env))
+        (t
+         (cons (cons (car vars) (car vals))
+               (add-binding (cdr vars) (cdr vals) env)))))
+
+; 変数の値を取得
+(defun lookup (var env)
+  (let ((value (assoc var env)))
+    (if value
+        value
+      (assoc var *global-environment*))))
+
+;;; syntax
+
+; (quote x)
+(defun m-quote (expr env)
+  (declare (ignore env))
+  (cadr expr))
+
+(defun true-p (x) (not (eq x 'false)))
+
+; (if test then eles)
+(defun m-if (expr env)
+  (if (true-p (m-eval (cadr expr) env))
+      (m-eval (caddr expr) env)
+    (if (null (cdddr expr))
+        '*undef*
+      (m-eval (cadddr expr) env))))
+
+; (lambda (args ...) body ...)
+(defun m-lambda (expr env)
+  (list 'closure expr env))
+
+; (define name s-expr)
+(defun m-define (expr env)
+  (setf *global-environment*
+        (cons (cons (cadr expr)
+                    (m-eval (caddr expr) env))
+              *global-environment*))
+  (cadr expr))
+
+; (set! name value)
+(defun m-set! (expr env)
+  (let ((cell (lookup (cadr expr) env)))
+    (setf (cdr cell) (m-eval (caddr expr) env))
+    (cdr cell)))
+
+;;; マクロ
+
+; (define-macro name s-expr)
+(defun m-define-macro (exp env)
+  (setq *global-environment*
+        (cons (cons (cadr exp)
+                    (cons 'macro (m-eval (caddr exp) env)))
+              *global-environment*))
+  ; symbol を返す
+  (cadr exp))
+
+; backquote
+(defun m-backquote (exp env)
+  (labels ((transfer (ls)
+    (cond ((consp ls)
+           (cond ((consp (car ls))
+                  (cond ((eq (caar ls) 'unquote)
+                         (cons (m-eval (cadar ls) env)
+                               (transfer (cdr ls))))
+                        ((eq (caar ls) 'splice)
+                         (append (m-eval (cadar ls) env)
+                                 (transfer (cdr ls))))
+                        (t (cons (transfer (car ls))
+                                 (transfer (cdr ls))))))
+                 (t (cons (car ls) (transfer (cdr ls))))))
+          (t ls))))
+    (transfer (cadr exp))))
+
+;;; 関数適用
+
+; 関数値 : (tag ...)
+; tag
+; syntax    : シンタックス形式 (syntax m-xxx)
+; primitive : プリミティブ     (primitive #&lt;subr ...&gt;)
+; closure   : クロージャ       (closure (lambda (args ...) body ...) env)
+
+; apply
+(defun m-apply (procedure actuals)
+  (case (car procedure)
+    ((primitive)
+     (apply (cadr procedure) actuals))
+    ((closure)
+     (let ((expr (cadr procedure)))
+       (eval-body (cddr expr)
+                  (add-binding (cadr expr) actuals (caddr procedure)))))
+    (t
+     (error "unknown procedure type -- m-apply: ~S" procedure))))
+
+;;; S 式の評価
+
+; body の評価
+(defun eval-body (body env)
+  (cond ((null (cdr body))
+         (m-eval (car body) env))
+        (t
+         (m-eval (car body) env)
+         (eval-body (cdr body) env))))
+
+; 自己評価フォームか
+(defun self-evaluationp (expr)
+  (and (not (consp expr)) (not (symbolp expr))))
+
+; eval
+(defun m-eval (expr env)
+  (cond ((self-evaluationp expr) expr)
+        ((symbolp expr)
+         (let ((cell (lookup expr env)))
+           (if cell
+               (cdr cell)
+             (error "unbound variable: ~S" expr))))
+        ((consp expr)
+         (let ((procedure (m-eval (car expr) env)))
+           (case (car procedure)
+             ((syntax) (funcall (cadr procedure) expr env))
+             ((macro)
+              (m-eval (m-apply (cdr procedure) (cdr expr)) env))
+             (t
+              (m-apply procedure
+                       (mapcar #'(lambda (x) (m-eval x env)) (cdr expr)))))))
+        (t
+         (error "unknown expression type -- m-eval: ~S" expr))))
+
+; 初期化
+(setf *global-environment*
+      (list
+       (cons 'true  'true)
+       (cons 'false 'false)
+       (cons 'nil   'nil)
+       (cons 'quit  'quit)
+       (list 'car   'primitive #'(lambda (x)
+                                   (if (null x)
+                                       (error "type error -- car: NIL")
+                                     (car x))))
+       (list 'cdr   'primitive #'(lambda (x)
+                                   (if (null x)
+                                       (error "type error -- cdr: NIL")
+                                     (cdr x))))
+       (list 'cons  'primitive #'cons)
+       (list 'eq?   'primitive #'(lambda (x y) (if (eq x y) 'true 'false)))
+       (list 'eqv?  'primitive #'(lambda (x y) (if (eql x y) 'true 'false)))
+       (list 'pair? 'primitive #'(lambda (x) (if (consp x) 'true 'false)))
+       (list 'if     'syntax #'m-if)
+       (list 'quote  'syntax #'m-quote)
+       (list 'lambda 'syntax #'m-lambda)
+       (list 'define 'syntax #'m-define)
+       (list 'set!   'syntax #'m-set!)
+       (list 'define-macro 'syntax #'m-define-macro)
+       (list 'backquote   'syntax #'m-backquote)
+       ))
+
+;;; read-eval-print-loop
+
+; マクロ文字の設定
+(defun change-readtable ()
+  (set-macro-character
+   #\`
+   #'(lambda (stream char)
+       (declare (ignore char))
+       (list 'backquote (read stream t nil t))))
+  (set-macro-character
+   #\,
+   #'(lambda (stream char)
+       (declare (ignore char))
+       (cond ((char= (peek-char nil stream) #\@)
+              (read-char stream)
+              (list 'splice (read stream t nil t)))
+             (t (list 'unquote (read stream t nil t)))))))
+
+(defun repl (&amp;rest file-list)
+  (unwind-protect
+      (progn
+        (change-readtable)
+        (dolist (file file-list)
+          (with-open-file (in file :direction :input)
+            (do ((output t))
+                ((eq output nil) (terpri))
+              (setf output (m-eval (read in nil) '()))
+              (print output))))
+        (do ((output nil))
+            ((eq output 'quit))
+          (princ "&gt;&gt;&gt; ")
+          (force-output)
+          (setf output (m-eval (read) '()))
+          (princ output)
+          (terpri)))
+    (setq *readtable* (copy-readtable nil))))
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+;
+; mlib.scm : micro Scheme 用ライブラリ
+;
+;            Copyright (C) 2009 Makoto Hiroi
+;
+
+; 述語
+(define null? (lambda (x) (eq? x '())))
+(define not (lambda (x) (if (eq? x false) true false)))
+
+; cxxr
+(define cadr (lambda (x) (car (cdr x))))
+(define cdar (lambda (x) (cdr (car x))))
+(define caar (lambda (x) (car (car x))))
+(define cddr (lambda (x) (cdr (cdr x))))
+
+;;; リスト操作関数
+
+(define list (lambda args args))
+
+(define append
+  (lambda (xs ys)
+    (if (null? xs)
+        ys
+      (cons (car xs) (append (cdr xs) ys)))))
+
+(define reverse
+  (lambda (ls)
+    (letrec ((iter (lambda (ls a)
+                     (if (null? ls)
+                         a
+                       (iter (cdr ls) (cons (car ls) a))))))
+      (iter ls '()))))
+
+(define reversei
+  (lambda (ls)
+    (let loop ((ls ls) (a '()))
+      (if (null? ls)
+          a
+          (loop (cdr ls) (cons (car ls) a))))))
+
+;;; リストの探索
+
+(define memq
+  (lambda (x ls)
+    (if (null? ls)
+        false
+        (if (eq? x (car ls))
+            ls
+          (memq x (cdr ls))))))
+
+(define memv
+  (lambda (x ls)
+    (if (null? ls)
+        false
+        (if (eqv? x (car ls))
+            ls
+          (memv x (cdr ls))))))
+
+;;; 連想リストの探索
+
+(define assq
+  (lambda (x ls)
+    (if (null? ls)
+        false
+      (if (eq? x (car (car ls)))
+          (car ls)
+        (assq x (cdr ls))))))
+
+(define assv
+  (lambda (x ls)
+    (if (null? ls)
+        false
+      (if (eqv? x (car (car ls)))
+          (car ls)
+        (assv x (cdr ls))))))
+
+;;; 高階関数
+
+(define map
+  (lambda (fn ls)
+    (if (null? ls)
+        '()
+      (cons (fn (car ls)) (map fn (cdr ls))))))
+
+(define map-2
+  (lambda (fn xs ys)
+    (if (null? xs)
+        '()
+      (cons (fn (car xs) (car ys)) (map-2 fn (cdr xs) (cdr ys))))))
+
+(define filter
+  (lambda (fn ls)
+    (if (null? ls)
+        '()
+      (if (fn (car ls))
+          (cons (car ls) (filter fn (cdr ls)))
+        (filter fn (cdr ls))))))
+
+(define fold-right
+  (lambda (fn a ls)
+    (if (null? ls)
+        a
+      (fn (car ls) (fold-right fn a (cdr ls))))))
+
+(define fold-left
+  (lambda (fn a ls)
+    (if (null? ls)
+        a
+      (fold-left fn (fn a (car ls)) (cdr ls)))))
+
+;;; マクロ
+
+; let, named-let
+(define-macro let
+  (lambda (args . body)
+    (if (pair? args)
+        `((lambda ,(map car args) ,@body) ,@(map cadr args))
+      ; named-let
+      `(letrec ((,args (lambda ,(map car (car body)) ,@(cdr body))))
+        (,args ,@(map cadr (car body)))))))
+
+; and
+(define-macro and
+  (lambda args
+    (if (null? args)
+        true
+      (if (null? (cdr args))
+          (car args)
+        `(if ,(car args) (and ,@(cdr args)) false)))))
+
+; or
+(define-macro or
+  (lambda args
+    (if (null? args)
+        false
+      (if (null? (cdr args))
+          (car args)
+        `(let ((+value+ ,(car args)))
+          (if +value+ +value+ (or ,@(cdr args))))))))
+
+; let*
+(define-macro let*
+  (lambda (args . body) 
+    (if (null? (cdr args))
+        `(let (,(car args)) ,@body)
+      `(let (,(car args)) (let* ,(cdr args) ,@body)))))
+
+; letrec
+(define-macro letrec
+  (lambda (args . body)
+    (let ((vars (map car args))
+          (vals (map cadr args)))
+      `(let ,(map (lambda (x) `(,x '*undef*)) vars)
+            ,@(map-2 (lambda (x y) `(set! ,x ,y)) vars vals)
+            ,@body))))
+
+; begin
+(define-macro begin
+  (lambda args
+    (if (null? args)
+        `((lambda () '*undef*))
+      `((lambda () ,@args)))))
+
+
+; cond
+(define-macro cond
+  (lambda args
+    (if (null? args)
+        '*undef*
+      (if (eq? (caar args) 'else)
+          `(begin ,@(cdar args))
+        (if (null? (cdar args))
+            `(let ((+value+ ,(caar args)))
+              (if +value+ +value+ (cond ,@(cdr args))))
+          `(if ,(caar args)
+               (begin ,@(cdar args))
+            (cond ,@(cdr args))))))))
+
+; case
+(define-macro case
+  (lambda (key . args)
+    (if (null? args)
+        '*undef*
+      (if (eq? (caar args) 'else)
+          `(begin ,@(cdar args))
+        `(if (memv ,key ',(caar args))
+             (begin ,@(cdar args))
+           (case ,key ,@(cdr args)))))))
+
+; do
+(define-macro do
+  (lambda (var-form test-form . args)
+    (let ((vars (map car var-form))
+          (vals (map cadr var-form))
+          (step (map cddr var-form)))
+      `(letrec ((loop (lambda ,vars
+                              (if ,(car test-form)
+                                  (begin ,@(cdr test-form))
+                                (begin
+                                  ,@args
+                                  (loop ,@(map-2 (lambda (x y)
+                                                   (if (null? x) y (car x)))
+                                                 step
+                                                 vars)))))))
+        (loop ,@vals)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb12.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb14.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

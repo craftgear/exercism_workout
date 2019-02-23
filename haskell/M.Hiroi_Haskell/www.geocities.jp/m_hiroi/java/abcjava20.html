@@ -1,0 +1,862 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>続・お気楽 Java プログラミング入門</title>
+  <meta name="description" content="Java,Java入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881776</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Java Programming</h1>
+<h2>続・お気楽 Java プログラミング入門</h2>
+<div class="small">
+[ <a href="abcjava19.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava21.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>継続渡しスタイル</h3>
+<p> 今回は「継続渡しスタイル (Continuation Passing Style : CPS)」という手法について説明します。Scheme には「継続」という他の言語 <sup><a href="abcjava20.html#note1">[*1]</a></sup> にはない強力な機能がありますが、使いこなすのはちょっと難しいといわれています。継続渡しスタイルはクロージャを使った汎用的な方法で、クロージャがあるプログラミング言語であれば、継続渡しスタイルでプログラムを作成することができます。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 実は Ruby にも「継続」があります。また、標準的な機能ではありませんが、関数型言語の SML/NJ や OCaml でも拡張機能を使って「継続」を取り扱うことができます。
+</div>
+<h4>●継続とは？</h4>
+<p> 最初に継続について簡単に説明します。継続は「次に行われる計算」のことです。たとえば、次のプログラムを例に考えてみましょう。
+</p>
+
+<pre class="list">
+リスト : 逐次実行
+
+public class sample200 {
+  static void foo() { System.out.println("foo"); }
+
+  static void bar() { System.out.println("bar"); }
+
+  static void baz() { System.out.println("baz"); }
+
+  static void test() {
+    foo(); bar(); baz();
+  }
+
+  public static void main(String[] args) {
+    test();
+  }
+}
+</pre>
+<pre>
+C&gt;java sample200
+foo
+bar
+baz
+</pre>
+
+<p> メソッド test() はメソッド foo(), bar(), baz() を順番に呼び出します。foo() の次に実行される処理は bar(), baz() の関数呼び出しです。この処理が foo() を呼び出したあとの「継続」になります。同様に、bar() のあとに実行されるのは baz() の呼び出しで、この処理がこの時点での「継続」になります。また、baz() を呼び出したあと、test() の中では次に実行する処理はありませんが、test() は関数呼び出しされているので、関数呼び出しから元に戻る処理が baz() を呼び出したあとの「継続」になります。
+</p>
+
+<p> このように、あるプログラムを実行しているとき、そのプログラムを終了するまでには「次に実行する処理 (計算)」が必ず存在します。一般に、この処理 (計算) のことを「継続」といいます。Scheme の場合、次の計算を続行するための情報を取り出して、それを保存することができます。Scheme では、この保存した情報を「継続」といって、通常のデータ型と同様に取り扱うことができます。つまり、継続を変数に代入したり関数の引数に渡すことができるのです。継続を使うとプログラムの実行を途中で中断し、あとからそこに戻ってプログラムの実行を再開することができます。
+</p>
+
+<h4>●継続渡しスタイルとは？</h4>
+<p> 一般のプログラミング言語では、Scheme のように継続を取り出して保存することはできません。そこで、継続 (次に行う処理) を関数 (クロージャ) で表して、それを引数に渡して実行することにします。これを「継続渡しスタイル (CPS)」といいます。たとえば、次の例を見てください。
+</p>
+
+<pre class="list">
+リスト : 継続渡しスタイル
+
+import java.util.function.*;
+
+public class sample201 {
+  static void foo() { System.out.println("foo"); }
+
+  static void bar() { System.out.println("bar"); }
+
+  static void baz() { System.out.println("baz"); }
+
+  static void testCps(Runnable cont) {
+    foo(); bar(); cont.run();
+  }
+
+  public static void main(String[] args) {
+    testCps(sample201::baz);
+    testCps(() -&gt; System.out.println("oops!!"));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample201
+foo
+bar
+baz
+foo
+bar
+oops!!
+</pre>
+
+<p> 関数 testCps() は foo(), bar() を呼び出したあと、引数 cont に渡された処理 (継続) を実行します。Runnable は引数が無くて返り値が void を表す関数型インターフェースです。メソッド baz() を渡せば foo, bar, baz と表示されますし、他の処理を渡せばそれを実行することができます。
+</p>
+
+<p> もう一つ簡単な例を示しましょう。継続に値を渡して処理を行うこともできます。
+</p>
+<pre class="list">
+リスト : 継続渡しスタイル (2)
+
+import java.util.function.*;
+
+public class sample202 {
+  static int addCps(int a, int b, Function&lt;Integer, Integer&gt; cont) {
+    return cont.apply(a + b);
+  }
+
+  public static void main(String[] args) {
+    System.out.println(addCps(10, 20, x -&gt; x));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample202
+30
+</pre>
+<p> 関数 addCps() は引数 a と b を加算して、その結果を継続 cont に渡します。cont に x -&gt; x を渡せば、計算結果を返すことができます。
+</p>
+
+<h4>●再帰呼び出しと継続渡しスタイル</h4>
+<p> CPS を使うと再帰呼び出しを「末尾再帰」に変換することができます。たとえば、階乗の計算を CPS でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 階乗の計算 (CPS)
+
+import java.util.function.*;
+
+public class sample203 {
+  static long factCps(long n, Function&lt;Long, Long&gt; cont) {
+    if (n == 0)
+      return cont.apply(1L);
+    else
+      return factCps(n - 1, x -&gt; cont.apply(n * x));
+  }
+
+  public static void main(String[] args) {
+    for (int i = 0; i &lt; 20; i++) {
+      System.out.println(factCps(i, x -&gt; x));
+    }
+  }
+}
+</pre>
+<pre>
+C&gt;java sample203
+1
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+39916800
+479001600
+6227020800
+87178291200
+1307674368000
+20922789888000
+355687428096000
+6402373705728000
+121645100408832000
+</pre>
+<p> 引数 cont が継続を表します。n = 0 のときは、cont に階乗の値 1 を渡します。それ以外の場合は、階乗の計算を継続の処理にまかせて factCps() を再帰呼び出します。ここで、factCps() の呼び出しは末尾再帰になることに注意してください。
+</p>
+<p> 継続の処理  x -&gt; cont(n * x) では、継続の引数 x と factCps() の引数 n を掛け算して、その結果を cont に渡します。この中で階乗の式が組み立てられていきます。そして、n = 0 のとき継続 cont に引数 1 を渡して評価すると、今までに組み立てられた式が評価されて階乗の値を求めることができます。
+</p>
+<p> つまり、n の階乗を求めるとき、継続 x -&gt; cont (n * x) の引数 x には n - 1 の階乗の値が渡されていくわけです。そして、最後に継続 x -&gt; x に n の階乗の値が渡されるので、階乗の値を返すことができます。
+</p>
+
+
+<h4>●二重再帰と継続渡しスタイル</h4>
+<p> 次はフィボナッチ数列を求める関数を CPS で作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : フィボナッチ関数
+
+import java.util.function.*;
+
+public class sample204 {
+  static long fiboCps(long n, Function&lt;Long, Long&gt; cont) {
+    if (n &lt; 2)
+      return cont.apply(n);
+    else
+      return fiboCps(n - 1, x -&gt; fiboCps(n - 2, y -&gt; cont.apply(x + y)));
+  }
+
+  public static void main(String[] args) {
+    for (long i = 0; i &lt;= 14; i++)
+      System.out.println(fiboCps(i, x -&gt; x));
+  }
+}
+</pre>
+<p> メソッド fiboCps(n, cont) は、引数 n が 0 または 1 のとき cont.apply(n) を評価します。それ以外の場合は fiboCps() を再帰呼び出しします。n - 1 の値が求まると、その値は fiboCps(n - 1, x -&gt; ...) の継続の引数 x に渡されます。継続の中で、今度は n - 2 の値を求めます。すると、その値は fiboCps(n - 2, y -&gt; ...) の継続の引数 y に渡されます。したがって、fiboCps(n, cont) の n の値は x + y で求めることができます。この値を継続 cont に渡せばいいわけです。
+</p>
+
+<p> fiboCps() の実行を図に示すと、次のようになります。
+</p>
+<pre class="fig">
+f(5) ┬ f(4) ┬ f(3) ┬ f(2) ┬ f(1)
+     │      │      │      │
+    cont    cont    cont    cont
+     │      │      │      └ f(0)
+     │      │      └ f(1)
+     │      └ f(2) ┬ f(1)
+     │              │
+     │             cont
+     │              └ f(0)
+     │
+     └ f(3) ┬ f(2) ┬ f(1)
+             │      │
+            cont    cont
+             │      └ f(0)
+             └ f(1)
+
+    図 : fibo_cps の実行
+</pre>
+<p> cont は継続を表します。fiboCps() は末尾再帰になっているので、n - 1 の値を求めるために左から右へ処理が進みます。このとき、n - 2 の値を求める継続 cont が生成されていくことに注意してください。そして、f(1) の実行が終了すると継続が評価され、n - 2 の値が求められます。すると、2 番目の継続が評価されて n - 1 の値 x と n - 2 の値 y を加算して、その値を継続 cont に渡します。こうして、次々と継続が評価されてフィボナッチ関数の値を求めることができます。
+</p>
+
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+C&gt;java sample204
+0
+1
+1
+2
+3
+5
+8
+13
+21
+34
+55
+89
+144
+233
+Exception in thread "main" java.lang.StackOverflowError
+</pre>
+<p> 残念ながら、単純な二重再帰で求めることができる値でも、fiboCps() ではエラーになってしまいました。Java は末尾再帰の最適化を行っていないので、CPS との相性はあまりよくないようです。
+</p>
+
+<h4>●CPS の便利な使い方</h4>
+<p> 階乗やフィボナッチ関数の場合、CPS に変換するメリットはほとんどありませんが、場合によっては CPS に変換した方が簡単にプログラムできることもあります。簡単な例として、連結リスト ImList を平坦化するメソッド flatten() を取り上げます。最初に、flatten() の定義を示します。
+</p>
+<pre class="list">
+リスト : リストの平坦化
+
+import immutable.*;
+import static immutable.ImList.*;
+
+public class sample205 {
+  static &lt;E&gt; ImList&lt;E&gt; flatten(ImList&lt;ImList&lt;E&gt;&gt; xs) {
+    if (xs.isEmpty())
+      return nil();
+    else
+      return xs.first().append(flatten(xs.rest()));
+  }
+
+  public static void main(String[] args) {
+    ImList&lt;ImList&lt;Integer&gt;&gt; xs = of(of(1,2,3), of(4,5,6), of(7,8,9));
+    ImList&lt;ImList&lt;Integer&gt;&gt; ys = of(of(1,2,3), nil(), of(7,8,9));
+    System.out.println(xs);
+    System.out.println(flatten(xs));
+    System.out.println(ys);
+    System.out.println(flatten(ys));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample205
+((1 2 3) (4 5 6) (7 8 9))
+(1 2 3 4 5 6 7 8 9)
+((1 2 3) () (7 8 9))
+(1 2 3 7 8 9)
+</pre>
+<p> プログラムは特に難しいところはないと思います。この定義では、リストの要素に空リストがあっても平坦化することができます。そこで、リストの要素に空リストが含まれていたら、平坦化せずに空リストを返すようにプログラムを修正してみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : リストの平坦化 (間違い)
+
+import immutable.*;
+import static immutable.ImList.*;
+
+public class sample206 {
+  static &lt;E&gt; ImList&lt;E&gt; flatten(ImList&lt;ImList&lt;E&gt;&gt; xs) {
+    if (xs.isEmpty())
+      return nil();
+    else if (xs.first().isEmpty())
+      return nil();
+    else
+      return xs.first().append(flatten(xs.rest()));
+  }
+
+  public static void main(String[] args) {
+    ImList&lt;ImList&lt;Integer&gt;&gt; xs = of(of(1,2,3), of(4,5,6), of(7,8,9));
+    ImList&lt;ImList&lt;Integer&gt;&gt; ys = of(of(1,2,3), of(4,5,6), nil(), of(7,8,9));
+    System.out.println(xs);
+    System.out.println(flatten(xs));
+    System.out.println(ys);
+    System.out.println(flatten(ys));
+  }
+}
+</pre>
+<p> flatten() は要素に空リストを見つけたら空リストを返していますが、これでは正常に動作しません。実際に試してみると次のようになります。
+</p>
+<pre>
+C&gt;java sample206
+((1 2 3) (4 5 6) (7 8 9))
+(1 2 3 4 5 6 7 8 9)
+((1 2 3) (4 5 6) () (7 8 9))
+(1 2 3 4 5 6)
+</pre>
+<p> 2 番目の例が空リストを含む場合です。この場合、空リストを返したいのですが、その前の要素を連結したリストを返しています。空リストを見つける前にリストの連結処理を行っているので、空リストを見つけたらその処理を廃棄しないといけないのです。
+</p>
+
+<p> このような場合、CPS を使うと簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : リストの平坦化 (CPS)
+
+import immutable.*;
+import static immutable.ImList.*;
+import java.util.function.*;
+
+public class sample207 {
+  static &lt;E&gt; ImList&lt;E&gt; flattenCps(ImList&lt;ImList&lt;E&gt;&gt; xs, Function&lt;ImList&lt;E&gt;, ImList&lt;E&gt;&gt; cont) {
+    if (xs.isEmpty())
+      return cont.apply(nil());
+    else if (xs.first().isEmpty())
+      return nil();
+    else
+      return flattenCps(xs.rest(), ys -&gt; cont.apply(xs.first().append(ys)));
+  }
+
+  public static void main(String[] args) {
+    ImList&lt;ImList&lt;Integer&gt;&gt; xs = of(of(1,2,3), of(4,5,6), of(7,8,9));
+    ImList&lt;ImList&lt;Integer&gt;&gt; ys = of(of(1,2,3), of(4,5,6), nil(), of(7,8,9));
+    System.out.println(xs);
+    System.out.println(flattenCps(xs, x -&gt; x));
+    System.out.println(ys);
+    System.out.println(flattenCps(ys, y -&gt; y));
+  }
+}
+</pre>
+<p> flatten() を CPS に変換するのは簡単です。リスト xs の先頭の要素 xs.first() と平坦化したリストの連結を継続で行うだけです。平坦化したリストは継続の引数 ys に渡されるので、xs.first().append(ys) でリストを連結して、それを継続 cont に渡せばいいわけです。
+</p>
+<p> 引数のリストが空リストになったら継続 cont に空リストを渡して評価します。これで、リストの連結処理が行われます。もしも、途中で空リストを見つけた場合は、空リストをそのまま返します。この場合、継続 cont は評価されないので、リストの連結処理は行われず、空リストをそのまま返すことができます。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+C&gt;java sample207
+((1 2 3) (4 5 6) (7 8 9))
+(1 2 3 4 5 6 7 8 9)
+((1 2 3) (4 5 6) () (7 8 9))
+()
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●二分木の巡回を CPS で実装</h4>
+<p> 次は二分木を巡回するプログラムを CPS で作ってみましょう。今回は Java のお勉強も兼ねて、immutable な二分木 ImTree&lt;E&gt; を作ることにします。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : immutable な二分木
+
+package immutable;
+
+import java.util.function.*;
+import immutable.*;
+
+public final class ImTree&lt;E extends Comparable&lt;? super E&gt;&gt; {
+  private final E item;
+  private final ImTree&lt;E&gt; left;
+  private final ImTree&lt;E&gt; right;
+
+  private ImTree(E x, ImTree&lt;E&gt; l, ImTree&lt;E&gt; r) {
+    item = x;
+    left = l;
+    right = r;
+  }
+
+  // 終端
+  private static final ImTree&lt;?&gt; NIL = new ImTree&lt;&gt;(null, null, null);
+  public static &lt;E extends Comparable&lt;? super E&gt;&gt; ImTree&lt;E&gt; nil() {
+    @SuppressWarnings("unchecked")
+    ImTree&lt;E&gt; t = (ImTree&lt;E&gt;)NIL;
+    return t;
+  }
+
+  public boolean isEmpty() { return this == NIL; }
+
+  // メソッドの定義
+  ・・・ 省略 ・・・
+
+}
+</pre>
+<p> フィールド変数 item に要素、left に左部分木、right に右部分木を格納します。二分木の操作は拙作のページ <a href="abcjava14.html">二分木</a> で作成したクラス BinaryTree の内部クラス Node の操作メソッドとほとんど同じです。下表に ImTree&lt;E&gt; のメソッドを示します。
+</p>
+<table border=1>
+<caption>表 : ImTree&lt;E&gt; のメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>static ImTree&lt;E&gt; nil()</td><td>空の木を返す</td></tr>
+  <tr><td>boolean isEmpty()</td><td>空の木ならば真を返す</td></tr>
+  <tr><td>boolean contains(E x)</td><td>二分木に x が含まれていれば真を返す</td></tr>
+  <tr><td>ImTree&lt;E&gt; add(E x)</td><td>x を二分木に追加する</td></tr>
+  <tr><td>ImTree&lt;E&gt; remove(E x)</td><td>二分木から x を削除する</td></tr>
+  <tr><td>E first()</td><td>最小値を返す</td></tr>
+  <tr><td>E last(E x)</td><td>最大値を返す</td></tr>
+  <tr><td>ImTree&lt;E&gt; removeFirst()</td><td>最小値を削除する</td></tr>
+  <tr><td>ImTree&lt;E&gt; removeLast()</td><td>最大値を削除する</td></tr>
+  <tr><td>void forEach(Consumer&lt;? super E&gt; action)</td><td>二分木を巡回する</td></tr>
+  <tr><td>String toString()</td><td>文字列に変換する</td></tr>
+  <tr><td>LazyStream&lt;E&gt; toStream()</td><td>LazyStream&lt;E&gt; に変換する</td></tr>
+</tbody>
+</table>
+<p> 詳細は <a href="abcjava20.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<p> 二分木を巡回するメソッド forEach() は次のようになります。
+</p>
+<pre class="list">
+リスト : 二分木の巡回
+
+  public void forEach(Consumer&lt;? super E&gt; action) {
+    if (!isEmpty()) {
+      left.forEach(action);
+      action.accept(item);
+      right.forEach(action);
+    }
+  }
+</pre>
+<p> forEach() は二重再帰になっています。そこで、action の評価と右部分木の巡回は継続で行うことにします。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 二分木の巡回 (CPS)
+
+  private void forEachSub(Consumer&lt;? super E&gt; action, Runnable cont) {
+    if (isEmpty())
+      cont.run();
+    else
+      left.forEachSub(action, () -&gt; {
+        action.accept(item);
+        right.forEachSub(action, () -&gt; cont.run());
+      });
+  }
+
+  public void forEachCsp(Consumer&lt;? super E&gt; action) {
+    forEachSub(action, () -&gt; {});
+  }
+</pre>
+<p> 実際の処理は forEachSub() で行います。forEachCsp() は副作用が目的なので、継続に値を渡す必要はありません。forEachSub() を呼び出すときは継続に () -&gt; {} を渡します。これで引数が無くて返り値が void のラムダ式になります。
+</p>
+<p> forEachSub() は左部分木をたどっていくとき、action と右部分木をたどる処理が継続 (クロージャ) に保存されます。そして、木の終端に到達したら cont.run() を実行します。これで継続に保存されていた処理が実行されます。継続の中で action を評価し、そのあと右部分木をたどり、その継続の中で cont.run() を評価するだけです。これで二分木を巡回することができます。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre class="list">
+リスト : forEachCps() のテスト
+
+import immutable.*;
+
+public class sample208 {
+  public static void main(String[] args) {
+    ImTree&lt;Integer&gt; tree = ImList.of(5,7,3,2,4,6,8,1,9).foldLeft((a, x) -&gt; a.add(x), ImTree.nil());
+    tree.forEach(System.out::print);
+    System.out.println("");
+    tree.forEachCps(System.out::print);
+    System.out.println("");
+  }
+}
+</pre>
+<pre>
+C&gt;java sample208
+123456789
+123456789
+</pre>
+<p> このように、forEachSub() で二分木を通りがけ順で巡回することができます。
+</p>
+<h4>●二分木と遅延ストリーム</h4>
+<p> 二分木の巡回を CPS に変換すると、遅延ストリームに対応するのも簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : LazyStream に変換する
+
+  private LazyStream&lt;E&gt; streamSub(Supplier&lt;LazyStream&lt;E&gt;&gt; cont) {
+    if (isEmpty())
+      return cont.get();
+    else
+      return left.streamSub(() -&gt; LazyStream.cons(item, () -&gt; right.streamSub(() -&gt; cont.get())));
+  }
+
+  public LazyStream&lt;E&gt; toStream() {
+    return streamSub(() -&gt; LazyStream.nil());
+  }
+</pre>
+
+<p> toStream() は二分木を巡回してその要素を順番に出力する遅延ストリームを生成します。実際の処理は streamSub() で行います。forEachCps() は継続の中でメソッド action を評価しましたが、streamSub() は継続の中で遅延ストリーム LazyStream.cons (item, ...) を返します。そして、そのラムダ式の中で右部分木をたどり、その継続の中で cont.get() を呼び出します。
+</p>
+<p> なお、toStream() で streamSub() を呼び出すときに渡す継続が一番最後に呼び出されるので、終端を表す LazyStream.nil() を返すように定義してください。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre class="list">
+リスト : toStream() の例
+
+import immutable.*;
+
+public class sample209 {
+  public static void main(String[] args) {
+    ImTree&lt;Integer&gt; tree = ImList.of(5,7,3,2,4,6,8,1,9).foldLeft((a, x) -&gt; a.add(x), ImTree.nil());
+    LazyStream&lt;Integer&gt; xs = tree.toStream();
+    xs.forEach(System.out::print);
+    System.out.println("");
+    System.out.println(xs.foldLeft((c, x) -&gt; c + 1, 0));
+    System.out.println(xs.foldLeft((sum, x) -&gt; sum + x, 0));
+  }
+}
+</pre>
+<pre>
+C&gt;java sample209
+123456789
+9
+45
+</pre>
+<h4>●部分集合の判定</h4>
+<p> toStream() を使うと、2 つの二分木 xs, ys が等しいか判定する述語 isEqual(xs, ys) や部分集合を判定する isSubset(xs, ys) を簡単に定義することができます。xs, ys の要素がすべて等しい場合、isEqual() は true を返します。xs の要素がすべて ys に含まれている場合、isSubset() は true を返します。つまり、二分木を集合として扱うわけです。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 部分集合の判定
+
+import immutable.*;
+
+public class sample20a {
+  static &lt;E extends Comparable&lt;E&gt;&gt; boolean isEqual(ImTree&lt;E&gt; xs, ImTree&lt;E&gt; ys) {
+    LazyStream&lt;E&gt; xs1 = xs.toStream();
+    LazyStream&lt;E&gt; ys1 = ys.toStream();
+    while (!xs1.isEmpty() &amp;&amp; !ys1.isEmpty()) {
+      E x = xs1.first();
+      E y = ys1.first();
+      if (!x.equals(y)) return false;
+      xs1 = xs1.rest();
+      ys1 = ys1.rest();
+    }
+    return xs1.isEmpty() &amp;&amp; ys1.isEmpty();
+  }
+
+  static &lt;E extends Comparable&lt;E&gt;&gt; boolean isSubset(ImTree&lt;E&gt; xs, ImTree&lt;E&gt; ys) {
+    LazyStream&lt;E&gt; xs1 = xs.toStream();
+    LazyStream&lt;E&gt; ys1 = ys.toStream();
+    while (!xs1.isEmpty() &amp;&amp; !ys1.isEmpty()) {
+      E x = xs1.first();
+      E y = ys1.first();
+      int r = x.compareTo(y);
+      if (r == 0) {
+        xs1 = xs1.rest();
+        ys1 = ys1.rest();
+      } else if (r &gt; 0) {
+        ys1 = ys1.rest();
+      } else {
+        return false;
+      }
+    }
+    return xs1.isEmpty();
+  }
+
+  public static void main(String[] args) {
+    ImTree&lt;Integer&gt; xs = ImList.of(2,5,6,4,7,3,1).foldLeft((a, x) -&gt; a.add(x), ImTree.nil());
+    ImTree&lt;Integer&gt; ys = ImList.of(1,4,3,5,7,6,2).foldLeft((a, x) -&gt; a.add(x), ImTree.nil());
+    System.out.println(isEqual(xs, ys));
+    System.out.println(isEqual(xs, ys.add(8)));
+    System.out.println(isSubset(xs, ys.add(8)));
+    System.out.println(isSubset(xs, ys.remove(5)));
+  }
+}
+</pre>
+<p> isEqual() は遅延ストリームから要素を順番に取り出して、それが等しいかチェックするだけです。isSubset() は遅延ストリーム xs1 と ys1 が空でなければ、要素 x, y を取り出して比較します。等しい場合は次の要素を調べます。x が大きい場合、ys1 の次の要素を調べます。y が大きい場合、y より小さな要素は ys に存在しないので、x は ys に含まれていないことがわかります。ここで false を返します。while ループを終了して、xs1 が空であれば xs は ys の部分集合です。xs1 が空でなければ ys1 が空になったので、xs は ys の部分集合ではないことがわかります。
+</p>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+C&gt;java sample20a
+true
+false
+true
+false
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// ImTree.java : immutable な二分木
+//
+//               Copyright (C) 2016 Makoto Hiroi
+//
+package immutable;
+
+import java.util.function.*;
+import immutable.*;
+
+public final class ImTree&lt;E extends Comparable&lt;? super E&gt;&gt; {
+  private final E item;
+  private final ImTree&lt;E&gt; left;
+  private final ImTree&lt;E&gt; right;
+
+  private ImTree(E x, ImTree&lt;E&gt; l, ImTree&lt;E&gt; r) {
+    item = x;
+    left = l;
+    right = r;
+  }
+
+  // 終端
+  private static final ImTree&lt;?&gt; NIL = new ImTree&lt;&gt;(null, null, null);
+  public static &lt;E extends Comparable&lt;? super E&gt;&gt; ImTree&lt;E&gt; nil() {
+    @SuppressWarnings("unchecked")
+    ImTree&lt;E&gt; t = (ImTree&lt;E&gt;)NIL;
+    return t;
+  }
+
+  public boolean isEmpty() { return this == NIL; }
+
+  // 探索
+  public boolean contains(E x) {
+    ImTree&lt;E&gt; node = this;
+    while (!node.isEmpty()) {
+      int r = x.compareTo(node.item);
+      if (r == 0) return true;
+      else if (r &lt; 0)
+        node = node.left;
+      else
+        node = node.right;
+    }
+    return false;
+  }
+    
+  // 挿入
+  public ImTree&lt;E&gt; add(E x) {
+    if (isEmpty()) {
+      return new ImTree&lt;E&gt;(x, nil(), nil());
+    } else {
+      int r = x.compareTo(item);
+      if (r == 0)
+        return new ImTree&lt;E&gt;(x, left, right);
+      else if (r &lt; 0)
+        return new ImTree&lt;E&gt;(item, left.add(x), right);
+      else
+        return new ImTree&lt;E&gt;(item, left, right.add(x));
+    }
+  }
+
+  // 最小値を探す
+  public E first() {
+    if (isEmpty())
+      throw new IndexOutOfBoundsException("ImTree.first()");
+    ImTree&lt;E&gt; node = this;
+    while (!node.left.isEmpty()) node = node.left;
+    return node.item;
+  }
+
+  // 最大値を探す
+  public E last() {
+    if (isEmpty())
+      throw new IndexOutOfBoundsException("ImTree.last()");
+    ImTree&lt;E&gt; node = this;
+    while (!node.right.isEmpty()) node = node.right;
+    return node.item;
+  }
+
+  // 最小値の節を削除
+  public ImTree&lt;E&gt; removeFirst() {
+    if (isEmpty())
+      throw new IndexOutOfBoundsException("ImTree.removeFirst()");
+    else if (left.isEmpty())
+      return right;
+    else
+      return new ImTree&lt;E&gt;(item, left.removeFirst(), right);
+  }
+
+  // 最大値の節を削除
+  public ImTree&lt;E&gt; removeLast() {
+    if (isEmpty())
+      throw new IndexOutOfBoundsException("ImTree.removeLast()");
+    else if (right.isEmpty())
+      return left;
+    else
+      return new ImTree&lt;E&gt;(item, left, right.removeLast());
+  }
+
+  // 削除
+  public ImTree&lt;E&gt; remove(E x) {
+    if (!isEmpty()) {
+      int r = x.compareTo(item);
+      if (r == 0) {
+        if (left.isEmpty()) return right;
+        if (right.isEmpty()) return left;
+        return new ImTree&lt;E&gt;(right.first(), left, right.removeFirst());
+      } else if (r &lt; 0) {
+        return new ImTree&lt;E&gt;(item, left.remove(x), right);
+      } else {
+        return new ImTree&lt;E&gt;(item, left, right.remove(x));
+      }
+    }
+    return this;
+  }
+
+  // 巡回
+  public void forEach(Consumer&lt;? super E&gt; action) {
+    if (!isEmpty()) {
+      left.forEach(action);
+      action.accept(item);
+      right.forEach(action);
+    }
+  }
+
+  // CPS 版
+  private void forEachSub(Consumer&lt;? super E&gt; action, Runnable cont) {
+    if (isEmpty())
+      cont.run();
+    else
+      left.forEachSub(action, () -&gt; {
+        action.accept(item);
+        right.forEachSub(action, () -&gt; cont.run());
+      });
+  }
+
+  public void forEachCsp(Consumer&lt;? super E&gt; action) {
+    forEachSub(action, () -&gt; {});
+  }
+
+  // LazyStream に変換
+  private LazyStream&lt;E&gt; streamSub(Supplier&lt;LazyStream&lt;E&gt;&gt; cont) {
+    if (isEmpty())
+      return cont.get();
+    else
+      return left.streamSub(() -&gt; LazyStream.cons(item, () -&gt; right.streamSub(() -&gt; cont.get())));
+  }
+
+  public LazyStream&lt;E&gt; toStream() {
+    return streamSub(() -&gt; LazyStream.nil());
+  }
+  
+  // 文字列に変換
+  public String toString() {
+    String[] s = {""};
+    forEach(x -&gt; s[0] += x.toString() + " ");
+    return "(" + s[0].trim() + ")";
+  }
+}
+</pre>
+<h4>●簡単なテスト</h4>
+<pre class="list">
+リスト : 簡単なテスト
+
+import java.util.*;
+import immutable.*;
+
+public class imtreetest {
+  public static void main(String[] args) {
+    ArrayList&lt;Integer&gt; buffer = new ArrayList&lt;&gt;();
+    for (int i = 1; i &lt;= 100; i++) buffer.add(i);
+    Collections.shuffle(buffer);
+    ImTree&lt;Integer&gt; tree = ImTree.nil();
+    System.out.println(tree.isEmpty());
+    for (int i: buffer) tree = tree.add(i);
+    System.out.println(tree.isEmpty());
+    System.out.println(tree);
+    
+    System.out.println(tree.contains(0));
+    System.out.println(tree.contains(1));
+    System.out.println(tree.contains(50));
+    System.out.println(tree.contains(51));
+    System.out.println(tree.contains(100));
+    System.out.println(tree.contains(101));
+
+    ImTree&lt;Integer&gt; tree2 = tree;
+    for (int i = 1; i &lt;= 50; i++) tree2 = tree2.remove(i * 2);
+    System.out.println(tree2);
+    System.out.println(tree.contains(1));
+    System.out.println(tree.contains(100));
+    System.out.println(tree2.contains(1));
+    System.out.println(tree2.contains(100));
+    System.out.println(tree.first());
+    System.out.println(tree2.first());
+    System.out.println(tree.last());
+    System.out.println(tree2.last());
+    System.out.println(tree.removeFirst().first());
+    System.out.println(tree2.removeFirst().first());
+    System.out.println(tree.removeLast().last());
+    System.out.println(tree2.removeLast().last());
+
+    LazyStream&lt;Integer&gt; zs  = tree.toStream();
+    LazyStream&lt;Integer&gt; zs2 = tree2.toStream();
+    System.out.println(zs.foldLeft((sum, x) -&gt; sum + x, 0));
+    System.out.println(zs2.foldLeft((sum, x) -&gt; sum + x, 0));
+  }
+}
+</pre>
+<h4>●実行結果</h4>
+<pre>
+C&gt;java imtreetest
+true
+false
+(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 
+30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56
+57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80 81 82 83
+ 84 85 86 87 88 89 90 91 92 93 94 95 96 97 98 99 100)
+false
+true
+true
+true
+true
+false
+(1 3 5 7 9 11 13 15 17 19 21 23 25 27 29 31 33 35 37 39 41 43 45 47 49 51 53 55
+57 59 61 63 65 67 69 71 73 75 77 79 81 83 85 87 89 91 93 95 97 99)
+true
+true
+true
+false
+1
+1
+100
+99
+2
+3
+99
+97
+5050
+2500
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcjava19.html">PrevPage</a> | <a href="index.html">Java</a> | <a href="abcjava21.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

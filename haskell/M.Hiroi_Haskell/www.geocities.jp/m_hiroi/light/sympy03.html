@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 SymPy プログラミング超入門 </title>
+  <meta name="description" content="Python,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881763</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Python3 Programming</h1>
+<h2>お気楽 SymPy プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="python3.html#sympy_abc">Python3</a> ]
+<hr>
+</div>
+<section class="contents">
+<h4 id="abc09">●論理代数</h4>
+<ul>
+  <li>SymPy には真偽値を表す専用のクラス Boolean が用意されている</li>
+  <ul>
+    <li>S.true, 真を表すシングルトンオブジェクト</li>
+    <li>S.false, 偽を表すシングルトンオブジェクト</li>
+  </ul>
+  <li>論理演算</li>
+  <ul>
+    <li>否定, ~, Not()</li>
+    <li>論理積, &amp;, And()</li>
+    <li>論理和, |, Or()</li>
+    <li>排他的論理和, ^, Xor()</li>
+    <li>否定論理積, Nand(), (= Not(And(...))</li>
+    <li>否定論理和, Nor(), (= Not(Or(...))</li>
+    <li>論理包含 (含意), &gt;&gt;, &lt;&lt;, Implies()</li>
+    <li>同値, Equivalent()</li>
+    <li>真理値表</li>
+  </ul>
+<pre class="item">
+   P    : False False True  True 
+   Q    : False True  False True 
+--------+-------------------------
+Not P   : True  True  False False
+Not Q   : True  False True  False
+P And Q : False False False True 
+P Or  Q : False True  True  True 
+P Xor Q : False True  True  False
+P Equ Q : True  False False True 
+P Imp Q : True  True  False True 
+Q Imp P : True  False True  True 
+</pre>
+  <ul>
+    <li>同値は P と Q が同じ値 (True と True または False と False) のとき真になる</li>
+    <li>論理包含 P Imp Q は P が真ならば Q の結果に、P が偽ならば Q の結果にかかわらず真となる</li>
+    <li>変数に値を代入するときは Python の真偽値や整数 (0 や 1) を使ってもよい</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.S.true
+True
+&gt;&gt;&gt; type(sy.S.true)
+&lt;class 'sympy.logic.boolalg.BooleanTrue'&gt;
+&gt;&gt;&gt; sy.S.false
+False
+&gt;&gt;&gt; type(sy.S.false)
+&lt;class 'sympy.logic.boolalg.BooleanFalse'&gt;
+
+&gt;&gt;&gt; ~x
+¬x
+&gt;&gt;&gt; x &amp; y
+x ∧ y
+&gt;&gt;&gt; x | y
+x ∨ y
+&gt;&gt;&gt; x ^ y
+x ⊻ y
+&gt;&gt;&gt; x &gt;&gt; y
+x → y
+&gt;&gt;&gt; x &lt;&lt; y
+y → x
+&gt;&gt;&gt; sy.Equivalent(x, y)
+x ⇔ y
+&gt;&gt;&gt; ~x.subs(x, True)
+False
+&gt;&gt;&gt; ~x.subs(x, False)
+True
+&gt;&gt;&gt; (x | y).subs(x, True)
+True
+&gt;&gt;&gt; (x | y).subs(x, False)
+y
+&gt;&gt;&gt; (x &amp; y).subs(x, True)
+y
+&gt;&gt;&gt; (x &amp; y).subs(x, False)
+False
+&gt;&gt;&gt; (x ^ y).subs(x, True)
+¬y
+&gt;&gt;&gt; (x ^ y).subs(x, False)
+y
+&gt;&gt;&gt; (x &gt;&gt; y).subs(x, True)
+y
+&gt;&gt;&gt; (x &gt;&gt; y).subs(x, False)
+True
+&gt;&gt;&gt; sy.Equivalent(x, y).subs(x, True)
+y
+&gt;&gt;&gt; sy.Equivalent(x, y).subs(x, False)
+¬y
+</pre>
+<ul>
+  <li>POSform() と SOPform() は真理値表から論理式を生成する</li>
+<pre class="item">
+POSform(vars, minterms, dontcares=None) =&gt; And_Object
+SOPform(vars, minterms, dontcares=None) =&gt; Or_Object
+</pre>
+  <ul>
+    <li>論理式は not, and, or の組み合わせで実現することができる</li>
+    <li>POSform は Product Of Sum form の略 (乗法標準形)</li>
+    <li>SOPform は Sum Of Product form の略 (加法標準形)</li>
+    <li>vars には変数を格納したリスト</li>
+    <li>minterms には真理値表 (二重のリスト) を渡す (真となるパターンだけ, 残りのパターンは偽となる)</li>
+    <li>dontcares は真偽どちらでもかまわないパターンを渡す</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; a = sy.POSform([x, y], [[0, 1], [1, 0]])
+&gt;&gt;&gt; a
+(x ∨ y) ∧ (¬x ∨ ¬y)
+&gt;&gt;&gt; a.subs([[x, False], [y, False]])
+False
+&gt;&gt;&gt; a.subs([[x, True], [y, False]])
+True
+&gt;&gt;&gt; a.subs([[x, False], [y, True]])
+True
+&gt;&gt;&gt; a.subs([[x, True], [y, True]])
+False
+&gt;&gt;&gt; b = sy.SOPform([x, y], [[0, 1], [1, 0]])
+&gt;&gt;&gt; b
+(x ∧ ¬y) ∨ (y ∧ ¬x)
+&gt;&gt;&gt; b.subs([[x, False], [y, False]])
+False
+&gt;&gt;&gt; b.subs([[x, False], [y, True]])
+True
+&gt;&gt;&gt; b.subs([[x, True], [y, False]])
+True
+&gt;&gt;&gt; b.subs([[x, True], [y, True]])
+False
+</pre>
+<ul>
+  <li>A ∧ B ∧ ... ∧ Z の形の論理式を連言標準形 (Conjunctive Normal Form, CNF) という</li>
+  <li>A ∨ B ∨ ... ∨ Z の形の論理式を選言標準形 (Disjunctive Normal Form, DNF) という</li>
+  <li>is_cnf(expr) は論理式 expr が CNF に変換できるかチェックする</li>
+  <li>to_cnf(expr) は論理式 expr を CNF に変換する</li>
+  <li>is_dnf(expr) は論理式 expr が DNF に変換できるかチェックする</li>
+  <li>to_dnf(expr) は論理式 expr を DNF に変換する</li>
+  <li>変換できない場合は論理式 expr を返す</li>
+  <li>関数 simplify_logic() は論理式を単純化する</li>
+<pre class="item">
+simplify_logic(expr, form=None, deep=True)
+</pre>
+  <ul>
+    <li>form に 'cnf' を指定すると CNF に、'dnf' を指定すると DNF に変換する</li>
+    <li>deep が True だと再帰的に単純化を適応する</li>
+  </ul>
+  <li>関数 satisfiable(expr) は論理式が真となる変数の組み合わせをひとつ返す</li>
+  <ul>
+    <li>真となる組み合わせが見つからない場合は False を返す</li>
+    <li>解が複数ある場合、キーワード引数 all_models=True を設定するとジェネレータを返す</li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.boolalg.is_cnf(x &amp; y &amp; z)
+True
+&gt;&gt;&gt; sy.boolalg.is_cnf(x | y | z)
+True
+&gt;&gt;&gt; sy.boolalg.is_cnf(x &amp; y | z)
+False
+&gt;&gt;&gt; sy.to_cnf(x &amp; y | z)
+(x ∨ z) ∧ (y ∨ z)
+&gt;&gt;&gt; sy.boolalg.is_dnf(x &amp; y | z)
+True
+&gt;&gt;&gt; sy.to_dnf(x &amp; y | z)
+z ∨ (x ∧ y)
+&gt;&gt;&gt; sy.to_cnf(x ^ z)
+(x ∨ z) ∧ (¬x ∨ ¬z)
+&gt;&gt;&gt; sy.to_dnf(x ^ z)
+(x ∧ ¬x) ∨ (x ∧ ¬z) ∨ (z ∧ ¬x) ∨ (z ∧ ¬z)
+
+&gt;&gt;&gt; sy.simplify_logic(x &amp; y | z)
+z ∨ (x ∧ y)
+&gt;&gt;&gt; sy.simplify_logic(x &amp; y | z, form='cnf')
+(x ∨ z) ∧ (y ∨ z)
+&gt;&gt;&gt; sy.simplify_logic(x &amp; y | z, form='dnf')
+z ∨ (x ∧ y)
+&gt;&gt;&gt; a = sy.to_dnf(x ^ z)
+&gt;&gt;&gt; a
+(x ∧ ¬x) ∨ (x ∧ ¬z) ∨ (z ∧ ¬x) ∨ (z ∧ ¬z)
+&gt;&gt;&gt; sy.simplify_logic(a)
+(x ∧ ¬z) ∨ (z ∧ ¬x)
+
+&gt;&gt;&gt; sy.satisfiable(x ^ y)
+{x: True, y: False}
+&gt;&gt;&gt; for a in sy.satisfiable(x ^ y, all_models=True): print(a)
+...
+{x: True, y: False}
+{y: True, x: False}
+&gt;&gt;&gt; sy.satisfiable(False)
+False
+</pre>
+<h4 id="abc10">●等式と不等式</h4>
+<ul>
+  <li>SymPy で等式を表すには Eq(lhs, rhs) を使う</li>
+  <ul>
+    <li>lhs == rhs は Python の等値演算子になる</li>
+    <li>lhs = rhs はシンタックスエラー</li>
+    <li>not equal を表す Ne(lhs, rhs) もある</li>
+    <li>なお、Eq((x + 1)**2, x**2 + 2*x + 1) のような等式の等値は判定できない</li>
+    <li>(x + 1)**2 を expand() で展開すれば True になる</li>
+    <li>方程式を解く関数 solveset() は Eq() を受け付ける</li>
+  </ul>
+  <li>不等式は Lt(), Le(), Gt(), Ge() もしくは演算子 <, <=, >, >= を使う</li>
+  <li>コンストラクタ Xx() でキーワード引数 evaluate=False を指定すると、すぐに評価せずにオブジェクト (式) を返す</li>
+  <li>その場合、メソッド doit() で式を評価する</li>
+</ul>
+<pre>
+&gt;&gt;&gt; a = sy.Eq(x + y, z)
+&gt;&gt;&gt; a
+x + y = z
+&gt;&gt;&gt; a.subs([[x, 1], [y, 2], [z, 3]])
+True
+&gt;&gt;&gt; a.subs([[x, 1], [y, 2], [z, 4]])
+False
+&gt;&gt;&gt; b = sy.Eq(1 + 2, 3, evaluate=False)
+&gt;&gt;&gt; b
+3 = 3
+&gt;&gt;&gt; b.doit()
+True
+&gt;&gt;&gt; c = sy.Ne(1 + 2, 3, evaluate=False)
+&gt;&gt;&gt; c
+3 ≠ 3
+&gt;&gt;&gt; c.doit()
+False
+
+&gt;&gt;&gt; sy.Eq((x + 1)**2, x**2 + 2*x + 1)
+       2    2
+(x + 1)  = x  + 2⋅x + 1
+&gt;&gt;&gt; sy.Eq(sy.expand((x + 1)**2), x**2 + 2*x + 1)
+True
+&gt;&gt;&gt; sy.solveset(x**2 - 4)
+{-2, 2}
+&gt;&gt;&gt; sy.solveset(sy.Eq(x**2, 4))
+{-2, 2}
+
+&gt;&gt;&gt; x + y < z
+x + y < z
+&gt;&gt;&gt; x + y <= z
+x + y ≤ z
+&gt;&gt;&gt; x + y > z
+x + y > z
+&gt;&gt;&gt; x + y >= z
+x + y ≥ z
+
+&gt;&gt;&gt; a = (x > 2) | (x < -2)
+&gt;&gt;&gt; a
+x > 2 ∨ x < -2
+&gt;&gt;&gt; a.subs(x, 0)
+False
+&gt;&gt;&gt; a.subs(x, 10)
+True
+&gt;&gt;&gt; a.subs(x, -10)
+True
+</pre>
+<ul>
+  <li>不等式に関連する公式</li>
+  <ol>
+    <li>(a + b) / 2 &gt;= √(ab), (a &gt; 0, b &gt; 0)</li>
+    <li>(a**2 + b**2)(x**2 + y**2) &gt;= (ax + by)**2</li>
+    <li>(ax + by) / 2 &gt;= ((a + b) / 2) * ((x + y) / 2), (a &gt;= b, x &gt;= y)</li>
+  </ol>
+  <li>1 は「相加平均は相乗平均より大きい」ことを表す</li>
+  <li>2 は「シュワルツの不等式」と呼ばれる</li>
+  <li>3 は「チェビシェフの不等式」と呼ばれる</li>
+  <li>これらの式は要素を n 個に増やしても成立する</li>
+</ul>
+<pre>
+&gt;&gt;&gt; a = sy.Symbol('a')
+&gt;&gt;&gt; b = sy.Symbol('b')
+&gt;&gt;&gt; e = sy.Ge((a + b) / 2, sy.sqrt(a * b))
+&gt;&gt;&gt; e
+a    b      _____
+─ + ─ ≥ ╲╱ a⋅b
+2    2
+&gt;&gt;&gt; e.subs([[a, 10], [b, 20]])
+True
+&gt;&gt;&gt; e.subs([[a, 10], [b, 10]])
+True
+&gt;&gt;&gt; e.subs([[a, -10], [b, -10]])
+False
+
+&gt;&gt;&gt; e = sy.Ge((a**2 + b**2)*(x**2 + y**2), (a*x + b*y)**2)
+&gt;&gt;&gt; e
+⎛ 2    2⎞ ⎛ 2    2⎞              2
+⎝a  + b ⎠⋅⎝x  + y ⎠ ≥ (a⋅x + b⋅y)
+&gt;&gt;&gt; e.subs([[a, 1], [b, 2], [x, 3], [y, 4]])
+True
+&gt;&gt;&gt; e.subs([[a, 1], [b, -2], [x, -3], [y, 4]])
+True
+
+&gt;&gt;&gt; e = sy.Ge((a*x + b*y)/2, ((a + b)/2)*((x + y)/2))
+&gt;&gt;&gt; e
+a⋅x    b⋅y    ⎛a    b ⎞ ⎛x    y ⎞
+── + ── ≥ ⎜─ + ─⎟⋅⎜─ + ─⎟
+ 2      2     ⎝2    2 ⎠ ⎝2    2 ⎠
+&gt;&gt;&gt; e.subs([[a, 2], [b, 1], [x, 4], [y, 3]])
+True
+&gt;&gt;&gt; e.subs([[a, 2], [b, 3], [x, 4], [y, 3]])
+False
+&gt;&gt;&gt; e.subs([[a, 2], [b, 1], [x, 4], [y, 5]])
+False
+</pre>
+<h4 id="abc11">●微分方程式</h4>
+<ul>
+  <li>微分方程式とは、x の関数 y = f(x) とその導関数を含む方程式のこと</li>
+  <li>微分方程式を解くとは y = f(x) を求めること</li>
+  <li>微分方程式は常微分方程式 (ordinary differential equation, ODE) と偏微分方程式 (partial differential equation, PDE) に分かれる</li>
+  <li>ここでは常微分方程式について取り上げる</li>
+  <li>簡単な例</li>
+<pre class="item">
+微分方程式     dy/dx - ky = 0
+式を変形する   (1/y)dy = kdx
+両辺を積分する ∫(1/y)dy = ∫kdx =&gt; log(y) + C1 = kx + C2
+C2 - C1 = C とおくと
+log(y) = kx + C =&gt; y = exp(C) * exp(kx)
+</pre>
+  <li>積分定数 C を含んだままの解を一般解という</li>
+  <li>x = 0 のとき a であるという初期条件があるなら y = a * exp(kx) となる</li>
+  <li>これを特殊解という</li>
+  <li>微分方程式には高階の導関数が含まれているものもある</li>
+  <li>導関数の最高階数が n とすると、その微分方程式を n 階微分方程式と呼ぶ</li>
+  <li>特別な場合を除き、微分方程式を解くのは難しいとされている</li>
+</ul>
+<ul>
+  <li>SymPy で微分方程式を解くには関数 dsolve(expr, func, hint=default) を使う</li>
+  <ul>
+    <li>引数 expr に微分方程式を、func に求める関数を指定する</li>
+    <li>hint は方程式を解くためのヒントを指定する (ヒントは関数としてあらかじめライブラリに用意されている)</li>
+    <li>微分方程式を記述するため未知の関数を表すシンボルを定義する</li>
+<pre class="item">
+symbols('name ...', cls=Function)
+</pre>
+    <li>キーワード引数 cls に Function を指定する</li>
+  </ul>
+<pre>
+&gt;&gt;&gt; sy.var('n m x y z')
+(n, m, x, y, z)
+&gt;&gt;&gt; sy.init_printing()
+&gt;&gt;&gt; f = sy.symbols('f', cls=sy.Function)
+&gt;&gt;&gt; f(x)
+f(x)
+&gt;&gt;&gt; f(x).diff(x)
+d
+─(f(x))
+dx
+&gt;&gt;&gt; sy.dsolve(f(x).diff(x) - n * f(x), f(x))
+           n⋅x
+f(x) = C₁⋅ℯ
+&gt;&gt;&gt; sy.dsolve(sy.Eq(f(x).diff(x), n * f(x)), f(x))
+           n⋅x
+f(x) = C₁⋅ℯ
+</pre>
+  <li>詳しい使い方はリファレンス <a href="https://docs.sympy.org/latest/modules/solvers/ode.html">ODE</a> を参照</li>
+</ul>
+<h4 id="abc12">●いろいろな関数</h4>
+<ul>
+  <li>SymPy にはいろいろな関数が定義されている</li>
+  <li>ここでは基本的な関数をいくつか紹介する</li>
+  <li>詳細はリファレンス <a href="https://docs.sympy.org/latest/modules/functions/index.html">Functions Module</a> を参照</li>
+  <li>絶対値, Abs(n)</li>
+  <li>符号, sign(n)</li>
+  <li>最大値, Max(n, m, ...)</li>
+  <li>最小値, Min(n, m, ...)</li>
+  <li>平方根, sqrt(n)</li>
+  <li>立方根, cbrt(n)</li>
+  <li>指数関数, exp(n)</li>
+  <li>自然対数, log(n)</li>
+  <ul>
+    <li>底 b を指定する場合は log(n, b)</li>
+  </ul>
+  <li>床関数, floor(n)</li>
+  <li>天井関数, ceiling(n)</li>
+<pre>
+&gt;&gt;&gt; sy.var('n m x y z')
+(n, m, x, y, z)
+&gt;&gt;&gt; sy.init_printing()
+&gt;&gt;&gt; sy.Abs(n)
+│n│
+&gt;&gt;&gt; sy.Abs(10)
+10
+&gt;&gt;&gt; sy.Abs(-10)
+10
+&gt;&gt;&gt; sy.sign(n)
+sign(n)
+&gt;&gt;&gt; sy.sign(0)
+0
+&gt;&gt;&gt; sy.sign(10)
+1
+&gt;&gt;&gt; sy.sign(-10)
+-1
+&gt;&gt;&gt; sy.Max(x, y, z)
+Max(x, y, z)
+&gt;&gt;&gt; sy.Max(1, 2, 3)
+3
+&gt;&gt;&gt; sy.Min(x, y, z)
+Min(x, y, z)
+&gt;&gt;&gt; sy.Min(1, 2, 3)
+1
+&gt;&gt;&gt; sy.sqrt(2)
+√2
+&gt;&gt;&gt; sy.sqrt(2).evalf()
+1.41421356237310
+&gt;&gt;&gt; sy.cbrt(3)
+3 ___
+╲╱ 3
+&gt;&gt;&gt; sy.cbrt(3).evalf()
+1.44224957030741
+&gt;&gt;&gt; sy.exp(1)
+ℯ
+&gt;&gt;&gt; sy.exp(1).evalf()
+2.71828182845905
+&gt;&gt;&gt; sy.log(2)
+log(2)
+&gt;&gt;&gt; sy.log(2).evalf()
+0.693147180559945
+&gt;&gt;&gt; sy.log(4, 2)
+2
+&gt;&gt;&gt; sy.log(5, 2)
+log(5)
+───
+log(2)
+&gt;&gt;&gt; for i in range(-5, 6): print(i - 0.5, sy.floor(i - 0.5))
+...
+-5.5 -6
+-4.5 -5
+-3.5 -4
+-2.5 -3
+-1.5 -2
+-0.5 -1
+0.5 0
+1.5 1
+2.5 2
+3.5 3
+4.5 4
+&gt;&gt;&gt; for i in range(-5, 6): print(i - 0.5, sy.ceiling(i - 0.5))
+...
+-5.5 -5
+-4.5 -4
+-3.5 -3
+-2.5 -2
+-1.5 -1
+-0.5 0
+0.5 1
+1.5 2
+2.5 3
+3.5 4
+4.5 5
+</pre>
+  <li>三角関数, sin(x), cos(x), tan(x)</li>
+  <ul>
+    <li>cot(x) = 1 / tan(x), sec(x) = 1 / cos(x), csc(x) = 1 / sin(x)</li>
+    <li>csc は cosec のこと</li>
+  </ul>
+  <li>逆三角関数, asin, acos, atan, acot, asec, acsc, atan2</li>
+  <li>双曲線関数, sinh(x), cosh(x), tanh(x)</li>
+  <ul>
+    <li>coth(x) = 1 / tanh(x), sech(x) = 1 / cosh(x), csch(x) = 1 / sinh(x)</li>
+  </ul>
+  <li>逆双曲線関数, asinh, acosh, atanh, acoth, asech, acsch</li>
+<pre>
+&gt;&gt;&gt; sy.diff(sy.sin(x))
+cos(x)
+&gt;&gt;&gt; sy.diff(sy.cos(x))
+-sin(x)
+&gt;&gt;&gt; sy.diff(sy.tan(x))
+   2
+tan (x) + 1
+&gt;&gt;&gt; sy.integrate(sy.sin(x))
+-cos(x)
+&gt;&gt;&gt; sy.integrate(sy.cos(x))
+sin(x)
+&gt;&gt;&gt; sy.integrate(sy.tan(x))
+-log(cos(x))
+&gt;&gt;&gt; sy.sin(x).series(x)
+     3     5
+    x     x      ⎛ 6⎞
+x - ─ + ── + O⎝x ⎠
+    6    120
+&gt;&gt;&gt; sy.cos(x).series(x)
+     2    4
+    x    x     ⎛ 6⎞
+1 - ─ + ─ + O⎝x ⎠
+    2    24
+&gt;&gt;&gt; sy.tan(x).series(x)
+     3      5
+    x    2⋅x     ⎛ 6⎞
+x + ─ + ── + O⎝x ⎠
+    3     15
+</pre>
+  <li>階乗, factorial(n)</li>
+<pre class="item">
+階乗
+0! = 1
+n! = n * (n - 1) * (n - 2) *  ... * 3 * 2 * 1
+
+再帰定義
+0! = 1
+n! = n * (n - 1)!
+</pre>
+<pre>
+&gt;&gt;&gt; sy.factorial(n)
+n!
+&gt;&gt;&gt; sy.factorial(10)
+3628800
+&gt;&gt;&gt; sy.factorial(20)
+2432902008176640000
+&gt;&gt;&gt; sy.factorial(30)
+265252859812191058636308480000000
+&gt;&gt;&gt; sy.summation(1/sy.factorial(x), (x, 0, sy.oo))
+ℯ
+&gt;&gt;&gt; sy.summation(1/((x + 2) * sy.factorial(x)), (x, 0, sy.oo))
+1
+</pre>
+  <li>フィボナッチ数, fibonacci(n)</li>
+  <ul>
+    <li>フィボナッチ数の説明は拙作のページ Puzzle DE Programming <a href="../puzzle/fibo.html">フィボナッチ数</a> を参照</li>
+  </ul>
+<pre class="item">
+フィボナッチ数
+fibonacci(0) = 0
+fibonacci(1) = 1
+fibonacci(n) = fibonacci(n - 1) + fibonacci(n - 2), n &gt; 1
+</pre>
+<pre>
+&gt;&gt;&gt; sy.fibonacci(n)
+fibonacci(n)
+&gt;&gt;&gt; for i in range(40): print(sy.fibonacci(i), end=" ")
+...
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 28657 46368 75025 121393
+196418 317811 514229 832040 1346269 2178309 3524578 5702887 9227465 14930352 24157817 39088169 63245986
+</pre>
+  <li>リュカ数, lucas(n)</li>
+<pre class="item">
+リュカ数
+lucas(0) = 2
+lucas(1) = 1
+lucas(n) = lucas(n - 1) + lucas(n - 2), n &gt; 1
+</pre>
+<pre>
+&gt;&gt;&gt; sy.lucas(n)
+lucas(n)
+&gt;&gt;&gt; for i in range(40): print(sy.lucas(i), end=" ")
+...
+2 1 3 4 7 11 18 29 47 76 123 199 322 521 843 1364 2207 3571 5778 9349 15127 24476 39603 64079 103682 167761 271443
+439204 710647 1149851 1860498 3010349 4870847 7881196 12752043 20633239 33385282 54018521 87403803 141422324
+</pre>
+  <li>組み合わせの数, binomial(n, r)</li>
+  <ul>
+    <li>n 個のものから r 個を選ぶ組み合わせ</li>
+    <li>sympy.functions.combinatorial.numbers.nC(n, r) もある</li>
+    <li>nC() の第 1 引数は列 (シーケンス) でもよい</li>
+  </ul>
+<pre class="item">
+組み合わせの数
+(1)
+<sub>n</sub>Ｃ<sub>r</sub> = n! / (r!(n - r)!)
+
+(2)
+<sub>n</sub>Ｃ<sub>0</sub> = <sub>n</sub>Ｃ<sub>n</sub> = 1
+<sub>n</sub>Ｃ<sub>r</sub> = <sub>n</sub>Ｃ<sub>r-1</sub> * (n - r + 1) / r
+
+(3)
+<sub>n</sub>Ｃ<sub>0</sub> = <sub>n</sub>Ｃ<sub>n</sub> = 1
+<sub>n</sub>Ｃ<sub>r</sub> = <sub>n-1</sub>Ｃ<sub>r-1</sub> + <sub>n-1</sub>Ｃ<sub>r</sub>
+</pre>
+<pre>
+&gt;&gt;&gt; sy.binomial(m, n)
+binomial(m, n)
+&gt;&gt;&gt; for i in range(1, 16):
+...     for j in range(0, i+1): print(sy.binomial(i, j), end=" ")
+...     print("")
+...
+1 1
+1 2 1
+1 3 3 1
+1 4 6 4 1
+1 5 10 10 5 1
+1 6 15 20 15 6 1
+1 7 21 35 35 21 7 1
+1 8 28 56 70 56 28 8 1
+1 9 36 84 126 126 84 36 9 1
+1 10 45 120 210 252 210 120 45 10 1
+1 11 55 165 330 462 462 330 165 55 11 1
+1 12 66 220 495 792 924 792 495 220 66 12 1
+1 13 78 286 715 1287 1716 1716 1287 715 286 78 13 1
+1 14 91 364 1001 2002 3003 3432 3003 2002 1001 364 91 14 1
+1 15 105 455 1365 3003 5005 6435 6435 5005 3003 1365 455 105 15 1
+</pre>
+  <li>Falling factorials, ff(n, r)</li>
+  <ul>
+    <li>ff(n, r) = n * (n - 1) * (n - 2) * ... * (n - r + 1)</li>
+    <li>n 個のものから r 個を選んで、1 列に並べる並べ方の数 <sub>n</sub>Ｐ<sub>r</sub> になる</li>
+    <li>sympy.functions.combinatorial.numbers.nP(n, r) もある</li>
+  </ul>
+<pre class="item">
+順列の数
+<sub>n</sub>Ｐ<sub>r</sub> = n! / (n - r)!
+</pre>
+<pre>
+&gt;&gt;&gt; sy.ff(m, n)
+FallingFactorial(m, n)
+&gt;&gt;&gt; for i in range(10): print(sy.ff(10, i), end=" ")
+...
+1 10 90 720 5040 30240 151200 604800 1814400 3628800
+</pre>
+  <li>Rising factorials, rf(n, r)</li>
+  <ul>
+    <li>rf(n, r) = n * (n + 1) * ... * (n + r - 1)</li>
+  </ul>
+<pre>
+&gt;&gt;&gt; sy.rf(m, n)
+RisingFactorial(m, n)
+&gt;&gt;&gt; for i in range(10): print(sy.rf(10, i), end=" ")
+...
+1 10 110 1320 17160 240240 3603600 57657600 980179200 17643225600 
+</pre>
+  <li>ベル数, bell(n)</li>
+  <ul>
+    <li>集合を分割する方法の総数はベル数 (Bell Number) になる</li>
+    <li>たとえば、集合 {1, 2, 3} は次のように分割することができる</li>
+<pre class="item">
+1 分割 : {{1, 2, 3}}
+2 分割 : {{1, 2}, {3}}, {{1, 3}, {2}}, {{1}, {2, 3}}
+3 分割 ; {{1}, {2}, {3}}
+</pre>
+    <li>全部で 5 通りあるので, bell(3) は 5 になる</li>
+  </ul>
+<pre class="item">
+ベル数
+B(0) = 1
+          n
+B(n+1) =  Σ <sub>n</sub>Ｃ<sub>k</sub> * B(k), n &gt;= 1
+          k=0
+</pre>
+<pre>
+&gt;&gt;&gt; sy.bell(n)
+bell(n)
+&gt;&gt;&gt; for i in range(20): print(sy.bell(i), end=" ")
+...
+1 1 2 5 15 52 203 877 4140 21147 115975 678570 4213597 27644437 190899322 1382958545 10480142147 
+82864869804 682076806159 5832742205057 
+</pre>
+  <li>カタラン数, catalan(n)</li>
+  <ul>
+    <li>カタラン数になるもの</li>
+    <ul>
+      <li>() を正しく並べる方法 (カッコ列) の総数</li>
+      <li>n + 1 個の葉をもつ二分木の総数</li>
+      <li>対角線を超えない格子状の最短経路の総数</li>
+      <li>n + 2 角形に対角線を n − 1 本引いて三角形に分割する方法の総数</li>
+      <li>などなど</li>
+    </ul>
+  </ul>
+<pre class="item">
+カタラン数
+         (2n)!
+Ｃ<SUB>n</SUB> = ----------
+       (n+1)!n!
+</pre>
+<pre>
+&gt;&gt;&gt; sy.catalan(n)
+catalan(n)
+&gt;&gt;&gt; for i in range(25): print(sy.catalan(i), end=" ")
+...
+1 1 2 5 14 42 132 429 1430 4862 16796 58786 208012 742900 2674440 9694845 35357670 129644790 477638700 1767263190 
+6564120420 24466267020 91482563640 343059613650 1289904147324
+</pre>
+  <li>分割数, sympy.functions.combinatorial.numbers.nT(n, [r])</li>
+  <ul>
+    <li>整数 n を 1 以上の自然数の和で表すことを「整数の分割」という</li>
+    <li>整数を分割するとき、同じ自然数を何回使ってもいいが、並べる順序が違うだけのものは同じ分割とする</li>
+    <li>分割の仕方の総数を「分割数」という</li>
+    <li>分割数の説明は拙作のページ Puzzle DE Programming <a href="../puzzle/partition.html">分割数</a> を参照</li>
+    <li>nT(n) は n の分割数を返す</li>
+    <li>nT(n, r) は n を r 分割したときの総数を返す</li>
+    <li>たとえば、5, 6, 7 の分割は次のようになる</li>
+<pre class="fig">
+[5]
+[4, 1]
+[3, 2]
+[3, 1, 1]
+[2, 2, 1]
+[2, 1, 1, 1]
+[1, 1, 1, 1, 1]
+
+[6]
+[5, 1]
+[4, 2]
+[4, 1, 1]
+[3, 3]
+[3, 2, 1]
+[3, 1, 1, 1]
+[2, 2, 2]
+[2, 2, 1, 1]
+[2, 1, 1, 1, 1]
+[1, 1, 1, 1, 1, 1]
+
+[7]
+[6, 1]
+[5, 2]
+[5, 1, 1]
+[4, 3]
+[4, 2, 1]
+[4, 1, 1, 1]
+[3, 3, 1]
+[3, 2, 2]
+[3, 2, 1, 1]
+[3, 1, 1, 1, 1]
+[2, 2, 2, 1]
+[2, 2, 1, 1, 1]
+[2, 1, 1, 1, 1, 1]
+[1, 1, 1, 1, 1, 1, 1]
+</pre>
+  </ul>
+<pre>
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(5)
+7
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(6)
+11
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(7)
+15
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(5, 3)
+2
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(6, 3)
+3
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(7, 4)
+3
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(100)
+190569292
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(1000)
+24061467864032622473692149727991
+&gt;&gt;&gt; sy.functions.combinatorial.numbers.nT(10000)
+36167251325636293988820471890953695495016030339315650422081868605887952568754066420592310556052906916435144
+</pre>
+  <li>調和級数 (harmonic series) の部分和, harmonic(n [, k])</li>
+  <ul>
+    <li>k を省略すると 1 になる</li>
+    <li>k &lt;= 1 は発散し、k &gt; 1 は収束する (リーマンゼータ関数 ζ (k) に等しい)</li>
+  </ul>
+<pre class="fig">
+       n
+H<sub>n,k</sub> = Σ 1 / x<sup>k</sup>
+      x=1
+</pre>
+<pre>
+&gt;&gt;&gt; sy.harmonic(n)
+harmonic(n)
+&gt;&gt;&gt; for i in range(1, 10): print(sy.harmonic(i), end=" ")
+...
+1 3/2 11/6 25/12 137/60 49/20 363/140 761/280 7129/2520 
+&gt;&gt;&gt; sy.harmonic(sy.oo)
+∞
+&gt;&gt;&gt; sy.harmonic(sy.oo, 2)
+ 2
+π
+─
+6
+&gt;&gt;&gt; sy.harmonic(sy.oo, 3)
+ζ(3)
+</pre>
+</ul>
+<h4 id="abc13">●特殊関数</h4>
+<ul>
+  <li>理論的にも実用的にも重要で、特別な名前や記法が定着している関数のことを「特殊関数 (special functions)」と呼ぶ</li>
+  <li>特殊関数は微分方程式の解や初等関数の積分の解として現れることが多い</li>
+  <li>SymPy には多くの特殊関数が用意されている</li>
+  <li>ここでは基本的な関数をいくつか取り上げる</li>
+  <li>詳細はリファレンス Functions Module の <a href="sympy03.html">Special</a> を参照</li>
+</ul>
+<ul>
+  <li>ガンマ関数 (gamma function), gamma(x)</li>
+<pre class="fig">
+        ∞
+Γ(x) = ∫e<sup>-t</sup>t<sup>x-1</sup>dt
+        0
+</pre>
+  <ul>
+    <li>階乗を複素数まで拡張した関数</li>
+    <li>漸化式 Γ(x + 1) = x * Γ(x) を満たす</li>
+    <li>x が正の整数のとき Γ(x) = (x - 1)! となる</li>
+    <li>このほかにも log(Γ(x)) を求める loggamma(x) などいろいろ用意されている</li>
+    <li>参考 URL: <a href="https://ja.wikipedia.org/wiki/%E3%82%AC%E3%83%B3%E3%83%9E%E9%96%A2%E6%95%B0">ガンマ関数 - Wikipedia</a></li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.gamma(sy.Rational(1, 2))
+√π
+&gt;&gt;&gt; sy.gamma(sy.Rational(2, 2))
+1
+&gt;&gt;&gt; sy.gamma(sy.Rational(3, 2))
+√π
+──
+2
+&gt;&gt;&gt; sy.gamma(10)
+362880
+&gt;&gt;&gt; sy.factorial(9)
+362880
+&gt;&gt;&gt; sy.gamma(11)
+3628800
+&gt;&gt;&gt; sy.factorial(10)
+3628800
+</pre>
+<pre>
+&gt;&gt;&gt; sy.plot(sy.gamma(x), (x, -sy.pi, sy.pi), ylim=(-10, 10))
+</pre>
+<p><img src="img/gamma1.png">
+</p>
+<pre>
+&gt;&gt;&gt; sy.plotting.plot3d(sy.Abs(sy.gamma(x + y * sy.I)), (x, -4, 4), (y, -4, 4))
+</pre>
+<p><img src="img/gamma2.png">
+</p>
+<p><img src="img/gamma3.png">
+</p>
+  <li>リーマンゼータ関数 (Riemann zeta function), zeta(s)</li>
+<pre class="fig">
+        ∞
+ζ(s) = Σ 1/n<sup>s</sup> = 1/1<sup>s</sup> + 1/2<sup>s</sup> + 1/3<sup>s</sup> + ... , (s &gt; 1)
+        n=1
+</pre>
+  <ul>
+    <li>ゼータ関数は s &gt; 1 で収束、s = 1 は調和級数になり発散する</li>
+    <li>s が偶数の場合、次の式で表すことができる</li>
+<pre class="fig">
+          (2π)<sup>2s</sup>
+ζ(2s) = -------- * |B<sub>2s</sub>|
+          2(2s)!
+</pre>
+    <li>B<sub>n</sub> はベルヌーイ数 (Bernoulli nuber)</li>
+    <li>SymPy にはベルヌーイ数を求める関数 bernoulli(x) が用意されている</li>
+    <li>参考 URL: <a href="https://ja.wikipedia.org/wiki/%E3%83%AA%E3%83%BC%E3%83%9E%E3%83%B3%E3%82%BC%E3%83%BC%E3%82%BF%E9%96%A2%E6%95%B0">リーマンゼータ関数 - Wikipedia</a></li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; for i in range(2, 9): print(i, sy.zeta(i))
+...
+2 pi**2/6
+3 zeta(3)
+4 pi**4/90
+5 zeta(5)
+6 pi**6/945
+7 zeta(7)
+8 pi**8/9450
+
+&gt;&gt;&gt; for i in range(2, 9): print(i, sy.zeta(i).evalf())
+...
+2 1.64493406684823
+3 1.20205690315959
+4 1.08232323371114
+5 1.03692775514337
+6 1.01734306198445
+7 1.00834927738192
+8 1.00407735619794
+
+&gt;&gt;&gt; for i in range(0, 10): print(i, sy.bernoulli(i))
+...
+0 1
+1 -1/2
+2 1/6
+3 0
+4 -1/30
+5 0
+6 1/42
+7 0
+8 -1/30
+9 0
+</pre>
+<pre>
+&gt;&gt;&gt; sy.plot(sy.zeta(x, 1), (x, 1.1, 8))
+</pre>
+<p><img src="img/zeta.png">
+</p>
+<ul>
+  <li>ベッセル関数 (Bessel function)</li>
+  <ul>
+    <li>ベッセルの微分方程式の特殊解をベッセル関数という</li>
+<pre class="fig">
+      dy<sup>2</sup>         dy
+x<sup>2</sup> * ----- + x * ---- + (x<sup>2</sup> - n<sup>2</sup>) * y = 0
+      dx<sup>2</sup>         dx
+</pre>
+    <li>n は任意の定数だが応用的には整数の場合が重要 (n は次数と呼ばれる)</li>
+    <li>ベッセル関数は周期的な振動を表す</li>
+    <li>物理や工学などで幅広く応用されている</li>
+    <li>第 1 種ベッセル関数, besselj(n, x)</li>
+<pre class="fig">
+         ∞    (-1)<sup>k</sup>
+Ｊ<sub>n</sub>(x) = Σ ------------ * (x / 2)<sup>n+2k</sup>
+        k=0  k!*(n + k)!
+</pre>
+    <li>整数 n に対して、Ｊ<sub>-n</sub>(x) = (-1)<sup>n</sup> * Ｊ<sub>n</sub>(x) の関係が成り立つ</li>
+    <li>第 2 種ベッセル関数, bessely(n, x)</li>
+<pre class="fig">
+          Ｊ<sub>n</sub>(x) * cos(nπ) - Ｊ<sub>-n</sub>(x)
+Ｙ<sub>n</sub>(x) = -----------------------------
+                   sin(nπ)
+</pre>
+    <li>ただし、n が整数のとき右辺は極限をもって定義されるものとする</li>
+    <li>参考 URL: <a href="https://ja.wikipedia.org/wiki/%E3%83%99%E3%83%83%E3%82%BB%E3%83%AB%E9%96%A2%E6%95%B0">ベッセル関数 - Wikipedia</a></li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.besselj(0, 0)
+1
+&gt;&gt;&gt; sy.besselj(0, sy.oo)
+0
+&gt;&gt;&gt; p1 = sy.plot(sy.besselj(0, x), (x, 0, 30), show=False)
+&gt;&gt;&gt; p2 = sy.plot(sy.besselj(2, x), (x, 0, 30), line_color="red", show=False)
+&gt;&gt;&gt; p3 = sy.plot(sy.besselj(4, x), (x, 0, 30), line_color="green", show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.extend(p3)
+&gt;&gt;&gt; p1.show()
+</pre>
+<p><img src="img/bessel1.png">
+</p>
+<pre>
+&gt;&gt;&gt; sy.bessely(0, sy.oo)
+0
+&gt;&gt;&gt; sy.bessely(0, 0)
+-∞
+&gt;&gt;&gt; p1 = sy.plot(sy.bessely(0, x), (x, 0.5, 20), show=False)
+&gt;&gt;&gt; p2 = sy.plot(sy.bessely(1, x), (x, 0.5, 20), line_color="red", show=False)
+&gt;&gt;&gt; p3 = sy.plot(sy.bessely(2, x), (x, 0.5, 20), line_color="green", show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.extend(p3)
+&gt;&gt;&gt; p1.show()
+</pre>
+<p><img src="img/bessel2.png">
+</p>
+<ul>
+  <li>誤差関数 (Error function), erf(x)</li>
+<pre class="fig">
+           2      x
+erf(x) = ----- * ∫ e<sup>-t<sup>2</sup></sup> dt
+         √π     0
+</pre>
+  <ul>
+    <li>ガウスの誤差関数とも呼ばれる</li>
+    <li>参考 URL: <a href="https://ja.wikipedia.org/wiki/%E8%AA%A4%E5%B7%AE%E9%96%A2%E6%95%B0">誤差関数 - Wikipedia</a></li>
+  </ul>
+</ul>
+<pre>
+&gt;&gt;&gt; sy.erf(sy.oo)
+1
+&gt;&gt;&gt; sy.erf(-sy.oo)
+-1
+&gt;&gt;&gt; for i in range(-3, 4): print(i, sy.erf(i))
+...
+-3 -erf(3)
+-2 -erf(2)
+-1 -erf(1)
+0 0
+1 erf(1)
+2 erf(2)
+3 erf(3)
+&gt;&gt;&gt; for i in range(-3, 4): print(i, sy.erf(i).evalf())
+...
+-3 -0.999977909503001
+-2 -0.995322265018953
+-1 -0.842700792949715
+0 0
+1 0.842700792949715
+2 0.995322265018953
+3 0.999977909503001
+</pre>
+<pre>
+&gt;&gt;&gt; sy.plot(sy.erf(x), (x, -3, 3))
+</pre>
+<p><img src="img/error.png">
+</p>
+<h4 id="abc14">●関数のグラフ</h4>
+<ul>
+  <li>matplotlib がインストールされている場合、プロットは matplotlib を使って行われる</li>
+  <li>二次元 (2D) だけでなく三次元 (3D) も表示できる</li>
+  <li>ここでは簡単な関数のグラフを SymPy で描画する</li>
+  <li>詳細はリファレンス <a href="https://docs.sympy.org/latest/modules/plotting.html">Plotting Module</a> を参照</li>
+</ul>
+<ul>
+  <li>多項式</li>
+  <ul>
+    <li>y = f(x) のグラフは関数 plot() を使うと簡単</li>
+<pre class="item">
+plot(expr1 [, expr2, ...], (var, low, high), ...)
+</pre>
+    <li>引数 expr は描画する関数 (SymPy の式)</li>
+    <li>(var, low, high) で変数 var の範囲を指定する</li>
+    <li>キーワード引数 xlim=(low, high), ylim=(low, high) で x 軸と y 軸の表示範囲を指定できる</li>
+    <li>線の色はキーワード引数 line_color で指定する</li>
+    <li>色が同じでもよければ、複数の式を指定することで一緒にグラフを描画することができる</li>
+    <li>メソッド extend() を使ってグラフ (plot object) を合成することもできる</li>
+  </ul>
+<pre>
+&gt;&gt;&gt; sy.var('n m x y z')
+(n, m, x, y, z)
+&gt;&gt;&gt; p1 = sy.plot(x**2 - 4, (x, -4, 4), ylim=(-20, 20), show=False)
+&gt;&gt;&gt; p2 = sy.plot(x**3 - 9*x, (x, -4, 4), line_color="red", ylim=(-20, 20), show=False)
+&gt;&gt;&gt; p3 = sy.plot(x**4 - 10*x**2 + 9, (x, -4, 4), line_color="blue", ylim=(-20, 20), show=False)
+&gt;&gt;&gt; p4 = sy.plot(x**5 - 5*x**3 + 4*x, (x, -4, 4), line_color="green", ylim=(-20, 20), show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.extend(p3)
+&gt;&gt;&gt; p1.extend(p4)
+&gt;&gt;&gt; p1.show()
+</pre>
+<img src="img/poly1.png">
+  <ul>
+    <li>y = x<sup>2</sup> - 4, (cyan)</li>
+    <li>y = x<sup>3</sup> - 9x, (red)</li>
+    <li>y = x<sup>4</sup> - 10x<sup>2</sup> + 9, (blue)</li>
+    <li>y = x<sup>5</sup> - 5x<sup>3</sup> + 4x, (green)</li>
+  </ul>
+</ul>
+<ul>
+  <li>指数関数・対数関数</li>
+<pre>
+&gt;&gt;&gt; p1 = sy.plot(2**x, (x, -2, 2), ylim=(-5, 5), show=False)
+&gt;&gt;&gt; p2 = sy.plot(0.5**x, (x, -2, 2), ylim=(-5, 5), line_color="red", show=False)
+&gt;&gt;&gt; p3 = sy.plot(sy.log(x, 2), (x, -2, 2), ylim=(-5, 5), line_color="blue", show=False)
+&gt;&gt;&gt; p4 = sy.plot(sy.log(x, 0.5), (x, -2, 2), ylim=(-5, 5), line_color="green", show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.extend(p3)
+&gt;&gt;&gt; p1.extend(p4)
+&gt;&gt;&gt; p1.show()
+</pre>
+<img src="img/explog1.png">
+  <ul>
+    <li>y = 2<sup>x</sup>, (cyan)</li>
+    <li>y = (1/2)<sup>x</sup>, (red)</li>
+    <li>y = log<sub>2</sub> x, (blue)</li>
+    <li>y = log<sub>1/2</sub> x, (green)</li>
+  </ul>
+<pre>
+&gt;&gt;&gt; p1 = sy.plot(sy.exp(x), (x, -2, 2), ylim=(-5, 5), show=False)
+&gt;&gt;&gt; p2 = sy.plot(sy.log(x), (x, -2, 2), ylim=(-5, 5), line_color="red", show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.show()
+</pre>
+<img src="img/explog2.png">
+  <ul>
+    <li>y = e<sup>x</sup>, (cyan)</li>
+    <li>y = ln x, (red)</li>
+  </ul>
+</ul>
+<ul>
+  <li>平方根・立方根</li>
+<pre>
+&gt;&gt;&gt; p1 = sy.plot(sy.sqrt(x), (x, 0, 9), show=False)
+&gt;&gt;&gt; p2 = sy.plot(sy.cbrt(x), (x, 0, 9), line_color="red", show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.show()
+</pre>
+<img src="img/sqrt1.png">
+  <ul>
+    <li>y = √x, (cyan)</li>
+    <li>y = cbrt(x), (red)</li>
+  </ul>
+</ul>
+<ul>
+  <li>三角関数</li>
+<pre>
+&gt;&gt;&gt; p1 = sy.plot(sy.sin(x), (x, -2*sy.pi, 2*sy.pi), show=False)
+&gt;&gt;&gt; p2 = sy.plot(sy.cos(x), (x, -2*sy.pi, 2*sy.pi), line_color="red", show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.show()
+</pre>
+<img src="img/sincos.png">
+  <ul>
+    <li>y = sin(x), (cyan)</li>
+    <li>y = cos(x), (red)</li>
+  </ul>
+<pre>
+&gt;&gt;&gt; sy.plot(sy.tan(x), (x, -2*sy.pi, 2*sy.pi), ylim=(-10,10))
+</pre>
+<img src="img/tan.png">
+  <ul>
+    <li>y = tan(x)</li>
+  </ul>
+</ul>
+<ul>
+  <li>双曲線関数</li>
+<pre>
+&gt;&gt;&gt; p1 = sy.plot(sy.sinh(x), (x, -4, 4), ylim=(-4, 4), show=False)
+&gt;&gt;&gt; p2 = sy.plot(sy.cosh(x), (x, -4, 4), ylim=(-4, 4), line_color="green", show=False)
+&gt;&gt;&gt; p3 = sy.plot(sy.tanh(x), (x, -4, 4), ylim=(-4, 4), line_color="red", show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.extend(p3)
+&gt;&gt;&gt; p1.show()
+</pre>
+<img src="img/hyper1.png">
+  <ul>
+    <li>y = sinh(x), (cyan)</li>
+    <li>y = cosh(x), (green)</li>
+    <li>y = tanh(x), (red)</li>
+  </ul>
+</ul>
+<ul>
+  <li>円・楕円</li>
+  <ul>
+    <li>円や楕円の描画は関数 plot_implict() または plot_parametric() を使う</li>
+    <li>plot_implict() は陰関数 (implicit function) を描画する</li>
+    <ul>
+      <li>たとえば、円の方程式 x<sup>2</sup> + y<sup>2</sup> = r が陰関数</li>
+      <li>第 1 引数には等式 Eq(x**2 + y**2, r) または x**2 + y**2 - r を渡す</li>
+      <li>不等式を指定すると領域を塗りつぶす</li>
+      <li>たとえば、Lt(x**2 + y**2, r) は円の中を、Gt(x**2 + y**2, r) は円の外を塗りつぶす</li>
+    </ul>
+    <li>plot_parametric() は媒介変数表示 (parametric representation) で定義された関数を描画する</li>
+    <li>画面のアスペクト比は plt.rcParams['figure.figsize'] で変更できる</li>
+    <li>参考 URL</li>
+    <ol>
+      <li><a href="https://ja.wikipedia.org/wiki/%E9%99%B0%E9%96%A2%E6%95%B0">陰関数 - Wikipedia</a></li>
+      <li><a href="https://ja.wikipedia.org/wiki/%E5%AA%92%E4%BB%8B%E5%A4%89%E6%95%B0">媒介変数 - Wikipedia</a></li>
+      <li><a href="https://qiita.com/HigashinoSola/items/6f4cc47d42a7a5bdcc47">sympy.plottingでaspect_ratioが変えられない？　件について</a>, (Higashino Sola さん)</li>
+    </ol>
+  </ul>
+<pre>
+&gt;&gt;&gt; import matplotlib.pyplot as plt
+&gt;&gt;&gt; plt.rcParams['figure.figsize'] = (6, 6)
+&gt;&gt;&gt; p1 = sy.plot_implicit(sy.Eq(x**2 +y**2, 1), (x, -1, 1), (y, -1, 1), show=False)
+&gt;&gt;&gt; p2 = sy.plot_implicit(sy.Eq(x**2/0.25 +y**2, 1), (x, -1, 1), (y, -1, 1), line_color='red', show=False)
+&gt;&gt;&gt; p3 = sy.plot_implicit(sy.Eq(x**2 +y**2/0.25, 1), (x, -1, 1), (y, -1, 1), line_color='green', show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.extend(p3)
+&gt;&gt;&gt; p1.show()
+</pre>
+<img src="img/circle.png">
+  <ul>
+    <li>x<sup>2</sup> + y<sup>2</sup> = 1, (cyan)</li>
+    <li>x<sup>2</sup>/0.5<sup>2</sup> + y<sup>2</sup> = 1, (red)</li>
+    <li>x<sup>2</sup> + y<sup>2</sup>/0.5<sup>2</sup> = 1, (green)</li>
+  </ul>
+<pre>
+&gt;&gt;&gt; p1 = sy.plotting.plot_parametric(sy.cos(x), sy.sin(x), (x, 0, 2*sy.pi), show=False)
+&gt;&gt;&gt; p2 = sy.plotting.plot_parametric(0.5*sy.cos(x), sy.sin(x), (x, 0, 2*sy.pi), line_color="red", show=False)
+&gt;&gt;&gt; p3 = sy.plotting.plot_parametric(sy.cos(x), 0.5*sy.sin(x), (x, 0, 2*sy.pi), line_color="green", show=False)
+&gt;&gt;&gt; p1.extend(p2)
+&gt;&gt;&gt; p1.extend(p3)
+&gt;&gt;&gt; p1.show()
+</pre>
+<img src="img/circle2.png">
+  <ul>
+    <li>x = cos(t), y = sin(t), 0 &lt;= t &lt; 2π, (cyan)</li>
+    <li>x = 0.5*cos(t), y = sin(t), 0 &lt;= t &lt; 2π, (red)</li>
+    <li>x = cos(t), y = 0.5*sin(t), 0 &lt;= t &lt; 2π, (green)</li>
+  </ul>
+</ul>
+<ul>
+  <li>三次元グラフの作成</li>
+  <li>z = f(x, y) のグラフは plot3d() を使うと簡単</li>
+<pre class="item">
+plot3d(expr, (x, low, high), (y, low, high), ...)
+</pre>
+  <li>媒介変数表示の関数は plot3d_parametric_line(), plot3d_parametric_surface() を使う</li>
+<pre class="item">
+plot3d_parametric_line(expr_x, expr_y, expr_z, (t, low, high), ...)
+plot3d_parametric_surface(expr_x, expr_y, expr_z, (t, low, high), ...)
+</pre>
+  <li>line は曲線を描画し、surface は曲面を描画する</li>
+  <li>参考 URL: <a href="http://izumi-math.jp/sanae/MathCurves/MathCurves.htm">空間における曲面と曲線</a>, (Masasi.Sanae さん)</li>
+<pre>
+&gt;&gt;&gt; sy.plotting.plot3d(x**2 + y**2, (x, -2, 2), (y, -2, 2))
+</pre>
+<img src="img/fig3d1.png">
+<pre>
+&gt;&gt;&gt; sy.plotting.plot3d(x**2 - y**2, (x, -2, 2), (y, -2, 2))
+</pre>
+<img src="img/fig3d2.png">
+<pre>
+&gt;&gt;&gt; sy.plotting.plot3d(sy.sin(sy.sqrt(x**2 + y**2)), (x, -3*sy.pi, 3*sy.pi), (y, -3*sy.pi, 3*sy.pi))
+</pre>
+<img src="img/fig3d6.png">
+<pre>
+&gt;&gt;&gt; sy.plotting.plot3d_parametric_line(sy.cos(x), sy.sin(x), x, (x, -5*sy.pi, 5*sy.pi))
+</pre>
+<img src="img/fig3d3.png">
+<pre>
+&gt;&gt;&gt; sy.plotting.plot3d_parametric_surface(sy.cos(x)*sy.cos(y), sy.cos(x)*sy.sin(y), sy.sin(x), 
+ (x, 0, 2*sy.pi), (y, 0, sy.pi))
+</pre>
+<img src="img/fig3d4.png">
+<pre>
+&gt;&gt;&gt; sy.plotting.plot3d_parametric_surface(sy.cosh(x)*sy.cos(y), sy.cosh(x)*sy.sin(y), sy.sinh(x), 
+ (x, -sy.pi, sy.pi), (y, -sy.pi, sy.pi))
+</pre>
+<img src="img/fig3d5.png">
+</ul>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="python3.html#sympy_abc">Python3</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881756</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj06.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj08.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap16">モジュール (2)</h3>
+<p> 前回はストラクチャとシグネチャを説明しました。SML/NJ のモジュール機能はこれだけではありません。もう一つ重要な機能に「ファンクタ (functor) 」があります。ファンクタは引数にストラクチャを受け取り、それを使って新しいストラクチャを生成する機能です。ファンクタはストラクチャを生成するストラクチャと考えてください。今回は「二分探索木」を例題にファンクタを説明します。
+</p>
+<p> まず最初に「二分探索木」から説明しましょう。二分探索木を理解されている方は読み飛ばしてもらってかまいません。
+</p>
+<p> <a href="smlnj07.html#next">次へ</a>
+</p>
+<h4>●二分探索木</h4>
+<p> あるデータの中から特定のデータを探す場合、データ数が少なければ力任せに検索してもなんとかなりますが、データ数が多くなると検索に時間がかかるようになります。このような場合、あらかじめデータを整理整頓しておくことで、特定のデータを高速に見つけることができるようになります。この代表的なアルゴリズムが「ハッシュ法」と「二分探索木」です。二分探索木はその名が示すように「木構造」の一種です。まずは木構造から説明しましょう。
+</p>
+
+<h4>●木構造</h4>
+<p> 「木構造 (tree structer) 」は「木 (tree) 」とも呼ばれるデータ構造で、「節 (ノード) 」と呼ばれる要素に対して、階層的な関係を表したものです。身近な例では、ディレクトリの階層構造が木にあたります。ディレクトリに「ルートディレクトリ」があるように、木にも「根 (ルート) 」と呼ばれる節が存在します。
+</p>
+
+<pre class="fig">
+            (root)
+              Ａ    ────────  レベル０  
+            ／｜＼                ↑
+          ／  ｜  ＼
+        Ｂ    Ｃ    Ｄ            木  レベル１
+      ／｜＼        ｜＼          の
+    ／  ｜  ＼      ｜  ＼        高
+  Ｅ    Ｆ    Ｇ    Ｈ    Ｉ      さ  レベル２
+            ／  ＼
+          ／      ＼              ↓
+        Ｊ          Ｋ    ─────  レベル３
+
+        図 : 一般的な木構造の一例
+</pre>
+<p> 木を図示する場合、階層関係がはっきりわかるように、根を上にして、同じ階層にある節を並べて書きます。根からレベル 0、レベル 1 と階層を数えていき、最下層の節までの階層数を「木の高さ」といいます。木は、ある節から下の部分を切り出したものも、木としての性質を持っています。これを「部分木」といいます。
+</p>
+
+<p> 木は、ある節からほかの節に至る「経路」を考えることができます。たとえば、A から J には、A - B - G - J という経路がありますね。これは、ディレクトリやファイルを指定するときのパスと同じです。
+</p>
+
+<p> ある節から根の方向にさかのぼるとき、途中で通っていく節を「先祖」といい、直接繋がっている節を「親」といます。これは、逆から見ると「子孫」と「子」という関係になります。子を持たない節をとくに「葉」と呼ぶことがあります。上図でいうと、G は J と K の親で、J は G の子になります。J は子を持っていないので葉となります。
+</p>
+
+<p> 子は、「左 &lt; 右」の順番で節に格納するのが一般的です。これを「順序木」といいます。また、順番がない木を「無順序木」と呼びます。節が持っている子の数を「次数」といいます。上図の場合、A は 3 つの子 B, C, D を持っているので、A の次数は 3 となります。すべての節の次数を n に揃えた順序木を「 n 分木」と呼びます。
+</p>
+<h4>●二分木</h4>
+<p> とくに、次数が 2 の二分木は、プログラムでよく使われるデータ構造です。
+</p>
+<pre class="fig">
+                      (root)
+                        18
+                      ／  ＼
+                    ／      ＼
+                  ／          ＼
+                ／              ＼
+              ／                  ＼
+            14                      22
+          ／  ＼                  ／  ＼
+        ／      ＼              ／      ＼
+      12          16          20          24
+    ／  ＼      ／  ＼      ／  ＼      ／  ＼
+  11      13  15      17  19      21  23      25  
+
+                図 : 二分木の一例
+</pre>
+
+<p> 上図に二分木の例を示します。二分木では、節にひとつのデータを格納します。そして、その節の左側の子には小さいデータを、右側の子には大きいデータが配置されるように木を構成します。
+</p>
+
+<p> この二分木をデータの探索に使うアルゴリズムが「二分探索木」です。二分探索木はデータの探索・挿入を高速に行うことができます。たとえば、上図の木から 19 を探してみましょう。まず root の 18 と比較します。18 &lt; 19 ですから、右側の子をたどり 22 と比較します。今度は 19 &lt; 22 なので左側の子をたどります。次は 20 と比較し 19 &lt; 20 なので左側の子をたどり、ここで 19 を見つけることができます。
+</p>
+
+<p> 二分探索木の探索は「二分探索 (binary search) 」と同じ原理です。左右どちらかの子をたどるたびに、探索するデータ数は半分になります。上図の場合でも、探索するデータ数が 15, 7, 3, 1 となり、最後に見つけることができました。
+</p>
+
+<p> データ数を N とすると、単純な線形探索では平均で N / 2 回の比較が必要になりますが、二分探索木を使うと log <sub>2</sub> N 程度の回数で収まります。たとえば、データが 100個ある場合、線形探索では 50 回データを比較しなければいけないのに、二分探索木では 7 回程度の比較で済むわけです。ただし、これは左右の部分木のバランスがとれている理想的な状態での話です。バランスが崩れると二分探索木の性能は劣化し、最悪の場合は線形探索と同じになってしまいます。
+</p>
+
+<p> そこで、左右のバランスを一定の範囲に収める「平衡木」が考案されています。有名なところでは AVL 木、2-3 木、B 木、B* 木などがあります。また、Ｃ++の標準ライブラリである STL (Standard Template Library) では、「2 色木（赤黒木）」というアルゴリズムが使われているそうです。
+</p>
+
+<h4 id="next">●二分探索木の実装</h4>
+<p> それでは、SML/NJ で二分探索木を作ってみましょう。まずはストラクチャを使わずにプログラムします。最初に datatype で節を定義します。
+</p>
+
+<pre class="list">
+リスト : 節の定義
+
+datatype 'a bintree =
+    Empty |
+    Node of 'a * 'a bintree * 'a bintree  
+</pre>
+
+<p> 今回は組で節を表します。もちろん、レコードを使ってもかまいません。Empty が空の木を表し、Node が節を表します。組の第 1 要素が二分木に格納するデータ、第 2 要素が左部分木、第 3 要素が右部分木を表します。簡単な例を示します。
+</p>
+<pre class="fig">
+    12      
+  ／  ＼    ==&gt; Node( 12, Node( 11, Empty, Empty ), Node( 13, Empty, Empty ) )
+11      13  
+</pre>
+<p> これを図で表すと次のようになります。
+</p>
+
+<pre class="fig">
+           ┌─┬─┬─┐
+           │12│・│・│
+           └─┴┼┴┼┘
+                 │  │
+   ┌──────┘  └─┐
+   ↓                    ↓
+ ┌─┬─┬─┐        ┌─┬─┬─┐
+ │11│／│／│        │13│／│／│
+ └─┴─┴─┘        └─┴─┴─┘
+
+      ┌─┬─┬─┐
+  節：│Ｄ│Ｌ│Ｒ│
+      └─┴─┴─┘
+  Ｄ：data, Ｌ：left, Ｒ：right, ／：Empty  
+
+        図 : 二分探索木の構造
+</pre>
+<h4>●データの探索</h4>
+<p> それでは、データを探索する関数から作ってみましょう。この処理はデータを比較して左右の部分木をたどっていくだけです。
+</p>
+
+<pre class="list">
+リスト : データの探索
+
+fun search( _, Empty ) = false
+|   search( x, Node( y, left, right ) ) =  
+    if x = y then true
+    else if x &lt; y then search( x, left )
+    else search( x, right );
+</pre>
+
+<p> 関数 search の第 1 引数 x が探索するデータ、第 2 引数が二分木です。二分木が Empty であれば、これ以上探索することはできません。データは見つからなかったので false を返します。
+</p>
+そうでなければ、引数 x と節のデータを比較します。節のデータはパターンマッチングで取り出すことができます。y がデータ、left が左部分木、right が右部分木です。x = y ならばデータが見つかったので true を返します。x &lt; y ならば search を再帰呼び出しして左部分木をたどります。そうでなければ x &gt; y なので右部分木をたどります。
+<p> なお、データの比較に演算子 = や &lt; を使っているため、関数 search の型は int * int bintree -&gt; bool になります。ここで「ファンクタ」を使うと、いろいろなデータ型に対応することができます。ファンクタはあとで説明します。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データを挿入する関数を作りましょう。探索と同様に、データを比較して木をたどっていき、木がなくなった所に新しいデータを挿入します。
+</p>
+
+<pre class="list">
+リスト : データの挿入
+
+fun insert( x, Empty ) = Node( x, Empty, Empty )
+|   insert( x, T as Node( y, left, right ) ) =
+    if x = y then T
+    else if x &lt; y then Node( y, insert( x, left ), right )  
+    else Node( y, left, insert( x, right ) );
+</pre>
+
+<p> 関数 insert の第 1 引数 x が挿入するデータ、第 2 引数が二分木です。二分木が Empty であれば、新しい節を作って返します。この返り値を節の部分木にセットします。2 番目の定義で、x と y が等しい場合は二分探索木に同じデータがあるので節をそのまま返します。x &lt; y であれば、insert を再帰呼び出しして左部分木をたどります。そして、左部分木を insert( x, left ) の返り値に置き換えた節を作って返します。もしも、left が Empty であれば、ここに新しい節が挿入され、新しい部分木が返されます。x &gt; y であれば右部分木をたどり、データを挿入した新しい右部分木を返します。
+</p>
+<h4>●二分木の巡回</h4>
+<p> 最後に、二分探索木の全データを出力する関数を作ります。二分探索木は、データの大小関係を使って構成されているので、ある順番で節をすべて出力すると、それはソートした結果と同じになります。木のすべての節を規則的な順序で回ることを「巡回 (traverse) 」といいます。このなかで、次の 3 つの方法が重要です。
+</p>
+<ol>
+  <li><b>行きがけ順</b><br>
+    まず節のデータを出力、その後左の子、右の子の順番で出力する。
+  <li><b>帰りがけ順</b><br>
+    左の子、右の子と出力してから、節のデータを出力する。
+  <li><b>通りがけ順</b><br>
+    左の子を出力、次に節のデータを出力、最後に右の子を出力する。
+</ol>
+<p> 名前の由来は、節のデータを出力するタイミングからきています。節に最初に到達したときに出力する方法が「行きがけ」、子を出力してその節に戻ってきたときに出力する方法が「帰りがけ」、子を出力する途中でその節に戻ってきたときに出力する方法が「通りがけ」です。
+</p>
+
+<p> 二分探索木は「左の子 &lt; 節のデータ &lt; 右の子」という関係が成り立つので、通りがけ順に出力すれば、ソートされた出力結果を得ることができます。この処理は、再帰定義を使えば簡単に実現できます。
+</p>
+
+<pre class="list">
+リスト : データの表示
+
+fun print_tree( Empty ) = ()
+|   print_tree( Node( x, left, right ) ) = (  
+    print_tree( left );
+    print( Int.toString( x ) ^ "\n" );
+    print_tree( right ));
+</pre>
+
+<p> まず、二分木が Empty ならば何もしないで unit を返します。これが再帰呼び出しの停止条件となります。あとは通りがけ順の定義そのままにプログラムをするだけです。左部分木を出力するため、left に対して print_tree を再帰呼び出しします。次に、節のデータ x を出力します。最後に右部分木を出力するため、rigth に対して print_tree を再帰呼び出しします。
+</p>
+
+<p> このほかに、データの削除処理がありますが、ここでは割愛いたします。二分探索木の場合、データの探索に比べて削除処理はちょっと複雑です。興味のある方は拙作のページ Common Lisp 入門：番外編 <a href="../clisp/clispb02.html#chap04">二分木：データの削除</a> を参考にしてください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示しましょう。
+</p>
+<pre>
+- val a = insert( 10, Empty );
+val a = Node (10,Empty,Empty) : int bintree
+- val a1 = insert( 5, a );
+val a1 = Node (10,Node (5,Empty,Empty),Empty) : int bintree
+- val a2 = insert( 15, a1 );
+val a2 = Node (10,Node (5,Empty,Empty),Node (15,Empty,Empty)) : int bintree
+- val a3 = insert( 12, a2 );
+val a3 = Node (10,Node (5,Empty,Empty),Node (15,Node #,Empty)) : int bintree
+- search( 12, a3 );
+val it = true : bool
+- search( 11, a3 );
+val it = false : bool
+- print_tree( a3 );
+5
+10
+12
+15
+val it = () : unit
+</pre>
+<p> 正常に動作していますね。この例では二分木を表示する print_tree を作りましたが、実際には app のような高階関数として定義した方がよいでしょう。
+</p>
+<h4>●ファンクタ</h4>
+<p> それではファンクタを使って、二分探索木を改良しましょう。ファンクタは次のように定義します。
+</p>
+<pre class="fig">
+functor 名前 (structA: sigA) = struct
+  .....
+end
+</pre>
+<p> ファンクタは引数に与えられたストラクチャ structA を使って新しいストラクチャを生成します。structA は関数定義の引数（仮引数）と同じと考えてください。ファンクタは、structA.func や structA.value のように、structA に定義されている関数や変数を使ってストラクチャを定義します。そして、structA の型をシグネチャ sigA で指定します。逆にいえば、ファンクタで必要になる関数や変数の仕様を sigA に記述するのです。ファンクタに与えるストラクチャは、このシグネチャの仕様を満たす必要があります。
+</p>
+
+<p> 二分探索木はデータを比較する関数が必要です。これをストラクチャに定義して渡すことにします。シグネチャの定義は次のようになります。
+</p>
+
+<pre class="list">
+リスト : シグネチャの定義
+
+signature ITEM = sig
+    type item
+    val compare : item * item -&gt; order  
+end
+</pre>
+
+<p> シグネチャの名前は ITEM としました。データの比較関数を定義するストラクチャなので、名前を ORDER にしている参考文献もあります。最初に type で item というデータ型を宣言します。このデータ型を使ってシグネチャを記述します。具体的なデータ型の指定はストラクチャで行います。データを比較する関数が compare です。関数型は item * item -&gt; order とします。order は SML/NJ に定義されているデータ型です。
+</p>
+<pre class="item">
+datatype order = LESS | EQUAL | GREATER
+</pre>
+<p> order はデータの大小関係を表します。compare( x, y ) は x &lt; y ならば LESS を、x = y ならば EQUAL を、x &gt; y ならば GREATER を返すことにします。
+</p>
+
+<p> このシグネチャを使ってファンクタを定義します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ファンクタの定義
+
+functor makeBinTree( Item: ITEM ) = struct
+  datatype 'a bintree =
+    Empty |
+    Node of 'a * 'a bintree * 'a bintree
+
+  val create = Empty : Item.item bintree
+
+  (* 探索 *)
+  fun search( x, Empty ) = false
+  |   search( x, Node( y, left, right ) ) =
+      case Item.compare( x, y )
+        of EQUAL   =&gt; true 
+         | LESS    =&gt; search( x, left )
+         | GREATER =&gt; search( x, right )
+
+  (* 挿入 *)
+  fun insert( x, Empty ) = Node( x, Empty, Empty )
+  |   insert( x, T as Node( y, left, right ) ) =
+      case Item.compare( x, y )
+        of EQUAL   =&gt; T 
+         | LESS    =&gt; Node( y, insert( x, left ), right )
+         | GREATER =&gt; Node( y, left, insert( x, right ) )
+
+  (* 二分木の巡回 *)
+  fun app _ Empty = ()
+  |   app f (Node( x, left, right )) = (app f left; f x; app f right)  
+end
+</pre>
+<p> 引数のストラクチャを Item とし、シグネチャを ITEM とします。ファンクタで指定するストラクチャ名は関数定義の仮引数と同じなので、あらかじめ Item というストラクチャを定義しておく必要はありません。ストラクチャで定義されているデータ型は Item.item で、比較関数は Item.compare で参照することができます。
+</p>
+
+<p> 二分木のデータ型は今までと同じ 'a bintree です。変数 create はデータ型を Item.item bintree に限定します。Empty だけだと多相的なデータになります。関数 search と insert は Item.compare を呼び出してデータを比較します。compare は order を返すので、case で場合分けしています。最後に、二分木の要素に関数 f を適用する高階関数 app を定義します。
+</p>
+
+<p> 次は、ファンクタに渡すストラクチャを作ります。
+</p>
+
+<pre class="list">
+リスト : ストラクチャの定義と生成
+
+structure IntItem: ITEM = struct
+  type item = int
+  fun compare( x, y ) =
+      if x &lt; y then LESS
+      else if x = y then EQUAL
+      else GREATER
+end
+
+structure IntTree = makeBinTree( IntItem )  
+</pre>
+
+<p> 二分木に格納するデータは int で、ストラクチャの名前は IntItem とします。最初に、シグネチャで宣言した item のデータ型を int にします。type はデータ型の宣言だけではなく、データ型に名前を付ける機能があります。
+</p>
+<pre class="item">
+type 名前 = 型式
+</pre>
+<p> type item = int で、シグネチャで宣言したデータ型 item は int になります。あとは関数 compare を定義するだけです。compare はシグネチャで item * item -&gt; order と定義されているので、2 つの整数値を引数に受け取る関数になります。最後に、int を格納する二分木 IntTree をファンクタで生成します。これはファンクタ makeBinTree に IntItem を渡すだけです。
+</p>
+
+<p> それでは実際に試してみましょう。IntTree の生成は次のようになります。
+</p>
+<pre>
+signature ITEM =
+  sig
+    type item
+    val compare : item * item -&gt; order
+  end
+structure IntItem : ITEM
+functor makeBinTree : <sig>
+structure IntTree :
+  sig
+    datatype 'a bintree = Empty | Node of 'a * 'a bintree * 'a bintree
+    val app : ('a -&gt; 'b) -&gt; 'a bintree -&gt; unit
+    val create : Item.item bintree
+    val insert : Item.item * Item.item bintree -&gt; Item.item bintree
+    val search : Item.item * Item.item bintree -&gt; bool
+  end
+</pre>
+<p> シグネチャ ITEM とストラクチャ IntItem とファンクタ makeBinTree が定義され、makeBinTree によりストラクチャ IntTree が生成されます。IntTree の実行例を示します。
+</p>
+<pre>
+- val a = IntTree.create;
+val a = Empty : IntItem.item IntTree.bintree
+- val a1 = IntTree.insert( 10, a );
+val a1 = Node (10,Empty,Empty) : IntItem.item IntTree.bintree
+- val a2 = IntTree.insert( 5, a1 );
+val a2 = Node (10,Node (5,Empty,Empty),Empty) : IntItem.item IntTree.bintree
+- val a3 = IntTree.insert( 15, a2 );
+val a3 = Node (10,Node (5,Empty,Empty),Node (15,Empty,Empty))
+  : IntItem.item IntTree.bintree
+- IntTree.app (fn(x)=&gt;print(Int.toString(x) ^ "\n")) a3;
+5
+10
+15
+val it = () : unit
+</pre>
+<p> 正常に動作していますね。ところで、変数 IntTree.create はデータ型が決まっているので、参照型の変数に格納することができます。次の例を見てください。
+</p>
+<pre>
+- val c = ref IntTree.create;
+val c = ref Empty : IntItem.item IntTree.bintree ref
+- app (fn(x) =&gt; c := IntTree.insert(x, !c)) [5,9,1,8,2,7,3,6,4];
+val it = () : unit
+- IntTree.app (fn(x) =&gt; print(Int.toString(x)^"\n")) (!c);
+1
+2
+3
+4
+5
+6
+7
+8
+9
+val it = () : unit
+</pre>
+<p> このように、ref 変数 c の値を書き換えながら、二分探索木にデータを挿入することもできます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap17">ハッシュ法</h3>
+<p> 今回は高速な探索アルゴリズムの一つである「ハッシュ法」を取り上げます。なお、ハッシュ法は次のページで詳しく説明しています。内容は重複しますが、ご了承くださいませ。
+</p>
+<UL>
+  <LI><a href="../xyzzy_lisp/abclisp09.html#yori14">Common Lisp 入門：ちょっと寄り道「ハッシュ法」</a>
+</UL>
+<p> ハッシュ法を理解されている方は読み飛ばしてもらってかまいません。
+</p>
+<p><a href="smlnj07.html#next1">次へ</a>
+</p>
+<h4>●ハッシュ法とは？</h4>
+<p> ハッシュ法は、コンパイラやインタプリタなどで予約語や関数名、変数名などの管理に使われている方法です。また、Perl や Ruby など連想配列をサポートしているスクリプト言語がありますが、その実装にはハッシュ法が使われています。
+</p>
+<p> ハッシュ法は「ハッシュ表 (hash table) 」と呼ばれるデータを格納する配列と、データを数値に変換する「ハッシュ関数 (hash function) 」を使います。たとえば、ハッシュ表の大きさを N とすると、ハッシュ関数はデータを 0 から N - 1 までの整数値に変換します。この値を「ハッシュ値 (hash value) 」と呼びます。ハッシュ値はハッシュ表の添字に対応し、この位置にデータを格納します。つまり、ハッシュ関数によってデータを格納する位置を決める方法がハッシュ法なのです。
+</p>
+<p> ハッシュ法で不特定多数のデータを扱う場合、異なるデータでもハッシュ値が等しくなる可能性があります。これを「ハッシュ値の衝突 (collision) 」といいます。つまり、データをハッシュ表に登録しようとしても、すでにデータが格納されていることがあるわけです。この場合、2 つの解決方法があります。
+</p>
+<p> 第 1 の方法は空いている場所を探して、そこにデータを格納する方法です。次の図を見てください。
+</p>
+
+<pre class="fig">
+   ハッシュ表            ハッシュ表         
+   ┌───┐            ┌───┐         
+   │  ／  │            │  ／  │         
+   ├───┤            ├───┤         
+   │  Ａ  │            │  Ａ  ┼─┐ 衝突 (E)
+   ├───┤            ├───┤  │     
+   │  ／  │            │  Ｅ  │←┘     
+   ├───┤            ├───┤         
+   │  ／  │            │  ／  │         
+   ├───┤            ├───┤         
+   │  Ｂ  │            │  Ｂ  ┼─┐ 衝突 (D, F)   
+   ├───┤            ├───┤  │     
+   │  ／  │            │  Ｄ  ┼←┤ 衝突 (F)
+   ├───┤            ├───┤  │     
+   │  Ｃ  │            │  Ｃ  ┼←┤ 衝突 (F)
+   ├───┤            ├───┤  │     
+   │  ／  │            │  Ｆ  │←┘     
+   └───┘            └───┘         
+       ／ ： 空き場所
+
+  (1) A, B, C を登録    (2) D, E, F を登録
+
+    図 : ハッシュ法 (オープンアドレス法)
+</pre>
+<p> ハッシュ値が衝突した場合、異なるハッシュ関数を用いてハッシュ値を再計算し、データを格納する場所を決めます。これを空いている場所が見つかるまで繰り返します。この場合、データの最大数はハッシュ表の大きさに制限されます。
+</p>
+<p> 第 2 の方法はハッシュ表に複数のデータを格納することです。このとき、よく利用されるデータ構造が連結リストです。次の図を見てください。
+</p>
+
+<pre class="fig">
+   ハッシュ表
+   ┌───┐   
+   │  ／  │   
+   ├───┤    ┌─┬─┐  ┌─┬─┐
+   │  ・─┼─→│Ｅ│・┼→│Ａ│／│
+   ├───┤    └─┴─┘  └─┴─┘
+   │  ／  │   
+   ├───┤   
+   │  ／  │   
+   ├───┤    ┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+   │  ・─┼─→│Ｆ│・┼→│Ｄ│・┼→│Ｂ│／│  
+   ├───┤    └─┴─┘  └─┴─┘  └─┴─┘
+   │  ／  │   
+   ├───┤    ┌─┬─┐
+   │  ・─┼─→│Ｃ│／│
+   ├───┤    └─┴─┘
+   │  ／  │   
+   └───┘   
+
+       ／ ： 終端
+
+        図 : ハッシュ法 (チェイン法)
+</pre>
+
+<p> ハッシュ表からデータを探索する場合、まずハッシュ値を求め、そこに格納されている連結リストの中からデータを探索します。ただし、ハッシュ値の衝突が頻繁に発生すると連結リストが長くなるため、データの探索に時間がかかってしまいます。効率よく探索を行うためには、ハッシュ表の大きさとハッシュ関数の選択が重要になります。連結リストの代わりに二分探索木を使う方法もあります。
+</p>
+<p> これら 2 つの方法の名前ですが、参考文献によって呼び方が異なっていて統一されていません。このドキュメントでは <a href="smlnj07.html#cite1">参考文献 [1]</a> に従って、第 1 の方法を「オープンアドレス法 (open addressing) 」、第 2 の方法を「チェイン法 (chaining) 」と呼ぶことにします。
+</p>
+<div class="note">
+<a name="cite1">-- 参考文献 --------</a><br>
+[1] 近藤嘉雪, 『Ｃプログラマのためのアルゴリズムとデータ構造』, ソフトバンク, 1998 
+</div>
+<h4 id="next1">●プログラムの作成</h4>
+<p> 今回はチェイン法でプログラムを作ってみましょう。ハッシュ法の性能は、ハッシュ関数によって大きく左右されます。このため、データに適したハッシュ関数を作るのが普通です。そこで、ハッシュ表の大きさ、ハッシュ関数、データの比較関数はストラクチャにまとめておき、ファンクタに渡すことにします。
+</p>
+
+<p> 最初に、ファンクタに渡すストラクチャ用のシグネチャ HASHITEM を定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : シグネチャの定義
+
+signature HASHITEM = sig
+  type item
+  val size : int
+  val hash_func : item -&gt; int
+  val equal : item * item -&gt; bool  
+end
+</pre>
+
+<p> size がハッシュ表の大きさ、hash_func がハッシュ関数、equal がデータが等しいかチェックする述語です。これらの変数と関数を使ってファンクタを定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ファンクタの定義
+
+functor makeHash( Item: HASHITEM ) = struct
+  (* データ型の定義 *)
+  datatype 'a hash = Hash of 'a array
+
+  (* ハッシュ表の生成 *)
+  fun create() = Hash( Array.array( Item.size, nil: Item.item list ) )  
+
+  (* データの探索 *)
+  fun search( data, Hash( table ) ) =
+      let
+        val n = Item.hash_func( data )
+        val L = Array.sub( table, n )
+      in
+        List.find (fn(x) =&gt; Item.equal( x, data )) L
+      end
+
+  (* データの挿入 *)
+  fun insert( data, Hash( table ) ) =
+      let
+        val n = Item.hash_func( data )
+        val L = Array.sub( table, n )
+      in
+        if List.exists (fn(x) =&gt; Item.equal( x, data )) L
+        then false
+        else (Array.update( table, n, data::L ); true)
+      end
+
+  (* データの削除 *)
+  fun delete( data, Hash( table ) ) =
+      let
+        fun remove( nil ) = nil
+        |   remove( x::xs ) =
+            if Item.equal( data, x ) then xs else remove( xs )
+        val n = Item.hash_func( data )
+        val L = Array.sub( table, n )
+      in
+        Array.update( table, n, remove( L ) )
+      end
+end
+</pre>
+<p> 最初に datatype でハッシュ表のデータ型 'a hash を定義します。配列をそのまま使うのではなく、ハッシュ表を表すデータ型を定義した方がよいでしょう。関数 create でハッシュ表を生成します。大きさ は Item.size で、初期値は空リスト (nil) になります。
+</p>
+<p> データの探索は関数 search で行います。ハッシュ関数 hash_func でハッシュ値 n を求め、ハッシュ表 table からリスト L を取り出します。そして、関数 find で data と等しいデータを探します。データの比較には関数 equal を使います。
+</p>
+<p> データの挿入は関数 insert で行います。ハッシュ値 n をリスト L を求める処理は search と同じです。まず、関数 exists で同じデータがあるかチェックします。もし、同じデータがあれば false を返します。そうでなければ、data をリスト L の先頭に追加します。そして、ハッシュ表 table を関数 update で更新して true を返します。
+</p>
+<p> データの削除は関数 delete で行います。リストから data を削除する関数 remove を定義し、それを使ってハッシュ表からデータを削除します。remove は equal を使って data と等しい要素を探し、それを削除したリストを返します。あとは、ハッシュ表の値を remove の返り値に更新するだけです。
+</p>
+
+<h4>●ハッシュ関数の作成</h4>
+<p> 次はファンクタに渡すストラクチャを定義しましょう。格納するデータは文字列とします。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ストラクチャの定義
+
+structure StringItem: HASHITEM = struct
+    type item = string
+    val size = 199
+    fun hash_func( x ) = 
+        (foldr (fn(a, b) =&gt; ord( a ) + b) 0 (explode( x ))) mod size  
+    fun equal( a, b ) = a = b
+end
+
+structure StringHash = makeHash( StringItem )
+</pre>
+<p> ストラクチャ名は StringItem としました。ハッシュ表の大きさは適当でもいいのですが、<a href="smlnj07.html#cite2">参考文献 [2]</a> によると <CITE> 『この値が素数だと安心である』 </CITE> とのことなので、このプログラムでは 199 としました。
+</p>
+<p> 今回はハッシュ法の例題ということで、ハッシュ値の計算は簡単な方法を採用します。関数 hash_func は文字コードを全て加算し、その値を size で割った余りをハッシュ値としています。これで、0 から 198 までのハッシュ値を生成することができます。
+</p>
+<p> SML/NJ には、文字を表す「文字型 (char) 」というデータ型があります。c を文字とすると、文字型は #"c" で表します。SML/NJ には string を char list に変換する関数 explode と、char list を string に変換する関数 implode が用意されています。簡単な例を示します。
+</p>
+<pre>
+- explode( "foo" );
+val it = [#"f",#"o",#"o"] : char list
+
+- implode( it );
+val it = "foo" : string
+</pre>
+<p> char を int に変換する関数が ord で、int を char に変換する関数が chr です。簡単な例を示します。
+</p>
+<pre>
+- ord( #"a" );
+val it = 97 : int
+
+- chr( 97 );
+val it = #"a" : char
+</pre>
+<p> 関数 hash_func は引数の文字列 x を explode で分解し、foldr で文字コードを加算します。匿名関数の中では、ord を使って char を int に変換し、その値を引数 b に加算します。あとは、foldr の返り値と size の剰余を求めるだけです。
+</p>
+<p> 文字列は等値型データなので、関数 equal は等値演算子 = でデータを比較するだけです。これで、ストラクチャの定義は終わりです。最後に、ファンクタ makeHash に StringItem を渡してストラクチャ StringHash を生成します。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+- val a = StringHash.create();
+val a = Hash [|[],[],[],[],[],[],[],[],[],[],[],[],...|]
+  : StringItem.item list StringHash.hash
+
+- StringHash.insert( "foo", a );
+val it = true : bool
+- StringHash.search( "foo", a );
+val it = SOME "foo" : StringItem.item option
+- StringHash.search( "bar", a );
+val it = NONE : StringItem.item option
+
+- StringHash.delete( "foo", a );
+val it = () : unit
+- StringHash.search( "foo", a );
+val it = NONE : StringItem.item option
+</pre>
+<p> 正常に動作していますね。
+</p>
+<div class="note">
+<a name="cite2">-- 参考文献 ------</a><br>
+[2] 奥村晴彦, 『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991 
+</div>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori07">ちょっと寄り道</h3>
+<h4>■小町算</h4>
+<p> パズルの世界では、1 から 9 までの数字を 1 個ずつすべて使った数字を「小町数」といいます。123456789 とか 321654987 のような数字が小町数です。「小町算」というものもあり、123 + 456 + 789 とか 321 * 654 + 987 のようなものです。今回は小町算の中でも特に有名なパズルを解いてみましょう。
+</p>
+<div class="question">
+<b>[問題]</b> 小町算<br>
+<p>1 から 9 までの数字を順番に並べ、間に + と - を補って 100 になる式を作ってください。
+</p>
+<p> 例：1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 = 100
+</p>
+</div>
+<h4>■プログラムの作成</h4>
+<p> それではプログラムを作りましょう。この問題は演算子が + と - だけしかないので、式はリストで表すことにします。SML/NJ の場合、異なるデータ型をリストに格納することはできないので、+ と - と数値を表すデータ型を定義します。
+</p>
+
+<pre class="list">
+リスト : データ型の定義
+
+datatype term =  Plus | Minus | Num of int  
+</pre>
+
+<p> term を使うと数式は次のように表すことができます。
+</p>
+<pre class="fig">
+1 + 2 + 3 - 4 + 5 + 6 + 78 + 9
+=&gt; [Num 1, Plus, Num 2, Plus, Num 3, Minus, Num 4, Plus, 
+    Num 5, Plus, Num 6, Plus, Num 78, Plus, Num 9]
+</pre>
+<p> あとは、式を生成して値を計算するだけです。式を生成するとき、リストを逆順で管理すると簡単です。次の図を見てください。
+</p>
+<pre class="item">
+[Num 1] =&gt; [Num 2, Plus, Num 1]  =&gt; [Num 3, Plus, Num 2, Plus, Num 1]
+                                 =&gt; [Num 3, Minus, Num 2, Plus, Num 1]
+                                 =&gt; [Num 23, Plus, Num 1]
+        =&gt; [Num 2, Minus, Num 1] =&gt; [Num 3, Plus, Num 2, Minus, Num 1]
+                                 =&gt; [Num 3, Minus, Num 2, Minus, Num 1]
+                                 =&gt; [Num 23, Minus, Num 1]
+        =&gt; [Num 12]              =&gt; [Num 3, Plus, Num 12]
+                                 =&gt; [Num 3, Minus, Num 12]
+                                 =&gt; [Num 123]
+</pre>
+<p> 式を生成するとき、リストに数字と演算子を順番に追加していきます。Numと Plus, Minus を追加する処理は簡単です。プログラムのポイントは数字を連結する処理、たとえば 1 と 2 を連結して一つの数値 12 にする処理です。この処理はリストの先頭の数字 Num 1 を Num 12 (= 1 * 10 + 2) に置き換えることで実現できます。リストが [Num 2, Plus, Num 1] であれば、Num 2 を Num 23 (= 2 * 10 + 3) に置き換えます。
+</p>
+<p> 式を生成するプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：式の生成
+
+fun make_expr( 10, expr ) = 
+  let
+    val expr1 = rev( expr )
+  in
+    if calc_expr( expr1 ) = 100 then print_expr( expr1 ) else ()  
+  end
+|   make_expr( n, expr as Num( x )::xs ) = (
+      make_expr( n + 1, Num( n )::Plus::expr );
+      make_expr( n + 1, Num( n )::Minus::expr );
+      make_expr( n + 1, Num( x * 10 + n )::xs ))
+</pre>
+
+<p> 式の生成はバックトラックを使うと簡単です。make_exp の引数 n が追加する数字、expr が生成する式（リスト）です。n が 10 になったら式が完成したので値を計算します。関数 rev で式を元に戻し、calc_expr で式 expr1 を計算します。その結果が 100 になれば関数 print_expr で式を出力します。
+</p>
+<p> n が 10 より小さい場合は数値と演算子をリストにセットします。最初に Num( n ) と Plus をセットして make_expr を再帰呼び出しします。その次に、Num( n ) と Minsu をセットして make_expr を呼び出します。最後に、Num( x ) を Num( x * 10 + n ) に置き換えてから make_expr を呼び出します。これで、全部の数式を生成することができます。
+</p>
+
+<p> 次は式を計算する calc_exp を作ります。今回の問題は演算子に + と - しかないので、リストで表現した式を計算することは簡単です。次のプログラムを見てください。
+</p>
+
+<pre class="list">
+リスト：式の計算
+
+fun calc_expr( Num(n)::expr ) =
+    let
+      fun calc_expr_sub( nil, sum ) = sum
+      |   calc_expr_sub( Plus::Num(x)::xs, sum ) = calc_expr_sub( xs, sum + x )
+      |   calc_expr_sub( Minus::Num(x)::xs, sum ) = calc_expr_sub( xs, sum - x )  
+    in
+      calc_expr_sub( expr, n )
+    end
+</pre>
+
+<p> 実際の計算処理は関数 calc_expr_sub で行います。第 1 引数が数式 (リスト) で、第 2 引数が計算結果です。calc_expr は先頭の数値 n を取り出し、残りの数式を calc_expr_sub の第 1 引数に、n を第 2 引数に渡します。すると、数式の先頭は Plus か Minus になります。calc_expr_sub では、Plus の場合は次の数値 x を sum に加算し、Minus の場合は sum から減算します。あとは calc_expr_sub を再帰呼び出しするだけです。
+</p>
+<p> あとのプログラムは簡単なので説明は省略いたします。詳細は <a href="smlnj07.html#list">プログラムリスト</a> をお読みください。
+</p>
+
+<h4>■実行結果</h4>
+<p> プログラムをコンパイルすると Warning: match nonexhaustive が表示されます。この Warning は、すべての場合についてパターンを定義していないときに表示されます。このプログラムはパターンが限定されているので、Warning を無視しても大丈夫です。
+</p>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+fun solve() = make_expr( 2, [Num(1)] )
+
+- solve();
+1 + 2 + 3 - 4 + 5 + 6 + 78 + 9
+1 + 2 + 34 - 5 + 67 - 8 + 9
+1 + 23 - 4 + 5 + 6 + 78 - 9
+1 + 23 - 4 + 56 + 7 + 8 + 9
+12 + 3 + 4 + 5 - 6 - 7 + 89
+12 + 3 - 4 + 5 + 67 + 8 + 9
+12 - 3 - 4 + 5 - 6 + 7 + 89
+123 + 4 - 5 + 67 - 89
+123 + 45 - 67 + 8 - 9
+123 - 4 - 5 - 6 - 7 + 8 - 9
+123 - 45 - 67 + 89
+val it = () : unit
+</pre>
+<p> 全部で 11 通りの解が出力されます。この他にも、いろいろな解き方があると思います。興味のある方は、もっとクールな方法を考えてみてください。
+</p>
+
+<hr>
+<h4 id="list">■プログラムリスト</h4>
+<pre class="list">
+(* 
+ * 小町算の解法
+ *
+ *         Copyright (C) 2005 Makoto Hiroi
+ *)
+
+datatype term =  Plus | Minus | Num of int
+
+fun print_item( Plus ) =  print( " + " )
+|   print_item( Minus ) = print( " - " )
+|   print_item( Num(x) ) = print( Int.toString( x ) )
+
+fun print_expr( nil ) = print( "\n" )
+|   print_expr( x::xs ) = (print_item( x ); print_expr( xs ))
+
+fun calc_expr( Num(n)::expr ) =
+    let
+      fun calc_expr_sub( nil, sum ) = sum
+      |   calc_expr_sub( Plus::Num(x)::xs, sum ) = calc_expr_sub( xs, sum + x )
+      |   calc_expr_sub( Minus::Num(x)::xs, sum ) = calc_expr_sub( xs, sum - x )
+    in
+      calc_expr_sub( expr, n )
+    end
+
+fun make_expr( 10, expr ) = 
+    let
+      val expr1 = rev( expr )
+    in
+      if calc_expr( expr1 ) = 100 then print_expr( expr1 ) else ()
+    end
+|   make_expr( n, expr as Num(x)::xs ) = (
+      make_expr( n + 1, Num(n)::Plus::expr );
+      make_expr( n + 1, Num(n)::Minus::expr );
+      make_expr( n + 1, Num(x * 10 + n)::xs ))
+
+fun solve() = make_expr( 2, [Num(1)] )
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2005 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj06.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj08.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

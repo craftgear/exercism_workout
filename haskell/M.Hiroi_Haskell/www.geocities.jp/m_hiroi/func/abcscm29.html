@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881783</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm28.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm30.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>非決定性 (2)</h3>
+<p> 今回は非決定性計算を幅優先探索で行う方法について説明します。参考文献は Paul Graham 著，野田 開 訳, <a href="http://www.komaba.utmc.or.jp/~flatline/onlispjhtml/">On Lisp</a> です。
+</p>
+
+<h4>●amb は深さ優先探索</h4>
+<p> 前回作成した amb は、一つ前に実行した amb の継続を局所変数 prev-fail に保存して、*amb-fail* をバックトラックする継続に書き換えています。この処理は *amb-fail* をスタックとして使用すると簡単に実現することができます。つまり、継続を *amb-fail* にプッシュしておいて、バットラックするときは *amb-fail* から継続をポップして実行します。この方法だと深さ優先探索していることがよくわかると思います。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 非決定性 amb の修正
+
+; 継続を格納するスタック
+(define *amb-fail* #f)
+
+; 初期化
+(define (initialize-amb-fail)
+  (set! *amb-fail* '()))
+
+; スタックから継続を取り出してバックトラックする
+(define (fail)
+  (if (null? *amb-fail*)
+      (error "amb tree exhausted")
+    ((pop! *amb-fail*))))
+
+
+;;; 非決定性
+
+; 関数版
+(define (amb-f . args)
+  (if (null? args)
+      (fail)
+    (call/cc
+      (lambda (cont-s)
+        (for-each
+          (lambda (x)
+            (call/cc
+              (lambda (cont-f)
+                (push! *amb-fail* (lambda () (cont-f #f)))
+                (cont-s x))))
+          args)
+        (fail)))))
+
+; マクロ版
+(define-syntax amb
+  (syntax-rules ()
+    ((_) (fail))
+    ((_ a) a)
+    ((_ a ...)
+     (call/cc
+       (lambda (cont-s)
+         (call/cc
+           (lambda (cont-f)
+             (push! *amb-fail* (lambda () (cont-f #f)))
+             (cont-s a)))
+         ...
+         (fail))))))
+
+; 見つけた解をリストに格納して返す
+(define-syntax bag-of
+  (syntax-rules ()
+    ((_ e)
+     (let ((results '()))
+       (if (call/cc
+             (lambda (cont)
+               (push! *amb-fail* (lambda () (cont #f)))
+               (push! results e)
+               (cont #t)))
+         (fail))
+       (reverse! results)))))
+</pre>
+<p> 関数 initialize-amb-faile は大域変数 *amb-fail* を空リストに初期化します。関数 fail は *amb-fail* から pop! で継続を取り出して実行します。*amb-fail* が空リストの場合はエラーを送出します。amb-f は関数版で、amb がマクロ版です。どちらもラムダ式 (lambda () (cont-f #f)) を *amb-fail* に push! してから、継続 cont-s を評価して要素を返します。bag-of の修正も同じです。
+</p>
+
+<h4>●経路の探索</h4>
+<p> それでは簡単な例題として、拙作のページ <a href="abcscm17.html">集合、グラフ、経路の探索</a> で取り上げた「経路の探索」を解いてみましょう。経路図を再掲します。
+</p>
+<pre class="fig">
+     Ｂ───Ｄ───Ｆ 
+   ／│      │
+ Ａ  │      │
+   ＼│      │
+     Ｃ───Ｅ───Ｇ
+
+    図 : 経路図
+</pre>
+<p> amb を使ったプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 経路の探索
+
+; 隣接リスト
+(define *adjacent*
+        '((a b c)
+          (b a c d)
+          (c a b e)
+          (d b e f)
+          (e c d g)
+          (f d)
+          (g e)))
+
+; 深さ優先探索
+(define (depth-first-search start goal)
+  (let loop ((path (list start)))
+    (if (eq? (car path) goal)
+        (reverse path)
+      (let ((x (apply amb-f (assoc (car path) *adjacent*))))
+        (assert (not (member x path)))
+        (loop (cons x path))))))
+</pre>
+<p> 隣接リスト *adjacent* は連想リストで表しています。関数 depth-first-search は経路をリスト path で管理します。経路は逆順で管理していることに注意してください。(car path) が goal と等しい場合は (reverse path) を返します。
+</p>
+<p> そうでなければ、amb-f で隣接リストから要素を一つ選びます。この場合、マクロ amb よりも関数 amb-f を使った方が簡単です。apply を使って隣接リストを amb-f に渡します。そして、選んだ要素 x が path に含まれていないことを assert で確認します。最後に、path の先頭に x を追加して探索を続行します。
+</p>
+<p> それでは、実行結果を示しましょう。
+</p>
+<pre>
+gosh&gt; (depth-first-search 'a 'g)
+(a b c e g)
+gosh&gt; (fail)
+(a b d e g)
+gosh&gt; (fail)
+(a c b d e g)
+gosh&gt; (fail)
+(a c e g)
+gosh&gt; (fail)
+*** ERROR: amb tree exhausted
+
+gosh&gt; (bag-of (depth-first-search 'a 'g))
+((a b c e g) (a b d e g) (a c b d e g) (a c e g))
+</pre>
+<p> amb は深さ優先探索なので、最初に見つかる経路が最短経路とは限りません。最短経路を求めるには「幅優先探索」のほうが適しています。
+</p>
+<h4>●幅優先探索版 amb の作成</h4>
+<p> それでは、amb のアルゴリズムを幅優先探索に変更しましょう。基本的には *amb-fail* をスタックからキューに変更するだけですが、それだけでは bag-of の動作が実現できないので、ちょっとした工夫が必要になります。
+</p>
+<p> キューは拙作のページ <a href="abcscm14.html">Scheme プログラミング中級編 [4]</a> で説明しましたが、Gauche には util.queue というライブラリが用意されています。今回はライブラリ util.queue を使うことにしましょう。主な関数を表に示します。
+</p>
+<table border=1>
+<caption>表 : キューを操作する関数</caption>
+<thead>
+  <tr><th>名前</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>make-queue</td><td>空のキューを作成する</td></tr>
+  <tr><td>queue-empty? q</td><td>キュー q が空の場合は #t を返す</td></tr>
+  <tr><td>queue-length q</td><td>キュー q の中にある要素の個数を返す</td></tr>
+  <tr><td>enqueue! q obj ...</td><td>キュー q に引数 obj を追加する</td></tr>
+  <tr><td>dequeue! q</td><td>キュー q から要素を取り出す</td></tr>
+  <tr><td>queue-front q</td><td>キュー q の先頭の要素を返す</td></tr>
+  <tr><td>queue-rear q</td><td>キュー q の最後尾の要素を返す</td></tr>
+</tbody>
+</table>
+<p> ほかにも便利な関数がありますので、詳細は Gauche のリファレンスマニュアルをお読みください。簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (use util.queue)
+#&lt;undef&gt;
+gosh&gt; (define q (make-queue))
+q
+gosh&gt; (enqueue! q 'a)
+(#0=(a) . #0#)
+gosh&gt; (enqueue! q 'b)
+((a . #0=(b)) . #0#)
+gosh&gt; (enqueue! q 'c)
+((a b . #0=(c)) . #0#)
+gosh&gt; (enqueue! q 'd)
+((a b c . #0=(d)) . #0#)
+gosh&gt; (dequeue! q)
+a
+gosh&gt; (dequeue! q)
+b
+gosh&gt; (dequeue! q)
+c
+gosh&gt; (dequeue! q)
+d
+gosh&gt; (queue-empty? q)
+#t
+</pre>
+<p> それでは amb を修正しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 非決定性 amb (幅優先探索)
+
+(use util.queue)
+
+; キュー
+(define *amb-fail* #f)
+; bag-of 用スタック
+(define *bag-fail* #f)
+
+; 初期化
+(define (initialize-amb-fail)
+  (set! *amb-fail* (make-queue))
+  (set! *bag-fail* '()))
+
+; キューから継続を取り出してバックトラックする
+(define (fail)
+  (if (queue-empty? *amb-fail*)
+      (if (null? *bag-fail*)
+          (error "amb tree exhausted")
+        ((pop! *bag-fail*) #f))
+    ((dequeue! *amb-fail*))))
+
+
+; 非決定性 (幅優先探索)
+
+; マクロ版
+(define-syntax amb
+  (syntax-rules ()
+    ((_) (fail))
+    ((_ a) a)
+    ((_ a ...)
+     (call/cc
+       (lambda (cont)
+         (enqueue! *amb-fail* (lambda () (cont a)))
+         ...
+         (fail))))))
+
+; 関数版
+(define (amb-f . args)
+  (if (null? args)
+      (fail)
+    (call/cc
+      (lambda (cont)
+        (for-each
+          (lambda (x) (enqueue! *amb-fail* (lambda () (cont x))))
+          args)
+        (fail)))))
+
+; 見つけた解をリストに格納して返す
+(define-syntax bag-of
+  (syntax-rules ()
+    ((_ e)
+     (let ((results '())
+           (prev-fail *amb-fail*))
+       (call/cc
+         (lambda (cont)
+            (set! *amb-fail* (make-queue))
+            (push! *bag-fail* cont)
+            (push! results e)
+            (fail)))
+       (set! *amb-fail* prev-fail)
+       (reverse! results)))))
+</pre>
+<p> マクロ版 amb と関数版 amb-f は簡単です。要素を返すための継続を取り出して cont にセットします。そして、(lambda () (cont a)) をキュー *amb-fail* に追加するだけです。最後に関数 fail を呼び出して、キューに格納された継続を取り出してバックトラックします。amb が最初に呼び出された場合、これで先頭の要素が返されます。
+</p>
+
+<p> 関数 bag-of はちょっと複雑になります。*amb-fail* はキューなので、bag-of の処理を終了するための継続をキューに追加しても動作しません。そこで、新しいキューを生成して *amb-fail* にセットし、引数 e の処理で発生したバックトラックはそのキューに格納します。そして、bag-of の処理を終了するための継続を大域変数 *bag-fail* にセットします。(push! result e) のあと fail を評価すると、引数 e の処理にバックトラックするので、e の評価結果を results に格納していくことができます。
+</p>
+
+<p> 関数 fail は *amb-fail* が空でも *bag-fail* が空リストでなければ、*bag-fail* から継続を取り出して実行します。*bag-fail* はスタックとして使用することに注意してください。これで bag-of の (call/cc ...) の処理が終了し、*amb-fail* を元のキューに戻して (reverse! results) を返します。
+</p>
+
+<p> それでは、簡単な実行例を示しましょう。
+</p>
+<pre>
+gosh&gt; (list (amb 1 2 3) (amb 4 5 6))
+(1 4)
+gosh&gt; (fail)
+(1 5)
+gosh&gt; (fail)
+(1 6)
+gosh&gt; (fail)
+(2 4)
+gosh&gt; (fail)
+(2 5)
+gosh&gt; (fail)
+(2 6)
+gosh&gt; (fail)
+(3 4)
+gosh&gt; (fail)
+(3 5)
+gosh&gt; (fail)
+(3 6)
+gosh&gt; (fail)
+*** ERROR: amb tree exhausted
+
+gosh&gt; (bag-of (list (amb 1 2 3) (amb 4 5 6)))
+((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+</pre>
+<p> amb は幅優先探索なので (list (amb 1 2 3) (amb 4 5 6)) を評価すると、先頭要素が 1 の組から順番に生成されます。
+</p>
+<p> 幅優先で「経路の探索」を行うと次のようになります。
+</p>
+<pre>
+gosh&gt; (breadth-first-search 'a 'g)
+(a c e g)
+gosh&gt; (fail)
+(a b c e g)
+gosh&gt; (fail)
+(a b d e g)
+gosh&gt; (fail)
+(a c b d e g)
+gosh&gt; (fail)
+*** ERROR: amb tree exhausted
+
+gosh&gt; (bag-of (breadth-first-search 'a 'g))
+((a c e g) (a b c e g) (a b d e g) (a c b d e g))
+</pre>
+<p> 関数 breadth-first-search は経路を幅優先探索します。この関数は depth-first-search の名前を breadth-fisrt-search に変更しただけで、プログラムはまったく同じです。amb が幅優先探索しているので、最初に見つかる経路が最短経路になります。
+</p>
+
+<h4>●水差し問題</h4>
+<p> それでは簡単な例題としてパズルを解いてみましょう。「水差し問題」はいろいろな呼び方があって、「水をはかる問題」とか「水を測り出す問題」と呼ばれることもあります。それでは問題です。
+</p>
+<div class="question">
+<b>[問題]</b> 水差し問題
+<p> 大きな容器に水が入っています。目盛の付いていない 8 リットルと 5 リットルの容器を使って、大きな容器から 4 リットルの水を汲み出してください。4 リットルの水は、どちらの容器に入れてもかまいません。水をはかる最短手順を求めてください。なお、水の総量に制限はありません。
+</p>
+</div>
+<p> なお、この問題は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/water_jug.html">水差し問題</a> と同じです。内容は重複しましが、あしからずご了承ください。
+</p>
+
+<p> 水差し問題の場合、次に示す 3 通りの操作があります。
+</p>
+<ol>
+  <li>容器いっぱいに水を満たす。
+  <li>容器を空にする。
+  <li>他の容器に水を移す。
+</ol>
+<p> 3 の操作は、容器が空になるまで水を移す場合と、もう一方の容器が満杯になるまで水を移す場合があります。容器は 2 つあるので、全部で 6 通りの操作があります。最初に、これらの操作を行う関数を定義します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 容器の操作
+
+; アクセス関数
+(define MAX-A 8)
+(define MAX-B 5)
+(define (get-A state) (car state))
+(define (get-B state) (cadr state))
+
+; A を満杯にする
+(define (full-A state)
+  (list MAX-A (get-B state)))
+
+; A を空にする
+(define (clear-A state)
+  (list 0 (get-B state)))
+
+; A -&gt; B
+(define (A-&gt;B state)
+  (let ((w (min (get-A state) (- MAX-B (get-B state)))))
+    (list (- (get-A state) w) (+ (get-B state) w))))
+
+; B を満杯にする
+(define (full-B state)
+  (list (get-A state) MAX-B))
+
+; B を空にする
+(define (clear-B state)
+  (list (get-A state) 0))
+
+; B-&gt;A
+(define (B-&gt;A state)
+  (let ((w (min (- MAX-A (get-A state)) (get-B state))))
+    (list (+ (get-A state) w) (- (get-B state) w))))
+</pre>
+<p> 状態はリスト (A B) で表します。A は 8 リットルの容器の水の量、B は 5 リットルの容器の水の量を表します。容器を水で満たす、または空にする操作は簡単ですね。他の容器へ移す場合、たとえば A-&gt;B では、B の空き容量と A の水の量を比較して、少ない方が移す水の量 w になります。
+</p>
+
+<p> あとは amb を使って簡単にプログラムすることができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 水差し問題の解法
+
+(define (solve-water goal)
+  (let loop ((path '((0 0))))
+    (if (or (= (get-A (car path)) goal)
+            (= (get-B (car path)) goal))
+        (reverse path)
+      (let ((fn (amb full-A clear-A A-&gt;B full-B clear-B B-&gt;A)))
+        (let ((state (fn (car path))))
+          (assert (not (member state path)))
+          (loop (cons state path)))))))
+</pre>
+<p> path に手順を格納します。A または B に水が goal リットルあれば解を見つけることができました。(reverse path) で path を逆順にして返します。そうでなければ、amb で操作関数を一つ選んで fn にセットします。そして、(fn (car path)) で新しい状態を生成して state にセットします。path に同じ状態が見つかった場合はバックトラックします。新しい状態であれば path の先頭に追加して探索を続行します。
+</p>
+
+<p> 深さ優先探索で実行すると次のようになります。
+</p>
+<pre>
+gosh&gt; (solve-water 4)
+((0 0) (8 0) (3 5) (8 5) (0 5) (5 0) (5 5) (8 2) (0 2) (2 0) (2 5) (7 0) (7 5) (8 4))
+</pre>
+<p> これは最短手順ではありません。幅優先探索で実行すると最短手順を求めることができます。
+</p>
+<pre>
+gosh&gt; (solve-water 4)
+((0 0) (0 5) (5 0) (5 5) (8 2) (0 2) (2 0) (2 5) (7 0) (7 5) (8 4))
+</pre>
+<p> このように、最短手順は 10 手になります。
+</p>
+
+<h4>●反復深化</h4>
+<p> ところで、深さ優先探索の amb を使って「反復深化」を行うこともできます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 反復深化
+
+(define (id-search max-limit fn . args)
+  (call/cc
+    (lambda (exit)
+      (do ((limit 1 (+ limit 1)))
+          ((&gt; limit max-limit))
+        (call/cc 
+          (lambda (cont)
+            (format #t "----- ~D -----~%" limit)
+            (push! *amb-fail* (lambda () (cont #f)))
+            (apply fn limit exit args)))))))
+</pre>
+<p> 関数 id-search は上限値 limit を 1 から max-limit まで 1 手ずつ増やしながら関数 fn を呼び出します。fn は amb を使って探索を行う関数とします。fn には引数 args のほかに、上限値 limit と解を見つけたときの脱出先継続 exit を渡します。
+</p>
+<p> 最初に解を返すための脱出先継続を取り出して exit にセットします。次に、繰り返しを行うシンタックス形式 do を使って limit を 1 手ずつ増やしていきます。do は R5RS で定義されているシンタックス形式です。do はあとで説明します。
+</p>
+<p> 探索中の手数で解が見つからない場合、*amb-fail* は空リストになるのでエラーが送出されます。そこで、反復深化を続けるための継続を取り出して cont にセットし、それを *amb-fail* にプッシュします。解が見つからない場合、この継続が評価されるので、反復深化を続けることができます。あとは apply で fn を評価するだけです。
+</p>
+<p> なお、format で上限値を表示していますが、表示する必要がなければ削除してください。
+</p>
+<h4>●do</h4>
+<p> ここで簡単に do について説明します。do の構文は少々複雑です。
+</p>
+<pre class="item">
+(do ((var init-form [step-form]) ...) (end-test [result ...]) Ｓ式 ... )
+</pre>
+
+<ol>
+  <li> 変数 var を init-form の評価結果に初期化します。
+  <li> end-test を評価し、結果が真であれば繰り返しを終了します。ここで result を評価します。result は複数の S 式を指定することができ、最後の S 式の評価結果が do の返り値になります。result が省略された場合、Gauche は #t を返します。
+  <li> 本体の S 式を順番に評価します。
+  <li> 変数 var の値を step-form の評価結果に更新します。step-form がない場合は何もしません。
+  <li> 2 から 4 までを繰り返します。
+</ol>
+
+<p> 変数 var はレキシカル変数として扱われます。do の処理を図に表すと次のようになります。
+</p>
+
+<pre class="fig">
+                 ↓
+        ┌────────┐
+        │var ← init-form│
+        └────────┘
+ ┌──────→┤
+ │              ↓
+ │     ┌────────┐ 真 ┌────────┐ 
+ │     │ end-test を評価│─→│resultを評価する│ 
+ │     └────────┘    └────────┘ 
+ │              ↓偽
+ │      ┌───────┐
+ │      │Ｓ式を評価する│
+ │      └───────┘
+ │              ↓
+ │     ┌────────┐
+ │     │var ← step-form│
+ │     └────────┘
+ └───────┘
+
+            図 : do の処理
+</pre>
+<p> ここで Scheme の do は変数 var を更新するときに破壊的な操作は行っていないことに注意してください。つまり、do は名前付き let のように、繰り返しを再帰定義で実現しています。
+</p>
+<p> do はＣ言語の for 文とよく似ています (実際は FORTRAN の do  ループの影響を受けたと思われます)。ただし、Ｃ言語では end-test が真の間は繰り返しを続けるのですが、Scheme の do は end-test が真になると繰り返しを終了します。繰り返しを続ける条件が逆になっているので注意して下さい。
+</p>
+<p> それでは簡単な使用例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : do の使用例
+
+(define (fact x)
+  (do ((n 1 (+ n 1)) (result 1))    ; 変数の定義
+      ((&gt; n x) result)              ; end-test と result 
+      (set! result (* result n))))  ; 繰り返す S 式
+</pre>
+
+<p> do を使って階乗を計算します。1 から x までを順番に乗算します。n と result がレキシカル変数です。変数 n は 1 に初期化されます。そして、繰り返すたびに step-form の (+ n 1) が評価され、n の値がひとつ増えます。result は 1 に初期化されますが、step-form は省略されています。(&gt; n x) が終了条件で、result の評価結果が do の返り値になります。(&gt; n 1) の評価値が真になると、繰り返しを終了して result の値を返します。
+</p>
+<h4>●反復深化による経路の探索</h4>
+<p> それでは id-search を使って「経路の探索」を解いてみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 経路の探索 (反復深化)
+
+(define (search limit exit start goal)
+  (let loop ((n 1) (path (list start)))
+    (if (= n limit)
+        (if (eq? (car path) goal)
+            (exit (reverse path))
+          (fail))
+      (let ((x (apply amb-f (assoc (car path) *adjacent*))))
+        (assert (not (member x path)))
+        (loop (+ n 1) (cons x path))))))
+</pre>
+<p> 関数 search は上限値 limit まで深さ優先探索を行います。n が節の個数を表します。n が limit と等しくなったら、現在地点 (car path) が goal に到達したかチェックします。そうであれば、継続 exit で経路 (reverse path) を返します。そうでなければ、fail を評価してバックトラックします。あとの処理は深さ優先探索と同じです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (id-search 7 search 'a 'g)
+----- 1 -----
+----- 2 -----
+----- 3 -----
+----- 4 -----
+(a c e g)
+gosh&gt; (fail)
+----- 5 -----
+(a b c e g)
+gosh&gt; (fail)
+(a b d e g)
+gosh&gt; (fail)
+----- 6 -----
+(a c b d e g)
+gosh&gt; (fail)
+----- 7 -----
+#t
+gosh&gt; (fail)
+*** ERROR: amb tree exhausted
+</pre>
+<p> このように、fail でバックトラックすることで全ての解を求めることができます。
+</p>
+<h4>●反復深化による水差し問題の解法</h4>
+<p> 同様に、水差し問題も反復深化で解くことができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 水差し問題の解法 (反復深化)
+
+(define (solve-water-id limit exit goal)
+  (let loop ((n 0) (path '((0 0))))
+    (if (= n limit)
+        (if (or (= (get-A (car path)) goal)
+                (= (get-B (car path)) goal))
+            (exit (reverse path))
+          (fail))
+      (let ((fn (amb full-A clear-A A-&gt;B full-B clear-B B-&gt;A)))
+        (let ((state (fn (car path))))
+          (assert (not (member state path)))
+          (loop (+ n 1) (cons state path)))))))
+</pre>
+<p> プログラムの処理内容は経路の探索とほぼ同じです。n が limit に到達して解が見つからない場合は fail でバックトラックすることに注意してください。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (id-search 12 solve-water-id 4)
+----- 1 -----
+----- 2 -----
+----- 3 -----
+----- 4 -----
+----- 5 -----
+----- 6 -----
+----- 7 -----
+----- 8 -----
+----- 9 -----
+----- 10 -----
+((0 0) (0 5) (5 0) (5 5) (8 2) (0 2) (2 0) (2 5) (7 0) (7 5) (8 4))
+gosh&gt; (fail)
+----- 11 -----
+((0 0) (0 5) (5 0) (5 5) (8 2) (0 2) (2 0) (2 5) (7 0) (7 5) (8 4) (0 4))
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●積木の移動</h4>
+<p> 最後に、積木の移動手順を求めるプログラムを作ります。
+</p>
+
+<pre class="fig">
+  <font color="red"  >■</font>                        <font color="red"  >■</font>  
+  <font color="blue" >■</font>         ──→         <font color="blue" >■</font>  
+  <font color="green">■</font>                        <font color="green">■</font>  
+  ─────        ─────
+  ｘ  ｙ  ｚ        ｘ  ｙ  ｚ
+
+  (初期状態）       (最終状態)
+
+        図：積木の移動
+</pre>
+<p> 積木は赤 (red)、青 (blue)、緑 (green) の 3 種類あり、積木を置く場所は x, y, z の 3 つあります。積木は、一回にひとつしか移動できません。また、上に積木が置かれている場合も、移動することはできません。上にある積木をどかしてから移動します。左図の初期状態の場合、積木 red を場所 y か場所 z へ動かすことはできますが、積木 blue や green を動かすことはできません。
+</p>
+
+<p> 問題は、初期状態から積木をひとつずつ動かして、最終状態になるまでの移動手順を求めることです。なお、この問題は拙作のページ <a href="../prolog/index.html">Prolog Programming</a> <a href="../prolog/prolog08.html#chap29">積木の移動</a> と同じです。内容は重複しますが、あしからずご了承ください。
+</p>
+
+<p> 今回は積木をシンボル red, blue, green で、状態をリスト (x y z) で、x, y, z もリストで表すことにします。たとえば、初期状態と最終状態は次のようになります。
+</p>
+<pre class="item">
+初期状態 : ((red blue green) () ())
+最終状態 : (() () (red blue green))
+</pre>
+<p> 積木の移動は 6 通りの方法があります。これを関数 move1 から move6 で表します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 積木の移動
+
+; x -&gt; y
+(define (move1 state)
+  (if (null? (first state))
+      #f
+    (list (cdr (first state))
+          (cons (car (first state)) (second state))
+          (third state))))
+
+; x -&gt; z
+(define (move2 state)
+  (if (null? (first state))
+      #f
+    (list (cdr (first state))
+          (second state)
+          (cons (car (first state)) (third state)))))
+
+; y -&gt; x
+(define (move3 state)
+  (if (null? (second state))
+      #f
+    (list (cons (car (second state)) (first state))
+          (cdr (second state))
+          (third state))))
+
+; y -&gt; z
+(define (move4 state)
+  (if (null? (second state))
+      #f
+    (list (first state)
+          (cdr (second state))
+          (cons (car (second state)) (third state)))))
+
+; z -&gt; x
+(define (move5 state)
+  (if (null? (third state))
+      #f
+    (list (cons (car (third state)) (first state))
+          (second state)
+          (cdr (third state)))))
+
+; z -&gt; y
+(define (move6 state)
+  (if (null? (third state))
+      #f
+    (list (first state)
+          (cons (car (third state)) (second state))
+          (cdr (third state)))))
+</pre>
+<p> たとえば、x から y へ積木を動かす move1 の場合、まず x に積木があることを確認します。空リストであれば #f を返します。積木があれば、リスト x の先頭要素を取り除き、その要素をリスト y の先頭に追加します。あとの関数も同じです。
+</p>
+
+<p> 移動手順を求める関数 solve-block は次のようになります。
+</p>
+<pre class="list">
+リスト : 積木の移動
+
+(define (solve-block start goal)
+  (let loop ((path (list start)))
+    (if (equal? (car path) goal)
+        (reverse path)
+      (let ((move (amb move1 move2 move3 move4 move5 move6)))
+        (let ((state (move (car path))))
+          (assert (and state (not (member state path))))
+          (loop (cons state path)))))))
+</pre>
+<p> プログラムは経路の探索や水差し問題とほぼ同じです。これで幅優先探索を行う amb を使うと最短手順を求めることができます。
+</p>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+gosh&gt; (initialize-amb-fail)
+()
+gosh&gt; (display (solve-block '((red blue green) () ()) '(() () (red blue green))))
+(((red blue green) () ()) ((blue green) (red) ()) ((green) (blue red) ()) (() (b
+lue red) (green)) (() (red) (blue green)) (() () (red blue green)))#&lt;undef&gt;
+</pre>
+<p> わかりやすく書き直すと次のようになります。
+</p>
+<pre>
+((red blue green) () ())
+((blue green) (red) ())
+((green) (blue red) ())
+(() (blue red) (green))
+(() (red) (blue green))
+(() () (red blue green)))
+</pre>
+<p> 5 手で解くことができました。ちなみに、深さ優先探索で解くと最初に次の手順が表示されます。
+</p>
+
+<pre>
+((red blue green) () ())
+((blue green) (red) ())
+((green) (blue red) ())
+(() (green blue red) ())
+(() (blue red) (green))
+((blue) (red) (green))
+(() (red) (blue green))
+((red) () (blue green))
+(() () (red blue green)))
+</pre>
+<p> 8 手になりました。このように、探索問題は amb を使うと簡単に解くことができますが、幅優先探索の場合、問題によってはメモリを大量に消費することがあります。ご注意くださいませ。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm28.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm30.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

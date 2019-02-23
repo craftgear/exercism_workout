@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 CLOS プログラミング入門</title>
+  <meta name="description" content="Common Lisp,Common Lisp Object System,CLOS,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881772</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>お気楽 CLOS プログラミング入門</h2>
+<div class="small">
+[ <a href="clisp02.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | <a href="clisp04.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>●継承</h3>
+<p> 前回は CLOS のオブジェクト指向機能を使った例題として「双方向リスト」というデータ構造を作成しました。今回は「継承 (inheritance : インヘリタンス) 」のお話です。まずは最初に、一般的なオブジェクト指向言語での「継承」について簡単に説明します。 
+</p>
+
+<h4>●継承とは？</h4>
+<p> 継承はクラスに親子関係を持たせる機能です。子供のクラスは親クラスの性質を受け継ぐことができます。プログラミング言語の場合、引き継ぐ性質は定義されたデータ型、スロットやメソッドとなります。プログラムを作っていると、いままで作ったプログラムと同じような機能が必要になる場合があります。このような場合、継承を使うことでその機能を受け継ぎ、新規の機能や変更される機能だけプログラムする、いわゆる「差分プログラミング」が可能となります。
+</p>
+
+<p> あるクラスを継承する場合、その元になるクラスを「スーパークラス」と呼びます。そして、継承したクラスを「サブクラス」と呼びます。この呼び方はプログラミング言語によってまちまちで統一されていません。Ｃ++の場合、元になるクラスを「基底クラス」といい、継承するクラスを「派生クラス」とか「導出クラス」といいます。
+</p>
+
+<p> 継承には「単一継承」と「多重継承」の 2 種類があります。単一継承は、ただひとつのクラスからしか機能を継承することができません。したがって、クラスの階層は次のような木構造で表すことができます。
+</p>
+<pre class="fig">
+            Ａ
+          ／｜＼
+        ／  ｜  ＼
+      Ｂ    Ｃ    Ｄ  
+    ／  ＼
+  ／      ＼
+Ｅ          Ｆ
+
+図 1 : 単一継承のクラスの階層
+</pre>
+
+<p> 継承は何段階に渡って行われてもかまいません。たとえばクラス E の場合、スーパークラスが B で、B のスーパークラスが A に設定されています。サブクラスは複数あってもかまいません。たとえば、A のサブクラスは B, C, D の 3 つ、B のサブクラスは E, F の 2 つがあります。上図ではクラス A のスーパークラスはありませんが、ほかのクラスではただひとつのスーパークラスを持っています。これが単一継承の特徴です。プログラミング言語では Smalltalk, Java, Ruby が単一継承です。
+</p>
+
+<p> これに対し、多重継承は複数のクラスから機能を継承することができます。このため、クラスの階層は木構造ではなく、次のようなグラフで表すことができます。
+</p>
+<pre class="fig">
+            Ａ
+          ／  ＼
+        ／      ＼
+      Ｂ          Ｃ
+    ／  ＼      ／  ＼
+  ／      ＼  ／      ＼
+Ｄ          Ｅ          Ｆ
+
+図 2 : 多重継承のクラスの階層
+</pre>
+<p> クラス E に注目してください。スーパークラスには B と C の 2 つがあります。多重継承では、単一継承と同じくサブクラスを複数持つことができ、なおかつ、スーパークラスも複数持つことができるのです。Ｃ++や CLOS は多重継承をサポートしています。それから、スクリプト言語の Python も多重継承です。
+</p>
+
+<h4>●単一継承の使い方</h4>
+<p> まずは「単一継承」から説明しましょう。クラスを継承する場合、defclass でスーパークラスを指定します。簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト 1 : クラスの定義
+
+(defclass foo ()
+  ((a :accessor foo-a :initform 1 :initarg :a)
+   (b :accessor foo-b :initform 2 :initarg :b)))
+
+(defclass bar (foo)
+  ((c :accessor bar-c :initform 10 :initarg :c)
+   (d :accessor bar-d :initform 20 :initarg :d)))
+</pre>
+
+<p> defclass でクラス名を指定し、その次のリストでスーパークラスを指定します。クラス bar はクラス foo を指定しているので、foo は bar のスーパークラスになります。この場合、スーパークラスはひとつしかないので「単一継承」になります。ここで複数のスーパークラスを指定すると「多重継承」になります。
+</p>
+
+<h4>●スロットとメソッドの継承</h4>
+<p> それでは、実際にインスタンスを生成してみましょう。次の例を見てください。
+</p>
+<pre>
+&gt; (setq x (make-instance 'foo))
+#&lt;FOO #x1A708629&gt;
+&gt; (setq y (make-instance 'bar))
+#&lt;BAR #x1A70CABD&gt;
+&gt; (foo-a x)
+1
+&gt; (foo-b x)
+2
+&gt; (foo-a y)
+1
+&gt; (foo-b y)
+2
+&gt; (bar-c y)
+10
+&gt; (bar-d y)
+20
+</pre>
+<p> これを図に示すと次のようになります。
+</p>
+<pre class="fig">
+                         変数 x
+┌──foo ──┐          ┌─ instance ─┐  
+├──────┤          ├───────┤
+│SLOT a : 1  │────→│SLOT a : 1    │
+├──────┤          ├───────┤
+│SLOT b : 2  │          │SLOT b : 2    │
+└──────┘          └───────┘
+       │
+       ↓                変数 y
+┌──bar ──┐          ┌─ instance ─┐
+├──────┤────→├───────┤
+│SLOT c : 10 │          │SLOT a : 1    │
+├──────┤          ├───────┤
+│SLOT d : 20 │          │SLOT b : 2    │
+└──────┘          ├───────┤
+                          │SLOT c : 10   │
+                          ├───────┤
+                          │SLOT d : 20   │
+                          └───────┘
+
+        図 3 : インスタンスの生成
+</pre>
+<p> クラス foo にはスロット a, b とメソッド foo-a, foo-b が定義されています。次に、クラス bar を定義します。bar は foo を継承し、bar 固有のスロット c, d  とメソッド bar-c, bar-d  が定義されています。foo と bar のインスタンスを生成すると、上図に示したように bar のインスタンスはスロット c, d だけではなく、クラス foo で定義されたスロット a, b も含まれます。
+</p>
+
+<p> foo のインスタンスにもスロット a, b がありますが、bar のインスタンスのスロット a, b とメモリ領域を共有 <SUP><a href="clisp03.html#note1">[*1]</a></SUP> することはありません。クラスはオブジェクトの設計図です。設計に共通な部分があったとしても、それから生み出されるインスタンスは別々の実体で、メモリ領域を共有することはないのです。 
+</p>
+
+<p> クラス bar にはメソッド bar-c, bar-d しか定義されていませんが、クラス foo を継承したことにより、メソッド foo-a, foo-b を利用することができます。bar のインスタンス y に対して foo-a を呼び出すと、インスタンス y のスロット a の値を取り出すことができます。また、(setf (foo-a y) 100) とすれば、インスタンス y のスロット a の値を書き換えることができます。次の例を見てください。
+</p>
+<pre>
+&gt; (setf (foo-a y) 100)
+100
+&gt; (foo-a y)
+100
+&gt; (foo-a x)
+1
+</pre>
+
+<p> setf でインスタンス y のスロット a を 100 に変更しました。当然ですが、インスタンス x のスロット a の値は 1 のままです。スロット a は共有されていないので、インスタンス y にメソッド foo-a を適用すれば、インスタンス y のスロット a にアクセスすることになります。
+</p>
+
+<p> このように、クラスを継承することでスーパークラスのスロットとメソッドをサブクラスでも利用することができます。スロットを受け継ぐことを「属性の継承」、メソッドを受け継ぐことを「実装の継承」と区別して呼ぶことがあります。
+</p>
+
+<div class="note">
+<a name="note1">-- note --------</a><br>
+[*1] CLOS の場合、スロットオプション :allocation にキーワード :class を指定すると、そのスロットは共有されます。:allocation の指定がない場合、もしくはキーワード :instance を指定すると、スロットは共有されません。
+</div>
+<h4>●スーパークラスに同じスロット名がある場合</h4>
+<p> CLOS の場合、defclass でスロットを定義するときに、スーパークラスと同じスロット名があってもかまいません。ただし、インスタンス内では、同じスロット名でアクセスできるスロットはひとつしか存在しません。次の例を見てください。
+</p>
+<pre class="list">
+; クラスの定義
+(defclass foo () ((a :accessor foo-a :initform 1 :initarg :a)))
+(defclass bar (foo) ((a :accessor bar-a :initform 2 :initarg :b)))
+</pre>
+<pre>
+&gt; (setq x1 (make-instance 'bar))
+#&lt;BAR #x1A706C55&gt;
+&gt; (bar-a x1)
+2
+&gt; (foo-a x1)
+2
+&gt; (setq x2 (make-instance 'bar :a 10))
+#&lt;BAR #x1A710A3D&gt;
+&gt; (bar-a x2)
+10
+&gt; (foo-a x2)
+10
+&gt; (setq x3 (make-instance 'bar :b 100))
+#&lt;BAR #x1A711B65&gt;
+&gt; (bar-a x3)
+100
+&gt; (foo-a x3)
+100
+</pre>
+<p> クラス foo はスロット a を定義しています。クラス bar は foo を継承していますが、同じ名前のスロット a を定義しています。この場合、インスタンスを生成すると、a に対応するスロットはひとつしかありません。このとき、スロットオプションも継承されることに注意してください。
+</p>
+<p> :accessor で指定されたメソッド foo-a, bar-a はどちらも利用することができます。この場合、同じスロット a をアクセスすることになります。:initform はサブクラスの値が優先されます。したがって、(make-instance 'bar) とすると、スロット a の初期値は 2 になります。実際に、メソッド foo-a, bar-a で値を求めると、2 に初期化されていることがわかります。
+</p>
+<p> :initarg はどちらのキーワードでも利用可能です。この場合も同じスロットに初期値を与えることになります。foo で指定したキーワード :a でも bar で指定した :b でも、スロット a の初期値を与えることができます。
+</p>
+<h4>●データ型の継承</h4>
+<p> CLOS の場合、継承されるのはスロットやメソッドだけではなく「データ型」も継承されます。クラス名を表すシンボルは型指定子と同じ働きをします。つまり、クラス foo のインスタンスは、データ型が foo として扱われます。次の例を見てください。
+</p>
+<pre>
+&gt; (defclass foo () ())
+#&lt;STANDARD-CLASS FOO&gt;
+&gt; (defclass bar (foo) ())
+#&lt;STANDARD-CLASS BAR&gt;
+&gt; (setq a (make-instance 'foo))
+#&lt;FOO #x1017AE7D&gt;
+&gt; (setq b (make-instance 'bar))
+#&lt;BAR #x1017BC51&gt;
+&gt; (typep a 'foo)
+T
+&gt; (typep a 'bar)
+NIL
+&gt; (typep b 'bar)
+T
+&gt; (typep b 'foo)
+T
+</pre>
+<p> クラス bar はクラス foo を継承しています。foo のインスタンス a は typep でチェックすると、当然ですが foo では t になり、bar では nil になります。ところが、クラス bar のインスタンス b は、bar で t になるのは当然ですが、foo のサブクラスなのでデータ型が継承されて foo でも t になります。
+</p>
+
+<p> ここで、bar を継承したクラス baz の作って、そのインスタンスを typep でチェックすると、foo, bar, baz のどれでも t になります。 
+</p>
+<pre>
+&gt; (defclass baz (bar) ())
+#&lt;STANDARD-CLASS BAZ&gt;
+&gt; (setq c (make-instance 'baz))
+#&lt;BAZ #x1017FBBD&gt;
+&gt; (typep c 'baz)
+T
+&gt; (typep c 'bar)
+T
+&gt; (typep c 'foo)
+T
+</pre>
+
+<p> このように、クラスを継承してサブクラスを作ると、サブクラスはスーパークラスの部分集合として考えることができます。図 4 を見てください。
+</p>
+<pre class="fig">
+  ┌──────────┐
+  │        foo         │
+  │  ┌──────┐  │
+  │  │    bar     │  │
+  │  │ ┌───┐ │  │
+  │  │ │ baz  │ │  │
+  │  │ │      │ │  │
+  │  │ └───┘ │  │
+  │  │            │  │
+  │  └──────┘  │
+  │                    │
+  └──────────┘
+
+図 4 : クラスとサブクラスの関係
+</pre>
+<p> 単一継承の場合、クラスとサブクラスは図 4 の関係になります。サブクラス baz は bar や foo に含まれているので、そのインスタンスに bar や foo のメソッドを適用することができるわけです。
+</p>
+
+<h4>●メソッドの選択</h4>
+<p> もうひとつ簡単な例を示しましょう。
+</p>
+<pre>
+&gt; (defmethod add ((z foo)) (+ (foo-a z) (foo-b z)))
+#&lt;STANDARD-METHOD (#&lt;STANDARD-CLASS FOO&gt;)&gt;
+&gt; (setq x (make-instance 'foo :a 10 :b 20))
+#&lt;FOO #x1A7143B9&gt;
+&gt; (setq y (make-instance 'bar :a 100 :b 200))
+#&lt;BAR #x1A714AF1&gt;
+&gt; (add x)
+30
+&gt; (add y)
+300
+</pre>
+<p> いま、メソッド add を定義しました。add はスロット a と b を足し算します。このメソッドは引数のデータ型（引数特定子）にクラス foo を指定しているので、foo のインスタンスだけではなく、foo のサブクラス bar のインスタンスにも適用することができます。クラス bar のインスタンスを生成して変数 y にセットします。このインスタンスにメソッド add を適用すると、スロット a と b を足した値を求めることができます。
+</p>
+
+<p> それでは、メソッドの引数特定子にサブクラス bar を指定した場合はどうなるのでしょうか。実際に試してみましょう。
+</p>
+<pre>
+&gt; (defmethod sub ((z bar)) (- (foo-a z) (foo-b z)))
+#&lt;STANDARD-METHOD (#&lt;STANDARD-CLASS BAR&gt;)&gt;
+&gt; (sub y)
+-100
+&gt; (sub x)
+=&gt; エラーとなる
+</pre>
+
+<p> スロット a, b の差分を求めるメソッド sub を定義します。sub の引数特定子はクラス bar なので、クラス bar のインスタンス y に sub を適用すると差分を求めることができます。ところが、スーパークラス foo のインスタンス x に sub を適用すると、「適用できるメソッドがない」というエラーが発生します。クラス foo にもスロット a, b があるのですが、このメソッドを foo のインスタンスに適用することはできないのです。
+</p>
+
+<p> ここで、CLOS がどのようにメソッドを選択するか簡単に説明しましょう。まず、総称関数 add に引数特定子が bar のメソッドが定義されているか調べます。ところが、総称関数 add には引数特定子が bar のメソッドは定義されていません。この場合、データ型のスーパークラスをチェックします。 bar のスーパークラスは foo なので、引数特定子が foo のメソッドが定義されているか総称関数 add を調べます。ここで該当するメソッドが見つかり、それを評価するのです。
+</p>
+
+<p> 総称関数 sub の場合、引数特定子が foo のメソッドは定義されていませんね。そこで、foo のスーパークラスを調べようとするのですが、foo のスーパークラスは定義されていません。これ以上探索するクラスがないのでエラーになるのです。このように、メソッドはサブクラスからスーパークラスの方向へ探索することを覚えておいてください。
+</p>
+
+<h4>●複数の引数がある場合</h4>
+<p> では、複数の引数特定子を持つメソッドの場合はどうなるのでしょうか。次の例を見てください。
+</p>
+<pre class="list">
+; クラスの定義
+(defclass foo () ((a :accessor foo-a :initform 1)))
+(defclass bar () ((b :accessor bar-b :initform 2)))
+(defclass foo1 (foo) ((c :accessor foo-c :initform 3)))
+(defclass bar1 (bar) ((d :accessor bar-d :initform 4)))
+
+; メソッド A
+(defmethod baz ((x foo) (y bar)) (format t "foo-bar method~%"))
+
+; メソッド B
+(defmethod baz ((x foo1) (y bar1)) (format t "foo1-bar1 method~%"))
+</pre>
+<pre>
+&gt; (setq x1 (make-instance 'foo))
+#&lt;FOO #x1A709769&gt;
+&gt; (setq x2 (make-instance 'foo1))
+#&lt;FOO1 #x1A70DBFD&gt;
+&gt; (setq y1 (make-instance 'bar))
+#&lt;BAR #x1A71074D&gt;
+&gt; (setq y2 (make-instance 'bar1))
+#&lt;BAR1 #x1A713259&gt;
+&gt; (baz x1 y1)
+foo-bar method
+NIL
+&gt; (baz x2 y2)
+foo1-bar1 method
+NIL
+&gt; (baz x1 y2)
+foo-bar method
+NIL
+&gt; (baz x2 y1)
+foo-bar method
+NIL
+</pre>
+<p> 総称関数 baz には、引数特定子が foo と bar のメソッド A と、foo1 と bar1 のメソッド B が定義されています。(baz x1 y1) の場合、x1 が foo のインスタンスで y1 が bar のインスタンスなのでメソッド A が呼び出されます。次は (baz x2 y2) ですが、x2 が foo1 のインスタンスで y2 が bar1 のインスタンスなのでメソッド B が呼び出されます。メソッドの選択は簡単なように思えますが、実際にはちょっと複雑な処理を行っています。
+</p>
+<p> 最初に、第 1 引数のインスタンス x2 に適用可能なメソッドを選びます。この場合、x2 のクラス foo1 と引数特定子が一致するメソッド B のほかに、引数特定子が foo であるメソッド A も適用することができますね。foo1 は foo のサブクラスなので、インスタンス x2 のデータ型は foo として扱うことができるからです。ただし、メソッドを選ぶ優先順位はサブクラス foo1 のメソッド B の方が高くなります。メソッドはサブクラスからスーパークラスに向かって探索されるので、優先順位はサブクラスのメソッドの方が高くなるのです。
+</p>
+<p> 次に、第 2 引数のインスタンス y2 に適用可能なメソッドを選びます。この場合も、メソッド A と B を適用することができますが、第 1 引数と同じ理由でメソッド B の方が優先順位が高くなります。したがって、メソッド B が選択されます。このように、適用可能なメソッドが複数ある場合は、もっとも特定的なメソッド（引数特定子がサブクラスのメソッド）が選択されます。
+</p>
+<p> その次の (baz x1 y2) は簡単です。第 1 引数のインスタンス x1 に適用可能なメソッドは A しかありません。メソッド A は第 2 引数のインスタンス y2 にも適用できるので、メソッド A が選択されます。最後の (baz x2 y1) ですが、第 1 引数のインスタンス x2 に適用可能なメソッドは A と B の 2 つあります。次に第 2 引数のインスタンス y1 に適用可能なメソッドを選びますが、インスタンス y1 のデータ型は bar なので、適用可能なメソッドは A しかありません。したがって、メソッド A が選択されます。
+</p>
+
+<p> このように、引数が複数ある場合は第 1 引数から順番に適用可能なメソッドを調べていきます。この例は単一継承なのでそれほど難しくありませんが、CLOS は「多重継承」をサポートしているので、メソッドの選択はもっと複雑になります。これは多重継承のところで詳しく説明しましょう。
+</p>
+
+<h4>●メソッドのオーバーライド</h4>
+<p> ところで、継承したクラスのメソッドとは違う働きをさせたい場合はどうするのでしょうか。これはとても簡単で、同名のメソッドを定義することで、そのクラスのメソッドを設定することができます。この機能を「オーバーライド (over ride) 」といいます。
+</p>
+<p> メソッド仕組みから見た場合、オーバーライドは必然の動作です。選択されるメソッドはもっとも特定的なメソッド、つまり引数特定子がサブクラスのメソッドになるので、サブクラスにメソッドを定義すれば、スーパークラスのメソッドではなくサブクラスのメソッドが選択されるのです。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト 2 : メソッドのオーバーライド (1)
+
+(defmethod add ((z bar))
+  (+ (foo-a z) (foo-b z) (bar-c z) (bar-d z)))
+</pre>
+<pre>
+&gt; (setq y (make-instance 'bar :a 10 :b 20 :c 30 :d 40))
+#&lt;BAR #x1A730C11&gt;
+&gt; (add y)
+100
+</pre>
+
+<p> foo のメソッド add はスロット a, b の値を足し算しましたね。この状態で、メソッド add をクラス bar のインスタンス y に適用すると、スロット a, b を足した値を返します。ここで、bar のメソッド add を定義します。今度は、スロット a, b, c, d の値を足し算します。そのあと、メソッド add をインスタンス y に適用すると、すべてのスロットの値を足した値 100 を返します。このように foo のメソッドではなく、サブクラス bar のメソッドが評価されました。
+</p>
+
+<p> ところで、スロット a, b の足し算は foo のメソッド add で定義されていました。このメソッドを呼び出すことができれば、わざわざメソッド foo-a, foo-b を呼び出す必要はありません。いいかえれば、スーパークラスのメソッドと同じプログラムを書かなくてもよいわけです。スーパークラスのメソッドを呼び出す機能は、オブジェクト指向言語では当然の機能といえるでしょう。
+</p>
+
+<p> CLOS の場合、スーパークラスのメソッドを呼び出すには関数 call-next-method を使います。
+</p>
+<pre class="item">
+call-next-method [引数 ...]
+</pre>
+<p> 引数が省略された場合、call-next-method には評価中のメソッドと同じ引数が与えられます。それでは、この関数を使ってクラス bar のメソッド add を書き直してみましょう。
+</p>
+<pre class="list">
+リスト 3 : メソッドのオーバーライド (2)
+
+(defmethod add ((z bar))
+  (+ (call-next-method) (bar-c z) (bar-d z)))
+</pre>
+<p> call-next-method により foo のメソッド add が呼び出されて、スロット a, b を足し算した値を返します。この例は簡単すぎるので、あまりメリットを感じないかもしれません。ところが、スーパークラスのメソッドが複雑な処理をしていて、サブクラスのメソッドでも同様の処理が必要な場合には、その力を十分に発揮してくれるでしょう。
+</p>
+
+<p> それでは、複数の引数特定子を持つメソッドの場合はどうなるのでしょうか。次の例を見てください。
+</p>
+<pre class="list">
+; クラスの定義
+(defclass foo () ((a :accessor foo-a :initform 1)))
+(defclass bar () ((b :accessor bar-b :initform 2)))
+(defclass foo1 (foo) ((c :accessor foo-c :initform 3)))
+(defclass bar1 (bar) ((d :accessor bar-d :initform 4)))
+
+; メソッド A
+(defmethod baz ((x foo) y) (format t "foo-other method~%"))
+
+; メソッド B
+(defmethod baz ((x foo) (y bar))
+  (call-next-method)
+  (format t "foo-bar method~%"))
+
+; メソッド C
+(defmethod baz ((x foo1) (y bar1))
+  (call-next-method)
+  (format t "foo1-bar1 method~%"))
+</pre>
+<pre>
+&gt; (setq x1 (make-instance 'foo))
+#&lt;FOO #x1A709769&gt;
+&gt; (setq x2 (make-instance 'foo1))
+#&lt;FOO1 #x1A70DBFD&gt;
+&gt; (setq y1 (make-instance 'bar))
+#&lt;BAR #x1A71074D&gt;
+&gt; (setq y2 (make-instance 'bar1))
+#&lt;BAR1 #x1A713259&gt;
+&gt; (baz x1 y1)
+foo-other method
+foo-bar method
+NIL
+&gt; (baz x2 y2)
+foo-other method
+foo-bar method
+foo1-bar1 method
+NIL
+</pre>
+<p> 総称関数 baz には 3 つのメソッド A, B, C が定義されています。メソッド A の第 2 引数には引数特定子が指定されていないので、第 2 引数がどのデータ型でも適用することができます。最初の (baz x1 y1) の場合、適用可能なメソッドは A と B の 2 つがあります。メソッドの優先順位は引数特定子が指定されているメソッド B の方が高くなります。ここで、メソッドの優先順位をリスト (B A) と表すことにしましょう。
+</p>
+<p> 最初に、メソッド B が呼び出されます。次に、メソッド B は call-next-method を評価します。call-next-method は、実行しているメソッド B の次に優先順位が高いメソッドをリスト (B A) から探します。この場合、メソッド A が呼び出されます。したがって、実行結果は foo-other method と boo-bar method が表示されます。
+</p>
+<p> 次の (baz x2 y2) の場合、適用可能なメソッドは A, B, C の 3 つあり、優先順位は (C B A) になります。最初にメソッド C が呼び出され、call-next-method により次に優先順位が高いメソッド B が呼び出されます。そして、メソッド B の call-next-method によりメソッド A が呼び出されます。その結果、foo-other mthod, foo-bar method, foo1-bar1 method と表示されます。
+</p>
+
+<p> もしも、call-next-method で次に適用できるメソッドが見つからない場合はエラーになります。次の例を見てください。
+</p>
+<pre>
+&gt; (defmethod baz1 ((x foo)) (call-next-method) (print "foo baz1"))
+#&lt;STANDARD-METHOD (#&lt;STANDARD-CLASS FOO&gt;)&gt;
+&gt; (baz1 x1)
+
+*** - NO-NEXT-METHOD: ・・・ 省略 ・・・
+</pre>
+<p> 新しいメソッド baz1 を定義しました。次に (baz1 x1) を評価しますが、適用可能なメソッドはひとつしかありませんね。次に、そのメソッドで call-next-method が評価されますが、適用可能なメソッドはもうありません。したがって、call-next-method でエラーが発生するのです。
+</p>
+
+<p> call-next-method で呼び出されるメソッドを「次メソッド (next method) 」と呼びます。次メソッドが存在するか否かを調べる述語に next-method-p があります。next-method-p は次メソッドが存在すれば真 (T) を返し、そうでなければ偽 (NIL) を返します。next-method-p を使ってメソッド baz1 を修正すると、次のようになります
+</p>
+<pre class="list">
+リスト 4 : メソッド baz1 の修正
+
+(defmethod baz1 ((x foo))
+  (if (next-method-p) (call-next-method))
+  (print "foo baz1"))
+</pre>
+<p> baz1 の場合、next-method-p は NIL を返すので call-next-method は実行されません。これで正常に baz1 を評価することができます。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003-2010 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clisp02.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | <a href="clisp04.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

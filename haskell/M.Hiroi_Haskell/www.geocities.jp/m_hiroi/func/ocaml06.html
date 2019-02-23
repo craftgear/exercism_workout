@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 OCaml プログラミング入門</title>
+  <meta name="description" content="OCaml,ML,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881750</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 OCaml プログラミング入門</h2>
+<div class="small">
+[ <a href="ocaml05.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml07.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">データ型の定義</h3>
+<p> 近代的なプログラミング言語は、ユーザーが既存のデータ型を組み合わせて、新しいデータ型を定義する機能を備えています。OCaml の場合、組を使って新しい型を表すことができますが、このほかに「ヴァリアント (variant) 」と「レコード (record) 」というデータ構造を定義する方法があります。
+</p>
+<h4>●ヴァリアントの定義</h4>
+<p> 最初にヴァリアントから説明します。ヴァリアントはＣ言語の共用体とよく似ているデータ構造です。OCaml の場合、新しいデータ型を定義するときは type 宣言を使います。ヴァリアントを定義する構文を次に示します。
+</p>
+<pre class="item">
+type (型変数, ... 型変数) 型の名前 =
+  データ構成子A of 型式A
+| データ構成子B of 型式B
+   ...
+| データ構成子N of 型式N
+</pre>
+<p> 「型式 (type expression) 」とはデータ型を表す式のことで、基本的なデータ型である int, float, string, bool などのほかに、関数型や組を表す積型、list と組み合わせてできる int list や string list などがあります。データ構成子 (コンストラクタ) とは型式のデータを表す名前です。OCaml の場合、コンストラクタ名は英大文字から始めます。コンストラクタはデータを生成するときやパターンマッチングのときに使用します。
+</p>
+<p> なお、異なるバリアント型で同名のコンストラクタを定義すると、後から定義したコンストラクタが有効になり、前に定義したコンストラクタは隠蔽されます。たとえば、ヴァリアント foo でコンストラクタ Baz を定義します。その後でバリアント bar でコンストラクタ Baz を定義すると、Baz で生成したデータ型は bar になります。Baz で foo のデータ型は生成できません。ご注意ください。
+</p>
+<h4>●ヴァリアントの生成</h4>
+<p> もっとも簡単なヴァリアントは、Ｃ言語などの列挙型 (enum) のように使う方法です。次の例を見てください。
+</p>
+<pre>
+# type fruit = Apple | Orange | Grape;;
+type fruit = Apple | Orange | Grape
+# Apple;;
+- : fruit = Apple
+# Grape;;
+- : fruit = Grape
+# Orange;;
+- : fruit = Orange
+</pre>
+<p> fruit というデータ型は Apple, Orange, Grape から構成されます。このあと、Apple, Orange, Grape を OCaml のプログラムで使うことができます。次のように fruit を組やリストに入れることもできます。
+</p>
+<pre>
+# let a = [Apple; Orange; Grape];;
+val a : fruit list = [Apple; Orange; Grape]
+# let b = (Apple, Orange);;
+val b : fruit * fruit = (Apple, Orange)
+</pre>
+<p> また、ヴァリアントはＣ言語の共用体とよく似た働きをします。たとえば、number というデータ型を定義してみましょう。次の例を見てください。
+</p>
+<pre>
+# type number = Int of int | Float of float;;
+type number = Int of int | Float of float
+# Int 10;;
+- : number = Int 10
+# Float 1.1;;
+- : number = Float 1.1
+# [Int 1; Float 1.5; Int 2; Float 2.5];;
+- : number list = [Int 1; Float 1.5; Int 2; Float 2.5]
+</pre>
+<p> number は数を表すデータ型で、データは整数 (int) または実数 (float) です。Int of int によりコンストラクタ Int の型は int と定義され、Float of float でコンストラクタ Float の型は float と定義されます。
+</p>
+<p> データ型 number の生成はコンストラクタを使います。Int 10 または Float 1.1 で number 型のデータが生成されます。Int (10) や Float (1.1) のようにカッコで囲んでもかまいません。最後の例のように、number 型のデータをリストに格納することができます。このように新しいデータ型 number を定義することで、整数と実数をいっしょにリストに格納することができます。
+</p>
+<h4>●パターンマッチング</h4>
+<p> コンストラクタは「パターン」として使うことができます。たとえば、number list の整数と実数の合計値を別々に求める関数 number_sum を作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 1 : 整数と実数の合計値を別々に求める
+
+let number_sum xs =
+  let rec sum xs a b = 
+    match xs with
+      [] -&gt; (a, b)
+    | Int y :: ys -&gt; sum xs (a + y) b
+    | Float y :: ys -&gt; sum xs a (b +. y)
+  in
+    sum xs 0 0.0
+</pre>
+<p> number_sum は整数と実数の合計を求め、組 (int * float) にして返します。実際の処理は局所関数 sum で行います。sum の第 2, 3 引数を累積変数として使い、第 2 引数に整数の合計値、第 3 引数に実数の合計値を求めます。Int y :: ys と Float y :: ys がパターンです。リストの先頭の要素が Int の場合、2 番目の定義とマッチングして、y の値は整数になります。要素が Float の場合は 3 番目の定義とマッチングして、y の値は実数になります。
+</p>
+
+<p> それでは実行例を示します。
+</p>
+<pre class="item">
+val number_sum = number list -&gt; int * float = &lt;fun&gt;
+</pre>
+<pre>
+# number_sum [Int 10; Int 11; Real 2.5; Int 12; Real 3.1; Real 4.2];;
+- : int * float = (33, 9.8)
+</pre>
+<h4>●option 型</h4>
+<p> 型変数を使うと 'a list のような多相的なデータ型を作ることができます。簡単な例として、OCaml に定義されている option 型をみてみましょう。option の定義を示します。
+</p>
+<pre class="item">
+type 'a option = None | Some of 'a
+</pre>
+<p> 型変数は type と名前の間に指定します。複数の型変数を使う場合は ('a, 'b, ... 'n) のように、型変数をカッコで囲んでカンマで区切ります。option はデータの有無を表す型です。データが無い場合は None を、データが有る場合は Some を使います。Some の型式は 'a なので、どのデータ型でも option に格納することができます。次の例を見てください。
+</p>
+<pre>
+# None;;
+- : 'a option = None
+# Some 10;;
+- : int option = Some 10
+# Some "foo";;
+- : string option = Some "foo"
+</pre>
+<p> None だけではデータ型を定めることができないので、型は 'a option と表示されます。Some 10 の場合、与えられたデータ型が int なので int option になります。同様に、Some "foo" の型は string option になります。
+</p>
+
+<p> たとえば、リストからデータを探索する処理を考えてみましょう。「リストの探索」で作成した関数 member は、データが見つかれば残りのリストを、見つからなければ空リストを返すように作りました。見つけたデータをそのまま返さないのは、データが見つからない場合の返り値である空リストとデータ型を一致させるためです。
+</p>
+<p> OCaml はデータ型を厳密にチェックするプログラミング言語なので、異なるデータ型を返すことはできません。このような場合、役に立つのが option です。見つけたデータをそのまま返さずに、option に格納して返せばいいわけです。
+</p>
+<p> 簡単な例として、リストの中から述語を満たす要素を探す関数 find_if を作ってみましょう。OCaml には List.find という同じ機能を持つ関数が用意されていますが、私達でも簡単に作ることができます。ちなみに、関数名は Common Lisp から拝借しました。
+</p>
+
+<pre class="list">
+リスト 2 : リストの探索
+
+let rec find_if f = function
+  [] -&gt; None
+| x :: xs -&gt; if f x then Some x else find_if f xs
+</pre>
+
+<p> 最初の節で、データが見つからない場合は None を返します。次の節で、述語 f x が真を返せば Some x を返します。そうでなければ、find_if を再帰呼び出しして次の要素を調べます。
+</p>
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre class="item">
+val find_if : ('a -&gt; bool) -&gt; 'a list -&gt; 'a option
+</pre>
+<pre>
+# find_if (fun x -&gt; x &gt;= 10) [1; 2; 11; 12; 3; 4];;
+- : int option = Some 11
+# find_if (fun x -&gt; x &gt;= 10) [1; 2; 3; 4; 5; 6];;
+- : int option = None
+</pre>
+<p> データが見つからない場合は None を返しますが、リストの要素が int なので None のデータ型も int option になります。なお、option の値はパターンマッチングを使って取り出すことができます。
+</p>
+
+<h4>●再帰的なデータ型</h4>
+<p> ヴァリアントは再帰的なデータ構造も定義することができます。たとえば、連結リスト (linkedlist) は次のように定義することができます。
+</p>
+<pre class="item">
+type 'a linkedlist = Nil | Cell of 'a * 'a linkedlist
+</pre>
+<p> Nil が連結リストの終端を表し、Cell がコンスセルを表します。積型 'a * 'a linkedlist で、最初の要素が格納するデータになり、2 番目の要素が次の Cell を格納するデータになります。これで Ocaml のリストと同等の多相的なデータ型になります。次の例を見てください。
+</p>
+<pre>
+# type 'a linkedlist = Nil | Cell of 'a * 'a linkedlist;;
+type 'a linkedlist = Nil | Cell of 'a * 'a linkedlist
+# let a = Cell (1, Nil);;
+val a : int linkedlist = Cell (1, Nil)
+# let b = Cell (2, a);;
+val b : int linkedlist = Cell (2, Cell (1, Nil))
+# let c = Cell (10, Cell (11, Cell (12, Nil)));;
+val c : int linkedlist = Cell (10, Cell (11, Cell (12, Nil)))
+</pre>
+<p> このように、Cell を使って linkedlist を組み立てることができます。ようするに、コンストラクタ Cell が list のコンス演算子と同じ働きをしているわけです。実際、Ocaml の list は次のように定義されています。
+</p>
+<pre class="item">
+type 'a list = [] | :: of 'a * 'a list
+</pre>
+<p> これで多相的なリスト構造を実現できるのですから、OCaml の型システムは柔軟で強力な機能だと思います。
+</p>
+<h4>●連想リスト</h4>
+<p> それでは簡単な例題として、「連想リスト (association list : a-list) 」を作ってみましょう。前回簡単に説明しましたが、連想リストは組 (key, data) を要素としたリストです。OCaml には連想リストを操作する関数が List モジュールに用意されています。今回は OCaml の学習ということで、あえて｢連想リスト」を表すデータ型とその操作関数を作成してみましょう。
+</p>
+<p> 最初にヴァリアントでデータ型を定義します。
+</p>
+<pre class="list">
+リスト 3 : 連想リストの定義
+
+type ('a, 'b) alist = ANil | ACell of 'a * 'b * ('a, 'b) alist
+</pre>
+
+<p> 名前は alist にしたので、型は ('a, 'b) alist になります。'a がキーで 'b がデータに対応する型になります。ANil が空の連想リストを表します。ACell の内部では 'a と 'b を組 ('a * 'b) にする必要はないので、ACell の型式は 'a * 'b * ('a, 'b) list としました。
+</p>
+
+<p> 次に連想リストを生成する関数を作りましょう。関数名は Common Lisp から拝借しました。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 4 : 連想リストの生成
+
+let acons x y ls = ACell (x, y, ls)
+
+let rec pairlis xs ys =
+  match (xs, ys) with
+    (([], _) | (_, [])) -&gt; ANil
+  | (x1::xs1, y1::ys1) -&gt; ACell (x1, y1, (pairlis xs1 ys1))
+</pre>
+
+<p> 関数 acons はキー x とデータ y と連想リスト ls を受け取り、ls の先頭に x と y を追加します。関数 pairlis は 2 つのリストを受け取り、第 1 引数のリストの要素がキー、第 2 引数のリストの要素がデータとなる連想リストを生成します。引数のリストの長さが違う場合は短い方に合わせます。
+</p>
+<p> 最初の節がどちらかのリストが空になった場合です。複数のパターンを | でつなぐパターンを「or パターン」といいます。パターンのどれかがマッチングに成功すれば、その節を選択して評価します。最後の節で ACell を生成して xs の要素 x1 と ys の要素 y1 を格納します。
+</p>
+
+<p> 次はデータを探索する関数を作ります。関数 assoc は指定したキーと等しいデータを探します。関数 assoc_if は述語が真となるキーを探します。どちらの関数も、データを option に格納して返します。見つからない場合は None を返します。
+</p>
+
+<pre class="list">
+リスト 5 : 連想リストの探索
+
+let rec assoc key = function
+  ANil -&gt; None
+| ACell (x, y, rest) -&gt; if x = key then Some y else assoc key rest
+
+let rec assoc_if f = function
+  ANil -&gt; None
+| ACell (x, y, rest) -&gt; if f x then Some y else assoc_if f rest
+</pre>
+
+<p> どちらの関数もパターンマッチングで ACell 内のデータを取り出しています。x がキーで、y がデータ、rest が次の ACell です。連想リストが空 (ANil) の場合は None を返します。assoc は引数 x とキー a を比較して、等しければ Some b を返します。assoc_if は f x の評価結果が真であれば Some b を返します。
+</p>
+
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre class="item">
+val acons : 'a -&gt; 'b -&gt; ('a, 'b) alist -&gt; ('a, 'b) alist = &lt;fun&gt;
+val pairlis : 'a list -&gt; 'b list -&gt; ('a, 'b) alist = &lt;fun&gt;
+val assoc : 'a -&gt; ('a, 'b) alist -&gt; 'b option = &lt;fun&gt;
+val assoc_if : ('a -&gt; bool) -&gt; ('a, 'b) alist -&gt; 'b option = &lt;fun&gt;
+</pre>
+<pre>
+# let a = acons 1 10 ANil;;
+val a : (int, int) alist = ACell (1, 10, ANil)
+# let b = acons 2 12 a;;
+val b : (int, int) alist = ACell (2, 12, ACell (1, 10, ANil))
+# let c = pairlis( [1, 2, 3, 4, 5], [11, 12, 13, 14, 15] );;
+val c : (int,int) alist = ... 省略 ...
+
+# assoc 4 c:;
+- : int option = Some 14
+# assoc_if (fun x -&gt; x mod 2 = 0) c;;
+^ : int option = Some 12
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●レコードの定義</h4>
+<p> 次は「レコード (record) 」について説明します。レコードはＣ言語の構造体と同じようなデータ構造です。レコードは type 宣言で次のように定義します。
+</p>
+<pre class="item">
+type (型引数, ...) 型名 = {
+  フィールド名1 : 型1; フィールド名2 : 型2; ... ; フィールド名n : 型n
+}
+</pre>
+<p> type 宣言の後ろに型名を指定し、その後ろに中カッコ { } で本体を定義します。要素は "フィールド名 : 型" の形式で指定してカンマで区切ります。なお、異なるレコード型で同じフィールド名を使用することはできません。フィールド名が重複している場合、あとから定義したレコードが有効になり、その前に定義したレコードは使うことができなくなります。ご注意ください。
+</p>
+<h4>●レコードの生成</h4>
+<p> レコードは次の形式で生成します。
+</p>
+<pre class="item">
+{ フィールド名1 = 式1; フィールド名2 = 式2; ... ; フィールド名n = 式n }
+</pre>
+<p> 式の評価結果がフィールドの値になります。簡単な例を示しましょう。
+</p>
+<pre>
+# type foo = {bar : int; baz : float};;
+type foo = { bar : int; baz : float; }
+# let a = {bar = 10; baz = 1.23};;
+val a : foo = {bar = 10; baz = 1.23}
+# a.bar;;
+- : int = 10
+# a.baz;;
+- : float = 1.23
+</pre>
+<p> フィールドの値はパターンマッチングで取り出すこともできますが、"レコード + ドット ( . ) + フィールド名" の形式で取り出すこともできます。
+</p>
+<p> OCaml はフィールドの値を変更した新しいレコードを生成することができます。次の例を見てください。
+</p>
+<pre>
+# let b = {a with baz = 123.4};;
+val b : foo = {bar = 10; baz = 123.4}
+# a;;
+val a : foo = {bar = 10; baz = 1.23}
+</pre>
+<p> {式0 with フィールド名 = 式; ... } という形式で、式0 で得られるレコードのフィールドの値を、指定した式の評価値に変更した新しいレコードを生成します。なお、元のレコードの値を書き換えることはありません。
+</p>
+
+<h4>●レコードのパターンマッチング</h4>
+<p> もちろん、レコードでもパターンマッチングを使うことができます。次の例を見てください。
+</p>
+<pre>
+# let {bar = x; baz = y} = a;;
+val x : int = 10
+val y : float = 1.23
+# let {baz = z} = a;;
+val z = 1.23
+</pre>
+
+<p> "フィールド = パターン" とするとフィールドの値とパターンを照合します。{bar = x; baz = y} は変数 x とフィールド bar の値、変数 y とフィールド bar の値がマッチングして、x = 10, y = 1.23 になります。また、レコードのパターンマッチングは、必要なフィールドだけを指定することができます。フィールド名からレコードの型が分かるので、すべてのフィールドを指定する必要はありません。
+</p>
+
+<h4>●多相的なレコード</h4>
+<p> レコードは型変数を使って多相的なデータ構造を定義することができます。たとえば、キーとデータの組を表すレコードは次のように定義することができます。
+</p>
+<pre>
+# type ('a, 'b) pair = {key : 'a; data : 'b};;
+type ('a, 'b) pair = { key : 'a; data : 'b; }
+</pre>
+<p> キー (key) の型を 'a で、データ (data) の型を 'b で表しています。
+</p>
+<p> 簡単な例題として、pair を使って連想リストを作ってみましょう。レコードはヴァリアントと組み合わせることができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 6 : 連想リストの定義
+
+type ('a, 'b) alist = ANil | ACell of ('a, 'b) pair * ('a, 'b) alist
+</pre>
+<p> ACell の型は ('a, 'b) pair * ('a, 'b) alist になります。
+</p>
+
+<p> 連想リストを生成する関数 acons と pairlis は次のようになります。
+</p>
+<pre class="list">
+リスト 7 : 連想リストの生成
+
+let acons x y xs = ACell ({key = x; data = y}, xs)
+
+let rec pairlis xs ys =
+  match (xs, ys) with
+    (([], _) | (_, [])) -&gt; ANil
+  | (x1::xs1, y1::ys1) -&gt; ACell ({key = x1; data = y1}, (pairlis xs1 ys1))
+</pre>
+<p> どちらの関数もキーとデータをレコードに格納するだけです。
+</p>
+
+<p> データを探索する関数 assoc と assoc_if は次のようになります。
+</p>
+<pre class="list">
+リスト 8 : 連想リストの探索
+
+let rec assoc key = function
+  ANil -&gt; None
+| ACell ({key = x; data = y}, rest) -&gt; if x = key then Some y else assoc key rest
+
+let rec assoc_if f = function
+  ANil -&gt; None
+| ACell ({key = x; data = y}, rest) -&gt; if f x then Some y else assoc_if f rest
+</pre>
+<p> どちらの関数もパターンマッチングでレコードから値を取り出します。レコードはフィールドに名前が付いているので、組と違ってデータの順番を気にする必要はなく、わかりやすいプログラムになると思います。
+</p>
+<p> それでは、簡単な実行例を示します。
+</p>
+<pre class="item">
+val acons : 'a -&gt; 'b -&gt; ('a, 'b) alist -&gt; ('a, 'b) alist = &lt;fun&gt;
+val pairlis : 'a list -&gt; 'b list -&gt; ('a, 'b) alist = &lt;fun&gt;
+val assoc : 'a -&gt; ('a, 'b) alist -&gt; 'b option = &lt;fun&gt;
+val assoc_if : ('a -&gt; bool) -&gt; ('a, 'b) alist -&gt; 'b option = &lt;fun&gt;
+</pre>
+<pre>
+# let a = acons 1 10 ANil;;
+val a : (int, int) alist = ACell ({key = 1; data = 10}, ANil)
+# let b = acons 2 12 a;;
+val b : (int, int) alist =
+ACell ({key = 2; data = 12}, ACell ({key = 1; key = 10}, ANil))
+# let c = pairlis( [1, 2, 3, 4, 5], [11, 12, 13, 14, 15] );;
+val c : (int,int) alist = ... 省略 ...
+
+# assoc 4 c:;
+- : int option = Some 14
+# assoc_if (fun x -&gt; x mod 2 = 0) c;;
+^ : int option = Some 12
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<h3 id="chap02">ソート (2)</h3>
+<h4>●マージソート</h4>
+<p> ソートのお話です。今まで例題としてクイックソートと挿入ソートを取り上げました。データ数を N とすると、挿入ソートの実行時間は N<sup>2</sup> に比例します。挿入ソートは遅いソートですが、クイックソートは高速なソートで、実行時間は N * log<sub>2</sub> N に比例します。ところがクイックソートにも弱点があり、枢軸の選び方によっては実行時間が N<sup>2</sup> に比例する遅いソートになってしまいます。リストの場合、枢軸を自由に選ぶことが難しいので、クイックソートはリスト向きのアルゴリズムとはいえません。
+</p>
+
+<p> そこで、今回はリストに適したソートアルゴリズムである「マージソート (merge sort) 」を取り上げます。データ数を N とすると、マージソートの実行時間は N * log<sub>2</sub> N に比例します。マージソートはクイックソートと同様に高速なアルゴリズムですが、実際にプログラムを作って比較してみるとクイックソートの方が高速になります。ただし、クイックソートと違って、データによって性能が劣化することはありません。どのようなデータに対しても力を発揮してくれます。
+</p>
+<h4>●リストのマージ</h4>
+<p> まず最初にマージから説明します。「マージ (併合) 」とは、複数のソート済みのリストを一つのソート済みのリストにまとめる操作です。次の図を見てください。
+</p>
+
+<pre class="fig">
+     ┌─ [1; 3; 5]  : リスト a 
+[] ←┤
+     └─ [2; 4; 6]  : リスト b 
+
+   小さい方をセットする
+
+      ┌─ [3; 5]    : リスト a 
+[1] ←┘
+           [2; 4; 6] : リスト b 
+
+   1 をセットする
+
+              [3; 5] : リスト a 
+[1; 2] ←┐
+         └─ [4; 6] : リスト b 
+
+   2 をセットする
+
+データがなくなるまで繰り返す 
+
+    図 1 : リストのマージ
+</pre>
+<p> 2 つのリスト a と b があります。これらのリストはソート済みとしましょう。これらのリストをソート済みのリストにまとめることを考えます。a と b はソート済みなので先頭のデータがいちばん小さな値です。したがって、上図のように先頭のデータを比較し、小さい方のデータを取り出して順番に並べていけば、ソート済みのリストにまとめることができます。途中でどちらかのリストが空になったら、残ったリストのデータをそのまま追加します。
+</p>
+<p> それでは、実際にプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト 9 : リストのマージ
+
+let rec merge xs ys =
+  match (xs, ys) with
+    ([], _) -&gt; ys
+  | (_, []) -&gt; xs
+  | (x1:: xs1, y1::ys1) -&gt;
+    if x1 &lt; y1 then x1::merge xs1 ys else y1::merge xs ys1
+</pre>
+
+<p> 関数 merge の引数 xs と ys がマージするリストです。最初の節はリスト xs が空リストになった場合で、リスト ys をそのまま返します。2 番目の節はリスト ys が空リストになった場合で、リスト xs をそのまま返します。この 2 つの節が再帰呼び出しの停止条件になります。
+</p>
+<p> リスト xs と ys にデータがあれば、先頭要素 x1 と y1 を比較します。x1 が小さい場合は x1 を、そうでなければ y1 を merge が返すリストに追加します。merge を再帰呼び出しするときは、追加する先頭要素をリストから取り除くことに注意してください。これでリストをマージすることができます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre class="item">
+val merge : 'a list -&gt; 'a list -&gt; 'a list = &lt;fun&gt;
+</pre>
+<pre>
+# merge [1; 3; 5; 7] [2; 4; 6; 8];;
+- : int list = [1; 2; 3; 4; 5; 6; 7; 8]
+# merge [10; 20; 30] [1; 2; 3; 4];;
+- : int list = [1,2,3,4,10,20,30]
+</pre>
+<h4>●マージソートの実装</h4>
+<p> マージソートは、このマージを使ってデータをソートします。次の図を見てください。
+</p>
+
+<pre class="fig">
+ 9 5 3 7 6 4 2 8  最初の状態
+
+|5 9|3 7|4 6|2 8| 長さ２の列に併合
+
+|3 5 7 9|2 4 6 8| 長さ４の列に併合 
+
+ 2 3 4 5 6 7 8 9  ソート終了
+
+        図 2 : マージソート
+</pre>
+
+<p> マージをソートに応用する場合、最初は各要素をソート済みのリストとして考えます。この状態で隣のリストとマージを行い、長さ 2 のリストを作ります。次に、このリストに対して再度マージを行い、長さ 4 のリストを作ります。このように順番にマージしていくと、最後にはひとつのリストにマージされソートが完了します。
+</p>
+
+<p> 実際にプログラムを作る場合、リストの長さを 1, 2, 4, 8, ... と増やしていくよりも、再帰的に考えた方が簡単です。まず、ソートするリストを 2 つに分割して、前半部分をソートします。次に、後半部分をソートして、その結果をマージすればいいわけです。
+</p>
+
+<p> 再帰呼び出しするたびにリストは 2 つに分割されるので、最後にリストの要素はひとつとなります。これはソート済みのリストなので、ここで再帰呼び出しを終了してマージ処理を行えばいいわけです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 10 : マージソート
+
+(* 先頭から n 個の要素を削除する *)
+let rec drop xs n =
+  match (xs, n) with
+    ((_, 0) | ([], _)) -&gt; xs
+  | (_ :: ys, _) -&gt; drop ys (n - 1)
+
+(* マージソート *)
+let rec merge_sort n xs =
+  match (n, xs) with
+    (_, []) -&gt; []
+  | (1, x::xs) -&gt; [x]
+  | (2, x1::x2::xs) -&gt;
+    if x1 &lt; x2 then [x1; x2] else [x2; x1]
+  | (_, _) -&gt;
+    let m = n / 2 in
+    merge (merge_sort m xs) (merge_sort (n - m) (drop xs m))
+</pre>
+
+<p> 関数 merge_sort の引数 xs がソートするリスト、引数 n がリストの長さを表します。merge_sort はリストを分割する処理で、新しいリストを作らないことに注意してください。次の図を見てください。
+</p>
+<pre class="fig">
+ 引数 x
+  ｜
+  ｜←── 長さn ──→｜
+（１ ２ ３ ４ ５ ６ ７ ８）   
+  ｜←n/2→｜ ｜←n/2→｜
+  ｜          ｜
+ 引数 x      引数 y     再帰呼び出し 
+
+        図 3 : リストの分割
+</pre>
+<p> merge_sort はソートするリストの範囲を開始位置と長さで表しています。上図のリストを二分割する場合、前半部分は x と n / 2 で表し、後半部分を y と n / 2 で表します。y はリスト x の先頭から n / 2 個の要素を取り除けば求めることができます。この処理を関数 drop で行います。drop は list の先頭から n 個の要素を取り除きます。リストに対して n 回だけ tl を適用すると考えてもかまいません。簡単な例を示しましょう。
+</p>
+<pre class="item">
+val drop : 'a list -&gt; int -&gt; 'a list = &lt;fun&gt;
+</pre>
+<pre>
+# drop [1; 2; 3; 4] 0;;
+- : int list = [1; 2; 3; 4]
+# drop [1; 2; 3; 4] 2;;
+- : int list = [3; 4]
+# drop [1; 2; 3; 4] 4;;
+- : int list = []
+</pre>
+<p> あとは再帰呼び出しでリストを分割していき、リストの長さが 1 になったならば新しいリストを返します。リストの長さが 2 の場合は簡単なので、2 つの要素を比較してソート済みのリストを作成して返します。そして、merge_sort の返り値を merge でマージすればいいわけです。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre class="item">
+val merge_sort : int -&gt; 'a list -&gt; 'a list = &lt;fun&gt;
+</pre>
+<pre>
+# merge_sort 9 [5; 9; 1; 8; 2; 7; 3; 6; 4];;
+- : int list = [1; 2; 3; 4; 5; 6; 7; 8; 9]
+</pre>
+<p> 正常に動作していますね。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ocaml05.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml07.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

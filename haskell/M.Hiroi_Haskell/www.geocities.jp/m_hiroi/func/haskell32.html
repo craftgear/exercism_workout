@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881791</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell31.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell33.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">電卓プログラムの作成 (4)</h3>
+<p> 今回は簡単な電卓プログラムを例題にして「モナディック・パーサ (Monadic Parser) 」について説明します。モナディック・パーサ (または関数型パーサ) は、基本となる小さなパーサを複数用意しておいて、それらを組み合わせることで目的のパーサを作成します。Haskell の場合は「モナド」を使ってパーサを組み合わせるので、モナディック・パーサと呼ばれています。
+</p>
+
+<h4>●パーサのデータ型</h4>
+<p> 今まで作成した電卓プログラムでおわかりのように、パーサは入力データを受け取り、値と残りのデータを返します。したがって、パーサのデータ型は次のように表すことができます。
+</p>
+<pre class="item">
+data Parser s a = Parser {runParser :: s -&gt; (a, s)}
+</pre>
+<p> これは State モナドで表すことができます。モナディック・パーサはこれだけではなく、「失敗したら次のパーサを試す」という選択処理もモナドで行うようにします。これは State モナドと失敗系のモナド (Maybe, Either, List など) を合成し、MonadPlus の mplus を使って実現することができます。たとえば、リストを使う場合は次のように定義できます。
+</p>
+<pre class="item">
+type Parser s a = StateT [s] [] a
+runParser = runStateT
+</pre>
+<p> Parser の入力データはリストで、s はリストの要素のデータ型を表します。もちろん、Maybe や Either を使ってもかまいませんが、リストと動作が異なる場合があります。これはあとで説明します。
+</p>
+
+<h4>●基本的なパーサ</h4>
+<p> それでは、基本的なパーサを作っていきましょう。先頭のデータを取り出す (無条件にマッチする) パーサ item は次のようになります。
+</p>
+<pre class="list">
+リスト ; 先頭のデータを取り出す
+
+item :: Parser s s
+item = do x:xs &lt;- get
+          put xs
+          return x
+</pre>
+<p> 前回作成した電卓プログラムの関数 item と同じです。get でリストを取り出して、先頭要素を取り除いたリスト xs を put で書き込み、先頭要素 x をモナドに包んで返します。パーサにおいて return は成功を表すことに注意してください。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runParser item "abcde"
+[('a',"bcde")]
+*Main&gt; runParser item ""
+[]
+*Main&gt; runParser item ["ab", "cd", "ef"]
+[("ab",["cd","ef"])]
+*Main&gt; runParser item [123, 456, 789]
+[(123,[456,789])]
+</pre>
+<p> 入力データが空リストの場合、(x:xs) &lt;- get のパターンマッチングで失敗するので、StateT の fail が呼び出され、リストの mzero の値 (空リスト) が返されます。失敗を表す値が MonadPlus の mzero であることに注意してください。
+</p>
+<p> item を使って 2 つのデータとマッチするパーサを作ることができます。
+</p>
+<pre class="list">
+リスト : 二つの要素とマッチするパーサ
+
+item2 :: Parser s [s]
+item2 = do a &lt;- item
+           b &lt;- item
+           return [a, b]
+</pre>
+<p> item2 のデータ型で値が [s] となっていることに注意してください。あとは簡単で、モナドを使ってパーサ item を連結するだけです。item が失敗した場合、残りの処理は実行されずに空リストが返されます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; runParser item2 "abcde"
+[("ab","cde")]
+*Main&gt; runParser item2 "a"
+[]
+*Main&gt; runParser item2 ""
+[]
+*Main&gt; runParser item2 [123, 456, 789]
+[([123,456],[789])]
+</pre>
+<p> このように、リストの要素数が一つ以下の場合、item2 は失敗します。
+</p>
+
+<p> 次は述語 p を引数に受け取り、先頭要素 x が p を満たしていれば x を返し、そうでなければ失敗するパーサ sat (satisfy) を作ります。
+</p>
+<pre class="list">
+リスト : 述語 p を満たす要素とマッチするパーサ
+
+failure :: Parser s a
+failure = mzero
+
+sat :: (s -&gt; Bool) -&gt; Parser s s
+sat p = do x &lt;- item
+           if p x then return x else failure
+</pre>
+<p> item で要素 x を取り出し、p x が真ならば x をモナドに包んで返し、そうでなければ失敗 failure を返します。failure は mzero で表します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runParser (sat (=='a')) "abcde"
+[('a',"bcde")]
+*Main&gt; runParser (sat (=='b')) "abcde"
+[]
+*Main&gt; runParser (sat isDigit) "12345"
+[('1',"2345")]
+*Main&gt; runParser (sat isDigit) "abcde"
+[]
+*Main&gt; runParser (sat (==123)) [123, 456, 789]
+[(123,[456,789])]
+*Main&gt; runParser (sat (/=123)) [123, 456, 789]
+[]
+</pre>
+<h4>●選択</h4>
+<p> 次は、パーサが失敗したら次のパーサを試す選択処理を作りましょう。選択は記号 +++ で表すことにします。
+</p>
+<pre class="list">
+リスト : 選択
+
+(+++) :: Parser s a -&gt; Parser s a -&gt; Parser s a
+(+++) = mplus
+</pre>
+<p> 選択は mplus で実現できます。簡単な実行例を示しましょう。
+</p>
+
+<pre>
+*Main&gt; runParser (sat (=='a') +++ sat (=='A')) "abcde"
+[('a',"bcde")]
+*Main&gt; runParser (sat (=='a') +++ sat (=='A')) "Abcde"
+[('A',"bcde")]
+*Main&gt; runParser (sat (=='a') +++ sat (=='A')) "zbcde"
+[]
+</pre>
+<p> ここで StateT と合成するモナドがリストと Maybe, Either では、選択の動作が異なることに注意してください。リストの場合、左右のパーサがどちらも成功すると、それらの結果をリストに格納して返します。
+</p>
+<p> 簡単な例を示します。
+</p>
+<pre>
+*Main&gt; runParser (sat isDigit +++ sat isAlphaNum) "abcde"
+[('a',"bcde")]
+*Main&gt; runParser (sat isDigit +++ sat isAlphaNum) "12345"
+[('1',"2345"),('1',"2345")]
+</pre>
+<p> 左辺の条件は isDigit で右辺の条件が isAlphaNum です。先頭のデータが数字であれば左右どちらのパーサも成功するので、その結果がリストに格納されて返されます。Maybe, Either の場合、mplus は論理和と同様の動作になるので、左辺のパーサが成功すれば、右辺のパーサは実行されません。
+</p>
+
+<h4>●繰り返し</h4>
+<p> 次はパーサ p を繰り返し適用し、マッチしたデータをリストに格納して返すパーサ many, many1 を作ります。
+</p>
+
+<pre class="list">
+リスト : 繰り返し
+
+-- 0 回以上
+many :: Parser s a -&gt; Parser s [a]
+many p = many1 p +++ return []
+
+-- 1 回以上
+many1 :: Parser s a -&gt; Parser s [a]
+many1 p = do x  &lt;- p
+             xs &lt;- many p
+             return (x:xs)
+</pre>
+<p> many は 0 回以上の繰り返しを、many1 は 1 回以上の繰り返しを表します。正規表現でいうと、* と + に対応します。many は many1 を呼び出して 1 回以上の繰り返しを試し、失敗した場合は空リストをモナドに包んで返します。many1 はパーサ p を実行し、成功した場合は many p を呼び出します。これで 1 回以上の繰り返しを表すことができます。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+
+<pre>
+*Main&gt; runParser (many (sat isDigit)) "12 ab"
+[("12"," ab"),("1","2 ab"),("","12 ab")]
+*Main&gt; runParser (many1 (sat isDigit)) "12 ab"
+[("12"," ab"),("1","2 ab")]
+</pre>
+<p> StateT にリストを合成した場合、many, many1 はパーサ p が成功するすべてのパターンをリストに格納して返します。many (sat isDigit) で数字を求める場合、"12 ab" は "12", "1". "" の 3 通りがリストに格納されます。many1 の場合、"" は含まれません。なお、Maybe, Either を合成した場合、最長一致した結果が返されます。つまり、入力データが "12 ab" であれば "12" だけが返されます。
+</p>
+
+<h4>●整数とマッチするパーサ</h4>
+<p> 次は整数とマッチするパーサを作ってみましょう。
+</p>
+<pre class="list">
+リスト : 整数とマッチするパーサ
+
+number :: Parser Char Integer
+number = do
+  xs &lt;- many1 $ sat isDigit
+  return (read xs)
+</pre>
+<p> number は many1 $ sat isDigit で数字 (0 - 9) が連続している文字列を取り出し、それを read で変換してモナドに包んで返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runParser number "12345 67890"
+[(12345," 67890"),(1234,"5 67890"),(123,"45 67890"),(12,"345 67890"),(1,"2345 67890")]
+</pre>
+<p> 整数値を求める場合は最長一致した文字列だけで十分なので、これ以降は Parser の定義を次のように変更します。
+</p>
+<pre class="item">
+type Parser s a = StateT [s] Maybe a
+</pre>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+*Main&gt; runParser number "12345 67890"
+Just (12345," 67890")
+</pre>
+<p> 空白文字で区切られた複数の整数を取り出すことも簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 複数の整数とマッチするパーサ
+
+spaces :: Parser Char String
+spaces = many $ sat isSpace
+
+token :: Parser Char a -&gt; Parser Char a
+token p = do a &lt;- p
+             spaces
+             return a
+
+numbers :: Parser Char [Integer]
+numbers = many1 $ token $ number
+</pre>
+<p> spaces は連続した空白文字とマッチするパーサです。token は引数のパーサ p を実行し、そのあと spaces を実行して空白文字を取り除きます。numbers は token $ number を many1 で繰り返し評価するだけです。これで複数の整数値を取り出すことができます。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; runParser numbers "123 456 789"
+Just ([123,456,789],"")
+*Main&gt; runParser numbers "123   456   789   "
+Just ([123,456,789],"")
+*Main&gt; runParser (do {spaces; numbers}) "    123   456   789   "
+Just ([123,456,789],"")
+</pre>
+<p> 先頭の空白文字を取り除く場合は numbers の前に spaces を実行してください。
+</p>
+
+<h4>●数式の計算</h4>
+<p> 次は整数の四則演算 (+, -, *, /) を行う処理を作ってみましょう。単項演算子 (+, -) とカッコも使用できることにします。
+</p>
+
+<p> 因子の処理は次のようになります。
+</p>
+<pre class="list">
+リスト : 因子の処理
+
+number :: Parser Char Integer
+number = do
+  xs &lt;- token $ many1 $ sat isDigit
+  return (read xs)
+
+factor :: Parser Char Integer
+factor = number
+     +++ do token $ sat ('('==)
+            n &lt;- expr
+            token $ sat (')'==)
+            return n
+     +++ do token $ sat ('-'==)
+            n &lt;- factor
+            return (- n)
+     +++ do token $ sat ('+'==)
+            n &lt;- factor
+            return n
+</pre>
+<p> number は token を呼び出して整数を取り出したあと空白文字を削除するように修正します。factor は、最初に number で整数とマッチするか試します。失敗した場合は次のパーサを試します。先頭の文字が '(' であれば、式を処理する expr を呼び出し、次の文字が ')' であることを確認します。成功すれば整数 n をモナドに包んで返します。先頭の文字が '-', '+' の場合は単項演算子の処理を行います。factor を呼び出して値 n を求め、所定の処理を行ってモナドに包んで返します。
+</p>
+
+<p> 次は演算子とマッチするパーサを作ります。
+</p>
+<pre class="list">
+リスト : 演算子とマッチするパーサ
+
+add, sub, mul, div' :: Parser Char (Integer -&gt; Integer -&gt; Integer)
+add  = do token $ sat (=='+')
+          return (+)
+sub  = do token $ sat (=='-')
+          return (-)
+mul  = do token $ sat (=='*')
+          return (*)
+div' = do token $ sat (=='/')
+          return div
+</pre>
+<p> add が演算子 + に、sub が演算子 - に、mul が演算子 * に、div' が演算子 / に対応します。
+</p>
+
+<p> 最後に項と式を処理する関数 term と expr を作ります。
+</p>
+<pre class="list">
+リスト : 項と式の処理
+
+rep :: Parser Char Integer -&gt; Parser Char (Integer -&gt; Integer -&gt; Integer) -&gt; Parser Char Integer
+rep p q = do
+  v &lt;- p
+  rep_sub v
+  where
+    rep_sub v = do {op &lt;- q; v' &lt;- p; rep_sub (op v v')} +++ return v
+
+term :: Parser Char Integer
+term = factor `rep` (mul +++ div')
+
+expr :: Parser Char Integer
+expr = term `rep` (add +++ sub)
+</pre>
+<p> rep はパーサ p, q を受け取り、rep_sub で q がマッチする場合は p を繰り返し呼び出して演算処理を行います。q がマッチしない場合は、引数 v をモナドに包んで返します。term は factor と (mul +++ 'div) を rep に渡して呼び出します。expr は term と (add +++ sub) を rep に渡して呼び出します。これで数式を計算することができます。
+</p>
+<p> それでは実行してみましょう。式の終わりにはセミコロンを入力するものとします。
+</p>
+<pre>
+*Main&gt; runParser expr "1 + 2 * 3 - 4;"
+Just (3,";")
+*Main&gt; runParser expr "(1 + 2) * (3 - 4);"
+Just (-3,";")
+*Main&gt; runParser expr "(1 + -2) * (3 - 4);"
+Just (1,";")
+*Main&gt; runParser expr "(-1 + -2) * (3 - 4);"
+Just (3,";")
+*Main&gt; runParser expr "* 3;"
+Nothing
+*Main&gt; runParser expr "/ 3;"
+Nothing
+*Main&gt; runParser expr "(1 + 2;"
+Nothing
+*Main&gt; runParser expr "1 + 2);"
+Just (3,");")
+*Main&gt; runParser expr "();"
+Nothing
+</pre>
+
+<h4>●エラー処理の追加</h4>
+<p> 次はこの電卓プログラムにエラー処理を追加してみましょう。モナディック・パーサの場合、選択処理に MonadPlus を利用しているので、StateT に Either モナドを合成しても、適切なエラーメッセージを表示することはできません。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : エラー処理の追加
+
+-- パーサの定義
+type Parser s a = StateT [s] (Either String) a
+runParser = runStateT
+
+-- エラー
+parseErr :: String -&gt; Parser s a
+parseErr s = throwError $ strMsg s
+
+-- 因子
+factor :: Parser Char Integer
+factor = number
+     +++ do token $ sat ('('==)
+            n &lt;- expr
+            x &lt;- token $ item
+            case x of
+              ')' -&gt; return n
+              _   -&gt; parseErr "')' expected"
+     +++ do token $ sat ('-'==)
+            n &lt;- factor
+            return (- n)
+     +++ do token $ sat ('+'==)
+            n &lt;- factor
+            return n
+     +++ do x &lt;- item
+            parseErr ("unexpected token: " ++ show x)
+</pre>
+
+<p> 左カッコに対応する右カッコが存在しない場合、エラーメッセージ "')' expected" を表示しようとして parseErr を実行します。この場合、返り値はパーサが失敗したときと同じデータ型になるので、次のパーサを試すことになります。けっきょく、最後のパーサが実行されて、関係のないエラーメッセージが表示されることになります。
+</p>
+
+<p> 実際に試してみると次のようになります。
+</p>
+<pre>
+*Main&gt; runParser expr "(1 + 2;"
+*** Exception: Pattern match failure in do expression at mparser1.hs:24:11-14
+*Main&gt; runParser expr "(1 + 2;;"
+Left "unexpected token: '('"
+</pre>
+<p> 最初の例は、item の (x:xs) &lt;- get のマッチングで失敗したとき、エラーが送出されているようです。Either モナドの fail が呼び出されていないのかもしれません。しかたがないので、セミコロンを 1 文字追加して試したところ、"')' expected" と表示されずに、最後の節のエラーが表示されていることがわかります。
+</p>
+
+<p> そこで、Either モナドのかわりに、パーサの結果を格納するためのデータ型を定義し、それをモナドのインスタンスに設定することにします。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : パーサの結果を格納する
+
+-- データ型の定義
+data Parse a = Fail | Err String | Some a deriving Show
+
+-- モナドのインスタンスに設定
+instance Monad Parse where
+  return x     = Some x
+  Fail   &gt;&gt;= _ = Fail
+  Err s  &gt;&gt;= _ = Err s
+  Some a &gt;&gt;= k = k a
+  fail s       = Fail
+
+instance MonadPlus Parse where
+  mzero = Fail
+  Fail `mplus` ys  = ys
+  xs   `mplus` _   = xs
+
+-- パーサの定義
+type Parser s a = StateT [s] Parse a
+runParser = runStateT
+
+-- エラー
+parseErr :: String -&gt; Parser s a
+parseErr s = StateT $ \_ -&gt; Err s
+</pre>
+<p> データ型 Parse a は、パーサの失敗を Fail で、致命的なエラーを Err String で、パースした結果を Some a で表します。モナドの設定は簡単です。return x は Some x を返します。バインド演算子は、左辺が Fail, Err s の場合は、Fail, Err s を返します。Some a の場合は、a を右辺の関数に渡して評価するだけです。fail s は Err s ではなく Fail を返すことに注意してください。
+</p>
+<p> MonadPlus も簡単で、mzero は Fail を返します。mplus は左辺が File の場合は右辺 ys を返します。それ以外の場合は右辺 xs を返します。これで左辺が Err のときは右辺を評価せずに Err を返すことができます。parseErr は throwError を使わないで、文字列 s を Err に格納して、ラムダ式で包んで返します。これでエラーを返すことができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; runParser expr "(1 + 2;"
+Err "')' expected"
+*Main&gt; runParser expr "(1 + *2;"
+Err "unexpected token : '*'"
+*Main&gt; runParser expr "1 + *2;"
+Err "unexpected token : '*'"
+</pre>
+<p> きちんとエラーメッセージが表示されていますね。ご参考までに、<a href="haskell31.html">電卓プログラム (3)</a> で作成したプログラムを、モナディック・パーサを使って書き直してみました。興味のある方は <a href="haskell32.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+<p> 今回は新しいデータ型を作成してエラーを処理しましたが、Haskell にはもっとクールな方法があるのかもしれませんね。実際には、Persec を使ったほうが簡単にプログラムできると思います。興味のある方は Parsec に挑戦してみてください。
+</p>
+
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li>山本和彦, <a href="http://d.hatena.ne.jp/kazu-yamamoto/20080920/1221881130">モナディック・パーサー (あどけない話)</a>
+  <li>山下伸夫, <a href="http://www.ipsj.or.jp/07editj/promenade/4702.pdf">構文解析器結合子(Haskellプログラミング)</a> (PDF)
+  <li>Graham Hutton, Erik Meijer, <a href="http://www.cs.nott.ac.uk/~gmh/pearl.pdf">Monadic parsing in Haskell</a> (PDF, 英)
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+--
+-- mparser.hs : モナディック・パーサ
+--
+--              Copyright (C) 2013 Makoto Hiroi
+--
+import Control.Monad
+import Control.Monad.State
+import Data.Char
+
+-- パーサの結果を格納する
+data Parse a = Fail | Err String | Some a deriving Show
+
+instance Monad Parse where
+  return x     = Some x
+  Fail   &gt;&gt;= _ = Fail
+  Err s  &gt;&gt;= _ = Err s
+  Some a &gt;&gt;= k = k a
+  fail s       = Fail
+
+instance MonadPlus Parse where
+  mzero = Fail
+  Fail `mplus` ys  = ys
+  xs   `mplus` _   = xs
+
+-- パーサの定義
+type Parser s a = StateT [s] Parse a
+runParser = runStateT
+
+-- エラー
+parseErr :: String -&gt; Parser s a
+parseErr s = StateT $ \_ -&gt; Err s
+
+-- 失敗
+failure :: Parser s a
+failure = mzero
+
+--
+item :: Parser s s
+item = do x:xs &lt;- get
+          put xs
+          return x
+
+--
+item2 :: Parser s [s]
+item2 = do a &lt;- item
+           b &lt;- item
+           return [a, b]
+
+--
+sat :: (s -&gt; Bool) -&gt; Parser s s
+sat p = do x &lt;- item
+           if p x then return x else failure
+
+-- 選択
+(+++) :: Parser s a -&gt; Parser s a -&gt; Parser s a
+(+++) = mplus
+
+-- 繰り返し
+-- 0 回以上
+many :: Parser s a -&gt; Parser s [a]
+many  p = many1 p +++ return []
+
+-- 1 回以上
+many1 :: Parser t a -&gt; Parser t [a]
+many1 p = do x &lt;- p
+             xs &lt;- many p
+             return (x:xs)
+
+-- 空白の除去
+spaces :: Parser Char String
+spaces = many $ sat isSpace
+
+token :: Parser Char a -&gt; Parser Char a
+token p = do a &lt;- p
+             spaces
+             return a
+
+-- 整数
+number :: Parser Char Integer
+number = do
+  xs &lt;- token $ many1 $ sat isDigit
+  return (read xs)
+
+numbers :: Parser Char [Integer]
+numbers = many1 $ token $ number
+
+
+-- 四則演算
+add, sub, mul, div' :: Parser Char (Integer -&gt; Integer -&gt; Integer)
+add  = do token $ sat (=='+')
+          return (+)
+sub  = do token $ sat (=='-')
+          return (-)
+mul  = do token $ sat (=='*')
+          return (*)
+div' = do token $ sat (=='/')
+          return div
+
+rep :: Parser Char Integer -&gt; Parser Char (Integer -&gt; Integer -&gt; Integer) -&gt; Parser Char Integer
+rep p q = do
+  v &lt;- p
+  rep_sub v
+  where
+    rep_sub v = do {op &lt;- q; v' &lt;- p; rep_sub (op v v')} +++ return v
+
+-- 因子
+factor :: Parser Char Integer
+factor = number
+     +++ do token $ sat ('('==)
+            n &lt;- expr
+            x &lt;- token $ item
+            case x of
+              ')' -&gt; return n
+              _   -&gt; parseErr "')' expected"
+     +++ do token $ sat ('-'==)
+            n &lt;- factor
+            return (- n)
+     +++ do token $ sat ('+'==)
+            n &lt;- factor
+            return n
+     +++ do x &lt;- item
+            parseErr ("unexpected token : " ++ show x)
+
+-- 項
+term :: Parser Char Integer
+term = factor `rep` (mul +++ div')
+
+-- 式
+expr :: Parser Char Integer
+expr = term `rep` (add +++ sub)
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+--
+-- calc3.hs : 電卓プログラム
+--            (モナディック・パーサを使った場合)
+--
+--            Copyright (C) 2013 Makoto Hiroi
+--
+import Data.Char
+import Control.Monad.State
+import System.IO
+
+-- 値
+data Value = INT Integer | REAL Double deriving (Show, Eq)
+
+-- トークンの定義
+data Token = Number Value           -- 数値
+           | Ident String           -- 識別子
+           | Add | Sub | Mul | Div  -- 演算子
+           | Assign                 -- 代入演算子
+           | Lpar | Rpar            -- カッコ
+           | Semic                  -- セミコロン
+           | Comma                  -- カンマ
+           | Eof                    -- ファイルの終了
+           | Others Char            -- その他
+  deriving (Show, Eq)
+
+-- 組み込み関数の定義
+data Func = F1  (Value -&gt; Calc Env Value)
+          | F2  (Value -&gt; Value -&gt; Calc Env Value)
+
+
+-- 構文木の定義
+data Expr = Num Value
+          | Var String
+          | Op1 (Value -&gt; Value) Expr
+          | Op2 (Value -&gt; Value -&gt; Value) Expr Expr
+          | Agn Expr Expr
+          | App Func [Expr]
+
+-- 結果を格納する
+data Parse a = Fail | Err String | Some a deriving Show
+
+instance Monad Parse where
+  return x     = Some x
+  Fail   &gt;&gt;= _ = Fail
+  Err s  &gt;&gt;= _ = Err s
+  Some a &gt;&gt;= k = k a
+  fail s       = Fail
+
+instance MonadPlus Parse where
+  mzero = Fail
+  Fail  `mplus` ys  = ys
+  xs    `mplus` _   = xs
+
+-- 型の定義
+type Lexer  = (Token, String)
+type Env    = [(String, Value)]
+type Calc s a = StateT s Parse a
+
+-- データを取り出す
+item :: Calc [a] a
+item = do x:xs &lt;- get
+          put xs
+          return x
+
+-- 先頭データを参照する
+lookahead :: Calc [a] a
+lookahead = do x:_ &lt;- get
+               return x
+
+--
+failure :: Calc s a
+failure = mzero
+
+--
+sat :: (a -&gt; Bool) -&gt; Calc [a] a
+sat p = do x &lt;- item
+           if p x then return x else failure
+
+-- 選択
+(+++) :: Calc s a -&gt; Calc s a -&gt; Calc s a
+(+++) = mplus
+
+-- エラー
+calcError :: String -&gt; Calc s a
+calcError msg = StateT $ \_ -&gt; Err msg
+
+-- 組み込み関数の呼び出し
+toREAL :: Value -&gt; Double
+toREAL (INT x)  = fromIntegral x
+toREAL (REAL x) = x
+
+callf1 :: (Double -&gt; Double) -&gt; Value -&gt; Calc Env Value
+callf1 f v = return $ REAL (f (toREAL v))
+
+callf2 :: (Double -&gt; Double -&gt; Double) -&gt; Value -&gt; Value -&gt; Calc Env Value
+callf2 f v1 v2 = return $ REAL (f (toREAL v1) (toREAL v2))
+
+callfri1 :: (Double -&gt; Integer) -&gt; Value -&gt; Calc Env Value
+callfri1 f v = return $ INT (f (toREAL v))
+
+callfii1 :: (Integer -&gt; Integer) -&gt; Value -&gt; Calc Env Value
+callfii1 f (INT n) = return $ INT (f n)
+callfii1 _ _       = calcError "Args is not Integer"
+
+callfii2 :: (Integer -&gt; Integer -&gt; Integer) -&gt; Value -&gt; Value -&gt; Calc Env Value
+callfii2 f (INT n) (INT m) = return $ INT (f n m)
+callfii2 _ _       _       = calcError "Args is not Integer"
+
+-- 階乗
+fact :: Integer -&gt; Integer
+fact n = if n &lt; 0 then 0
+         else if n == 0 then 1
+         else n * fact (n - 1)
+
+-- 組み合わせの数
+comb :: Integer -&gt; Integer -&gt; Integer
+comb n r = 
+  if n &lt; r || r &lt; 0 then 0
+  else if n == r || r == 0 then 1
+  else comb n (r - 1) * (n - r + 1) `div` r
+
+-- 関数の定義
+funcTable :: [(String, Func)]
+funcTable = [("sqrt", F1 (callf1 sqrt)),
+             ("sin",  F1 (callf1 sin)),
+             ("cos",  F1 (callf1 cos)),
+             ("tan",  F1 (callf1 tan)),
+             ("asin", F1 (callf1 asin)),
+             ("acos", F1 (callf1 acos)),
+             ("atan", F1 (callf1 atan)),
+             ("exp",  F1 (callf1 exp)),
+             ("pow",  F2 (callf2 (**))),
+             ("log",  F1 (callf1 log)),
+             ("sinh", F1 (callf1 sinh)),
+             ("cosh", F1 (callf1 cosh)),
+             ("tanh", F1 (callf1 tanh)),
+             ("floor",   F1 (callfri1 floor)),
+             ("ceiling", F1 (callfri1 ceiling)),
+             ("round",   F1 (callfri1 round)),
+             ("truncate",F1 (callfri1 truncate)),
+             ("fact",    F1 (callfii1 fact)),
+             ("comb", F2 (callfii2 comb)),
+             ("mod",  F2 (callfii2 mod)),
+             ("gcd",  F2 (callfii2 gcd)),
+             ("lcm",  F2 (callfii2 lcm))]
+
+-- トークンの切り出し
+getToken :: String -&gt; Lexer
+getToken [] = (Eof, "")
+getToken (x:xs)
+  | isSpace x = getToken xs
+  | isAlpha x = let (name, ys) = span isAlphaNum (x:xs)
+                in (Ident name, ys)
+  | isDigit x = let (s, ys@(y:_)) = span isDigit (x:xs)
+                in if y == '.' || y == 'e' || y == 'E'
+                   then case reads (x:xs) of
+                          [] -&gt; error "not number"  -- ありえないエラー
+                          [(y', ys')] -&gt; (Number (REAL y'), ys')
+                   else (Number (INT (read s)), ys)
+  | otherwise =
+      case x of
+        '=' -&gt; (Assign, xs)
+        '+' -&gt; (Add, xs)
+        '-' -&gt; (Sub, xs)
+        '*' -&gt; (Mul, xs)
+        '/' -&gt; (Div, xs)
+        '(' -&gt; (Lpar, xs)
+        ')' -&gt; (Rpar, xs)
+        ';' -&gt; (Semic, xs)
+        ',' -&gt; (Comma, xs)
+        _   -&gt; (Others x, xs)
+
+-- セミコロンまで読み込む
+lexer :: String -&gt; ([Token], String)
+lexer xs =
+  let (t, ys) = getToken xs
+  in case t of 
+      Semic -&gt; ([Semic], ys)
+      Eof   -&gt; ([Eof], ys)
+      _     -&gt; let (ts, zs) = lexer ys
+               in (t:ts, zs)
+
+-- 算術演算
+neg :: Value -&gt; Value
+neg (INT x)  = INT  (- x)
+neg (REAL x) = REAL (- x)
+
+add :: Value -&gt; Value -&gt; Value
+add (INT x)  (INT y)  = INT (x + y)
+add (REAL x) (REAL y) = REAL (x + y)
+add (INT x)  (REAL y) = REAL (fromIntegral x + y)
+add (REAL x) (INT y)  = REAL (x + fromIntegral y)
+
+sub :: Value -&gt; Value -&gt; Value
+sub (INT x)  (INT y)  = INT (x - y)
+sub (REAL x) (REAL y) = REAL (x - y)
+sub (INT x)  (REAL y) = REAL (fromIntegral x - y)
+sub (REAL x) (INT y)  = REAL (x - fromIntegral y)
+
+mul :: Value -&gt; Value -&gt; Value
+mul (INT x)  (INT y)  = INT (x * y)
+mul (REAL x) (REAL y) = REAL (x * y)
+mul (INT x)  (REAL y) = REAL (fromIntegral x * y)
+mul (REAL x) (INT y)  = REAL (x * fromIntegral y)
+
+div' :: Value -&gt; Value -&gt; Value
+div' (INT x)  (INT y)  = INT  (x `div` y)
+div' (REAL x) (REAL y) = REAL (x / y)
+div' (INT x)  (REAL y) = REAL (fromIntegral x / y)
+div' (REAL x) (INT y)  = REAL (x / fromIntegral y)
+
+-- 数式の計算
+factor :: Calc [Token] Expr
+factor = do x &lt;- item
+            case x of
+              Number v -&gt; return (Num v)
+              _        -&gt; failure
+     +++ do sat (== Lpar)
+            e &lt;- expr
+            y &lt;- item
+            case y of
+              Rpar -&gt; return e
+              _    -&gt; calcError "')' expected"
+     +++ do sat (== Sub)
+            e &lt;- expr
+            return (Op1 neg e)
+     +++ do sat (== Add)
+            e &lt;- expr
+            return e
+     +++ do sat (== Eof)
+            calcError "EOF"
+     +++ do x &lt;- item
+            case x of
+              Ident name -&gt; do
+                case lookup name funcTable of
+                  Nothing -&gt; return (Var name)
+                  Just fn -&gt; do args &lt;- getArgs
+                                if length args &lt; argsNum fn
+                                  then calcError "not enough arguments"
+                                  else return (App fn args)
+                                  where argsNum fn = case fn of
+                                                       (F1 _)  -&gt; 1
+                                                       (F2 _)  -&gt; 2
+              _ -&gt; calcError ("unexpected token: " ++ show x)
+
+
+-- 引数の取得
+getExpr :: Calc [Token] [Expr]
+getExpr = do
+  e &lt;- expr
+  x &lt;- item
+  case x of
+    Comma -&gt; do es &lt;- getExpr
+                return (e:es)
+    Rpar  -&gt; return [e]
+    _     -&gt; calcError ("unexpected token in argument list: " ++ show x)
+
+getArgs :: Calc [Token] [Expr]
+getArgs = do sat (== Lpar)
+             y &lt;- lookahead
+             case y of
+               Rpar -&gt; return []
+               _    -&gt; getExpr
+      +++ calcError "'(' expected"
+
+
+-- 演算子のパーサ
+addp, subp, mulp, divp :: Calc [Token] (Value -&gt; Value -&gt; Value)
+addp = do sat (Add ==)
+          return add
+subp = do sat (Sub ==)
+          return sub
+mulp = do sat (Mul ==)
+          return mul
+divp = do sat (Div ==)
+          return div'
+
+-- 繰り返し
+rep :: Calc [Token] Expr -&gt; Calc [Token] (Value -&gt; Value -&gt; Value) -&gt; Calc [Token] Expr
+rep p q = do
+  e &lt;- p
+  iter e
+  where iter e = do op &lt;- q
+                    e' &lt;- p
+                    iter (Op2 op e e')
+             +++ return e
+
+-- 項
+term :: Calc [Token] Expr
+term = factor `rep` (mulp +++ divp)
+
+-- 式 1
+expr1 :: Calc [Token] Expr
+expr1 = term `rep` (addp +++ subp)
+
+-- 式
+expr :: Calc [Token] Expr
+expr = do
+  e &lt;- expr1
+  expr_sub e
+  where
+    expr_sub e = do
+      y &lt;- lookahead
+      case y of
+        Assign -&gt; case e of
+                    Var _ -&gt; do item
+                                e' &lt;- expr
+                                return (Agn e e')
+                    _     -&gt; calcError "invalid assign form"
+        _ -&gt; return e
+
+expression :: Calc [Token] Expr
+expression = do
+  e &lt;- expr
+  y &lt;- lookahead
+  case y of
+    Semic -&gt; return e
+    _     -&gt; calcError "expression error"
+
+-- 構文木の評価
+evalExpr :: Expr -&gt; Calc Env Value
+evalExpr (Num x) = return x
+evalExpr (Var x) = do
+  env &lt;- get
+  case lookup x env of
+    Nothing -&gt; calcError ("unbound variable: " ++ x)
+    Just v  -&gt; return v
+evalExpr (Agn (Var name) e) = do
+  v &lt;- evalExpr e
+  env &lt;- get
+  put ((name, v):env)
+  return v
+evalExpr (Op1 op e) = do
+  v &lt;- evalExpr e
+  return (op v)
+evalExpr (Op2 op e1 e2) = do
+  v1 &lt;- evalExpr e1
+  v2 &lt;- evalExpr e2
+  return (op v1 v2)
+evalExpr (App fn args) = do
+  v1 &lt;- evalExpr (args !! 0)
+  case fn of
+    F1 f -&gt; f v1
+    F2 f -&gt; do v2 &lt;- evalExpr (args !! 1)
+               f v1 v2
+
+--
+toplevel :: String -&gt; Env -&gt; IO ()
+toplevel xs env = do
+  putStr "Calc&gt; "
+  let (ys, xs') = lexer xs
+  case runStateT expression ys of
+    Err mes -&gt; do putStrLn mes
+                  toplevel xs' env
+    Fail    -&gt; do print "Fail"
+                  toplevel xs' env
+    Some (e, _) -&gt;
+      case runStateT (evalExpr e) env of
+        Err mes -&gt; do putStrLn mes
+                      if mes == "EOF"
+                        then return ()
+                        else toplevel xs' env
+        Fail    -&gt; do print "Fail"
+                      toplevel xs' env
+        Some (v, env') -&gt; do case v of
+                               INT x  -&gt; print x
+                               REAL x -&gt; print x
+                             toplevel xs' env'
+
+main :: IO ()
+main = do
+  xs &lt;- hGetContents stdin
+  toplevel xs []
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell31.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell33.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

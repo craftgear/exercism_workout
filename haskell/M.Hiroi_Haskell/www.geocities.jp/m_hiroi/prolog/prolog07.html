@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Prolog プログラミング入門</title>
+  <meta name="description" content="Prolog,Prolog入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881780</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Prolog Programming</h1>
+<h2>お気楽 Prolog プログラミング入門</h2>
+<div class="small">
+[ <a href="prolog06.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog08.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap26">待ち行列（キュー）</h3>
+<p> 待ち行列といえば、チケットなどを買うとき窓口にできる長い列のことですが、プログラムの「待ち行列（キュー）」もそれと同じだと考えてください。チケットを買うときは、列の途中に割り込むことはできませんね。いちばん後ろに並んで順番を待たなければいけません。列の先頭まで進むと、チケットを購入することができます。
+</p>
+<pre class="fig">
+  out                            in 
+    ---------------------------
+ &lt;=  a  b  c  d  e  .  .  .  z  &lt;=
+    ---------------------------     
+
+        図：待ち行列
+</pre>
+<p> このように、要素を取り出す場合は列の先頭から行い、要素を追加する場合は列の後ろに行うデータ構造が「キュー (queue) 」なのです。キューは「先入れ先出し (FIFO : first-in, first-out) 」<sup><a href="prolog07.html#note1">[*1]</a></sup> とも呼ばれます。Prolog の場合、差分リストを使ってキューを簡単に実現することができます。
+</p>
+<div class="note">
+-- note: --------<br>
+<a name="note1">[*1]</a> キューと対になるデータ構造が「スタック (stack) 」です。スタックは後ろから入れたデータから取り出されるので、後入れ先出し (LIFO : last-in, first-out) と呼ばれます。
+</div>
+<h4>●差分リストによるキューの実装</h4>
+<p> キューの基本的な操作は、データをキューに追加する enqueue と、キューからデータを取り出す dequeue があります。それから、キューにデータがあるか調べる述語 empty を作りましょう。
+</p>
+<ul>
+  <li><b>enqueue(Item, Queue, NewQueue)</b><br>
+      キュー Queue にデータ Item を追加する。
+  <li><b>dequeue(Item, Queue, NewQueue)</b><br>
+      キュー Queue からデータ Item を取り出す。
+  <li><b>empty(Queue).</b><br>
+      キューにデータがあれば成功、なければ失敗する。
+</ul>
+<p> Prolog の場合、マッチングした変数の値を書き換えることはできません。したがって、enqueue と dequeue のどちらの操作にしても、キューの新しい状態は NewQueue になることに注意してください。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト：キューの操作
+
+enqueue(Item, [Qh, [Item | Qt]], [Qh, Qt]).
+dequeue(Item, [[Item | Qh], Qt], [Qh, Qt]).
+empty([X, Y]) :- X == Y.
+</pre>
+
+<p> 差分リストを使ってキューを表すので、キューが空の状態は [ Q, Q ] となります。これにデータ a を追加してみましょう。マッチングは次のように行われます。
+</p>
+<pre class="item">
+enqueue(a, [ Q, Q ], NewQ).
+
+[ Q, Q ] = [ Qh, [ a | Qt ] ]
+NewQ = [Qh, Qt]
+
+Q = Qh
+Q = [ a | Qt ]  =&gt; Qh = [ a | Qt ]
+NewQ = [ [ a | Qt ], Qt ]
+</pre>
+<p> 差分リスト [ Q , Q ] の場合、Q は自由変数であることに注意してください。Q と Qh はお互い自由変数なのでマッチングに成功しますが、Q と [ a | Qt ] もマッチングに成功するのです。したがって、Qh は [ a | Qt ] となり、NewQ は [ [ a | Qt ] , Qt ] になります。これで、空のキュー（差分リスト [ Q , Q ] ）に a が追加されました。
+</p>
+<p> 続いて、このキューにデータ b を追加しましょう。マッチングは次のように行われます。
+</p>
+<pre class="item">
+enqueue(b, [ [ a | Q ], Q ], NewQ).
+
+[ [ a | Q ], Q ] = [ Qh, [ b | Qt ] ]
+NewQ = [Qh, Qt]
+
+[ a | Q ] = Qh
+Q = [ b | Qt ]  =&gt; Qh = [ a | [ b | Qt ] ] =&gt; [ a, b | Qt ]
+NewQ = [ [ a. b | Qt ], Qt ]
+</pre>
+<p> 今度は [ a | Q ] と Qh がマッチングし、Q と [ b | Qt ] がマッチングします。したがって、Qh は [ a | [ b | Qt ] ] = [ a , b | Qt ] になり、NewQ は [ [ a , b | Qt ] , Qt ] となります。確かに、データ b がキューに追加されていますね。マジックのように思われるかもしれませんが、これが「差分リスト」の面白いところです。
+</p>
+<p> データの追加に比べて、データの削除はとても簡単です。dequeue のマッチングは次のように行われます。
+</p>
+<pre class="item">
+dequeue(X, [ [ a, b | Q ], Q ], NewQ).
+
+X = Item
+[ [ a, b | Q ], Q ] = [ [ Item | Qh ], Qt ]
+NewQ = [ Qh, Qt ]
+
+Item = a
+Qh = [ b | Q ]
+Qt = Q
+
+X = Item = a
+NewQ = [ [ b | Q ], Q ]
+</pre>
+<p> 差分リストの先頭からデータを取り出せばいいわけですから、キューと [ [ Item | Qh ] , Qt ] をマッチングさせれば、Item に先頭データを取り出すことができます。この場合、[ a , b | Q ] とマッチングするので、Item の値は a になり、Qh は [ b | Q ] となります。したがって、NewQ の値はデータを取り出したあとのキューは、[ Qh , Qt ] = [ [ b | Q ] , Q ] になります。
+</p>
+<p> empty も簡単です。キューが空の状態は [ Q, Q ] ですから、差分リストの要素を取り出して、同じ値であることを述語 == を使って確認すればいいわけです。
+</p>
+<h4 id="update">●キューと幅優先探索</h4>
+<p> それでは、キューを実際に使ってみましょう。経路図と各地点の隣接関係は、前回と同じプログラムを使います。プログラムリストを再度掲載します。
+</p>
+<pre class="fig">
+Ｈ───Ｉ───Ｊ───Ｋ  
+│      │    ／│
+│      │  ／  │
+│      │／    │
+Ｅ───Ｆ───Ｇ
+│    ／│      │
+│  ／  │      │
+│／    │      │
+Ａ───Ｂ───Ｃ───Ｄ
+
+    図：簡単な経路図
+</pre>
+<pre class="list">
+リスト：隣接の定義
+
+neighbor(a, b).  neighbor(a, f).  neighbor(a, e).
+neighbor(b, f).  neighbor(b, c).  neighbor(c, d).
+neighbor(c, g).  neighbor(e, f).  neighbor(e, h).
+neighbor(f, g).  neighbor(f, i).  neighbor(f, j).
+neighbor(g, j).  neighbor(h, i).  neighbor(i, j).
+neighbor(j, k).
+
+/* X の隣を求める */
+next(X, Y) :- neighbor(X, Y).
+next(X, Y) :- neighbor(Y, X).
+</pre>
+
+<p>幅優先探索でのキューの動作は、次のようになります。
+<pre class="fig">
+(1)     ───── QUEUE  ──────
+  ┌── [a]
+  │    ───────────────
+  │
+  └─→ キューからデータを取り出す
+
+(2)     ───── QUEUE  ──────
+                                    ←─┐
+        ───────────────  │
+                                        │
+        [a] の経路を進め    [a,b] ───┤
+        キューに追加する    [a,f] ───┤
+                            [a,e] ───┘
+
+(3)     ───── QUEUE  ──────
+  ┌── [a,b] [a,f] [a,e]            ←─┐
+  │    ───────────────    │
+  │                                      │
+  └─→ [a,b] の経路を進めキューに追加   │
+         [a,b,c] [a,b,f]  ────────┘
+
+(4)     ───── QUEUE  ──────
+  ┌── [a,f] [a,e] [a,b,c] [a,b,f]  ←─┐
+  │    ───────────────    │
+  │                                      │
+  └─→ キューに経路がある間繰り返す ──┘  
+
+        図：幅優先探索とキューの動作
+</pre>
+
+<p> 最初は、(1) のように出発点をキューにセットしておきます。次に、キューから経路を取り出し、(2) のように経路 [a] をひとつ延ばして、経路 [a,b] [a,f] [a,e] を作り、それをキューに追加します。(3) では経路 [a,b] を取り出して、ひとつ延ばした経路 [a,b,c] と [a,b,f] をキューに追加します。
+</p>
+<p> あとは、キューに経路がある間、処理を繰り返せばいいわけです。キューは先入れ先出し (FIFO) の性質を持つデータ構造なので、距離の短い経路から順番に処理されるため、幅優先探索として機能するのです。
+</p>
+<h4 id="update">●末尾再帰による実装</h4>
+<p> Prolog の場合、繰り返しは「末尾再帰」か「失敗駆動ループ」を使って実現します。最初に末尾再帰を使ってプログラムを作りましょう。幅優先探索を行う breadth_search は、次のようになります。
+</p>
+<pre class="list">
+リスト：キューを使った幅優先探索
+
+breadth_search(Goal, Q) :-
+    not(empty(Q)),
+    dequeue([Node | Path], Q, Q1),
+    findall(Next, next(Node, Next), NextList),
+    add_path(Goal, [Node | Path], NextList, Q1, Q2),
+    breadth_search(Goal, Q2).
+</pre>
+
+<p> Goal がゴール地点で、Q がキューを表します。キューにはあらかじめ出発点 [a] を格納しておきます。まず、キューにデータがあるか empty で調べます。これが繰り返しの停止条件となります。そして、dequeue で経路をひとつ取り出します。今回はわかりやすさを優先してキューの操作述語 empty, dequeue, enqueue を使いますが、キュー（差分リスト）を直接操作した方が実践的でしょう。
+</p>
+<p> 次に、集合述語 findall で Node に隣接している地点をすべて求めます。そして、add_path で経路を延ばしてキューに格納します。dequeu によりキューの状態は Q1 に変わっているので、add_path には Q1 を渡します。そして、新しい経路を追加したキューを Q2 で受け取ります。
+</p>
+<p> 最後に、breadth_search を再帰呼び出しします。このとき、キューには Q2 を渡すことをお間違えなく。breadth_search は末尾再帰になっているので、SWI-Prolog では末尾再帰最適化により繰り返しに変換されます。
+</p>
+<p> 次に add_path を作ります。これも再帰呼び出しを使います。
+</p>
+<pre class="list">
+リスト：経路を延ばしてキューに追加する
+
+add_path(_, _, [], Q, Q).
+
+add_path(Goal, Path, [Goal | Rest], Q, Qe) :-
+    reverse([Goal | Path], NewPath), write(NewPath), nl, !,
+    add_path(Goal, Path, Rest, Q, Qe).
+
+add_path(Goal, Path, [Next | Rest], Q, Qe) :-
+    (member(Next, Path) -&gt; Qn = Q ; enqueue([Next | Path], Q, Qn)),
+    add_path(Goal, Path, Rest, Qn, Qe).
+</pre>
+
+<p> add_path はリスト NextList に格納された隣接地点を取り出し、経路 Path を延ばしてキューに格納します。このとき、ゴール地点のチェックも行います。最初の規則が隣接地点をすべて取り出した場合です。これが再帰呼び出しの停止条件となります。第 3 引数には経路を追加したキューがセットされているので、これを第 4 引数にマッチングさせます。
+</p>
+<p> 次の規則がゴールに到達した場合です。経路を表示するだけで、キューには格納しません。Prolog の場合、失敗したときには再試行するので、最後の規則を実行しないようにカットを使っています。ここでカットを使いたくない場合は、breadth_search の再帰呼び出しの手前にカットを入れてください。
+</p>
+<p> そして、最後の規則で経路を延ばしてキューに追加します。Next が Path に含まれていないか member でチェックし、含まれていなければ enqueue でキューに追加します。含まれている場合はキューに追加しないで Qn と Q をマッチングさせます。あとは、add_path を再帰呼び出しするだけです。このとき、キューは Qn を渡すことをお間違いなく。
+</p>
+<p> 最後に breadth_search を呼び出すプログラムを作ります。
+</p>
+<pre class="list">
+リスト：幅優先探索の実行
+
+keiro(Start, Goal) :-
+    enqueue([Start], [Q, Q], Qn), breadth_search(Goal, Qn).
+</pre>
+
+<p> breadth_search を呼び出す前に、最初の経路 [Start] をキューに追加します。それでは実行してみましょう。
+<pre>
+?- keiro(a, k).
+[a, f, j, k]
+[a, b, f, j, k]
+[a, f, g, j, k]
+[a, f, i, j, k]
+[a, e, f, j, k]
+[a, b, f, g, j, k]
+[a, b, f, i, j, k]
+[a, b, c, g, j, k]
+[a, e, f, g, j, k]
+[a, e, f, i, j, k]
+[a, e, h, i, j, k]
+[a, b, c, g, f, j, k]
+[a, f, b, c, g, j, k]
+[a, f, e, h, i, j, k]
+[a, e, h, i, f, j, k]
+[a, b, f, e, h, i, j, k]
+[a, b, c, g, f, i, j, k]
+[a, e, f, b, c, g, j, k]
+[a, e, h, i, f, g, j, k]
+[a, b, c, g, f, e, h, i, j, k]
+[a, e, h, i, f, b, c, g, j, k]
+
+No
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4><A name="update1">●失敗駆動ループによる実装</A></h4>
+<p> 今度は失敗駆動ループを使ってプログラムを作ってみましょう。再試行する場合、Prolog はマッチングした変数を自由変数に戻すため、キューを変数に格納しておくことはできません。このため、失敗駆動ループでキューを使う場合、キューの状態を節に格納しておく必要があります。今回は節 queue にキューを格納することにしましょう。キューを操作する述語は次のようになります。
+</p>
+<pre class="list">
+リスト：キューの操作（その２）
+
+/* キューの初期化 */
+make_queue :- assert(queue([Q, Q])).
+
+/* データを追加 */
+enqueue(Item) :-
+    queue([Qh, [Item | Qt]]),
+    retractall(queue(_)),
+    assert(queue([Qh, Qt])).
+
+/* データを取り出す */
+dequeue(Item) :-
+    queue([[Item | Qh], Qt]),
+    retractall(queue(_)),
+    assert(queue([Qh, Qt])).
+
+/* キューにデータがある間繰り返す */
+repeat_queue :-
+    repeat, queue([Qh, Qt]), (Qh == Qt -&gt; (!, fail) ; true).
+</pre>
+
+<p> enqueue と dequeue は節 queue からキューを取り出し、retractall で古い状態を削除してから assert で新しい状態を格納します。このプログラムで重要な働きをする述語が repeat_queue です。この述語はキューにデータがあると成功し、なければ失敗します。
+</p>
+<p> 次に、述語 repeat を使って失敗駆動ループを形成します。データがないときは、カットを使って失敗駆動ループから脱出することをお忘れなく。
+</p>
+<p> 次は経路を延ばしてキューに加える述語 add_one_path を作ります。
+</p>
+<pre class="list">
+リスト：経路を延ばす
+
+add_one_path(Goal, [Goal | Node]) :-
+    reverse([Goal | Node], Path), write(Path), nl, !, fail.
+
+add_one_path(Goal, [Node | Rest]) :-
+    next(Node, Next),
+    not(member(Next, Rest)),
+    enqueue([Next, Node | Rest]),
+    fail.
+</pre>
+
+<p> add_one_path は、<A href="prolog06.html#chap25">経路の探索(2)：幅優先探索</A> で作成した述語 extend_one_path とほとんど同じです。extend_one_path では経路を節 path に記憶しましたが、add_one_path では経路をキューに格納します。違いはこれだけです。add_one_path は失敗駆動ループで使うため、必ず失敗することに注意してください。
+</p>
+<p> 最後に、幅優先探索を行う breadth_search を作ります。
+</p>
+<pre class="list">
+リスト：幅優先探索
+
+breadth_search(Start, Goal) :-
+    /* 初期化 */
+    make_queue, enqueue([Start]),
+    /* 繰り返し */
+    repeat_queue, dequeue(Path), add_one_path(Goal, Path).
+</pre>
+
+<p> これは簡単ですね。make_queue でキューを初期化し、出発点をキューにセットします。あとは、キューにデータがある間、dequeue で経路を取り出して、add_one_path で経路を延ばします。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+?- breadth_search(a, k).
+[a, f, j, k]
+[a, b, f, j, k]
+[a, f, g, j, k]
+[a, f, i, j, k]
+[a, e, f, j, k]
+[a, b, f, g, j, k]
+[a, b, f, i, j, k]
+[a, b, c, g, j, k]
+[a, e, f, g, j, k]
+[a, e, f, i, j, k]
+[a, e, h, i, j, k]
+[a, b, c, g, f, j, k]
+[a, f, b, c, g, j, k]
+[a, f, e, h, i, j, k]
+[a, e, h, i, f, j, k]
+[a, b, f, e, h, i, j, k]
+[a, b, c, g, f, i, j, k]
+[a, e, f, b, c, g, j, k]
+[a, e, h, i, f, g, j, k]
+[a, b, c, g, f, e, h, i, j, k]
+[a, e, h, i, f, b, c, g, j, k]
+
+No
+</pre>
+<p> 正常に動作しています。ところが、このプログラムには重大な欠点があるのです。実際に実行してみるとわかりますが、実行時間が<b>とても遅い</b>のです。キューの状態を格納している節 queue を頻繁に書き換えるので、実行時間が遅くなるのは仕方がないのでしょう。キューを使う場合は、末尾再帰と組み合わせた方が良いようですね。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap27">パズル：農夫と山羊と狼とキャベツの問題</h3>
+<p> 農夫と山羊と狼とキャベツの問題は、「川渡りの問題」<sup><a href="prolog07.html#note2">[*2]</a></sup> と呼ばれる古典的なパズルのひとつです。農夫が狼と山羊とキャベツを持って川の左岸にいます。農夫はこれらを川の右岸へ運ばなければいけませんが、ボートにはそのうちのひとつしか乗せることができません。狼は山羊を好んで食べるため、この 2 つを同じ岸に残すことはできません。また、山羊はキャベツを好んで食べるため、この 2 つも同じ岸に残すことはできません。この条件で、荷物をすべて右岸へ運ぶ手順を求めるのが問題です。
+</p>
+<p> このパズルを Prolog で解いてみましょう。コンピュータに解かせる前に、自分で考えてみるのも面白いと思います。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note2">[*2]</a> 川渡りの問題にはたくさんのバリエーションがありますが、<A href="../puzzle/husband.html">「嫉妬深い夫の問題」</A> とか「宣教師と人食い人」という危険な名前のパズルがとくに有名です。
+</div>
+<h4>●バックトラックで解く場合</h4>
+<p> このパズルをバックトラックで解く場合、同じ移動手順を何度も繰り返すことがないように注意しなければいけません。極端な例ですが、何も工夫しないと、同じ物を持って左右の岸を往復する、といったことも起こります。このような場合、過去の状態を記憶しておけば、簡単にチェックすることができます。つまり、過去のある状態と同じになった場合は、そこで探索を打ち切ればいいわけです。経路の探索で説明した「巡回経路のチェック」と同じことです。
+</p>
+<p> 次に、状態を表すデータ構造を決めましょう。いろいろな方法が考えられますが、今回は単純にリストを使って表すことにします。先頭の要素が農夫 (farmer) の位置、次の要素が山羊 (Goat) で、その次が狼 (Wolf)、そして最後の要素がキャベツ (cabbage) の位置とします。
+</p>
+<p> 左右の岸を left と right で表すことにすると、最初の状態は [ left, left, left, left ] となり、ゴールが [ right, right, right, right ] となります。ボートを表すデータがありませんが、ボートには必ず農夫が乗り込むので、ボートのデータは農夫で代用することができます。
+</p>
+<p> この状態をリストに格納しておきます。このリストが移動手順を表すことになります。そして、物を移動して新しい状態を作成したとき、リストに同じ状態がないか調べればいいわけです。これは述語 member を使えば簡単にできます。
+</p>
+<h4>●プログラム</h4>
+<p> それでは、プログラムを作りましょう。まず最初に、物を移動する述語 move(OldState, NewState) を作ります。述語 move は、状態 OldState から物を移動して、新しい状態 NewState を作成します。
+</p>
+<pre class="list">
+リスト：移動
+
+/* 農夫だけ */
+move([F, G, W, C], [NF, G, W, C]) :- (F == left -&gt; NF = right ; NF = left).
+
+/* 農夫と山羊 */
+move([F, F, W, C], [NF, NF, W, C]) :- (F == left -&gt; NF = right ; NF = left).
+
+/* 農夫と狼 */
+move([F, G, F, C], [NF, G, NF, C]) :- (F == left -&gt; NF = right ; NF = left).
+
+/* 農夫とキャベツ */
+move([F, G, W, F], [NF, G, W, NF]) :- (F == left -&gt; NF = right ; NF = left).
+</pre>
+
+<p> ボートには山羊、狼、キャベツを乗せることができますが、このほかに<b>農夫だけがボートに乗る</b>場合があることに注意してください。この条件を忘れるとパズルを解くことができません。最初の規則が、農夫だけボートに乗る場合です。この場合、農夫を反対側の岸へ移動させるだけです。
+</p>
+<p> 物を運ぶ場合、それが農夫と同じ岸にないと運ぶことはできませんね。山羊を運ぶ場合は第 1 要素と第 2 要素、狼は第 1 要素と第 3 要素、キャベツは第 1 要素と第 4 要素が同じ岸でないと運ぶことができません。これを規則の頭部でチェックしています。条件を満たせば、農夫と運ぶ物を反対側の岸へ移動します。
+</p>
+<p> 次は、山羊とキャベツが安全か確認する述語 safe を作ります。
+</p>
+<pre class="list">
+リスト：安全確認
+
+safe([F, G, W, C]) :-
+    safe_cabbage(F, G, C), safe_goat(F, G, W).
+
+safe_cabbage(F, G, C) :- F == C.
+safe_cabbage(F, G, C) :- G \== C.
+
+safe_goat(F, G, W) :- F == G.
+safe_goat(F, G, W) :- G \== W.
+</pre>
+
+<p> 述語 safe はパズルの条件をそのままプログラムするだけです。キャベツの安全を safe_cabbage で、山羊の安全を safe_goat で確認します。キャベツと山羊は農夫と一緒にいれば安全ですね。農夫がいない場合、キャベツは山羊がいないこと、山羊は狼がいないことを確認します。キャベツと山羊が同じ岸にいる、または、山羊と狼が同じ岸にいる場合は安全ではありません。述語 safe は失敗します。
+</p>
+<p> それでは、move と safe を使って探索を行う述語 depth_search を作りましょう。
+</p>
+<pre class="list">
+リスト：バックトラックによる探索
+
+depth_search([State | History]) :-
+    State == [right, right, right, right], !, print_answer([State | History]).
+
+depth_search([State | History]) :-
+    move(State, NewState),
+    safe(NewState),
+    not(member(NewState, History)),
+    depth_search([NewState, State | History]).
+</pre>
+<p> depth_search の引数はリストで、ここにいままでの状態が格納されています。現在の状態はリストの先頭に格納されています。まず、2 番目の規則を見てください。depth_search はリストから現在の状態を取り出し move で物を移動します。
+<p> 次に、新しい状態 NewState が安全か safe で確認します。safe が失敗した場合は、move を再試行し別の物を移動します。それから、member でリストに同じ状態がないかチェックして、depth_search を再帰呼び出しします。このとき、リストの先頭に NewState を追加することをお忘れなく。
+</p>
+<p> 最初の規則がゴールを見つけた場合です。これが再帰の停止条件となります。移動手順を print_answer で表示します。これ以降バックトラックする必要がないので、カットを使って 2 番目の規則の再試行を禁止します。
+</p>
+<p> 最後に print_answer を作ります。
+</p>
+<pre class="list">
+リスト：解の表示
+
+print_answer([]) :- !.
+print_answer([State | Rest]) :-
+    print_answer(Rest), write(State), nl. 
+</pre>
+<p> リストをそのまま表示すると、手順は逆順に表示されてしまいます。そこで、再帰を使って最初まで戻ってから write で状態を出力します。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+?- depth_search([[left, left, left, left]]).
+[left, left, left, left]
+[right, right, left, left]
+[left, right, left, left]
+[right, right, right, left]
+[left, left, right, left]
+[right, left, right, right]
+[left, left, right, right]
+[right, right, right, right]
+
+Yes
+</pre>
+<p> 7 手で解くことができました。このプログラムは状態をそのまま表示しているだけなので、ちょっとわかりにくいですね。移動手順を書き直すと次のようになります。
+</p>
+<pre class="fig">
+0: [ farmer  goat  wolf  cabbage ] []
+1: [ wolf  cabbage ]               [ farmer  goat ]
+2: [ farmer  wolf  cabbage ]       [ goat ]
+3: [ cabbage ]                     [ farmer  goat  wolf ]
+4: [ farmer  goat  cabbage ]       [ wolf ]
+5: [ goat ]                        [ farmer  wolf  cabbage ]
+6: [ farmer  goat ]                [ wolf  cabbage ]
+7: []                              [ farmer  goat  wolf  cabbage ]
+</pre>
+<p> 出力の改善は皆さんにお任せしようと思います。わかりやすく出力できるように、データ構造を工夫してみるのもいいでしょう。興味のある方は、挑戦してみてください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="prolog06.html">PrevPage</a> | <a href="index.html">Prolog</a> | <a href="prolog08.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

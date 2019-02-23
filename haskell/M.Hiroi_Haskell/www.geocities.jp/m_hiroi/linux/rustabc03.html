@@ -1,0 +1,1578 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881816</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>Rust の基礎知識</h3>
+<h4 id="abc31">●演算子の多重定義</h4>
+<ul>
+  <li>Rust の場合、多くの演算子はメソッド呼び出しの糖衣構文になっている</li>
+  <li>トレイトを使って演算子を「多重定義 (オーバーロード)」することができる</li>
+  <li>多重定義できる演算子用のトレイトは <a href="https://doc.rust-lang.org/std/ops/">Module std::ops</a> に定義されている</li>
+    <ul>
+      <li>Add (+), Mul (*), Sub (-), Div (/) などなど</li>
+    </ul>
+</ul>
+<pre class="list">
+リスト : トレイト Add の定義
+
+pub trait Add&lt;RHS = Self&gt; {
+    type Output;
+    fn add(self, rhs: RHS) -&gt; Self::Output;
+}
+</pre>
+<ul>
+  <li>a + b は a.add(b) というメソッド呼び出しになる</li>
+  <li>RHS は右辺式 b のデータ型を表す型パラメータ</li>
+  <li>省略した場合はデフォルト値 Self (左辺式 a のデータ型) になる</li>
+</ul>
+<pre class="list">
+リスト : 演算子の多重定義
+
+use std::ops::Add;
+
+#[derive(Debug, Copy, Clone)]
+struct Point {
+    x: f64, y: f64
+}
+
+#[derive(Debug, Copy, Clone)]
+struct Point3d {
+    x: f64, y: f64, z: f64
+}
+
+impl Point {
+    fn new(x0: f64, y0: f64) -&gt; Point {
+        Point { x: x0, y: y0 }
+    }
+}
+
+impl Point3d {
+    fn new(x0: f64, y0: f64, z0: f64) -&gt; Point3d {
+        Point3d { x: x0, y: y0, z: z0 }
+    }
+}
+
+// 左辺と右辺でデータ型が同じ場合
+impl Add for Point {
+    type Output = Point;
+    fn add(self, other: Point) -&gt; Point {
+        Point {
+             x: self.x + other.x,
+             y: self.y + other.y
+        }
+    }
+}
+
+impl Add for Point3d {
+    type Output = Point3d;
+    fn add(self, other: Point3d) -&gt; Point3d {
+        Point3d {
+             x: self.x + other.x,
+             y: self.y + other.y,
+             z: self.z + other.z
+        }
+    }
+}
+
+// 右辺と左辺でデータ型が違う場合
+impl Add&lt;Point3d&gt; for Point {
+    type Output = Point3d;
+    fn add(self, other: Point3d) -&gt; Point3d {
+        Point3d {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: other.z
+        }
+    }
+}
+
+impl Add&lt;Point&gt; for Point3d {
+    type Output = Point3d;
+    fn add(self, other: Point) -&gt; Point3d {
+        Point3d {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z
+        }
+    }
+}
+
+fn main() {
+    let p1 = Point::new(1.0, 1.0);
+    let p2 = Point::new(2.0, 2.0);
+    let p3 = Point3d::new(10.0, 10.0, 10.0);
+    let p4 = Point3d::new(20.0, 20.0, 20.0);
+    println!("{:?}", p1 + p2);
+    println!("{:?}", p3 + p4);
+    println!("{:?}", p1 + p3);
+    println!("{:?}", p4 + p2);
+}
+</pre>
+<pre>
+Point { x: 3, y: 3 }
+Point3d { x: 30, y: 30, z: 30 }
+Point3d { x: 11, y: 11, z: 10 }
+Point3d { x: 22, y: 22, z: 20 }
+</pre>
+<h4 id="abc32">●サイズ不定型</h4>
+<ul>
+  <li>Sized はコンパイル時にサイズを決定できるデータ型を表すトレイト</li>
+  <li>サイズを決定できないデータ型を「サイズ不定型」とか「動的サイズ型」という</li>
+  <li>たとえば、配列を表すデータ型 [T] だけでは、その大きさを決定できない</li>
+  <li>サイズ不定型はポインタ (参照) を使ってアクセスする</li>
+  <li>let や関数の引数にサイズ不定型を指定することはできない</li>
+  <li>[T] はだめだが &amp;[T] ならば OK</li>
+  <li>構造体の最後のフィールドに限りサイズ不定型を指定できる</li>
+  <li>ジェネリクスの型パラメータには暗黙のうちに Sized が付加される</li>
+  <li>この制約を外すには ?Sized を指定する</li>
+</ul>
+<pre class="list">
+リスト : サイズ不定型の簡単な使用例
+
+struct Foo&lt;T: ?Sized&gt; {
+    buff: T      // 大きさが異なる配列でも格納できる
+}
+
+fn main() {
+    let a = [1,2,3];
+    let b = [1,2,3,4,5,6];
+    let c = Foo { buff: a };
+    let d = Foo { buff: b };
+    let e = Foo { buff: [1,2,3,4,5,6,7,8,9]};
+    println!("{:?}", c.buff);
+    println!("{:?}", d.buff);
+    println!("{:?}", e.buff);
+}
+</pre>
+<pre>
+[1, 2, 3]
+[1, 2, 3, 4, 5, 6]
+[1, 2, 3, 4, 5, 6, 7, 8, 9]
+</pre>
+<h4 id="abc33">●Deref</h4>
+<ul>
+  <li>Deref は参照外し (デリファレンス) の演算子 * を多重定義するためのトレイト</li>
+</ul>
+<pre class="list">
+リスト : トレイト Deref の定義
+
+pub trait Deref {
+    type Target: ?Sized;
+    fn deref(&amp;self) -&gt; &amp;Self::Target;
+}
+</pre>
+<pre class="list">
+リスト : トレイト Deref の簡単な使用例
+
+use std::ops::Deref;
+
+struct Foo&lt;T: ?Sized&gt; {
+    buff: T
+}
+
+impl&lt;T&gt; Deref for Foo&lt;T&gt; {
+    type Target = T;
+    fn deref(&amp;self) -&gt; &amp;T {
+        &amp;self.buff
+    }
+}
+
+struct Bar {
+    num: i32
+}
+
+impl Deref for Bar {
+    type Target = i32;
+    fn deref(&amp;self) -&gt; &amp;i32 {
+        &amp;self.num
+    }
+}
+
+fn main() {
+    let a = Foo { buff: [1,2,3] };
+    let b = Foo { buff: [4,5,6,7,8,9] };
+    let c = Bar { num: 123 };
+    let d = Bar { num: 456 };
+    println!("{:?}", *a);
+    println!("{:?}", *b);
+    println!("{:?}", *c);
+    println!("{:?}", *d);
+}
+</pre>
+<pre>
+[1, 2, 3]
+[4, 5, 6, 7, 8, 9]
+123
+456
+</pre>
+<ul>
+  <li>変数 a, b, c, d に格納されているデータは参照 (リファレンス) ではない</li>
+  <li>しかしながら、Foo と Bar には Deref が実装されいるので、演算子 * を使ってフィールドにアクセスできる</li>
+  <li>Deref は immutable なので、*c = 999; のような代入はできない</li>
+  <li>値を書き換えたい場合はトレイト DerefMut を使う</li>
+</ul>
+<pre class="list">
+リスト : トレイト DerefMut
+
+pub trait DerefMut: Deref {
+    fn deref_mut(&amp;mut self) -&gt; &amp;mut Self::Target;
+}
+</pre>
+<pre class="list">
+リスト : DerefMut の簡単な使用例
+
+use std::ops::{Deref, DerefMut};
+
+struct Bar {
+    num: i32
+}
+
+impl Deref for Bar {
+    type Target = i32;
+    fn deref(&amp;self) -&gt; &amp;i32 {
+        &amp;self.num
+    }
+}
+
+impl DerefMut for Bar {
+    fn deref_mut(&amp;mut self) -&gt; &amp;mut i32 {
+        &amp;mut self.num
+    } 
+}
+
+fn main() {
+    let mut c = Bar { num: 123 };
+    let d = Bar { num: 456 };
+    println!("{:?}", *c);
+    println!("{:?}", *d);
+    *c = 789;
+    println!("{:?}", *c);
+}
+</pre>
+<pre>
+123
+456
+789
+</pre>
+<h4 id="abc34">●型強制</h4>
+<ul>
+  <li>Rust の型強制は他の言語でいう「暗黙のキャスト」のこと</li>
+  <li>たとえば、&amp;mut T は暗黙のうちに &amp;T に変換される</li>
+  <li>Deref は型強制にも使用することができる (deref の型強制)</li>
+  <li>データ型 T が Deref&lt;Target=U&gt; を実装しているとき、&amp;T は &amp;U に型強制される</li>
+  <li>関連型を含むトレイトのデータ型は トレイト名&lt;関連型=データ型&gt; で表すことができる</li>
+</ul>
+<pre class="list">
+リスト : deref の型強制
+
+use std::ops::{Deref, DerefMut};
+
+struct Bar {
+    num: i32
+}
+
+impl Deref for Bar {
+    type Target = i32;
+    fn deref(&amp;self) -&gt; &amp;i32 {
+        &amp;self.num
+    }
+}
+
+impl DerefMut for Bar {
+    fn deref_mut(&amp;mut self) -&gt; &amp;mut i32 {
+        &amp;mut self.num
+    } 
+}
+
+fn bar(x: &amp;i32) {
+    println!("{}", x);
+}
+
+fn main() {
+    let mut c = Bar { num: 123 };
+    let d = Bar { num: 456 };
+    println!("{:?}", *c);
+    println!("{:?}", *d);
+    *c = 789;
+    println!("{:?}", *c);
+    bar(&amp;c);
+    bar(&amp;d);
+    let e = Box::new(1000);
+    bar(&amp;e);
+    let f = Box::new(Bar { num: 2000 });
+    bar(&amp;f);
+}
+</pre>
+<pre>
+123
+456
+789
+789
+456
+1000
+2000
+</pre>
+<ul>
+  <li>Bar は Deref&lt;Target=i32&gt; を実装しているので、&amp;Bar は &amp;i32 に型強制される</li>
+  <li>関数 bar() の引数の型は &amp;i32 なので、&amp;c や &amp;d を渡してもコンパイルできる</li>
+  <li>Box&lt;T&gt; は Deref&lt;Target=T&gt; を実装している</li>
+  <li>変数 e の型は Box&lt;i32&gt; なので、関数 bar() に &amp;e を渡すことができる</li>
+  <li>型強制は該当する型が見つかるまで行われる</li>
+  <li>たとえば、bar() に &amp;f を渡す場合、&amp;Box -&gt; &amp;Bar -&gt; &amp;i32 のように二段階の型強制が行われる</li>
+  <li>deref の型強制はメソッド呼び出しでも行われる</li>
+</ul>
+<pre class="list">
+リスト : メソッド呼び出しの型強制
+
+use std::ops::Deref;
+
+struct Foo {
+    num: i32
+}
+
+impl Foo {
+    fn foo(&amp;self) {
+        println!("{}", self.num)
+    }
+}
+
+struct Bar {
+    content: Foo
+}
+
+impl Deref for Bar {
+    type Target = Foo;
+    fn deref(&amp;self) -&gt; &amp;Foo {
+        &amp;self.content
+    }
+}
+
+fn main() {
+    let a = Box::new(Foo { num: 123 });
+    let b = Bar { content: Foo { num: 456 } };
+    let c = Box::new(Bar { content: Foo { num: 789 } });
+    a.foo();
+    b.foo();
+    c.foo();
+}
+</pre>
+<pre>
+123
+456
+789
+</pre>
+<ul>
+  <li>a.foo() は &amp;Box -&gt; &amp;Foo の型強制が行われる</li>
+  <li>b.foo() は Bar に Deref&lt;Target=Foo&gt; が実装されているので、&amp;Bar -&gt; &amp;Foo の型強制が行われる</li>
+  <li>c.foo() は &amp;Box -&gt; &amp;Bar -&gt; &amp;Foo と三段階の型強制が行われる</li>
+</ul>
+<h4 id="abc35">●Rc&lt;T&gt;</h4>
+<ul>
+  <li>Rc&lt;T&gt; は Box&lt;T&gt; に「参照カウンタ (Reference Count)」を付けたもの</li>
+  <li>複数の変数から Rc が保持しているヒープ上のデータを共有することができる</li>
+  <li>Rc を clone() すると、Rc が保持しているデータはコピーされずに、参照カウンタが +1 される</li>
+  <li>Rc を保持している変数がスコープから外れると、参照カウンタが -1 される</li>
+  <li>参照カウンタが 0 になったとき、Rc が保持しているヒープ上のデータが解放される</li>
+  <li>Rc&lt;T&gt; の動作は C++ の shared_ptr&lt;T&gt; に近い</li>
+  <li>Rc&lt;T&gt; にも Deref&lt;Target=T&gt; が実装されている</li>
+</ul>
+<pre class="list">
+リスト : Rc&lt;T&gt; の簡単な使用例 (1)
+
+use std::rc::Rc;
+
+#[derive(Clone)]
+struct Foo {
+    num: i32
+}
+
+impl Drop for Foo {
+    fn drop(&amp;mut self) {
+        println!("Drop foo {}", self.num);
+    }
+}
+
+fn main() {
+    let a = Rc::new(Foo { num: 123 });
+    println!("{}", Rc::strong_count(&amp;a));
+    let x = Box::new(Foo { num: 456 });
+    println!("{}", x.num);
+    {
+        let b = a.clone();
+        println!("{}", Rc::strong_count(&amp;a));
+        println!("{}", Rc::strong_count(&amp;b));
+        let c = &amp;a;
+        println!("{}", Rc::strong_count(&amp;a));
+        println!("{}", Rc::strong_count(c));
+        let y = x.clone();
+        println!("{}", y.num);
+    }
+    println!("{}", Rc::strong_count(&amp;a));
+}
+</pre>
+<pre>
+1
+456
+2
+2
+2
+2
+456
+Drop foo 456
+1
+Drop foo 456
+Drop foo 123
+</pre>
+<ul>
+  <li>構造体 Foo はトレイト Clone を実装しているので、clone() で複製を作ることができる</li>
+  <li>Rc&lt;Foo&gt; を clone() しても Foo は複製されない</li>
+  <li>Rc の参照カウンタは関数 Rc::strong_count() で求めることができる</li>
+  <li>let b = a.clone() のあと、参照カウンタは 2 になる</li>
+  <li>let c = &amp;a; のように、Rc を借用しただけでは参照カウンタは増加しない</li>
+  <li>変数 b がスコープから外れると、参照カウンタは 1 に戻る</li>
+  <li>Box&lt;Foo&gt; を clone() すると、Foo は複製される</li>
+  <li>Box&lt;T&gt; の T が Clone を実装していない場合、Box&lt;T&gt; に clone() は適用できない (コンパイルエラー)</li>
+  <li>let y = x.clone(); は x が保持しているデータも複製する</li>
+  <li>変数 y がスコープから外れると、保持しているデータが解放される</li>
+  <li>最後に、変数 a と x がスコープから外れ、保持しているデータが解放される</li> 
+</ul>
+<pre class="list">
+リスト : Rc&lt;T&gt; の簡単な使用例 (2)
+
+use std::rc::Rc;
+
+#[derive(Debug)]
+struct Foo {
+    num: i32
+}
+
+fn main() {
+    let a = Box::new(Foo { num: 123 });
+    let b = *a;   // move
+    // println!("{}", a.num); コンパイルエラー
+    println!("{}", b.num);
+
+    let c = Rc::new(Foo { num: 456 });
+    // let x = *c;    Rc の場合は単純に move することはできない
+    {
+        let d = c.clone();
+        // 参照カウンタが 1 よりも多いと Err
+        match Rc::try_unwrap(d) {
+            Ok(x) =&gt; println!("{}", x.num),
+            Err(x) =&gt; println!("error {:?}", x)
+        }
+    }
+    // 参照カウンタが 1 ならば Ok
+    match Rc::try_unwrap(c) {
+        Ok(x) =&gt; println!("{}", x.num),
+        Err(x) =&gt; println!("error {:?}", x)
+    }
+}
+</pre>
+<pre>
+123
+error Foo { num: 456 }
+456
+</pre>
+<ul>
+  <li>Box はデリファレンス (*) でデータを簡単に move できるが、Rc はできない</li>
+  <li>Rc が保持しているデータを move する場合はメソッド Rc::try_unwrap() を使う</li>
+<pre class="item">
+fn try_unwrap(this: Rc&lt;T&gt;) -&gt; Result&lt;T, Rc&lt;T&gt;&gt;
+</pre>
+  <li>引数 this の参照カウンタが 1 の場合、データを取り出して Ok() に包んで返す</li>
+  <li>参照カウンタが 1 よりも多い場合、this 自身を Err() に包んで返す</li>
+</ul>
+<pre class="list">
+リスト : 簡単な連結リスト (Rc 版)
+
+use std::rc::Rc;
+
+#[derive(Debug)]
+enum List {
+    Nil,
+    Cons(i32, Rc&lt;List&gt;)
+}
+
+use List::*;
+
+impl List {
+    fn new() -&gt; Rc&lt;List&gt; {
+        Rc::new(Nil)
+    }
+    fn cons(x: i32, xs: &amp;Rc&lt;List&gt;) -&gt; Rc&lt;List&gt; {
+        Rc::new(Cons(x, xs.clone()))
+    }
+}
+
+impl Drop for List {
+    fn drop(&amp;mut self) {
+        match *self {
+            Nil =&gt; println!("drop Nil"),
+            Cons(x, _) =&gt; println!("drop {}", x)
+        }
+    }
+}
+
+fn main() {
+    let a = List::new();
+    println!("{:?}", a);
+    {
+        let b = List::cons(1, &amp;a);
+        println!("{:?}", a);
+        println!("{:?}", b);
+        println!("{}", Rc::strong_count(&amp;a));
+        println!("{}", Rc::strong_count(&amp;b));
+        {
+            let c = List::cons(2, &amp;b);
+            println!("{:?}", a);
+            println!("{:?}", b);
+            println!("{:?}", c);
+            println!("{}", Rc::strong_count(&amp;a));
+            println!("{}", Rc::strong_count(&amp;b));
+            println!("{}", Rc::strong_count(&amp;c));
+        }
+        println!("{}", Rc::strong_count(&amp;a));
+        println!("{}", Rc::strong_count(&amp;b));
+    }
+    println!("{}", Rc::strong_count(&amp;a));
+}
+</pre>
+<pre>
+Nil
+Nil
+Cons(1, Nil)
+2
+1
+Nil
+Cons(1, Nil)
+Cons(2, Cons(1, Nil))
+2
+2
+1
+drop 2
+2
+1
+drop 1
+1
+drop Nil
+</pre>
+<h4 id="abc36">●Cell&lt;T&gt; と RefCell&lt;T&gt;</h4>
+<ul>
+  <li>Cell&lt;T&gt; は immutable なデータの中で mutable な操作をするときに使用する</li>
+  <li>T には Copy 型の制約がある</li>
+  <li>Cell はメソッド Cell::new(値) で生成する</li> 
+  <li>メソッド get() でデータを読み取り、メソッド set() でデータを書き換える</li>
+</ul>
+<pre class="list">
+リスト : Cell の簡単な使用例
+
+use std::cell::Cell;
+
+#[derive(Debug)]
+struct Foo {
+    x: i32,
+    y: Cell&lt;i32&gt;
+}
+
+fn main() {
+    let a = Cell::new(123);
+    println!("{:?}", a);
+    println!("{}", a.get());
+    a.set(456);
+    println!("{:?}", a);
+    println!("{}", a.get());
+
+    let b = Foo { x: 789, y: Cell::new(999) };
+    println!("{:?}", b);
+    b.y.set(1000);
+    println!("{:?}", b);
+
+    let c = Box::new(Cell::new(1.234));
+    println!("{}", c.get());
+    c.set(5.678);
+    println!("{}", c.get());
+}
+</pre>
+<pre>
+Cell { value: 123 }
+123
+Cell { value: 456 }
+456
+Foo { x: 789, y: Cell { value: 999 } }
+Foo { x: 789, y: Cell { value: 1000 } }
+1.234
+5.678
+</pre>
+<ul>
+  <li>RefCell&lt;T&gt; の場合、T に Copy 型の制約はない</li>
+  <li>RefCell はメソッド RefCell::new() で生成する</li>
+  <li>メソッド borrow() は immutable な参照を返す (正確には Ref&lt;T&gt; 型を返す)</li>
+  <li>メソッド borrow_mut() は mutable な参照を返す (正確には RefMut&lt;T&gt; 型を返す)</li>
+  <li>RefCell 型の場合、借用のチェックはプログラムの実行時に行われる</li>
+  <li>違反するとパニック</li>
+  <li>RefCell 内のデータを取り出す場合はメソッド into_inner() を使う</li>
+  <li>所有権が移動するので、再度 RefCell にアクセスすることはできない (コンパイルエラー)</li>
+</ul>
+<pre class="list">
+リスト : RefCell の簡単な使用例
+
+use std::cell::RefCell;
+
+#[derive(Debug)]
+struct Foo {
+    x: i32,
+}
+
+impl Drop for Foo {
+    fn drop(&amp;mut self) {
+        println!("drop foo {}", self.x);
+    }
+}
+
+#[derive(Debug)]
+struct Bar {
+    foo: RefCell&lt;Foo&gt;
+}
+
+fn main() {
+    let a = RefCell::new(123);
+    println!("{:?}", a);
+    {
+        println!("{}", *a.borrow());  // immutable な参照
+    }
+    {
+        let mut ref_a = a.borrow_mut();   // mutable な参照
+        *ref_a = 456;
+        // println!("{}", *a.borrow());  immutable な参照を借りるとパニック
+    }
+    println!("{}", *a.borrow());  //immutable な参照
+    
+    let b = Bar { foo: RefCell::new(Foo { x: 123 })};
+    println!("{:?}", b);
+    {
+        println!("{:?}", *b.foo.borrow());  // immutable な参照
+    }
+    {
+        let mut ref_b = b.foo.borrow_mut();   // mutable な参照
+        *ref_b = Foo { x: 456 };              // Foo { x: 123 } は廃棄される
+    }
+    println!("{:?}", b);
+
+    let c = Box::new(RefCell::new(Foo { x: 789 }));
+    println!("{:?}", c);
+    {
+        println!("{}", c.borrow().x);     // フィールド x の値を参照する
+        c.borrow_mut().x = 999;           // フィールド x の値を書き換える
+        println!("{:?}", c);
+    }
+    {
+        let mut ref_c = c.borrow_mut();   // mutable な参照
+        *ref_c = Foo { x: 1000 };         // Foo { x: 999 } は廃棄される
+    }
+
+    let d = c.into_inner();    // メソッド into_inner() は中身のデータを move する
+    // println!("{:?}", c);    コンパイルエラーになる
+    println!("{:?}", d);
+}
+</pre>
+<pre>
+RefCell { value: 123 }
+123
+456
+Bar { foo: RefCell { value: Foo { x: 123 } } }
+Foo { x: 123 }
+drop foo 123
+Bar { foo: RefCell { value: Foo { x: 456 } } }
+RefCell { value: Foo { x: 789 } }
+789
+RefCell { value: Foo { x: 999 } }
+drop foo 999
+Foo { x: 1000 }
+drop foo 1000
+drop foo 456
+</pre>
+<ul>
+  <li>構造体のフィールドを書き換えるメソッドを定義する場合、mutable な参照 (&amp;mut self) を受け取れば実装できる</li>
+  <li>ただし、Rust には immutable と mutable な参照を同時に使うことはできない、という制約がある</li>
+  <li>Cell と RefCell を使うと、この制約を緩和することができる</li>
+  <li>Rust の場合、immutable な参照はいくつでも借用することができる</li>
+  <li>Cell や RefCell を使うと、どの参照からでも値を書き換えることが可能になる</li>
+  <li>使用には十分な注意が必要</li>
+</ul>
+<pre class="list">
+リスト : Cell の簡単な使用例 (その２)
+
+use std::cell::Cell;
+
+struct Foo {
+    num: Cell&lt;i32&gt;
+}
+
+impl Foo {
+    fn new(x: i32) -&gt; Foo {
+        Foo { num: Cell::new(x) }
+    }
+    fn get_num(&amp;self) -&gt; i32 {
+        self.num.get()
+    }
+    fn set_num(&amp;self, x: i32) {   // immutable な参照でも更新できる
+        self.num.set(x)
+    }
+}
+
+fn main() {
+    let a = Foo::new(100);
+    let b = &amp;a;
+    let c = &amp;a;
+    println!("{}", a.get_num());
+    println!("{}", b.get_num());
+    println!("{}", c.get_num());
+    c.set_num(200);
+    println!("{}", a.get_num());
+    println!("{}", b.get_num());
+    println!("{}", c.get_num());
+}
+</pre>
+<pre>
+100
+100
+100
+200
+200
+200
+</pre>
+<h4 id="abc37">●format! と Display</h4>
+<ul>
+  <li>format! マクロはＣ言語の関数 sprintf() と同じような動作をする</li>
+  <li>format! は書式文字列に従ってデータを整形し、その結果を文字列にして返す</li>
+  <li>print!, println! マクロは書式文字列に従ってデータを整形して標準出力に書き込む</li>
+  <li>write!, writeln! マクロは第 1 引数に整形した結果を書き込む</li>
+  <li>第 1 引数はトレイト std::io::Write を実装しているデータ型であること</li>
+  <li>write!, writeln! は Result 型を返す</li>
+  <li>書式文字列の {} は引数を文字列に変換する</li>
+  <li>{n} とすると n 番目の引数を変換する</li>
+  <li>{:変換指示子}</li>
+    <ul>
+      <li>{:b}, 2 進数表示</li>
+      <li>{:o}, 8 進数表示</li>
+      <li>{:x}, {:X}, 16 進数表示 (英小文字, 英大文字)</li>
+      <li>{:e}, {:E}, 指数表示 (英小文字, 英大文字)</li>
+      <li>{:?}, Debug 表示</li>
+    </ul> 
+  <li>: と変換指示子の間に桁数などを指定することができる</li>
+    <ul>
+      <li>{:n}, n 桁表示</li>
+      <li>{:&lt;n}, 左詰め</li>
+      <li>{:&gt;n}, 右詰め</li>
+      <li>{:^n}, 中央</li>
+      <li>{:0n}, n 桁表示で空きを 0 で埋める</li>
+      <li>{:.n}, 小数点以下の桁数を指定する</li> 
+    </ul>
+  <li>この他にもいろいろな機能がある</li>
+</ul>
+<pre class="list">
+リスト : write! の簡単な使用例
+
+use std::io::{self, Write};
+
+fn main () {
+    let mut buff = Vec::new();
+    write!(&amp;mut buff, "hello, world").unwrap();
+    write!(&amp;mut buff, "{}, {}, {}", 1, 1.2345, "foo bar baz").unwrap();
+    io::stdout().write(&amp;buff).unwrap();
+}
+</pre>
+<pre>
+hello, world1, 1.2345, foo bar baz
+</pre>
+<ul>
+  <li>Vec&lt;u8&gt; にはトレイト Write が実装されている</li>
+</ul>
+<ul>
+  <li>std::fmt::Display トレイトを実装すると、書式文字列の {} でデータを変換できる</li>
+<pre class="list">
+リスト : Display トレイトの定義
+
+pub trait Display {
+    fn fmt(&amp;self, f: &amp;mut Formatter) -&gt; Result&lt;(), Error&gt;;
+}
+</pre>
+  <li>実装するメソッドは fmt()</li>
+  <li>第 2 引数の Formatter に write! でデータを書き込めばよい</li>
+</ul>
+<pre class="list">
+リスト : Display トレイトの簡単な実装例
+
+use std::fmt;
+
+struct Point {
+    x: i32, y: i32
+}
+
+impl fmt::Display for Point {
+    fn fmt(&amp;self, f: &amp;mut fmt::Formatter) -&gt; fmt::Result {
+        write!(f, "({}, {})", self.x, self.y)
+    }
+}
+
+fn main() {
+    let a = Point { x: 0, y: 0 };
+    let b = Point { x: 10, y: 20 };
+    println!("{}, {}", a, b);
+}
+</pre>
+<pre>
+(0, 0), (10, 20)
+</pre>
+<h4 id="abc38">●VecDeque&lt;T&gt;</h4>
+<ul>
+  <li>std::collections::VecDeque は「両端キュー (double ended queue: deque)」のこと</li>
+  <li>VecDeque は VecDeque::new() で生成する</li>
+  <li>push_back(item) で末尾にデータを追加する</li>
+  <li>push_front(item) で先頭にデータを追加する</li>
+  <li>pop_back() -&gt; Option&lt;T&gt; で末尾からデータを取り出す</li>
+  <li>pop_front() -&gt; Option&lt;T&gt; で先頭からデータを取り出す</li>
+  <li>front() -&gt; Option&lt;&amp;T&gt; は先頭要素への参照を返す</li>
+  <li>back() -&gt; Option&lt;&amp;T&gt; は末尾要素への参照を返す</li>
+  <li>get(n) -&gt; Option&lt;&amp;T&gt; は n 番目の要素への参照を返す</li>
+  <li>iter() は先頭からデータを順番に取り出すイテレータを生成する</li>
+  <li>len() は VecDeque に格納されているデータ数を返す</li>
+  <li>is_empty() は VecDeque が空であれば true を返す</li>
+  <li>clear() は VecDeque を空にする</li>
+</ul>
+<pre class="list">
+リスト : VecDeque の簡単な使用例
+
+use std::collections::VecDeque;
+
+fn main() {
+    // スタック (Stack) の動作
+    let mut s = VecDeque::new();
+    for x in 0 .. 10 {
+        s.push_back(x);
+    }
+    println!("{:?}", s);
+    while !s.is_empty() {
+        println!("{}", s.pop_back().unwrap());
+    }
+    // キュー (Queue) の動作
+    let mut q = VecDeque::new();
+    for x in 10 .. 20 {
+        q.push_back(x);
+    }
+    println!("{:?}", q);
+    while !q.is_empty() {
+        println!("{}", q.pop_front().unwrap());
+    }
+}
+</pre>
+<pre>
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+9
+8
+7
+6
+5
+4
+3
+2
+1
+0
+[10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+</pre>
+<h4 id="abc39">●LinkedList&lt;T&gt;</h4>
+<ul>
+  <li>std::collections::LinkedList&lt;T&gt; は「双方向連結リスト (doubly linked list)」のこと</li>
+  <li>LinkedList は LinkedList::new() で生成する</li>
+  <li>VecDeque のように「両端キュー」として使用できる</li>
+  <li>両端キューとして使用する場合、メソッドは VecDeque と同じ</li>
+  <li>LinkedList にメソッド get(n) は用意されていない</li>
+</ul>
+<pre class="list">
+リスト : LinkedList の簡単な使用例
+
+use std::collections::LinkedList;
+
+fn main() {
+    // スタック (Stack) の動作
+    let mut s = LinkedList::new();
+    for x in 0 .. 10 {
+        s.push_back(x);
+    }
+    println!("{:?}", s);
+    while !s.is_empty() {
+        println!("{}", s.pop_back().unwrap());
+    }
+    // キュー (Queue) の動作
+    let mut q = LinkedList::new();
+    for x in 10 .. 20 {
+        q.push_back(x);
+    }
+    println!("{:?}", q);
+    while !q.is_empty() {
+        println!("{}", q.pop_front().unwrap());
+    }
+}
+</pre>
+<p> 結果は VecDeque の簡単な使用例と同じ。
+</p>
+<h4 id="abc40">●HashMap&lt;K, V&gt; と HashSet&lt;T&gt;</h4>
+<ul>
+  <li>std::collections::HashMap&lt;K, V&gt; は「連想配列」のことで、他の言語では「ハッシュ」とか「辞書」と呼ばれる</li>
+  <li>K がキーのデータ型、V がキーに対応する値のデータ型を表す</li>
+  <li>キーはブーリアン、整数、文字列など、Eq と Hash トレイトを保持する型なら何でもよい</li>
+  <li>HashMap は HashMap::new() で生成する</li>
+  <li>キーと値はメソッド insert(key, value) で挿入する</li>
+  <li>返り値は Option&lt;V&gt;</li>
+  <li>キーが存在している場合、新しい値に更新して、古い値を Some に包んで返す</li>
+  <li>キーが存在しいない場合、キーと値を追加して None を返す</li>
+  <li>キーの有無は contains_key(&amp;key) -&gt; bool で判定する</li>
+  <li>値は get(&amp;key) -&gt; Option&lt;&amp;V&gt; で取得する</li>
+  <li>キーと値は remove(&amp;key) -&gt; Option&lt;V&gt; で削除できる</li>
+  <li>keys() はキーを取り出すイテレータを生成する</li>
+  <li>values() は値をを取り出すイテレータを生成する</li>
+  <li>iter() はキーと値を取り出すイテレータを生成する</li>
+  <li>len() は HashMap に格納されているデータ数を返す</li>
+  <li>is_empty() は HashMap が空であれば true を返す</li>
+  <li>clear() は HashMap を空にする</li>
+  <li>ハッシュのかわりに多分木 (B-tree) を用いた BTreeMap もある</li>
+  <li>BTreeMap のキーにはトレイト Ord が必要</li> 
+</ul>
+<pre class="list">
+リスト : HashMap の簡単な使用例
+
+use std::collections::HashMap;
+
+fn main() {
+    let mut ht = HashMap::new();
+    ht.insert("foo", 1);
+    ht.insert("bar", 2);
+    ht.insert("baz", 3);
+    ht.insert("oops", 4);
+    println!("{:?}", ht);
+    println!("{}", ht.contains_key("baz"));
+    println!("{}", ht.contains_key("Baz"));
+    println!("{:?}", ht.get("foo"));
+    println!("{:?}", ht.get("Foo"));
+    println!("{:?}", ht.remove("Oops"));
+    println!("{:?}", ht.remove("oops"));
+    println!("{:?}", ht.insert("foo", 100));
+    println!("{:?}", ht.insert("oops", 200));
+    for (k, v) in ht.iter() {
+        println!("{}, {}", k, v);
+    }
+}
+</pre>
+<pre>
+{"baz": 3, "bar": 2, "foo": 1, "oops": 4}
+true
+false
+Some(1)
+None
+None
+Some(4)
+Some(1)
+None
+baz, 3
+bar, 2
+foo, 100
+oops, 200
+</pre>
+<ul>
+  <li>std::collections::HashSet&lt;T&gt; は集合を表すコレクション</li>
+  <li>データ型 T は HashMap のキーと同じ</li>
+  <li>HashSet は HashSet::new() で生成する</li>
+  <li>データは insert(item) -&gt; bool で挿入する</li>
+  <li>データの有無は contains(item) -&gt; bool で判定する</li>
+  <li>データの削除は remove(item) -&gt; bool で行う</li>
+  <li>iter() はデータを取り出すイテレータを生成する</li>
+  <li>len() は HashSet に格納されているデータ数を返す</li>
+  <li>is_empty() は HashSet が空であれば true を返す</li>
+  <li>clear() は HashSet を空にする</li>
+  <li>部分集合は is_subset(&amp;other_hashset) -&gt; bool で判定する</li>
+  <li>union(), difference(), intersection() などの集合演算も用意されている</li>
+  <li>これらの集合演算はイテレータを返す</li>
+  <li>ハッシュのかわりに多分木 (B-tree) を用いた BTreeSet もある</li>
+  <li>BTreeSet のキーにはトレイト Ord が必要</li> 
+</ul>
+<pre class="list">
+リスト : HashSet の簡単な使用例
+
+use std::collections::HashSet;
+
+fn main() {
+    let a: HashSet&lt;_&gt; = [1,2,3,4].iter().cloned().collect();
+    let b: HashSet&lt;_&gt; = [3,4,5,6].iter().cloned().collect();
+    println!("{:?}", a);
+    println!("{:?}", b);
+    println!("{}", a.contains(&amp;1));
+    println!("{}", b.contains(&amp;1));
+    let c: HashSet&lt;_&gt; = a.union(&amp;b).cloned().collect();
+    println!("{:?}", c);
+    let d: HashSet&lt;_&gt; = a.intersection(&amp;b).collect();
+    println!("{:?}", d);
+    let e: HashSet&lt;_&gt; = a.difference(&amp;b).collect();
+    println!("{:?}", e);
+    println!("{}", a.is_subset(&amp;c));
+    println!("{}", b.is_subset(&amp;c));
+    println!("{}", a.is_subset(&amp;b));
+}
+</pre>
+<ul>
+  <li>イテレータのメソッド cloned() は map(|&amp;x| x) と同じ</li>
+</ul>
+<pre>
+{4, 2, 3, 1}
+{4, 5, 3, 6}
+true
+false
+{5, 4, 2, 6, 1, 3}
+{3, 4}
+{2, 1}
+true
+true
+false
+</pre>
+<h4 id="abc41">●Option&lt;T&gt;</h4>
+<ul>
+  <li>Option&lt;T&gt; はエラー処理だけではなく、データ構造の構築にも使用される</li>
+  <li>LinkedList&lt;T&gt; は Option&lt;T&gt; を使って構成されている</li>
+  <li>ここでは、まだ説明していない Option の便利なメソッドを簡単に紹介する</li>
+</ul>
+<ul>
+  <li>fn is_some(&amp;self) -&gt; bool, Some ならば真を返す</li>
+  <li>fn is_none(&amp;self) -&gt; bool, None ならば真を返す</li>
+  <li>fn as_ref(&amp;self) -&gt; Option&lt;&amp;T&gt;, Option&lt;T&gt; を Option&lt;&amp;T&gt; に変換する</li>
+  <li>fn as_mut(&amp;self) -&gt; Option&lt;&amp;T&gt;, Option&lt;T&gt; を Option&lt;&amp;mut T&gt; に変換する</li>
+  <li>fn map&lt;U, F&gt;(self, f: F) -&gt; Option&lt;U&gt;, マッピングはとても重要</li> 
+  <li>fn iter(&amp;self) -&gt; Iter&lt;T&gt;, immutable なイテレータを返す</li>
+  <li>fn iter_mut(&amp;mut self) -&gt; IterMut&lt;T&gt;, mutable なイテレータを返す</li>
+  <li>fn take(&amp;mut self) -&gt; Option&lt;T&gt;, T を新しい Option に包んで返す、元の値は None に書き換えられる</li>
+</ul>
+<pre class="list">
+リスト : Option の簡単な使用例
+
+fn main() {
+    let mut a: Option&lt;i32&gt; = Some(100);
+    let mut b: Option&lt;i32&gt; = None;
+    println!("{}", a.is_some());
+    println!("{}", b.is_none());
+    {
+        let c = a.as_mut().unwrap();
+        *c = 200;
+    }
+    {
+        let d = a.as_ref().unwrap();
+        println!("{}", d);
+    }
+    let e = a.take();
+    println!("{:?}", a);
+    println!("{:?}", e);
+    let f = b.take();
+    println!("{:?}", b);
+    println!("{:?}", f);
+    let g = e.map(|v| v * v);
+    println!("{:?}", e);
+    println!("{:?}", g);
+}
+</pre>
+<pre>
+true
+true
+200
+None
+Some(200)
+None
+None
+Some(200)
+Some(40000)
+</pre>
+<h4 id="abc42">●AsRef と AsMut</h4>
+<ul>
+  <li>AsRef はジェネリックなコードにおいて値を immutable な参照に変換するトレイト</li>
+<pre class="list">
+リスト : AsRef トレイト
+
+pub trait AsRef&lt;T&gt; where T: ?Sized
+{
+    fn as_ref(&amp;self) -&gt; &amp;T;
+}
+</pre>
+  <li>たとえば、Foo&lt;T&gt; から &amp;T を取得するために使用する</li>
+  <li>AsMut はジェネリックなコードにおいて値を mutable な参照に変換するトレイト</li>
+<pre class="list">
+リスト : AsMut トレイト
+
+pub trait AsMut&lt;T&gt; where T: ?Sized
+{
+    fn as_mut(&amp;mut self) -&gt; &amp;mut T;
+}
+</pre>
+  <li>たとえば、Foo&lt;T&gt; から &amp;mut T を取得するために使用する</li>
+  <li>Option や Result のメソッド as_ref(), as_mut() とは違うことに注意</li>
+</ul>
+<pre class="list">
+リスト : 簡単な使用例
+
+struct Foo&lt;T&gt; {
+    item: T
+}
+
+impl&lt;T&gt; AsRef&lt;T&gt; for Foo&lt;T&gt; {
+    fn as_ref(&amp;self) -&gt; &amp;T {
+        &amp;self.item
+    }
+}
+
+impl&lt;T&gt; AsMut&lt;T&gt; for Foo&lt;T&gt; {
+    fn as_mut(&amp;mut self) -&gt; &amp;mut T {
+        &amp;mut self.item
+    }
+}
+
+fn get&lt;T: AsRef&lt;i32&gt;&gt;(n: &amp;T) -&gt; &amp;i32 {
+    n.as_ref()
+}
+
+fn inc&lt;T: AsMut&lt;i32&gt;&gt;(n: &amp;mut T, m: i32) {
+    *n.as_mut() += m;
+}
+
+fn main() {
+    let mut a = Foo { item: 100 };
+    println!("{}", get(&amp;a));
+    inc(&amp;mut a, 100);
+    println!("{}", get(&amp;a));
+}
+</pre>
+<pre>
+100
+200
+</pre>
+<h4 id="abc43">●Borrow</h4>
+<ul>
+  <li>トレイト Borrow&lt;T&gt; はある値を &amp;T に変換するために使用する
+  </li>
+<pre class="list">
+リスト : Borrow トレイト
+
+pub trait Borrow&lt;Borrowed: ?Sized&gt; {
+    fn borrow(&amp;self) -> &Borrowed;
+}
+</pre>
+  <li>たとえば、標準ライブラリでは impl Borrow&lt;str&gt; for String が実装されている</li>
+  <li>この場合、メソッド borrow() により String が &amp;str に変換される</li>
+  <li>Borrow はマップやセットなどのデータを探索するメソッドで使用されている</li>
+<pre class="list">
+リスト : HashMap のメソッド contains_key() の仕様
+
+fn contains_key&lt;Q: ?Sized&gt;(&amp;self, k: &amp;Q) -&gt; bool
+        where K: Borrow&lt;Q&gt;,
+              Q: Hash + Eq
+</pre>
+  <li>探索するキー k の型は Q で、HashMap のキーの型 K と同じではない</li>
+  <li>K が Borrow&lt;Q&gt; を実装していれば、K を &amp;Q に変換して引数 k と比較することができる</li>
+  <li>たとえば、String がキーの HashMap でも、Borrow により &amp;str で探索することができる</li>
+  <li>ちなみに、標準ライブラリには impl&lt;T&gt; Borrow&lt;T&gt; for T が定義されている</li>
+  <li>K と Q が同じデータ型であればメソッドの仕様を満たすことになる</li>
+</ul>
+<pre class="list">
+リスト : Borrow の簡単な使用例
+
+use std::borrow::Borrow;
+use std::collections::HashMap;
+
+#[derive(Hash, Eq, PartialEq)]
+struct Foo {
+    num: i32
+}
+
+impl Borrow&lt;i32&gt; for Foo {
+    fn borrow(&amp;self) -> &amp;i32 {
+        &amp;self.num
+    }
+}
+
+fn main() {
+    let mut ht: HashMap&lt;Foo, i32&gt; = HashMap::new();
+    ht.insert(Foo { num: 1 }, 100);
+    ht.insert(Foo { num: 2 }, 200);
+    ht.insert(Foo { num: 3 }, 300);
+    println!("{:?}", ht.get(&amp;1));
+    println!("{:?}", ht.get(&amp;4));
+    println!("{:?}", ht.get(&amp;Foo { num: 2 }));
+    println!("{:?}", ht.get(&amp;Foo { num: 5 }));
+}
+</pre>
+<pre>
+Some(100)
+None
+Some(200)
+None
+</pre>
+<h4 id="abc44">●スレッド</h4>
+<ul>
+  <li>Rust は std::thread::spawn() で OS のネイティブスレッドを起動する</li>
+<pre class="item">
+pub fn spawn&lt;F, T&gt;(f: F) -&gt; JoinHandle&lt;T&gt; 
+where
+    F: FnOnce() -&gt; T,
+    F: Send + 'static,
+    T: Send + 'static, 
+</pre>
+  <li>spawn() にはクロージャを渡す</li>
+  <li>局所変数をキャプチャする場合は move クロージャを使う</li>
+  <li>新しいスレッドでクロージャが実行される</li>
+  <li>トレイト Send はスレッド間でデータの受け渡し (所有権の移動) が可能であることを表す</li>
+  <li>spawn() の返り値はスレッドを表す JoinHandle 型</li>
+  <li>メソッド join() でスレッドが終了するまで待機する</li>
+  <li>join() の返り値は std::thread::Result&lt;T&gt;</li>
+  <li>スレッドがパニックした場合は Err が返される</li>
+  <li>スレッドのスケジューリングは OS 側で行われる</li>
+</ul>
+<pre class="list">
+リスト : スレッドの簡単な使用例 (1)
+
+use std::{thread, time};
+
+fn foo(msg: &amp;str, n: u64) {
+    let m = time::Duration::from_millis(n);
+    for _ in 1 .. 10 {
+        println!("{}", msg);
+        thread::sleep(m);
+    }
+}
+
+fn main() {
+    let t1 = thread::spawn(|| {
+        foo("oops", 500);
+    });
+    let t2 = thread::spawn(|| {
+        foo("piyopiyo", 400);
+    });
+    println!("{:?}", t1.join().unwrap());
+    println!("{:?}", t2.join().unwrap());
+}
+</pre>
+<pre>
+piyopiyo
+oops
+piyopiyo
+oops
+piyopiyo
+oops
+piyopiyo
+oops
+piyopiyo
+piyopiyo
+oops
+piyopiyo
+oops
+piyopiyo
+oops
+piyopiyo
+oops
+oops
+()
+()
+</pre>
+<pre class="list">
+リスト : スレッドの簡単な使用例 (2)
+
+use std::thread;
+use std::time::Instant;
+
+// フィボナッチ数列
+fn fibo(n: i64) -&gt; i64 {
+    if n &lt; 2 {
+        n
+    } else {
+        fibo(n - 1) + fibo(n - 2)
+    }
+}
+
+fn main() {
+    let s1 = Instant::now();
+    println!("{}", fibo(40));
+    let e1 = s1.elapsed();
+    println!("{}.{:03}秒経過しました。", e1.as_secs(), e1.subsec_nanos() / 1_000_000);
+
+    let s2 = Instant::now();
+    let mut buff: Vec&lt;_&gt; = vec![];
+    buff.push(thread::spawn(|| fibo(40)));
+    buff.push(thread::spawn(|| fibo(40)));
+    for x in buff {
+        println!("{}", x.join().unwrap());
+    }
+    let e2 = s2.elapsed();
+    println!("{}.{:03}秒経過しました。", e2.as_secs(), e2.subsec_nanos() / 1_000_000);
+}
+</pre>
+<pre>
+102334155
+0.771秒経過しました。
+102334155
+102334155
+0.814秒経過しました。
+</pre>
+<ul>
+  <li>M.Hiroi のパソコンは CORE i5 (物理コア数 2、ハイパースレッディングで 2 * 2 = 4)</li>
+  <li>VirtualBox ではプロセッサ数を 2 に設定している</li>
+  <li>2 つの fibo() が並列に実行されていることがわかる</li>
+</ul>
+<h4 id="abc45">●チャネル</h4>
+<ul>
+  <li>Rust は「チャネル (channels)」を経由してスレッド間でデータを受け渡しすることができる</li>
+  <li>チャネルは std::sync::mpsc::channel() で生成する</li>
+  <pre class="item">
+pub fn channel&lt;T&gt;() -&gt; (Sender&lt;T&gt;, Receiver&lt;T&gt;)
+</pre>
+  <li>Sender が送信チャンネル、Receiver が受信チャンネルを表す</li>
+  <li>データは Sender から Receiver に送られる</li>
+  <li>Sender は clone() でコピーすることで、複数生成することができる</li>
+  <li>データの送信は　Sender のメソッド send() で、受信は Receiver のメソッド recv() で行う</li>
+<pre class="item">
+fn send(&amp;self, t: T) -&gt; Result&lt;(), SendError&lt;T&gt;&gt;
+fn recv(&amp;self) -&gt; Result&lt;T, RecvError&gt;
+</pre>
+  <li>recv() はデータを受信するまで、スレッドの実行をブロックする</li>
+</ul>
+<pre class="list">
+リスト : チャネルの簡単な使用例
+
+use std::thread;
+use std::sync::mpsc;
+
+fn fibo(n: i64) -&gt; i64 {
+    if n &lt; 2 {
+        n
+    } else {
+        fibo(n - 1) + fibo(n - 2)
+    }
+}
+
+fn main() {
+    let (tx, rx) = mpsc::channel();
+    for x in vec![40, 39, 38, 37] {
+        let tx = tx.clone();
+        thread::spawn(move || tx.send(fibo(x)).unwrap());
+    }
+    for _ in 0 .. 4 {
+        println!("{}", rx.recv().unwrap());
+    }
+}
+</pre>
+<pre>
+24157817
+39088169
+63245986
+102334155
+</pre>
+<ul>
+  <li>データを送信した順番 (スレッドが終了した順番) でデータが受信される</li>
+</ul>
+<h4 id="abc46">●Arc と Mutex / RwLock</h4>
+<ul>
+  <li>スレッド間で immutable なデータを共有したい場合は Arc&lt;T&gt; を使う</li>
+  <li>Rc をスレッドでも使用できるようにしたものが Arc</li>
+  <li>共有するデータにはトレイト Send と Sync が実装されていること</li>
+  <li>mutable なデータを共有したい場合は Arc&lt;Mutex&lt;T&gt;&gt; を使う</li>
+  <li>Mutex はデータを保護するために使用する</li>
+  <li>データにアクセスするときはメソッド lock() でロックを取得する必要がある</li>
+<pre class="item">
+fn lock(&amp;self) -&gt; LockResult&lt;MutexGuard&lt;T&gt;&gt;
+</pre>
+  <li>lock() はロックを取得するまでスレッドの実行をブロックする</li>
+  <li>ロックを取得できないとき、Err を返してほしい場合はメソッド try_lock() を使う</li>
+  <li>データのアクセスは MutexGuard 型を介して行う</li>
+  <li>具体的には演算子 * でデリファレンスする</li>
+  <li>MutexGuard がスコープから外れたときにロックが解除される</li>
+</ul>
+<pre class="list">
+リスト : Arc と Mutex の簡単な使用例
+
+use std::thread;
+use std::sync::{Arc, Mutex};
+
+fn main() {
+    let data = Arc::new(vec![10, 20, 30, 40]);
+    for i in 0 .. 4 {
+        let data = data.clone();
+        thread::spawn(move || {
+            println!("{}", data[i]);
+        }).join().unwrap();
+    }
+    let data1 = Arc::new(Mutex::new(vec![1, 2, 3, 4]));
+    for i in 0 .. 4 {
+        let data1 = data1.clone();
+        thread::spawn(move || {
+            let mut buff = data1.lock().unwrap();
+            buff[i] += 10;
+            println!("{}", buff[i]);
+        }).join().unwrap();
+    }
+    println!("{:?}", data1);
+}
+</pre>
+<pre>
+10
+20
+30
+40
+11
+12
+13
+14
+Mutex { data: [11, 12, 13, 14] }
+</pre>
+<ul>
+  <li>RwLock はデータにアクセス (read/write) するときにロックをかける</li>
+  <li>基本的な考え方は借用チェッカーに似ている</li>
+<pre class="item">
+fn read(&amp;self) -&gt; LockResult&lt;RwLockReadGuard&lt;T&gt;&gt;
+fn write(&amp;self) -&gt; LockResult&lt;RwLockWriteGuard&lt;T&gt;&gt;
+</pre>
+  <li>メソッド read() は immutable な借用 (実際は RwLockReadGuard&lt;T&gt;) を生成する</li>
+  <li>read() で immutable な参照はいくつでも作ることができる</li>
+  <li>メソッド write() は mutable な借用 (実際は RwLockWriteGuard&lt;T&gt;) を生成する</li>
+  <li>mutable な参照はひとつしか生成できないし、immutable な参照と共存することもできない</li>
+  <li>read() と write() はロックを取得できるまでスレッドの実行をブロックする</li>
+  <li>Err を返してほしい場合は try_read() と try_write() を使う</li>
+  <li>データにアクセスするときは演算子 * でデリファレンスする</li>
+  <li>借用がスコープの範囲外になったとき、ロックが解除される</li>
+</ul>
+<pre class="list">
+リスト : RwLock の簡単な使用例 (1)
+
+use std::sync::RwLock;
+
+fn main() {
+    let lock = RwLock::new(123);
+    {
+        let r1 = lock.read().unwrap();
+        let r2 = lock.read().unwrap();
+        println!("{}, {}", *r1, *r2);
+        //let mut w1 = lock.write().unwrap();   ブロックされる
+        //*w1 = 456;
+        //println!("{}", *w1);
+    }
+    {
+        let mut w1 = lock.write().unwrap();
+        *w1 = 456;
+        println!("{}", *w1);
+        //let mut w2 = lock.write().unwrap();   ブロックされる
+        //*w2 = 789;
+        //println!("{}", *w2);
+        //let r3 = lock.read().unwrap();   　   ブロックされる
+        //println!("{}", *r3);
+    }
+}
+</pre>
+<pre>
+123, 123
+456
+</pre>
+<pre class="list">
+リスト : RwLock の簡単な使用例 (2)
+
+use std::{thread, time};
+use std::sync::{Arc, RwLock};
+
+fn main() {
+    let lock = Arc::new(RwLock::new(1));
+    let t1;
+    let t2;
+    {
+        let lock = lock.clone();
+        t1 = thread::spawn(move || {
+            for _ in 0 .. 10 {
+                match lock.try_read() {
+                    Ok(r) =&gt; println!("read data {}", *r),
+                    _ =&gt; println!("Can't read data")
+                }
+                thread::sleep(time::Duration::from_millis(500));
+            }
+        });
+    }
+    {
+        let lock = lock.clone();
+        t2 = thread::spawn(move || {
+            for _ in 0 .. 10 {
+                match lock.try_write() {
+                    Ok(mut w) =&gt; {
+                        *w+= 1;
+                        println!("write data {}", *w);
+                    }
+                    _ =&gt; println!("Can't write data")
+                }
+                thread::sleep(time::Duration::from_millis(500));
+            }
+        });
+    }
+    t1.join().unwrap();
+    t2.join().unwrap();
+}
+</pre>
+<pre>
+read data 1
+Can't write data
+Can't read data
+write data 2
+write data 3
+Can't read data
+write data 4
+read data 4
+write data 5
+read data 5
+write data 6
+read data 6
+write data 7
+read data 7
+write data 8
+read data 8
+write data 9
+read data 9
+Can't read data
+write data 10
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

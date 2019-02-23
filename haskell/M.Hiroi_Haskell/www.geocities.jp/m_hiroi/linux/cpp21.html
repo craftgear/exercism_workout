@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ++プログラミング超入門</title>
+  <meta name="description" content="Ｃ++,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881812</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ++プログラミング超入門</h2>
+<div class="small">
+[ <a href="cpp20.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp22.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>右辺値参照 (rvalue reference)</h3>
+<p> 今回は最近の規格 (C++11) で導入された「右辺値参照 (rvalue reference)」という機能について説明します。
+</p>
+
+<h4>●左辺値と右辺値</h4>
+<p> Ｃ/Ｃ++の場合、左辺値 (lvalue) はもともと「代入式の左側に置けるもの」という意味で使われていて、特定のメモリ領域を指し示す式が左辺値になります。たとえば、変数、ポインタの間接参照、配列の添字演算子などが左辺値になります。Ｃ++であれば参照や参照を返す関数も左辺値になります。
+</p>
+<p> 右辺値 (rvalue) は代入式の右側に置かれる値のことで、左辺値を含めすべての式が右辺値になります。式は評価されて値となりますが、このとき値を保持するための一時的なデータが生成されます。たとえば int x = 1 + 2; であれば、右辺式 1 + 2 の計算結果 3 をどこかのメモリ領域 <sup><a href="cpp21.html#note1">[*1]</a></sup> に保持します。それから、その値を左辺値 (変数 x) が示すメモリ領域に代入します。これはインスタンスの場合も同じで、右辺式で生成されるインスタンスは一時的なものになります。その後、生成された一時的なデータは廃棄されます。
+</p>
+<p> Ｃ++の場合、一時的なインスタンスを関数に参照渡しするとき、const を指定しないとコンパイルエラーになります。今までは、すぐに廃棄される一時的なインスタンスの内容を変更するのは意味がない、と考えられてきました。次の例を見てください。
+</p> 
+<pre class="list">
+リスト : 右辺値の参照渡し
+
+#include &lt;iostream&gt;
+using namespace std;
+
+struct Foo { };
+
+void foo(const Foo&amp; x) { }
+void bar(Foo&amp; x) { }
+
+int main()
+{
+  Foo a;
+  foo(a);     // OK
+  foo(Foo());
+  bar(a);
+  bar(Foo()); // NG
+}
+</pre>
+<p> 関数 foo() の引数は const を指定しています。当然ですが、foo(a) で変数 a の参照を受け取ることができます。foo(Foo()) の場合、コンストラクタ Foo() で一時的なインスタンスが生成され、その参照が foo() に渡されます。関数 bar() は引数に const を指定していないので、bar(Foo()) のように一時的なインスタンスを渡すとコンパイルエラーになります。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> コンパイラの最適化によっては、メモリではなく CPU の「レジスタ (register)」に保持される場合もあります。
+</div>
+<h4>●右辺値参照</h4>
+<p> C++11 では、右辺値の参照を受け取るために新しい参照型が定義されました。データ型 T の右辺値参照は &amp;&amp; を付けて T&amp;&amp; とします。この場合、左辺値の参照を受け取ることはできません。また、const を付けるとコンパイルエラーになります。右辺値参照を使うと、引数に渡されたインスタンスのメンバ変数を書き換えることができます。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 右辺値参照
+
+#include &lt;iostream&gt;
+using namespace std;
+
+struct Foo {
+  int a;
+};
+
+void foo(const Foo&amp; x) {
+  cout &lt;&lt; x.a &lt;&lt; endl;
+}
+
+void bar(Foo&amp; x) {
+  x.a *= 10;
+  cout &lt;&lt; x.a &lt;&lt; endl;
+}
+
+void baz(Foo&amp;&amp; x) {
+  x.a *= 20;
+  cout &lt;&lt; x.a &lt;&lt; endl;
+}
+  
+int main()
+{
+  Foo a = {1};
+  foo(a);
+  foo(Foo{2});
+  bar(a);
+  //bar(Foo()); // NG
+  //baz(a);     // NG
+  baz(Foo{3});
+}
+</pre>
+<p> 関数 baz() は右辺値参照を受け取ります。これで、受け取ったインスタンスのメンバ変数 x の値を書き換えることができます。それから、コンパイルするときはオプション -std=c++11 をお忘れなく。
+</p>
+<p> 実行結果を示します。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+2
+10
+60
+</pre>
+<h4>●所有権の移動</h4>
+<p> Ｃ++では、自分で取得したメモリ領域はデストラクタで解放するのが普通です。この場合、メモリの所有権はそれを保持しているインスタンスが持っていると考えることができます。コピーコンストラクタはその中身を新しいメモリ領域にコピーしますが、コピー元のインスタンスが不要になる (廃棄される) ことがわかっているならば、中身をコピーせずにポインタ変数のつけ替えだけで済ますことができるはずです。一時的に生成されたインスタンスはすぐに廃棄されるので、この場合に当てはまります。つまり、メモリの所有権を他のインスタンスに移すわけです。<a href="cpp21.html#cite">参考 URL</a> によると、このような考え方を「所有権の移動」とか「ムーブセマンティクス (Move Semantics)」と呼びます。
+</p>
+<p> たとえば、次のプログラムを見てください。
+</p>
+<pre class="list">
+リスト : マッピング (mapping)
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;list&gt;
+using namespace std;
+
+template&lt;class C, class F&gt;
+C mapcar(const C&amp; seq, F func)
+{
+  C temp;
+  for (const auto&amp; x : seq) temp.push_back(func(x));
+  return temp;
+}
+
+template&lt;class T&gt;
+T square(T x) { return x * x; }
+
+int main()
+{
+  vector&lt;int&gt; a = {1, 2, 3, 4, 5, 6, 7, 8};
+  list&lt;double&gt; b = {1.1, 2.2, 3.3, 4.4, 5.5};
+  vector&lt;int&gt; c = mapcar(a, square&lt;int&gt;);
+  for (int x : c) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  list&lt;double&gt; d = mapcar(b, square&lt;double&gt;);
+  for (double x : d) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1 4 9 16 25 36 49 64 
+1.21 4.84 10.89 19.36 30.25 
+</pre>
+<p> 関数 mapcar() はコンテナクラス seq の各要素に関数 func を適用し、その結果を新しいコンテナクラス temp に格納し、return でそれを返します。このような操作を「マッピング (写像)」といいます。マッピングは関数型言語でよく使われる高階関数です。名前は Common Lisp の関数 mapcar から拝借しました。他の関数型言語では map と呼ばれることが多いです。auto に &amp; を付けると、推論したデータ型の参照になります。const を付けると、const のデータ型になります。
+</p>
+<p> C++11 よりも前のＣ++では、mapcar() に大きなコンテナを渡すと、効率がとても悪くなることがあります。mapcar() の返り値で変数を初期化する場合、コピーコンストラクタで temp の要素が新しいメモリ領域にコピーされます。変数に代入する場合は、代入演算子で同様な処理が行われます。temp は局所変数なので、関数の実行が終了すると temp は廃棄されます。つまり、temp で取得した大量のメモリは無駄になるわけです。もちろん、コンテナのサイズが大きければ、要素のコピーにも時間がかかるでしょう。
+</p>
+<p> このような場合、temp が確保したメモリの所有権を移動すれば、mapcar() を効率的に実行することが可能です。temp は関数が実行されている間だけ有効な一時的なインスタンスです。つまり、mapcar() の返り値は右辺値として扱うことができるわけです。
+</p>
+<p> このとき、廃棄されるインスタンスのポインタ変数を nullptr (または 0) に書き換えておかないと、デストラクタが実行されたときにメモリ領域が解放されてしまいます。移したメモリ領域は他のインスタンスで使用中なので、勝手に解放されてしまうと使っている側が困ってしまいます。つまり、右辺値のインスタンスを書き換えることができないと、所有権を移動することはできないのです。
+</p>
+
+<h4>●ムーブコンストラクタとムーブ代入演算子</h4>
+<p> 所有権の移動にコピーコンストラクタや代入演算子を利用することはできません。どちらの場合も引数のデータ型に const を付けるのが普通ですが、const を外しても呼び出すことは可能です。そうすると、引数 (インスタンス) のメンバ変数を書き換えることができるので、所有権を移動することができるように思われますが、今度は普通のコピー処理や代入処理が必要になるときに困ってしまいます。
+</p>
+<p> そこで、右辺値参照型を使うことにします。引数のデータ型が右辺値参照のコピーコンストラクタを「ムーブコンストラクタ」とか「移動コンストラクタ」といい、右辺値参照の代入演算子を「ムーブ代入演算子」とか「移動代入演算子」といいます。データ型を T とすると、これらのメンバ関数のプロトタイプは次のようになります。
+</p>
+<ol>
+  <li> T(T&amp;&amp);
+  <li> T&amp; operator=(T&amp;&amp;);
+</ol>
+<p> 1 がムーブコンストラクタ、2 がムーブ代入演算子になります。clang++ の標準ライブラリ (STL) は C++11 に対応しているので、オプション -std=c++11 を指定すれば、mapcar() のようなプログラムでも効率的に実行することができます。
+</p>
+
+<p> 簡単な例を示しましょう。次のリスを見てください。
+</p>
+<pre class="list">
+リスト : ムーブコンストラクタとムーブ代入演算子の使用例
+
+#include &lt;iostream&gt;
+#include &lt;cstring&gt;
+using namespace std;
+
+class cstr {
+  char* str;
+public:
+  cstr() : str(0) {}
+  cstr(const char* s) : str(new char [strlen(s) + 1]) {
+      strcpy(str, s);
+  }
+  ~cstr() { delete[] str; }
+  // コピーコンストラクタ
+  cstr(const cstr&amp; s) : str(new char [strlen(s.str) + 1]) {
+    cout &lt;&lt; "copy\n";
+    strcpy(str, s.str);
+  }
+  // 代入演算子
+  cstr&amp; operator=(const cstr&amp; s) {
+    if (this != &amp;s) {
+      cout &lt;&lt; "set\n";
+      delete[] str;
+      str = new char [strlen(s.str) + 1];
+      strcpy(str, s.str);
+    }
+    return *this;
+  }
+  // ムーブコンストラクタ
+  cstr(cstr&amp;&amp; s) : str(s.str) {
+    cout &lt;&lt; "move copy\n";
+    s.str = nullptr;
+  }
+  // ムーブ代入演算子
+  cstr&amp; operator=(cstr&amp;&amp; s) {
+    if (this != &amp;s) {
+      cout &lt;&lt; "move set\n";
+      delete[] str;
+      str = s.str;
+      s.str = nullptr;
+    }
+    return *this;
+  }
+  // 出力演算子
+  friend ostream&amp; operator&lt;&lt;(ostream&amp; output, const cstr&amp; s) {
+    output &lt;&lt; s.str;
+    return output;
+  }
+};
+</pre>
+<p> クラス cstr はＣスタイル文字列をメンバ変数 str に格納します。コピーコンストラクタはコピー元の文字列 s.str を自分のメンバ変数 str にコピーします。代入演算子は自分の文字列 str を delete[] で削除してから、再度 new でメモリ領域を取得して、そこに文字列 s.str をコピーします。
+</p>
+<p> これに対し、ムーブコンストラクタは移動元のポインタ変数 s.str の値を自分自身の str にセットするだけです。そして、s.str を nullptr に書き換えます。同様に、ムーブ代入演算子も str を delete[] で解放してから、s.str の値を str にセットし、s.str を nullptr に書き換えます。
+</p>
+<p> それでは実際に動かしてみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+int main()
+{
+  cstr a("foo");
+  cstr b("bar");
+  {
+    cstr c = a;
+    a = b;
+    b = c;
+  }
+  cout &lt;&lt; a &lt;&lt; endl;
+  cout &lt;&lt; b &lt;&lt; endl;
+  {
+    cstr c = move(a);
+    a = move(b);
+    b = move(c);
+  }
+  cout &lt;&lt; a &lt;&lt; endl;
+  cout &lt;&lt; b &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+copy
+set
+set
+bar
+foo
+move copy
+move set
+move set
+foo
+bar
+</pre>
+<p> 変数 a, b の値を変数 c を使って交換します。cstr c = a; の場合、変数 a の値が不要になるとは限らないので、ここではムーブコンストラクタは呼び出されず、通常のコピーコンストラクタが呼び出されます。同様に、a = b; と b = c; も通常の代入演算子が呼び出されます。変数 a と b の値を交換するだけなので、ムーブコンストラクタを呼び出したほうが効率的です。
+</p>
+<p> このような場合、左辺値の変数を右辺値参照に型変換 (キャスト) します。いちいち static_cast を記述するのは面倒なので、それを行ってくれる関数 move() が用意されています。cstr c = move(a); とすると、ムーブコンストラクタが呼び出されます。a = move(b), b = move(c) とすると、ムーブ代入演算子が呼び出されます。これで変数 a, b のメンバ変数 str の値を交換することができます。また、move() を使うことで、所有権を移動していることがプログラム上でも明確になります。
+</p>
+<h4>●コンテナクラスとムーブ代入演算子</h4>
+<p> C++11 に対応している標準ライブラリ (STL) であれば、コンテナクラスにデータをセットするとき、それが右辺値であればムーブ代入演算子が呼び出されます。また、メンバ関数にも右辺値参照に対応しているものがあります。たとえば、vector&lt;T&gt; の push_back() は引数の型が const T&amp; だけではなく、T&amp;&amp; でも受け付けてくれます。
+</p>
+<p> 簡単な例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : vector のムーブ代入演算子
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;cstring&gt;
+using namespace std;
+
+// Ｃスタイル文字列
+class cstr {
+  //
+  // ・・・ 省略 ・・・
+  //
+};
+
+int main()
+{
+  vector&lt;cstr&gt; a;
+  a.push_back(cstr("foo"));
+  a.push_back(cstr("bar"));
+  a.push_back(cstr("baz"));
+  a[0] = cstr("FOO");
+  a[1] = cstr("BAR");
+  a[2] = cstr("BAZ");
+  while (!a.empty()) {
+    cstr x = move(a.back());
+    cout &lt;&lt; x &lt;&lt; endl;
+    a.pop_back();
+  }
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+move copy
+move copy
+copy
+move copy
+copy
+copy
+move set
+move set
+move set
+move copy
+BAZ
+move copy
+BAR
+move copy
+FOO
+</pre>
+<p> push_back() で要素を末尾に挿入するとき、データが右辺値であればムーブコンストラクタ (move copy と表示) が呼び出されます。ベクタの容量を拡張するとき要素がコピーされますが、clang++ の STL ではコピーコンストラクタ (copy と表示) が呼び出されています。必要な大きさがわかっているならば、メンバ関数 reserve() であらかじめ容量を増やしておくといいでしょう。
+</p>
+<p> a[0] = cstr("FOO") の右辺値は一時的なインスタンスなので、ムーブ代入演算子 (move set と表示) が呼び出されます。a.back() で末尾データを参照するとき、move() でキャストするとムーブ代入演算子が呼び出されます。このとき、ベクタ内のインスタンスはメンバ変数 str が nullptr に書き換えられます。所有権を移動したので、このデータを使用してはいけません。a.pop_back() で末尾要素が取り除かれ、ここでデストラクタが実行されます。
+</p>
+<h4>●Emplacement</h4>
+<p> C++11 では、インスタンスをコンテナクラスに挿入するとき、メンバ関数 emplace() や emplace_back() などを使うと、コンテナ内でインスタンスを生成することができます。この機能を Emplacement といいます。
+</p>
+<pre class="item">
+void emplace(iterator, コンストラクタの引数, ...);
+void emplace_back(コンストラクタの引数, ...);
+</pre>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : emplace_back の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;cstring&gt;
+using namespace std;
+
+class cstr {
+  //
+  // ・・・ 省略 ・・・
+  //
+};
+
+int main()
+{
+  vector&lt;cstr&gt; a;
+  a.reserve(4);
+  a.emplace_back("foo");
+  a.emplace_back("bar");
+  a.emplace_back("baz");
+  while (!a.empty()) {
+    cstr x = move(a.back());
+    cout &lt;&lt; x &lt;&lt; endl;
+    a.pop_back();
+  }
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+move copy
+baz
+move copy
+bar
+move copy
+foo
+</pre>
+<p> emplace_back() を使うと一時的なインスタンスが生成されないので、ムーブコンストラクタは呼び出されません。また、一時的なインスタンスを生成すると、それを廃棄するためにデストラクタが呼び出されますが、その呼び出しもありません。効率的にインスタンスをコンテナに挿入することができます。
+</p>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="http://cpplover.blogspot.jp/2009/11/rvalue-reference_23.html">本の虫: rvalue reference 完全解説</a>, (江添亮さん)
+  <li><a href="http://www.slideshare.net/Reputeless/c11c14">ゲーム開発者のための C++11 / C++14</a>, (Ryo Suzuki さん)
+</ol>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">スマートポインタ</h3>
+<p> 今回は「スマートポインタ (Smart Pointer)」を取り上げます。以前のＣ++には、標準ライブラリの &lt;memory&gt; に auto_ptr&lt;T&gt; というスマートポインタが用意されてました。最近の規格 (C++11) では、auto_ptr&lt;T&gt; の使用は推奨されておらず、新しいスマートポインタ unique_ptr&lt;T&gt;, shared_ptr&lt;T&gt;, weak_ptr&lt;T&gt; が導入されました。今回はこの中から unique_ptr&lt;T&gt; の基本的な使い方について簡単に説明します。
+</p>
+<h4>●スマートポインタとは？</h4>
+<p> Ｃ++の場合、動的なメモリの取得と解放は new と delete で行います。ポインタをそのまま扱う場合、delete を忘れたときにメモリリークする危険性があり、メモリ管理はけっこう面倒なものになります。スマートポインタは名前が表しているように、ポインタをスマートに扱うためのクラステンプレートです。
+</p>
+<p> スマートポインタはポインタによって初期化され、ポインタと同じように扱うことができます。また、スマートポインタにはデストラクタがあるので、デストラクタを実行するとき、ポインタが指し示しているメモリを解放することができます。
+</p>
+<p> auto_ptr&lt;T&gt; はポインタ T* を保持し、それを「所有権の移動」で管理しています。コピーコンストラクタや代入演算子の処理が実行されると、そのポインタの所有権はコピー先 (または代入先) に移り、元の auto_ptr が保持しているポインタ変数は 0 に書き換えられます。
+</p>
+<p> auto_ptr は C++11 よりも前の規格で作られたクラステンプレートなので、ムーブコンストラクタやムーブ代入演算子はありません。所有権を移動したことを忘れて、うっかり元の auto_ptr にアクセスするとコアダンプが発生します。次の例を見てください。
+</p>
+
+<pre class="list">
+リスト : auto_ptr の使用例
+
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+using namespace std;
+
+class Foo {
+  int x;
+public:
+  Foo(int n) : x(n) { cout &lt;&lt; "constructor\n"; }
+  ~Foo() { cout &lt;&lt; "destructor\n"; }
+  int get() const { return x; }
+};
+
+int main()
+{
+  auto_ptr&lt;Foo&gt; a(new Foo(1));
+  cout &lt;&lt; a-&gt;get() &lt;&lt; endl;
+  auto_ptr&lt;Foo&gt; b = a;  // 所有権の移動
+  cout &lt;&lt; b-&gt;get() &lt;&lt; endl;
+  // cout &lt;&lt; a-&gt;get() &lt;&lt; endl; コアダンプ
+  auto_ptr&lt;Foo&gt; c;
+  c = b;                // 所有権の移動
+  cout &lt;&lt; c-&gt;get() &lt;&lt; endl;
+  // cout &lt;&lt; b-&gt;get() &lt;&lt; endl; コアダンプ
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+constructor
+1
+1
+1
+destructor
+</pre>
+<p> auto_ptr のコンストラクタにはポインタを渡します。これで auto_ptr はそのポインタが示すメモリ領域を保持し、自分に所有権があればデストラクタでメモリ領域を解放します。
+</p>
+<p> 変数 a を変数 b の初期値として指定すると、コピーコンストラクタが呼び出されますが、このとき auto_ptr はメモリの所有権を移動します。a-&gt;get() を実行するとコアダンプが発生します。同様に、c = b は代入演算子の処理が呼び出され、ここでも auto_ptr の所有権は移動します。このあと、b-&gt;get() を実行してもコアダンプが発生します。main() が終了すると、デストラクタが実行されます。
+</p>
+<p> このように、auto_ptr はうっかり所有権を移動すると、そのあとでコアダンプを発生させる危険性があります。また、コピー元や代入元のインスタンスを破壊的に修正するため、auto_ptr を標準的なコンテナクラスに格納することは推奨されていません。
+</p>
+<h4>●unique_ptr の基本的な使い方</h4>
+<p> C++11 から導入された unique_ptr は、ただ一つの unique_ptr だけがメモリの所有権を所持しているスマートポインタです。具体的には、auto_ptr と同様に所有権の移動で所持したポインタを管理します。auto_ptr と違って、unique_ptr を他の unique_ptr にコピーしたり代入することはできません。そのかわり、ムーブコンストラクタとムーブ代入演算子が用意されているので、move() を使って明示的に所有権を移動することができます。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : unique_ptr の使用例
+
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+using namespace std;
+
+class Foo {
+  int x;
+public:
+  Foo(int n) : x(n) { cout &lt;&lt; "constructor\n"; }
+  ~Foo() { cout &lt;&lt; "destructor\n"; }
+  int get() const { return x; }
+};
+
+int main()
+{
+  unique_ptr&lt;Foo&gt; a(new Foo(1));
+  cout &lt;&lt; a-&gt;get() &lt;&lt; endl;
+  // unique_ptr&lt;Foo&gt; b = a; コンパイルエラー
+  unique_ptr&lt;Foo&gt; b = move(a);  // 明示的に所有権を移動
+  cout &lt;&lt; b-&gt;get() &lt;&lt; endl;
+  unique_ptr&lt;Foo&gt; c;
+  // c = b;  コンパイルエラー
+  c = move(b);  // 明示的に所有権を移動
+  cout &lt;&lt; c-&gt;get() &lt;&lt; endl;  
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+constructor
+1
+1
+1
+destructor
+</pre>
+
+<p> unique_ptr を使うときはヘッダファイル memory をインクルードしてください。所有権は move() で移動することができます。コピーコンストラクタや代入演算子を呼び出す処理はコンパイルエラーになります。
+</p>
+
+<h4>●配列を所持する方法</h4>
+<p> auto_ptr は配列を所持することはできませんが、unique_ptr ならば可能です。次のように、テンプレート仮引数に T [] を指定してください。
+</p>
+<pre class="item">
+unique_ptr&lt;T []&gt; a(new T [size]);
+</pre>
+<p> あとはコンストラクタの引数に、動的に生成した配列を渡すだけです。この場合、添字演算子 [] を使って配列の要素にアクセスすることができます。簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : 配列を所持する (1)
+
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+using namespace std;
+
+int main()
+{
+  unique_ptr&lt;int []&gt; a(new int [10]);
+  for (int i = 0; i &lt; 10; i++) a[i] = i;
+  for (int i = 0; i &lt; 10; i++) cout &lt;&lt; a[i] &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre>
+<p> もちろん、インスタンスを格納する配列も unique_ptr に格納することができます。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 配列を所持する (2)
+
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+using namespace std;
+
+class Foo {
+  int x;
+public:
+  Foo() : x(0) { cout &lt;&lt; "constructor\n"; }
+  Foo(int n) : x(n) { cout &lt;&lt; "constructor " &lt;&lt; n &lt;&lt; endl; }
+  ~Foo() { cout &lt;&lt; "destructor " &lt;&lt; x &lt;&lt; endl; }
+  int get() const { return x; }
+  void put(int n) { x = n; }
+};
+
+int main()
+{
+  unique_ptr&lt;Foo []&gt; a(new Foo [8]);
+  for (int i = 0; i &lt; 8; i++) a[i].put(i);
+  for (int i = 0; i &lt; 8; i++) cout &lt;&lt; a[i].get() &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+constructor
+constructor
+constructor
+constructor
+constructor
+constructor
+constructor
+constructor
+0 1 2 3 4 5 6 7 
+destructor 7
+destructor 6
+destructor 5
+destructor 4
+destructor 3
+destructor 2
+destructor 1
+destructor 0
+mhiroi@mhiroi-VirtualBox:~/cpp$ cat sample215.cpp
+</pre>
+<p> このように、unique_ptr が廃棄されたとき、各々のインスタンスのデストラクタが実行されます。
+</p>
+<h4>●コンテナクラスに unique_ptr を格納する</h4>
+<p> unique_ptr は auto_ptr と違ってコンテナクラスに格納することができます。たとえば、vector に格納する場合は次のようになります。
+</p>
+<pre class="list">
+リスト : vector に unique_ptr を格納する
+
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+#include &lt;vector&gt;
+using namespace std;
+
+class Foo {
+  //
+  // ・・・ 省略 ・・・
+  //
+};
+
+int main()
+{
+  vector&lt;unique_ptr&lt;Foo&gt;&gt; a;
+  a.emplace_back(new Foo(1));
+  a.emplace_back(new Foo(2));
+  a.emplace_back(new Foo(3));
+  cout &lt;&lt; a[0]-&gt;get() &lt;&lt; endl;
+  cout &lt;&lt; a[1]-&gt;get() &lt;&lt; endl;
+  cout &lt;&lt; a[2]-&gt;get() &lt;&lt; endl;
+  a.pop_back();
+  a.pop_back();
+  a.pop_back();
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+constructor 1
+constructor 2
+constructor 3
+1
+2
+3
+destructor 3
+destructor 2
+destructor 1
+</pre>
+<p> Foo のインスタンスを保持する unique_ptr を vector に追加する場合、push_back() よりも emplace_back() を使ったほうが簡単です。pop_back() で vector から unique_ptr を取り出すと、unique_ptr が廃棄されて、所持しているインスタンスのデストラクタが実行されます。
+</p>
+<h4>●その他のメンバ関数</h4>
+<p> 今まで所持しているメモリの所有権を放棄して、他のメモリの所有権を持ちたい場合はメンバ関数 reset() を使います。reset() は所持しているメモリを解放したあと、引数に渡されたメモリの所有権を所持します。引数なして reset() を呼び出す、または引数に nullptr を渡すと、所持しているメモリを解放することができます。
+</p>
+<p> なお、所有権の放棄はメンバ関数 release() で行うことができます。release() は所持していたポインタを返します。ポインタが指し示すメモリ領域は解放しないので注意してください。
+</p>
+<p> unique_ptr が所持しているポインタはメンバ関数 get() で求めることができます。get() を呼び出したあとでも、unique_ptr は所有権を放棄しません。それから、unique_ptr には operator bool が多重定義されていて、条件式の中で unique_ptr を判定すると、所有権を持っていれば true を、そうでなければ false を返します。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : メンバ関数の使用例
+
+#include &lt;iostream&gt;
+#include &lt;memory&gt;
+using namespace std;
+
+class Foo {
+  //
+  // ・・・ 省略 ・・・
+  //
+};
+
+int main()
+{
+  unique_ptr&lt;Foo&gt; a(new Foo(1));
+  cout &lt;&lt; a-&gt;get() &lt;&lt; endl;
+  cout &lt;&lt; a.get() &lt;&lt; endl;
+  a.reset(new Foo(2));
+  cout &lt;&lt; a-&gt;get() &lt;&lt; endl;
+  cout &lt;&lt; a.get() &lt;&lt; endl;
+  if (a)
+    cout &lt;&lt; "true\n";
+  else
+    cout &lt;&lt; "false\n";
+  Foo* b = a.release();
+  if (a)
+    cout &lt;&lt; "true\n";
+  else
+    cout &lt;&lt; "false\n";
+  delete b;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+constructor 1
+1
+0x94ab008
+constructor 2
+destructor 1
+2
+0x94ab018
+true
+false
+destructor 2
+</pre>
+<p> reset() を実行すると、所持していた Foo のインスタンスがデストラクタで解放されます。変数 a が格納しているポインタの値も変わっています。if の条件式で変数 a を判定すると true になります。次に、release() で所有権を放棄します。返り値は変数 b にセットします。if の条件式で変数 a を判定すると false になります。今まで所持していた Foo のインスタンスは解放していないので、delete b で解放します。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="cpp20.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp22.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

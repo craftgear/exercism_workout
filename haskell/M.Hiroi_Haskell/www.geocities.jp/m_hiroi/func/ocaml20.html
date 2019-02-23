@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 OCaml プログラミング入門</title>
+  <meta name="description" content="OCaml,ML,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881751</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 OCaml プログラミング入門</h2>
+<div class="small">
+[ <a href="ocaml19.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml21.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">パズルの解法 (2)</h3>
+<p> 今回は基本的な探索手法である幅優先探索を使って 15 パズルで有名なスライドパズルを解いてみましょう。なお、このドキュメントは拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo27.html">幅優先探索と反復深化</a> のプログラムを OCaml で書き直したものです。内容は重複していますが、ご了承くださいませ。
+</p>
+
+<h4>●スライドパズルの説明</h4>
+<p> <a href="ocaml20.html#cite">参考文献 1</a> によると、15 パズルはアメリカのサム・ロイドが 1870 年代に考案したパズルで、彼はパズルの神様と呼ばれるほど有名なパズル作家だそうです。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┬─┐
+  │１│２│３│４│
+  ├─┼─┼─┼─┤
+  │５│６│７│８│
+  ├─┼─┼─┼─┤
+  │９│10│11│12│
+  ├─┼─┼─┼─┤
+  │13│14│15│  │
+  └─┴─┴─┴─┘
+
+   図 1 : 15 パズル
+</pre>
+<p> 15 パズルは上図に示すように、1 から 15 までの駒を並べるパズルです。駒の動かし方は、1 回に 1 個の駒を空いている隣の場所に滑らせる、というものです。駒を跳び越したり持ち上げたりすることはできません。
+</p>
+
+<p> 15 パズルの場合、駒の配置は空き場所がどこでもいいことにすると、16! (約 2e13) 通りもあります。実際には、15 パズルの性質からその半分になるのですが、それでもパソコンで扱うにはあまりにも大きすぎる数です。そこで、盤面を一回り小さくした、1 から 8 までの数字を並べる「8 パズル」を考えることにします。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐      ┌─┬─┬─┐
+  │１│２│３│      │１│２│３│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │４│５│６│      │４│５│６│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │７│８│  │      │８│７│  │
+  └─┴─┴─┘      └─┴─┴─┘
+  （１）完成形      （２）不可能な局面  
+
+
+            図 2 : 8 パズル
+</pre>
+<p> 15 パズルは 4 行 4 列の盤ですが、8 パズルは 3 行 3 列と盤を小さくしたパズルです。8 パズルの場合、駒の配置は空き場所がどこでもいいことにすると、9! =  362880 通りあります。15 パズルや 8 パズルの場合、<a href="ocaml20.html#cite">参考文献 2</a> によると <cite>『適当な 2 つの駒をつまみ上げて交換する動作を偶数回行った局面にしか移行できない』</cite> とのことです。
+</p>
+<p> 図 2 (2) は 7 と 8 を入れ替えただけの配置です。この場合、交換の回数が奇数回のため完成形に到達することができない、つまり解くことができないのです。このような性質を「偶奇性（パリティ）」といいます。詳しい説明は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/parity.html">偶奇性（パリティ）のお話</a> をお読みください。8 パズルの場合、完成形に到達する局面の総数は 9! / 2 = 181440 個となります。
+</p>
+
+<h4>●幅優先探索による解法</h4>
+<p> それでは、プログラムを作りましょう。下図に示すスタートから完成形 (ゴール) に到達するまでの最短手数を幅優先探索で求めます。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐    ┌─┬─┬─┐
+  │８│６│７│    │１│２│３│
+  ├─┼─┼─┤    ├─┼─┼─┤
+  │２│５│４│    │４│５│６│
+  ├─┼─┼─┤    ├─┼─┼─┤
+  │３│  │１│    │７│８│  │
+  └─┴─┴─┘    └─┴─┴─┘
+     スタート           ゴール
+
+
+          図 3 : 8 パズル
+</pre>
+<p> 8 パズルの盤面は配列を使って表します。盤面の位置と配列の添字の対応は下図を見てください。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐      ┌─┬─┬─┐
+  │１│２│３│      │０│１│２│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │４│５│６│      │３│４│５│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │７│８│  │      │６│７│８│
+  └─┴─┴─┘      └─┴─┴─┘
+
+ 盤面:[1; 2; 3;      盤面と配列の対応
+       4; 5; 6;
+       7; 8; 0]
+
+
+         図 4 : 8 パズルの盤面
+</pre>
+
+<p> 空き場所は 0 で表します。隣接リストの定義は次のようになります。
+</p>
+
+<pre class="list">
+リスト 1 : 隣接リスト
+
+let adjacent = [|
+  [1; 3];        (* 0 *)
+  [0; 2; 4];     (* 1 *)
+  [1; 5];        (* 2 *)
+  [0; 4; 6];     (* 3 *)
+  [1; 3; 5; 7];  (* 4 *)
+  [2; 4; 8];     (* 5 *)
+  [3; 7];        (* 6 *)
+  [4; 6; 8];     (* 7 *)
+  [5; 7]         (* 8 *)
+|]
+</pre>
+
+<p> 次は局面を表すデータ型を定義します。
+</p>
+<pre class="list">
+リスト 2 : 局面の定義
+
+type state = Nil | State of int * int array * state
+</pre>
+<p> 型名は state としました。最初の int は空き場所の位置、次の int array は盤面を表す配列、最後の state は 1 手前の局面を格納します。ゴールに到達したら、prev をたどって手順を表示します。終端は Nil で表します。
+</p>
+
+<p> それでは幅優先探索のプログラムを作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 3 : 幅優先探索
+
+(* ハッシュ表 *)
+let ht = Hashtbl.create 181440
+
+(* キュー *)
+let que = Queue.create ()
+
+(* 局面の登録 *)
+let set_new_state space board prev =
+  let new_state = State (space, board, prev) in
+  Hashtbl.add ht board true;
+  Queue.add new_state que
+
+(* 例外 *)
+exception Found
+
+(* 幅優先探索 *)
+let bfs start goal =
+  set_new_state (position 0 start) start Nil;
+  while not (Queue.is_empty que) do
+    let (State (space, board, _)) as state1 = Queue.take que in
+    List.iter
+      (fun x -&gt;
+        let new_board = Array.copy board in
+        move_piece space x new_board;
+        if new_board = goal then
+          begin
+            print_answer (State (x, new_board, state1));
+            raise Found
+          end
+        else if not (Hashtbl.mem ht new_board) then
+          set_new_state x new_board state1
+        else ()
+      )
+      adjacent.(space)
+  done
+</pre>
+
+<p> プログラムの骨格は <a href="ocaml18.html">経路の探索</a> で説明した幅優先探索と同じです。変数 ht は同一局面をチェックするためのハッシュ表 (Hashtbl) を格納します。そして、変数 que にキューをセットします。新しい局面は関数 make_new_state で生成し、それをハッシュとキューにセットします。
+</p>
+
+<p> 幅優先探索の場合、手数 を 1 つずつ増やしながら探索を行います。このため、n 手目の移動で作られた局面が n 手以前の局面で出現している場合、n 手より短い手数で到達する移動手順が必ず存在します。最短手順を求めるのであれば、この n 手の手順を探索する必要はありません。ハッシュ表 ht をチェックして新しい局面だけキューに登録します。
+</p>
+
+<p> まず、start の局面を生成してハッシュとキューに登録します。それから、while ループで、ゴール (goal) に到達するまで探索を繰り返します。キューが空になり while ループが終了する場合、start は goal に到達できない、つまり解くことができなかったことになります。
+</p>
+
+<p> キューから局面を取り出して変数 state1 にセットします。そして、駒を動かして新しい局面を生成します。この処理を List.fold_left で行います。動かせる駒の位置は空き場所の隣なので、adjacent.(space) で求めることができます。匿名関数の引数 x が動かす駒の位置になります。元の局面 board を Array.copy でコピーして変数 new_board にセットし、関数 move_piece で駒を移動します。
+</p>
+
+<p> 新しい盤面 new_board を作ったら、それが goal と等しいがチェックします。goal に到達した場合、print_answer で手順を表示して処理を終了します。そうでない場合は、同一の盤面がないかハッシュ表の関数 Hashtbl.mem でチェックします。同じ盤面が見つからない場合、make_new_state で新しい局面を生成してキューとハッシュに登録します。
+</p>
+
+<p> あとは特に難しいところはないでしょう。詳細は <a href="ocaml20.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+
+<h4>●実行結果</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+<pre>
+8 6 7 
+2 5 4 
+3 0 1 
+
+8 6 7 
+2 0 4 
+3 5 1 
+
+... 省略 ...
+
+1 2 3 
+4 5 6 
+7 0 8 
+
+1 2 3 
+4 5 6 
+7 8 0 
+</pre>
+<p> 31 手で解くことができました。生成した局面は全部で 181440 通りで、実行時間は 2.22 秒 (Windows XP, celeron 1.40 GHz, ocamlc 3.10.0) かかりました。8 パズルの場合、最長手数は 31 手で、下図に示す 2 通りの局面があります。スタートの局面はその一つです。
+</p>
+<pre class="fig">
+┌─┬─┬─┐    ┌─┬─┬─┐
+│８│６│７│    │６│４│７│
+├─┼─┼─┤    ├─┼─┼─┤
+│２│５│４│    │８│５│  │
+├─┼─┼─┤    ├─┼─┼─┤
+│３│  │１│    │３│２│１│
+└─┴─┴─┘    └─┴─┴─┘
+
+    図 5 : 31 手で解ける局面
+</pre>
+<p> 最長手数の局面は、幅優先探索を使って求めることができます。これはあとで試してみましょう。
+</p>
+
+<h4>●双方向探索による高速化</h4>
+<p> ところで、今回の 8 パズルようにゴールの状態が明確な場合、スタートから探索するだけではなくゴールからも探索を行うことで、幅優先探索を高速化することができます。これを「双方向探索 (bi-directional search) 」といいます。
+</p>
+<p> その理由を説明するために、簡単なシミュレーションをしてみましょう。たとえば、1 手進むたびに 3 つの局面が生成され、5 手で解けると仮定します。すると、n 手目で生成される局面は 3 の n 乗個になるので、初期状態から単純に探索すると、生成される局面の総数は、3 + 9 + 27 + 81 + 243 = 363 個となります。
+</p>
+<p> これに対し、初期状態と終了状態から同時に探索を始めた場合、お互い 3 手まで探索した時点で同じ局面に到達する、つまり、解を見つけることができます。この場合、生成される局面の総数は 3 手目までの局面数を 2 倍した 78 個となります。
+</p>
+<p> 生成される局面数はぐっと少なくなりますね。局面数が減少すると同一局面の探索処理に有利なだけではなく、「キューからデータを取り出して新しい局面を作る」という根本的な処理のループ回数を減らすことになるので、処理速度は大幅に向上するのです。
+</p>
+
+<p> それではプログラムを作りましょう。単純に考えると、2 つの探索処理を交互に行うことになりますが、そうするとプログラムの大幅な修正が必要になります。ここは、探索方向を示すフラグを用意することで、一つのキューだけで処理することにしましょう。局面を表すクラスに方向を格納するデータ型 dir を追加します。
+</p>
+
+<pre class="list">
+リスト 4 : 局面の定義 (双方向からの探索)
+
+type dir = Back | Fore
+type state = Nil | State of dir * int * int array * state
+</pre>
+
+<p> スタートからの探索を Fore で、ゴールからの探索を Back で表ます。双方向探索のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト 5 : 双方向探索
+
+let bfs start goal =
+  (* 初期化 *)
+  set_new_state Fore (position 0 start) start Nil;
+  set_new_state Back (position 0 goal) goal Nil;
+  (* 探索 *)
+  while not (Queue.is_empty que) do
+    let (State (d1, space, board, _)) as state1 = Queue.take que in
+    List.iter
+      (fun x -&gt;
+        let new_board = Array.copy board in
+        move_piece space x new_board;
+        if Hashtbl.mem ht new_board then
+          let (State (d2, _, _, _)) as state2 = Hashtbl.find ht new_board in
+          if d1 &lt;&gt; d2 then
+            begin
+              print_answer state1 state2;
+              raise Found
+            end
+          else ()
+        else set_new_state d1 x new_board state1
+      )
+      adjacent.(space)
+  done
+</pre>
+
+<p> スタートとゴールの局面を生成してキューとハッシュにセットします。ここで、ハッシュには局面をセットすることに注意してください。スタートの局面は Fore をセットし、ゴールの局面は Goal をセットします。最初に、スタートの状態から 1 手目の局面が生成され、次にゴールの状態から 1 手目の局面が生成されます。あとは、交互に探索が行われます。
+</p>
+
+<p> 駒の移動と局面の生成処理は幅優先探索と同じです。同じ局面を見つけたとき、ハッシュ表 ht から局面を取り出して変数 state2 にセットします。そして、探索の方向 d1 と d2 を比較して探索方向が異なっていれば、双方向の探索で同一局面に到達したことがわかります。見つけた最短手順を関数 print_answer で出力します。同じ探索方向であれば、キューへの追加は行いません。
+</p>
+<p> print_answer は簡単なプログラムなので説明は割愛いたします。詳細は <a href="ocaml20.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+
+<p> さっそく実行してみると、生成された局面数は 16088 個で、実行時間は 0.13 秒 (Windows XP, celeron 1.40 GHz, ocamlc 3.10.0) でした。局面数は約 1 / 11 になり、実行時間も約 17 倍と高速になりました。
+</p>
+
+<h4>●最長手数の求め方</h4>
+<p> 次は最長手数の局面を求めてみましょう。最長手数の求め方ですが、181440 通りの配置の最短手数がすべてわかれば、最長の手数となる配置を求めることができます。しかし、この方法では時間がとてもかかりそうです。そこで、完成形から始めていちばん長い手数の局面を生成することにします。
+</p>
+<p> まず、完成形から駒を動かして 1 手で到達する局面をすべて作ります。次に、これらの局面から駒を動かして新しい局面を作れば、完成形から 2 手で到達する局面となります。このように、手数を 1 手ずつ伸ばしていき、新しい局面が生成できなくなった時点での手数が求める最長手数となります。この処理は幅優先探索を使えばぴったりです。
+</p>
+<p> このプログラムの目的は、いちばん長い手数となる配置を求めることなので、その手順を表示することは行いません。このため、一手前の局面は格納しないで、その局面までの手数を格納することにします。一つ前の局面の手数に 1 を足せば、現在の局面の手数となります。
+</p>
+
+<p> それではプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト 6 : 8 パズルの最長手数を求める
+
+(* データ型 *)
+type state = State of int * int array * int
+
+(* 最長手数の探索 *)
+let rec bfs ls =
+  let new_ls = List.fold_left
+    (fun a (State (s, b, m)) -&gt;
+      List.fold_left
+        (fun x y -&gt;
+          let nb = Array.copy b in
+          move_piece s y nb;
+          if Hashtbl.mem ht nb then x
+          else (
+            Hashtbl.add ht nb true;
+            (State (y, nb, m + 1))::x))
+        a
+        adjacent.(s))
+    []
+    ls
+  in
+    if new_ls = [] then print_answer ls else bfs new_ls
+</pre>
+
+<p> 関数 bfs は n 手の局面を格納したリストを引数 ls に受け取ります。そして、そこから n + 1 手の局面を生成してリストに格納し、変数 new_ls にセットします。もしも、new_ls が空リストであれば、ls の局面が最長手数の局面となります。そうでなければ、探索処理を続行します。この処理を再帰呼び出しで実現しています。
+</p>
+
+<p> 新しい局面の生成は fold_left を使うと簡単です。ここで fold_left を二重で使っていることに注意してください。最初の fold_left で ls から局面を一つずつ取り出します。匿名関数の第 1 引数 a が新しい局面を格納する累積変数 (リスト) で、第 2 引数が局面 state です。パターンマッチングで空き場所の位置、盤面、手数を取り出して変数 s, b, m にセットします。
+</p>
+
+<p> 次の fold_left で盤面の駒を動かして新しい局面を生成します。匿名関数の第 1 引数 x が新しい局面を格納する累積変数 (リスト) で、第 2 引数 y が移動する駒の位置です。x の初期値は最初の fold_left の累積変数が渡されるので、新しい局面をここに蓄積して返すことができます。あとは、新しい盤面を生成してハッシュ表 ht をチェックし、同一の盤面がなければ、新しい局面を x に追加して返します。そうでなければ x をそのまま返します。
+</p>
+
+<p> あとは特に難しいところはないと思います。詳細は <a href="ocaml20.html#list3">プログラムリスト３</a> をお読みください。
+</p>
+
+<p> さっそく実行してみましょう。
+</p>
+<pre>
+31:
+8 6 7 
+2 5 4 
+3 0 1 
+
+31:
+6 4 7 
+8 5 0 
+3 2 1 
+</pre>
+
+<p> 最長手数は 31 手で、その配置は全部で 2 通りになります。実行時間は 1.91 秒 (Windows XP, celeron 1.40 GHz, ocamlc 3.10.0) になりました。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>井上うさぎ, 『世界のパズル百科イラストパズルワンダーランド』, 東京堂出版, 1997
+  <li>三木太郎, 『特集コンピュータパズルへの招待 スライディングブロック編』, C MAGAZINE 1996 年 2 月号, ソフトバンク
+  <li>高橋謙一郎, 『特集 悩めるプログラマに効くアルゴリズム』, C MAGAZINE 2000 年 11 月号, ソフトバンク
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+(*
+ * eight.ml : 8 Puzzle
+ *
+ *            Copyright (C) 2008 Makoto Hiroi
+ *)
+
+(* 隣接リスト *)
+let adjacent = [|
+  [1; 3];
+  [0; 2; 4];
+  [1; 5];
+  [0; 4; 6];
+  [1; 3; 5; 7];
+  [2; 4; 8];
+  [3; 7];
+  [4; 6; 8];
+  [5; 7]
+|]
+
+(* 局面 *)
+type state = Nil | State of int * int array * state
+
+(* 駒の移動 *)
+let move_piece space pos board =
+  board.(space) &lt;- board.(pos);
+  board.(pos) &lt;- 0
+
+(* 駒の位置を返す *)
+let position x ary =
+  let rec iter n =
+    if n = Array.length ary then raise Not_found
+    else if x = ary.(n) then n
+    else iter (n + 1)
+  in
+    iter 0
+
+(* 盤面の表示 *)
+let print_board board =
+  for i = 0 to 2 do
+    for j = 0 to 2 do
+      Printf.printf "%d " board.(i * 3 + j)
+    done;
+    print_newline ()
+  done;
+  print_newline ()
+
+let rec print_answer = function
+  Nil -&gt; ()
+| State (_, board, prev) -&gt;
+    print_answer prev;
+    print_board board
+
+(* ハッシュ表 *)
+let ht =Hashtbl.create 181440
+
+(* キュー *)
+let que = Queue.create ()
+
+(* 局面の登録 *)
+let set_new_state space board prev =
+  let new_state = State (space, board, prev) in
+  Hashtbl.add ht board true;
+  Queue.add new_state que
+
+(* 例外 *)
+exception Found
+
+(* 幅優先探索 *)
+let bfs start goal =
+  set_new_state (position 0 start) start Nil;
+  while not (Queue.is_empty que) do
+    let (State (space, board, _)) as state1 = Queue.take que in
+    List.iter
+      (fun x -&gt;
+        let new_board = Array.copy board in
+        move_piece space x new_board;
+        if new_board = goal then
+          begin
+            print_answer (State (x, new_board, state1));
+            raise Found
+          end
+        else if not (Hashtbl.mem ht new_board) then
+          set_new_state x new_board state1
+        else ()
+      )
+      adjacent.(space)
+  done
+
+let solve start = bfs start [|1;2;3;4;5;6;7;8;0|]
+
+(* 時間計測 *)
+let () =
+  let a = Sys.time () in
+  try solve [|8;6;7;2;5;4;3;0;1|] with Found -&gt; ();
+  print_float (Sys.time () -. a)
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+(*
+ * eight1.ml : 8 Puzzle (双方向探索)
+ *
+ *             Copyright (C) 2008 Makoto Hiroi
+ *)
+
+(* 隣接リスト *)
+let adjacent = [|
+  [1; 3];
+  [0; 2; 4];
+  [1; 5];
+  [0; 4; 6];
+  [1; 3; 5; 7];
+  [2; 4; 8];
+  [3; 7];
+  [4; 6; 8];
+  [5; 7]
+|]
+
+(* データ型 *)
+type dir = Back | Fore
+type state = Nil | State of dir * int * int array * state
+
+(* 駒の移動 *)
+let move_piece space pos board =
+  board.(space) &lt;- board.(pos);
+  board.(pos) &lt;- 0
+
+(* 駒の位置を返す *)
+let position x ary =
+  let rec iter n =
+    if n = Array.length ary then raise Not_found
+    else if x = ary.(n) then n
+    else iter (n + 1)
+  in
+    iter 0
+
+(* 盤面の表示 *)
+let print_board board =
+  for i = 0 to 2 do
+    for j = 0 to 2 do
+      Printf.printf "%d " board.(i * 3 + j)
+    done;
+    print_newline ()
+  done;
+  print_newline ()
+
+let rec print_answer_fore = function
+  Nil -&gt; ()
+| State (_, _, board, prev) -&gt;
+    print_answer_fore prev;
+    print_board board
+
+let rec print_answer_back = function
+  Nil -&gt; ()
+| State (_, _, board, prev) -&gt;
+    print_board board;
+    print_answer_back prev
+
+let print_answer state1 = function
+  Nil -&gt; ()
+| (State(Fore, _, _, _)) as state2 -&gt;
+    print_answer_fore state2; print_answer_back state1
+| state2 -&gt; print_answer_fore state1; print_answer_back state2
+
+
+(* ハッシュ表 *)
+let ht = Hashtbl.create 181440
+
+(* キュー *)
+let que = Queue.create ()
+
+(* 新しい局面をセットする *)
+let set_new_state d space board prev =
+  let new_state = State (d, space, board, prev) in
+  Hashtbl.add ht board new_state;
+  Queue.add new_state que
+
+(* 例外 *)
+exception Found
+
+(* 双方向探索 *)
+let bfs start goal =
+  (* 初期化 *)
+  set_new_state Fore (position 0 start) start Nil;
+  set_new_state Back (position 0 goal) goal Nil;
+  (* *)
+  while not (Queue.is_empty que) do
+    let (State (d1, space, board, _)) as state1 = Queue.take que in
+    List.iter
+      (fun x -&gt;
+        let new_board = Array.copy board in
+        move_piece space x new_board;
+        if Hashtbl.mem ht new_board then
+          let (State (d2, _, _, _)) as state2 = Hashtbl.find ht new_board in
+          if d1 &lt;&gt; d2 then
+            begin
+              print_answer state1 state2;
+              raise Found
+            end
+          else ()
+        else set_new_state d1 x new_board state1
+      )
+      adjacent.(space)
+  done
+
+let solve start = bfs start [|1;2;3;4;5;6;7;8;0|]
+
+(* 時間計測 *)
+let () =
+  let a = Sys.time () in
+  try solve [|8;6;7;2;5;4;3;0;1|] with Found -&gt; ();
+  print_float (Sys.time () -. a)
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+(*
+ * eight2.ml : 8 Puzzle (最長手数の探索)
+ *
+ *             Copyright (C) 2008 Makoto Hiroi
+ *)
+
+(* 隣接リスト *)
+let adjacent = [|
+  [1; 3];
+  [0; 2; 4];
+  [1; 5];
+  [0; 4; 6];
+  [1; 3; 5; 7];
+  [2; 4; 8];
+  [3; 7];
+  [4; 6; 8];
+  [5; 7]
+|]
+
+(* データ型 *)
+type state = State of int * int array * int
+
+(* 駒の移動 *)
+let move_piece space pos board =
+  board.(space) &lt;- board.(pos);
+  board.(pos) &lt;- 0
+
+(* 盤面の表示 *)
+let print_board board =
+  for i = 0 to 2 do
+    for j = 0 to 2 do
+      Printf.printf "%d " board.(i * 3 + j)
+    done;
+    print_newline ()
+  done;
+  print_newline ()
+
+(* 最長手数の局面を表示 *)
+let print_answer ls =
+  List.iter (fun (State (_, b, n)) -&gt; Printf.printf "%d:\n" n; print_board b) ls
+
+(* ハッシュ表 *)
+let ht = Hashtbl.create 181440
+
+(* 幅優先探索 *)
+let rec bfs ls =
+  let new_ls = List.fold_left
+    (fun a (State (s, b, m)) -&gt;
+      List.fold_left
+        (fun x y -&gt;
+          let nb = Array.copy b in
+          move_piece s y nb;
+          if Hashtbl.mem ht nb then x
+          else (
+            Hashtbl.add ht nb true;
+            (State (y, nb, m + 1))::x))
+        a
+        adjacent.(s))
+    []
+    ls
+  in
+    if new_ls = [] then print_answer ls else bfs new_ls
+
+(* 実行 *)
+let () =
+  let x = [|1;2;3;4;5;6;7;8;0|] in
+  let a = Sys.time () in
+  Hashtbl.add ht x true;
+  bfs [State (8, x, 0)];
+  print_float (Sys.time () -. a)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="ocaml19.html">PrevPage</a> | <a href="ocaml.html">OCaml</a> | <a href="ocaml21.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

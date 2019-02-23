@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 SQLite 超入門</title>
+  <meta name="description" content="SQLite,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881816</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 SQLite 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="sqlite.html">SQLite</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>Perl DE SQLite</h3>
+<p> SQLite は Perl, Python, Ruby などのスクリプト言語からでも簡単に利用することができます。本稿では Perl から SQLite にアクセスする基本的な方法について簡単に説明します。
+</p>
+<h4>●インストール</h4>
+<p> Perl から SQLite にアクセスする場合、モジュール DBI (DataBase Interface) を利用するのが一番簡単です。DBI にはデータベースを操作するための共通なインターフェースが定義されていて、実際には各種の DBD (DataBase Driver) を呼び出すことになります。SQLite であれば、モジュール DBD::SQLite になります。
+</p>
+<p> DBI や DBD::SQLite がインストールされていない場合、Ubuntu 系の OS では次のコマンドで簡単にインストールすることができます。
+</p>
+<pre class="item">
+$ sudo apt-get install libdbd-sqlite3-perl
+</pre>
+<p> これで SQLite にアクセスするための必要なファイルがインストールされます。
+</p>
+<h4>●接続と切断</h4>
+<p> Perl で SQLite を使用する場合、最初に use DBI; でモジュール DBI をロードしてください。データベースの接続はメソッド connect を、切断は disconnect を使います。次の例を見てください。
+</p>
+<pre class="list">
+リスト : データベースの接続と切断 (test01.pl)
+
+use strict;
+use warnings;
+use DBI;
+
+# 接続
+my $dbh = DBI-&gt;connect("dbi:SQLite:dbname=sample_perl.sqlite");
+
+# 切断
+$dbh-&gt;disconnect;
+</pre>
+<p> connect の引数には dbi:SQLite:dbname=データベース名 を指定します。データベース名と一致するファイルが見つからない場合、新しいファイルが生成されます。同名のファイルがある場合はそれをデータベースとして使用します。connect の返り値 (データベースハンドル) はデータベースの操作に必要なので、変数 $dbh に格納しておきます。切断はメソッド disconnect を呼び出すだけです。
+</p>
+<h4>●テーブルの作成</h4>
+<p> DBI で SQL 文を実行するには 2 つの方法があります。一つはメソッド do を使う方法です。do は引数に渡された文字列を SQL 文として実行します。ただし、同じようなクエリ (問い合わせ) を何度も繰り返すと、RDBMS では同じような解析処理を繰り返すというオーバーヘッドが発生します。メソッド prepare を使うと、このようなオーバーヘッドを避けることができます。
+</p>
+<p> prepare はパラメータ情報を含んだ SQL 文をプリコンパイルしておきます。prepare の返り値をステートメントハンドルと呼びます。パラメータは ? で表します。これを「プレースホルダー」といいます。SQL 文の実行はメソッド execute で行います。このとき、パラメータに対応する値を引数として渡します。このような値を「バインド値」と呼びます。
+</p>
+<p> それでは簡単な例題として、次に示すテーブルを作成してみましょう。
+</p>
+<table border=1>
+<caption>テーブル名 : person</caption>
+<thead>
+  <tr><th>id</th><th>name</th><th>age</th><th>sex</th><th>email</th></tr>
+</thead>
+<tbody>
+  <tr><td>1</td><td>Foo</td><td>50</td><td>male</td><td>foo@yahoo.co.jp</td></tr>
+  <tr><td>2</td><td>Bar</td><td>35</td><td>female</td><td>bar@yahoo.co.jp</td></tr>
+  <tr><td>3</td><td>Baz</td><td>40</td><td>male</td><td>baz@yahoo.co.jp</td></tr>
+  <tr><td>4</td><td>Oops</td><td>30</td><td>female</td><td>oops@yahoo.co.jp</td></tr>
+</tbody>
+</table>
+<pre class="list">
+リスト : テーブルの作成 (test02.pl)
+
+use strict;
+use warnings;
+use DBI;
+
+# 接続
+my $dbh = DBI->connect("dbi:SQLite:dbname=sample_perl.sqlite");
+
+# テーブルの作成
+$dbh->do("create table person (id integer, name text, age integer, sex text, email text);");
+
+# データの挿入
+my $sth = $dbh->prepare("insert into person (id, name, age, sex, email) values (?, ?, ?, ?, ?)");
+$sth->execute(1, 'Foo', 50, 'male', 'foo@yahoo.co.jp');
+$sth->execute(2, 'Bar', 35, 'female', 'bar@yahoo.co.jp');
+$sth->execute(3, 'Baz', 40, 'male', 'baz@yahoo.co.jp');
+$sth->execute(4, 'Oops', 30, 'female', 'oops@yahoo.co.jp');
+
+$sth-&gt;finish;
+
+#切断
+$dbh->disconnect;
+</pre>
+<p> execute の引数は SQLite に渡されるとき文字列になるので、カラムには適切なデータ型を指定してください。ステートメントハンドル $sth の使用が終了したらメソッド finish で $sth を廃棄します。
+</p>
+<p> また、次のようにヒアドキュメントを使うと、do でも簡単にデータを挿入することができます。
+</p>
+<pre class="list">
+リスト : テーブルの作成 (test021.pl)
+
+use strict;
+use warnings;
+use DBI;
+
+# 接続
+my $dbh = DBI-&gt;connect("dbi:SQLite:dbname=sample_perl.sqlite");
+
+# テーブルの作成
+$dbh->do("create table person (id integer, name text, age integer, sex text, email text);");
+
+# データの挿入 (ヒアドキュメント)
+my $str = &lt;&lt; 'SQL';
+insert into person (id, name, age, sex, email) values
+(1, 'Foo', 50, 'male', 'foo@yahoo.co.jp'),
+(2, 'Bar', 35, 'female', 'bar@yahoo.co.jp'),
+(3, 'Baz', 40, 'male', 'baz@yahoo.co.jp'),
+(4, 'Oops', 30, 'female', 'oops@yahoo.co.jp');
+SQL
+
+$dbh-&gt;do($str);
+
+#切断
+$dbh-&gt;disconnect;
+</pre>
+
+<h4>●データの抽出</h4>
+<p> select 文のように結果を返す SQL 文は、メソッド prepare と execute を使って SQL 文を実行します。そのあと、メソッド fetch で 1 行ずつ結果を取得します。
+</p>
+<pre class="list">
+リスト : データの抽出 (test03.pl)
+
+use strict;
+use warnings;
+use DBI;
+
+# 接続
+my $dbh = DBI-&gt;connect("dbi:SQLite:dbname=sample_perl.sqlite");
+
+# データの取得
+my $sth = $dbh-&gt;prepare("select * from person");
+$sth-&gt;execute;
+
+while (my $row = $sth-&gt;fetch) {
+    print "@$row\n";
+}
+
+$sth-&gt;finish;
+
+#切断
+$dbh-&gt;disconnect;
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ perl test03.pl
+1 Foo 50 male foo@yahoo.co.jp
+2 Bar 35 female Bar@yahoo.co.jp
+3 Baz 40 male baz@yahoo.co.jp
+4 Oops 30 female oops@yahoo.co.jp
+</pre>
+<p> fetch は配列へのリファレンスを返します。この場合、0 番目にカラム id, 1 番目に name, 2 番目に age, 3 番目に sex, 4 番目に email の値が格納されます。アクセスが終了したらメソッド finish で $sth を廃棄します。
+</p>
+
+<p> カラム名でアクセスしたい場合は、連想配列へのリファレンスを返すメソッド fetchrow_hashref を使ってください。
+</p>
+<pre class="list">
+リスト : データの抽出 (test04.pl)
+
+use strict;
+use warnings;
+use DBI;
+
+# 接続
+my $dbh = DBI-&gt;connect("dbi:SQLite:dbname=sample_perl.sqlite");
+
+# データの取得
+my $sth = $dbh-&gt;prepare("select * from person");
+$sth-&gt;execute;
+
+while (my $row = $sth-&gt;fetchrow_hashref) {
+    print "$row-&gt;{'name'} $row-&gt;{'email'}\n";
+}
+
+$sth-&gt;finish;
+
+#切断
+$dbh-&gt;disconnect;
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ perl test04.pl
+Foo foo@yahoo.co.jp
+Bar Bar@yahoo.co.jp
+Baz baz@yahoo.co.jp
+Oops oops@yahoo.co.jp
+</pre>
+<h4>●トランザクションと AutoCommit</h4>
+<p> 「トランザクション (transaction)」は処理とか取引という意味ですが、SQL では「関連した複数の処理を一つの処理にまとめたもの」をトランザクションといいます。SQL 文では、BEGIN でトランザクションを開始します。この場合、データベースの変更を伴う行う作業 (insert, update など) では、そのつどデータベースに変更が反映されるのではありません。トランザクションを終了して実際にデータベースの変更を行う SQL 文が COMMIT (コミット) です。
+</p>
+<p> Perl で SQLite を操作する場合、オートコミット (AutoCommit) モードが設定されていると、トランザクションやコミットを明示的に指定しなくても、データベースを操作することができます。insert や update などの SQL 文を実行するとき、SQLite は暗黙のうちにトランザクションを開始します。さらに、オートコミットモードが有効だと、SQL 文が終了したとき、SQLite は自動的にコミットしてくれます。
+</p>
+<p> これはとても便利な機能なのですが、コミットはけっこう時間がかかる処理なので、オートコミットモードでたくさんのデータをいっきに挿入しようとすると、時間がとてもかかるのです。次の例を見てください。
+</p>
+
+<pre class="list">
+リスト : オートコミットモードでの挿入 (test05.pl)
+
+use strict;
+use warnings;
+use DBI;
+
+# 接続
+my $dbh = DBI-&gt;connect('dbi:SQLite:dbname=test_perl.sqlite');
+
+# テーブル作成
+$dbh-&gt;do('create table test (name text, val real);');
+$dbh-&gt;do('create index name_idx on test(name);');
+my $sth = $dbh-&gt;prepare('insert into test (name, val) values (?, ?);');
+
+# データ挿入
+my $s = 'test00001';
+for (my $i = 0; $i &lt; 10000; $i++, $s++) {
+    $sth-&gt;execute($s, rand());
+}
+$sth-&gt;finish;
+
+# 切断
+$dbh-&gt;disconnect;
+print "OK\n";
+</pre>
+<p> test_perl.sqlite に TEXT と REAL を 10000 件挿入します。実行時間は次のようになりました。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ time perl test05.pl
+OK
+
+real	1m18.976s
+user	0m0.996s
+sys	0m6.336s
+
+実行環境 : Lubuntu 16.04 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> 10000 件のデータを挿入するのに約 1 分 19 秒もかかりました。オートコミットモードをオフにすると、もっと高速にデータを挿入することができます。
+</p>
+<pre class="list">
+リスト : オートコミットモードをオフにする (test06.pl)
+
+use strict;
+use warnings;
+use DBI;
+
+# 接続
+my $dbh = DBI-&gt;connect('dbi:SQLite:dbname=test_perl.sqlite', "", "", {AutoCommit =&gt; 0});
+
+# テーブル作成
+$dbh-&gt;do('create table test (name text, val real);');
+$dbh-&gt;do('create index name_idx on test(name);');
+my $sth = $dbh-&gt;prepare('insert into test (name, val) values (?, ?);');
+
+# データ挿入
+my $s = 'test00001';
+for (my $i = 0; $i &lt; 10000; $i++, $s++) {
+    $sth-&gt;execute($s, rand());
+}
+$dbh-&gt;commit;
+$sth-&gt;finish;
+
+# 切断
+$dbh-&gt;disconnect;
+print "OK\n";
+</pre>
+<p> データベースの設定を変更する場合、メソッド connect の第 4 引数にハッシュを渡します。{AutoCommit =&gt; 0} を渡すと、オートコミットモードをオフにすることができます。コミットする場合はメソッド commit を呼び出すだけです。実行結果は次のようになりました。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ time perl test06.pl
+OK
+
+real	0m0.167s
+user	0m0.132s
+sys	0m0.008s
+
+実行環境 : Lubuntu 16.04 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> 10000 件のデータを 1 秒もかからずに挿入することができました。
+</p>
+<h4>●メモリ上にデータベースを作成する</h4>
+<p> SQLite はデータベース名に :memory: を指定すると、メモリ上にデータベースを作成することができます。簡単な例として、拙作のページ お気楽 Perl プログラミング入門 <a href="perl16.html">パズルの解法 (2)</a> の 8 パズルのプログラムで、Perl のハッシュのかわりに SQLite を使ってみましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト: 8 パズルの解法 (幅優先探索)
+
+sub bfs {
+    my ($start, $goal) = @_;
+    my @que = (make_state($start, index($start, '0'), $nil));
+    my $dbh = DBI-&gt;connect('dbi:SQLite:dbname=:memory:', "", "", {AutoCommit => 0});
+    $dbh-&gt;do('create table state (board text);');
+    $dbh-&gt;do('create index state_idx on state(board);');
+    my $set = $dbh-&gt;prepare('insert into state (board) values (?);');
+    my $get = $dbh-&gt;prepare('select board from state where board = ?;');
+    $set-&gt;execute($start);
+    while (@que &gt; 0) {
+        my $st = shift @que;
+        my $s = $st-&gt;{'space'};
+        foreach my $x (@{$adjacent[$s]}) {
+            my $b = $st-&gt;{'board'};
+            my $c = substr($b, $x, 1);
+            $b =~ s/([0$c])(.*)([0$c])/$3$2$1/;     # 0 と交換する
+            my $new_st = make_state($b, $x, $st);
+            if ($b eq $goal) {
+                print_answer($new_st);
+                $set-&gt;finish;
+                $get-&gt;finish;
+                $dbh-&gt;disconnect;
+                return;
+            } else {
+                $get-&gt;execute($b);
+                if (!$get-&gt;fetch) {
+                    $set-&gt;execute($b);
+                    push @que, $new_st;
+                }
+            }
+        }
+    }
+}
+</pre>
+<p> prepare でデータの挿入とチェックを行う SQL 文を生成して、変数 $set と $get にセットします。あとは、ハッシュのかわりに $set-&gt;execute と $get-&gt;execute を呼び出すだけです。実行結果は次のようになりました。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ time perl eight.pl
+867254301
+867204351
+807264351
+087264351
+287064351
+287364051
+287364501
+287364510
+287360514
+280367514
+208367514
+268307514
+268037514
+268537014
+268537104
+268537140
+268530147
+260538147
+206538147
+236508147
+236058147
+236158047
+236158407
+236158470
+236150478
+230156478
+203156478
+023156478
+123056478
+123456078
+123456708
+123456780
+
+real	0m12.422s
+user	0m12.344s
+sys	0m0.040s
+
+実行環境 : Lubuntu 16.04 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> ハッシュを使ったプログラムは約 6.5 秒だったので、約 2 倍くらい遅くなりました。もっと遅くなると予想していたので、この結果にはちょっと驚きました。また、データベースをインメモリではなくファイルに変更したところ、実行時間は次のようになりました。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/sqlite$ time perl eight.pl
+867254301
+867204351
+807264351
+
+・・省略・・
+
+123456078
+123456708
+123456780
+
+real	0m12.886s
+user	0m12.664s
+sys	0m0.164s
+
+実行環境 : Lubuntu 16.04 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> 実行速度はインメモリとほとんど同じでした。SQLite はとても速いですね。この結果には M.Hiroi も大変驚きました。
+</p>
+<h4>●参考文献, URL</h4>
+<ol>
+  <li>Sriram Srinivasan, 『実用Ｐｅｒｌプログラミング』, オライリー・ジャパン, 1998
+  <li><a href="http://perldoc.jp/docs/modules/DBI-1.612/DBI.pod">DBI - Perl 用データベース独立インターフェース</a>, (<a href="http://perldoc.jp/">perldoc.jp</a>)
+  <li><a href="http://www.kent-web.com/perl/sqlite/">データベース入門 - PerlでSQLite</a>, (KENT さん)
+</ol>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+#
+# eight.pl : ８パズルの解法 (SQLite 版)
+#
+#            Copyright (C) 2016 Makoto Hiroi
+#
+use strict;
+use warnings;
+use DBI;
+
+# 連結リストの終端
+our $nil = {};
+
+# 局面
+sub make_state {
+    my ($board, $space, $prev) = @_;
+    {board =&gt; $board, space =&gt; $space, prev =&gt; $prev}
+}
+
+# 隣接リスト
+our @adjacent = (
+    [1, 3],       # 0
+    [0, 4, 2],    # 1
+    [1, 5],       # 2
+    [0, 4, 6],    # 3
+    [1, 3, 5, 7], # 4
+    [2, 4, 8],    # 5
+    [3, 7],       # 6
+    [4, 6, 8],    # 7
+    [5, 7]        # 8
+    );
+
+# 手順の表示
+sub print_answer {
+    my $st = shift;
+    if ($st-&gt;{'prev'} != $nil) {
+        print_answer($st-&gt;{'prev'});
+    }
+    print $st-&gt;{'board'}, "\n";
+}
+
+# 幅優先探索
+sub bfs {
+    my ($start, $goal) = @_;
+    my @que = (make_state($start, index($start, '0'), $nil));
+    my $dbh = DBI-&gt;connect('dbi:SQLite:dbname=:memory:', "", "", {AutoCommit => 0});
+    $dbh-&gt;do('create table state (board text);');
+    $dbh-&gt;do('create index state_idx on state(board);');
+    my $set = $dbh-&gt;prepare('insert into state (board) values (?);');
+    my $get = $dbh-&gt;prepare('select board from state where board = ?;');
+    $set-&gt;execute($start);
+    while (@que &gt; 0) {
+        my $st = shift @que;
+        my $s = $st-&gt;{'space'};
+        foreach my $x (@{$adjacent[$s]}) {
+            my $b = $st-&gt;{'board'};
+            my $c = substr($b, $x, 1);
+            $b =~ s/([0$c])(.*)([0$c])/$3$2$1/;     # 0 と交換する
+            my $new_st = make_state($b, $x, $st);
+            if ($b eq $goal) {
+                print_answer($new_st);
+                $set-&gt;finish;
+                $get-&gt;finish;
+                $dbh-&gt;disconnect;
+                return;
+            } else {
+                $get-&gt;execute($b);
+                if (!$get-&gt;fetch) {
+                    $set-&gt;execute($b);
+                    push @que, $new_st;
+                }
+            }
+        }
+    }
+}
+
+# 実行
+bfs("867254301", "123456780");
+</pre>
+</section>
+<hr>
+<div align="center">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="sqlite.html">SQLite</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

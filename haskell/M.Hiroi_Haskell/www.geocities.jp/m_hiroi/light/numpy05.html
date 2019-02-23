@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 NumPy プログラミング超入門 </title>
+  <meta name="description" content="Python,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881763</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Python3 Programming</h1>
+<h2>お気楽 NumPy プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="python3.html#numpy_abc">Python3</a> ]
+<hr>
+</div>
+<section class="contents">
+<h4 id="chap23">●N 色ライツアウトの解法</h4>
+<p> 次は N 色ライツアウトの解法プログラムを作りましょう。N が素数のとき、その剰余は有限体になるので、とりあえず N は素数に限定します。なお、それ以外の数でも工夫次第で解くことができるようです。興味のある方は下記 URL をお読みくださいませ。有益な情報を公開されている高橋謙一郎さんと deepgreen さんに深く感謝いたします。
+</p>
+<ul>
+  <li><a href="http://www.ic-net.or.jp/home/takaken/nt/light/light3.html">ライツアウト(３カラーパズル)の計算解法</a>, (高橋謙一郎さん)</li>
+  <li><a href="http://deepgreen.game.coocan.jp/old/shortnotes/lightsout/index.htm">ライツアウト ＆ ８めくりパズル</a>, (deepgreen さん)</li>
+</ul>
+<p> GF(N) の場合、足し算や掛け算は簡単です。計算結果に mod N を適用するだけです。ちょっと面倒なのが引き算と割り算です。これらの演算は足し算と掛け算に直して行うことにします。x の負数 (加法の逆元) は N - x で簡単に求めることができます。逆数 (乗法の逆元) は「拡張ユークリッドの互除法」や「フェルマーの小定理」を使うと簡単です。今回は拡張ユークリッドの互除法を使うことにしましょう。詳しい説明は拙作のページ <a href="../memo.html#180616">Memorundom 2018 年 6 月 16 日 不定方程式と拡張ユークリッドの互除法</a> をお読みください。
+</p>
+<h4>●逆数表の作成</h4>
+<p> それではプログラムを作りましょう。最初に逆数をリストに格納して返す関数 make_inv() を作ります。
+</p>
+<pre class="list">
+リスト : 逆数表の作成
+
+# 拡張ユークリッドの互除法
+def ext_euclid(a, b):
+    xs = a, 1, 0
+    ys = b, 0, 1
+    while ys[0] != 0:
+        q, z = divmod(xs[0], ys[0])
+        xs, ys = ys, (z, xs[1] - q * ys[1], xs[2] - q * ys[2])
+    return xs
+
+# 逆数表の生成
+def make_inv(n):
+    inv = [0] * n
+    for i in range(1, n):
+        g, x, _ = ext_euclid(i, n)
+        if g != 1: raise Exception("色数は素数にしてください")
+        inv[i] = (x + n) % n
+    return inv
+</pre>
+<p> 関数 ext_euclid() は拡張ユークリッドの互除法で a * x + b * y = gcd(a, b) を満たす (x, y) の組を求めます。返り値は gcd(a, b), x, y です。make_inv(n) の引数は色の個数で、1 から n - 1 までの逆数をリストに格納して返します。n が素数ではない場合、ext_euclid() の返り値 g が 1 にならない数があります。この数には逆数がないのでエラーを送出します。逆数は x にセットされますが、負数が返ってくる場合があるので、(x + n) % n を計算して inv[i] にセットします。
+</p>
+<h4>●枢軸の選択</h4>
+<p> 次は枢軸を選択する関数 select_pivot() を作ります。
+</p>
+<pre class="list">
+リスト : 枢軸の選択
+
+def select_pivot(xs, i):
+    # 0 以外のものと交換する
+    for j in range(i, len(xs)):
+        if xs[j, i] != 0:
+            if j != i:
+                temp = xs[i].copy()
+                xs[i] = xs[j]
+                xs[j] = temp
+            break
+</pre>
+<p> 今回は整数の演算なので、最大値を選択する必要はありません。zs[j, i] が 0 ではない行 j と行 i を交換するだけです。
+</p>
+<h4>●解法プログラムの作成</h4>
+<p> 最後に、ガウスの消去法で解を求める関数 nlo() を作ります。
+</p>
+<pre class="list">
+リスト : N 色ライツアウトの解法 (N は素数)
+
+def nlo(ys, c):
+    inv = make_inv(c)               # 逆数表
+    zs = make_matrix((c - ys) % c)  # 負数は c - x
+    n = len(zs)
+    m = n
+    # 前進消去
+    for i in range(n):
+        select_pivot(zs, i)
+        if zs[i, i] == 0:
+            if np.all(zs[i:, i:] == 0):
+                # 複数の解がある
+                m = i
+                break
+            return    # 解無し
+        for j in range(i + 1, n):
+            if zs[j, i] != 0:
+                temp = zs[j, i] * inv[zs[i, i]]
+                zs[j, i:] += c - ((temp * zs[i, i:]) % c)
+                zs[j, i:] %= c
+                if zs[j, i] != 0: raise Exception("係数を 0 にできないよ")
+
+    temp = zs[:, n].copy()
+    for j in range(0, c ** (n - m)):
+        zs[m:, n] = num_conv(j, n - m, c)
+        # 後退代入
+        for i in range(m - 1, -1, -1):
+            zs[i, n] += c - (zs[i, i+1:n] @ zs[i+1:, n] % c)
+            zs[i, n] *= inv[zs[i, i]]
+            zs[i, n] %= c
+        yield zs[:, n].reshape(ys.shape)
+        zs[:, n] = temp
+</pre>
+<p> 引数 ys が盤面の状態、c が色数を表します。最初に make_inv() で逆数表を求めて、それを変数 inv にセットします。make_matrix() で拡大係数行列を生成するとき、引数 ys の負数を渡すことと、拡大係数行列の要素の型は np.uint32 にすることに注意してください。
+</p>
+<p> 前進消去の計算で、浮動小数点数の場合は temp = zs[j, i] / zs[i, i] としましたが、GF(C) の世界では temp = zs[j, i] * inv[zs[i, i]] とします。zs[j, i:] から引き算する処理も、(temp * zs[i, i:]) % c の負数を求めて、それを加算する処理になります。加算と乗算のあとは剰余を計算することをお忘れなく。
+</p>
+<p> 変数 m は階数を表します。m &lt; n の場合、c ** (n - m) 個の解があります。for ループですべての解を出力します。関数 num_conv() は整数 j を n - m 桁の c 進数に変換し、その結果をリストに格納して返します。その値を zs[m:, n] にセットしてから後退代入の処理を行います。ここでも、引き算を足し算に、割り算を掛け算に直して計算しています。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="numpy05.html#list_nlo">プログラムリスト１</a> をお読みください。
+</p>
+<h4>●実行結果</h4>
+<p> 簡単なテストと実行結果を示します。ご参考までに、行の基本変形後の拡大係数行列を表示しています。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+for x in [2, 3, 5]:
+    print("-----", x, "-----")
+    for xs in nlo(np.full(5 * 5, x - 1, dtype=np.uint32).reshape((5 ,5)), x):
+        print(xs, xs.sum())
+</pre>
+<pre>
+----- 2 -----
+[[1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 1 1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 1 0 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 1 1 1 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 1 0 1 1 1 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 1 1 0 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 1 1 1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 0 1 0 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 1 1 0 1 1 0 1 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 0 0 0 1 0 1 0 1 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 1 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 1 1 0 0 0 1 0 0 0 0 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 1 1 0 0 1 1 0 0 0 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 1 1 0 1 0 1 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 1 0 1 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 1 1 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 1 0 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 0 1 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]]
+[[0 1 1 0 1]
+ [0 1 1 1 0]
+ [0 0 1 1 1]
+ [1 1 0 1 1]
+ [1 1 0 0 0]] 15
+[[0 0 0 1 1]
+ [1 1 0 1 1]
+ [1 1 1 0 0]
+ [0 1 1 1 0]
+ [1 0 1 1 0]] 15
+[[1 1 0 0 0]
+ [1 1 0 1 1]
+ [0 0 1 1 1]
+ [0 1 1 1 0]
+ [0 1 1 0 1]] 15
+[[1 0 1 1 0]
+ [0 1 1 1 0]
+ [1 1 1 0 0]
+ [1 1 0 1 1]
+ [0 0 0 1 1]] 15
+----- 3 -----
+[[1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 1 1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 1 0 0 2 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 1 1 1 2 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 2 0 1 1 2 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 2 1 0 2 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 1 1 0 1 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 1 2 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 0 1 1 2 2 2 0 0 1 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 0 0 1 1 1 2 0 0 1 1 0 0 0 0 0 0 0 0 2]
+ [0 0 0 0 0 0 0 0 0 0 1 2 1 1 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 1 1 2 1 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 2 1 1 1 2 1 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 0 1 1 0 0 0 0 0 0 2]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 1 0 0 2 0 1 0 0 0 0 2]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 1 0 2 1 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 2 2 0 0 1 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 1 0 0 2]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 1 1 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 1 0 2 1 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 0 1 0 2 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 0 2 0 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]]
+[[2 0 1 2 1]
+ [2 1 1 0 1]
+ [2 0 1 0 2]
+ [0 0 2 1 1]
+ [2 2 0 0 0]] 24
+[[0 1 0 1 2]
+ [0 0 2 1 1]
+ [1 1 1 2 0]
+ [2 1 1 0 1]
+ [0 2 1 0 0]] 21
+
+・・・ 省略 ・・・
+
+[[2 0 0 2 0]
+ [2 2 2 2 2]
+ [1 1 1 2 0]
+ [0 2 1 2 0]
+ [1 0 1 2 2]] 30
+[[0 1 2 1 1]
+ [0 1 0 0 2]
+ [0 2 1 1 1]
+ [2 0 0 1 0]
+ [2 0 2 2 2]] 24
+----- 5 -----
+[[1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 1 1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 1 0 0 4 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 1 1 1 4 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 4 0 1 1 4 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 4 1 0 4 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 3 1 4 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 4 2 4 3 3 1 0 0 0 0 0 0 0 0 0 0 0 0 4]
+ [0 0 0 0 0 0 0 0 4 0 2 3 2 1 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 1 2 4 2 2 0 1 0 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 0 0 0 1 0 4 0 1 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 2 4 3 1 0 1 0 0 0 0 0 0 0 0 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 4 4 4 1 3 1 0 0 0 0 0 0 0 4]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 1 1 4 3 4 1 0 0 0 0 0 0 3]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 1 2 0 1 0 1 0 0 0 0 3]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 1 0 4 1 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 2 0 3 1 1 0 0 0 4]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 2 3 1 1 1 0 0 2]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 4 0 1 1 1 0 2]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 2 2 3 0 0 4]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 4 0 1 1 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 4 0 4 0 3]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 3 3 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]]
+[[3 2 0 0 0]
+ [1 1 4 1 1]
+ [1 3 0 0 4]
+ [1 1 4 1 1]
+ [3 2 0 0 0]] 34
+[[3 1 1 1 3]
+ [2 1 3 1 2]
+ [0 4 0 4 0]
+ [0 1 0 1 0]
+ [0 1 4 1 0]] 34
+
+・・・ 省略 ・・・
+
+[[4 4 2 3 0]
+ [3 1 2 1 3]
+ [3 1 0 2 2]
+ [4 1 1 1 4]
+ [3 4 3 3 4]] 59
+[[4 3 3 4 3]
+ [4 1 1 1 4]
+ [2 2 0 1 3]
+ [3 1 2 1 3]
+ [0 3 2 4 4]] 59
+</pre>
+<p> 5 * 5 盤で連立方程式が解ける場合、3 色では 27 通り、5 色では 25 通りの解が表示されました。行の基本変形後の係数行列の自由度 (行数 - 階数) を n, 色数を c とすると、解の総数は c<sup>n</sup> 通りになります。自由度を調べたところ、次のようになりました。
+</p>
+<pre class="fig">
+         表 : 自由度
+
+       |  2  3  5  7 11 13 17 19
+-------+-------------------------
+(3, 3) |  0  0  0  1  0  0  0  0
+(4, 4) |  4  2  2  2  2  2  2  2
+(5, 5) |  2  3  2  2  3  2  2  2
+(6, 6) |  0  0  0  0  0  3  0  0
+(7, 7) |  0  0  0  1  0  0  3  0
+(8, 8) |  0  4  0  0  0  0  2  1
+(9, 9) |  8  2  2  2  2  2  2  4
+</pre>
+<p> 自由度 0 はどんな点灯パターンでも解けることを意味します。たとえば、3 * 3 盤は 7 色以外の自由度は 0 なので、ボタンが全部同じ色のパターンは解くことができます。ところが 7 色の場合、ボタンが全部同じ色のパターンは解くことができません。次に示す点灯パターンは解くことができて、7 通りの解が表示されます。
+</p>
+<pre>
+&gt;&gt;&gt; for xs in nlo(np.array([[6, 6, 6], [6, 6, 6], [6, 0, 0]]), 7): print(xs, xs.sum())
+...
+[[0 0 1]
+ [1 0 0]
+ [0 0 0]] 2
+[[1 3 2]
+ [4 2 3]
+ [1 3 1]] 20
+[[2 6 3]
+ [0 4 6]
+ [2 6 2]] 31
+[[3 2 4]
+ [3 6 2]
+ [3 2 3]] 28
+[[4 5 5]
+ [6 1 5]
+ [4 5 4]] 39
+[[5 1 6]
+ [2 3 1]
+ [5 1 5]] 29
+[[6 4 0]
+ [5 5 4]
+ [6 4 6]] 40
+</pre>
+<p> 盤面を大きくしたり色数を増やすと、ボタンを押す回数がとても多くなります。ゲームとして遊ぶには、5 * 5 盤の 2, 3, 5 色程度が手ごろなのかもしれませんね。
+</p>
+<h4>●N が素数以外の場合</h4>
+<p> N が素数ではない場合の対処方法は、高橋謙一郎さんと deepgreen さんが考案されていますが、今回は deepgreen さんの方法を使わせてもらうことにします。基本的な考え方はとてもシンプルです。係数行列 zs の対角成分 zs[i, i] において、その値の逆数が存在しないとき、逆数が存在する行 j と交換する、という方法です。つまり、割り算できる値を選択するわけです。ただし、この方法ですべて上手くいくわけではなく、対角成分に逆数が存在しない値が残る場合があります。簡単な例を示しましょう。
+</p>
+<pre class="fig">
+----- 4 -----
+[[1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 1 1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 1 0 0 3 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+
+        ・・・ 省略 ・・・
+
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 2 3 3 2]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 1 0 1]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 3 3]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]]
+----- 6 -----
+[[1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 1 1 1 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+ [0 0 1 0 0 5 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]
+
+        ・・・ 省略 ・・・
+
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 5 3 1 0 2]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 5 3 2 3]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 3 3]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 3 3]
+ [0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 3 3 3]]
+</pre>
+<p> 5 * 5 盤 4 色の係数行列は今までと同様に変形できましたが、6 色の係数行列は対角成分に 3 が残ってしまいます。これらの方程式は解の条件を示しています。右辺値を d1, d2, d3  とすると、3 * (x23 + x24 + x25) = d<sub>i</sub> (mod 6, i = 1, 2, 3) を満たす x23, x24, x25 を求めればいいわけです。
+</p>
+<p> これらの方程式を解く賢い方法があるのかもしれませんが、今回は単純な力任せで探索することにします。具体的には、[0, 0, 0] から [5, 5, 5] までのベクタ (6<sup>3</sup> = 216 通り) を生成します。あとは、左辺式を計算して、その値が右辺値と等しいことをチェックするだけです。
+</p>
+<h4>●逆数表とピボット選択の修正</h4>
+<p> それではプログラムを作りましょう。まずは枢軸を選択する関数 select_pivot() を修正します。
+</p>
+<pre class="list">
+リスト : 逆数表とピボット選択
+
+# 逆数表の生成
+def make_inv(n):
+    inv = [0] * n
+    for x in range(1, n):
+        g, y, _ = ext_euclid(x, n)
+        if g == 1:
+            inv[x] = (y + n) % n
+    return inv
+
+# ピボット選択
+def select_pivot(xs, i, inv):
+    # 逆数があるものと交換する
+    for j in range(i, len(xs)):
+        if inv[xs[j, i]] != 0:
+            if j != i:
+                temp = xs[i].copy()
+                xs[i] = xs[j]
+                xs[j] = temp
+            break
+</pre>
+<p> make_inv() では、g が 1 のときだけ逆数をセットします。逆数表が 0 の場合、その数の逆数は存在しません。select_pivot() の引数 inv に逆数表を渡します。inv[xs[j, i]] が 0 でなければ逆数が存在するので行 i と j を交換します。
+</p>
+<h4>●解法プログラムの修正</h4>
+<p> 最後に、解を求める関数 nlo() を修正します。
+</p>
+<pre class="list">
+リスト : N 色ライツアウトの解法
+
+def nlo(ys, c):
+    inv = make_inv(c)               # 逆数表
+    zs = make_matrix((c - ys) % c)  # 負数は c - x
+    n = len(zs)
+    m = n
+    check = False
+    # 前進消去
+    for i in range(n):
+        select_pivot(zs, i, inv)
+        if inv[zs[i, i]] == 0:
+            if np.all(zs[i:, i:n] == 0):
+                if np.any(zs[i:, n] &gt; 0): return # 解なし
+            else:
+                check = True
+            m = i
+            break
+        for j in range(i + 1, n):
+            if zs[j, i] != 0:
+                temp = zs[j, i] * inv[zs[i, i]]
+                zs[j, i:] += c - (temp * zs[i, i:] % c)
+                zs[j, i:] %= c
+                if zs[j, i]: raise Exception("係数が 0 になりません")
+
+    temp = zs[:, n].copy()
+    for j in range(0, c ** (n - m)):
+        vs = num_conv(j, n - m, c)
+        if check and not np.all((zs[m:, m:n] @ vs % c) == zs[m:, n]): continue
+        zs[m:, n] = vs
+        # 後退代入
+        for i in range(m - 1, -1, -1):
+            zs[i, n] += c - (zs[i, i+1:n] @ zs[i+1:, n] % c)
+            zs[i, n] *= inv[zs[i, i]]
+            zs[i, n] %= c
+        yield zs[:, n].reshape(ys.shape)
+        zs[:, n] = temp
+</pre>
+<p> select_pivot() で行を選択したあと inv[zs[i, i]] をチェックし、値が 0 ならば前進消去を終了します。係数行列 zs[i:, i:n] の要素が全部 0 ならば、今までと同じパターンです。右辺値 zs[i:, n] をチェックして 0 以外の値がある場合、連立方程式に解はありません。return で None を返します。zs[i:, i:n] の要素に 0 以外の値がある場合、残っている方程式を満たす解を探索します。変数 check を True にセットして for ループを脱出します。なお、変数 check は False に初期化しておきます。
+</p>
+<p> 後退代入では、num_conv() でベクトル vs を生成するところは同じです。check が True ならば、左辺式を計算して右辺値と等しいかチェックします。左辺式の計算は簡単で、zs[m:, m:n] と vs の内積を計算し、その値の剰余を求めるだけです。この値が右辺値 zs[m: n] と等しければ条件を満たしています。そうでなければ continue でループの先頭に戻り、次の値を試します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="numpy05.html#list_nlo1">プログラムリスト２</a> をお読みくださいませ。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実際に試してみましょう。5 * 5 盤で全点灯パターンの最小手数を求めます。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+for n in range(2, 10):
+    print("-----", n, "-----")
+    m = n * 25
+    ys = None
+    cnt = 0
+    for xs in nlo(np.full(5 * 5, n - 1, dtype=np.uint32).reshape((5, 5)), n):
+        if xs.sum() &lt; m:
+            m = xs.sum()
+            ys = xs.copy()
+        cnt += 1
+    print(ys, m, cnt)
+</pre>
+<p> 最小手数だけではなく、解の総数も表示します。結果は次のようになりました。
+</p>
+<pre>
+----- 2 -----
+[[0 1 1 0 1]
+ [0 1 1 1 0]
+ [0 0 1 1 1]
+ [1 1 0 1 1]
+ [1 1 0 0 0]] 15 4
+----- 3 -----
+[[0 1 0 1 2]
+ [0 0 2 1 1]
+ [1 1 1 2 0]
+ [2 1 1 0 1]
+ [0 2 1 0 0]] 21 27
+----- 4 -----
+[[0 1 1 0 1]
+ [0 3 3 3 0]
+ [2 2 3 3 1]
+ [1 3 2 3 1]
+ [3 1 2 0 0]] 39 16
+----- 5 -----
+[[3 2 0 0 0]
+ [1 1 4 1 1]
+ [1 3 0 0 4]
+ [1 1 4 1 1]
+ [3 2 0 0 0]] 34 25
+----- 6 -----
+[[0 4 0 1 5]
+ [3 3 2 1 1]
+ [1 1 1 2 0]
+ [2 1 1 3 4]
+ [3 2 1 3 0]] 45 108
+----- 7 -----
+[[1 0 5 0 1]
+ [0 2 3 2 0]
+ [5 3 3 3 5]
+ [0 2 3 2 0]
+ [1 0 5 0 1]] 47 49
+----- 8 -----
+[[0 5 1 0 5]
+ [4 3 3 3 4]
+ [2 2 7 7 5]
+ [1 3 6 3 1]
+ [3 5 6 0 0]] 79 64
+----- 9 -----
+[[1 5 5 3 0]
+ [4 8 6 2 7]
+ [6 5 7 1 1]
+ [4 2 0 8 1]
+ [7 8 2 0 0]] 93 243
+</pre>
+<p> ところで、N 色ライツアウトで全点灯パターンが必ず解けるわけではありません。実際、3 * 3 盤 7 色, 5 * 5 盤 11 色, 8 * 8 盤 3, 6, 9 色の全点灯パターンは解くことができませんでした。なお、8 * 8 盤 6 色の場合、8 本の方程式が残るので 0 から 6 ** 8 - 1 = 1679615 までの値をチェックすることになります。Python3 ではけっこう時間がかかるので注意してください。やっぱり、単純な力任せの探索では限界がありますね。興味のある方はプログラムを改良してみてください。
+</p>
+<h4>●追記 (2018/06/23)</h4>
+<p> 色数が素数以外のとき、行の交換だけではなく列も交換する「完全ピボット選択」を試してみました。たとえば、8 * 8 盤 6 色の場合、部分ピボット選択では 8 本の方程式が残りますが、完全ピボット選択を行うと、方程式の残数を 4 本まで減らすことができました。
+</p>
+<p> ただし、この方法では効果が得られない場合もあります。たとえば 9 * 9 盤 10 色では部分ピボット選択で 8 本の方程式が残りますが、完全ピボット選択をしても方程式の残数を減らすことはできませんでした。まあ、力任せの探索を行っている以上、盤を大きしたり色数を増やすと実用的な時間では解けないケースが出てくるのは仕方がないと思います。
+</p>
+<p> ご参考までに、<a href="numpy05.html#list_nlo2">プログラムリスト３</a> と実行結果 (全点灯パターンの解の総数) を示します。
+</p>
+<pre class="fig">
+                表 : 全点灯パターンの解の総数
+
+       |  2  3  4  5   6  7   8   9  10  11  12  13  14  15   16  17  18   19   20   21
+-------+--------------------------------------------------------------------------------  
+(3, 3) |  1  1  1  1   1  0   1   1   1   1   1   1   0   1    1   1   1    1    1    0
+(4, 4) | 16  9 64 25 144 49 256  81 400 121 576 169 784 225 1024 289 1296 361 1600  441
+(5, 5) |  4 27 16 25 108 49  64 243 100   0 432 169 196 675  256 289  972 361  400 1323
+(6, 6) |  1  1  1  1   1  1   1   1   1   1   1   0   1   1    1   1   1    1    1    1
+(7, 7) |  1  1  1  1   1  7   1   1   1   1   1   1   7   1    1   0   1    1    1    7
+(8, 8) |  1  0  1  1   0  1   1   0   1   1   0   1   1   0    1 289   0   19    1    0
+</pre>
+<hr>
+<h4 id="list_nlo">●プログラムリスト１</h4>
+<pre class="list">
+#
+# nlo.py : N 色ライツアウトの解法 (N は素数)
+#
+#          Copyright (C) 2018 Makoto Hiroi
+#
+import numpy as np
+
+# 拡張ユークリッドの互除法
+def ext_euclid(a, b):
+    xs = a, 1, 0
+    ys = b, 0, 1
+    while ys[0] != 0:
+        q, z = divmod(xs[0], ys[0])
+        xs, ys = ys, (z, xs[1] - q * ys[1], xs[2] - q * ys[2])
+    return xs
+
+# 逆数表の生成
+def make_inv(n):
+    inv = [0] * n
+    for i in range(1, n):
+        g, x, _ = ext_euclid(i, n)
+        if g != 1: raise Exception("色数は素数にしてください")
+        inv[i] = (x + n) % n
+    return inv
+
+# 拡大係数行列の生成
+def make_matrix(ys):
+    n, m = ys.shape
+    k = n * m
+    xs = np.zeros((k, k + 1), dtype=np.uint32)
+    for y in range(n):
+        for x in range(m):
+            z = y * m + x
+            for dy, dx in [(-1, 0), (0, -1), (0, 0), (0, 1), (1, 0)]:
+                y1 = y + dy
+                x1 = x + dx
+                if 0 &lt;= x1 &lt; m and 0 &lt;= y1 &lt; n:
+                    xs[z, y1 * m + x1] = 1
+    xs[:, k] = ys.flatten()
+    return xs
+
+# ピボット選択
+def select_pivot(xs, i):
+    # 0 以外のものと交換する
+    for j in range(i, len(xs)):
+        if xs[j, i] != 0:
+            if j != i:
+                temp = xs[i].copy()
+                xs[i] = xs[j]
+                xs[j] = temp
+            break
+
+# 数値 m を n 桁 c 進数に変換
+def num_conv(m, n, c):
+    buff = [0] * n
+    i = 0
+    while m &gt; 0:
+        buff[i] = m % c
+        m //= c
+        i += 1
+    return buff
+        
+# c は色数
+def nlo(ys, c):
+    inv = make_inv(c)               # 逆数表
+    zs = make_matrix((c - ys) % c)  # 負数は c - x
+    n = len(zs)
+    m = n
+    # 前進消去
+    for i in range(n):
+        select_pivot(zs, i)
+        if zs[i, i] == 0:
+            if np.all(zs[i:, i:] == 0):
+                # 複数の解がある
+                m = i
+                break
+            return    # 解無し
+        for j in range(i + 1, n):
+            if zs[j, i] != 0:
+                temp = zs[j, i] * inv[zs[i, i]]
+                zs[j, i:] += c - ((temp * zs[i, i:]) % c)
+                zs[j, i:] %= c
+                if zs[j, i] != 0: raise Exception("係数を 0 にできないよ")
+
+    temp = zs[:, n].copy()
+    for j in range(0, c ** (n - m)):
+        zs[m:, n] = num_conv(j, n - m, c)
+        # 後退代入
+        for i in range(m - 1, -1, -1):
+            zs[i, n] += c - (zs[i, i+1:n] @ zs[i+1:, n] % c)
+            zs[i, n] *= inv[zs[i, i]]
+            zs[i, n] %= c
+        yield zs[:, n].reshape(ys.shape)
+        zs[:, n] = temp
+</pre>
+<hr>
+<h4 id="list_nlo1">●プログラムリスト２</h4>
+<pre class="list">
+#
+# nlo1.py : N 色ライツアウトの解法 (N は素数でなくてもよい)
+#
+#           Copyright (C) 2018 Makoto Hiroi
+#
+import numpy as np
+
+# 拡張ユークリッドの互除法
+def ext_euclid(a, b):
+    xs = a, 1, 0
+    ys = b, 0, 1
+    while ys[0] != 0:
+        q, z = divmod(xs[0], ys[0])
+        xs, ys = ys, (z, xs[1] - q * ys[1], xs[2] - q * ys[2])
+    return xs
+
+# 逆数表の生成
+def make_inv(n):
+    inv = [0] * n
+    for x in range(1, n):
+        g, y, _ = ext_euclid(x, n)
+        if g == 1:
+            inv[x] = (y + n) % n
+    return inv
+
+
+# 拡大係数行列の生成
+def make_matrix(ys):
+    n, m = ys.shape
+    k = n * m
+    xs = np.zeros((k, k + 1), dtype=np.uint32)
+    for y in range(n):
+        for x in range(m):
+            z = y * m + x
+            for dy, dx in [(-1, 0), (0, -1), (0, 0), (0, 1), (1, 0)]:
+                y1 = y + dy
+                x1 = x + dx
+                if 0 &lt;= x1 &lt; m and 0 &lt;= y1 &lt; n:
+                    xs[z, y1 * m + x1] = 1
+    xs[:, k] = ys.flatten()
+    return xs
+
+# ガウスの消去法でライツアウトを解く
+# ピボット選択
+def select_pivot(xs, i, inv):
+    # 逆数があるものと交換する
+    for j in range(i, len(xs)):
+        if inv[xs[j, i]] != 0:
+            if j != i:
+                temp = xs[i].copy()
+                xs[i] = xs[j]
+                xs[j] = temp
+            break
+
+# 数値 m を n 桁 c 進数に変換
+def num_conv(m, n, c):
+    buff = np.full(n, 0, dtype=np.uint32)
+    i = 0
+    while m &gt; 0:
+        buff[i] = m % c
+        m //= c
+        i += 1
+    return buff
+
+# c は色数
+def nlo(ys, c):
+    inv = make_inv(c)               # 逆数表
+    zs = make_matrix((c - ys) % c)  # 負数は c - x
+    n = len(zs)
+    m = n
+    check = False
+    # 前進消去
+    for i in range(n):
+        select_pivot(zs, i, inv)
+        if inv[zs[i, i]] == 0:
+            if np.all(zs[i:, i:n] == 0):
+                if np.any(zs[i:, n] &gt; 0): return # 解なし
+            else:
+                check = True
+            m = i
+            break
+        for j in range(i + 1, n):
+            if zs[j, i] != 0:
+                temp = zs[j, i] * inv[zs[i, i]]
+                zs[j, i:] += c - (temp * zs[i, i:] % c)
+                zs[j, i:] %= c
+                if zs[j, i]: raise Exception("係数が 0 になりません")
+
+    temp = zs[:, n].copy()
+    for j in range(0, c ** (n - m)):
+        vs = num_conv(j, n - m, c)
+        if check and not np.all((zs[m:, m:n] @ vs % c) == zs[m:, n]): continue
+        zs[m:, n] = vs
+        # 後退代入
+        for i in range(m - 1, -1, -1):
+            zs[i, n] += c - (zs[i, i+1:n] @ zs[i+1:, n] % c)
+            zs[i, n] *= inv[zs[i, i]]
+            zs[i, n] %= c
+        yield zs[:, n].reshape(ys.shape)
+        zs[:, n] = temp
+</pre>
+<hr>
+<h4 id="list_nlo2">●プログラムリスト３</h4>
+<pre class="list">
+#
+# nlo2.py : N 色ライツアウトの解法 (N は素数でなくてもよい)
+#
+#           Copyright (C) 2018 Makoto Hiroi
+#
+import numpy as np
+
+# 拡張ユークリッドの互除法
+def ext_euclid(a, b):
+    xs = a, 1, 0
+    ys = b, 0, 1
+    while ys[0] != 0:
+        q, z = divmod(xs[0], ys[0])
+        xs, ys = ys, (z, xs[1] - q * ys[1], xs[2] - q * ys[2])
+    return xs
+
+# 逆数表の生成
+def make_inv(n):
+    inv = [0] * n
+    for x in range(1, n):
+        g, y, _ = ext_euclid(x, n)
+        if g == 1:
+            inv[x] = (y + n) % n
+    return inv
+
+
+# 拡大係数行列の生成
+def make_matrix(ys):
+    n, m = ys.shape
+    k = n * m
+    xs = np.zeros((k, k + 1), dtype=np.uint32)
+    for y in range(n):
+        for x in range(m):
+            z = y * m + x
+            for dy, dx in [(-1, 0), (0, -1), (0, 0), (0, 1), (1, 0)]:
+                y1 = y + dy
+                x1 = x + dx
+                if 0 &lt;= x1 &lt; m and 0 &lt;= y1 &lt; n:
+                    xs[z, y1 * m + x1] = 1
+    xs[:, k] = ys.flatten()
+    return xs
+
+# ガウスの消去法でライツアウトを解く
+# 完全ピボット選択
+def select_pivot(xs, i, inv, cols):
+    # 逆数があるものと交換する
+    for k in range(i, len(xs)):
+        for j in range(i, len(xs)):
+            if inv[xs[j, k]] != 0:
+                if j != i:
+                    # 行の交換
+                    temp = xs[i].copy()
+                    xs[i] = xs[j]
+                    xs[j] = temp
+                if k != i:
+                    # 列の交換
+                    temp = xs[:, i].copy()
+                    xs[:, i] = xs[:, k]
+                    xs[:, k] = temp
+                    cols[i], cols[k] = cols[k], cols[i]
+                return
+
+# 数値 m を n 桁 c 進数に変換
+def num_conv(m, n, c):
+    buff = np.full(n, 0, dtype=np.uint32)
+    i = 0
+    while m &gt; 0:
+        buff[i] = m % c
+        m //= c
+        i += 1
+    return buff
+
+
+# c は色数
+def nlo(ys, c):
+    inv = make_inv(c)               # 逆数表
+    zs = make_matrix((c - ys) % c)  # 負数は c - x
+    n = len(zs)
+    m = n
+    check = False
+    cols = list(range(0, n))        # 列交換記憶用
+    # 前進消去
+    for i in range(n):
+        select_pivot(zs, i, inv, cols)
+        if inv[zs[i, i]] == 0:
+            if np.all(zs[i:, i:n] == 0):
+                if np.any(zs[i:, n] &gt; 0): return # 解なし
+            else:
+                check = True
+            m = i
+            break
+        for j in range(i + 1, n):
+            if zs[j, i] != 0:
+                temp = zs[j, i] * inv[zs[i, i]]
+                zs[j, i:] += c - (temp * zs[i, i:] % c)
+                zs[j, i:] %= c
+                if zs[j, i]: raise Exception("係数が 0 になりません")
+
+    temp = zs[:, n].copy()
+    for j in range(0, c ** (n - m)):
+        vs = num_conv(j, n - m, c)
+        if check and not np.all((zs[m:, m:n] @ vs % c) == zs[m:, n]): continue
+        zs[m:, n] = vs
+        # 後退代入
+        for i in range(m - 1, -1, -1):
+            zs[i, n] += c - (zs[i, i+1:n] @ zs[i+1:, n] % c)
+            zs[i, n] *= inv[zs[i, i]]
+            zs[i, n] %= c
+        yield (zs[:, n])[cols].reshape(ys.shape)
+        zs[:, n] = temp
+
+# 簡単なテスト
+for m in range(3, 9):
+    print((m, m), end=" ")
+    ys = make_matrix(np.full(m * m, 0, dtype=np.uint32).reshape((m, m)))
+    for n in range(2, 22):
+        c = 0
+        for xs in nlo(np.full(m * m, n - 1, dtype=np.uint32).reshape((m, m)), n):
+            zs = (ys[:, :m*m] @ xs.flatten()) % n
+            if np.any(zs != 1):
+                print(n)
+                raise Exception("error")
+            c += 1
+        print(c, end=" ")
+    print("")
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="python3.html#numpy_abc">Python3</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881784</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm50.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm52.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>電卓プログラムの作成 (2)</h3>
+<p> 前回は四則演算を行う簡単な電卓プログラムを作りました。今回は電卓プログラムに変数と関数の機能を追加してみましょう。
+</p>
+
+<h4>●変数</h4>
+<p> 前回作成した電卓は、計算結果を表示したあとそれを保持していないので、計算結果を再利用することができません。一般の電卓のように、計算結果を記憶しておくメモリ機能があると便利です。この機能を「変数 (variable) 」として実現することにします。プログラミング言語で言えば、大域変数 (グローバル変数) と同じ機能になります。
+</p>
+
+<p> 変数を実装するのであれば、変数に値を代入する操作が必要になります。文法に「文」を定義する、つまり「代入文」を追加する方法もありますが、今回は簡単な電卓プログラムなので、代入演算子 "=" を用意して式の中で処理することにしましょう。代入演算子は右辺の式の値を左辺の変数に代入するので、文法は次のように表すことができます。
+</p>
+
+<pre class="item">
+[EBNF]
+  式   = 代入式 | 式１.
+代入式 = 変数, "=", 式.
+ 式１  = 項, { ("+" | "-"), 項 }.
+  項   = 因子, { ("*" | "/"), 因子 }.
+ 因子  = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数.
+ 変数  = 識別子
+
+[注意] 数値と識別子の定義は省略
+</pre>
+
+<p> 演算子 = は他の演算子と違って右結合になることに注意してください。このため、他の演算子よりも優先順位を低くし、右辺の式の評価を優先して行います。そして、その結果を変数にセットします。文法では、式を 代入式 | 式１ に変更し、代入式で演算子 = の処理を行います。式１は今までの式の定義と同じです。これで演算子 = の優先順位を低くすることができます。あとは代入式の処理で、右辺の式を先に評価して、その結果を変数にセットすればいいわけです。
+</p>
+
+<p> それから、因子に「変数」を追加します。変数の定義は「識別子」とし、識別子はアルファベットで構成されるものとします。電卓プログラムではそれをシンボルに変換し、シンボルを変数として扱います。なお、変数の値は因子の処理で求めると、代入式で左辺の変数が数値に変換されるため、右辺の値をセットすることができなくなります。そこで、因子の処理は変数を表すシンボルをそのまま返すことにします。変数の値は実際に演算を行うときに求めることにしましょう。
+</p>
+
+<h4>●関数</h4>
+<p> 次は文法に関数を追加しましょう。関数の処理は「因子」に追加します。
+</p>
+
+<pre class="item">
+[EBNF]
+  式   = 代入式 | 式１.
+代入式 = 変数, "=", 式.
+ 式１  = 項, { ("+" | "-"), 項 }.
+  項   = 因子, { ("*" | "/"), 因子 }.
+ 因子  = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数 | 関数, "(", 引数リスト, ")".
+ 変数  = 識別子
+ 関数  = 識別子
+
+引数リスト = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+
+<p> 関数の名前は識別子とし、そのあとに引数をカッコで囲んで渡します。カッコの中は「引数リスト」として定義します。これは「式」をカンマで区切って並べたもので、一般的な手続き型言語の関数呼び出しと同じ形式になります。
+</p>
+<p> ただし、変数と関数は同じ識別子なので、このままでは区別することができません。この場合、簡単な方法が 2 つあります。ひとつは関数として登録されている識別子を関数とする方法、もうひとつは次のトークンが左カッコ (lpar) であれば関数とする方法です。今回は前者の方法を採用することにしましょう。
+</p>
+
+<h4>●変数と関数の操作</h4>
+<p> それではプログラムを作ります。最初に、変数と関数を格納する大域変数とアクセス関数を定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 関数と変数のアクセス関数
+
+; 関数を格納する
+(define *function*
+  `((exp  . ,exp)
+    (log  . ,log)
+    (sin  . ,sin)
+    (cos  . ,cos)
+    (tan  . ,tan)
+    (asin . ,asin)
+    (acos . ,acos)
+    (atan . ,atan)
+    (sqrt . ,sqrt)
+    (expt . ,expt)))
+
+; 関数を求める
+(define (lookup-function name)
+  (assoc name *function*))
+
+; 変数を格納する
+(define *variable* '())
+
+; 変数の値を求める
+(define (lookup-variable var)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (cdr cp)
+      (error "unbound variable:" var))))
+
+; 変数の値を更新する
+(define (update-variable var val)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (set-cdr! cp val)
+      (push! *variable* (cons var val)))))
+</pre>
+
+<p> 組み込み関数は大域変数 *function* に連想リストの形式で格納します。関数 lookup-function は名前が name の組み込み関数があるか *function* から探します。
+</p>
+<p> 変数は大域変数 *variable* に連想リストの形式で格納します。関数 lookup-variable は *variable* から変数 var を探索します。見つかった場合はその値を返します。見つからない場合はエラーを送出します。関数 update-variable は変数の値を更新します。変数 var が既に存在する場合は、set-cdr! でその CDR 部の値を val に書き換えます。var が存在しない場合は、push! で (cons var val) を *variable* に追加します。
+</p>
+
+<h4>●字句解析</h4>
+<p> 次は関数 get-token を修正します。
+</p>
+<pre class="list">
+リスト : 字句解析の修正
+
+; 識別子
+(define (get-ident)
+  (let loop ((a '()))
+    (if (not (char-alphabetic? (getch)))
+        (string-&gt;symbol (list-&gt;string (reverse a)))
+      (loop (begin0 (cons (getch) a) (nextch))))))
+
+; トークンの切り分け
+(define (get-token)
+  ; 空白文字の読み飛ばし
+  (while (char-whitespace? (getch))
+    (nextch))
+  (cond ((char-numeric? (getch))
+         (set! *token* 'number)
+         (set! *value* (get-number)))
+        ((char-alphabetic? (getch))
+         (set! *token* 'ident)
+         (set! *value* (get-ident)))
+        (else
+         (case (getch)
+          ((#\=)
+           (set! *token* '=)
+           (nextch))
+          ((#\+)
+           (set! *token* '+)
+           (nextch))
+          ((#\-)
+           (set! *token* '-)
+           (nextch))
+          ((#\*)
+           (set! *token* '*)
+           (nextch))
+          ((#\/)
+           (set! *token* '/)
+           (nextch))
+          ((#\()
+           (set! *token* 'lpar)
+           (nextch))
+          ((#\))
+           (set! *token* 'rpar)
+           (nextch))
+          ((#\,)
+           (set! *token* 'comma)
+           (nextch))
+          ((#\;)
+           (set! *token* 'semic)
+           (nextch))
+          ((#\null)
+           (set! *token* 'eof))
+          (else
+           (set! *token* 'others))))))
+</pre>
+<p> 記号がアルファベットの場合は関数 get-ident で識別子を切り分けます。*token* にはシンボル ident をセットし、get-ident の返り値を *value* にセットします。get-ident はアルファベットを変数 buff に格納し、それを list-&gt;string で文字列に変換したあと、string-&gt;symbol でシンボルに変換して返します。あとは、代入演算子 = とカンマ "," が入力された場合、それを表すトークン = と comma を *token* にセットするだけです。
+</p>
+
+<h4>●構文解析</h4>
+<p> 次は構文解析を修正します。まず最初に、代入演算子の処理を expression に追加します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : expression の修正
+
+; 変数の評価
+(define (eval-var var)
+  (if (number? var)
+      var
+    (lookup-variable var)))
+
+; 演算子の評価
+(define (eval-op op var1 var2)
+  (op (eval-var var1) (eval-var var2)))
+
+; 式
+(define (expression)
+  (let ((val (expr1)))
+    (case *token*
+      ((=)
+       ; 代入式の処理
+       (unless (symbol? val)
+         (error "invalid = form"))
+       (get-token)
+       (let ((val1 (eval-var (expression))))
+         (update-variable val val1)
+         val1))
+      (else val))))
+
+(define (expr1)
+  (let loop ((val (term)))
+    (case *token*
+      ((+)
+       (get-token)
+       (loop (eval-op + val (term))))
+      ((-)
+       (get-token)
+       (loop (eval-op - val (term))))
+      (else val))))
+
+; 項
+(define (term)
+  (let loop ((val (factor)))
+    (case *token*
+      ((*)
+       (get-token)
+       (loop (eval-op * val (factor))))
+      ((/)
+       (get-token)
+       (loop (eval-op / val (factor))))
+      (else val))))
+</pre>
+<p> 演算子 +, - の処理は関数 expr1 で行い、演算子 = の処理を expression で行います。expression は最初に expr1 を評価して、その返り値を変数 val にセットします。*token* が = の場合は代入式の処理を行います。
+</p>
+<p> まず val の値をチェックして、シンボルでなければエラーを送出します。次に、expression を呼び出して右辺の式を評価して、返り値を変数 val1 にセットします。val1 の値は変数の場合もあるので、関数 eval-var に渡して値を取得します。eval-var は引数が数値ならばそのまま返し、そうでなければ lookup-variable で変数の値を求めます。あとは、update-variable で変数の値を val1 に更新してから val1 を返します。
+</p>
+<p> 関数 expr1 は今までの expression と同じです。expr1 と term は演算子を評価するとき関数 eval-op を呼び出すように修正します。eval-op は引数を eval-var で評価してから演算子 op を評価します。あとの処理は今までと同じです。
+</p>
+
+<p> 次は関数 factor を修正します。
+</p>
+<pre class="list">
+リスト : 因子の修正
+
+; 実引数の取得
+(define (get-argument)
+  (get-token)
+  (let loop ((a '()))
+    (let ((val (eval-var (expression))))
+      (case *token*
+        ((rpar)
+         (get-token)
+         (reverse (cons val a)))
+        ((comma)
+         (get-token)
+         (loop (cons val a)))
+        (else
+         (error "unexpected token in argument list" *token*))))))
+
+; 因子
+(define (factor)
+  (case *token*
+    ((lpar)
+     (get-token)
+     (let ((val (expression)))
+       (if (eq? *token* 'rpar)
+           (get-token)
+         (error "')' expected"))
+       val))
+    ((number)
+     (begin0 *value* (get-token)))
+    ((+)
+     ; 単項演算子
+     (get-token)
+     (eval-var (factor)))
+    ((-)
+     ; 単項演算子
+     (get-token)
+     (- (eval-var (factor))))
+    ((ident)
+     (let ((func (lookup-function *value*)))
+       (cond (func
+              ; 関数呼び出し
+              (get-token)
+              (if (eq? *token* 'lpar)
+                  (apply (cdr func) (get-argument))
+                (error "'(' expected")))
+             (else
+              ; 変数
+              (begin0 *value* (get-token))))))
+    (else
+     (error "unexpected token" *token*))))
+</pre>
+<p> *token* が ident の場合、変数または関数呼び出しの処理を行います。最初に lookup-function を呼び出し、識別子 *value* が組み込み関数かチェックします。そうであれば、組み込み関数を呼び出します。引数の評価は関数 get-argument で行います。その前に、get-token を呼び出して次のトークンを求め、それが左カッコ (lpar) であることを確認します。そうでなければエラーを送出します。組み込み関数でなければ *value* をそのまま返します。
+</p>
+
+<p> get-argument はカンマで区切られた式を expression で評価し、それをリストに格納して返します。expression を評価したあと、case で *token* をチェックします。右カッコ (lpar) であれば、式の値 val を累積変数 a に追加して、reverse で反転して返します。カンマ (comma) であれば、まだ引数があるので次の式を評価します。そうでなければ、式に誤りがあるのでエラーを送出します。
+</p>
+
+<p> あとは関数 toplevel で、expression の返り値を eval-var で評価する処理を追加するだけです。詳細は <a href="abcscm51.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+gosh> (calc)
+Calc&gt; a = 10;
+=&gt; 10
+Calc&gt; a;
+=&gt; 10
+Calc&gt; a * 10 + 20;
+=&gt; 120
+Calc&gt; b = a * 10 + 20;
+=&gt; 120
+Calc&gt; a + b;
+=&gt; 130
+Calc&gt; 1 + (c = 2 + 3 + 4) + 5 + 6;
+=&gt; 21
+Calc&gt; c;
+=&gt; 9
+Calc&gt; x = y = z = 0;
+=&gt; 0
+Calc&gt; x;
+=&gt; 0
+Calc&gt; y;
+=&gt; 0
+Calc&gt; z;
+=&gt; 0
+Calc&gt; p = p + 1;
+ERROR: "unbound variable: p"
+Calc&gt; q = 10;
+=&gt; 10
+Calc&gt; q;
+=&gt; 10
+Calc&gt; q = q + 1;
+=&gt; 11
+</pre>
+<p> 変数に値を代入すると、その値を使って式を評価することができます。また、式の中に演算子 = が入っていても、その式を評価することができます。x = y = z = 0; のように、多重代入することも可能です。ただし、新しい変数 p で p = p + 1; のようなことはできません。q = 10; を評価したあとならば、既に変数 q は定義されているので、q = q + 1; は評価することができます。
+</p>
+<p> 次は組み込み関数を実行してみましょう。
+</p>
+<pre>
+Calc&gt; sqrt(2);
+=&gt; 1.4142135623730951
+Calc&gt; expt(2, 32) - 1;
+=&gt; 4294967295
+Calc&gt; PI = asin(0.5) * 6;
+=&gt; 3.1415926535897936
+Calc&gt; sin(0);
+=&gt; 0.0
+Calc&gt; sin(PI/2);
+=&gt; 1.0
+Calc&gt; sin(PI);
+=&gt; -3.216285744678249e-16
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●代入を文として実装する場合</h4>
+<p> 次は変数の代入処理を「代入文」として実装してみましょう。文法は次のようになります。
+</p>
+<pre class="item">
+[EBNF]
+  文   = 代入文 | 式.
+代入文 = "set", 変数, 式.
+  式   = 項, { ("+" | "-"), 項 }.
+  項   = 因子, { ("*" | "/"), 因子 }.
+ 因子  = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数 | 関数, "(", [引数リスト], ")".
+ 変数  = 識別子
+ 関数  = 識別子
+
+引数リスト = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+<p> 最初に「文」を 代入文 | 式 と定義します。式の定義は今までと同じです。代入文は "set", 変数, 式 とします。一般に、再帰降下法で構文解析を行う場合、一番左側のトークンをみるだけで処理を決定できるように文法を定義するのが普通です。もしも、代入文を 変数, "=", 式. と定義すると、一番左側の変数をみただけでは、それが代入文なのか因子なのか区別することができません。代入文と判定するには、トークンを先読みしないといけないのです。そこで、今回は識別子 set を使って代入文を実装することにします。
+</p>
+
+<p> 次は関数 factor を修正します。
+</p>
+<pre class="list">
+リスト : 因子の処理
+
+(define (factor)
+  (case *token*
+    ((lpar)
+     (get-token)
+     (let ((val (expression)))
+       (if (eq? *token* 'rpar)
+           (get-token)
+         (error "')' expected"))
+       val))
+    ((number)
+     (begin0 *value* (get-token)))
+    ((+)
+     ; 単項演算子
+     (get-token)
+     (factor))
+    ((-)
+     ; 単項演算子
+     (get-token)
+     (- (factor)))
+    ((ident)
+     (let ((func (lookup-function *value*)))
+       (cond (func
+              ; 関数呼び出し
+              (get-token)
+              (if (eq? *token* 'lpar)
+                  (apply (cdr func) (get-argument))
+                (error "'(' expected")))
+             (else
+              ; 変数
+              (begin0 (lookup-variable *value*) (get-token))))))
+    (else
+     (error "unexpected token" *token*))))
+</pre>
+<p> 変数の代入は代入文 set で行うので、式を評価するときに変数そのものを必要とする処理はありません。factor では変数の値を lookup-variable で求めて返すように修正します。式を評価する他の処理でも、eval-var で変数の値を求める処理は不要になります。
+</p>
+
+<p> 次は関数 toplevel を修正します。
+</p>
+<pre class="list">
+リスト : 式の入力と評価
+
+(define (toplevel)
+  (cond ((and (eq? *token* 'ident)
+              (eq? *value* 'set))
+         ; 代入文
+         (get-token)
+         (unless (eq? *token* 'ident)
+           (error "invalid set form"))
+         (let ((var *value*))
+           (get-token)
+           (let ((value (expression)))
+             (unless (eq? *token* 'semic)
+               (error "invalid token:" *token*))
+             (update-variable var value)
+             (display-value value))))
+        (else
+         ; 式
+         (let ((value (expression)))
+           (unless (eq? *token* 'semic)
+             (error "invalid token:" *token*))
+           (display-value value))))
+  (display "Calc&gt; ")
+  (flush))
+</pre>
+<p> *token* が ident で *value* が set の場合、変数への代入処理を行います。そうでなければ「式」として評価します。代入処理の場合、get-token で次のトークンを求め、それが ident でなければ識別子でないのでエラーを送出します。次に、*value* の値を var にセットして、expression で式を評価します。そのあと *token* をチェックして、セミコロンでなければエラーを送出します。最後に、update-varibale で変数 var に値 value をセットし、display-value で値を表示します。
+</p>
+
+<p> あとの修正は簡単なので説明は割愛いたします。詳細は <a href="abcscm51.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+<h4>●実行例 (2)</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+Calc&gt; set a 1;
+=&gt; 1
+Calc&gt; a;
+=&gt; 1
+Calc&gt; a + 2 + 3;
+=&gt; 6
+Calc&gt; set b 3 + 2 + a;
+=&gt; 6
+Calc&gt; b;
+=&gt; 6
+Calc&gt; set PI asin(0.5) * 6;
+=&gt; 3.1415926535897936
+Calc&gt; sin(PI);
+=&gt; -3.216285744678249e-16
+Calc&gt; sin(PI/2);
+=&gt; 1.0
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> 今回はここまでです。次回はユーザが関数を定義する機能を追加してみましょう。
+</p>
+
+<h4>●参考文献</h4>
+<ol>
+  <li>松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li>水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li>松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li>高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li>久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; calc1.scm : 電卓プログラム
+;
+;             Copyright (C) 2011 Makoto Hiroi
+;
+; 変数と組み込み関数の追加
+;
+
+;;;
+;;; 大域変数
+;;;
+(define *ch*    #f)
+(define *token* #f)
+(define *value* #f)
+
+;;;
+;;; 関数
+;;;
+(define *function*
+  `((exp  . ,exp)
+    (log  . ,log)
+    (sin  . ,sin)
+    (cos  . ,cos)
+    (tan  . ,tan)
+    (asin . ,asin)
+    (acos . ,acos)
+    (atan . ,atan)
+    (sqrt . ,sqrt)
+    (expt . ,expt)))
+
+; 関数を求める
+(define (lookup-function name)
+  (assoc name *function*))
+
+;;;
+;;; 変数
+;;;
+(define *variable* '())
+
+; 変数の値を求める
+(define (lookup-variable var)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (cdr cp)
+      (error "unbound variable:" var))))
+
+; 変数の値を更新する
+(define (update-variable var val)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (set-cdr! cp val)
+      (push! *variable* (cons var val)))))
+
+;;;
+;;; 入力処理
+;;;
+
+; 文字の読み込み
+(define (nextch)
+  (set! *ch* (read-char))
+  (when (eof-object? *ch*)
+    (set! *ch* #\null)))
+
+; 先読み文字の取得
+(define (getch) *ch*)
+
+; 数値
+(define (get-number)
+  (let ((buff '()))
+    ; 整数を buff に格納
+    (define (get-numeric)
+      (while (char-numeric? (getch))
+        (push! buff (getch))
+        (nextch)))
+    ; 整数部
+    (get-numeric)
+    (case (getch)
+      ((#\.)
+       ; 小数部
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)
+       (case (getch)
+         ((#\d #\D #\e #\E)
+          ; 指数部
+          (push! buff (getch))
+          (nextch)
+          (when (or (eqv? (getch) #\+)
+                    (eqv? (getch) #\-))
+            (push! buff (getch))
+            (nextch))
+          ; 指数の数字
+          (get-numeric))))
+      ((#\/)
+       ; 分数
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)))
+    (string-&gt;number (list-&gt;string (reverse buff)))))
+
+; 識別子
+(define (get-ident)
+  (let loop ((a '()))
+    (if (not (char-alphabetic? (getch)))
+        (string-&gt;symbol (list-&gt;string (reverse a)))
+      (loop (begin0 (cons (getch) a) (nextch))))))
+
+; トークンの切り分け
+(define (get-token)
+  ; 空白文字の読み飛ばし
+  (while (char-whitespace? (getch))
+    (nextch))
+  (cond ((char-numeric? (getch))
+         (set! *token* 'number)
+         (set! *value* (get-number)))
+        ((char-alphabetic? (getch))
+         (set! *token* 'ident)
+         (set! *value* (get-ident)))
+        (else
+         (case (getch)
+          ((#\=)
+           (set! *token* '=)
+           (nextch))
+          ((#\+)
+           (set! *token* '+)
+           (nextch))
+          ((#\-)
+           (set! *token* '-)
+           (nextch))
+          ((#\*)
+           (set! *token* '*)
+           (nextch))
+          ((#\/)
+           (set! *token* '/)
+           (nextch))
+          ((#\()
+           (set! *token* 'lpar)
+           (nextch))
+          ((#\))
+           (set! *token* 'rpar)
+           (nextch))
+          ((#\,)
+           (set! *token* 'comma)
+           (nextch))
+          ((#\;)
+           (set! *token* 'semic)
+           (nextch))
+          ((#\null)
+           (set! *token* 'eof))
+          (else
+           (set! *token* 'others))))))
+
+;;;
+;;; 式の評価
+;;;
+
+; 変数の評価
+(define (eval-var var)
+  (if (number? var)
+      var
+    (lookup-variable var)))
+
+; 演算子の評価
+(define (eval-op op var1 var2)
+  (op (eval-var var1) (eval-var var2)))
+
+; 式
+(define (expression)
+  (let ((val (expr1)))
+    (case *token*
+      ((=)
+       ; 代入式の処理
+       (unless (symbol? val)
+         (error "invalid = form"))
+       (get-token)
+       (let ((val1 (eval-var (expression))))
+         (update-variable val val1)
+         val1))
+      (else val))))
+
+(define (expr1)
+  (let loop ((val (term)))
+    (case *token*
+      ((+)
+       (get-token)
+       (loop (eval-op + val (term))))
+      ((-)
+       (get-token)
+       (loop (eval-op - val (term))))
+      (else val))))
+
+; 項
+(define (term)
+  (let loop ((val (factor)))
+    (case *token*
+      ((*)
+       (get-token)
+       (loop (eval-op * val (factor))))
+      ((/)
+       (get-token)
+       (loop (eval-op / val (factor))))
+      (else val))))
+
+; 実引数の取得
+(define (get-argument)
+  (get-token)
+  (let loop ((a '()))
+    (let ((val (eval-var (expression))))
+      (case *token*
+        ((rpar)
+         (get-token)
+         (reverse (cons val a)))
+        ((comma)
+         (get-token)
+         (loop (cons val a)))
+        (else
+         (error "unexpected token in argument list" *token*))))))
+
+; 因子
+(define (factor)
+  (case *token*
+    ((lpar)
+     (get-token)
+     (let ((val (expression)))
+       (if (eq? *token* 'rpar)
+           (get-token)
+         (error "')' expected"))
+       val))
+    ((number)
+     (begin0 *value* (get-token)))
+    ((+)
+     ; 単項演算子
+     (get-token)
+     (eval-var (factor)))
+    ((-)
+     ; 単項演算子
+     (get-token)
+     (- (eval-var (factor))))
+    ((ident)
+     (let ((func (lookup-function *value*)))
+       (cond (func
+              ; 関数呼び出し
+              (get-token)
+              (if (eq? *token* 'lpar)
+                  (apply (cdr func) (get-argument))
+                (error "'(' expected")))
+             (else
+              ; 変数
+              (begin0 *value* (get-token))))))
+    (else
+     (error "unexpected token" *token*))))
+
+;;;
+;;;
+;;;
+
+; 式の入力と評価
+(define (toplevel)
+  (let ((val (eval-var (expression))))
+    (cond ((eq? *token* 'semic)
+           (display "=&gt; ")
+           (display val)
+           (newline)
+           (display "Calc&gt; ")
+           (flush))
+          (else
+           (error "invalid token:" *token*)))))
+
+; 入力をクリアする
+(define (clear-input-data)
+  (while (not (eqv? *ch* #\return))
+    (nextch))
+  (display "Calc&gt; ")
+  (flush))
+
+; 電卓プログラムの実行
+(define (calc)
+  (display "Calc&gt; ")
+  (flush)
+  (nextch)
+  (call/cc
+    (lambda (break)
+      (let loop ()
+        (guard (err
+                 ((&lt;error&gt; err)
+                  (format #t "ERROR: ~S~%" (condition-ref err 'message))
+                  (clear-input-data)))
+          (get-token)
+          (when (eqv? *token* 'eof) (break #t))
+          (toplevel))
+        (loop)))))
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+
+; calc11.scm : 電卓プログラム
+;
+;              Copyright (C) 2011 Makoto Hiroi
+;
+; 変数と組み込み関数の追加
+; 代入演算子ではなく代入文 set を使う
+;
+
+;;;
+;;; 大域変数
+;;;
+(define *ch*    #f)
+(define *token* #f)
+(define *value* #f)
+
+;;;
+;;; 関数
+;;;
+(define *function*
+  `((exp  . ,exp)
+    (log  . ,log)
+    (sin  . ,sin)
+    (cos  . ,cos)
+    (tan  . ,tan)
+    (asin . ,asin)
+    (acos . ,acos)
+    (atan . ,atan)
+    (sqrt . ,sqrt)
+    (expt . ,expt)))
+
+; 関数を求める
+(define (lookup-function name)
+  (assoc name *function*))
+
+;;;
+;;; 変数
+;;;
+(define *variable* '())
+
+; 変数の値を求める
+(define (lookup-variable var)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (cdr cp)
+      (error "unbound variable:" var))))
+
+; 変数の値を更新する
+(define (update-variable var val)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (set-cdr! cp val)
+      (push! *variable* (cons var val)))))
+
+;;;
+;;; 入力処理
+;;;
+
+; 文字の読み込み
+(define (nextch)
+  (set! *ch* (read-char))
+  (when (eof-object? *ch*)
+    (set! *ch* #\null)))
+
+; 先読み文字の取得
+(define (getch) *ch*)
+
+; 数値
+(define (get-number)
+  (let ((buff '()))
+    ; 整数を buff に格納
+    (define (get-numeric)
+      (while (char-numeric? (getch))
+        (push! buff (getch))
+        (nextch)))
+    ; 整数部
+    (get-numeric)
+    (case (getch)
+      ((#\.)
+       ; 小数部
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)
+       (case (getch)
+         ((#\d #\D #\e #\E)
+          ; 指数部
+          (push! buff (getch))
+          (nextch)
+          (when (or (eqv? (getch) #\+)
+                    (eqv? (getch) #\-))
+            (push! buff (getch))
+            (nextch))
+          ; 指数の数字
+          (get-numeric))))
+      ((#\/)
+       ; 分数
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)))
+    (string-&gt;number (list-&gt;string (reverse buff)))))
+
+; 識別子
+(define (get-ident)
+  (let loop ((a '()))
+    (if (not (char-alphabetic? (getch)))
+        (string-&gt;symbol (list-&gt;string (reverse a)))
+      (loop (begin0 (cons (getch) a) (nextch))))))
+
+; トークンの切り出し
+(define (get-token)
+  ; 空白文字の読み飛ばし
+  (while (char-whitespace? (getch))
+    (nextch))
+  (cond ((char-numeric? (getch))
+         (set! *token* 'number)
+         (set! *value* (get-number)))
+        ((char-alphabetic? (getch))
+         (set! *token* 'ident)
+         (set! *value* (get-ident)))
+        (else
+         (case (getch)
+          ((#\+)
+           (set! *token* '+)
+           (nextch))
+          ((#\-)
+           (set! *token* '-)
+           (nextch))
+          ((#\*)
+           (set! *token* '*)
+           (nextch))
+          ((#\/)
+           (set! *token* '/)
+           (nextch))
+          ((#\()
+           (set! *token* 'lpar)
+           (nextch))
+          ((#\))
+           (set! *token* 'rpar)
+           (nextch))
+          ((#\,)
+           (set! *token* 'comma)
+           (nextch))
+          ((#\;)
+           (set! *token* 'semic)
+           (nextch))
+          ((#\null)
+           (set! *token* 'eof))
+          (else
+           (set! *token* 'others))))))
+
+;;;
+;;; 式の評価
+;;;
+
+; 式
+(define (expression)
+  (let loop ((val (term)))
+    (case *token*
+      ((+)
+       (get-token)
+       (loop (+ val (term))))
+      ((-)
+       (get-token)
+       (loop (- val (term))))
+      (else val))))
+
+; 項
+(define (term)
+  (let loop ((val (factor)))
+    (case *token*
+      ((*)
+       (get-token)
+       (loop (* val (factor))))
+      ((/)
+       (get-token)
+       (loop (/ val (factor))))
+      (else val))))
+
+; 実引数の取得
+(define (get-argument)
+  (get-token)
+  (let loop ((a '()))
+    (let ((val (expression)))
+      (case *token*
+        ((rpar)
+         (get-token)
+         (reverse (cons val a)))
+        ((comma)
+         (get-token)
+         (loop (cons val a)))
+        (else
+         (error "unexpected token in argument list" *token*))))))
+
+; 因子
+(define (factor)
+  (case *token*
+    ((lpar)
+     (get-token)
+     (let ((val (expression)))
+       (if (eq? *token* 'rpar)
+           (get-token)
+         (error "')' expected"))
+       val))
+    ((number)
+     (begin0 *value* (get-token)))
+    ((+)
+     ; 単項演算子
+     (get-token)
+     (factor))
+    ((-)
+     ; 単項演算子
+     (get-token)
+     (- (factor)))
+    ((ident)
+     (let ((func (lookup-function *value*)))
+       (cond (func
+              ; 関数呼び出し
+              (get-token)
+              (if (eq? *token* 'lpar)
+                  (apply (cdr func) (get-argument))
+                (error "'(' expected")))
+             (else
+              ; 変数
+              (begin0 (lookup-variable *value*) (get-token))))))
+    (else
+     (error "unexpected token" *token*))))
+
+;;;
+;;;
+;;;
+
+; 値を表示する
+(define (display-value value)
+  (display "=&gt; ")
+  (display value)
+  (newline))
+
+; 文の入力と評価
+(define (toplevel)
+  (cond ((and (eq? *token* 'ident)
+              (eq? *value* 'set))
+         ; 代入文
+         (get-token)
+         (unless (eq? *token* 'ident)
+           (error "invalid set form"))
+         (let ((var *value*))
+           (get-token)
+           (let ((value (expression)))
+             (unless (eq? *token* 'semic)
+               (error "invalid token:" *token*))
+             (update-variable var value)
+             (display-value value))))
+        (else
+         ; 式
+         (let ((value (expression)))
+           (unless (eq? *token* 'semic)
+             (error "invalid token:" *token*))
+           (display-value value))))
+  (display "Calc&gt; ")
+  (flush))
+
+; 入力をクリアする
+(define (clear-input-data)
+  (while (not (eqv? *ch* #\return))
+    (nextch))
+  (display "Calc&gt; ")
+  (flush))
+
+; 電卓プログラムの実行
+(define (calc)
+  (display "Calc&gt; ")
+  (flush)
+  (nextch)
+  (call/cc
+    (lambda (break)
+      (let loop ()
+        (guard (err
+                 ((&lt;error&gt; err)
+                  (format #t "ERROR: ~S~%" (condition-ref err 'message))
+                  (clear-input-data)))
+          (get-token)
+          (when (eqv? *token* 'eof) (break #t))
+          (toplevel))
+        (loop)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm50.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm52.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

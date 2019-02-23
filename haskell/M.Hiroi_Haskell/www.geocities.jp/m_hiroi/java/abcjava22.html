@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>続・お気楽 Java プログラミング入門</title>
+  <meta name="description" content="Java,Java入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881776</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Java Programming</h1>
+<h2>続・お気楽 Java プログラミング入門</h2>
+<div class="small">
+[ <a href="abcjava21.html">PrevPage</a> | <a href="index.html">Java</a> | NextPage ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>リストで遊ぼう (2)</h3>
+<p> 拙作の <a href="abcjava16.html#chap02">immutable な連結リスト</a> を使った簡単な問題集です。
+</p>
+<ol>
+  <li>リストに格納されている数値データの最小値、最大値、合計値、平均値、標準偏差を求めるプログラムを作ってください。
+  <li>リストを使って「パスカルの三角形」を表示するプログラムを作ってください。
+  <li>リスト xs において、連続している同じ要素を (code num) に変換するメソッド encode() とそれを元に戻すメソッド decode() を定義してください。code は要素、num は個数を表します。このような変換を「ランレングス符号化」といいます。
+  <li>下記に示す経路図において、A から G までの経路をすべて求めるプログラムを作ってください。ただし、経路はリストで表すものとします。
+<pre class="fig">
+    Ｂ───Ｄ───Ｆ
+  ／│      │
+Ａ  │      │
+  ＼│      │
+    Ｃ───Ｅ───Ｇ
+
+    図 : 経路図
+</pre>
+  <li>パズル「8 クイーン」を解くプログラムを作ってください。
+  <li>パズル「農夫と山羊と狼とキャベツの問題」を解くプログラムを作ってください。
+<div class="question">
+<b>[問題]</b><br>
+農夫が狼と山羊とキャベツを持って川の左岸にいます。農夫はこれらを川の右岸へ運ばなければいけませんが、ボートにはそのうちのひとつしか乗せることができません。狼は山羊を好んで食べるため、この 2 つを同じ岸に残すことはできません。また、山羊はキャベツを好んで食べるため、この 2 つも同じ岸に残すことはできません。この条件で、荷物をすべて右岸へ運ぶ手順を求めてください。
+</div>
+  <li>n 個の整数 1, 2, ..., n の順列を考えます。このとき、i 番目 (先頭要素が 1 番目) の要素が整数 i ではない順列を「完全順列 (derangement)」といいます。1 から n までの整数値で完全順列を生成するプログラムを作ってください。
+  <li>リストで表した集合 xs を分割するプログラムを作ってください。たとえば、集合 (1 2 3) は次のように分割することができます。
+<pre class="item">
+1 分割 : ((1 2 3))
+2 分割 : ((1 2) (3)), ((1 3) (2)), ((1) (2 3))
+3 分割 ; ((1) (2) (3))
+</pre>
+  <li>k 個の要素をもつ集合 xs を要素数が等しい m 個の部分集合に分割することを考えます。部分集合の要素数 n は k / m になります。分割の仕方をすべて求めるプログラムを作ってください。
+  <li>整数 n を 1 以上の自然数の和で表すことを考えます。これを「整数の分割」といいます。整数を分割するとき、同じ自然数を何回使ってもかまいませんが、並べる順序が違うだけのものは同じ分割とします。リストを使って整数 n の分割の仕方をすべて求めるプログラムを作ってください。
+</ol>
+<hr>
+<h4>●解答</h4>
+<pre class="list">
+//
+// listproblem2.java : リストで遊ぼう (2)
+//
+//                     Copyright (C) 2017 Makoto Hiroi
+//
+import java.util.List;
+import java.util.function.*;
+import immutable.*;
+
+public class listproblem2 {
+  // Q01
+  static ImList&lt;Double&gt; height = ImList.of(
+    148.7, 149.5, 133.7, 157.9, 154.2, 147.8, 154.6, 159.1, 148.2, 153.1,
+    138.2, 138.7, 143.5, 153.2, 150.2, 157.3, 145.1, 157.2, 152.3, 148.3,
+    152.0, 146.0, 151.5, 139.4, 158.8, 147.6, 144.0, 145.8, 155.4, 155.5,
+    153.6, 138.5, 147.1, 149.6, 160.9, 148.9, 157.5, 155.1, 138.9, 153.0,
+    153.9, 150.9, 144.4, 160.3, 153.4, 163.0, 150.9, 153.3, 146.6, 153.3,
+    152.3, 153.3, 142.8, 149.0, 149.4, 156.5, 141.7, 146.2, 151.0, 156.5,
+    150.8, 141.0, 149.0, 163.2, 144.1, 147.1, 167.9, 155.3, 142.9, 148.7,
+    164.8, 154.1, 150.4, 154.2, 161.4, 155.0, 146.8, 154.2, 152.7, 149.7,
+    151.5, 154.5, 156.8, 150.3, 143.2, 149.5, 145.6, 140.4, 136.5, 146.9,
+    158.9, 144.4, 148.1, 155.5, 152.4, 153.3, 142.3, 155.3, 153.1, 152.3);
+
+  static &lt;E extends Comparable&lt;E&gt;&gt; E maximum(ImList&lt;E&gt; xs) {
+    return xs.rest().foldLeft((a, x) -&gt; a.compareTo(x) &gt; 0 ? a : x, xs.first());
+  }
+
+  static &lt;E extends Comparable&lt;E&gt;&gt; E minimum(ImList&lt;E&gt; xs) {
+    return xs.rest().foldLeft((a, x) -&gt; a.compareTo(x) &lt; 0 ? a : x, xs.first());
+  }
+
+  static double sum(ImList&lt;Double&gt; xs) {
+    return xs.foldLeft((a, x) -&gt; a + x, 0.0);
+  }
+
+  static ImList&lt;Double&gt; average(ImList&lt;Double&gt; xs) {
+    // return sum(xs) / xs.length();
+    double a = 0.0;
+    int c = 0;
+    for (double x: xs) {
+      a += x;
+      c++;
+    }
+    return ImList.of(a, a / c);
+  }
+
+  static ImList&lt;Double&gt; avgSd(ImList&lt;Double&gt; xs) {
+    double m = 0.0, s = 0.0;
+    int i = 0;
+    for (double x: xs) {
+      i++;
+      x -= m;
+      m += x / i;
+      s += (i - 1) * x * x / i;
+    }
+    return ImList.of(m, Math.sqrt(s / i));
+  }
+
+  // Q02
+  static void pascal(int n) {
+    ImList&lt;Integer&gt; xs = ImList.of(1);
+    while (n-- &gt; 0) {
+      System.out.println(xs);
+      xs = ImList.zipWith((a, b) -&gt; a + b, xs.append(ImList.of(0)), ImList.cons(0, xs));
+    }
+  }
+
+  // Q03
+  static &lt;E&gt; Pair&lt;ImList&lt;E&gt;, ImList&lt;E&gt;&gt; span(Predicate&lt;E&gt; pred, ImList&lt;E&gt; xs) {
+    if (xs.isEmpty() || !pred.test(xs.first())) {
+      return Pair.pair(ImList.nil(), xs);
+    } else {
+      Pair&lt;ImList&lt;E&gt;, ImList&lt;E&gt;&gt; p = span(pred, xs.rest());
+      return Pair.pair(ImList.cons(xs.first(), p.getFst()), p.getSnd());
+    }
+  }
+  
+  static &lt;E&gt; ImList&lt;ImList&lt;E&gt;&gt; pack(ImList&lt;E&gt; xs) {
+    if (xs.isEmpty()) {
+      return ImList.nil();
+    } else {
+      E x = xs.first();
+      Pair&lt;ImList&lt;E&gt;, ImList&lt;E&gt;&gt; p = span(y -&gt; x.equals(y), xs);
+      return ImList.cons(p.getFst(), pack(p.getSnd()));
+    }
+  }
+  
+  static &lt;E&gt; ImList&lt;Pair&lt;E, Integer&gt;&gt; encode(ImList&lt;E&gt; xs) {
+    //return pack(xs).map(ys -&gt; Pair.pair(ys.first(), ys.length()));
+    if (xs.isEmpty()) return ImList.nil();
+    E x = xs.first();
+    ImList&lt;E&gt; ys = xs.takeWhile(y -&gt; x.equals(y));
+    return ImList.cons(Pair.pair(x, ys.length()), encode(xs.dropWhile(y -&gt; x.equals(y))));
+    
+  }
+
+  static &lt;E&gt; ImList&lt;E&gt; decode(ImList&lt;Pair&lt;E, Integer&gt;&gt; xs) {
+    return xs.flatMap(p -&gt; ImList.fill(p.getSnd(), p.getFst()));
+  }
+
+  // 遅延ストリーム版
+  static &lt;E&gt; LazyStream&lt;Pair&lt;E, Integer&gt;&gt; encodeLazy(LazyStream&lt;E&gt; xs) {
+    if (xs.isEmpty()) return LazyStream.nil();
+    E x = xs.first();
+    List&lt;E&gt; ys = xs.takeWhile(y -&gt; x.equals(y));
+    return LazyStream.cons(Pair.pair(x, ys.size()), () -&gt; encodeLazy(xs.dropWhile(y -&gt; x.equals(y))));
+  }
+
+  static &lt;E&gt; LazyStream&lt;E&gt; decodeLazy(LazyStream&lt;Pair&lt;E, Integer&gt;&gt; xs) {
+    return xs.flatMap(p -&gt; LazyStream.fill(p.getSnd(), p.getFst()));
+  }
+
+  // Q04
+  //   B----D----F
+  //  /|    |
+  // A |    |
+  //  \|    |
+  //   C----E----G
+  static enum Node { A, B, C, D, E, F, G }
+
+  // 隣接リスト (連想リストになっている)
+  static ImList&lt;ImList&lt;Node&gt;&gt; adjacent = ImList.of(
+    ImList.of(Node.A, Node.B, Node.C),
+    ImList.of(Node.B, Node.A, Node.C, Node.D),
+    ImList.of(Node.C, Node.A, Node.B, Node.E),
+    ImList.of(Node.D, Node.B, Node.E, Node.F),
+    ImList.of(Node.E, Node.C, Node.D, Node.G),
+    ImList.of(Node.F, Node.D),
+    ImList.of(Node.G, Node.E));
+
+  // 連想リストの探索
+  static &lt;E&gt; ImList&lt;E&gt; assoc(E a, ImList&lt;ImList&lt;E&gt;&gt; xs) {
+    ImList&lt;ImList&lt;E&gt;&gt; ys = xs.memberIf(x -&gt; x.first() == a);
+    return ys.isEmpty() ? ImList.nil() : ys.first().rest();
+  }
+
+  // 深さ優先探索
+  static void depthFirstSearch(Node goal, ImList&lt;Node&gt; path) {
+    if (path.first() == goal)
+      System.out.println(path.reverse());
+    else
+      assoc(path.first(), adjacent).forEach(x -&gt; {
+        if (!path.contains(x))
+          depthFirstSearch(goal, ImList.cons(x, path));
+      });
+  }
+
+  // 幅優先探索
+  static void breadthFirstSearch(Node start, Node goal) {
+    Queue&lt;ImList&lt;Node&gt;&gt; q = Queue.queue();
+    q = q.add(ImList.of(start));
+    while (!q.isEmpty()) {
+      ImList&lt;Node&gt; path = q.first();
+      q = q.rest();
+      if (path.first() == goal)
+        System.out.println(path.reverse());
+      else
+        for (Node x: assoc(path.first(), adjacent)) {
+          if (!path.contains(x))
+            q = q.add(ImList.cons(x, path));
+        }
+    }
+  }
+
+  // 再帰版
+  static void bfsRec(Queue&lt;ImList&lt;Node&gt;&gt; q, Node goal) {
+    if (!q.isEmpty()) {
+      ImList&lt;Node&gt; path = q.first();
+      if (path.first() == goal) {
+        System.out.println(path.reverse());
+        bfsRec(q.rest(), goal);
+      } else {
+        bfsRec(assoc(path.first(), adjacent).foldLeft((newQ, x) -&gt; {
+          return path.contains(x) ? newQ : newQ.add(ImList.cons(x, path));
+        }, q.rest()), goal);
+      }
+    }
+  }
+
+  // 反復深化
+  static void dfs(Node goal, ImList&lt;Node&gt; path, int limit) {
+    if (path.length() == limit) {
+      if (path.first() == goal)
+        System.out.println(path.reverse());
+    } else {
+      assoc(path.first(), adjacent).forEach(x -&gt; {
+        if (!path.contains(x))
+          dfs(goal, ImList.cons(x, path), limit);
+      });
+    }
+  }
+
+  static void ids(Node start, Node goal) {
+    for (int limit = 1; limit &lt;= 7; limit++) {
+      System.out.println("----- " + limit + " -----");
+      dfs(goal, ImList.of(start), limit);
+    }
+  }
+
+  // Q05
+  static &lt;E&gt; ImList&lt;Pair&lt;E, ImList&lt;E&gt;&gt;&gt; select(ImList&lt;E&gt; xs) {
+    if (xs.rest().isEmpty())
+      return ImList.cons(Pair.pair(xs.first(), ImList.nil()), ImList.nil());
+    else
+      return ImList.cons(Pair.pair(xs.first(), xs.rest()),
+                         select(xs.rest()).map(p -&gt; Pair.pair(p.getFst(), ImList.cons(xs.first(), p.getSnd()))));
+  }
+
+  static boolean attack(int x, ImList&lt;Integer&gt; qs) {
+    int n = 1;
+    for (int y: qs) {
+      if (x == y + n || x == y - n) return true;
+      n++;
+    }
+    return false;
+  }
+  
+  static void nqueens(ImList&lt;Integer&gt; xs, ImList&lt;Integer&gt; qs) {
+    if (xs.isEmpty())
+      System.out.println(qs.reverse());
+    else
+      select(xs).forEach(p -&gt; {
+        int x = p.getFst();
+        if (!attack(x, qs)) nqueens(p.getSnd(), ImList.cons(x, qs));
+      });
+  }
+
+  // Q06
+  static final int farmer  = 0x01;
+  static final int goat    = 0x02;
+  static final int wolf    = 0x04;
+  static final int cabbage = 0x08;
+
+  // 同じ岸にいるか
+  static boolean isSameSide(int xs, int x, int y) {
+    return ((xs &amp; x) == 0) == ((xs &amp; y) == 0);
+  }
+
+  // 移動
+  static int moveFarmer(int xs) {
+    return xs ^ farmer;
+  }
+
+  static int moveGoat(int xs) {
+    if (!isSameSide(xs, farmer, goat)) return -1;
+    return (xs ^ farmer) ^ goat;
+  }
+
+  static int moveWolf(int xs) {
+    if (!isSameSide(xs, farmer, wolf)) return -1;
+    return (xs ^ farmer) ^ wolf;
+  }
+
+  static int moveCabbage(int xs) {
+    if (!isSameSide(xs, farmer, cabbage)) return -1;
+    return (xs ^ farmer) ^ cabbage;
+  }
+
+  // 移動関数表
+  static ImList&lt;Function&lt;Integer, Integer&gt;&gt; moveFunc = ImList.of(
+    listproblem2::moveFarmer,
+    listproblem2::moveGoat,
+    listproblem2::moveWolf,
+    listproblem2::moveCabbage);
+  
+  // 安全か？
+  static boolean isSafe(int xs) {
+    if (!isSameSide(xs, farmer, goat) &amp;&amp; isSameSide(xs, goat, wolf)) return false;
+    if (!isSameSide(xs, farmer, cabbage) &amp;&amp; isSameSide(xs, goat, cabbage)) return false;
+    return true;
+  }
+
+  // 手順の表示
+  static void printMove(ImList&lt;Integer&gt; xs) {
+    for (int x: xs) {
+      for (int i = 0; i &lt; 2; i++) {
+        System.out.print("[ ");
+        if ((x &amp; 1) == i) System.out.print("farmer ");
+        if (((x &gt;&gt; 1) &amp; 1) == i) System.out.print("goat ");
+        if (((x &gt;&gt; 2) &amp; 1) == i) System.out.print("wolf ");
+        if (((x &gt;&gt; 3) &amp; 1) == i) System.out.print("cabbage ");
+        System.out.print("]");
+      }
+      System.out.println("");
+    }
+  }
+
+  // 幅優先探索
+  static void riverCrossing() {
+    Queue&lt;ImList&lt;Integer&gt;&gt; q = Queue.queue();
+    q = q.add(ImList.of(0));
+    while (!q.isEmpty()) {
+      ImList&lt;Integer&gt; move = q.first();
+      q = q.rest();
+      int st = move.first();
+      if (st == 0x0f) {
+        printMove(move.reverse());
+        return;
+      } else {
+        for (Function&lt;Integer, Integer&gt; func: moveFunc) {
+          int newSt = func.apply(st);
+          if (newSt != -1 &amp;&amp; isSafe(newSt) &amp;&amp; !move.contains(newSt)) {
+            q = q.add(ImList.cons(newSt, move));
+          }
+        }
+      }
+    }
+  }
+
+  // Q07
+  static ImList&lt;ImList&lt;Integer&gt;&gt; derangementSub(int m, ImList&lt;Integer&gt; xs) {
+    if (xs.isEmpty())
+      return ImList.of(ImList.nil());
+    else
+      return xs.filter(x -&gt; x != m)
+        .flatMap(x -&gt; derangementSub(m + 1, xs.filter(y -&gt; x != y)).map(ys -&gt; ImList.cons(x, ys)));
+  }
+
+  static ImList&lt;ImList&lt;Integer&gt;&gt; derangement(int n) {
+    return derangementSub(1, ImList.iota(1, n));
+  }
+
+  // Q08
+  static &lt;E&gt; void partSetSub(ImList&lt;E&gt; xs, ImList&lt;ImList&lt;E&gt;&gt; a) {
+    if (xs.isEmpty()) {
+      System.out.println(a);
+    } else {
+      a.forEach(ys -&gt; partSetSub(xs.rest(), ImList.cons(ImList.cons(xs.first(), ys), a.filter(zs -&gt; zs != ys))));
+      partSetSub(xs.rest(), ImList.cons(ImList.of(xs.first()), a));
+    }
+  }
+  
+  static &lt;E&gt; void partitionOfSet(ImList&lt;E&gt; xs) {
+    partSetSub(xs.reverse(), ImList.nil());
+  }
+
+  // Q09
+  static &lt;E&gt; void groupPartSub(int n, int m, ImList&lt;E&gt; xs, ImList&lt;ImList&lt;E&gt;&gt; a) {
+    if (xs.isEmpty()) {
+      System.out.println(a);
+    } else {
+      a.forEach(ys -&gt; {
+        if (ys.length() &lt; n)
+          groupPartSub(n, m, xs.rest(), ImList.cons(ImList.cons(xs.first(), ys), a.filter(zs -&gt; zs != ys)));
+      });
+      if (a.length() &lt; m)
+        groupPartSub(n, m, xs.rest(), ImList.cons(ImList.of(xs.first()), a));
+    }
+  }
+  
+  static &lt;E&gt; void groupPartition(int n, int m, ImList&lt;E&gt; xs) {
+    groupPartSub(n, m, xs.reverse(), ImList.nil());
+  }
+
+  // Q10
+  static void partInt(int n, int k, ImList&lt;Integer&gt; a) {
+    if (n == 0) {
+      System.out.println(a);
+    } else if (n == 1) {
+      System.out.println(a.append(ImList.of(1)));
+    } else if (k == 1) {
+      System.out.println(a.append(ImList.fill(n, 1)));
+    } else {
+      if (n - k &gt;= 0)
+        partInt(n - k, k, a.append(ImList.of(k)));
+      partInt(n, k - 1, a);
+    }
+  }
+      
+  static void partitionOfInt(int n) {
+    partInt(n, n, ImList.nil());
+  }
+  
+  public static void main(String[] args) {
+    System.out.println("----- Q01 -----");
+    System.out.println("min = " + minimum(height));
+    System.out.println("max = " + maximum(height));
+    System.out.println("sum = " + sum(height));
+    System.out.println("(sum, avg) = " + average(height));
+    System.out.println("(avg, sd) = " + avgSd(height));
+    System.out.println("----- Q02 -----");
+    pascal(16);
+    System.out.println("----- Q03 -----");
+    ImList&lt;Integer&gt; xs = ImList.of(1,2,2,3,3,3,4,4,4,4,5,5,5,5,5);
+    ImList&lt;Pair&lt;Integer, Integer&gt;&gt; ys = encode(xs);
+    System.out.println(ys);
+    System.out.println(decode(ys));
+    LazyStream&lt;Integer&gt; xs1 = LazyStream.of(xs);
+    LazyStream&lt;Pair&lt;Integer, Integer&gt;&gt; ys1 = encodeLazy(xs1);
+    ys1.forEach(System.out::print);
+    System.out.println("");
+    decodeLazy(ys1).forEach(c -&gt; System.out.print(c + " "));
+    System.out.println("");
+    System.out.println("----- Q04 -----");
+    System.out.println("----- dfs -----");
+    depthFirstSearch(Node.G, ImList.of(Node.A));
+    System.out.println("----- bfs -----");
+    breadthFirstSearch(Node.A, Node.G);
+    System.out.println("----- bfsRec -----");
+    Queue&lt;ImList&lt;Node&gt;&gt; q = Queue.queue();
+    bfsRec(q.add(ImList.of(Node.A)), Node.G);
+    System.out.println("----- ids -----");
+    ids(Node.A, Node.G);
+    System.out.println("----- Q05 -----");
+    for (int i = 4; i &lt;= 8; i++)
+      nqueens(ImList.iota(1, i), ImList.nil());
+    System.out.println("----- Q06 -----");
+    riverCrossing();
+    System.out.println("----- Q07 -----");
+    System.out.println(derangement(3));
+    System.out.println(derangement(4));
+    System.out.println(derangement(5));
+    System.out.println("----- Q08 -----");
+    partitionOfSet(ImList.iota(1, 3));
+    partitionOfSet(ImList.iota(1, 4));
+    System.out.println("----- Q09 -----");
+    groupPartition(2, 2, ImList.iota(1, 4));
+    groupPartition(3, 2, ImList.iota(1, 6));
+    System.out.println("----- Q10 -----");
+    partitionOfInt(5);
+    partitionOfInt(6);
+  }
+}
+</pre>
+<hr>
+<h4>●実行結果</h4>
+<pre>
+----- Q01 -----
+min = 133.7
+max = 167.9
+sum = 15062.699999999997
+(sum, avg) = (15062.699999999997 150.62699999999998)
+(avg, sd) = (150.62699999999998 6.433472701426506)
+----- Q02 -----
+(1)
+(1 1)
+(1 2 1)
+(1 3 3 1)
+(1 4 6 4 1)
+(1 5 10 10 5 1)
+(1 6 15 20 15 6 1)
+(1 7 21 35 35 21 7 1)
+(1 8 28 56 70 56 28 8 1)
+(1 9 36 84 126 126 84 36 9 1)
+(1 10 45 120 210 252 210 120 45 10 1)
+(1 11 55 165 330 462 462 330 165 55 11 1)
+(1 12 66 220 495 792 924 792 495 220 66 12 1)
+(1 13 78 286 715 1287 1716 1716 1287 715 286 78 13 1)
+(1 14 91 364 1001 2002 3003 3432 3003 2002 1001 364 91 14 1)
+(1 15 105 455 1365 3003 5005 6435 6435 5005 3003 1365 455 105 15 1)
+----- Q03 -----
+((1, 1) (2, 2) (3, 3) (4, 4) (5, 5))
+(1 2 2 3 3 3 4 4 4 4 5 5 5 5 5)
+(1, 1)(2, 2)(3, 3)(4, 4)(5, 5)
+1 2 2 3 3 3 4 4 4 4 5 5 5 5 5 
+----- Q04 -----
+----- dfs -----
+(A B C E G)
+(A B D E G)
+(A C B D E G)
+(A C E G)
+----- bfs -----
+(A C E G)
+(A B C E G)
+(A B D E G)
+(A C B D E G)
+----- bfsRec -----
+(A C E G)
+(A B C E G)
+(A B D E G)
+(A C B D E G)
+----- ids -----
+----- 1 -----
+----- 2 -----
+----- 3 -----
+----- 4 -----
+(A C E G)
+----- 5 -----
+(A B C E G)
+(A B D E G)
+----- 6 -----
+(A C B D E G)
+----- 7 -----
+----- Q05 -----
+(2 4 1 3)
+(3 1 4 2)
+(1 3 5 2 4)
+(1 4 2 5 3)
+(2 4 1 3 5)
+(2 5 3 1 4)
+(3 1 4 2 5)
+(3 5 2 4 1)
+(4 1 3 5 2)
+(4 2 5 3 1)
+(5 2 4 1 3)
+(5 3 1 4 2)
+(2 4 6 1 3 5)
+(3 6 2 5 1 4)
+(4 1 5 2 6 3)
+(5 3 1 6 4 2)
+(1 3 5 7 2 4 6)
+(1 4 7 3 6 2 5)
+(1 5 2 6 3 7 4)
+(1 6 4 2 7 5 3)
+(2 4 1 7 5 3 6)
+(2 4 6 1 3 5 7)
+(2 5 1 4 7 3 6)
+(2 5 3 1 7 4 6)
+(2 5 7 4 1 3 6)
+(2 6 3 7 4 1 5)
+(2 7 5 3 1 6 4)
+(3 1 6 2 5 7 4)
+(3 1 6 4 2 7 5)
+(3 5 7 2 4 6 1)
+(3 6 2 5 1 4 7)
+(3 7 2 4 6 1 5)
+(3 7 4 1 5 2 6)
+(4 1 3 6 2 7 5)
+(4 1 5 2 6 3 7)
+(4 2 7 5 3 1 6)
+(4 6 1 3 5 7 2)
+(4 7 3 6 2 5 1)
+(4 7 5 2 6 1 3)
+(5 1 4 7 3 6 2)
+(5 1 6 4 2 7 3)
+(5 2 6 3 7 4 1)
+(5 3 1 6 4 2 7)
+(5 7 2 4 6 1 3)
+(5 7 2 6 3 1 4)
+(6 1 3 5 7 2 4)
+(6 2 5 1 4 7 3)
+(6 3 1 4 7 5 2)
+(6 3 5 7 1 4 2)
+(6 3 7 4 1 5 2)
+(6 4 2 7 5 3 1)
+(6 4 7 1 3 5 2)
+(7 2 4 6 1 3 5)
+(7 3 6 2 5 1 4)
+(7 4 1 5 2 6 3)
+(7 5 3 1 6 4 2)
+(1 5 8 6 3 7 2 4)
+(1 6 8 3 7 4 2 5)
+(1 7 4 6 8 2 5 3)
+(1 7 5 8 2 4 6 3)
+(2 4 6 8 3 1 7 5)
+(2 5 7 1 3 8 6 4)
+(2 5 7 4 1 8 6 3)
+(2 6 1 7 4 8 3 5)
+(2 6 8 3 1 4 7 5)
+(2 7 3 6 8 5 1 4)
+(2 7 5 8 1 4 6 3)
+(2 8 6 1 3 5 7 4)
+(3 1 7 5 8 2 4 6)
+(3 5 2 8 1 7 4 6)
+(3 5 2 8 6 4 7 1)
+(3 5 7 1 4 2 8 6)
+(3 5 8 4 1 7 2 6)
+(3 6 2 5 8 1 7 4)
+(3 6 2 7 1 4 8 5)
+(3 6 2 7 5 1 8 4)
+(3 6 4 1 8 5 7 2)
+(3 6 4 2 8 5 7 1)
+(3 6 8 1 4 7 5 2)
+(3 6 8 1 5 7 2 4)
+(3 6 8 2 4 1 7 5)
+(3 7 2 8 5 1 4 6)
+(3 7 2 8 6 4 1 5)
+(3 8 4 7 1 6 2 5)
+(4 1 5 8 2 7 3 6)
+(4 1 5 8 6 3 7 2)
+(4 2 5 8 6 1 3 7)
+(4 2 7 3 6 8 1 5)
+(4 2 7 3 6 8 5 1)
+(4 2 7 5 1 8 6 3)
+(4 2 8 5 7 1 3 6)
+(4 2 8 6 1 3 5 7)
+(4 6 1 5 2 8 3 7)
+(4 6 8 2 7 1 3 5)
+(4 6 8 3 1 7 5 2)
+(4 7 1 8 5 2 6 3)
+(4 7 3 8 2 5 1 6)
+(4 7 5 2 6 1 3 8)
+(4 7 5 3 1 6 8 2)
+(4 8 1 3 6 2 7 5)
+(4 8 1 5 7 2 6 3)
+(4 8 5 3 1 7 2 6)
+(5 1 4 6 8 2 7 3)
+(5 1 8 4 2 7 3 6)
+(5 1 8 6 3 7 2 4)
+(5 2 4 6 8 3 1 7)
+(5 2 4 7 3 8 6 1)
+(5 2 6 1 7 4 8 3)
+(5 2 8 1 4 7 3 6)
+(5 3 1 6 8 2 4 7)
+(5 3 1 7 2 8 6 4)
+(5 3 8 4 7 1 6 2)
+(5 7 1 3 8 6 4 2)
+(5 7 1 4 2 8 6 3)
+(5 7 2 4 8 1 3 6)
+(5 7 2 6 3 1 4 8)
+(5 7 2 6 3 1 8 4)
+(5 7 4 1 3 8 6 2)
+(5 8 4 1 3 6 2 7)
+(5 8 4 1 7 2 6 3)
+(6 1 5 2 8 3 7 4)
+(6 2 7 1 3 5 8 4)
+(6 2 7 1 4 8 5 3)
+(6 3 1 7 5 8 2 4)
+(6 3 1 8 4 2 7 5)
+(6 3 1 8 5 2 4 7)
+(6 3 5 7 1 4 2 8)
+(6 3 5 8 1 4 2 7)
+(6 3 7 2 4 8 1 5)
+(6 3 7 2 8 5 1 4)
+(6 3 7 4 1 8 2 5)
+(6 4 1 5 8 2 7 3)
+(6 4 2 8 5 7 1 3)
+(6 4 7 1 3 5 2 8)
+(6 4 7 1 8 2 5 3)
+(6 8 2 4 1 7 5 3)
+(7 1 3 8 6 4 2 5)
+(7 2 4 1 8 5 3 6)
+(7 2 6 3 1 4 8 5)
+(7 3 1 6 8 5 2 4)
+(7 3 8 2 5 1 6 4)
+(7 4 2 5 8 1 3 6)
+(7 4 2 8 6 1 3 5)
+(7 5 3 1 6 8 2 4)
+(8 2 4 1 7 5 3 6)
+(8 2 5 3 1 7 4 6)
+(8 3 1 6 2 5 7 4)
+(8 4 1 3 6 2 7 5)
+----- Q06 -----
+[ farmer goat wolf cabbage ][ ]
+[ wolf cabbage ][ farmer goat ]
+[ farmer wolf cabbage ][ goat ]
+[ cabbage ][ farmer goat wolf ]
+[ farmer goat cabbage ][ wolf ]
+[ goat ][ farmer wolf cabbage ]
+[ farmer goat ][ wolf cabbage ]
+[ ][ farmer goat wolf cabbage ]
+----- Q07 -----
+((2 3 1) (3 1 2))
+((2 1 4 3) (2 3 4 1) (2 4 1 3) (3 1 4 2) (3 4 1 2) (3 4 2 1) (4 1 2 3) (4 3 1 2) (4 3 2 1))
+((2 1 4 5 3) (2 1 5 3 4) (2 3 1 5 4) (2 3 4 5 1) (2 3 5 1 4) (2 4 1 5 3) (2 4 5 1 3) 
+ (2 4 5 3 1) (2 5 1 3 4) (2 5 4 1 3) (2 5 4 3 1) (3 1 2 5 4) (3 1 4 5 2) (3 1 5 2 4) 
+ (3 4 1 5 2) (3 4 2 5 1) (3 4 5 1 2) (3 4 5 2 1) (3 5 1 2 4) (3 5 2 1 4) (3 5 4 1 2) 
+ (3 5 4 2 1) (4 1 2 5 3) (4 1 5 2 3) (4 1 5 3 2) (4 3 1 5 2) (4 3 2 5 1) (4 3 5 1 2) 
+ (4 3 5 2 1) (4 5 1 2 3) (4 5 1 3 2) (4 5 2 1 3) (4 5 2 3 1) (5 1 2 3 4) (5 1 4 2 3) 
+ (5 1 4 3 2) (5 3 1 2 4) (5 3 2 1 4) (5 3 4 1 2) (5 3 4 2 1) (5 4 1 2 3) (5 4 1 3 2) 
+ (5 4 2 1 3) (5 4 2 3 1))
+----- Q08 -----
+((1 2 3))
+((1) (2 3))
+((1 2) (3))
+((1 3) (2))
+((1) (2) (3))
+((1 2 3 4))
+((1) (2 3 4))
+((1 2) (3 4))
+((1 3 4) (2))
+((1) (2) (3 4))
+((1 2 3) (4))
+((1 4) (2 3))
+((1) (2 3) (4))
+((1 2 4) (3))
+((1 3) (2 4))
+((1) (2 4) (3))
+((1 2) (3) (4))
+((1 3) (2) (4))
+((1 4) (2) (3))
+((1) (2) (3) (4))
+----- Q09 -----
+((1 2) (3 4))
+((1 4) (2 3))
+((1 3) (2 4))
+((1 2 3) (4 5 6))
+((1 5 6) (2 3 4))
+((1 3 4) (2 5 6))
+((1 2 4) (3 5 6))
+((1 2 6) (3 4 5))
+((1 4 5) (2 3 6))
+((1 3 6) (2 4 5))
+((1 2 5) (3 4 6))
+((1 4 6) (2 3 5))
+((1 3 5) (2 4 6))
+----- Q10 -----
+(5)
+(4 1)
+(3 2)
+(3 1 1)
+(2 2 1)
+(2 1 1 1)
+(1 1 1 1 1)
+(6)
+(5 1)
+(4 2)
+(4 1 1)
+(3 3)
+(3 2 1)
+(3 1 1 1)
+(2 2 2)
+(2 2 1 1)
+(2 1 1 1 1)
+(1 1 1 1 1 1)
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">数で遊ぼう</h3>
+<p> 数を題材にした簡単な問題集です。プログラムは拙作のページで作成した immutable な連結リストと遅延ストリームを使っています。もちろん、連結リストや遅延ストリームを使わなくても解くことができるので、興味のある方は挑戦してみてください。
+</p>
+<ol>
+  <li>自然数 n 以上 m 未満の区間にある素数を求めるプログラムを作ってください。
+  <li>メルセンヌ素数を求めるプログラムを作ってください。
+  <li>自然数 n 以下のフィボナッチ数の総和を求めるプログラムを作ってください。
+  <li>フィボナッチ素数 (フィボナッチ数かつ素数) を求めるプログラムを作ってください。
+  <li>自然数 n を素因数分解するプログラムを作ってください。
+  <li>自然数 n の約数の個数を求めるプログラムを作ってください。
+  <li>自然数 n の約数の総和を求めるプログラムを作ってください。
+  <li>自然数 n の約数を求めるプログラムを作ってください。
+  <li>10000 以下の「完全数」を求めるプログラムを作ってください。
+  <li>100000 以下の「友愛数」を求めるプログラムを作ってください。
+</ol>
+<p> なお、問題の詳しい説明は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> の <a href="../puzzle/fibo.html">フィボナッチ数</a>, <a href="../puzzle/prime.html">素数</a>, <a href="../puzzle/divisor.html">約数</a> をお読みくださいませ。
+<hr>
+<h4>●解答</h4>
+<pre class="list">
+//
+// playnum.java : 数で遊ぼう
+//
+//                Copyright (C) 2017 Makoto Hiroi
+//
+import java.util.*;
+import immutable.*;
+
+public class playnum {
+  // Q01
+  
+  // 素数列
+  static LazyStream&lt;Long&gt; primes =
+    LazyStream.cons(2L, () -&gt; LazyStream.cons(3L, () -&gt; LazyStream.cons(5L, () -&gt; primesFrom(7))));
+
+  static long nextPrime(long n) {
+    while (true) {
+      LazyStream&lt;Long&gt; ps = primes;
+      while (true) {
+        long p = ps.first();
+        if (p * p &gt; n) return n;
+        if (n % p == 0) break;
+        ps = ps.rest();
+      }
+      n += n % 6 == 5 ? 2 : 4;
+    }
+  }
+
+  static LazyStream&lt;Long&gt; primesFrom(long n) {
+    long p = nextPrime(n);
+    return LazyStream.cons(p, () -&gt; primesFrom(p % 6 == 5 ? p + 2 : p + 4));
+  }
+
+  // Long バージョンの iota
+  static ImList&lt;Long&gt; iota(long n, long m) {
+    ImList&lt;Long&gt; xs = ImList.nil();
+    while (n &lt;= m) {
+      xs = ImList.cons(m--, xs);
+    }
+    return xs;
+  }
+  
+  // 区間ふるい
+  static ImList&lt;Long&gt; segmentSieve(long n, long m) {
+    ImList&lt;Long&gt; xs = iota(n, m);
+    LazyStream&lt;Long&gt; ps = primes;
+    while (true) {
+      long p = ps.first();
+      if (p * p &gt; m) return xs;
+      xs = xs.filter(x -&gt; x % p != 0 || x == p);
+      ps = ps.rest();
+    }
+  }
+
+  // Q02 メルセンヌ素数
+
+  // 累乗
+  static long power(long x, long n) {
+    if (n == 0) {
+      return 1L;
+    } else if (n == 1) {
+      return x;
+    } else {
+      long z = power(x, n / 2);
+      if (n % 2 == 1)
+        return x * z * z;
+      else
+        return z * z;
+    }
+  }
+
+  // 素数のチェック (試し割り)
+  static boolean isPrime(long n) {
+    LazyStream&lt;Long&gt; ps = primes;
+    while (true) {
+      long p = ps.first();
+      if (p * p &gt; n) return true;
+      if (n % p == 0) return false;
+      ps = ps.rest();
+    }
+  }
+
+  static LazyStream&lt;Long&gt; mersenneNumber() {
+    return LazyStream.iterate(2L, x -&gt; x + 1L)
+                     .map(x -&gt; power(2, x) - 1)
+                     .filter(x -&gt; isPrime(x));
+  }
+
+  // リュカ-レーマー・テスト (Lucas-Lehmer primality test)
+  static boolean lucasLehmerTest(long p) {
+    long m = power(2, p) - 1;
+    long x = 4;
+    for (long i = 0; i &lt; p - 2; i++) 
+      x = (x * x - 2) % m;
+    return x % m == 0;
+  }
+
+  static LazyStream&lt;Long&gt; mersenneNumberFast() {
+    return LazyStream.cons(3L, () -&gt; LazyStream.iterate(2L, x -&gt; x + 1L)
+                                               .filter(x -&gt; lucasLehmerTest(x))
+                                               .map(x -&gt; power(2, x) - 1));
+  }
+  
+  // Q03
+  // フィボナッチ数列
+  static LazyStream&lt;Long&gt; makeFibo(long a, long b) {
+    return LazyStream.cons(a, () -&gt; makeFibo(b, a + b));
+  }
+
+  static long fiboSum(long n) {
+    LazyStream&lt;Long&gt; fibo = makeFibo(1, 1);
+    long a = 0;
+    for (long x: fibo.takeWhile(x -&gt; x &lt;= n)) a += x;
+    return a;
+  }
+
+  // Q04
+  static LazyStream&lt;Long&gt; fiboPrime() {
+    return makeFibo(2, 3).filter(x -&gt; isPrime(x));
+  }
+    
+  // Q05
+  static Pair&lt;Long, Long&gt; factorSub(long n, long m) {
+    long c = 0;
+    while (n % m == 0) {
+      c++;
+      n /= m;
+    }
+    return Pair.pair(c, n);
+  }
+
+  // 素因数分解 (試し割り)
+  static List&lt;Pair&lt;Long, Long&gt;&gt; factorization(long n) {
+    List&lt;Pair&lt;Long, Long&gt;&gt; xs = new ArrayList&lt;&gt;();
+    LazyStream&lt;Long&gt; ps = primes;
+    while (true) {
+      long p = ps.first();
+      if (p * p &gt; n) break;
+      Pair&lt;Long, Long&gt; y = factorSub(n, p);
+      if (y.getFst() &gt; 0) {
+        xs.add(Pair.pair(p, y.getFst()));
+        n = y.getSnd();
+      }
+      ps = ps.rest();
+    }
+    if (n &gt; 1) xs.add(Pair.pair(n, 1L));
+    return xs;
+  }
+
+  // Q06
+  static long divisorNum(long n) {
+    return LazyStream.of(factorization(n)).map(x -&gt; x.getSnd()).foldLeft((a, x) -&gt; a * (x + 1), 1L);
+  }
+
+  // Q07
+  static long sigma(Pair&lt;Long, Long&gt; p) {
+    return iota(0, p.getSnd()).foldLeft((a, x) -&gt; a + power(p.getFst(), x), 0L);
+  }
+
+  static long divisorSum(long n) {
+    return LazyStream.of(factorization(n)).map(x -&gt; sigma(x)).foldLeft((a, x) -&gt; a * x, 1L);
+  }
+
+  // Q08
+  // LazyStream.iota の Long バージョン
+  static LazyStream&lt;Long&gt; iotaLazy(long n, long m) {
+    if (n &gt; m)
+      return LazyStream.nil();
+    else
+      return LazyStream.cons(n, () -&gt; iotaLazy(n + 1, m));
+  }
+  
+  static LazyStream&lt;Long&gt; factorSub(Pair&lt;Long, Long&gt; p) {
+    return iotaLazy(0, p.getSnd()).map(x -&gt; power(p.getFst(), x));
+  }
+
+  static LazyStream&lt;Long&gt; product(LazyStream&lt;Long&gt; xs, LazyStream&lt;Long&gt; ys) {
+    return xs.flatMap(x -&gt; ys.map(y -&gt; x * y));
+  }
+  
+  static List&lt;Long&gt; divisor(long n) {
+    List&lt;Pair&lt;Long, Long&gt;&gt; fs = factorization(n);
+    LazyStream&lt;Long&gt; xs = factorSub(fs.get(0));
+    for (int i = 1; i &lt; fs.size(); i++) {
+      xs = product(xs, factorSub(fs.get(i)));
+    }
+    List&lt;Long&gt; ys = xs.take((int)divisorNum(n));
+    Collections.sort(ys);
+    return ys;
+  }
+
+  // Q09
+  static void perfectNumber(long n) {
+    for (long x = 2; x &lt;= n; x++) {
+      if (divisorSum(x) - x == x) System.out.println(x);
+    }
+  }
+
+  // 別解 (メルセンヌ素数を M<sub>n</sub> とすると、偶数の完全数は 2<sup>n-1</sup> * M<sub>n</sub>)
+  static LazyStream&lt;Long&gt; perfectNumber() {
+    return LazyStream.iterate(2L, x -&gt; x + 1)
+                     .filter(x -&gt; isPrime(power(2, x) - 1))
+                     .map(x -&gt; power(2, x - 1) * (power(2, x) - 1));
+  }
+  
+  // Q10
+  static LazyStream&lt;Pair&lt;Long, Long&gt;&gt; yuuaiNumber() {
+    return LazyStream
+      .iterate(2L, x -&gt; x + 1)
+      .map(x -&gt; Pair.pair(x, divisorSum(x) - x))
+      .filter(x -&gt; {
+        long n = x.getFst();
+        long m = x.getSnd();
+        return n &lt; m &amp;&amp; divisorSum(m) - m == n;
+      });
+  }
+
+  public static void main(String[] args) {
+    System.out.println("----- Q01 -----");
+    System.out.println(segmentSieve(2, 100));
+    System.out.println(segmentSieve(100000, 100100));
+    System.out.println("----- Q02 -----");
+    System.out.println(mersenneNumber().take(7));
+    System.out.println(mersenneNumberFast().take(8));
+    System.out.println("----- Q03 -----");
+    System.out.println(fiboSum(100000000));
+    System.out.println(fiboSum(300000000));
+    System.out.println("----- Q04 -----");
+    System.out.println(fiboPrime().take(9));
+    System.out.println("----- Q05 -----");
+    System.out.println(factorization(24));
+    System.out.println(factorization(12345678));
+    System.out.println(factorization(123456789));
+    System.out.println(factorization(1234567890));
+    System.out.println(factorization(1111111111));
+    System.out.println("----- Q06 -----");
+    System.out.println(divisorNum(24));
+    System.out.println(divisorNum(12345678));
+    System.out.println(divisorNum(123456789));
+    System.out.println(divisorNum(1234567890));
+    System.out.println(divisorNum(1111111111));
+    System.out.println("----- Q07 -----");
+    System.out.println(divisorSum(24));
+    System.out.println(divisorSum(12345678));
+    System.out.println(divisorSum(123456789));
+    System.out.println(divisorSum(1234567890));
+    System.out.println(divisorSum(1111111111));
+    System.out.println("----- Q08 -----");
+    System.out.println(divisor(24));
+    System.out.println(divisor(12345678));
+    System.out.println(divisor(123456789));
+    System.out.println(divisor(1234567890));
+    System.out.println(divisor(1111111111));
+    System.out.println("----- Q09 -----");
+    perfectNumber(10000);
+    System.out.println(perfectNumber().take(6));
+    System.out.println("----- Q10 -----");
+    System.out.println(yuuaiNumber().takeWhile(x -&gt; x.getSnd() &lt; 100000));
+  }
+}
+</pre>
+<h4>●実行結果</h4>
+<pre>
+C&gt;java playnum
+----- Q01 -----
+(2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97)
+(100003 100019 100043 100049 100057 100069)
+----- Q02 -----
+[3, 7, 31, 127, 8191, 131071, 524287]
+[3, 7, 31, 127, 8191, 131071, 524287, 2147483647]
+----- Q03 -----
+165580140
+701408732
+----- Q04 -----
+[2, 3, 5, 13, 89, 233, 1597, 28657, 514229]
+----- Q05 -----
+[(2, 3), (3, 1)]
+[(2, 1), (3, 2), (47, 1), (14593, 1)]
+[(3, 2), (3607, 1), (3803, 1)]
+[(2, 1), (3, 2), (5, 1), (3607, 1), (3803, 1)]
+[(11, 1), (41, 1), (271, 1), (9091, 1)]
+----- Q06 -----
+8
+24
+12
+48
+16
+----- Q07 -----
+60
+27319968
+178422816
+3211610688
+1246404096
+----- Q08 -----
+[1, 2, 3, 4, 6, 8, 12, 24]
+[1, 2, 3, 6, 9, 18, 47, 94, 141, 282, 423, 846, 14593, 29186, 43779, 87558, 131337,
+ 262674, 685871, 1371742, 2057613, 4115226, 6172839, 12345678]
+[1, 3, 9, 3607, 3803, 10821, 11409, 32463, 34227, 13717421, 41152263, 123456789]
+[1, 2, 3, 5, 6, 9, 10, 15, 18, 30, 45, 90, 3607, 3803, 7214, 7606, 10821, 11409,
+ 18035, 19015, 21642, 22818, 32463, 34227, 36070, 38030, 54105, 57045, 64926, 68454,
+ 108210, 114090, 162315, 171135, 324630, 342270, 13717421, 27434842, 41152263,
+ 68587105, 82304526, 123456789, 137174210, 205761315, 246913578, 411522630, 
+ 617283945, 1234567890]
+[1, 11, 41, 271, 451, 2981, 9091, 11111, 100001, 122221, 372731, 2463661, 4100041,
+ 27100271, 101010101, 1111111111]
+----- Q09 -----
+6
+28
+496
+8128
+[6, 28, 496, 8128, 33550336, 8589869056]
+----- Q10 -----
+[(220, 284), (1184, 1210), (2620, 2924), (5020, 5564), (6232, 6368), (10744, 10856),
+ (12285, 14595), (17296, 18416), (63020, 76084), (66928, 66992), (67095, 71145),
+ (69615, 87633), (79750, 88730)]
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcjava21.html">PrevPage</a> | <a href="index.html">Java</a> | NextPage ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

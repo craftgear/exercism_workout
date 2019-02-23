@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / Four Four's</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881760</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>数字のパズル：Four Four's</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>パズルの説明</h3>
+<p> <b>Four Four's</b> は数字を使ったパズルです。いろいろなルールがあるのですが、今回は簡易ルールで行きましょう。それでは問題です。
+</p>
+<div class="question">
+<b>[問題] Four Four's</b><br><br>
+数字 4 を 4 つと＋, －, ×, ÷, （, ） を使って、答えが 1 から 10 になる式を作りなさい。数字は 4 だけではなく、44 や 444 のように合体させてもよい。また、－を符号として使うことは禁止する。
+</div>
+<p> 数字の 4 を 4 つ使うので Four Four's という名前なのだと思います。ところで、このルールでは 11 になる式を作ることができません。ほかのルール、たとえば小数点を付け加えると、次のように作ることができます。
+</p>
+<pre class="item">
+4 ÷ .4 ＋ 4 ÷ 4 = 11
+</pre>
+<p> 今回は簡易ルールということで、小数点を使わないで 1 から 10 までの式を作ってください。まずは、ご自分の頭を使って解いてみましょう。気分転換や息抜きのときにでも考えてみてください。
+</p>
+<p> このほかに、4 つの数字を使ったパズルでは、M.Kamada さんの <a href="http://homepage2.nifty.com/m_kamada/index.htm">STUDIO KAMADA</a> の日記に 切符番号の問題 があります。また、未菜実さんの <a href="http://www.geocities.co.jp/Berkeley-Labo/6317/">未菜実の数理パズル入門</a>
+には <a href="http://www.geocities.co.jp/Berkeley-Labo/6317/kuruma.htm">車のナンバーは１０</a> というパズルがあります。ちなみに、Four Four's の話題もあります。実をいうと、M.Hiroi は未菜実さんのページで Four Four's を知りました。未菜実さんに感謝いたします。
+</p>
+<h4>●数式のパターン</h4>
+<p> それではプログラムを作りましょう。基本的には、数式を生成して答えをチェックするだけです。ところで、数式を解析して計算するのはちょっと面倒ではないかと思われた方もいるでしょう。ところが、最近のスクリプト言語では、プログラムの実行中に数式や別のプログラムを組み立て、それを実行することができるようになっています。これを<b>動的プログラミング</b>とか<b>実行時評価</b>と呼びます。もともと動的プログラミングは Lisp や Prolog の得意技なのですが、Perl, Ruby, Tcl, Python などでも行うことができます。
+</p>
+<p> 今回は Perl を使いましょう。Perl の場合、関数 eval を使って簡単に数式を計算することができます。もっとも、数式を <b>逆ポーランド記法</b> で表せば、eval を使わなくても簡単に計算することができます。逆ポーランド記法は、あとで詳しく説明する予定です。
+</p>
+
+<p> Four Four's の場合、4 つの数値に 3 つの演算子しかありませんから、数式のパターンは簡単に求めることができます。数式を二分木で表すと、次に示す 5 つのパターンになります。
+</p>
+
+<pre class="fig">
+            Ｘ                Ｘ                          Ｘ
+          ／  ＼            ／  ＼                      ／  ＼
+        ／      ＼        ４      Ｙ                  Ｙ      ４  
+      Ｙ          Ｚ            ／  ＼              ／  ＼
+    ／  ＼      ／  ＼        ４      Ｚ          Ｚ      ４
+  ４     ４   ４      ４            ／  ＼      ／  ＼
+                                  ４      ４  ４      ４
+          （１）             （２）                    （３）
+
+      Ｘ                   Ｘ
+    ／  ＼               ／  ＼
+  ４      Ｙ           Ｙ      ４
+        ／  ＼       ／  ＼
+      Ｚ      ４   ４      Ｚ
+    ／  ＼               ／  ＼
+  ４      ４           ４      ４
+    （４）               （５）
+
+                図：数式のパターン（二分木）
+</pre>
+<p> X, Y, Z が演算子を表します。これを式で表すと、次のようになります。
+</p>
+<pre class="item">
+(1) (4 Y 4) X (4 Z 4)
+(2) 4 X (4 Y (4 Z 4))
+(3) ((4 Z 4) Y 4) X 4
+(4) 4 X ((4 Z 4) Y 4)
+(5) (4 Y (4 Z 4)) X 4
+</pre>
+<p> あとは、X, Y, Z に演算子 +, -, *, / を入れて数式を計算すればいいわけです。
+</p>
+<p> Four Four's は数字を合体できるので、数字が 3 つで演算子が 2 つ、数字が 2 つで演算子がひとつ、というパターンもあります。演算子がひとつの場合は簡単ですね。演算子が 2 つの場合は、次の式になります。
+</p>
+<pre class="item">
+(A) (a Y b) X c
+(B) a X (b Y c)
+</pre>
+<p> a, b, c が数字で X, Y が演算子を表しています。数字は 4 か 44 になります。この場合、a, b, c の組み合わせを生成する必要があります。組み合わせを (a, b, c) で表すと、(4, 4, 44), (4, 44, 4), (44, 4, 4) の 3 通りとなります。これと演算子の組み合わせにより数式を生成して、答えを求めてチェックします。
+</p>
+
+<h4>●プログラム</h4>
+<p> それでは、4 が 4 つと演算子が 3 つある場合のプログラムを示します。
+</p>
+
+<pre class="list">
+リスト：数字が 4 つある場合
+
+sub solve4 {
+  my @operator = ('+', '-', '*', '/');
+  foreach $x (@operator) {
+    foreach $y (@operator) {
+      foreach $z (@operator) {
+        foreach $expr ("(4 $y 4) $x (4 $z 4)",
+                       "4 $x (4 $y (4 $z 4))",
+                       "((4 $z 4) $y 4) $x 4",
+                       "4 $x ((4 $z 4) $y 4)",
+                       "(4 $y (4 $z 4)) $x 4" ) {
+          my $result = eval( $expr );
+          if( $result == int( $result ) and $result &gt;= 1 and $result &lt;= 10 ){
+            push( @{$answer[$result]}, $expr );
+          }
+        }
+      }
+    }
+  }
+}
+</pre>
+<p> 数式の組み立ては、文字列の変数置換を使えば簡単です。演算子を変数 $x, $y, $z にセットし、それを使って 5 種類の数式を組み立てればいいわけです。そして、組み立てた数式 $expr を関数 eval で実行します。
+</p>
+<p> Perl の場合、除算は浮動小数点で実行されることに注意してください。結果 $result を関数 int で整数に変換しても同じ値であれば、$result が整数値であることがわかります。その値が 1 以上 10 以下であれば、数式を配列 @answer に格納します。@answer の要素は「無名の配列」で初期化しておいて、複数の数式を格納できるようにします。
+</p>
+
+<p> 数字が 3 つで演算子が 2 つの場合も、基本的には同じプログラムになります。ただし、数字は引数として渡します。関数名を solve3 とすると、solve3( 4, 4, 44 ), slove3( 4, 44, 4 ), solve3( 44, 4, 4 ) と 3 回呼び出します。solve3 では、引数と演算子を組み合わせて数式を生成し、答えをチェックします。詳細は <a href="four.html#list">プログラムリスト</a> を参照してください。
+</p>
+
+<h4>●追記(2001/02/04)</h4>
+<p> 組み立てた数式の中には 0 で除算する場合があります。たとえば 4 * 4 / (4 - 4) を実行すると、実行時にエラーが発生します。Perl の場合、実行中にエラーが発生するとプログラムを終了しますが、eval でプログラムを評価する場合は動作が少し異なります。
+</p>
+<p> eval でプログラムを評価する場合、コンパイル時と実行時でエラーが発生することがありますが、どちらも場合も eval は変数 $@ にエラーメッセージをセットして未定義値を返します。Perl 自身が終了することはないのです。
+</p>
+<p> このプログラムでは、エラー "Illegal division by zero" が発生しているのですが、eval が未定義値を返すため計算結果を 0 と判断しています。このため、0 で除算する数式が @answer に格納されることはありません。エラーは division by zero しか発生しないとはいえ、きちんとチェックした方がいいですね。次のようにプログラムを修正します。
+</p>
+
+<pre class="list">
+リスト：エラーのチェック
+
+  my $result = eval( $expr );
+  if( $@ ){
+    unless( $@ =~ /Illegal division by zero/ ){
+      die;
+    }
+  } else {
+    if( $result == int( $result ) and $result &gt;= 1 and $result &lt;= 10 ){
+      push( @{$answer[$result]}, $expr );
+    }
+  }
+</pre>
+<p> まず、変数 $@ をチェックします。ノーエラーの場合、$@ には未定義値がセットされています。そして、そのエラーが division by zero でなければ、die を呼び出して終了します。この場合、die には $@ が引数として渡されます。
+</p>
+<p> Perl の eval は、実行時評価のほかにも例外処理に使うことができます。Perl の例外処理は <a href="../memo01.html#0204">Memoraudom 2001 年 2 月 4 日</a> で簡単に説明しましたので参考にしてください。
+</p>
+<h4>●実行結果</h4>
+<p> さっそく実行してみたところ、全部で 100 通りの式が出力されました。このプログラムは重複解のチェックを行っていないので、多数の式が出力されることに注意してください。
+</p>
+実行結果の一部を示します。
+<pre class="item">
+ 1: (4 - 4) + (4 / 4)
+ 2: (4 / 4) + (4 / 4)
+ 3: ((4 + 4) + 4) / 4
+ 4: 4 + (4 * (4 - 4))
+ 5: ((4 * 4) + 4) / 4
+ 6: ((4 + 4) / 4) + 4
+ 7: 4 + (4 - (4 / 4))
+ 8: (4 + 4) + (4 - 4)
+ 9: (4 + 4) + (4 / 4)
+10: (44 - 4) / 4
+</pre>
+
+<p> この中で、10 になる式は (44 - 4) / 4 しかありません。数字 4 を 4 つと＋, －, ×, ÷, ( , ) だけでは、10 になる式を作ることはできないのですね。
+</p>
+<p> 次は <a href="four.html#rpn">逆ポーランド記法</a> を使ってプログラムを作ってみたいと思います。
+</p>
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+#
+# four.pl : 「４つの４」
+#
+#            Copyright (C) 2001 Makoto Hiroi
+#
+
+# 答えを格納する配列
+@answer = (
+  [],                       # dummy
+  [],  [],  [],  [],  [],
+  [],  [],  [],  [],  [],
+);
+
+# 数値が４つの場合
+sub solve4 {
+  my @operator = ('+', '-', '*', '/');
+  foreach $x (@operator) {
+    foreach $y (@operator) {
+      foreach $z (@operator) {
+        foreach $expr ("(4 $y 4) $x (4 $z 4)",
+                       "4 $x (4 $y (4 $z 4))",
+                       "((4 $z 4) $y 4) $x 4",
+                       "4 $x ((4 $z 4) $y 4)",
+                       "(4 $y (4 $z 4)) $x 4" ) {
+          my $result = eval( $expr );
+          if( $@ ){
+            unless( $@ =~ /Illegal division by zero/ ){
+              die;
+            }
+          } else {
+            if( $result == int( $result ) and $result &gt;= 1 and $result &lt;= 10 ){
+              push( @{$answer[$result]}, $expr );
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# 数値が３つの場合
+sub solve3 {
+  my ($a, $b, $c) = @_;
+  my @operator = ('+', '-', '*', '/');
+  foreach  $x (@operator) {
+    foreach $y (@operator) {
+      # 式
+      foreach $expr ("($a $y $b) $x $c",
+                     "$a $x ($b $y $c)") {
+        my $result = eval( $expr );
+        if( $@ ){
+          unless( $@ =~ /Illegal division by zero/ ){
+            die;
+          }
+        } else {
+          if( $result == int( $result ) and $result &gt;= 1 and $result &lt;= 10 ){
+            push( @{$answer[$result]}, $expr );
+          }
+        }
+      }
+    }
+  }
+}
+
+# 数値が２つの場合
+sub solve2 {
+  my ($a, $b) = @_;
+  my @operator = ('+', '-', '*', '/');
+  foreach  $x (@operator) {
+    my $expr = "$a $x $b";
+    my $result = eval( $expr );
+    if( $result == int( $result ) and $result &gt;= 1 and $result &lt;= 10 ){    
+      push( @{$answer[$result]}, $expr );
+    }
+  }
+}
+
+# 解の探索
+&amp;solve4;
+&amp;solve3( 4, 4, 44 );
+&amp;solve3( 4, 44, 4 );
+&amp;solve3( 44, 4, 4 );
+&amp;solve2( 44, 44 );
+&amp;solve2( 444, 4 );
+&amp;solve2( 4, 444 );
+
+# 答えを出力
+foreach $i (1 .. 10) {
+  foreach $expr (@{$answer[$i]}) {
+    print "$i: $expr\n";
+  }
+}
+</pre>
+<hr>
+<h3 id="rpn">逆ポーランド記法</h3>
+<p> 私達がふつうに式を書く場合、1 + 2 のように演算子を真ん中に置きます。この書き方を <b>中置記法</b> といいます。中があれば前後もあるだろう、と思われた方はなかなか鋭いです。そのとおりで、<b>前置記法</b> と <b>後置記法</b> という書き方があります。
+</p>
+<p> 前置記法は演算子を前に置く書き方です。たとえば、1 + 2 であれば + 1 2 と書きます。これにカッコをつけてみると (+ 1 2) となり、M.Hiroi's Home Page ではお馴染みの Lisp プログラムになります。つまり、Lisp は前置記法で数式を表しているのです。
+</p>
+<p> 後置記法は演算子を後ろに置く書き方で、<b>逆ポーランド記法 (RPN : Reverse Polish Notation)</b> と呼ばれています。1 + 2 であれば 1 2 + のように書きます。逆ポーランド記法の利点は、計算する順番に演算子が現れるため、カッコが不要になることです。たとえば、"1 と 2 の和と 3 と 4 の和との積"、という数式を表してみましょう。
+</p>
+<pre class="item">
+中置記法： (1 + 2) * (3 + 4)
+後置記法： 1 2 + 3 4 + *
+</pre>
+<p> 逆ポーランド記法は、日本語の読み方とまったく同じです。<b>1 2 + </b>で 1 と 2 の和を求め、<b>3 4 + </b> で 3 と 4 を求め、最後に 2 つの結果を掛け算して答えが求まります。
+</p>
+<p> 私達は中置記法に慣れているため、逆ポーランド記法はわかりにくいのですが、コンピュータで利用する場合、演算ルーチンが簡単になるという利点があります。実際、<b>FORTH</b> というプログラミング言語では、逆ポーランド記法で数式を表しています。
+</p>
+
+<h4>●スタックの動作</h4>
+<p> 逆ポーランド記法は <b>スタック</b>(stack) を使うと簡単に計算することができます。ここで、スタックの動作を簡単に説明しておきましょう。
+</p>
+
+<pre class="fig">
+   |-----|   |[ A ]|   |[ B ]|   |[ A ]|  |-----| 
+   |  |  |   |-----|   |[ A ]|   |-----|  |  |  |
+   |  |  |   |  |  |   |-----|   |  |  |  |  |  |
+   |  |  |   |  |  |   |  |  |   |  |  |  |  |  |
+   |  |  |   |  |  |   |  |  |   |  |  |  |  |  |
+   +-----+   +-----+   +-----+   +-----+  +-----+
+ 1. 空の状態 2.PUSH    3.PUSH    4.POP    5.POP
+                A         B         B        A
+
+                図：スタックの動作例
+</pre>
+<p> 図はバネがついた容器を表していて、上から品物を出し入れすることができます。初めは空の状態です。ここに品物を乗せると、重さによってバネを圧縮し、品物が容器に格納されます。さらにもうひとつ品物を上に乗せると、さらにバネを圧縮し、その品物も容器に格納することができます。バネが限界まで圧縮されると、もう品物は追加できなくなります。取り出す場合は、上にある品物から行います。ひとつ取り出すと、その分バネが伸びて下にある品物が上に押し出されます。
+</p>
+<p> この容器の動作が、スタックの動作なのです。スタックにデータを追加する操作を<b>プッシュ (PUSH)</b> といい、スタックからデータを取り出す操作を<b>ポップ (POP)</b> といいます。品物をデータに見立てれば、データ A をスタックにプッシュし (2)、次にデータ B をプッシュします (3)。データを取り出す場合、後から入れたデータ B が先にポップされ (4)、その次にデータ A がポップされてスタックが空になります (5)。このように、スタックは後から入れたデータが先に取り出されるので、<b>後入れ先出し (LIFO : Last-In, First-Out)</b> と呼ばれます。
+</p>
+
+<h4>●スタックを使って計算する</h4>
+<p> スタックを使うと、逆ポーランド記法は簡単に計算できます。
+</p>
+<ol>
+  <li>数値はスタックに追加する。
+  <li>演算子であればスタックから 2 つ数値を取り出し、演算結果をスタックに追加する。
+  <li>最後にスタックに残った値が答えになる。
+</ol>
+<p> たったこれだけの規則で数式を計算することができます。それでは、実際に 1 2 + 3 4 + * を試してみましょう。次の表をみてください。
+</p>
+<table border=1 align="left">
+<thead>
+  <tr><th>数式</th><th>操作</th><th>スタック</th>
+</thead>
+<tbody>
+  <tr><td>1</td><td>PUSH</td><td>[ 1 ]</td></tr>
+  <tr><td>2</td><td>PUSH</td><td>[ 2, 1 ]</td></tr>
+  <tr><td>+</td><td>POP (2)</td><td>[ 1 ]</td></tr>
+  <tr><td> </td><td>POP (1)</td><td>[ ]</td></tr>
+  <tr><td> </td><td>1+2=3</td><td>[ ]</td></tr>
+  <tr><td> </td><td>PUSH</td><td>[ 3 ]</td></tr>
+  <tr><td>3</td><td>PUSH</td><td>[ 3, 3 ]</td></tr>
+  <tr><td>4</td><td>PUSH</td><td>[ 4, 3, 3 ]</td></tr>
+  <tr><td>+</td><td>POP (4)</td><td>[ 3, 3 ]</td></tr>
+  <tr><td> </td><td>POP (3)</td><td>[ 3 ]</td></tr>
+  <tr><td> </td><td>3+4=7</td><td>[ 3 ]</td></tr>
+  <tr><td> </td><td>PUSH</td><td>[ 7, 3 ]</td></tr>
+  <tr><td>*</td><td>POP (7)</td><td>[ 3 ]</td></tr>
+  <tr><td> </td><td>POP (3)</td><td>[ ]</td></tr>
+  <tr><td> </td><td>3*7=21</td><td>[ ]</td></tr>
+  <tr><td> </td><td>PUSH</td><td>[ 21 ]</td></tr>
+</tbody>
+</table>
+<p> スタックは [ ] で表しています。最初の 1 と 2 は数値なのでスタックにプッシュします。次は演算子 + なので、スタックからデータを取り出して 1 + 2 を計算します。そして、計算結果 3 をスタックにプッシュします。
+</p>
+<p> 次に、3 と 4 は数値なのでスタックにプッシュします。次は演算子 + なので同じように処理して、計算結果 7 をスタックにプッシュします。スタックの中身は [ 7, 3 ] となり、最初の計算結果 3 と次に計算した結果 7 がスタックに格納されています。この状態で最後の * を処理します。7 と 3 を取り出すとスタックは空の状態になります。そして、3 * 7 を計算して 21 をスタックにプッシュします。これで計算は終了です。スタックに残っている値 21 が計算結果となります。
+</p>
+<p> このように、スタックを使うことで逆ポーランド記法で書かれた数式を簡単に計算することができます。実は、数式だけではなく、スタックを用いてプログラムを実行することもできます。たとえば、プログラミング言語 FORTH がそうです。FORTH には「数値」と「ワード」という 2 種類のデータしかありません。ワードには +, -, *, / などの演算子のほかに、いろいろな処理が定義されています。もちろん、ユーザーが新しいワードを定義することもできます。
+</p>
+<p> FORTH の動作は、数値であればスタックにプッシュして、ワードであればそれを実行する、というシンプルなものです。これでプログラミングができるのですから、とてもユニークな言語ですね。
+</p>
+<br clear="left">
+<h4 id="update">●プログラムの作成</h4>
+<p> それでは、逆ポーランド記法の数式を計算するプログラムを作ってみましょう。使用する言語は Perl です。最初に、スタックと演算子を定義します。
+</p>
+
+<pre class="list">
+リスト：スタックと演算子の定義
+
+# スタック
+@stack = ();
+
+# 演算子
+%operator = (
+  '+' =&gt; \&plus, '-' =&gt; \&minus, '*' =&gt; \&multiply, '/' =&gt; \&division,
+);
+
+# 演算
+sub plus {
+  my $n2 = pop @stack;
+  my $n1 = pop @stack;
+  push @stack, $n1 + $n2;
+}
+
+sub minus {
+  my $n2 = pop @stack;
+  my $n1 = pop @stack;
+  push @stack, $n1 - $n2;
+}
+
+sub multiply {
+  my $n2 = pop @stack;
+  my $n1 = pop @stack;
+  push @stack, $n1 * $n2;
+}
+
+sub division {
+  my $n2 = pop @stack;
+  my $n1 = pop @stack;
+  push @stack, $n1 / $n2;
+}
+</pre>
+<p> スタックは配列を使って簡単に実現できます。とくに、Perl には配列をスタックとして操作する関数 push と pop があるのでとても簡単です。演算子 +, -, *, / は、ハッシュ表 %operator に登録します。実際の演算は、関数 plus, minus, multiply, division で行います。ハッシュ表には、これらの関数へのリファレンスを登録しておきます。
+</p>
+<p> 演算を行う関数は、スタックから数値を 2 つ取り出して演算し、その結果をプッシュするだけです。スタックは後入れ先出しのデータ構造なので、計算するときは数値の順番に注意してください。
+</p>
+
+<p> 次は、逆ポーランド記法を計算する関数 calc_rpn を作ります。
+</p>
+
+<pre class="list">
+リスト：逆ポーランド記法を計算
+
+sub calc_rpn {
+  my $string = shift;
+  foreach $item ( split(/ /, $string) ) {
+    my $op = $operator{$item};
+    if( $op ){
+      die "stack underflow: $item [@stack]\n" if @stack &lt; 2;
+      &$op;
+    } else {
+      push @stack, $item;
+    }
+  }
+  die "expression error: [@stack]\n" if @stack != 1;
+  pop @stack;
+}
+</pre>
+
+<p> calc_rpn には文字列を与えます。数字と演算子は空白で区切ることにします。関数 split で与えられた文字列を空白で分解し、foreach で要素を順番に取り出します。要素 $item が %operator に登録されていない場合、それを数値とみなして @stack にプッシュします。Perl の配列は自動的に拡張されるので、スタックの範囲チェックは行っていません。
+</p>
+<p>要素が %operator に登録されていれば、それは演算子です。$op には関数へのリファレンスがセットされているので、それを呼び出すだけです。このとき、@stack にデータが 2 つ以上あることを確かめます。データがなければ、die でエラー終了します。計算が終了したら、スタックに残っている値を返します。計算が正常に終了した場合、スタックにはデータがひとつしか残っていないはずです。2 つ以上ある場合は die でエラー終了します。
+</p>
+
+<h4>●実行結果</h4>
+<p> プログラムを動かす前に、数式を入力するための簡単なプログラムを作ります。
+</p>
+
+<pre class="list">
+リスト：数式入力用プログラム
+
+print "intput RPN-expression\n";
+while( <> ){
+  chop;
+  if( $_ ){
+    eval {
+      print calc_rpn( $_ ), "\n";
+    };
+    if( $@ ){
+      print $@;
+      @stack = ();
+    }
+  }
+}
+</pre>
+
+<p> eval は例外処理に使っています。エラーが発生したら、エラーメッセージを表示してスタックを空にします。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+intput RPN-expression
+1 2 + 5 3 - *
+6
+1 2 + *
+stack underflow: * [3]
+1 2 3 +
+expression error: [1 5]
+</pre>
+<p> きちんと動作していますね。このように、逆ポーランド記法の数式は簡単に計算することができます。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

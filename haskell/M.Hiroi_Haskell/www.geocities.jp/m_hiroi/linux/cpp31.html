@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ++プログラミング超入門</title>
+  <meta name="description" content="Ｃ++,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881813</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ++プログラミング超入門</h2>
+<div class="small">
+[ <a href="cpp30.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp32.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>unordered_map</h3>
+<p> 今回は最近の規格 (C++11) で追加された標準ライブラリ (STL) の unordered_map について説明します。unordered_map は探索アルゴリズムに高速な「ハッシュ法 (hashing)」を用いたコンテナクラス (連想配列) です。ハッシュ法はコンパイラやインタプリタなどで予約語、関数名、変数名などの管理に使われている方法です。また、Perl, Python, Ruby など連想配列をサポートしているスクリプト言語では、その実装にハッシュ法が使われています。
+</p>
+<p> ハッシュ法は、設計をうまく行えば 1 回の比較でデータを見つけることができます。実際、コンパイラの予約語のように探索するデータが固定されている場合は、そのように設計することが可能です。不特定多数のデータが探索対象になる場合は、すべてのデータを 1 回の比較で見つけることはできませんが、数回程度の比較で見つけるように設計することは可能です。
+</p>
+<p> まずは最初に、ハッシュ法のアルゴリズムについて説明します。なお、ハッシュ法の説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo04.html">ハッシュ法</a> や <a href="clang.html">お気楽Ｃ言語プログラミング超入門</a> <a href="clang20.html">ハッシュ法</a>, <a href="clang21.html">ハッシュ法 (2)</a> と同じです。ハッシュ法を理解されている方は読み飛ばしてもらってかまいません。また、これらのページでは Python やＣ言語を使って実際にハッシュ法をプログラムしています。興味のある方はお読みください。
+</p>
+<p> <a href="cpp31.html#next">●unordered_map の使い方</a> へ
+</p>
+<h4>●ハッシュ法の仕組み</h4>
+<p> ハッシュ法は「ハッシュ表 (hash table)」と呼ばれるデータを格納する配列と、データを数値 (無符号整数値) に変換する「ハッシュ関数 (hash function)」を用意します。たとえば、ハッシュ表の大きさを M とすると、ハッシュ関数はデータを 0 から M - 1 までの整数値に変換します。この値を「ハッシュ値 (hash value)」と呼びます。ハッシュ値はハッシュ表の添字に対応し、この位置にデータを格納します。つまり、ハッシュ関数によってデータを格納する位置を決める探索方法がハッシュ法なのです。
+</p>
+<p> ハッシュ法で不特定多数のデータを扱う場合、異なるデータでも同じハッシュ値が生成される可能性があります。これをハッシュ値の「衝突 (collision)」といいます。つまり、データをハッシュ表に登録しようとしても、すでに先客が居座っているわけです。この場合、2 種類の解決方法があります。
+</p>
+<p> 第 1 の方法はハッシュ表に複数のデータを格納することです。配列には一つのデータしか格納できないので、複数個のデータをまとめて格納する工夫が必要になります。このときよく利用されるデータ構造が「連結リスト (linked list)」です。ハッシュ表からデータを探索する場合、まずハッシュ値を求め、そこに格納されている連結リストの中からデータを探索します。これを「チェイン法 (chaining)」といいます。連結リストのほかに二分木を使う方法もあります。
+</p>
+<p> 第 2 の方法は空いている場所を探して、そこにデータを入れる方法です。この場合、最初とは違うハッシュ関数を用意して、新しくハッシュ値を計算させて場所を決めます。この処理を空いている場所が見つかるまで繰り返します。空き場所が見つからない場合、つまりハッシュ表が満杯の場合はデータを挿入することはできません。この方法を「オープンアドレス法 (open addressing)」といいます。
+</p>
+<h4>●チェイン法</h4>
+<p> それでは、チェイン法から説明します。チェイン法の場合、ハッシュ表にはデータをそのまま格納しないで、連結リストへのポインタを格納します。ハッシュ表からデータを探索する場合、まずハッシュ値を求め、そこに格納されている連結リストの中からデータを探索します。
+</p>
+<p> 簡単な例を示しましょう。次の図を見てください。
+</p>
+<pre class="fig">
+     ハッシュ値 0 1 2 3 4 5 6
+    --------------------------
+                A B C D E F G
+                H I J K L M N
+                O P Q R S T U
+                V W X Y Z
+
+HASH TABLE 0 [        ] -&gt; [O] -&gt; [H] -&gt; [A] -&gt; NULL
+           1 [        ] -&gt; [B] -&gt; NULL
+           2 [  NULL  ]
+           3 [        ] -&gt; [Y] -&gt; [D] -&gt; NULL
+           4 [  NULL  ]
+           5 [        ] -&gt; [M] -&gt; [F] -&gt; NULL
+           6 [        ] -&gt; [G] -&gt; NULL
+
+                図 : チェイン法
+</pre>
+<p> たとえば、上図のようにハッシュ関数とハッシュ表が構成されているとします。データ A の場合、ハッシュ値は 0 なのでハッシュ表の 0 の位置に格納されている連結リストを探索します。A は連結リストの中に登録されているので探索は成功です。データ C の場合、ハッシュ値は 2 ですが、ハッシュ表に連結リストがないので探索は失敗です。データ U の場合、ハッシュ値は 6 ですが、連結リストの中に U が登録されていないので探索は失敗です。
+</p>
+<p> ところで、チェイン法はハッシュ値の衝突が頻繁に発生すると、データを格納する連結リストが長くなるので、探索に時間がかかることになります。効率良く探索するには、うまくハッシュ値を分散させることが必要になります。
+</p>
+<h4>●オープンアドレス法</h4>
+<p> 次はオープンアドレス法について説明します。オープンアドレス法の場合、チェイン法とは違ってハッシュ表に直接データをセットするので、衝突が発生したとき別の空き場所を探す手順が必要になります。この手順のことを｢再ハッシュ (rehashing)」といいます。
+</p>
+<p> 再ハッシュの手順はいくつかの方法がありますが、その中で最も簡単な方法が「線形走査法 (linear probing)」です。ハッシュ関数を h(x)、ハッシュ表の大きさを M とすると、k 回目の再ハッシュ関数 h<SUB>k</SUB>(x) は次の式で表すことができます。
+</p>
+<pre class="fig">
+h<SUB>k</SUB>(x) = (h(x) + k) mod M
+</pre>
+<p> 最初の再ハッシュ関数 h<SUB>1</SUB>(x) は (h(x) + 1) mod M で、2 回目の再ハッシュ関数 h<SUB>2</SUB>(x) は (h(x) + 2) mod M になります。つまり、線形走査法はハッシュ表の空き場所を順番に調べていく「線形探索」と同じです。本ページでは線形走査法でオープンアドレス法の仕組みを説明することにします。このほかに「二重ハッシュ法 (double hashing)」という方法もあります。
+</p>
+<h4>●データの挿入と探索</h4>
+<p> 最初にデータの挿入から説明します。下図を見てください。
+<pre class="fig">
+   ハッシュ表                    ハッシュ表
+   ┌───┐                    ┌───┐
+   │  ／  │                    │  ／  │
+   ├───┤                    ├───┤
+   │  Ａ  │                    │  Ａ  ┼─┐ 衝突 (E)
+   ├───┤                    ├───┤  │
+   │  ／  │                    │  Ｅ  │←┘
+   ├───┤                    ├───┤
+   │  ／  │                    │  ／  │
+   ├───┤                    ├───┤
+   │  Ｂ  │                    │  Ｂ  ┼─┐ 衝突 (D, F)
+   ├───┤                    ├───┤  │
+   │  ／  │                    │  Ｄ  ┼←┤ 衝突 (F)
+   ├───┤                    ├───┤  │
+   │  Ｃ  │                    │  Ｃ  ┼←┤ 衝突 (F)
+   ├───┤                    ├───┤  │
+   │  ／  │                    │  Ｆ  │←┘
+   └───┘                    └───┘
+
+  A (1), B (4), C (6) を挿入    D (4), E (1), F (4) を挿入
+
+    図 : オープンアドレス法（線形走査法）
+</pre>
+<p> 最初にデータ A, B, C を挿入します。ハッシュ値の場所 (1, 4, 6 番目) にデータをセットします。次に、データ D を挿入します。ハッシュ値は 4 ですが、B と衝突しています。線形走査法の場合、次の場所は (4 + 1) mod 8 で 5 になります。そこで、D を 5 番目にセットします。同様に E を挿入しますが A と衝突しているので、その隣の場所 (2) に E をセットします。
+</p>
+<p> 最後に F を挿入しますが、B と衝突しています。そこで再ハッシュを行いますが、1 回目は (4 + 1) mod 8 = 5 で D と衝突します。2 回目は (4 + 2) mod 8 = 6 ですが、C と衝突します。3 回目で (4 + 3) mod 8 = 7 になり、この場所に F を挿入します。
+</p>
+<p> データの探索も簡単です。データのハッシュ値 n を求め、ハッシュ表の n 番目に格納されているデータと比較します。等しい場合は探索成功です。そうでなければ、再ハッシュを行って次のデータと比較します。そこが空き場所ならば、探索は失敗となります。
+</p>
+<p> たとえば B を探す場合、ハッシュ値は 4 なので、ハッシュ表の 4 番目に格納されている値と比較します。この場合は等しいので探索成功です。F を探索する場合、最初に B と比較します。次に、再ハッシュを行い 5, 6, 7 番目と順番にデータを比較していきます。そして、7 番目の F で探索成功となります。ハッシュ値が 1 のデータ G を探索する場合は、最初に A と比較し、次に E と比較します。その次に 3 番目のデータと比較しますが、空き場所なので探索は失敗となります。
+</p>
+<h4>●データの削除</h4>
+<p> オープンアドレス法の場合、データの探索と挿入だけならば簡単なのですが、データの削除処理がからむとちょっと複雑になります。次の図を見てください。
+</p>
+<pre class="fig">
+   ハッシュ表            ハッシュ表
+   ┌───┐            ┌───┐
+   │  ／  │            │  ／  │
+   ├───┤            ├───┤
+   │  Ａ  │            │  Ａ  │
+   ├───┤            ├───┤
+   │  Ｅ  │            │  Ｅ  │
+   ├───┤            ├───┤
+   │  ／  │            │  ／  │
+   ├───┤            ├───┤
+   │  Ｂ  │            │  Ｂ  ┼─┐Ｆの探索
+   ├───┤            ├───┤  │
+   │  Ｄ  │            │  Ｄ  ┼←┤探索継続
+   ├───┤            ├───┤  │
+   │  Ｃ  │─Ｃを削除→│  ／  │←┘終了（失敗）
+   ├───┤            ├───┤
+   │  Ｆ  │            │  Ｆ  │
+   └───┘            └───┘
+
+  データを挿入した順番
+  A (1), B (4), C (6), D (4), E (1), F (4)
+
+    図 : データの削除 (1)
+</pre>
+<p> データ C を削除します。単純に考えると、ハッシュ表の 6 番目を空き場所にすればよさそうですが、実はそうはいかないのです。6 番目を空き場所にした状態で、データ F を探索してみましょう。F のハッシュ値は 4 で B と衝突します。そこで、再ハッシュを行うと (4 + 1) mod 8 = 5 になりますが、ここでも D と衝突します。そして、再ハッシュを行い (4 + 2) mod 8 = 6 になりますが、この場所は空き場所なので探索は失敗となります。
+</p>
+<p> このように、データを単純に削除すると、再ハッシュを行ったデータをたどることができなくなるのです。そこで、削除したことを表すデータ DEL を用意します。そして、データが DEL のときは探索を続けるように手順を変更します。次の図を見てください。
+</p>
+<pre class="fig">
+   ハッシュ表            ハッシュ表
+   ┌───┐            ┌───┐
+   │  ／  │            │  ／  │
+   ├───┤            ├───┤
+   │  Ａ  │            │  Ａ  │
+   ├───┤            ├───┤
+   │  Ｅ  │            │  Ｅ  │
+   ├───┤            ├───┤
+   │  ／  │            │  ／  │
+   ├───┤            ├───┤
+   │  Ｂ  │            │  Ｂ  ┼─┐Ｆの探索
+   ├───┤            ├───┤  │
+   │  Ｄ  │            │  Ｄ  ┼←┤探索継続
+   ├───┤            ├───┤  │
+   │  Ｃ  │─Ｃを削除→│ＤＥＬ┼←┤探索継続
+   ├───┤            ├───┤  │
+   │  Ｆ  │            │  Ｆ  │←┘成功
+   └───┘            └───┘
+
+  データを挿入した順番
+  A (1), B (4), C (6), D (4), E (1), F (4)
+
+    図 : データの削除 (2)
+</pre>
+<p> データ C を削除する場合、その場所に DEL を書き込みます。そのあと、データ F を探索する場合、D と衝突したあとの再ハッシュで (4 + 2) mod 8 = 6 になります。今度は空き場所ではなく DEL になっているので、再ハッシュを行って探索を続けます。今度はデータ F を見つけることができます。
+<p> なお、新しいデータを挿入する場合は、空き場所または削除した場所を探して、そこにデータを書き込むだけです。
+</p>
+<h4>●オープンアドレス法の問題点</h4>
+<p> オープンアドレス法の場合、データの最大数はハッシュ表の大きさに制限されます。また、データ数が多くなるとハッシュ値の衝突が頻発するため、その性能は劣化してしまいます。とくに線形走査法の場合、再ハッシュのたびに連続した領域を使用するため、データがハッシュ表に分散するのではなく、特定の領域に偏って存在するようになります。このような現象を「クラスター (clustering)」といいます。これがハッシュ値の衝突をさらに増やすことになり、線形走査法では性能が急激に悪くなります。<a href="cpp31.html#cite">参考文献</a> によると、線形走査法の場合ハッシュ表の最大使用率は 80 % を目安にするとよいそうです。
+</p>
+<p> それから、データの削除を行う場合、データだけではなく削除データ (DEL) が増えても性能が劣化することに注意してください。ようするに、オープンアドレス法の場合、ハッシュ表の空き場所が少なくなると性能が劣化するのです。データの挿入と削除を繰り返すと空き場所は減少していくので、データ数が少ない状態でも探索が遅くなる場合もあるのです。このため、オープンアドレス法で削除処理を行うときは、ハッシュ表の再構築を考慮する必要があると思われます。削除処理を行う場合は、チェイン法を使ったほうが簡単かもしれません。実際、STL の unordered_map や unordered_set はチェイン法が採用されています。
+</p>
+<h4 id="next">●unordered_map の使い方</h4>
+<p> それでは unordered_map の使い方を見ていきましょう。unordered_map を使用するときは、ヘッダファイル unordered_map をインクルードしてください。変数の宣言は次のように行います。
+</p>
+<pre class="item">
+unordered_map&lt;キーのデータ型, 値のデータ型&gt; 変数名;
+</pre>
+<p> unordered_map はテンプレートなので、&lt; &gt; の中にキーのデータ型と値のデータ型を指定してください。この場合、空 (要素数が 0) の連想配列が生成されます。デフォルトの設定では、ハッシュ値の計算に構造体 hash テンプレートの関数オブジェクトが使用されます。もうひとつ、キーの等値を判定する叙述関数が必要になります。これは構造体 equal_to テンプレートの関数オブジェクトが使用されます。基本的なデータ型には、これらの関数が定義されているので、そのまま unordered_map を利用することができます。
+</p>
+<p> unordered_map のコンストラクタを下表に示します。
+</p>
+<table border=1>
+<caption>表 : list の主なコンストラクタ</caption>
+<thead>
+  <tr><th>書式</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>unordered_map&lt;K, V&gt;(const unordered_map&lt;K, V&gt;&amp; v)</td><td>コピーコンストラクタ</td></tr>
+  <tr><td>unordered_map&lt;K, V&gt;(s, e)</td><td>イテレータ s から e の手前までの要素を格納したマップを生成する</td></tr>
+</tbody>
+</table>
+<p> コピーコンストラクタのほかにも代入演算子 = による unordered_map の代入も可能です。イテレータを使って unordered_map&lt;K, V&gt; を初期化する場合、その要素は構造体 pair&lt;K, V&gt; でなければいけません。また、配列と同様に { ... } を使って unordered_map を初期化することもできます。このときも要素は構造体 pair&lt;K, V&gt; になります。
+</p>
+<p> 要素のアクセスは添字演算子 [] で行うことができます。たとえば、マップが unordered_map&lt;string, int&gt; a と宣言されている場合、a["foo"] = 10 でマップ a のキー "foo" に 10 をセットすることができます。キーが存在しない場合は、マップにキーが登録されます。キーが存在する場合、キーに対応する値が書き換えられます。a["foo"] でキー "foo" の値を求めることができます。キーが存在しない場合、値のデフォルト値 V() が返されます。
+</p>
+<p> それでは簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : unordered_map の簡単な使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;unordered_map&gt;
+using namespace std;
+
+int main()
+{
+  unordered_map&lt;string, int&gt; a;
+  a["foo"] = 1;
+  a["bar"] = 2;
+  a["baz"] = 3;
+  cout &lt;&lt; a["foo"] &lt;&lt; endl;
+  cout &lt;&lt; a["oops"] &lt;&lt; endl;
+  for (pair&lt;string, int&gt; x : a)
+    cout &lt;&lt; "(" &lt;&lt; x.first &lt;&lt; "," &lt;&lt; x.second &lt;&lt; ")\n";
+
+  vector&lt;pair&lt;string, int&gt;&gt; b = {
+    {"Foo", 10}, {"Bar", 20}, {"Baz", 30}
+  };
+  unordered_map&lt;string, int&gt; c(b.begin(), b.end());
+  for (pair&lt;string, int&gt; x : c)
+    cout &lt;&lt; "(" &lt;&lt; x.first &lt;&lt; "," &lt;&lt; x.second &lt;&lt; ")\n";
+
+  unordered_map&lt;string, int&gt; d = {
+    {"FOO", 10}, {"BAR", 20}, {"BAZ", 30}
+  };
+  for (pair&lt;string, int&gt; x : c)
+    cout &lt;&lt; "(" &lt;&lt; x.first &lt;&lt; "," &lt;&lt; x.second &lt;&lt; ")\n";
+}
+</pre>
+<p> unordered_map で pair を使用する場合、first にキーを、second に値をセットします。pair は構造体なので、{ ... } でメンバ変数を初期化することができます。unordered_map は範囲 for 文で要素を順番に取り出していくこともできます。ただし、unordered_map は map と違って要素 (キー) は決められた順序で並べられているわけではありません。範囲 for 文で要素にアクセスする場合、要素は昇順 (または降順) に取り出されるとは限りません。ご注意くださいませ。
+</p>
+<p> プログラムは簡単なので説明は割愛します。実行結果は次のようになります。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+0
+(oops,0)
+(baz,3)
+(bar,2)
+(foo,1)
+(Baz,30)
+(Foo,10)
+(Bar,20)
+(Baz,30)
+(Foo,10)
+(Bar,20)
+</pre>
+
+<h4>●unordered_map のイテレータ</h4>
+<p> unordered_map は前方向イテレータをサポートしています。++ 演算子で次の要素に進むことができます。イテレータを生成するメンバ関数を下表に示します。
+</p>
+<table border=1>
+<caption>表 : イテレータの生成 (unoredered_map)</caption>
+<thead>
+  <tr><th>メンバ関数</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>begin()</td><td>先頭要素を指し示すイテレータを返す</td></tr>
+  <tr><td>end()</td><td>終端を指し示すイテレータを返す</td></tr>
+  <tr><td>cbegin()</td><td>先頭要素を指し示す const イテレータを返す</td></tr>
+  <tr><td>cend()</td><td>終端を指し示す const イテレータを返す</td></tr>
+</tbody>
+</table>
+<p> const イテレータは要素を更新することができません。unordered_map は map と違って要素 (キー) は決められた順序で並べられているわけではありません。イテレータで要素にアクセスする場合、要素は昇順 (または降順) に取り出されるとは限りません。ご注意ください。
+</p>
+<p> イテレータのデータ型は次のようになります。
+</p>
+<pre class="item">
+unordered_map&lt;K, V&gt;::iterator        // 通常のイテレータ
+unordered_map&lt;K, V&gt;::const_iterator  // const イテレータ
+</pre>
+<p> イテレータの宣言は auto を使ったほうが簡単でしょう。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : イテレータの使用例
+
+#include &lt;iostream&gt;
+#include &lt;unordered_map&gt;
+using namespace std;
+
+int main()
+{
+  unordered_map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}, {"oops", 4}, {"hello", 5}
+  };
+  for (unordered_map&lt;string, int&gt;::const_iterator iter = a.cbegin(); iter != a.end(); ++iter)
+    cout &lt;&lt; "(" &lt;&lt; iter-&gt;first &lt;&lt; "," &lt;&lt; iter-&gt;second &lt;&lt; ")\n";
+  for (auto iter = a.begin(); iter != a.end(); ++iter)
+    iter-&gt;second *= 10;
+  for (auto &amp;x : a)
+    cout &lt;&lt; "(" &lt;&lt; x.first &lt;&lt; "," &lt;&lt; x.second &lt;&lt; ")\n";
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+(hello,5)
+(foo,1)
+(bar,2)
+(baz,3)
+(oops,4)
+(hello,50)
+(foo,10)
+(bar,20)
+(baz,30)
+(oops,40)
+</pre>
+<p> イテレータが指し示す要素のデータ型は pair&lt;const K, V&gt; です。値は書き換えることができますが、キーは参照することしかできません。
+</p>
+<h4>●データの探索</h4>
+<p> map は添字演算子 [] でキーの有無をチェックすることはできません。この場合、メンバ関数 find() を使います。find() はキーを見つけたらそれを指し示すイテレータを返します。見つからない場合は終端を指し示すイテレータを返します。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : find の使用例
+
+#include &lt;iostream&gt;
+#include &lt;unordered_map&gt;
+using namespace std;
+
+int main()
+{
+  unordered_map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}, {"oops", 4}, {"hello", 5}
+  };
+  auto iter = a.find("baz");
+  if (iter != a.end()) {
+    cout &lt;&lt; iter-&gt;second &lt;&lt; endl;
+  } else{
+    cout &lt;&lt; "not found\n";
+  }
+  iter = a.find("world");
+  if (iter != a.end()) {
+    cout &lt;&lt; iter-&gt;second &lt;&lt; endl;
+  } else{
+    cout &lt;&lt; "not found\n";
+  }
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+3
+not found
+</pre>
+
+<h4>●データの挿入</h4>
+<p> データの挿入はメンバ関数 insert() でも行うことができます。引数のデータ型は pair&lt;K, V&gt; で、返り値のデータ型は pair&lt;iterator, bool&gt; です。実際にデータを挿入した場合、bool は true になります。同じキーが存在している場合、値は書き換えられずに、bool は false になります。iterator は要素へのイテレータです。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : insert の使用例
+
+#include &lt;iostream&gt;
+#include &lt;unordered_map&gt;
+using namespace std;
+
+int main()
+{
+  unordered_map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}
+  };
+  auto r = a.insert(pair&lt;string, int&gt;("oops", 4));
+  cout &lt;&lt; r.second &lt;&lt; endl;
+  r = a.insert(pair&lt;string, int&gt;("foo", 10));
+  cout &lt;&lt; r.second &lt;&lt; endl;
+  for (auto p : a)
+    cout &lt;&lt; "(" &lt;&lt; p.first &lt;&lt; "," &lt;&lt; p.second &lt;&lt; ")\n";
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+0
+(oops,4)
+(baz,3)
+(foo,1)
+(bar,2)
+</pre>
+<h4>●データの削除</h4>
+<p> データの削除はメンバ関数 erase() で行います。引数はキーで返り値は削除した要素の個数です。unordered_map の場合、キーと値の組は一つしかないので、要素を削除したら 1 を返し、キーが見つからない場合は 0 を返します。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : erase の使用例
+
+#include &lt;iostream&gt;
+#include &lt;unordered_map&gt;
+using namespace std;
+
+int main()
+{
+  unordered_map&lt;string, int&gt; a = {
+    {"foo", 1}, {"bar", 2}, {"baz", 3}
+  };
+  string key[] = {
+    "oops", "foo", "bar", "baz"
+  };
+  for (string k : key) {
+    cout &lt;&lt; a.erase(k) &lt;&lt; endl;
+    cout &lt;&lt; a.size() &lt;&lt; endl;
+  }
+  cout &lt;&lt; a.empty() &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0
+3
+1
+2
+1
+1
+1
+0
+1
+</pre>
+<p> メンバ関数 size() は unordered_map の要素数を返します。empty() は unoredred_map が空であれば true を、そうでなければ false を返します。また、unoredred_map を空にするメンバ関数 clear() も用意されています。
+</p>
+<h4>●ハッシュ関数と叙述関数の設定</h4>
+<p> unordered_map を利用する場合、キーからハッシュ値を求めるハッシュ関数とキーの等値を判定する叙述関数が必要になります。これらの関数は unordered_map のテンプレート仮引数で指定することもできますが、構造体テンプレート hash&lt;Key&gt; と equal_to&lt;Key&gt; を特殊化して、operator()() を定義したほうが簡単です。hash の関数オブジェクトがハッシュ値を計算し、equal_to の関数オブジェクトが等値を判定します。
+</p>
+<p> hash と equal_to の関数オブジェクトの仕様を示します。
+</p>
+<pre class="list">
+リスト : hash と equal_to の特殊化
+
+template&lt;&gt;
+struct hash&lt;Key&gt; {
+  size_t operator()(const Key&amp;) const;
+};
+
+template&lt;&gt;
+struct equal_to&lt;Key&gt; {
+  bool operator()(const Key&amp; const key&amp) const;
+};
+</pre>
+<p> 簡単な例として、array&lt;int, 9&gt; をキーにして unoredered_map を使ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : hash と equal_to の使用例
+
+#include &lt;iostream&gt;
+#include &lt;unordered_map&gt;
+#include &lt;array&gt;
+
+using namespace std;
+
+// データ型の定義
+typedef array&lt;int, 9&gt; Key;
+
+// hash の特殊化
+template&lt;&gt;
+struct hash&lt;Key&gt; {
+  size_t operator()(const Key&amp; a) const {
+    size_t val = 0;
+    for (auto x : a)
+      val = (val &lt;&lt; 3) ^ x;
+    return val;
+  }
+};
+
+// equal_to の特殊化
+template&lt;&gt;
+struct equal_to&lt;Key&gt; {
+  bool operator()(const Key&amp; a, const Key&amp; b) const {
+    return a == b;
+  }
+};
+
+int main()
+{
+  Key a = {1,2,3,4,5,6,7,8,9};
+  Key b = {9,8,7,6,5,4,3,2,1};
+  Key c = {9,8,7,6,5,4,3,2,1};
+  cout &lt;&lt; hash&lt;Key&gt;()(a) &lt;&lt; endl;
+  cout &lt;&lt; hash&lt;Key&gt;()(b) &lt;&lt; endl;
+  cout &lt;&lt; equal_to&lt;Key&gt;()(a, b) &lt;&lt; endl;
+  cout &lt;&lt; equal_to&lt;Key&gt;()(a, a) &lt;&lt; endl;
+  cout &lt;&lt; equal_to&lt;Key&gt;()(b, c) &lt;&lt; endl;
+
+  unordered_map&lt;Key, int&gt; d;
+  d[a] = 10;
+  d[b] = 20;
+  cout &lt;&lt; d[a] &lt;&lt; endl;
+  cout &lt;&lt; d[b] &lt;&lt; endl;
+}
+</pre>
+<p> typedef で array&lt;int, 9&gt; に別名 Key を付けます。あとは、hash と equal_to を Key で特殊化するだけです。ハッシュ値の計算は val を 3 bit 左シフトして要素との XOR を計算するという単純な方法です。array は equal_to を定義する必要は無いのですが、簡単な例題として array&lt;int, 9&gt; で特殊化しています。array は演算子 == で等値の判定ができるので簡単です。
+</p>
+<p> それでは実行してみましょう。
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+21912969
+136272081
+0
+1
+1
+10
+20
+</pre>
+<p> ハッシュ値の計算と等値の判定は正常に動作していますね。これで、unordered_map のキーに Key (array&lt;int, 9&gt;) を使用することができます。
+</p>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>近藤嘉雪, 『Ｃプログラマのためのアルゴリズムとデータ構造』, ソフトバンク, 1998
+</ol>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="cpp30.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp32.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

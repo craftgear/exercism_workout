@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 TypeScript 超入門</title>
+  <meta name="description" content="TypeScript,JavaScript,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881857</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>お気楽 TypeScript 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="typescript.html">TypeScript</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>TypeScript の基礎知識</h3>
+<h4 id="abc19">●Union Types</h4>
+<ul>
+  <li>TypeScript はクラスやインターフェースで新しいデータ型を定義できるが、それ以外の方法もある</li>
+  <li>Union Types は "A または B" というデータ型を表す</li>
+  <li>Ｃ言語の「共用体 (union)」や関数型言語の「代数的データ型」と似ている</li>
+  <li>Union Types は複数のデータ型を '|' で連結して表す</li>
+<pre class="item">
+データ型1 | データ型2 | ... | データ型n
+</pre>
+  <li>共用型の場合、各データ型で共通のフィールドやメソッドしか使用できない</li>
+  <li>データ型固有のフィールドやメソッドを使用する場合は「型変換 (キャスト)」が必要 (あとで説明する)</li>
+  <li>let a: number | string; は数値または文字列を代入できるが、それ以外のデータ型を代入することはできない</li>
+  <li>オプション --strictNullChecks を指定すると、変数 a に null や undefined を代入することはできない</li>
+  <li>データ型を number | string | null にすると、null を代入することが可能になる</li>
+  <li>TypeScript は type でデータ型に別名を付けることができる</li>
+<pre class="item">
+type 名前 = データ型;
+</pre>
+  <li>これを Type Alias という</li>
+  <li>Type Alias は再帰的なデータ型でも定義できる</li>
+</ul>
+<pre class="list">
+リスト : Type Alias の使用例
+
+// 以下のプログラムは --strictNullChecks を指定するとコンパイルエラーになる
+
+// 簡単な連結リスト 
+type LinkedList&lt;T&gt; = { item: T; next: LinkedList&lt;T&gt; };
+
+const ls0: LinkedList&lt;number&gt; = { item: 0, next: null };
+const ls1 = { item: 1, next: ls0 };
+const ls2 = { item: 2, next: ls1 };
+
+console.log(ls2.item);
+console.log(ls2.next.item);
+console.log(ls2.next.next.item);
+console.log(ls2.next.next.next);
+console.log(ls2);
+</pre>
+<pre>
+2
+1
+0
+null
+{ item: 2, next: { item: 1, next: { item: 0, next: null } } }
+</pre>
+<pre class="list">
+リスト : Union Types の使用例
+
+// 以下のプログラムは --strictNullChecks を指定してもコンパイルできる
+
+// 空リスト (本来ならばシングルトンにする)
+class Nil {
+    get first(): never { throw new Error("empty list"); };
+    get rest(): never { throw new Error("empty list"); }
+}
+
+// コンスセル
+class Cons&lt;T&gt; {
+    constructor(private _first: T, private _rest: List&lt;T&gt;) {}
+    get first(): T { return this._first; }
+    get rest(): List&lt;T&gt; { return this._rest; }
+}
+
+// 連結リスト
+type List&lt;T&gt; = Nil | Cons&lt;T&gt;;
+
+// 終端
+const nil = new Nil();
+
+// 生成関数
+function cons&lt;T&gt;(x: T, xs: List&lt;T&gt;): List&lt;T&gt; {
+    return new Cons&lt;T&gt;(x, xs);
+}
+
+const xs0 = cons&lt;number&gt;(0, nil);
+const xs1 = cons(1, xs0);
+const xs2 = cons(2, xs1);
+
+console.log(xs2.first);
+console.log(xs2.rest.first);
+console.log(xs2.rest.rest.first);
+console.log(xs2);
+</pre>
+<pre>
+2
+1
+0
+Cons {
+  _first: 2,
+  _rest: Cons { _first: 1, _rest: Cons { _first: 0, _rest: Nil {} } } }
+</pre>
+<ul>
+  <li>never はありえないことを表すデータ型である</li>
+  <li>Nil の first(), rest() は throw でエラーを送出するので、呼び出し元には戻らない</li>
+  <li>これを never 型でコンパイラに教えることにより、first(), rest() の返り値のデータ型がコンスセルのものに推論できる</li>
+  <li>実際には以下に示すように抽象クラス List&lt;T&gt; を定義したほうがよいかもしれない</li>
+</ul>
+<pre class="list">
+リスト : 抽象クラスを使った連結リストの実装
+
+abstract class List&lt;T&gt; {
+    abstract get first(): T;
+    abstract get rest(): List&lt;T&gt;;
+}
+
+// 空リスト (本来ならばシングルトンにする)
+class Nil extends List&lt;never&gt; {
+    get first(): never { throw new Error("empty list"); };
+    get rest(): never { throw new Error("empty list"); }
+}
+
+// コンスセル
+class Cons&lt;T&gt; extends List&lt;T&gt; {
+    constructor(private _first: T, private _rest: List&lt;T&gt;) { super(); }
+    get first(): T { return this._first; }
+    get rest(): List&lt;T&gt; { return this._rest; }
+}
+
+// 終端
+const nil = new Nil();
+
+// 生成関数
+function cons&lt;T&gt;(x: T, xs: List&lt;T&gt;): List&lt;T&gt; {
+    return new Cons&lt;T&gt;(x, xs);
+}
+
+const xs0 = cons&lt;number&gt;(0, nil);
+const xs1 = cons(1, xs0);
+const xs2 = cons(2, xs1);
+
+console.log(xs2.first);
+console.log(xs2.rest.first);
+console.log(xs2.rest.rest.first);
+console.log(xs2);
+</pre>
+<ul>
+  <li>クラス Nil はクラス List&lt;T&gt; を継承するが、型パラメータ T の指定で困る</li>
+  <li>この場合、never を指定するとうまくいく</li>
+  <li>TypeScript の never はすべての型のサブタイプとして定義されている</li>
+  <li>never は Scala の Nothing と似ている</li>
+</ul>
+<pre class="list">
+リスト : never 型
+
+class Foo { foo: 1; }
+class Bar extends Foo { bar: 2 }
+class Baz extends Bar { baz: 3 }
+
+function foo&lt;T extend Bar&gt;(): void { console.log("oops"); }
+
+// foo&lt;Foo&gt;();    コンパイルエラー
+foo&lt;Bar&gt;();
+foo&lt;Baz&gt;();
+// foo&lt;number&gt;(); コンパイルエラー
+foo&lt;any&gt;();
+foo&lt;never&gt;();
+</pre>
+<ul>
+  <li>関数 foo() の型 T は Bar のサブタイプなので、Bar, Baz は指定できても Foo や number は指定できない</li>
+  <li>never はすべての型のサブタイプなので、never を指定してもコンパイルできる</li>
+  <li>any を指定してもコンパイルできるとは驚いた</li>
+  <li>T extends never とすると、never 以外の型はコンパイルエラーになる</li>
+  <li>M.Hiroi は TypeScript の型システムに詳しくないので、何か間違いや勘違いがあるかもしれない</li>
+</ul> 
+<h4 id="abc20">●Type Assertions</h4>
+<ul>
+  <li>type assertions (型アサーション) は他のプログラミング言語でいう「キャスト」のこと</li>
+  <li>type assertions の構文は 2 種類ある</li>
+<pre class="item">
+&lt;データ型名&gt; 値
+値 as データ型名
+</pre>
+  <li>いわゆる「ダウンキャスト」ができるが、変換できない場合は実行時に不具合が発生する</li>
+  <li>type assertions よりも、できれば Type Guards を使ったほうが良い</li>
+</ul>
+<pre class="list">
+リスト : Type Assertions の使用例
+
+class FooX {
+    constructor(private _x: number) { }
+    get x(): number { return this._x; }
+}
+
+class BarX extends FooX {
+    constructor(x: number, private _y: number) {
+        super(x);
+    }
+    get y(): number { return this._y; }
+}
+
+class BazX extends FooX {
+    constructor(x: number, private _z: string) {
+        super(x);
+    }
+    get z(): string { return this._z; }
+}
+
+// アップキャスト
+const objFoo0: FooX = new BarX(123, 456);
+const objFoo1: FooX = new BazX(789, "hello, world");
+
+// console.log(objFoo0.y); コンパイルエラー
+// console.log(objFoo1.z); コンパイルエラー
+
+// ダウンキャスト (正常に実行)
+console.log((&lt;BarX&gt;objFoo0).y);  // 456
+console.log((&lt;BazX&gt;objFoo1).z);  // hello, world
+
+// コンパイルできるが実行結果は undefined
+// objFoo0 は BazX のオブジェクトではないから
+console.log((&lt;BazX&gt;objFoo0).z);  // undefined
+</pre>
+<pre>
+456
+hello, world
+undefined
+</pre>
+<h4 id="abc21">●Type Guards</h4>
+<ul>
+  <li>Type Guards (型ガード) は if 文でデータ型を比較することにより、オブジェクトのデータ型を特定する機能である</li>
+  <li>データ型の比較には演算子 typeof と instanceof を使う</li>
+  <li>typeof obj はオブジェクト obj のデータ型により次の値 (文字列) を返す</li>
+    <ul>
+      <li>number =&gt; 'number'</li>
+      <li>string =&gt; 'string'</li>
+      <li>boolean =&gt; 'boolean'</li>
+      <li>undefined =&gt; 'undefined'</li>
+      <li>関数 =&gt; 'function'</li>
+      <li>その他 (null も含む) =&gt; 'object'</li>
+    </ul>
+  <li>if (typeof obj === 'number') { ... この中で obj は数値として扱われる ... }</li>
+  <li>obj instanceof データ型 は obj がデータ型のオブジェクトであれば真を返す</li>
+  <li>if (obj instanceof A) { ... この中で obj は A として扱われる ... }</li>
+  <li>ユーザがデータ型を判定するための関数を定義することができる</li>
+<pre class="item">
+function 関数名(仮引数: データ型): 仮引数 is データ型 { ... }
+</pre>
+  <li>返り値のデータ型を指定するとき is を使用する</li>
+  <li>実際の返り値は boolean</li>
+</ul>
+<pre class="list">
+リスト : Type Guards の使用例
+
+function isFoo(x: {foo: string}): x is {foo: string} {
+    if (!x) return false;
+    return typeof x.foo === 'string';
+}
+
+function typeSample(obj: number | string | Array&lt;number&gt; | {foo: string} | undefined): void {
+    if (typeof obj === 'number') {
+        // obj は数値
+        console.log(obj + 123);
+    } else if (typeof obj === 'string') {
+        // obj は文字列
+        console.log("hello, " + obj);
+    } else if (obj instanceof Array) {
+        // obj は配列
+        console.log(obj.reduce((a, x) => a + x));
+    } else if (isFoo(obj)) {
+        // obj は {foo: string} と互換性あり
+        console.log(`foo: ${obj.foo}`);
+    } else {
+        // 残りは undefined
+        console.log("oops!!");
+    }
+}
+
+typeSample(1000);
+typeSample("bar");
+typeSample([1,2,3,4,5]);
+typeSample({foo: 'oops!!'});
+typeSample(undefined);
+</pre>
+<pre>
+1123
+hello, bar
+15
+foo: oops!!
+oops!!
+</pre>
+<h4 id="abc22">●Intersection Types</h4>
+<ul>
+  <li>Intersection Types (交差型) は複数の型を &amp; で連結したもの</li>
+  <li>T &amp; U &amp; V は T, U, V のフィールドやメソッドをすべて備えた型になる</li>
+  <li>データ型の合成を簡単に記述できる</li>
+</ul>
+<pre class="list">
+リスト : Intersection　Types の使用例
+
+type FooI = { foo: number };
+type BarI = { bar: string };
+type BazI = FooI &amp; BarI;
+
+const objX: FooI = { foo: 123 };
+const objY: BarI = { bar: "hello, world" };
+
+let objZ: BazI;
+// objZ = objX;  コンパイルエラー
+// objZ = objY;  コンパイルエラー
+objZ = { foo: 456, bar: "oops!!" };  // OK
+console.log(objX);
+console.log(objY);
+console.log(objZ);
+</pre>
+<pre>
+{ foo: 123 }
+{ bar: 'hello, world' }
+{ foo: 456, bar: 'oops!!' }
+</pre>
+<h4 id="abc23">●String Literal Types</h4>
+<ul>
+  <li>「String Literal Type (文字列リテラル型)」は文字列リテラルをデータ型として扱う機能</li>
+<pre class="list">
+type Fruit = "Apple" | "Grape" | "Orange";
+</pre>
+  <li>"Apple", "Grape", "Orange" はデータ型を表す</li>
+  <li>let fruit: Fruit と宣言した変数 fruit には　"Apple", "Grape", "Orange" を代入することができる</li>
+  <li>それ以外の文字列は代入することができない</li>
+</ul>
+<pre class="list">
+リスト : String Literal Types の使用例
+
+// 果物
+type Fruit = "Apple" | "Grape" | "Orange" | "Banana";
+
+// 果物の価格
+class FruitPrice {
+    constructor(private _kind: Fruit, private _price: number) { }
+    get kind(): Fruit { return this._kind; }
+    get price(): number { return this._price; }
+}
+
+// 価格表
+const priceTable: FruitPrice[] = [
+    new FruitPrice("Apple", 100),
+    new FruitPrice("Grape", 150),
+    new FruitPrice("Orange", 80)
+];
+
+// 価格を求める
+function getPrice(x: Fruit, xs: FruitPrice[]): number {
+    for (let fruit of xs) {
+        if (fruit.kind == x) return fruit.price;
+    }
+    return 0;
+}
+
+console.log(getPrice("Apple", priceTable));
+console.log(getPrice("Grape", priceTable));
+console.log(getPrice("Orange", priceTable));
+console.log(getPrice("Banana", priceTable));
+
+// 簡単な Option 型
+type Option&lt;T&gt; = "None" | { some: T };
+
+function isNone&lt;T&gt;(x: Option&lt;T&gt;): x is "None" { return typeof x === 'string'; }
+function isSome&lt;T&gt;(x: Option&lt;T&gt;): x is {some: T} { return typeof x !== 'string'; }
+
+// Option から値を求める
+function getValue&lt;T&gt;(x: Option&lt;T&gt;, y?: T) {
+    if (isSome&lt;T&gt;(x)) {
+        return x.some;
+    } else if (y !== undefined) {
+        return y;
+    }
+    throw new Error("getValue: value is none");
+}
+
+// 探索
+function findIf&lt;T&gt;(pred: (x: T) => boolean, xs: T[]): Option&lt;T&gt; {
+    for (let y of xs) {
+        if (pred(y)) return { some: y };
+    }
+    return "None";
+}
+
+let result = findIf(x => x.kind == 'Apple', priceTable);
+if (isSome(result))
+    console.log(getValue(result).price);
+else
+    console.log("sold out");
+
+result = findIf(x => x.kind == 'Banana', priceTable);
+if (isSome(result))
+    console.log(getValue(result).price);
+else
+    console.log("sold out");
+</pre>
+<pre>
+100
+150
+80
+0
+100
+sold out
+</pre>
+<h4 id="abc24">●関数の多重定義</h4>
+<ul>
+  <li>TypeScript は同名の関数を複数定義することができる</li>
+  <li>これを関数の「多重定義 (overload)」という</li>
+  <li>ただし、引数のデータ型、個数、並び方などが異なる必要がある</li>
+  <li>TypeScript の多重定義は他の言語のそれとちょっと異なる</li>
+  <li>同名の関数を複数宣言するだけで、実装は一つの関数で行う</li>
+  <li>このとき、関数の仮引数や返り値のデータ型は、関数宣言と矛盾しないように定義すること</li>
+</ul>
+<pre class="list">
+リスト : 関数の多重定義
+
+// 関数宣言
+function foo(): void;
+function foo(x: number): void;
+function foo(x: string): void;
+
+// 実装
+function foo(x?: any): void {
+    if (x === undefined) {
+        console.log("hello, foo");
+    } else if (typeof x === 'number') {
+        while (x-- &gt; 0) console.log("hello, foo!");
+    } else {
+        console.log(`hello, ${x}!!`);
+    }
+}
+
+foo();
+foo(5);
+foo("oops");
+</pre>
+<pre>
+hello, foo
+hello, foo!
+hello, foo!
+hello, foo!
+hello, foo!
+hello, foo!
+hello, oops!!
+</pre>
+<h4 id="abc25">●モジュール</h4>
+<ul>
+  <li>JavaScript は ECMAScript 2015 (ES2015) から「モジュール (mmodule)」が導入された</li>
+  <li>現時点で ES2015 のモジュール機能を実装しているブラウザを M.Hiroi は知らない</li>
+  <li>TypeScript は ES2015 だけではなく、CommonJS 形式や AMD 形式などのモジュールをサポートしている</li>
+  <li>ここでは CommonJS 形式のモジュールの使い方を簡単に説明する</li>
+  <li>一般に、TypeScript (JavaScript) は一つのファイルで一つのモジュールを定義する</li>
+  <li>モジュールファイルで変数、関数、クラスなどの定義に exprot を付けると、それらの名前が外部に公開される</li>
+  <li>Node.js の module.exports = クラス; と同じことをしたい場合は export = クラス; とする</li>
+  <li>モジュールを読み込むときには import 文と reqire() を使う</li>
+<pre class="item">
+import 変数名 = require("...パス.../モジュール名");
+</pre>
+  <li>export された名前は 変数名.名前 でアクセスすることができる</li>
+  <li>export = クラス; の場合は、クラスが変数に格納される (Node.js と同じ)</li>
+  <li>コンパイルするときはオプション -m commonjs を指定すること</li>
+</ul>
+<pre class="list">
+リスト : モジュール foo.ts
+
+class Foo {
+    static foo(): string { return "foo"; }
+    static bar(): string { return "bar"; }
+    static baz(): string { return "baz"; }
+}
+
+export = Foo;
+</pre>
+<pre class="list">
+リスト : モジュールの使用例 (test.ts)
+
+import foo = require("./foo");
+
+console.log(foo.foo());
+console.log(foo.bar());
+console.log(foo.baz());
+</pre>
+<pre>
+C&gt;tsc -t es2015 -m commonjs test.ts
+
+C&gt;node test.js
+foo
+bar
+baz
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+</section>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="typescript.html">TypeScript</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

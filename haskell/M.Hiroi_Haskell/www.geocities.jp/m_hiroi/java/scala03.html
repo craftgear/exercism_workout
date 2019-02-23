@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scala プログラミング入門</title>
+  <meta name="description" content="Scala,Scala入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881777</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scala Programming</h1>
+<h2>お気楽 Scala プログラミング入門</h2>
+<div class="small">
+[ <a href="scala02.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala04.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>再帰定義</h3>
+<p> 前回はメソッドの関数的な使い方について説明しました。今回は「再帰定義」について説明します。
+</p>
+<p> 関数定義の中で、その関数自身を呼び出すことを「再帰呼び出し (recursive call) 」とか「再帰定義 (recursive definition) 」といいます。関数の定義に自分自身を使うことができるなんて、何か特別な仕掛があるのではないかと思われるかもしれません。ところが、再帰定義は特別なことではありません。大昔のプログラミング言語ならばいざしらず、今では再帰呼び出しができないプログラミング言語のほうが珍しいでしょう。もちろん Scala の関数 (メソッド) も再帰呼び出しが可能です。
+</p>
+
+<h4>●再帰定義の基本</h4>
+<p> 再帰定義というと、関数型言語の専売特許だと思われている方もいるでしょう。実際、Ｃ言語などの手続き型言語では、再帰定義を難しいテクニックの一つと思い込んでしまい、初心者の方は避けて通ることが多いように思います。再帰定義は、今まで説明した関数の呼び出しとまったく同じなので、難しく考える必要はありません。慣れるまでちょっと苦労するかもしれませんが、ポイントさえつかめば簡単に使いこなすことができます。
+</p>
+
+<p> まずは簡単な例を見てみましょう。階乗を計算するプログラムです。階乗の定義を下図に示します。
+</p>
+
+<pre class="fig">
+0! = 1
+n! = n * (n - 1)!
+
+図 : 階乗の定義
+</pre>
+
+<p> 階乗の定義からわかるように、n の階乗は n - 1 の階乗がわかれば求めることができます。実は、これをそのままプログラムすることができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def fact(n: Int): BigInt = if (n == 0) 1 else n * fact(n - 1)
+fact: (n: Int)BigInt
+
+scala&gt; for(i &lt;- 0 to 20) println(fact(i))
+1
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+39916800
+479001600
+6227020800
+87178291200
+1307674368000
+20922789888000
+355687428096000
+6402373705728000
+121645100408832000
+2432902008176640000
+</pre>
+<p> 関数 fact は引数 n が 0 であれば 1 を返し、そうでなければ n * fact(n - 1) の計算結果を返します。fact の定義で fact 自身を呼び出しています。これが再帰呼び出しです。
+</p>
+
+<p> 階乗と同じように再帰定義で表されるアルゴリズムはたくさんあります。階乗の計算は簡単なので、再帰呼び出しを使わなくても繰り返しでプログラムできますが、再帰で定義されるアルゴリズムのなかには、繰り返しに変換すると複雑なプログラムになってしまうものがあります。
+</p>
+
+<p> このような場合は、素直に再帰定義を使ったほうがわかりやすいプログラムになり、間違いを犯す危険性が少なくなります。難しいアルゴリズムでも、再帰定義を使うと簡単にプログラムできる場合もあるのです。
+</p>
+
+<h4>●再帰定義のポイント</h4>
+<p> それでは、再帰定義のポイントを説明しましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐  ┌─────┐
+│Call:1    │-&gt;│Call:2    │-&gt;│Call:3    │-&gt;│Call:4    │-&gt;│Call:5    │
+│n:4       │  │n:3       │  │n:2       │  │n:1       │  │n:0       │
+│value : 24│&lt;-│value : 6 │&lt;-│value : 2 │&lt;-│value : 1 │&lt;-│value : 1 │
+└─────┘  └─────┘  └─────┘  └─────┘  └─────┘
+
+        図 : fact の再帰呼び出し（n:引数の値, value:返り値）
+</pre>
+
+<p> 上図は関数 fact(4) の呼び出しを表したものです。最初の呼び出し (Call:1) では、引数 n の値は 4 なので n の値を 1 減らして fact を再帰呼び出しします。2 回目の呼び出しでは、引数 n の値に 3 が代入されます。ここで、最初に呼び出したときと、2 回目に呼び出したときでは、引数 n の値が違うことに注意してく
+</p>
+ださい。
+
+<p> 関数の引数は局所変数として扱われます。前回説明したように、局所変数には有効範囲（スコープ）があります。引数の場合、その関数が実行されている間だけ有効です。局所変数は関数呼び出しが行われるたびに新しく生成されて、そこに値が代入されます。そして、関数の実行が終了すると、生成された局所変数は廃棄されます。つまり、1 回目の呼び出しと 2 回目の呼び出しでは、引数 n は名前が同じでも異なる変数になるのです。ここが再帰呼び出しを理解するポイントの一つです。
+</p>
+
+<p> プログラムを見ると変数 n は一つしかありませんが、再帰呼び出しが行われるたびに新しい変数 n が作られていくと考えてください。fact(4) を実行しているときの n は 4 であり、fact(3) を呼び出すときには、この n の値を書き換えるのではなく、新しい変数 n を用意して、そこに 3 を代入するのです。
+</p>
+
+<p> 同様に再帰呼び出しが行われ、5 回目の呼び出し (Call:5) で引数 n が 0 になります。このとき、if の then 節が実行され 1 が返されます。ここで再帰呼び出しが止まります。これを再帰呼び出しの「停止条件」といいます。ここが第 2 のポイントです。停止条件がなかったり、あってもその条件を満たさない場合、関数を際限なく呼び出すことになり、Scala であればプログラムの実行は途中で停止します。再帰呼び出しを使う場合は、この停止条件に十分注意してください。
+</p>
+
+<p> fact(0) は 1 を返して fact(1) に戻ります。fact(1) を実行しているあいだ、引数 n の値は 1 です。したがって、fact(1) の返り値は 1 * 1 を計算して 1 となります。あとは同様に、再帰呼び出しした関数の返り値を使って値を計算し、最後に fact(4) の値 24 を求めることができます。
+</p>
+
+<h4>●ユークリッドの互除法</h4>
+<p> 次は、負でない整数 a と b の最大公約数を求めるプログラムを「ユークリッド (Euclid) の互除法」で作ります。まず最初に、ユークリッドの互除法を説明します。
+</p>
+<pre class="item">
+[ユークリッドの互除法]
+負でない整数 a と b (a &gt; b) で、a を b で割った余りを r とする。
+このとき、a と b の最大公約数は b と r の最大公約数に等しい。
+</pre>
+
+<p> ユークリッドの互除法は簡単に証明できます。a と b の割り算を式 (1) で表します。
+</p>
+
+<pre class="item">
+a = q * b + r --- (1)
+</pre>
+
+<p> ここで、a と b の最大公約数を m とすると、a = m * a', b = m * b' となります。すると、式 (1) は式 (2) で表すことができます。
+</p>
+<pre class="item">
+m * a' = q * m * b' + r --- (2)
+</pre>
+<p> 左辺は m で割り切れるので、右辺も m で割り切れる必要があります。q * m * b' は m で割り切れるので、r も m で割り切れることになります。つまり、m は b と r の公約数であることがわかります。b と r の最大公約数を m' とすると、式 (3) が成り立ちます。
+</p>
+<pre class="item">
+m &lt;= m' --- (3)
+</pre>
+<p> 次に、b = m' * b'', r = m' * r' として式 (1) に代入すると、式 (4) が成り立ちます。
+</p>
+<pre class="item">
+a = q * m' * b'' + m' * r'  --- (4)
+</pre>
+<p> 右辺は m' で割り切れるので、a も m' で割り切れる必要があります。つまり、m' は a と b の公約数であることがわかります。したがって、式 (5) が成り立ちます。
+</p>
+<pre class="item">
+m' &lt;= m --- (5)
+</pre>
+<p> 式 (3) と (5) より m = m' となり、a と b の最大公約数は b と r の最大公約数に等しいことが証明されました。
+</p>
+
+<p> あとは b を a とし、r を b にして同じ計算をすればいいわけです。この計算を繰り返し行うと、a と b はどんどん小さくなっていき、r = 0 になったときの b が最大公約数になります。
+</p>
+
+<p> プログラムは再帰定義を使って簡単に作ることができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
+gcd: (a: Int, b: Int)Int
+
+scala&gt; gcd(42, 30)
+res1: Int = 6
+
+scala&gt; gcd(15, 70)
+res2: Int = 5
+
+scala&gt; def lcm(a: Int, b: Int): Int = a * b / gcd(a, b)
+lcm: (a: Int, b: Int)Int
+
+scala&gt; lcm(5, 7)
+res3: Int = 35
+
+scala&gt; lcm(14, 35)
+res4: Int = 70
+</pre>
+<p> 関数 gcd は引数 a と b の最大公約数を求めます。b が 0 の場合は a を返します。これが再帰呼び出しの停止条件になります。そうでなければ、gcd を再帰呼び出しして、b と a % b の最大公約数を求めます。gcd はユークリッドの互除法の定義をそのままプログラムしただけです。このように、再帰定義を使うと簡単にプログラムを作ることができます。また、整数 a と b の最小公倍数 (lcm) は a * b / gcd(a, b) で求めることができます。
+</p>
+
+<h4>●フィボナッチ関数</h4>
+<p> もうひとつ簡単な数値計算の例を示しましょう。フィボナッチ関数も再帰的に定義される関数です。
+</p>
+<pre class="fig">
+       ┌ 1                : n = 0
+f(n) = ┤ 1                : n = 1
+       └ f(n-1) + f(n-2)  : n &gt; 1
+
+1, 1, 2, 3, 5, 8, 13 .... という直前の 2 項を足していく数列
+
+        図 : フィボナッチ関数の定義
+</pre>
+<p> フィボナッチ関数も再帰定義を使えば簡単にプログラムできます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def fibo(n: Int): BigInt = if (n == 0 || n == 1) 1 else fibo(n - 1) + fibo(n - 2)
+fibo: (n: Int)BigInt
+
+scala&gt; for (i &lt;- 0 to 20) println(fibo(i))
+1
+1
+2
+3
+5
+8
+13
+21
+34
+55
+89
+144
+233
+377
+610
+987
+1597
+2584
+4181
+6765
+10946
+</pre>
+<p> 関数 fibo は fact とは違い、自分自身を 2 回呼び出しています。これを「二重再帰」といいます。fibo の呼び出しをトレースすると下図のようになります。
+</p>
+<pre class="fig">
+f(5) ┬ f(4) ┬ f(3) ┬ f(2) ┬ f(1)
+     │      │      │      │
+     │      │      │      └ f(0)
+     │      │      └ f(1)
+     │      └ f(2) ┬ f(1)
+     │              │
+     │              └ f(0)
+     │
+     └ f(3) ┬ f(2) ┬ f(1)
+             │      │
+             │      └ f(0)
+             └ f(1)
+
+    図 : fibo のトレース
+</pre>
+<p> 同じ値を何回も求めているため、効率はとても悪いのです。もちろん、高速に求める方法があるので、心配しないで下さい。
+</p>
+
+<h4>●末尾再帰</h4>
+<p> 再帰定義のなかで、処理の最後で再帰呼び出しを行う場合を「末尾再帰 (tail recursion) 」といいます。英語では tail recursion ですが、日本語では末尾再帰のほかに末端再帰とか終端再帰と呼ぶことがあります。末尾再帰は簡単な処理で繰り返しに変換できることが知られています。
+</p>
+<p> 関数型言語や論理型言語の Prolog では、プログラムをコンパイルもしくは実行するとき、末尾再帰を繰り返しに変換する処理系があります。この機能を「末尾再帰最適化」<sup><a href="scala03.html#note1">[*1]</a></sup> といいます。なかには Scheme <sup><a href="scala03.html#note2">[*2]</a></sup> のように、言語仕様に末尾再帰最適化を行うことを明記しているプログラミング言語もあります。
+</p>
+
+<p> たとえば、階乗を計算する関数 fact を思い出してください。fact は最後に n と fact の返り値を乗算しているので、このプログラムは末尾再帰ではありません。これを末尾再帰に変換すると次のようになります。
+</p>
+<pre>
+scala&gt; def facti(n: Int, a: BigInt): BigInt = if (n == 0) a else facti(n - 1, a * n)
+facti: (n: Int, a: BigInt)BigInt
+
+scala&gt; for (i &lt;- 0 to 20) println(facti(i, 1))
+1
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+39916800
+479001600
+6227020800
+87178291200
+1307674368000
+20922789888000
+355687428096000
+6402373705728000
+121645100408832000
+2432902008176640000
+</pre>
+
+<p> 最後の再帰呼び出しで、facti の返り値をそのまま返しているので、このプログラムは末尾再帰になっています。これで階乗を計算できるなんて、ちょっと不思議に思われるかもしれません。そこが再帰呼び出しの面白いところです。このプログラムでは引数 a の使い方がポイントです。
+</p>
+
+<p> たとえば facti(4) を実行すると、このプログラムでは 4 * 3 * 2 * 1 を計算します。このとき、計算の途中経過を引数 a に記憶しているのです。facti の呼び出しを下図に示します。
+</p>
+
+<pre class="fig">
+facti(4, 1)
+|   facti(3, 4)
+|   |   facti(2, 12)
+|   |   |   facti(1, 24)
+|   |   |   |   facti(0, 24)
+|   |   |   |   =&gt; a の値 24 を返す
+|   |   |   =&gt; 24
+|   |   =&gt; 24
+|   =&gt; 24
+=&gt; 24
+
+        図 : facti の動作
+</pre>
+
+<p> 引数 a には計算途中の値が格納されていることがわかります。このような変数を「累算変数」とか「累算器」といいます。
+</p>
+
+<p> 関数型言語の場合、while文 や for文 などの繰り返しがないプログラミング言語があります。また、論理型言語 Prolog にも単純な繰り返しはありません。これらのプログラミング言語では、繰り返しのかわりに末尾再帰を使ってプログラミングを行い、末尾再帰最適化によりプログラムを高速に実行することができます。
+</p>
+<p> なお、引数 a をデフォルト引数 (初期値 1) に指定すると、facti(n) で階乗を求めることができます。
+</p>
+<pre>
+scala&gt; def facti(n: Int, a: BigInt = 1): BigInt =
+     | if (n == 0) a else facti(n - 1, a * n)
+facti: (n: Int, a: BigInt)BigInt
+
+scala&gt; facti(10)
+res0: BigInt = 3628800
+
+scala&gt; facti(20)
+res1: BigInt = 2432902008176640000
+</pre>
+<p> 末尾再帰最適化は Scala でも行われています。次の例を見てください。
+</p>
+<pre>
+scala&gt; def sumOfInt(n: Int, m: Int): BigInt =
+     | if (n &gt; m) 0 else n + sumOfInt(n + 1, m)
+sumOfInt: (n: Int, m: Int)BigInt
+
+scala&gt; sumOfInt(1, 100)
+res2: BigInt = 5050
+
+scala&gt; sumOfInt(1, 1000)
+res3: BigInt = 500500
+
+scala&gt; sumOfInt(1, 10000)
+=&gt; スタックオーバーフロー
+</pre>
+<p> 関数 sumOfInt を再帰定義でプログラムしました。ただし、これは末尾再帰ではありません。1 から 10000 までの和を求めると、スタックがオーバーフローしてプログラムの実行は停止します。
+</p>
+<p> これを末尾再帰でプログラムすると次のようになります。
+</p>
+<pre>
+scala&gt; def sumOfInt1(n: Int, m: Int, a: BigInt = 0): BigInt =
+     | if (n &gt; m) a else sumOfInt1(n + 1, m, a + n)
+sumOfInt1: (n: Int, m: Int, a: BigInt)BigInt
+
+scala&gt; sumOfInt1(1, 1000)
+res0: BigInt = 500500
+
+scala&gt; sumOfInt1(1, 10000)
+res1: BigInt = 50005000
+
+scala&gt; sumOfInt1(1, 100000)
+res2: BigInt = 5000050000
+</pre>
+<p> sumOfInt1 は末尾再帰になっていて、Scala の末尾再帰最適化により大きな値でもスタックオーバーフローせずに求めることができます。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 末尾再帰最適化は一般的な呼び方で、厳密には「末尾呼び出し最適化」とか「末尾最適化」といいます。詳しい説明は拙作のページ <a href="scala23.html">継続渡しスタイル</a> の <a href="scala23.html#chap02">Appendix:末尾再帰と繰り返し</a> をお読みください。<br>
+<a name="note2">[*2]</a> Scheme は Lisp の方言の一つです。Scheme は Lisp の標準である Common Lisp よりもシンプルな仕様で、熱心なユーザが多いプログラミング言語です。
+</div>
+<h4>●二重再帰を末尾再帰に変換する</h4>
+<p> 今度は累算変数を使って、二重再帰を末尾再帰に変換してみましょう。フィボナッチ関数 fibo は二重再帰になっているので、とても時間がかかります。二重再帰を末尾再帰に変換すると、プログラムを高速に実行することができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def fiboi(n: Int, a1: BigInt = 1, a2: BigInt = 0): BigInt =
+     | if (n == 0) a1 else fiboi(n - 1, a1 + a2, a1)
+fiboi: (n: Int, a1: BigInt, a2: BigInt)BigInt
+
+scala&gt; for (i &lt;- 0 to 20) println(fiboi(i))
+1
+1
+2
+3
+5
+8
+13
+21
+34
+55
+89
+144
+233
+377
+610
+987
+1597
+2584
+4181
+6765
+10946
+</pre>
+<p> 累算変数 a1 と a2 の使い方がポイントです。現在のフィボナッチ数を変数 a1 に、ひとつ前の値を変数 a2 に格納しておきます。あとは a1 と a2 を足し算して、新しいフィボナッチ数を計算すればいいわけです。fiboi の呼び出しを図に示すと、次のようになります。
+</p>
+<pre class="fig">
+fiboi (5, 1, 0)
+  fiboi (4, 1, 1)
+    fiboi (3, 2, 1)
+      fiboi (2, 3, 2)
+        fiboi (1, 5, 3)
+          fiboi (0, 8, 5)
+          =&gt; a1 の値 8 を返す
+        =&gt; 8
+      =&gt; 8
+    =&gt; 8
+  =&gt; 8
+=&gt; 8
+
+図 : 関数 fibo の呼び出し
+</pre>
+<p> 二重再帰では、同じ値を何回も求めていたため効率がとても悪かったのですが、このプログラムでは無駄な計算を行っていないので、値を高速に求めることができます。もちろん、末尾再帰になっているので、末尾再帰最適化を行う処理系では、プログラムをより高速に実行できるでしょう。
+</p>
+
+<h4>●末尾再帰を繰り返しに変換する</h4>
+<p> ところで、最大公約数を求める関数 gcd は末尾再帰になっています。Scala は末尾再帰最適化をサポートしているので、このままでも高速に実行することができますが、繰り返しに変換するのも簡単です。次の例を見てください。
+</p>
+
+<pre>
+scala&gt; def gcdi(a: Int, b: Int): Int = {
+     | var x = a
+     | var y = b
+     | while (y &gt; 0) {
+     | val z = x
+     | x = y
+     | y = z % y
+     | }
+     | x
+     | }
+gcdi: (a: Int, b: Int)Int
+
+scala&gt; gcdi(42, 30)
+res0: Int = 6
+
+scala&gt; gcdi(15, 70)
+res1: Int = 5
+</pre>
+<p> 関数 gcdi は引数 a, b の値を変数 x, y にコピーして、変数 x, y を書き換えることで最大公約数を求めています。再帰定義を使ったプログラムはユークリッドの互除法であることがすぐにわかりますが、繰り返しに変換するとプログラムは少しわかりにくくなると思います。また、Scala の引数は immutable なので、mutable な変数を用意する分だけ、プログラムはちょっと複雑になります。
+</p>
+
+<p> 繰り返しは再帰定義に比べると実行速度やメモリの消費量など効率の点で有利です。このため、何がなんでも繰り返しでプログラムしようとする方もいるでしょう。ところが、再帰定義を使うと簡単にプログラムできるが、繰り返しではとても複雑なプログラムになってしまう場合もあります。したがって、とくに問題がなければ再帰定義を繰り返しに変換する必要はないと思います。複雑なプログラムは、しばらくたつと書いた本人でさえ理解できなくなることがよくあります。わかりやすいプログラムがいちばんです 
+</p>
+
+<h4>●相互再帰</h4>
+<p> 相互再帰とは、関数 foo が関数 bar を呼び出し、bar でも foo を呼び出すというように、お互いに再帰呼び出しを行っていることをいいます。関数型言語 (SML/NJ, OCaml など) では、相互再帰を定義するために専用の構文を使いますが、Scala は特別なことをしなくても相互再帰を行うことができます。
+</p>
+
+<p> それでは簡単な例を示しましょう。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 相互再帰
+
+object sample0301 {
+  def foo(n: Int): Boolean =
+    if (n == 0) true else bar(n - 1)
+
+  def bar(n: Int): Boolean =
+    if (n == 0) false else foo(n - 1)
+}
+</pre>
+<p> このプログラムは関数 foo と bar が相互再帰しています。foo と bar が何をしているのか、実際に動かしてみましょう。
+</p>
+<pre>
+scala&gt; :load sample0301.scala
+Loading sample0301.scala...
+defined object sample0301
+
+scala&gt; import sample0301._
+import sample0301._
+
+scala&gt; bar(3)
+res0: Boolean = true
+
+scala&gt; bar(2)
+res1: Boolean = false
+
+scala&gt; bar(1)
+res2: Boolean = true
+
+scala&gt; foo(3)
+res3: Boolean = false
+
+scala&gt; foo(2)
+res4: Boolean = true
+
+scala&gt; foo(1)
+res5: Boolean = false
+</pre>
+
+<p> 結果を見ればおわかりのように、foo は n が偶数のときに真を返し、bar は n が奇数のときに真を返します。なお、このプログラムはあくまでも相互再帰の例題であり、実用的なプログラムではありません。
+</p>
+<p> もうひとつ、Scala には注意点があります。foo や bar に大きな値を与えるとスタックオーバーフローします。foo と bar はお互いに処理の末尾で呼び出されています。関数型言語、たとえば Scheme, SML/NJ, OCaml などでは、このような場合でも末尾再帰最適化が行われますが、Scala の場合、相互再帰の末尾再帰最適化は行われません。ご注意くださいませ。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">高階関数</h3>
+<p> 関数型言語は関数を他のデータと同等に取り扱うことができます。つまり、関数を変数に代入したり、引数として渡すことができるのです。また、値として関数を返すこともできるので、関数を作る関数を定義することもできます。関数を引数にとる関数のことを「汎関数 (functional) 」とか「高階関数 (higher order function) 」と呼びます。Scala は高階関数を簡単に定義することができます。もちろん、値として関数を返すこともできるので、関数を作る関数を定義することも簡単です。
+</p>
+
+<h4>●関数を引数にとる関数</h4>
+<p> 簡単な例として、整数 n から m までの和を求める関数 sumOfInt を作ってみましょう。今回は末尾再帰でプログラムします。次の例を見てください。
+</p>
+<pre>
+scala&gt; def sumOfInt(n: Int, m: Int, a: BigInt = 0): BigInt =
+     | if (n &gt; m) a else sumOfInt(n + 1, m, a + n)
+sumOfInt: (n: Int, m: Int, a: BigInt)BigInt
+
+scala&gt; sumOfInt(1, 100)
+res0: BigInt = 5050
+
+scala&gt; sumOfInt(1, 10000)
+res1: BigInt = 50005000
+</pre>
+<p> プログラムは簡単なので説明は不要でしょう。それでは、整数の 2 乗の和と 3 乗の和を求めるプログラムはどうなるでしょうか。次の例を見てください。
+</p>
+<pre>
+scala&gt; def square(x: BigInt): BigInt = x * x
+square: (x: BigInt)BigInt
+
+scala&gt; def cube(x: BigInt): BigInt = x * x * x
+cube: (x: BigInt)BigInt
+
+scala&gt; def sumOfSquare(n: Int, m: Int, a: BigInt = 0): BigInt =
+     | if (n &gt; m) a else sumOfSquare(n + 1, m, a + square(n))
+sumOfSquare: (n: Int, m: Int, a: BigInt)BigInt
+
+scala&gt; def sumOfCube(n: Int, m: Int, a: BigInt = 0): BigInt =
+     | if (n &gt; m) a else sumOfCube(n + 1, m, a + cube(n))
+sumOfCube: (n: Int, m: Int, a: BigInt)BigInt
+
+scala&gt; sumOfSquare(1, 10000)
+res2: BigInt = 333383335000
+
+scala&gt; sumOfCube(1, 10000)
+res3: BigInt = 2500500025000000
+</pre>
+<p> 累積変数 a に値を加算する処理で、square を呼び出すと 2 乗の和を、cube を呼び出すと 3 乗の和を求めることができます。関数 sumOfSquare と sumOfCube の違いはこれだけです。ここで、square や cube を引数として渡すことができれば、sumOfSquare や sumOfCube を一つの関数で済ますことができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def sumOf(f: BigInt =&gt; BigInt, n: Int, m: Int, a: BigInt = 0): BigInt =
+     | if (n &gt; m) a else sumOf(f, n + 1, m, a + f(n))
+sumOf: (f: BigInt =&gt; BigInt, n: Int, m: Int, a: BigInt)BigInt
+
+scala&gt; sumOf(square, 1, 10000)
+res4: BigInt = 333383335000
+
+scala&gt; sumOf(cube, 1, 10000)
+res5: BigInt = 2500500025000000
+</pre>
+<p> 関数 sumOf の第 1 引数 f に関数を渡します。Scala の場合、関数の型は次の形式で表します。
+</p>
+<pre class="item">
+(引数の型1, 引数の型2, ...) =&gt; 返り値の型
+</pre>
+<p> カッコの中に引数の型を書き、=&gt; の後ろに返り値の型を書きます。引数が一つしかない場合はカッコを省略することができます。引数がない場合は () =&gt; 返り値の型 となります。
+</p>
+<p> 引数 f の型は BigInt =&gt; BigInt なので、BigInt を一つ受け取って BigInt を返す関数であることがわかります。渡された関数は、今までと同じ方法で呼び出すことができます。square や cube のかわりに a + f(n) とすることで、関数 f に n を渡して呼び出し、その結果を a に加算することができます。引数に関数を渡す場合も簡単で、引数に関数名を書くだけです。
+</p>
+
+<h4>●多相性</h4>
+<p> ところで、sumOfInt も sumOf を使って実現することができます。引数 f には自分自身を返す関数を渡せばよいのです。これを「恒等関数 (identity function) 」といいます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def identity[A](x: A): A = x
+identity: [A](x: A)A
+
+scala&gt; identity(10)
+res0: Int = 10
+
+scala&gt; identity(10.0)
+res1: Double = 10.0
+
+scala&gt; identity("foo")
+res2: String = foo
+</pre>
+<p> 関数 identity は引数をそのまま返す関数です。ここで、引数 x の型が A で、返り値の型が A になっていることに注目してください。これを「型パラメータ」<sup><a href="scala03.html#note3">[*3]</a></sup> といって、A は任意の型を表します。型パラメータは関数名と引数の間の角カッコの中で指定します。Scala では、型パラメータを A, B, C, D ... のように英大文字で表すのが習慣のようです。
+</p>
+
+<p> identity の型は A =&gt; A なので、任意の型のデータを受け取り、同じ型を返す関数であることがわかります。つまり、Int, Double, String など Scala のデータ型であれば何でも対応することができるのです。このような関数を「多相型関数 (polymorphic function) 」といいます。
+</p>
+
+<p> 多相型関数のように、いろいろな型を取ることができる性質のことを「多相性 (polymmprphism) 」といいます。多相性は Scala だけではなく、ML 系の言語 (OCaml, SML/NJ, Haskell など) の特徴のひとつです。なお、Scala には恒等関数 identity が定義されているので、私たちが実際に定義する必要はありません。
+</p>
+<p> sumOfInt は sumOf と identity を使って次のように実現できます。
+</p>
+<pre>
+scala&gt; sumOf(identity, 1, 100)
+res3: BigInt = 5050
+
+scala&gt; sumOf(identity, 1, 10000)
+res4: BigInt = 50005000
+</pre>
+<p> Scala は型チェックを厳密に行うプログラミング言語ですが、型推論と多相性により柔軟なプログラミングが可能になっています。
+</p>
+<div class="note">
+-- <a name="note3">note</a> --------<br>
+[*3] ML 系の言語では「型変数」といいます。
+</div>
+<h4>●データの探索</h4>
+<p> それでは多相性の簡単な例題として、データの探索処理を作ってみましょう。データの探索とは、データの集まりの中から特定のデータを見つける処理のことです。データの探索はプログラムの中で最も基本的な操作の一つです。たとえば配列からデータを探す場合、いちばん簡単な方法は先頭から順番にデータを比較していくことです。これを「線形探索 (linear searching) 」といます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : データの探索 (sample0302.scala)
+
+object sample0302 {
+
+  def find[A](n: A, buff: Array[A]): Boolean = {
+    for (x &lt;- buff) {
+      if (x == n) return true
+    }
+    return false
+  }
+
+  def position[A](n: A, buff: Array[A]): Int = {
+    for (i &lt;- 0 until buff.size) {
+      if (buff(i) == n) return i
+    }
+    -1
+  }
+
+  def count[A](n: A, buff: Array[A]): Int = {
+    var c = 0
+    for (x &lt;- buff) {
+      if (x == n) c += 1
+    }
+    c
+  }
+}
+</pre>
+
+<p> どの関数も多相型関数として定義しています。探索するデータ n と配列 buff の要素の型が同じ A であることに注意してください。関数 find は buff の中から引数 n と等しいデータを探します。for 文で配列の要素を一つずつ順番に取り出して n と比較します。等しい場合は true を返します。for ループが終了する場合は n と等しい要素が見つからなかったので false を返します。
+</p>
+<p> 関数 position は、データを見つけた場合はその位置 i を返し、見つからない場合は -1 を返します。position は最初に見つけた要素の位置を返しますが、同じ要素が配列に複数あるかもしれません。関数 count は等しい要素の個数を数えて返します。局所変数 c を 0 に初期化し、n と等しい要素 x を見つけたら c の値を +1 します。最後に c の値を返します。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+scala&gt; :load sample0302.scala
+Loading sample0302.scala...
+defined object sample0302
+
+scala&gt; import sample0302._
+import sample0302._
+
+scala&gt; val a = Array(1,2,3,4,5,6,7,8)
+a: Array[Int] = Array(1, 2, 3, 4, 5, 6, 7, 8)
+
+scala&gt; val b = Array("foo", "bar", "baz", "oops!")
+b: Array[String] = Array(foo, bar, baz, oops!)
+
+scala&gt; find(1, a)
+res0: Boolean = true
+
+scala&gt; find("baz", b)
+res1: Boolean = true
+
+scala&gt; find(9, a)
+res2: Boolean = false
+
+scala&gt; find("hello", b)
+res3: Boolean = false
+
+scala&gt; position(8, a)
+res4: Int = 7
+
+scala&gt; position("oops!", b)
+res5: Int = 3
+
+scala&gt; position(0, a)
+res6: Int = -1
+
+scala&gt; position("hello", b)
+res7: Int = -1
+
+scala&gt; val c = Array(1,2,3,4,2,3,4,3,4,4)
+c: Array[Int] = Array(1, 2, 3, 4, 2, 3, 4, 3, 4, 4)
+
+scala&gt; count(1, c)
+res8: Int = 1
+
+scala&gt; count(4, c)
+res9: Int = 4
+
+scala&gt; count(5, c)
+res10: Int = 0
+</pre>
+<p> このように、線形探索は簡単にプログラムできますが、大きな欠点があります。データ数が多くなると処理に時間がかかるのです。近年、パソコンの性能は著しく向上しているので、線形探索でどうにかなる場合もありますが、データ数が多くて時間がかかるのであれば、高速な探索アルゴリズムを使ったほうがよいでしょう。
+</p>
+
+<p> ところで、データの探索は基本的な処理なので、Scala のライブラリにもいろいろなメソッドが用意されています。データの有無はメソッド contains でチェックできます。
+</p>
+<pre>
+scala&gt; val a = Array(1,2,3,4,5,6,7,8)
+a: Array[Int] = Array(1, 2, 3, 4, 5, 6, 7, 8)
+
+scala&gt; a.contains(1)
+res0: Boolean = true
+
+scala&gt; a.contains(8)
+res1: Boolean = true
+
+scala&gt; a.contains(0)
+res2: Boolean = false
+
+scala&gt; a.contains(10)
+res3: Boolean = false
+
+scala&gt; a contains 2
+res4: Boolean = true
+</pre>
+<p> Scala の場合、引数が一つしかないメソッドは二項演算子のように使うことができます。たとえば、a.contains(2) は a contains 2 としてもかまいません。
+</p>
+<p> 見つけた要素の位置を求めたい場合はメソッド indexOf を使います。
+</p>
+<pre>
+scala&gt; a.indexOf(1)
+res5: Int = 0
+
+scala&gt; a indexOf 8
+res6: Int = 7
+
+scala&gt; a indexOf 10
+res7: Int = -1
+</pre>
+<p> メソッド count は高階関数で、引数の関数が真を返す要素の個数を返します。
+</p>
+<pre>
+scala&gt; def isEven(x: Int): Boolean = x % 2 == 0
+isEven: (x: Int)Boolean
+
+scala&gt; a.count(isEven)
+res8: Int = 4
+</pre>
+<h4>●無名関数</h4>
+<p> 高階関数を使うようになると、数を 2 乗する square のような小さな関数をいちいち定義するのが面倒になります。とくに、その高階関数でしか使わないのであれば、なおさらそう思うでしょう。Scala には Lisp のラムダ式 (lambda) のような「無名関数 (Anonymous Functions) 」という名前のない関数が用意されています。
+</p>
+<p> Scala の場合、無名関数は次のように定義します。
+</p>
+<pre class="item">
+(引数1:型1, 引数2:型2, ...) =&gt; 式
+</pre>
+<p> 関数の型とよく似ていますが、返り値の型を指定することはできません。Scala の型推論に任せるか、あらかじめ関数の型を宣言しておく必要があります。無名関数は関数型のデータ (関数値) を生成して返します。なお、Scala の関数値は多相性がありません。つまり、無名関数は多相型関数として定義することはできないのです。ご注意くださいませ。
+</p>
+
+<p> Scala は無名関数をそのまま実行することができます。また、関数の引数に無名関数を渡すこともできます。次の例を見てください。
+</p>
+<pre>
+scala&gt; (x: Int) =&gt; x * x
+res0: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; ((x: Int) =&gt; x * x)(10)
+res1: Int = 100
+
+scala&gt; sumOf(x =&gt; x, 1, 1000)
+res2: BigInt = 500500
+
+scala&gt; sumOf(x =&gt; x * x, 1, 1000)
+res3: BigInt = 333833500
+
+scala&gt; sumOf(x =&gt; x * x * x, 1, 1000)
+res4: BigInt = 250500250000
+</pre>
+<p> sumOf の引数 f には関数の型が指定されているので、sumOf に渡す無名関数に型を指定する必要はありません。
+</p>
+
+<h4>●カリー化</h4>
+<p> ところで、関数型言語は関数をデータ型の一つとして扱うことができるので、関数の返り値として関数を返すことができます。この「関数を返す関数」を使うと、関数の引数が一つでも複数の引数を処理することができます。このような関数を「カリー化関数 (curried function) 」といいます。
+</p>
+
+<p> たとえば、(x: Int, y: Int) =&gt; x + y の場合、引数 x を受け取ると「引数 y を受け取って x + y を計算する関数」を返し、その関数に引数 y を渡せば x + y を計算することができます。Scala では、次のように定義することができます。
+</p>
+<pre>
+scala&gt; (x: Int) =&gt; (y: Int) =&gt; x + y
+res0: Int =&gt; (Int =&gt; Int) = &lt;function1&gt;
+</pre>
+<p> 関数の型が少し複雑になりました。これは引数 Int を受け取り、Int =&gt; Int という型の関数を返すことを表しています。これで引数を一つだけ与えれば、関数を返すことになります。もちろん、引数を 2 つ与えれば、それらを加算した結果を返します。つまり、最初の引数を受け取って関数を生成し、その関数に 2 番目の引数を渡して呼び出す、という動作になります。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+scala&gt; ((x: Int) =&gt; (y: Int) =&gt; x + y)(1)
+res1: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; ((x: Int) =&gt; (y: Int) =&gt; x + y)(1)(2)
+res2: Int = 3
+</pre>
+<p> 引数を一つだけ渡すと「引数 y を受け取って x + y を計算する関数」を返します。引数を 2 つ渡すと、それを足し算した値を返します。カリー化関数の場合、引数はカッコに入れて渡してください。
+</p>
+
+<p> Scala の場合、メソッド curried を使うと通常の関数をカリー化することができます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def add(x: Int, y: Int):Int = x + y
+add: (x: Int, y: Int)Int
+
+scala&gt; add _
+res3: (Int, Int) =&gt; Int = &lt;function2&gt;
+
+scala&gt; (add _).curried
+res4: Int =&gt; (Int =&gt; Int) = &lt;function1&gt;
+
+scala&gt; val addCurry = (add _).curried
+addCurry: Int =&gt; (Int =&gt; Int) = &lt;function1&gt;
+
+scala&gt; addCurry(10)
+res5: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; addCurry(10)(20)
+res6: Int = 30
+</pre>
+<p> 関数名にアンダーバー ( _ ) を付けて呼び出すと、その関数値を取り出す <sup><a href="scala03.html#note4">[*4]</a></sup> ことができます。関数値にメソッド curried を適用すると、カリー化関数に変換することができます。変数 addCurry にカリー化関数をセットします。addCurry(10) とすると、Int =&gt; Int の関数を返し、addCurry(10)(20) とすると、足し算した値 30 を返します。
+</p>
+
+<p> たとえば、関数 sumOf をカリー化すると次のようになります。
+</p>
+<pre>
+scala&gt; val sumOfCurry = (sumOf _).curried
+sumOfCurry: (BigInt =&gt; BigInt) =&gt; (BigInt =&gt; (BigInt =&gt; (BigInt =&gt; BigInt))) = &lt;function1&gt;
+</pre>
+<p> そして、この sumOfCurry を使うと、sumOfInt, sumOfSquare, sumOfCube を簡単に定義することができます。
+</p>
+<pre>
+scala&gt; val sumOfInt = sumOfCurry (x =&gt; x)
+sumOfInt: BigInt =&gt; (BigInt =&gt; (BigInt =&gt; BigInt)) = &lt;function1&gt;
+
+scala&gt; val sumOfSquare = sumOfCurry (x =&gt; x * x)
+sumOfSquare: BigInt =&gt; (BigInt =&gt; (BigInt =&gt; BigInt)) = &lt;function1&gt;
+
+scala&gt; val sumOfCube = sumOfCurry (x =&gt; x * x * x)
+sumOfCube: BigInt =&gt; (BigInt =&gt; (BigInt =&gt; BigInt)) = &lt;function1&gt;
+
+scala&gt; sumOfInt(1)(100)(0)
+res7: BigInt = 5050
+
+scala&gt; sumOfSquare(1)(100)(0)
+res8: BigInt = 338350
+
+scala&gt; sumOfCube (1)(100)(0)
+res9: BigInt = 25502500
+</pre>
+<p> このように、カリー化された関数の一部の引数に値を与えて、残りの引数を受け取る関数を生成することを「部分適用 (partial application) 」といいます。カリー化関数は部分適用が簡単にできるのでとても便利です。
+</p>
+<p> ただし、この場合はデフォルト引数 a が機能しないので、次のように引数の順番を変えたほうが使いやすくなるでしょう。
+</p>
+<pre>
+scala&gt; def sumOf(f: BigInt =&gt; BigInt, a: BigInt, n: Int, m: Int): BigInt =
+     | if (n &gt; m) a else sumOf(f, a + f(n), n + 1, m)
+sumOf: (f: BigInt =&gt; BigInt, a: BigInt, n: Int, m: Int)BigInt
+
+scala&gt; val sumOfInt = (sumOf _).curried(x =&gt; x)(0)
+sumOfInt: Int =&gt; (Int =&gt; BigInt) = &lt;function1&gt;
+
+scala&gt; sumOfInt(1)(1000)
+res10: BigInt = 500500
+</pre>
+<div class="note">
+-- <a name="note4">note</a> --------<br>
+[*4] 多相型関数の場合、アンダーバー ( _ ) で関数値を取り出すと、その関数値は多相型関数ではなくなります。次の例を見てください。
+<pre>
+scala&gt; def identity[A](x: A): A = x
+identity: [A](x: A)A
+
+scala&gt; val f = identity _
+f: Nothing =&gt; Nothing = &lt;function1&gt;
+
+scala&gt; f(10)
+&lt;console&gt;:14: error: type mismatch;
+ found   : Int(10)
+ required: Nothing
+              f(10)
+                ^
+</pre>
+<p> 多相型関数を関数値に変換するとき、Scala は型推論により型パラメータを適切な型に変換します。この場合、Nothing という特別な型に変換されたため、identity 本来の機能は失われてしまいます。
+</p>
+</div>
+<h4>●部分適用</h4>
+<p> Scala の場合、カリー化関数でなくても部分適用を行うことできます。次の例を見てください。
+</p>
+<pre>
+scala&gt; def add(x: Int, y: Int): Int = x + y
+add: (x: Int, y: Int)Int
+
+scala&gt; val add10 = add(10, _: Int)
+add10: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; add10(100)
+res0: Int = 110
+
+scala&gt; val add20 = add(_ : Int, 20)
+add20: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; add20(200)
+res1: Int = 220
+</pre>
+<p> 関数の引数で、実引数以外に _:型 を渡すと、実引数を部分適用した関数を生成することができます。val add10 = add(10, _: Int) であれば、第 1 引数を 10 に指定して部分適用するので、add10 は引数に 10 を加算する関数として動作します。val add20 = add(_: Int, 20) であれば、第 2 引数に 20 を指定して部分適用するので、add20 は引数に 20 を加算する関数として動作します。
+</p>
+
+<p> 部分適用を行う場合、関数の引数をカッコで分けて定義すると便利です。次の例を見てください。
+</p>
+<pre>
+scala&gt; def sub(x: Int)(y: Int): Int = x - y
+sub: (x: Int)(y: Int)Int
+
+scala&gt; val f = sub(10)_
+f: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; f(20)
+res2: Int = -10
+
+scala&gt; val g = sub(_: Int)(20)
+g: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; g(100)
+res3: Int = 80
+</pre>
+<p> 引数を分けて書くと、第 1 引数の値を指定するときは、sub(10)_ だけで部分適用を行うことができます。ただし、第 2 引数の値を指定するときは、第 1 引数の型を指定しないといけません。
+</p>
+<p> sumOf を部分適用して sumOfInt, sumOfSquare, sumOfCube を定義することができます。
+</p>
+<pre>
+scala&gt; def sumOf(f: BigInt =&gt; BigInt)(a: BigInt)(n : Int, m: Int): BigInt =
+     | if (n &gt; m) a else sumOf(f)(a + f(n))(n + 1, m)
+sumOf: (f: BigInt =&gt; BigInt)(a: BigInt)(n: Int, m: Int)BigInt
+
+scala&gt; val sumOfInt = sumOf(x =&gt; x)(0)_
+sumOfInt: (Int, Int) =&gt; BigInt = &lt;function2&gt;
+
+scala&gt; sumOfInt(1, 1000)
+res0: BigInt = 500500
+
+scala&gt; val sumOfSquare = sumOf(x =&gt; x * x)(0)_
+sumOfSquare: (Int, Int) =&gt; BigInt = &lt;function2&gt;
+
+scala&gt; sumOfSquare(1, 1000)
+res1: BigInt = 333833500
+
+scala&gt; val sumOfCube = sumOf(x =&gt; x * x * x)(0)_
+sumOfCube: (Int, Int) =&gt; BigInt = &lt;function2&gt;
+
+scala&gt; sumOfCube(1, 1000)
+res2: BigInt = 250500250000
+</pre>
+<p> このように、sumOf の引数を分けて定義することで、部分適用を簡単に行うことができます。
+</p>
+
+<h4>●関数の合成</h4>
+<p> 最後に、関数 f(x) と g(x) を合成して新しい関数 h(x) を作ることを考えてみましょう。関数 h(x) を次のように定義します。
+</p>
+<pre class="item">
+1. h(x) = g( f(x) )
+2. h(x) = f( g(x) )
+</pre>
+<p> たとえば、f(x) = 2 * x + 1, g(y) = y * y + 3 * y とすると、1 の h(x) は次のようになります。
+</p>
+<pre class="item">
+h(x) = g( f(x) )
+     = (2 * x + 1) * (2 * x + 1) + 3 * (2 * x + 1)
+     = 4 * x * x + 4 * x + 1 + 6 * x + 3
+     = 4 * x * x + 10 * x + 4
+</pre>
+<p> 実際のプログラムは数式を展開するのではなく、f(x) の評価結果を g(x) に渡すだけなので簡単です。Scala には関数合成を行うメソッド andThen と compose が用意されています。
+</p>
+<pre class="item">
+f.andThen(g) =&gt; g(f(x))
+f.compose(g) =&gt; f(g(x))
+</pre>
+<p> andThen と compose は関数値に対して動作することに注意してください。def で定義した関数は、(関数名 _) で関数値に変換する必要があります。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+scala&gt; def foo(x:Int):Int = 2 * x + 1
+foo: (x: Int)Int
+
+scala&gt; def bar(y:Int):Int = y * y + 3 * y
+bar: (y: Int)Int
+
+scala&gt; bar(foo(4));
+res0: Int = 108
+
+scala&gt; val baz = (foo _).andThen(bar _)
+baz: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; baz(4)
+res1: Int = 108
+
+scala&gt; val baz1 = (bar _).compose(foo _)
+baz1: Int =&gt; Int = &lt;function1&gt;
+
+scala&gt; baz1(4)
+res2: Int = 108
+</pre>
+<p> 関数 foo と bar を定義します。foo と bar の合成は bar( foo( x ) ) と表すことができます。実際に 4 を計算すると 108 になります。この関数は andHten と compose で合成することができます。(foo _).andThen(bar _) の返り値を変数 baz に束縛すると、baz を合成関数として使うことができます。
+</p>
+
+<p> 今回はここまでです。次回は「リスト」と「パターンマッチング」について説明します。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b> Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="scala02.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala04.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

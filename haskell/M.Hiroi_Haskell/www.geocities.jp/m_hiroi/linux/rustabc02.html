@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881816</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>Rust の基礎知識</h3>
+<h4 id="abc19">●Box&lt;T&gt;</h4>
+<ul>
+  <li>Rust で「ヒープ領域」からメモリを取得するときは Box&lt;T&gt; を使う</li>
+  <li>Box&lt;T&gt; は C++ (C++11) の「スマートポインタ」の動作に近い</li>
+  <li>Box&lt;T&gt; がスコープから外れたとき、取得したメモリは自動的に解放される</li>
+  <li>メモリの取得はメソッド new() で行う</li>
+<pre class="item">
+Box::new(データ) -&gt; Box&lt;データ型&gt;
+</pre>
+  <li>格納されているデータは * で取得できる (デリファレンス)</li>
+  <li>トレイト Drop のメソッド drop() を実装すると、メモリを解放するときに処理を実行することができる</li>
+</ul>
+<pre class="list">
+リスト : Box の簡単な使用例
+
+// 点
+struct Point { x: f64, y: f64 }
+
+// Point を廃棄したときにメッセージを表示する
+impl Drop for Point {
+    fn drop(&amp;mut self) {
+        println!("Drop Point!");
+    }
+}
+
+fn main() {
+    let a = Box::new(10);
+    println!("{}", *a);    // * でデリファレンス
+                           // a でも表示できる
+    let b = a;             // move
+    // println!("{}", a);  コンパイルエラー
+    println!("{}", b);
+    {
+        let p1 = Box::new(Point {x: 0.0, y: 0.0});
+        println!("{}, {}", p1.x, p1.y);  // (*p1).x, (*p1).y と同じ
+        let Point {x: c, y: d} = *p1;    // パターンマッチ
+        println!("{}, {}", c, d);
+    }
+    // ここで p1 が廃棄される
+    println!("----- end ------")
+    // main() が終了したら b が廃棄される
+}
+</pre>
+<pre>
+10
+10
+0, 0
+0, 0
+Drop Point!
+----- end ------
+</pre>
+<pre class="list">
+リスト : 簡単な連結リスト
+
+#[derive(Debug)]
+enum List {
+    Nil,
+    Cons(i32, Box&lt;List&gt;)
+}
+
+impl Drop for List {
+    fn drop(&amp;mut self) {
+        println!("Drop List {:?}", self);
+    }
+}
+
+impl List {
+    // 空リストを返す
+    fn new() -&gt; List {
+        List::Nil
+    }
+
+    // 連結リストの先頭にデータを追加する
+    fn cons(self, x: i32) -&gt; List {
+        List::Cons(x, Box::new(self))
+    }
+}
+
+fn main() {
+    let a = List::new();
+    let b = a.cons(1);       // a は move
+    println!("{:?}", b);
+    {
+        let c = b.cons(2);   // b は move
+        println!("{:?}", c);
+    }
+    // ここで c がすべて廃棄される
+    println!("----- end -----");
+}
+</pre>
+<pre>
+Cons(1, Nil)
+Cons(2, Cons(1, Nil))
+Drop List Cons(2, Cons(1, Nil))
+Drop List Cons(1, Nil)
+Drop List Nil
+----- end -----
+</pre>
+<ul>
+  <li>Rust の場合、連結リストは簡単に定義することができる</li>
+  <li>ただし、この方法では所有権が移動するので、関数型言語のようにリストを共有して使うことはできない</li>
+  <li>M.Hiroi は Rust の「所有権」を甘くみていたようだ (難しい)</li>
+</ul>
+<h4 id="abc20">●トレイトオブジェクト</h4>
+<ul>
+  <li>トレイトオブジェクトはプログラムの実行時にメソッドを選択する仕組み (動的ディスパッチ)</li>
+  <li>C++ の仮想関数によく似ている</li>
+  <li>トレイトを Foo とすると、トレイトオブジェクトのデータ型は &amp;Foo または Box&lt;Foo&gt;</li>
+  <li>トレイトオブジェクトはトレイトを実装したデータ型を「型キャスト」するか「型強制」することで生成する</li>
+</ul>
+<pre class="list">
+リスト : トレイトオブジェクトの簡単な例題
+
+trait Foo {
+    fn method(&amp;self);
+}
+
+struct Bar;
+struct Baz;
+
+impl Foo for Bar {
+    fn method(&amp;self) { println!("Bar method"); }
+}
+
+impl Foo for Baz {
+    fn method(&amp;self) { println!("Baz method"); }
+}
+
+fn call_method(func: &amp;Foo) {
+    func.method();    // 動的ディスパッチ
+}
+
+fn call_method_box(func: Box&lt;Foo&gt;) {
+    func.method();
+}
+
+fn main() {
+    let x = Bar;
+    let y = Baz;
+    call_method(&amp;x as &amp;Foo);
+    call_method(&amp;y);
+    call_method_box(Box::new(x));
+    call_method_box(Box::new(y));    
+}
+</pre>
+<pre>
+Bar method
+Baz method
+Bar method
+Baz method
+</pre>
+<pre class="list">
+リスト : 図形オブジェクト
+
+// 図形のトレイト
+trait Figure {
+    fn area(&amp;self) -&gt; f64;
+    fn kind(&amp;self) -&gt; &amp;str;
+
+    // デフォルトメソッド
+    fn print(&amp;self) {
+        println!("{}: area = {:.3}", self.kind(), self.area());
+    }
+}
+
+// 三角形
+struct Triangle {
+    altitude: f64, base_line: f64
+}
+
+impl Triangle {
+    fn new(a: f64, b: f64) -&gt; Triangle {
+        Triangle { altitude: a, base_line: b }
+    }
+}
+
+impl Figure for Triangle {
+    fn area(&amp;self) -&gt; f64 {
+        self.altitude * self.base_line / 2.0
+    }
+    fn kind(&amp;self) -&gt; &amp;str {
+        "Triangle"
+    }
+}
+
+// 四角形
+struct Rectangle {
+    width: f64, height: f64
+}
+
+impl Rectangle {
+    fn new(w: f64, h: f64) -&gt; Rectangle {
+        Rectangle { width: w, height: h}
+    }
+}
+
+impl Figure for Rectangle {
+    fn area(&amp;self) -&gt; f64 {
+        self.width * self.height
+    }
+    
+    fn kind(&amp;self) -&gt; &amp;str {
+        "Rectangle"
+    }
+}
+
+// 円
+struct Circle {
+  radius: f64
+}
+
+impl Circle {
+    fn new(r: f64) -&gt; Circle {
+        Circle { radius: r }
+    }
+}
+
+impl Figure for Circle {
+    fn area(&amp;self) -&gt; f64 {
+         std::f64::consts::PI * self.radius * self.radius
+    }
+
+    fn kind(&amp;self) -&gt; &amp;str {
+        "Circle"
+    }
+}
+
+// 図形の合計値を求める
+fn figure_sum(data: &amp;[&amp;Figure]) -&gt; f64 {
+    let mut a = 0.0;
+    for fig in data {
+        a += fig.area();
+    }
+    a
+}
+
+fn main() {
+    let a = Triangle::new(2.0, 2.0);
+    let b = Rectangle::new(2.0, 2.0);
+    let c = Circle::new(2.0);
+    a.print();
+    b.print();
+    c.print();
+
+    // トレイトオブジェクトを配列に格納する
+    let d = [&amp;a as &amp;Figure, &amp;b as &amp;Figure, &amp;c as &amp;Figure];
+    println!("{:.3}", figure_sum(&amp;d));
+}
+</pre>
+<pre>
+Triangle: area = 2.000
+Rectangle: area = 4.000
+Circle: area = 12.566
+18.566
+</pre>
+<h4 id="abc21">●クロージャの基本</h4>
+<ul>
+  <li>Rust の「クロージャ (closure)」は Lisp / Scheme の「ラムダ式 (lambda)」のこと</li>
+  <li>Rust では「ラムダ (lambda)」と呼ばれることもある</li>
+  <li>ラムダは名前のない関数 (匿名関数, anonymous function)</li>
+<pre class="item">
+|仮引数: データ型, ...| -&gt; データ型 { 処理; ... }
+</pre>
+  <li>仮引数と返り値のデータ型を省略すると Rust が推論してくれる</li>
+  <li>本体の処理が一つしかない場合は { } を省略できる</li>
+  <li>ラムダを評価すると「クロージャ」が生成される</li>
+  <li>このとき、参照可能な局所変数がクロージャに保存される</li>
+  <li>参照可能な局所変数の集合を「環境」と呼ぶ</li>
+  <li>クロージャの呼び出し方は関数と同じ</li>
+</ul>
+<pre class="list">
+リスト : クロージャの簡単な使用例
+
+fn main() {
+    let a = 10;
+    let add_a = |x| x + a;      // 変数 a を immutable で借用
+    println!("{}", add_a(20));
+    let mut b = 0;
+    {
+        let mut inc_b = || b += 1;   // 変数 b を mutable で借用
+        inc_b();
+        inc_b();
+        inc_b();
+        inc_b();
+        inc_b();
+        // println!("{}", b);   コンパイルエラー
+    }
+    // mutable な借用は一つしか使用できない
+    // inc_b が廃棄されると b にアクセスできる
+    println!("{}", b);
+
+    let mut c = 0;
+    {
+        // move クロージャ (所有権をクロージャに移動する)
+        let mut add_c = move |x| {c += x; c};
+        // 数値の場合、クロージャ内に値がコピーされ、
+        // その値が書き換えられる
+        println!("{}", add_c(100));
+        println!("{}", add_c(200));
+    }
+    println!("{}", c);    // c の値は 0 のまま
+}
+</pre>
+<pre>
+30
+5
+100
+300
+0
+</pre>
+<ul>
+  <li>クロージャを生成するとき、環境を保持する構造体に特別なトレイト Fn, FnMut, FnOnce が実装される</li>
+    <ul>
+      <li>Fn : 変数を immutable な参照で捕捉する</li>
+      <li>FnMut : 変数を mutable な参照で捕捉する</li>
+      <li>FnOnce : 変数の所有権を移動する</li>
+    </ul>
+  <li>クロージャのデータ型は トレイト(引数のデータ型, ...) -&gt; 返り値のデータ型 になる</li>
+  <li>Fn は FnMut を継承し、FnMut は FnOnce を継承している</li>
+  <li>Rust はクロージャを生成するとき、できるだけ immutable な参照を使う</li>
+</ul>
+<h4 id="abc22">●クロージャと高階関数</h4>
+<ul>
+  <li>クロージャを高階関数に渡す場合、関数とクロージャではデータ型が異なるので、関数と同じ方法で渡すことはできない</li>
+  <li>クロージャを関数に渡すには 2 つの方法がある</li>
+  <li>一つは高階関数をジェネリクスで定義して、型パラメータの境界条件にクロージャの型を指定する</li>
+  <li>この場合、通常の関数も渡すことができる</li>
+  <li>もう一つ、トレイトオブジェクトを渡す方法がある</li>
+  <li>仮引数のデータ型に &amp;クロージャの型 を指定する</li>
+  <li>クロージャを渡すときは、ラムダの先頭に &amp; を付ける</li>
+  <li>通常の関数を渡すことも可能、その場合は関数名の前に &amp; を付ける</li>
+</ul>
+<pre class="list">
+リスト : クロージャを受け取る高階関数
+
+fn apply1&lt;F, V&gt;(func: F, x: V) -&gt; V where F: Fn(V) -&gt; V {
+    func(x)
+}
+
+fn apply11&lt;V&gt;(func: &amp;Fn(V) -&gt; V, x: V) -&gt; V {
+    func(x)
+}
+
+fn apply2&lt;F, V&gt;(func: F, x: V, y: V) -&gt; V where F: Fn(V, V) -&gt; V {
+    func(x, y)
+}
+
+fn apply22&lt;V&gt;(func: &amp;Fn(V, V) -&gt; V, x: V, y: V) -&gt; V {
+    func(x, y)
+}
+
+fn main() {
+    fn square(x: f64) -&gt; f64 { x * x };
+    println!("{}", apply1(|x| x * x, 123));
+    println!("{}", apply11(&amp;|x| x * x, 123));
+    println!("{}", apply1(square, 1.111));
+    println!("{}", apply11(&amp;square, 1.111));
+
+    fn add(x: f64, y: f64) -&gt; f64 { x + y };
+    println!("{}", apply2(|x, y| x + y, 1, 2));
+    println!("{}", apply22(&amp;|x, y| x + y, 1, 2));
+    println!("{}", apply2(add, 1.1, 2.2));
+    println!("{}", apply22(&amp;add, 1.1, 2.2));
+}
+</pre>
+<pre>
+15129
+15129
+1.234321
+1.234321
+3
+3
+3.3000000000000003
+3.3000000000000003
+</pre>
+<ul>
+  <li>簡単な例題として、マッピング、フィルター、畳み込みを行う高階関数を示す</li>
+  <li>Rust の場合、これらの高階関数は「イテレータ」として定義されている</li>
+  <li>イテレータはあとで説明する</li>
+</ul>
+<pre class="list">
+リスト : 簡単な高階関数
+
+// マッピング
+fn map&lt;F, T, U&gt;(func: F, xs: &amp;Vec&lt;T&gt;) -&gt; Vec&lt;U&gt;
+    where F: Fn(T) -&gt; U, T: Copy, U: Copy {
+    let mut ys: Vec&lt;U&gt; = vec![];
+    for x in xs {
+        ys.push(func(*x));
+    }
+    ys
+}
+
+// フィルター
+fn filter&lt;F, T&gt;(pred: F, xs: &amp;Vec&lt;T&gt;) -&gt; Vec&lt;T&gt;
+    where F: Fn(T) -&gt; bool, T: Copy + PartialEq {
+    let mut ys: Vec&lt;T&gt; = vec![];
+    for x in xs {
+        if pred(*x) { ys.push(*x); }
+    }
+    ys
+}
+
+// 畳み込み
+fn reduce&lt;F, T, U&gt;(func: F, a: U, xs: &amp;Vec&lt;T&gt;) -&gt; U
+    where F: Fn(U, T) -&gt; U, T: Copy, U: Copy {
+    let mut acc = a;
+    for x in xs {
+        acc = func(acc, *x);
+    }
+    acc
+}
+
+fn main() {
+    let xs = vec![1,2,3,4,5,6,7,8];
+    println!("{:?}", map(|x| x * x, &amp;xs));
+    println!("{:?}", map(|x| x as f64 * 1.1, &amp;xs));
+    println!("{:?}", filter(|x| x % 2 == 0, &amp;xs));
+    println!("{}", reduce(|a, x| a + x, 0, &amp;xs));
+}
+</pre>
+<pre>
+[1, 4, 9, 16, 25, 36, 49, 64]
+[1.1, 2.2, 3.3000000000000003, 4.4, 5.5, 6.6000000000000005, 7.700000000000001, 8.8]
+[2, 4, 6, 8]
+36
+</pre>
+<h4 id="abc23">●クロージャを返す</h4>
+<ul>
+  <li>クロージャを返すにはトレイトオブジェクトを使う</li>
+  <li>データ型は Box&lt;Fn(データ型, ...) -&gt; データ型&gt; になる</li>
+  <li>クロージャを返すときには若干の制約がある</li>
+  <li>ひとつはジェネリクスを使うことができないこと</li>
+  <li>もうひとつは move クロージャを使うこと</li>
+</ul>
+<pre class="list">
+リスト : クロージャを返す
+
+// x を加算するクロージャを返す
+fn make_adder(x: i32) -&gt; Box&lt;Fn(i32) -&gt; i32&gt; {
+    Box::new(move |y| x + y)
+}
+
+// 簡単なジェネレータ 
+// (Rust にはイテレータがあるので、このような使い方はあまりしないと思う)
+fn make_counter(init: i32) -&gt; Box&lt;FnMut() -&gt; i32&gt; {
+    let mut c = init - 1;
+    Box::new(move || { c += 1; c})
+}
+
+fn main() {
+    let add10 = make_adder(10);   // 10 を加算する関数になる
+    let add20 = make_adder(20);   // 20 を加算する関数になる
+    println!("{}", add10(1));
+    println!("{}", add20(2));
+
+    let mut cnt = make_counter(1);   // 1, 2, 3, ... を返す
+    for _ in 0..10 {
+        println!("{}", cnt());
+    }
+}
+</pre>
+<pre>
+11
+22
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre>
+<h4 id="abc24">●ライフタイムの基本</h4>
+<ul>
+  <li>Rust は参照 (借用) を「ライフタイム」を使って管理している</li>
+  <li>あるデータを参照したとき、参照元のデータが廃棄されたあと、その参照が残っていてはいけない</li>
+  <li>通常はコンパイラが参照の有効期間をチェックする (借用チェッカー)</li>
+  <li>チェックできないときは、参照の有効期間をライフタイムを使って明示的に指定する</li>
+  <li>ライフタイムは 'a や 'b のように ' を付けて表す (ライフタイムパラメータ)</li>
+  <li>'static は特別なライフタイムパラメータ (有効期間はプログラム全体)</li>
+    <ul>
+      <li>文字列リテラルのデータ型は &amp;'static str</li>
+      <li>static 変数の参照も同様</li>
+    </ul>
+  <li>指定方法はジェネリクスの型パラメータと同じ</li>
+    <ul>
+      <li>&lt;... &gt; の中でライフタイムパラメータを定義する</li>
+      <li>データ型の指定でそれを使用する</li>
+<pre class="item">
+fn foo(x: &amp;i32) { ... } =&gt; fn foo&lt;'a&gt;(x: &amp;'a i32) { ... }  
+</pre>
+    </ul>    
+  <li>関数の場合、ライフタイムパラメータを省略すると、引数はすべて異なるライフタイムになる</li>
+  <li>参照を返すときライフタイムパラメータを省略すると、引数と同じライフタイムになる</li>
+  <li>ライフタイムが異なる引数が複数ある場合、返り値のライフタイムを指定する必要がある</li>
+</ul>
+<pre class="list">
+リスト : ライフタイムパラメータの指定
+
+// 配列の探索
+fn find&lt;'a, 'b, T: PartialEq&gt;(item: &amp;'b T, xs: &amp;'a [T]) -&gt; Option&lt;&amp;'a T&gt; {
+    for x in xs {
+        if x == item { return Some(x); }
+    }
+    None
+}
+
+fn main() {
+    let xs = [1,2,3,4,5,6,7,8];
+    for x in 0 .. 10 {
+        match find(&amp;x, &amp;xs) {
+            Some(v) =&gt; println!("{}", v),
+            None =&gt; println!("None")
+        }
+    }
+}
+</pre>
+<pre>
+None
+1
+2
+3
+4
+5
+6
+7
+8
+None
+</pre>
+<ul>
+  <li>関数 find() でライフパラメータの指定を省略するとコンパイルエラー</li>
+  <li>返り値 Option&lt;&amp;T&gt; は配列 xs の要素への参照</li>
+  <li>返り値のライフタイムが xs のライフタイムよりも長くなってはいけない</li>
+  <li>ライフタイムパラメータ 'a を使って、2 つのライフタイムが同じであることをコンパイラに指示する</li>
+  <li>Rust ver 1.18 の場合、ライフタイムパラメータ 'b を省略してもコンパイルできる</li>
+</ul>
+<ul>
+  <li>struct で参照を格納するときはライフタイムパラメータが必要になる</li>
+<pre class="list">
+リスト : 構造体のライフタイム
+
+struct Foo&lt;'a&gt; {
+    x: &amp;'a i32
+}
+
+fn main() {
+    let y = 123;
+    let z = Foo { x: &amp;y };
+    println!("{}", z.x);
+    // let z1;  コンパイルエラー
+    // {
+    //     let y1 = 456;
+    //     z1 = Foo { x: &amp;y1 };
+    // }
+    // println!("{}", z1.x);
+}
+</pre>
+  <li>y と z はライフタイムが同じなのでコンパイルできる</li>
+  <li>y1 と z1 では、y1 のライフタイムが z1 よりも短いのでコンパイルエラーになる</li>
+</ul>
+<ul>
+  <li>メソッドのライフタイムは関数のそれと似ている</li>
+</ul>
+<pre class="list">
+リスト : メソッドのライフタイム
+
+struct Foo&lt;'a&gt; {
+    x: &amp;'a i32
+}
+
+impl &lt;'a&gt; Foo&lt;'a&gt; {
+    fn foo(&amp;self) -&gt;&amp;i32 { self.x }
+
+    fn foo1(&amp;self, y: &amp;i32) -&gt;&amp;i32 {
+        println!("{},{}", self.x, y);
+        self.x
+    }    
+
+    fn foo2&lt;'b&gt;(&amp;self, y: &amp;'b i32) -&gt;&amp;'b i32 {
+        println!("{},{}", self.x, y);
+        y
+    }    
+}
+
+fn main() {
+    let y = 123;
+    let z = Foo { x: &amp;y };
+    println!("{}", z.foo());
+    let y1 = 456;
+    println!("{}", z.foo1(&amp;y1));
+    println!("{}", z.foo2(&amp;y1));
+}
+</pre>
+<pre>
+123
+123,456
+123
+123,456
+456
+</pre>
+<ul>
+  <li>メソッド foo() の返り値のライフタイムは引数と同じになる</li>
+  <li>メソッド foo1() のように、複数の引数があってライフタイムパラメータの指定がない場合、返り値のライフタイムは self と同じになる</li>
+  <li>メソッド foo2() のように、self と異なるライフタイムを指定したい場合はライフタイムパラメータを明示する</li>
+</ul>
+<h4 id="abc25">●type</h4>
+<ul>
+  <li>Rust は type でデータ型に別名を付けることができる (タイプエイリアス)</li>
+<pre class="item">
+type 別名 = データ型;
+</pre>
+  <li>type はデータ型に別名を付けるだけで、新しいデータ型を定義するわけではない</li>
+  <li>type はトレイトの中で型パラメータの定義に使用できる</li>
+  <li>Rust ではこれを「関連型」という</li>
+<pre class="list">
+リスト : 関連型
+
+trait Foo {
+    type A;
+    type B;
+    // メソッドの仕様で型パラメータ Self::A, Self::B を使用する
+    ...
+}
+
+impl Foo for Bar {
+    type A = i32;   // 具体的なデータ型を指定する
+    type B = f64;
+    // メソッドの定義で型パラメータ Self::A, Self::B を使用する
+    // または具体的なデータ型を使用してもよい
+    ...
+}
+</pre>
+  <li>トレイトで定義した型パラメータを使用するときは Self::型パラメータ とする</li>
+  <li>impl でメソッドを実装するときは、Self::型パラメータ もしくは実際のデータ型を使う</li>
+</ul>
+<pre class="list">
+リスト : 点と距離
+
+// f64 で二次元座標を保持する
+struct Point1 {
+    x: f64, y: f64
+}
+
+// f32 で二次元座標を保持する
+struct Point2 {
+    x: f32, y: f32
+}
+
+// f64 で三次元座標を保持する
+struct Point3D {
+    x: f64, y: f64, z: f64
+}
+
+// 距離を求めるトレイト
+trait Distance {
+    type Item;
+    fn distance(&amp;self, p: &amp;Self) -&gt; Self::Item;
+}
+
+// 実装
+impl Distance for Point1 {
+    type Item = f64;
+    fn distance(&amp;self, p: &amp;Self) -&gt; Self::Item {
+        let dx = self.x - p.x;
+        let dy = self.y - p.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+impl Distance for Point2 {
+    type Item = f32;
+    fn distance(&amp;self, p: &amp;Self) -&gt; Self::Item {
+        let dx = self.x - p.x;
+        let dy = self.y - p.y;
+        (dx * dx + dy * dy).sqrt()
+    }
+}
+
+impl Distance for Point3D {
+    type Item = f64;
+    fn distance(&amp;self, p: &amp;Self) -&gt; Self::Item {
+        let dx = self.x - p.x;
+        let dy = self.y - p.y;
+        let dz = self.z - p.z;
+        (dx * dx + dy * dy + dz * dz).sqrt()
+    }
+}
+
+fn main() {
+    let p1 = Point1 { x: 0.0, y: 0.0 };
+    let p2 = Point1 { x: 10.0, y: 10.0 };
+    let p3 = Point2 { x: 0.0f32, y: 0.0f32 };
+    let p4 = Point2 { x: 10.0f32, y: 10.0f32 };
+    let p5 = Point3D { x: 0.0, y: 0.0, z: 0.0 };
+    let p6 = Point3D { x: 10.0, y: 10.0, z: 10.0 };
+    println!("{}", p1.distance(&amp;p2));
+    println!("{}", p3.distance(&amp;p4));
+    println!("{}", p5.distance(&amp;p6));
+}
+</pre>
+<pre>
+14.142135623730951
+14.142136
+17.320508075688775
+</pre>
+<h4 id="abc26">●イテレータ</h4>
+<ul>
+  <li>Rust ではトレイト Iterator を実装すると「イテレータ (iterator)」になる</li>
+  <li>Iterator は関連型 Item とメソッド next() を実装するだけ</li>
+  <li>Iterator には便利なデフォルトメソッドが多数用意されている</li>
+<pre class="list">
+リスト : Iterator トレイト
+
+pub trait Iterator {
+    type Item;
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt;;
+
+    // デフォルトメソッドの定義
+    ...
+}
+</pre>
+  <li>next() は値を Option 型に格納して返す</li>
+  <li>値が無くなった場合は None を返す</li>
+  <li>Iterator を実装すると for 文を使用できるようになる</li>
+</ul>
+<pre class="list">
+リスト : 整数列の生成
+
+// start 以上 end 未満の整数列を生成する
+struct IntSeq {
+    start: i32, end: i32
+}
+
+// 初期化
+impl IntSeq {
+    fn new(s: i32, e: i32) -&gt; IntSeq {
+        IntSeq { start: s, end: e }
+    }
+}
+
+// イテレータの実装
+impl Iterator for IntSeq {
+    type Item = i32;
+    fn next(&amp;mut self) -&gt; Option&lt;i32&gt; {
+        if self.start &lt; self.end {
+            let x = self.start;
+            self.start += 1;
+            Some(x)
+        } else {
+            None
+        }
+    }
+}
+
+fn main() {
+    let mut s0 = IntSeq::new(0, 5);
+    while let Some(x) = s0.next() {
+        println!("{}", x);
+    }
+    for x in IntSeq::new(5, 10) {
+        println!("{}", x);
+    }
+    let mut s1 = 10 .. 15;
+    while let Some(x) = s1.next() {
+        println!("{}", x);
+    }
+}
+</pre>
+<pre>
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+</pre>
+<ul>
+  <li>配列の参照やベクタは for 文で要素を順番に取り出すことができるがイテレータではない</li>
+<pre class="list">
+リスト : 配列と for 文 (1)
+
+ fn main() {
+    let a = [1, 2, 3, 4, 5];
+    for x in &amp;a {       // for x in a { ... } とするとコンパイルエラー
+        println!("{}", x);
+    }
+}
+</pre>
+  <li>配列やベクタをイテレータに変換するにはメソッド iter(), iter_mut(), into_iter() を使う</li>
+    <ul>
+      <li>iter() は要素の参照 (immutable) を返すイテレータを生成する</li>
+      <li>iter_mut() は要素の参照 (mutable) を返すイテレータを生成する</li>
+      <li>into_iter() は要素を返すイテレータを生成する (要素は move される)</li>
+    </ul>
+<pre class="list">
+リスト : 配列と for 文 (2)
+
+fn main() {
+    let a = [1, 2, 3, 4, 5];
+    for x in a.iter() {
+        println!("{}", x);
+    }
+}
+</pre>
+  <li>イテレータから値を受け取り、異なる値のイテレータを生成するメソッドを「イテレータアダプタ」と呼ぶ</li>
+  <li>map(), filter() などの便利な高階関数はイテレータアダプタとして用意されている</li>
+  <li>イテレータから値を受け取り、最終的な処理結果を返すメソッドを「コンシューマ」と呼ぶ</li>
+  <li>イテレータの要素を集積する collect() や畳み込みを行う fold() など便利なメソッドが多数用意されている</li>
+</ul>
+<pre class="list">
+リスト : map, filter, fold, collect の簡単な使用例
+
+fn change(x: i32) -&gt; String {
+    if x % 15 == 0 {
+        "FizzBuzz".to_string()
+    } else if x % 3 == 0 {
+        "Fizz".to_string()
+    } else if x % 5 == 0 {
+        "Buzz".to_string()
+    } else {
+        format!("{}", x)
+    }
+}
+
+fn main() {
+    let xs: Vec&lt;_&gt; = (1..101).map(change).collect();
+    println!("{:?}", xs);
+    let ys = vec![1,2,3,4,5,6,7,8,9,10];
+    {
+        let a: Vec&lt;_&gt; = ys.iter().map(|x| x * x).collect();
+        println!("{:?}", a);
+        let b: Vec&lt;_&gt; = ys.iter().filter(|&amp;x| x % 2 == 0).collect();
+        println!("{:?}", b);
+        println!("{}", ys.iter().fold(0, |a, x| a + x));
+    }
+    let c: Vec&lt;_&gt; = ys.into_iter().filter(|x| x % 2 == 1).collect();
+    println!("{:?}", c);
+    // println!("()", ys);   コンパイルエラー
+}
+</pre>
+<ul>
+  <li>Vec&lt;_&gt; のように要素のデータ型に _ を指定すると、要素のデータ型を推論してくれる</li>
+  <li>collect::&lt;Vec&lt;_&gt;&gt;() のように指定することもできる</li>
+  <li>iter() は要素への参照を渡すので、filter() のラムダではパターンマッチで要素の値を求めている</li>
+</ul>
+<pre>
+["1", "2", "Fizz", "4", "Buzz", "Fizz", "7", "8", "Fizz", "Buzz", "11", "Fizz", "13", "14", "FizzBuzz", "16", "17", "Fizz",
+"19", "Buzz", "Fizz", "22", "23", "Fizz", "Buzz", "26", "Fizz", "28", "29", "FizzBuzz", "31", "32", "Fizz", "34", "Buzz", 
+"Fizz", "37", "38", "Fizz", "Buzz", "41", "Fizz", "43", "44", "FizzBuzz", "46", "47", "Fizz", "49", "Buzz", "Fizz", 
+"52", "53", "Fizz", "Buzz", "56", "Fizz", "58", "59", "FizzBuzz", "61", "62", "Fizz", "64", "Buzz", "Fizz", "67",
+"68", "Fizz", "Buzz", "71", "Fizz", "73", "74", "FizzBuzz", "76", "77", "Fizz", "79", "Buzz", "Fizz", "82", "83", "Fizz", 
+"Buzz", "86", "Fizz", "88", "89", "FizzBuzz", "91", "92", "Fizz", "94", "Buzz", "Fizz", "97", "98", "Fizz", "Buzz"]
+[1, 4, 9, 16, 25, 36, 49, 64, 81, 100]
+[2, 4, 6, 8, 10]
+55
+[1, 3, 5, 7, 9]
+</pre>
+<h4 id="abc27">●モジュール</h4>
+<ul>
+  <li>モジュールは mod モジュール名 { ... } で定義する (mod は module の略)</li>
+  <li>モジュールで定義された名前は基本的に非公開 (private)</li>
+  <li>同じモジュール内からアクセスできるが、モジュールの外側からアクセスすることはできない</li>
+  <li>モジュールの外に公開する場合は pub を付ける (pub は public の略)</li>
+  <li>公開された名前は モジュール名::名前 でアクセスする</li>
+  <li>モジュールは入れ子にすることができる</li>
+  <li>構造体の場合、pub を指定してもフィールドは private のまま</li>
+  <li>フィールドも公開したい場合はフィールド名に pub を付ける</li>
+  <li>impl で定義したメソッドを公開する場合も pub を付ける</li>
+</ul>
+<pre class="list">
+リスト : モジュールの使用例
+
+mod foo {
+    // 公開 (foo::bar::function() でアクセスできる)
+    pub mod bar {
+        pub fn function() {
+            println!("call foo::bar::function");
+        }
+    }
+    // 非公開 (foo の中でのみ有効)
+    mod baz {
+        pub fn function() {
+            println!("call foo::baz::function");
+        }
+
+    }
+
+    // 構造体 Foo (public)
+    pub struct Foo {
+        // フィールド a は public, b は private
+        pub a: i32, b: i32
+    }
+
+    impl Foo {
+        pub fn new(a: i32, b: i32) -&gt; Foo {
+            Foo { a: a, b: b }
+        }
+        pub fn add(&amp;self) -&gt; i32 { self.a + self.b }
+    }
+
+    pub fn function() {
+        println!("call foo::function");
+        baz::function();
+    }
+}
+
+fn main() {
+    foo::function();
+    foo::bar::function();
+    // foo::baz::function();   コンパイルエラー  
+
+    let a = foo::Foo::new(1, 2);
+    println!("{}", a.a);
+    // println!("{}", a.b);    コンパイルエラー
+    println!("{}", a.add());
+}
+</pre>
+<pre>
+call foo::function
+call foo::baz::function
+call foo::bar::function
+1
+3
+</pre>
+<ul>
+  <li>名前は use 宣言で別名を付けることができる</li>
+<pre class="item">
+use 名前1:: ... ::名前N::名前 as 別名;       // 名前を別名でアクセスできる
+use 名前1:: ... ::名前N::名前;               // 名前だけでアクセスできる
+use 名前1:: ... ::名前N::{名前a, 名前b ...}; // 複数の名前を指定できる
+use 名前1:: ... ::名前N::*;                 // 名前N で公開されているものすべて
+</pre>
+  <li>ブロックの中で use 宣言を使用すると、有効範囲はそのブロックに限定される</li>
+  <li>たとえば、main() の中で use foo::*; とすると、foo:: を省略することができる</li>
+  <li>use foo::Foo; とすると foo::Foo::new() は Foo::new() でアクセスできる</li>
+  <li>use foo::{Foo, function} とすると foo::function() も function() でアクセスできる</li>
+</ul>
+<ul>
+  <li>モジュールをファイルに切り出す場合、mod モジュール名; だけを指定する</li>
+  <li>この場合、Rust は モジュール名.rs または モジュール名/mod.rs をモジュールとして認識する</li>
+  <li>このとき、ファイルの中で改めて mod を宣言する必要はない</li>
+  <li>モジュール名.rs でモジュールを切り出した場合、同じ方法で入れ子のモジュールを切り出すことはできないようだ (コンパイルエラー)</li>
+</ul>
+<pre class="fig">
+test.rs        -- メインプログラム
+foo/mod.rs     -- モジュール foo
+   /bar/mod.rs -- モジュール bar
+   /baz/mod.rs -- モジュール baz
+
+    図 : ファイルの構成
+</pre>
+<pre class="list">
+リスト : メインプログラム
+
+mod foo;
+
+fn main() {
+    foo::function();
+    foo::bar::function();
+    // foo::baz::function();   コンパイルエラー  
+
+    let a = foo::Foo::new(1, 2);
+    println!("{}", a.a);
+    // println!("{}", a.b);    コンパイルエラー
+    println!("{}", a.add());
+}
+</pre>
+<pre class="list">
+リスト : モジュール foo/mod.rs
+
+pub mod bar;
+mod baz;
+
+pub struct Foo {
+    pub a: i32, b: i32
+}
+
+impl Foo {
+    pub fn new(a: i32, b: i32) -&gt; Foo {
+        Foo { a: a, b: b }
+    }
+    pub fn add(&amp;self) -&gt; i32 { self.a + self.b }
+}
+
+pub fn function() {
+    println!("call foo::function");
+    baz::function();
+}
+</pre>
+<pre class="list">
+リスト : モジュール foo/bar/mod.rs
+
+pub fn function() {
+    println!("call foo::bar::function");
+}
+</pre>
+<pre class="list">
+リスト : モジュール foo/baz/mod.rs
+
+pub fn function() {
+    println!("call foo::baz::function");
+}
+</pre>
+<ul>
+  <li> rustc test.rc でコンパイルできる</li>
+</ul>
+<h4 id="abc28">●クレート</h4>
+<ul>
+  <li>「クレート (crate)」は木箱という意味だが、Rust ではコンパイルの単位を表す</li>
+  <li>一つのクレートをコンパイルして実行ファイルまたはライブラリを生成する</li>
+  <li>Rust の標準ライブラリはクレートで管理されている</li>
+  <li>クレートは複数のモジュールを格納することができる</li>
+  <li>たとえば、標準ライブラリのクレート std には便利なモジュールが多数用意されている</li>
+  <li>ライブラリを生成するときはオプション --create-type=lib を指定する</li>
+<pre class="list">
+リスト : クレイト cfoo.rs
+
+pub fn function() {
+    println!("cfoo::function");
+}
+</pre>
+<pre>
+rustc --crate-type=lib cfoo.rs
+</pre>
+  <li>これでライブラリ libcfoo.rlib が生成される</li>
+  <li>クレートを使用するには extern create クレート名; と宣言する</li>
+<pre class="list">
+リスト : クレート cfoo の使用例 (test.rs)
+
+extern crate cfoo;
+
+fn main() {
+    cbar::function();
+}
+</pre>
+  <li>クレート内で定義された名前は クレート::名前 でアクセスできる</li>
+  <li>ライブラリがカレントディレクトリにある場合、オプション -L . でパスを追加する</li>
+  <li>rustc -L . test.rs でコンパイルできる</li>
+  <li>クレート名とソースファイル名が異なっていても、オプション -crate-name を指定すれば、クレートを生成することができる</li>
+<pre class="list">
+リスト : クレイト cbar (cbar/lib.rs)
+
+pub fn function() {
+    println!("cbar::function");
+}
+</pre>
+<pre>
+$ rustc --crate-type=lib --crate-name cbar cbar/lib.rs</li>
+</pre>
+  <li>カレントディレクトリに libcbar.rlib が生成される</li>
+<pre class="list">
+リスト : クレイト cbar の使用例 (test1.rs)
+
+extern crate cbar;
+
+fn main() {
+    cbar::function();
+}
+</pre>
+  <li>rustc -L . test1.rs でコンパイルできる</li>
+  <li>--crate-type, --crate-name はアトリビュートで指定できる</li>
+<pre class="list">
+リスト : アトリビュートでの指定方法 (cbar/lib.rs)
+
+#![crate_type = "lib"]
+#![crate_name = "cbar"]
+
+pub fn function() {
+    println!("cbar::function");
+}
+</pre>
+  <li>この場合は rustc cbar/lib.rs でコンパイルできる</li>
+  <li>実際にアプリケーションやライブラリを開発するときは、ビルドツール Cargo を使ったほうが良い</li>
+</ul>
+<h4 id="abc29">●エラー処理の基本</h4>
+<ul>
+  <li>Rust のエラー処理は Option や Result を使ってエラーを返すことが基本</li>
+  <li>マクロ panic! はエラーメッセージを表示してプログラムを終了する</li>
+  <li>Rust ではこれを「パニック (panic)」という</li>
+    <ul>
+      <li>パニックの種類によっては std::panic::catch_unwind() で捕捉することもできるようだ</li>
+    </ul>
+  <li>Option と Result のメソッド unwrap() は Some(T) や Ok(T) から T を取り出す</li>
+  <li>None や Err(E) の場合、unwrap() はパニックする</li>
+  <li>メソッド unwrap_or(default) を使うとパニックせずに default を返すことができる</li>
+  <li>Option のまま Some の値を処理したい場合はメソッド map() を使う</li>
+    <ul>
+      <li>map() は引数の関数に Some の値を渡して実行し、その値を Some に格納して返す</li>
+      <li>None の場合は何もせずに None を返す</li>
+    </ul>
+  <li>map() に渡す関数が Option を返す場合、返り値は Option の入れ子になる</li>
+  <li>これを一重の Option にしたい場合はメソッド and_then() を使う</li>
+    <ul>
+      <li>繰り返しになるが、and_then() に渡す関数は Option を返すことに注意</li>
+      <li>and_then() は関数の返り値をそのまま返すだけ</li>
+      <li>関数型言語の flatmap() と同じ</li>
+    </ul>
+  <li>Result にも map() や and_then() がある</li>
+  <li>Err(E) に作用する map_err() や or_else() もある</li>
+  <li>Option には Result に変換するメソッド ok_or(err) がある</li>
+  <li>None の場合、引数 err が Reuslt の Err(E) にセットされる</li>
+</ul>
+<pre class="list">
+リスト : Option, Result と map() の使用例
+
+fn main() {
+    let a = [1, 2, 3, 4, 5];
+    let r1 = a.iter().find(|&amp;x| x % 3 == 0);
+    println!("{}", r1.map(|&amp;x| x * 10).unwrap());
+    let r2 = a.iter().find(|&amp;x| x % 6 == 0);
+    println!("{}", r2.map(|&amp;x| x * 10).unwrap_or(0));
+    println!("{}", "12345".parse::&lt;i32&gt;().map(|x| x * 2).unwrap());
+    println!("{}", "abcde".parse::&lt;i32&gt;().map(|x| x * 2).unwrap_or(0));
+}
+</pre>
+<ul>
+  <li>find(pred) はイテレータのコンシューマ</li>
+  <li>述語 pred が真を返す要素を Option に格納して返す</li>
+  <li>parse() は文字列のメソッドで、文字列を指定したデータ型の数値に変換する</li>
+  <li>結果は Result に格納して返す</li>
+</ul>
+<pre>
+30
+0
+24690
+0
+</pre>
+<ul>
+  <li>マクロ try! を使うと、Err(E) が返された時点でリターンする</li>
+  <li>この時の返り値は Err(E)</li>
+  <li>Ok(T) が返された場合は、そこから T を取り出す</li>
+  <li>Rust ではこれを「早期リターン」という</li>
+  <li>返り値のデータ型は Result でないとコンパイルエラー</li>
+  <li>早期リターンは後置演算子 ? で行うこともできる</li>
+</ul>
+<pre class="list">
+リスト : try! の使用例
+
+fn parse_buff(buff: &amp;[&amp;str]) -&gt; Result&lt;Vec&lt;i32&gt;, std::num::ParseIntError&gt; {
+    let mut r: Vec&lt;i32&gt; = vec![];
+    for s in buff {
+        let n = try!(s.parse());   // s.parse()?; でもよい
+        r.push(n)
+    }
+    Ok(r)
+}
+
+fn main() {
+    let s0 = ["123", "456", "789"];
+    println!("{:?}", parse_buff(&amp;s0));
+    let s1 = ["123", "abc", "789"];
+    println!("{:?}", parse_buff(&amp;s1));
+}
+</pre>
+<pre>
+Ok([123, 456, 789])
+Err(ParseIntError { kind: InvalidDigit })
+</pre>
+<h4 id="abc30">●ファイル入出力</h4>
+<ul>
+  <li>Rust の場合、ファイルをオープンするとそれに対応するファイル構造体 File が生成される</li>
+  <li>標準入出力は std::io::Stdin, std::io::Stdout, std::io::Stderr</li>
+  <li>それぞれ std::io::stdin(), std::io::stderr(), std::io::stderr() で取得する</li>
+  <li>ファイルのリードオープンは std::fs::File::open(filename) -&gt; Result&lt;File&gt;</li>
+  <li>ファイルのライトオープンは std::fs::File::create(filename) -&gt; Result&lt;File&gt;</li>
+    <ul>
+      <li>filename はパスを表す std::path::Path か、文字列や String で指定する</li>
+      <li>ファイル入出力の Result は std::io::Result のことで次のように定義されている</li>
+<pre class="item">
+type Result&lt;T&gt; = Result&lt;T, Error&gt;;
+</pre>
+      <li>Error は std::io::Error のことで、ファイル入出処理のエラータイプを表す</li>
+    </ul>
+  <li>File 構造体がスコープから外れたとき、オープンしたファイルは自動的にクローズされる</li>
+  <li>リードオープンした File にはトレイト Read が実装されている</li>
+  <li>Read の主なメソッド</li>
+    <ul>
+      <li>fn read(&amp;mut self, buf: &amp;mut [u8]) -&gt; Result&lt;usize&gt;;</li>
+        <ul>
+          <li>read() は配列 buf にデータを読み込む</li>
+          <li>Result に読み込んだバイト数を格納して返す</li>
+        </ul>
+      <li>fn read_to_end(&amp;mut self, buf: &amp;mut Vec&lt;u8&gt;) -&gt; Result&lt;usize&gt;</li>
+      <li>fn read_to_string(&amp;mut self, buf: &amp;mut String) -&gt; Result&lt;usize&gt;</li>
+        <ul>
+          <li>read_to_end() と read_to_string() はファイルを最後まで読み込み、バッファ buf に格納する</li>
+        </ul>
+      <li>fn read_exact(&amp;mut self, buf: &amp;mut [u8]) -&gt; Result&lt;()&gt;</li>
+        <ul>
+          <li>read_exact() は配列 buf にデータを読み込む</li>
+          <li>配列 buf を満たすことができなければエラー</li>
+        </ul>
+      <li>fn bytes(self) -&gt; Bytes&lt;Self&gt;</li>
+        <ul>
+          <li>ファイルから 1 byte ずつ読み込むイテレータを生成する</li>
+          <li>要素は Result&lt;u8&gt;</li>
+          <li>ファイルの終端に到達したらイテレータは None を返す</li>
+        </ul>
+    </ul>
+  <li>ライトオープンした File にはトレイト Write が実装されている</li>
+  <li>Write の主なメソッド
+    <ul>
+      <li>fn write(&amp;mut self, buf: &amp;[u8]) -&gt; Result&lt;usize&gt;</li>
+        <ul>
+          <li>配列 buf に格納されているデータを出力する</li>
+        </ul>
+      <li>fn flush(&amp;mut self) -&gt; Result&lt;()&gt;</li>
+        <ul>
+          <li>バッファリングされている場合、バッファ内のデータを出力する</li>
+        </ul>
+      <li>fn write_all(&amp;mut self, buf: &amp;[u8]) -&gt; Result&lt;()&gt;</li>
+        <ul>
+          <li>配列 buf のデータをすべて出力する</li>
+        </ul>
+    </ul>
+  <li>File 構造体の入出力処理はバッファリングを行わないので実行速度が遅い</li>
+  <li>バッファリングを行うには std::io::BufReader, std::io::BufWriter を使う</li>
+  <li>コンストラクタは new(File)</li>
+  <li>BufReader にはトレイト Read, BufRead が実装されている</li>
+  <li>BufRead の便利なメソッド</li>
+    <ul>
+      <li>fn read_line(&amp;mut self, buf: &amp;mut String) -&gt; Result&lt;usize&gt;</li>
+        <ul>
+          <li>配列 buf に 1 行読み込む</li>
+          <li>改行文字 (Unix 系は \n, Windows は \r\n) は buf に格納される</li>
+          <li>読み込んだバイト数を Result に格納して返す</li>
+        </ul>
+      <li>fn lines(self) -&gt; Lines&lt;Self&gt;</li>
+        <ul>
+          <li>ファイルから 1 行ずつ読み込むイテレータを生成する</li>
+          <li>要素は Result&lt;String&gt;</li>
+          <li>read_line() と違って、改行文字は取り除かれることに注意</li>
+          <li>ファイルの終端に到達したらイテレータは None を返す</li>
+        </ul>
+    </ul>
+  <li>BufWriter にはトレイト Write が実装されている (トレイト BufWrite は存在しない)</li>
+</ul>
+<pre class="list">
+リスト : 単純な echo (1)
+
+use std::io::prelude::*;
+use std::io::{self, BufReader, BufWriter};
+
+// 標準入力 -&gt; 標準出力 (バイト単位)
+fn main() {
+    let reader = BufReader::new(io::stdin());
+    let mut writer = BufWriter::new(io::stdout());
+    for c in reader.bytes() {
+        writer.write(&amp;[c.unwrap()]).unwrap();
+    }
+}
+</pre>
+<ul>
+  <li>use std::io::prelude::*; は Read, BufRead, Write, Seek をインポートする</li>
+  <li>use std::io::{self, ...}; の self は use std::io; と同じ</li>
+</ul>
+<pre class="list">
+リスト : 単純な echo (2)
+
+use std::io::prelude::*;
+use std::io::{self, BufReader};
+
+// 標準入力 -&gt; 標準出力 (行単位)
+fn main() {
+    let reader = BufReader::new(io::stdin());
+    for ls in reader.lines() {
+        println!("{}", ls.unwrap());
+    }
+}
+</pre>
+<ul>
+  <li>コマンドライン引数は std::env::args を介して取得する</li>
+  <li>args() はイテレータを生成する (要素は String)</li>
+</ul>
+<pre class="list">
+リスト : コマンドライン引数の取得 (test.rs)
+
+fn main() {
+    for x in std::env::args() {
+        println!("{}", x);
+    }
+}
+</pre>
+<pre>
+$ ./test foo bar baz
+./test
+foo
+bar
+baz
+oops
+</pre>
+<pre class="list">
+リスト : ファイルの連結 (cat0.rs)
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::error::Error;
+
+fn concat_file(filename: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let file = File::open(filename)?;
+    let mut reader = BufReader::new(file);
+    let mut buff = String::new();
+    reader.read_to_string(&amp;mut buff)?;
+    println!("{}", buff);
+    Ok(())
+}
+
+fn main() {
+    for filename in std::env::args().skip(1) {
+        match concat_file(&amp;filename) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}: {}", &amp;filename, err.description())
+        }
+    }
+}
+</pre>
+<ul>
+  <li>メソッド description() はショートエラーメッセージを返す</li>
+</ul>
+<pre class="list">
+リスト : ファイルのコピー (cp0.rs)
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::{BufReader, BufWriter};
+use std::error::Error;
+
+const BUFF_SIZE: usize = 128;
+
+fn copy_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let infile = File::open(src)?;
+    let outfile = File::create(dst)?;
+    let mut buff: [u8; BUFF_SIZE] = [0; BUFF_SIZE];  // バッファ
+    let mut reader = BufReader::new(infile);
+    let mut writer = BufWriter::new(outfile);
+    loop {
+        let size = reader.read(&amp;mut buff)?;
+        writer.write(&amp;mut buff[..size])?;
+        if size &lt; BUFF_SIZE { break; }
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: cp0 src_file dst_file");
+    } else {
+        match copy_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) &gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<pre class="list">
+リスト : ファイルのコピー (cp1.rs)
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::{BufReader, BufWriter};
+use std::error::Error;
+
+fn copy_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let infile = File::open(src)?;
+    let outfile = File::create(dst)?;
+    let mut reader = BufReader::new(infile);
+    let mut writer = BufWriter::new(outfile);
+
+    let mut buff: Vec&lt;u8&gt; = vec![];
+    reader.read_to_end(&amp;mut buff)?;
+    // ベクタは immutable なスライスに変換できる
+    writer.write_all(&amp;buff)?;
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: cp1 src_file dst_file");
+    } else {
+        match copy_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

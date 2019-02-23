@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scala プログラミング入門</title>
+  <meta name="description" content="Scala,Scala入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881777</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Scala Programming</h1>
+<h2>お気楽 Scala プログラミング入門</h2>
+<div class="small">
+[ <a href="scala09.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala11.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>連結リスト</h3>
+<p> 今回はデータ構造の簡単な例題として「連結リスト (Linked List) 」を作ってみましょう。Scala の List は immutable (不変) な連結リストです。Scala のライブラリ scala.collection.mutable には mutable (可変) な連結リスト ListBuffer がありますが、Scala のお勉強ということで、あえて連結リストを作ってみましょう。ただし、今回は格納する要素の型を Int に限定します。もちろん、多相的な連結リストを作ることも可能ですが、それは「多相クラス」を説明したあとで挑戦してみましょう。
+</p>
+
+<h4>●可変な連結リスト</h4>
+<p> まず最初に、可変な連結リストから作りましょう。下図に今回作成する連結リストの構造を示します。
+</p>
+<pre class="fig">
+(1)変数
+  ┌─┐    ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  
+  │・┼─→│10│・┼→│20│・┼→│30│／│ ／：終端(null)
+  └─┘    └─┴─┘  └─┴─┘  └─┴─┘  
+
+(2)ヘッダセル
+  ┌─┬─┐    ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  
+  │  │・┼─→│10│・┼→│20│・┼→│30│／│ ／：終端(null)
+  └─┴─┘    └─┴─┘  └─┴─┘  └─┴─┘  
+
+                図 : 連結リスト
+</pre>
+<p> 連結リストはセル (cell) というデータを繋げて作ります。セルにはデータを格納する場所と、次のセルを指し示す場所から構成されます。上図でいうと、箱がひとつのセルを表していて、左側にデータを格納し、右側に次のセルへの参照を格納します。これは Scala のリストと同じ構造です。リストの終わりを示すため、最後のセルの右側には特別な値 (null) を格納することにします。そして、上図 (1) のように先頭セルへの参照を変数に格納しておけば、この変数を使って連結リストにアクセスすることができます。また、上図 (2) のようにヘッダセルを用意する方法もあります。
+</p>
+
+<p> 連結リストの長所は、データの挿入や削除が簡単にできることです。配列でデータの削除や挿入を行う場合、要素を移動しなければいけませんが、連結リストはセルを付け替えるだけで実現できます。逆に、配列はどの要素にも一定の時間でアクセスすることができますが、連結リストはセルを順番にたどっていくため、後ろのデータほどアクセスに時間がかかります。これが連結リストの短所です。
+</p>
+
+<h4>●連結リストの定義</h4>
+<p> それではプログラムを作りましょう。最初に、mutable な連結リストを表すクラス slist とセルを表すクラス cell を定義します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 連結リストの定義
+
+package mylist
+
+class cell(var item: Int, var next: cell = null)
+
+class slist {
+  private var top: cell = null
+
+  // メソッドの定義
+  ・・・ 省略 ・・・
+}
+</pre>
+<p> 今回はパッケージを使います。詳しい説明は回を改めて行う予定ですが、package mylist でパッケージ mylist を宣言します。Scala の場合、ファイル名とパッケージ名が異なっていてもかまいません。
+</p>
+<p> package を使う場合はファイルを scalac でコンパイルしてください。ソースファイルがカレントディレクトリにあり、そこでコンパイルしたとすると、サブディレクトリ mylist が作成され、その中にコンパイルされた class ファイルが格納されます。クラス slist のアクセスは mylist.slist になります。import mylist._ とすると、mylist. を省略することができます。
+</p>
+
+<p> セルは連結リストを構成する部品で、他のクラスから利用されることはありません。このような場合、クラス cell をクラス slist の中で定義することができます。これを「内部クラス (inner class) 」といいます。内部クラスはまだ説明していないので、cell の定義は slist の外で行いました。内部クラスは回を改めて説明する予定です。
+</p>
+
+<p> cell のフィールド変数 item にデータを格納し、next に次のセルへの参照を格納します。item の型は Int になり、next の型は cell になります。どちらのフィールド変数も値を書き換えることがあるので、var で宣言していることに注意してください。
+</p>
+
+<p> 次に、セルを使って連結リストクラス slist を作成します。slist は先頭のセルを保持するフィールド変数 top を用意します。今回はヘッダーセルを使わずに直接 top にセルを格納することにします。top の型は cell で、初期値は null になります。null は 型 Null のインスタンスで、Java の null と同じです。いわゆる「参照型 (Scala であれば AnyRef を継承している型) 」の変数であれば null を代入することができます。これで「空リスト」を表します。
+</p>
+
+<p> あとは、連結リストを操作するメソッドを定義します。連結リストを操作する基本的なメソッドを下表に示します。
+</p>
+<table border=1>
+<caption>表 : slist の操作メソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>apply(n: Int): Int </td><td>n 番目の要素を求める。</td></tr>
+  <tr><td>update(n: Int, x: Int): Unit </td><td>n 番目の要素をデータ x に書き換える。</td></tr>
+  <tr><td>insert(n: Int, x: Int): Unit </td><td>n 番目の位置にデータ x を挿入する。</td></tr>
+  <tr><td>delete(n: Int): Unit</td><td>n 番目の要素を削除する。</td></tr>
+  <tr><td>mapInto(f: Int => Int): Unit</td><td>要素に関数 f を適用して、その返り値に書き換える。</td></tr>
+  <tr><td>positionIf(f: Int => Boolean): Int</td><td>関数 f が真を返す要素の位置を返す。見つからない場合は -1 を返す。</td></tr>
+  <tr><td>deleteIf(f: Int => Boolean): Int</td><td>関数 f が真を返す要素を削除するする。削除した個数を返す。</td></tr>
+  <tr><td>foldl[A](a: A, f: (A, Int) => A): A</td><td>リストの先頭から畳み込みを行う。</td></tr>
+  <tr><td>foldr[A](a: A, f: (Int, A) => A): A</td><td>リストの末尾から畳み込みを行う。</td></tr>
+  <tr><td>foreach(f: Int => Unit): Unit</td><td>要素に関数 f を適用する。</td></tr>
+  <tr><td>isEmpty(): Boolean    </td><td>連結リストが空の場合は真を返す。</td></tr>
+  <tr><td>length(): Int    </td><td>要素の個数を返す。</td></tr>
+  <tr><td>clear(): Unit    </td><td>連結リストを空にする。</td></tr>
+</tbody>
+</table>
+
+<p> 要素の位置はリストと同様に 0 から数えることにします。位置 n がリストの要素数（長さ）よりも多い場合、apply, update, insert, delete はエラーを送出することにします。
+</p>
+
+<h4>●作業用メソッド _nth</h4>
+<p> 次に、作業用のメソッドとして n 番目のセルを求める処理を作ります。メソッド名は _nth() としました。これはクラス内部でしか使わないので、private メソッドに設定します。
+</p>
+
+<pre class="list">
+リスト : n 番目のセルを求める
+
+  private def _nth(n: Int): Option[cell] = {
+    if (n &gt;= 0 &amp;&amp; top != null) {
+      var i = 0
+      var cp = top
+      while (cp != null) {
+        if (i == n) return Some(cp)
+        i += 1
+        cp = cp.next
+      }
+    }
+    None
+  }
+</pre>
+
+<p> n が 0 よりも小さい、または top が null の場合は None を返します。そうでなければ、while ループでセルをたどり、i が n と等しくなったとき、そのセルを Some に包んで return で返します。
+</p>
+
+<p> セルのたどり方は実に簡単です。次の図を見てください。
+</p>
+
+<pre class="fig">
+ cp1         cp2         cp3
+┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+│10│・┼→│20│・┼→│30│・┼→
+└─┴─┘  └─┴─┘  └─┴─┘
+↑          ↑
+(1)         (2)
+
+(1) cp = cp.next =&gt; cp2
+(2) cp = cp.next =&gt; cp3
+
+        図 : セルのたどり方
+</pre>
+
+<p> セル cp1 の next にはセル cp2 への参照が格納されています。変数 cp が cp1 の場合、cp = cp.next とすれば、cp の値はセル cp2 になります (図 (1))。さらに cp = cp.next とすれば、cp の値は cp3 になります (図 (2))。
+</p>
+
+<p> _nth() の場合、while ループでセルをたどっていきますが、途中でセルがなくなった場合、cp の値は null になるので while ループを終了して None を返すことになります。
+</p>
+
+<h4>●データの参照</h4>
+<p> それでは、n 番目の要素を求めるメソッド apply から作りましょう。apply は特別なメソッドで、このメソッドが実装されていると、配列やリスト (List) のようにカッコ ( ) で要素を参照することができます。
+</p>
+
+<p> 次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : n 番目の要素を求める
+
+  def apply(n: Int): Int =
+    _nth(n) match {
+      case None =&gt; throw new Exception("slist.apply: out of range")
+      case Some(cp) =&gt; cp.item
+    }
+</pre>
+
+<p> メソッド _nth() を呼び出して n 番目のセルを求めます。返り値をパターンマッチングして、None でなければ、格納されているデータ cp.item を返します。None の場合はエラーを送出します。
+</p>
+
+<h4>●データの更新</h4>
+<p> 次はデータを書き換えるメソッド update を作ります。update も特別なメソッドで、update が実装されていると、配列のようにカッコ ( ) と演算子 = を使って要素を書き換えることができます。
+</p>
+<pre class="list">
+リスト : データの更新
+
+  def update(n: Int, x: Int): Unit =
+    _nth(n) match {
+      case None =&gt; throw new Exception("slist.update: out of range")
+      case Some(cp) =&gt; cp.item = x
+    }
+</pre>
+<p> _nth で n 番目のセルを求めます。返り値が None であればエラーを送出します。そうでなければ、セル cp の item を x に書き換えます。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データを挿入するメソッド insert を作りましょう。データの挿入はセルの next を書き換えることで実現できます。次の図を見てください。セル (1) とセル (2) の間に、セル (3) を挿入します。
+</p>
+
+<pre class="fig">
+ top         (1)                (2)
+┌─┐      ┌─┬─┐         ┌─┬─┐  ┌─┬─┐
+│  ┼──→│10│・┼─ X ─→│20│・┼→│30│／│
+└─┘      └─┴┼┘         └─┴─┘  └─┴─┘
+                  │   (3)      ↑
+                  │  ┌─┬─┐│
+                  └→│40│・┼┘
+                      └─┴─┘
+
+セル(1)とセル(2)の間にセル(3)を挿入する場合
+
+            図 : データの挿入
+</pre>
+
+<p> セル (1) の後ろにセル (3) を挿入する場合、セル (1) の next にはセル (2) への参照がセットされているので、この値をセル (3) の next にセットします。これで、セル (3) とセル (2) がリンクされます。次に、セル (1) の next にセル (3) への参照をセットします。これで、セル (1) とセル (2) の間に、セル (3) を挿入することができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの挿入
+
+  def insert(n: Int, x: Int): Unit =
+    if (n == 0) {
+      top = new cell(x, top)
+    } else {
+      _nth(n - 1) match {
+        case None =&gt; throw new Exception("slist.insert: out of range")
+        case Some(cp) =&gt; cp.next = new cell(x, cp.next)
+      }
+    }
+</pre>
+<p> n が 0 の場合は、リストの先頭に x を追加するだけです。new cell(x, top) で新しいセルを生成し、item に x を、next に top をセットします。これで top の先頭にセルを追加することができます。あとは、 top の値を新しいセルに書き換えるだけです。
+</p>
+<p> 連結リストの途中にデータを挿入する場合、挿入する位置のひとつ手前のセルが必要になります。_nth() で n - 1 番目のセルを求めます。セル cp が見つかれば、cp の後ろに x を挿入します。
+</p>
+
+<p> new cell(x, cp.next) で x を格納する新しいセルを生成します。第 2 引数に cp.next を指定することで、新しいセルの後ろに、cp の次のセルを接続することができます。そして、cp.next の値を新しいセルに書き換えます。これで cp の後ろに新しいセルを挿入することができます。
+</p>
+
+<h4>●データの削除</h4>
+<p> 次は、データを削除するメソッド delete を作りましょう。
+</p>
+
+<pre class="fig">
+ (1)           (2)         (3)
+┌─┬─┐    ┌─┬─┐  ┌─┬─┐  
+│10│・┼×→│20│・┼→│30│・┼→
+└─┴┼┘    └─┴─┘  └─┴─┘  
+      │                  ↑
+      └─────────┘
+
+図 : データの削除:セル(2) を削除する場合
+</pre>
+
+<p> データを削除する場合も、セルを付け替えるだけで済ますことができます。上図を見てください。セル (1) の後ろにあるセル (2) を削除する場合、セル (1) の next をセル (3) への参照に書き換えればいいのです。セル (3) はセル (2) の next から求めることができます。つまり、セル (1) を保持する変数を cp とすると、セル (3) は cp.next.next で求めることができるのです。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの削除
+
+  def delete(n: Int): Unit =
+    if (n == 0) {
+      if (top == null)
+        throw new Exception("slist.delete: out of range")
+      else {
+        top = top.next
+      }
+    } else {
+      _nth(n - 1) match {
+        case None =&gt; throw new Exception("slist.delete: out of range")
+        case Some(cp) =&gt; {
+          val del = cp.next
+          if (del == null)
+            throw new Exception("slist.delete: out of range")
+          else {
+            cp.next = del.next
+          }
+        }
+      }
+    }
+</pre>
+<p> n が 0 の場合は先頭のデータを取り除きます。top が null の場合はエラーを送出します。そうでなければ、top の値を top.next に書き換えます。これで、先頭のセルを削除することができます。リストの途中からデータを削除する場合も、削除する位置のひとつ手前のセルが必要になります。_nth() で n - 1 番目のセルを求めます。セル cp が見つかれば、cp の後ろのセルを削除します。
+</p>
+
+<p> このとき、削除するセルがあるかチェックすることを忘れないでください。まず、cp.next を変数 del にセットします。そして、削除するセルがあるか del の値をチェックします。値が null でなければ、そのセルを削除します。cp.next の値を del.next に書き換えます。これは cp.next の値を cp.next.next に書き換えることと同じです。削除するセルがなければエラーを送出します。
+</p>
+
+<p> ところで、連結リストからはずされたセルやデータは、変数 top からアクセスすることができなくなります。Scala の場合、どの変数からも参照されなくなったオブジェクトはゴミになり、「ゴミ集め (GC) 」<sup><a href="scala10.html#note1">[*1]</a></sup> によって回収して再利用されます。GC がないプログラミング言語では、不要になったオブジェクトは自動的に回収されません。それを行うようにプログラムする必要があるのです。Java や Scala のように GC があるプログラミング言語では、ゴミになったオブジェクトは自動的に回収されるので、プログラマの負担はそれだけ少なくなります。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 不要になったオブジェクトを自動的に回収する機能をガベージコレクション (garbage collection)、略して GC と呼びます。
+</div>
+<h4>●連結リストの表示</h4>
+<p> 最後にメソッド toString をオーバーライドします。
+</p>
+
+<pre class="list">
+リスト : メソッド toString のオーバーライド
+
+  override def toString: String = {
+    var s = "slist("
+    var cp = top
+    while (cp != null) {
+      s += cp.item
+      if (cp.next != null) s += ", "
+      cp = cp.next
+    }
+    s += ")"
+    s
+  }
+</pre>
+<p> 連結リスト slist は slist(item1, item2, ... ) と表示することにします。while ループでセル cp を順番にたどり、cp.item を文字列に変換して変数 s に追加していきます。要素がまだある場合は ", " を s に追加します。最後に ")" を追加して s を返します。
+</p>
+
+<h4>●実行例 (1)</h4>
+<p> それでは、ここまで作成したメソッドを簡単にテストしてみましょう。
+</p>
+<pre>
+scala&gt; import mylist._
+import mylist._
+
+scala&gt; val a = new slist
+a: mylist.slist = slist()
+
+scala&gt; for (i <- 0 to 9) a.insert(i, i)
+
+scala&gt; a
+res2: mylist.slist = slist(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; a(0)
+res3: Int = 0
+
+scala&gt; a(9)
+res4: Int = 9
+
+scala&gt; a(0) = 10
+
+scala&gt; a(9) = 19
+
+scala&gt; a
+res7: mylist.slist = slist(10, 1, 2, 3, 4, 5, 6, 7, 8, 19)
+
+scala&gt; a.delete(0)
+
+scala&gt; a.delete(8)
+
+scala&gt; a
+res10: mylist.slist = slist(1, 2, 3, 4, 5, 6, 7, 8)
+</pre>
+<p> 基本的な操作である挿入、参照、更新、削除を試してみましたが、どうやら正常に動作しているようです。
+</p>
+
+<h4>●マッピング</h4>
+<p> 高階関数も簡単に定義することができます。最初はマッピングを行う mapInto を作ります。mapInto はリストの要素に関数を適用し、要素をその返り値で書き換えます。新しいリストを生成せずに、リストを破壊的に修正することに注意してください。ちなみに、関数名は Common Lisp の関数 map-into から拝借しました。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : マッピング (破壊的修正)
+
+  def mapInto(f: Int =&gt; Int) {
+    var cp = top
+    while (cp != null) {
+      cp.item = f(cp.item)
+      cp = cp.next
+    }
+  }
+</pre>
+<p> while ループでリストをたどり、f(cp.item) の返り値で cp.item の値を書き換えるだけです。
+</p>
+
+<h4>●データの探索</h4>
+<p> 次はデータを線形探索する positionIf を作ります。この関数名も Common Lisp の position-if から拝借しました。
+</p>
+<pre class="list">
+リスト : データの探索
+
+  def positionIf(f: Int => Boolean): Int = {
+    var i = 0
+    var cp = top
+    while (cp != null) {
+      if (f(cp.item)) return i
+      i += 1
+      cp = cp.next
+    }
+    -1
+  }
+</pre>
+<p> 変数 i が要素の位置を表します。あとは、while ループでリストを順番にたどり、f(cp.item) が真のときに return で i を返します。while ループを終了したら -1 を返します。
+</p>
+
+<h4>●フィルター</h4>
+<p> 次は deleteIf を作ります。これも Common Lisp の関数 delete-if から拝借しました。
+</p>
+<pre class="list">
+リスト : データの削除 (高階関数版)
+
+  def deleteIf(f: Int =&gt; Boolean): Int = {
+    var c = 0
+    while (top != null &amp;&amp; f(top.item)) {
+      c += 1
+      top = top.next
+    }
+    if (top != null) {
+      var prev = top
+      var cp = top.next
+      while (cp != null) {
+        if (f(cp.item)) {
+          c += 1
+          prev.next = cp.next
+          cp = cp.next
+        } else {
+          prev = cp
+          cp = cp.next
+        }
+      }
+    }
+    c
+  }
+</pre>
+<p> 最初の while ループで、先頭要素が条件を満たしている間、その要素を削除します。削除した要素の個数は変数 c でカウントします。次の処理で、リストの途中からデータを削除します。一つ前のセルを prev に、現在のセルを cp にセットします。f(cp.item) が真を返した場合は cp を削除します。一つ前のセル prev の next を cp.next に、cp を cp.next に書き換えます。セルを一つ削除することができます。そうでなければ、prev と cp を次のセルへ進めて処理を続けます。最後に c を返します。
+</p>
+
+<h4>●畳み込み</h4>
+<p> 畳み込みは多相型メソッドになります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 畳み込み
+
+  def foldl[A](a: A, f: (A, Int) =&gt; A): A = {
+    var cp = top
+    var acc = a
+    while (cp != null) {
+      acc = f(acc, cp.item)
+      cp = cp.next
+    }
+    acc
+  }
+
+  def foldr[A](a: A, f: (Int, A) =&gt; A): A = {
+    def foldsub(a: A, cp: cell): A =
+      if (cp == null) a
+      else f(cp.item, foldsub(a, cp.next))
+    //
+    foldsub(a, top)
+  }
+</pre>
+<p> 引数 a が初期値で、型を型パラメータ A で表します。foldl に渡す関数の型は (A, Int) =&gt; A に、foldr は (Int, A) =&gt; A になります。あとは簡単で、fpldl は while ループでリストをたどり、foldr は局所関数を再帰呼び出しでリストをたどり、要素を関数 f に適用して畳み込みを行うだけです。
+</p>
+
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="scala10.html#list1">プログラムリスト</a> をお読みください。
+</p>
+
+<h4>●実行例 (2)</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+scala&gt; val a = new slist
+a: mylist.slist = slist()
+
+scala&gt; for (i <- 0 to 9) a.insert(i, i)
+
+scala&gt; a
+res1: mylist.slist = slist(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+
+scala&gt; a.mapInto(x => x * x)
+
+scala&gt; a
+res3: mylist.slist = slist(0, 1, 4, 9, 16, 25, 36, 49, 64, 81)
+
+scala&gt; a.positionIf(_ % 2 == 0)
+res4: Int = 0
+
+scala&gt; a.positionIf(_ % 2 != 0)
+res5: Int = 1
+
+scala&gt; a.positionIf(_ > 20)
+res6: Int = 5
+
+scala&gt; a.deleteIf(_ % 2 == 0)
+res7: Int = 5
+
+scala&gt; a
+res8: mylist.slist = slist(1, 9, 25, 49, 81)
+
+scala&gt; a.foldl(0, (a: Int, x: Int) => a + x)
+res9: Int = 165
+
+scala&gt; a.foldr(0, (a: Int, x: Int) => a + x)
+res10: Int = 165
+
+scala&gt; a.foreach(println)
+1
+9
+25
+49
+81
+
+scala&gt; a.length
+res12: Int = 5
+
+scala&gt; a.isEmpty
+res13: Boolean = false
+
+scala&gt; a.clear
+
+scala&gt; a.isEmpty
+res15: Boolean = true
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●不変な連結リスト</h4>
+<p> 次は immutable な連結リストを作りましょう。この場合、空リストにもメソッドを適用したいので、リストの終端を null で表すことはできません。そこで、空リストを表すシングルトンオブジェクト Nils を定義します。セルはクラス Cons で表し、Nils と Cons のスーパークラスとして抽象クラス imlist を定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : immutable な連結リスト
+
+abstract class imlist {
+  def isEmpty(): Boolean
+  def car(): Int
+  def cdr(): imlist
+  //
+  // メソッドの定義 (省略)
+  //
+}
+
+case class Cons(item: Int, next: imlist) extends imlist {
+  def isEmpty(): Boolean = false
+  def car(): Int = item
+  def cdr(): imlist = next
+}
+
+case object Nils extends imlist {
+  def isEmpty(): Boolean = true
+  def car() = throw new Exception("imlist.car: Empty list")
+  def cdr() = throw new Exception("imlist.cdr: Empty list")
+}
+</pre>
+<p> 抽象クラス imlist は抽象メソッド isEmpty, car, cdr を持っていて、これらのメソッドを使って、具体的なリスト操作メソッドを定義します。isEmpty は空リスト (Nils) ならば真を返します。car はリストの先頭要素を返します。cdr は先頭要素を取り除いたリストを返します。car, cdr は Lisp の関数から拝借したもので、Scala の head, tail に相当します。セルの生成はクラス Cons のコンストラクタで行います。なお、imlist はトレイト (trait) で定義してもかまいません。
+</p>
+
+<p> Cons は case class で定義します。isEmpty, car, cdr は簡単ですね。Nils は case object で定義します。isEmpty は true を返し、car, cdr はエラーを送出します。プログラムはパッケージに格納してコンパイルしておくと簡単に使用することができます。今回は slist と同じパッケージ mylist 内で定義することにします。
+</p>
+
+<h4>●メソッドの定義</h4>
+<p> 次は、抽象クラス imlist に基本的なメソッドを定義します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 基本的なリスト操作メソッド
+
+  // 参照
+  def apply(n: Int): Int =
+    if (isEmpty) throw new Exception("imlist.apply: out of range")
+    else if (n == 0) car
+    else cdr.apply(n - 1)
+
+  // 挿入
+  def insert(n: Int, x: Int): imlist =
+    if (n == 0) Cons(x, this)
+    else if (isEmpty) throw new Exception("imlist.insert: out of range")
+    else Cons(car, cdr.insert(n - 1, x))
+
+  // 削除
+  def delete(n: Int): imlist =
+    if (isEmpty) throw new Exception("imlist.delete: out of range")
+    else if (n == 0) cdr
+    else Cons(car, cdr.delete(n - 1))
+
+  // 長さ
+  def length(): Int = if (isEmpty) 0 else 1 + cdr.length
+</pre>
+<p> 今回のメソッドはすべて再帰定義でプログラムしています。apply は n 番目の要素を返します。空リストならばエラーを送出します。n が 0 ならばリストの要素 car を返します。そうでなければ、cdr に apply を適用して n - 1 番目の要素を求めます。
+</p>
+
+<p> insert はリストの n 番目に x を挿入します。n が 0 ならば、現在のセル (this) に Cons(x, this) で x を追加します。this が Nils の場合は Cons(x, Nils) が返されます。セルが空リストの場合はエラーを送出します。そうでなければ、現在の要素 car と cdr.insert の返り値を Cons でセルに格納して返します。セルは値を書き換えることができないので、たどってきたセルをコピーしていくことになります。
+</p>
+
+<p> delete は n 番目の要素を削除します。現在のセルが空リストであればエラーを送出します。n が 0 の場合は cdr を返します。そうでなければ、現在の要素 car と cdr.delete の返り値を Cons でセルに格納して返します。delete の場合も、たどってきたセルをコピーすることになります。length は簡単ですね。
+</p>
+
+<h4>●実行例 (3)</h4>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+scala&gt; import mylist._
+import mylist._
+
+scala&gt; val a: imlist = Cons(1, Cons(2, Cons(3, Cons(4, Cons(5, Nils)))))
+a: mylist.imlist = Cons(1,Cons(2,Cons(3,Cons(4,Cons(5,Nils)))))
+
+scala&gt; a(0)
+res0: Int = 1
+
+scala&gt; a(4)
+res1: Int = 5
+
+scala&gt; a.insert(0, 0)
+res2: mylist.imlist = Cons(0,Cons(1,Cons(2,Cons(3,Cons(4,Cons(5,Nils))))))
+
+scala&gt; a.insert(2, 0)
+res3: mylist.imlist = Cons(1,Cons(2,Cons(0,Cons(3,Cons(4,Cons(5,Nils))))))
+
+scala&gt; a.insert(5, 0)
+res4: mylist.imlist = Cons(1,Cons(2,Cons(3,Cons(4,Cons(5,Cons(0,Nils))))))
+
+scala&gt; a.delete(0)
+res5: mylist.imlist = Cons(2,Cons(3,Cons(4,Cons(5,Nils))))
+
+scala&gt; a.delete(4)
+res6: mylist.imlist = Cons(1,Cons(2,Cons(3,Cons(4,Nils))))
+
+scala&gt; a.length
+res7: Int = 5
+</pre>
+<h4>●高階関数の定義</h4>
+<p> 次は高階関数を作りましょう。
+</p>
+<pre class="list">
+リスト : 高階関数
+
+  // 探索
+  def positionIf(f: Int =&gt; Boolean, i: Int = 0): Int =
+    if (isEmpty) -1
+    else if (f(car)) i
+    else cdr.positionIf(f, i + 1)
+
+  // マッピング
+  def map(f: Int =&gt; Int): imlist =
+    if (isEmpty) Nils
+    else Cons(f(car), cdr.map(f))
+
+  // フィルター
+  def filter(f: Int =&gt; Boolean): imlist =
+    if (isEmpty) Nils
+    else if (f(car)) Cons(car, cdr.filter(f))
+    else cdr.filter(f)
+
+  // 畳み込み
+  def foldl[A](a: A, f: (A, Int) =&gt; A): A =
+    if (isEmpty) a
+    else cdr.foldl(f(a, car), f)
+
+  def foldr[A](a: A, f: (Int, A) =&gt; A): A =
+    if (isEmpty) a
+    else f(car, cdr.foldr(a, f))
+
+  // 巡回
+  def foreach(f: Int =&gt; Unit): Unit = {
+    if (!isEmpty) {
+      f(car)
+      cdr.foreach(f)
+    }
+  }
+</pre>
+<p> 高階関数も再帰呼び出しで定義しています。map は現在のセルが空リストであれば Nils を返します。そうでなければ、f(car) と cdr.map の返り値を Cons でセルに格納して返します。
+</p>
+<p> positionIf はデフォルト引数 i を定義すると簡単です。現在のセルが空リストの場合は -1 を返します。f(car) が真であれば i を返します。そうでなければ、cdr に対して positionIf を再帰呼び出しするだけです。
+</p>
+<p> filter も簡単です。現在のセルが空リストの場合は Nils を返します。f(car) が真であれば、car と cdr.filter の返り値をセルに格納して返します。そうでなければ、cdr に対して filter を再帰呼び出しするだけです。
+</p>
+<p> 畳み込みを行う foldl, foldr も簡単です。現在のセルが空リストであれば累積変数 a を返します。そうでなければ、foldl, foldr を再帰呼び出しするだけです。foreach も簡単で、リストの要素 car に関数 f を適用して、cdr に対して foreach を再帰呼び出しするだけです。
+</p>
+
+<h4>●実行例 (4)</h4>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+scala&gt; import mylist._
+import mylist._
+
+scala&gt; val a: imlist = Cons(1, Cons(2, Cons(3, Cons(4, Cons(5, Nils)))))
+a: mylist.imlist = Cons(1,Cons(2,Cons(3,Cons(4,Cons(5,Nils)))))
+
+scala&gt; a.map(x => x * x)
+res0: mylist.imlist = Cons(1,Cons(4,Cons(9,Cons(16,Cons(25,Nils)))))
+
+scala&gt; a.positionIf(_ == 3)
+res1: Int = 2
+
+scala&gt; a.positionIf(_ == 0)
+res2: Int = -1
+
+scala&gt; a.filter(_ % 2 == 0)
+res3: mylist.imlist = Cons(2,Cons(4,Nils))
+
+scala&gt; a.filter(_ % 2 != 0)
+res4: mylist.imlist = Cons(1,Cons(3,Cons(5,Nils)))
+
+
+scala&gt; a.foldl(0, (_:Int) + (_:Int))
+res6: Int = 15
+
+scala&gt; a.foldr(0, (_:Int) + (_:Int))
+res7: Int = 15
+
+scala&gt; a.foldl(0, (_: Int) + (_: Int))
+res5: Int = 15
+
+scala&gt; a.foldr(0, (_: Int) + (_: Int))
+res6: Int = 15
+
+scala&gt; a.foreach(println)
+1
+2
+3
+4
+5
+</pre>
+<p> 正常に動作しているようです。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+//
+// slist.scala : singly-linked list
+//
+//               Copyright (C) 2014 Makoto Hiroi
+//
+package mylist
+
+//
+// mutable
+//
+
+// セル
+class cell(var item: Int, var next: cell = null)
+
+// 連結リスト
+class slist {
+  private var top: cell = null
+
+  // 作業用メソッド
+  private def _nth(n: Int): Option[cell] = {
+    if (n &gt;= 0 &amp;&amp; top != null) {
+      var i = 0
+      var cp = top
+      while (cp != null) {
+        if (i == n) return Some(cp)
+        i += 1
+        cp = cp.next
+      }
+    }
+    None
+  }
+
+  // 参照
+  def apply(n: Int): Int =
+    _nth(n) match {
+      case None =&gt; throw new Exception("slist.apply: out of range")
+      case Some(cp) =&gt; cp.item
+    }
+
+  // 更新
+  def update(n: Int, x: Int): Unit =
+    _nth(n) match {
+      case None =&gt; throw new Exception("slist.update: out of range")
+      case Some(cp) =&gt; cp.item = x
+    }
+
+  // 挿入
+  def insert(n: Int, x: Int): Unit =
+    if (n == 0) {
+      top = new cell(x, top)
+    } else {
+      _nth(n - 1) match {
+        case None =&gt; throw new Exception("slist.insert: out of range")
+        case Some(cp) =&gt; cp.next = new cell(x, cp.next)
+      }
+    }
+
+  // 削除
+  def delete(n: Int): Unit =
+    if (n == 0) {
+      if (top == null)
+        throw new Exception("slist.delete: out of range")
+      else {
+        top = top.next
+      }
+    } else {
+      _nth(n - 1) match {
+        case None =&gt; throw new Exception("slist.delete: out of range")
+        case Some(cp) =&gt; {
+          val del = cp.next
+          if (del == null)
+            throw new Exception("slist.delete: out of range")
+          else {
+            cp.next = del.next
+          }
+        }
+      }
+    }
+
+  // 長さ
+  def length(): Int = {
+    var i = 0
+    var cp = top
+    while (cp != null) {
+      i += 1
+      cp = cp.next
+    }
+    i
+  }
+
+  // マッピング
+  def mapInto(f: Int =&gt; Int) {
+    var cp = top
+    while (cp != null) {
+      cp.item = f(cp.item)
+      cp = cp.next
+    }
+  }
+
+  // 探索
+  def positionIf(f: Int =&gt; Boolean): Int = {
+    var i = 0
+    var cp = top
+    while (cp != null) {
+      if (f(cp.item)) return i
+      i += 1
+      cp = cp.next
+    }
+    -1
+  }
+
+  // フィルター
+  def deleteIf(f: Int =&gt; Boolean): Int = {
+    var c = 0
+    while (top != null &amp;&amp; f(top.item)) {
+      c += 1
+      top = top.next
+    }
+    if (top != null) {
+      var prev = top
+      var cp = top.next
+      while (cp != null) {
+        if (f(cp.item)) {
+          c += 1
+          prev.next = cp.next
+          cp = cp.next
+        } else {
+          prev = cp
+          cp = cp.next
+        }
+      }
+    }
+    c
+  }
+
+  // 畳み込み
+  def foldl[A](a: A, f: (A, Int) =&gt; A): A = {
+    var cp = top
+    var acc = a
+    while (cp != null) {
+      acc = f(acc, cp.item)
+      cp = cp.next
+    }
+    acc
+  }
+
+  def foldr[A](a: A, f: (Int, A) =&gt; A): A = {
+    def foldsub(a: A, cp: cell): A =
+      if (cp == null) a
+      else f(cp.item, foldsub(a, cp.next))
+    //
+    foldsub(a, top)
+  }
+
+  // 巡回
+  def foreach(f: Int =&gt; Unit) {
+    var cp = top
+    while (cp != null) {
+      f(cp.item)
+      cp = cp.next
+    }
+  }
+
+  // 空にする
+  def clear(): Unit = top = null
+
+  // 空か？
+  def isEmpty(): Boolean = top == null
+
+  override def toString: String = {
+    var s = "slist("
+    var cp = top
+    while (cp != null) {
+      s += cp.item
+      if (cp.next != null) s += ", "
+      cp = cp.next
+    }
+    s += ")"
+    s
+  }
+}
+
+//
+// immutable
+//
+
+// 抽象クラス
+abstract class imlist {
+  def isEmpty(): Boolean
+  def car(): Int
+  def cdr(): imlist
+
+  // 参照
+  def apply(n: Int): Int =
+    if (isEmpty) throw new Exception("imlist.apply: out of range")
+    else if (n == 0) car
+    else cdr.apply(n - 1)
+
+  // 挿入
+  def insert(n: Int, x: Int): imlist =
+    if (n == 0) Cons(x, this)
+    else if (isEmpty) throw new Exception("imlist.insert: out of range")
+    else Cons(car, cdr.insert(n - 1, x))
+
+  // 削除
+  def delete(n: Int): imlist =
+    if (isEmpty) throw new Exception("imlist.delete: out of range")
+    else if (n == 0) cdr
+    else Cons(car, cdr.delete(n - 1))
+
+  // 長さ
+  def length(): Int = if (isEmpty) 0 else 1 + cdr.length
+
+  // 探索
+  def positionIf(f: Int =&gt; Boolean, i: Int = 0): Int =
+    if (isEmpty) -1
+    else if (f(car)) i
+    else cdr.positionIf(f, i + 1)
+
+  // マッピング
+  def map(f: Int =&gt; Int): imlist =
+    if (isEmpty) Nils
+    else Cons(f(car), cdr.map(f))
+
+  // フィルター
+  def filter(f: Int =&gt; Boolean): imlist =
+    if (isEmpty) Nils
+    else if (f(car)) Cons(car, cdr.filter(f))
+    else cdr.filter(f)
+
+  // 畳み込み
+  def foldl[A](a: A, f: (A, Int) =&gt; A): A =
+    if (isEmpty) a
+    else cdr.foldl(f(a, car), f)
+
+  def foldr[A](a: A, f: (Int, A) =&gt; A): A =
+    if (isEmpty) a
+    else f(car, cdr.foldr(a, f))
+
+  // 巡回
+  def foreach(f: Int =&gt; Unit): Unit = {
+    if (!isEmpty) {
+      f(car)
+      cdr.foreach(f)
+    }
+  }
+}
+
+// コンスセル
+case class Cons(item: Int, next: imlist) extends imlist {
+  def isEmpty(): Boolean = false
+  def car(): Int = item
+  def cdr(): imlist = next
+}
+
+// 空リスト
+case object Nils extends imlist {
+  def isEmpty(): Boolean = true
+  def car() = throw new Exception("imlist.car: Empty list")
+  def cdr() = throw new Exception("imlist.cdr: Empty list")
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b> Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="scala09.html">PrevPage</a> | <a href="scala.html">Scala</a> | <a href="scala11.html">NextPage</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

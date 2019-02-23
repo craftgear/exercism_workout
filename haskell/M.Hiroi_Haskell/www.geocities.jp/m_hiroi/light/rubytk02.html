@@ -1,0 +1,611 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Ruby/Tk 超入門</title>
+  <meta name="description" content="Ruby,Tk,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881801</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lightweigth Language</h1>
+<h2>お気楽 Ruby/Tk 超入門</h2>
+<div class="small">
+[ <a href="rubytk01.html">PrevPage</a> | <a href="ruby.html#ruby_tk">Ruby</a> | <a href="rubytk03.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap05">メニューバー</h3>
+<p> 次は GUI には欠かせないメニューの作り方を説明します。Tk ではメニューのためのウィジェットがいくつか用意されていて、いろいろなメニューを構成することができます。今回は Windows のようにウィンドウの上部に「メニューバー」を表示する方法を簡単に説明します。
+</p>
+<h4>●TkMenu</h4>
+<p> メニューバーを作る場合、最初に TkMenu.new() でメニューのオブジェクトを生成します。そして、メインウィンドウのオプション menu に生成したオブジェクトを configure() で設定します。メインウィンドウのオブジェクトは Tk.root でアクセスすることができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト: メニューバーの設定
+
+require 'tk'
+
+menubar = TkMenu.new
+Tk.root.configure(menu: menubar)
+</pre>
+
+<p> これでメインウィンドウにメニューバーが設定されました。あとはこのメニューバーに具体的なメニューを追加します。メニューを設定する主なメソッドを示します。
+</p>
+<ul>
+  <li>add_cascade()<br>     複数のメニューを表示する
+  <li>add_checkbutton()<br> チェックボタンを表示
+  <li>add_command()<br>     command で指定した関数を実行
+  <li>add_radiobutton()<br> ラジオボタンを表示
+  <li>add_separator()<br>   区切りを表示する
+</ul>
+<p> 各メソッドはオプションを設定することができます。add_cascade() を指定すると、そのメニューを選択したときに複数のメニューを表示します。add_checkbutton() は yes/no のような二者択一の情報を設定するために使います。add_command() はメニューが選択されたときに、オプション command で指定したコールバック関数を実行します。add_radiobutton() は複数の値からひとつを選ぶ場合に使います。add_separator() は区切りを表示するだけです。
+</p>
+
+<p> add_checkbutton() と add_radiobutton() はメニューバーに直接定義するのではなく、add_cascade() と組み合わせて使うことが一般的です。add_checkbutton() と add_radiobutton() を使う場合、選択する値をオプション value で指定し、その値を格納するオブジェクトをオプション variable で指定します。また、command オプションを設定することもできます。この場合、オブジェクトに値がセットされるとともに、指定した関数が実行されます。
+</p>
+<h4>●簡単な例題</h4>
+<p> たとえば、将棋やリバーシのようなゲームのメニューを考えてみましょう。最低限必要となるメニューは、ゲームの開始、先手と後手の選択、コンピュータの強さの設定、などでしょうか。最初の 2 つはメニュー Games で設定し、強さはメニュー Level で選択することにします。この場合、まず Games と Level をメニューバーに追加します。
+</p>
+
+<pre class="list">
+リスト : メニュー Games と Level の設定
+
+games = TkMenu.new(menubar, tearoff: false)
+levels = TkMenu.new(menubar, tearoff: false)
+menubar.add_cascade(label: "Games", underline: 0, menu: games)
+menubar.add_cascade(label: "Level", underline: 0, menu: levels)
+</pre>
+<p> まず TkMenu.new() で Games と Level 用のメニューオブジェクトを生成します。これらのメニューは menubar に配置されるので、TkMenu.new() の第 1 引数には menubar を指定します。オプション tearoff は、そのメニューをウィンドウから引きちぎることができるかを設定します。デフォルトでは true になっています。その場合、メニューを選択すると一番上に破線が表示され、そこをクリックするとそのメニューが独立したウィンドウになります。
+</p>
+<p> add_cascade() のオプション label はメニューに表示するテキストを設定します。オプション underline (under でも可) は、ラベルの文字に下線を付け加えます。この状態で下線のついた文字をキーボードから入力することで、そのメニューを選ぶことができます。そして、オプション menu で表示するメニューオブジェクトを指定します。
+</p>
+<p> それではメニュー Games を設定しましょう。
+</p>
+
+<pre class="list">
+リスト : Games の設定
+
+games.add_command(label: "Start", under: 0, command: proc { start })
+games.add_separator
+games.add_radiobutton(label: "first", variable: action, value: 0)
+games.add_radiobutton(label: "second", variable: action, value: 1)
+games.add_separator
+games.add_command(label: "exit", under: 0, command: proc { exit })
+</pre>
+
+<p> Start を選ぶとゲームを開始します。ゲームを開始する関数、これはゲームによって異なりますが、この例では start() を実行します。
+</p>
+<p> 先手・後手の選択はラジオボタンを使っています。これで、先手、後手のどちらかを選ぶことができます。たとえば、後手をクリックすると、action の値は 1 にセットされ、ラベルの左側にレ点がつきます。使用するオブジェクトはあらかじめ TkVariable.new() で生成しておきましょう。
+</p>
+<p> これで Games をクリックすると、Start、first・second、Exit という 3 つのメニューが現れます。
+</p>
+
+<p><img src="ruby_img/menu0.png" alt="メニュー GAMES の画像"> Games をクリックしたときの動作
+</p>
+
+<p> 次はメニュー Level の設定です。
+</p>
+<pre class="list">
+リスト : Level の設定
+
+levels.add_radiobutton(label: 'Level 1', variable: level, value: 1)
+levels.add_radiobutton(label: 'Level 2', variable: level, value: 2)
+levels.add_radiobutton(label: 'Level 3', variable: level, value: 3)
+</pre>
+
+<p> ラジオボタンを使えば 3 つの中からひとつを選ぶことができます。ゲームの中身は空ですが、このように簡単にメニューを設定することができます。
+</p>
+
+<p> <img src="ruby_img/menu1.png" ALT="メニュー Level の画像"> Level をクリックしたときの動作
+</p>
+
+<h4>●プログラムリスト</h4>
+<pre class="list">
+リスト：メニューのサンプルプログラム
+
+# coding: utf-8
+require 'tk'
+
+# フォントの指定
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+
+# vairable 用の変数
+action = TkVariable.new(0)
+level  = TkVariable.new(1)
+
+# ダミー
+def start
+  print "start!\n"
+end
+
+menubar = TkMenu.new
+Tk.root.configure(menu: menubar)
+
+# メニューの設定
+games = TkMenu.new(menubar, tearoff: false)
+levels = TkMenu.new(menubar, tearoff: false)
+menubar.add_cascade(label: "Games", underline: 0, menu: games)
+menubar.add_cascade(label: "Level", underline: 0, menu: levels)
+
+# Games
+games.add_command(label: "Start", under: 0, command: proc { start })
+games.add_separator
+games.add_radiobutton(label: "first", variable: action, value: 0)
+games.add_radiobutton(label: "second", variable: action, value: 1)
+games.add_separator
+games.add_command(label: "exit", under: 0, command: proc { exit })
+
+# Labels
+levels.add_radiobutton(label: 'Level 1', variable: level, value: 1)
+levels.add_radiobutton(label: 'Level 2', variable: level, value: 2)
+levels.add_radiobutton(label: 'Level 3', variable: level, value: 3)
+
+# ラベル
+TkLabel.new(text: "***** Menu Test *****").pack
+
+Tk.mainloop
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap06">キー入力とバインド</h3>
+<p> 今までの例題は、マウスで操作するものばかりでした。今度はキーボードからの入力を受け付けるウィジェットを説明します。
+</p>
+<h4>●TkEntry</h4>
+<p> エントリー (entry) は 1 行の文字列を入力、または編集することができます。例題として、数式を入力して計算する calc.rb を作ります。これはとても簡単に作ることができます。まずエントリーから説明しましょう。
+</p>
+<p> エントリーオブジェクトは TkEntry.new() で生成します。よく使うオプションは textvariable です。エントリーで入力されたデータは指定したオブジェクトに格納されます。また、オブジェクトの値が変更されると、エントリーの内容も変更されます。面白いオプションが show です。これはパスワードのように画面に見えてはいけない文字列を打ち込むときに使います。たとえば、show: '*' とすれば、入力された文字は * として表示されます。
+</p>
+<p> メソッドは cget(), configure() のほかに、文字列の取得、挿入、削除、カーソルの移動、カット &amp; ペースト、スクロールなど、たくさん用意されていますが、文字列の入力だけならば、それらを使う機会はあまりないでしょう。また、エントリーのキー操作はエディタ Emacs に準じているので、Emacs をお使いの方には扱いやすいと思います。
+</p>
+<h4>●式入力電卓の制作</h4>
+<p> それではプログラムを作りましょう。データの入力が完了したらボタンを押してもらってもいいのですが、データはキーボードから入力するのですから、マウスよりもキーボードで操作した方がいいでしょう。リターンキーの入力で式を計算するようにします。キー入力もイベントのひとつですからバインディングを設定することができます。
+</p>
+プログラムは次のようになります。
+<pre class="list">
+リスト : 式入力電卓
+
+# coding: utf-8
+require 'tk'
+
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+
+# 式を格納するオブジェクト
+$buffer = TkVariable.new('')
+
+# 計算
+def calc(event)
+  if $buffer.value != ''
+      val = eval($buffer.value)
+    $buffer.value=(val.to_s)
+  end
+end
+
+# エントリー
+e = TkEntry.new(textvariable: $buffer).pack
+e.focus
+
+# バインディング
+e.bind('Return', proc {|e| calc(e) })
+
+Tk.mainloop
+</pre>
+
+<p> 計算は関数 eval() を使えば簡単です。eval() は与えられた Ruby の式として評価します。とても簡単なプログラムですが、モジュール Math をインクルードすれば、sin(), cos(), tan() などの関数を呼び出すことができるので、簡単な関数電卓としても使うことができます。
+</p>
+
+<p> 一般の GUI アプリケーションの場合、キー入力はアクティブになっているウィンドウに渡されます。Tk では、これをフォーカスウィンドウ (focus window) といいます。フォーカスウィンドウは、マウスの操作によって変更することができますが、メソッド focus によってプログラムで設定することができます。
+</p>
+<pre class="item">
+widget.focus
+</pre>
+<p> e.focus でフォーカスウィンドウをエントリーに設定します。これですぐに式を入力することができます。
+</p>
+<p> <img src="ruby_img/entry0.png" ALT="電卓入力の画面"> 数式を入力する
+</p>
+<p> <img src="ruby_img/entry1.png" ALT="計算結果の画面"> リターンキーで計算する
+</p>
+
+<h4>●イベント処理</h4>
+<p>このプログラムのポイントはメソッド bind() です。
+</p>
+<pre class="item">
+widget.bind(eventsequence, callback, args, ...)
+</pre>
+<p> すでにバインドされているコールバック関数がある場合、新しい関数に差し替えられます。bind() で設定されたコールバック関数が呼び出される場合、引数 args によって渡される値が異なります。args が省略された場合、イベントを表す TkEvent::Event のオブジェクトが渡されます。args を指定すると、必要な情報だけを取得して引数に渡すことができます。これはあとで説明します。
+</p>
+<p> イベントの指定は次のような構文を持っています。
+</p>
+<pre class="item">
+'modifier-modifier-type-detail'
+</pre>
+<p> type は GUI 環境上で発生するイベントタイプを表します。ユーザーが操作するときに発生する主なイベントタイプには次のようなものがあります。
+</p>
+<table border=1>
+<caption>表：イベントタイプ</caption>
+<tbody>
+<tr><td>Key, KeyPress</td><td>キーが押された</td></tr>
+<tr><td>KeyRelease</td><td>キーが離された</td></tr>
+<tr><td>Button, ButtonPress</td><td>マウスのボタンが押された</td></tr>
+<tr><td>ButtonRelease</td><td>マウスのボタンが離された</td></tr>
+<tr><td>Motion</td><td>マウスの移動</td></tr>
+<tr><td>Enter</td><td>マウスカーソルがウィンドウの中に入った</td></tr>
+<tr><td>Leave</td><td>マウスカーソルがウィンドウから出た</td></tr>
+</tbody>
+</table>
+<p> このほかにも、ウィンドウが破棄されたときに発生するイベントなど、様々なイベントタイプがあります。
+</p>
+<p> マウスとキーのイベントには、ボタンやキーの種類を detail で指定します。マウスでは左ボタンが 1 となります。キーの種類は名前で指定します。英数字はその文字がそのまま名前となります。このほかに、改行キーに対する Return、バックスペースキーに対する BackSpace などがあります。
+</p>
+<p> detail を指定する場合は type を省略することができます。ただし、'1' という指定は 'KeyPress-1' ではなく 'Button-1' となるので注意してください。また、'KeyPress-a' は 'a' と書くことができます。それから、'KeyPress' のように detail を省略すると、種類によらずキーが押されたときにバインドされたコマンドが実行されます。
+</p>
+
+<h4>●モディファイア</h4>
+<p> イベントタイプの前にはモディファイア (modifier) をつけることができます。たとえば、'Control-d' はコントロールキーと d キーを同時に押したときのイベントを表します。主なモディファイアを次に示します。
+</p>
+
+<table border=1>
+<caption>表：モデファイア</caption>
+<tbody>
+<tr><td>Control</td><td>Ctrl キーを押しながらの入力</td></tr>
+<tr><td>Shift</td><td>Shift キーを押しながらの入力</td></tr>
+<tr><td>Alt</td><td>Alt キーを押しながらの入力</td></tr>
+<tr><td>Button1, B1</td><td>マウスの左ボタンを押しながらの入力</td></tr>
+<tr><td>Button3, B3</td><td>マウスの右ボタンを押しながらの入力</td></tr>
+<tr><td>Double</td><td>ダブルクリック</td></tr>
+<tr><td>Triple</td><td>トリプルクリック</td></tr>
+</tbody>
+</table>
+
+<p> Tk の出身地である X Window は 3 ボタンマウスを使うので、Button2 は右ボタンではなく中ボタンとなります。たとえば、左ボタンのダブルクリックに対応するイベントは 'Double-1'となります。また、イベントタイプは配列を使って複数個指定することができます。たとえば、['Escape', 'a'] はEsc キーが押されたあとで a キーを押したイベントに対応します。
+</p>
+
+<h4>●イベントの詳細情報</h4>
+<p> Ruby/Tk の場合、bind(event, callback, args, ...) の引数 args に % から始まる記号 (文字列) を渡すと、callback の引数には記号が表すイベント情報が渡されます。複数のイベント情報を取得する場合、args 以降に複数の文字列を指定するか、記号を空白で区切った文字列を渡してください。
+</p>
+
+<table border=1>
+<thead>
+  <tr><th>記号</th><th>イベント情報</th></tr>
+</thead>
+<tbody>
+  <tr><td>%b    </td><td>マウスボタンの番号</td></tr>
+  <tr><td>%x, %y</td><td>マウスカーソルの座標</td></tr>
+  <tr><td>%W    </td><td>ウィンドウのパス名</td></tr>
+  <tr><td>%A    </td><td>キーに対応する文字</td></tr>
+  <tr><td>%K    </td><td>キーに対応する名前 (Keysym)</td></tr>
+  <tr><td>%%    </td><td>% 自身を表す</td></tr>
+</tbody>
+</table>
+
+<p> これ以外にも、いろいろな情報がありますので、詳細は Tcl/Tk のマニュアルなどをお読みください。たとえば、次のプログラムを実行すると、キーに対応する名前を表示することができます。
+</p>
+
+<pre class="list">
+リスト：キーの名前を表示
+
+# coding: utf-8
+require 'tk'
+
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+$buffer = TkVariable.new('')
+
+# ラベルの設定
+TkLabel.new(text: '*** push any key ***').pack
+a = TkLabel.new(textvariable: $buffer)
+a.pack
+a.bind('KeyPress', proc {|k| $buffer.value=("push key is #{k}") }, '%K')
+a.focus
+
+Tk.mainloop()
+</pre>
+
+<p> コールバック関数の引数 k には '%K' で指定したイベント情報、つまりキーに対応する名前が渡されます。実際に試してみると、F1 や F2 キーには F1, F2 という名前が割り当てられていることがわかります。
+</p>
+<p><img src="ruby_img/key.png" alt="キー入力の表示"> F1 キーを押したときの動作
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap07">リストボックスとスクロールバー</h3>
+<p> 次は、リストボックスとスクロールバーというウィジェットを説明します。リストボックスは複数の文字列を表示し、ユーザーはその中からひとつ以上の文字列を選ぶことができます。スクロールバーは、ほかのウィジェットの表示範囲を制御します。例題として、calc.rb で入力した計算式をリストボックスに格納しておいて、必要なときに取り出せるように改造してみましょう。
+</p>
+
+<h4>●リストボックス</h4>
+<p> 最初にリストボックスから説明します。リストボックスのオブジェクトは TkListbox.new() で生成します。TkListbox.new() で指定する主なオプションは表示範囲のコントロールと選択方法です。
+</p>
+<table border=1>
+<caption>表：Listbox() の主なオプション</caption>
+<tbody>
+<tr><td>xscrollcommand</td><td>x 方向のスクロールメソッドを指定</td></tr>
+<tr><td>yscrollcommand</td><td>y 方向のスクロールメソッドを指定</td></tr>
+<tr><td>selectmode</td><td>セレクションモード</td></tr>
+</tbody>
+</table>
+
+<p> xscrollcommand/yscrollcommand には、スクロールバーウィジェットのメソッド set() を指定します。リストボックスの表示範囲が変更されたときに指定したメソッド set() が呼び出されます。これは TkScrollbar と一緒に説明します。セレクションには次のモードが用意されています。
+</p>
+<ul>
+  <li>single<br>ひとつの行をマウスの左クリックで選択する。
+  <li>browse<br>single と同じだが、ドラッグによって選択される行が変化し、
+ボタンを離したところの行が選択される。
+  <li>multiple<br>左クリックで複数行を選択する（ドラッグは不可）。
+  <li>extended<br>
+ドラッグで複数行を選択するが、左クリックではいままで選択した行はキャンセルされ、
+クリックした行のみ選択される。
+CTRL キーを押しながら左クリックするとトグル動作（結果が反転）となり、
+シフトキーを押しながら左クリックすると直前に左クリックした行から現在の行までが選択される。
+</ul>
+<p> selectmode のデフォルト値は browse です。データの挿入、削除、取得は次のメソッドで行います。
+</p>
+<ul>
+  <li>insert(index, *element)<br> 指定した位置の直前に文字列を挿入
+  <li>delete(first, last)<br> 指定した範囲の行を削除する
+  <li>get(first, last)<br> 指定した範囲の行をリストに格納して返す
+  <li>index(index)<br> 指定した位置の行番号を返す
+  <li>curselection()<br> 選択された行番号をリストにして返す
+  <li>see(index)<br> 指定した位置が見えるようにスクロールする
+</ul>
+
+<p> このほかにもいろいろなメソッドがありますが、とくにスクロールバーに関係する xview/yview メソッドが重要です。これは TkScrollbar のところで説明します。
+</p>
+<p> 位置の指定には次の方法があります。
+</p>
+<ul>
+  <li>n (数値)<br>n 行目      
+  <li>active<br>左ボタンを離したときの行
+  <li>anchor<br>左ボタンを押したときの行
+  <li>end<br>
+最後の行、ただし、insert() で指定すると最終行の次にデータが追加される。
+  <li>@x,y<br>指定した座標に最も近い行
+</ul>
+<p> セレクションモードが extended のときにドラッグで選択した場合、最初の行が anchor で最後の行が active となります。したがって、delete に anchor と active を指定すると、選択した行をリストボックスから削除することになります。
+</p>
+
+<h4>●スクロールバー</h4>
+<p> 次はスクロールバーを説明します。スクロールバーは、その両端に矢印がつき、中央付近には四角いスライダが表示されます。矢印を左クリックするか、スライダをドラッグすることで表示位置を変更します。また、矢印とスライダの隙間をクリックすると 1 画面分スクロールします。スクロールバーは TkScrollbar.new() <sup><a href="rubytk02.html#note1">[*1]</a></sup> でオブジェクトを生成します。TkScrollbar.new() で主に使用されるオプションには次のものがあります。
+</p>
+
+<table border=1>
+<caption>表：Scrollbar() の主なオプション</caption>
+<tbody>
+<tr><td>orient</td><td>スクロールバーの方向</td></tr>
+<tr><td>troughcolor</td><td>矢印とスクロールの隙間の色</td></tr>
+<tr><td>command</td><td>スクロールバーが動いたときに実行するメソッド</td></tr>
+</tbody>
+</table>
+<p> orient はスケールと同じくスクロールバーの方向を指定するもので、horizontal または h を指定すると水平になり、vertical または v で垂直になります。command はスクロールバーを動かしたときに実行する関数を指定します。リストボックスとスクロールバーを連動させる場合、ここにはリストボックスの表示位置を制御するメソッド xview() や yview() を指定します。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> Ruby/Tk の場合、スクロールバーの定義は TkXScrollbar, TkYScrollbar を使った法が簡単です。詳細は <a href="rubytk02.html#appendix">補足</a> をお読みください。
+</div>
+
+<h4>●メソッドの指定</h4>
+<p> スクロールバーで重要なメソッドは set() です。
+</p>
+<pre class="item">
+widget.set(first, last)
+</pre>
+<p> set() には 2 つの引数 first と last を渡します。first と last は 0 から 1 の間の実数で、表示されている範囲を表しています。たとえばリストボックスと連動している場合、全体の行数が 100 行で 20 行目から 30 行分表示されているとすると、set(0.2, 0.5) となります。つまり、データ全体の 20 % の位置から 50 % の位置まで表示されていることを表します。スクロールバーではこのデータからスライダの位置と大きさを調整します。
+</p>
+
+<p> リストボックスのオプション xscrollcommand や yscrollcommand に set() を指定する場合、次のように行います。
+</p>
+<pre class="item">
+xscrollcommand: proc {|first, last| widget.set(first, last)}
+</pre>
+<p> 手続きオブジェクトの引数は *args のように可変個引数にしてもかまいません。その場合、set() を呼び出すときは set(*args) としてください。
+</p>
+<p> widget はスクロールバーのオブジェクトです。リストボックスで表示範囲が変更されると set() が実行されます。このとき、リストボックスの表示範囲 (first, last) が引数として渡されます。これでリストボックスの内容が変更されたとき、それをスクロールバーに反映することができます。
+</p>
+<p> 逆に、スクロールバーを変更したとき、それをリストボックスに反映させるためのオプションが command です。ここにリストボックスのメソッド xview や yview を指定します。指定方法は簡単で、リストボックスのオブジェクトを widget とすると次のようになります。
+</p>
+<pre class="item">
+command: proc {|*args| widget.yview(*args)}
+</pre>
+<p> スクロールバーの操作によって、メソッドには次に示す文字列が引数として渡されます。
+</p>
+<ul>
+  <li>'moveto', 数値<br>指定した数値 (0 - 1.0) の位置までスクロール
+  <li>'scroll', n, unit<br>上または下に n 単位スクロールする
+  <li>'scroll', n, pages<br>上または下に n ページスクロールする
+</ul>
+<p> まあ、付け加えられるデータを無理に覚える必要はありません。スクロールバーを使うときは、連動するウィジェットのスクロールオプションに set() を指定して、スクロールバーの command に表示を制御するウィジェットコマンドを指定する、と理解しておけば十分でしょう。
+</p>
+<h4>●grid による配置</h4>
+<p> それでは、calc.rb を改造しましょう。まず必要なウィジェットを生成します。
+</p>
+<pre class="list">
+リスト：ウィジェットの生成と配置
+
+require 'tk'
+
+# フォントの設定
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+
+# 式を格納するオブジェクト
+$buffer = TkVariable.new('')
+
+# Entry の生成
+e = TkEntry.new(textvariable: $buffer)
+
+# Listbox の生成
+$lb = TkListbox.new
+
+# Scrollbar の生成
+sb1 = TkScrollbar.new(orient: 'v',
+                       command: proc {|*a| $lb.yview(*a)})
+sb2 = TkScrollbar.new(orient: 'h',
+                       command: proc {|*a| $lb.xview(*a)})
+
+# Listbox の設定
+$lb.configure(yscrollcommand: proc {|*a| sb1.set(*a)})
+$lb.configure(xscrollcommand: proc {|*a| sb2.set(*a)})
+
+# grid による配置
+e.grid(row: 0, columnspan: 2, sticky: 'ew')
+$lb.grid(row: 1, column: 0, sticky: 'nsew')
+sb1.grid(row: 1, column: 1, sticky: 'ns')
+sb2.grid(row: 2, column: 0, sticky: 'ew')
+</pre>
+<p> xscrollcommand / yscrollcommand の設定にはスクロールバーのオブジェクトが必要なので、スクロールバーを生成してから configure() で設定します。
+</p>
+<p> リストボックスとスクロールバーは grid() で配置します。grid は格子状にウィジェットを配置するジオメトリマネージャです。ウィンドウを M 行 N 列のセルに分割し、そこにウィジェットを配置するのです。x 方向の位置はオプション column で指定し、y 方向の位置は row で指定します。
+</p>
+<p> grid には pack とは違うオプション columnspan と rowspan があります。これは、複数のセルにまたがってウィジェットを配置するために使います。columnspan は x 方向にまたがるセルの数、rowspan は y 方向にまたがるセルの数を指定します。
+</p>
+<p> それから、pack ではオプション fill でウィジェットを引き伸ばすことができましたが、grid ではオプション sticky を使います。
+</p>
+
+<table border=1>
+<caption>表：stickey オプション</caption>
+<tbody>
+<tr><td>n</td><td>上寄せ</td></tr>
+<tr><td>s</td><td>下寄せ</td></tr>
+<tr><td>e</td><td>右寄せ</td></tr>
+<tr><td>w</td><td>左寄せ</td></tr>
+<tr><td>ns</td><td>上下方向に引き伸ばす</td></tr>
+<tr><td>ew</td><td>左右方向に引き伸ばす</td></tr>
+</tbody>
+</table>
+
+<p> sticky は pack のオプション anchor と同じ機能もあわせ持っています。エントリーはいちばん上に配置しますが、columnspan で x 方向にセルをつなげて、sticky = 'ew' で左右に広げています。
+</p>
+
+<h4>●バインディングの設定</h4>
+<p> 次はバインディングを設定します。リストボックスからデータを選ぶ処理ですが、ダブルクリックしてもらうことにします。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：バインディングの設定
+
+# 計算
+def calc()
+  expr = $buffer.value
+  $lb.insert('end', expr)
+  $lb.see('end')
+  val = eval(expr)
+  $buffer.value=(val.to_s)
+end
+
+# 式の取り出し
+def get_expr()
+  $buffer.value=($lb.get('active'))
+end
+
+# バインディング
+e.bind('Return', proc { calc })
+$lb.bind('Double-1', proc { get_expr })
+</pre>
+
+<p> エントリーではリターンキーが入力されると関数 calc() が実行されます。calc() では式をリストボックスに代入し、計算結果を $buffer にセットします。これが逆になると、答えをリストボックスに代入することになります。それから、メソッド see() を使ってセットした計算式が見えるようにスクロールしています。
+</p>
+<p> リストボックスでダブルクリックすると関数 get_expr() が実行されます。ダブルクリックされた位置からメソッド get() でデータを取り出して $buffer にセットします。ダブルクリックですから、位置の指定は active と anchor どちらでもかまいません。
+</p>
+<p> <img src="ruby_img/listbox1.png" ALT="履歴が残る電卓">  式の履歴が残るように改造した電卓
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+#
+# リストボックスとスクロールバーのサンプル
+#
+# Copyright (C) 2016 Makoto Hiroi
+#
+# coding: utf-8
+require 'tk'
+
+# フォントの設定
+TkOptionDB.add('*font', 'Takaoゴシック 14')
+
+# 式を格納するオブジェクト
+$buffer = TkVariable.new('')
+
+# Entry の生成
+e = TkEntry.new(textvariable: $buffer)
+
+# Listbox の生成
+$lb = TkListbox.new
+
+# Scrollbar の生成
+sb1 = TkScrollbar.new(orient: 'v',
+                       command: proc {|*a| $lb.yview(*a)})
+sb2 = TkScrollbar.new(orient: 'h',
+                       command: proc {|*a| $lb.xview(*a)})
+
+# Listbox の設定
+$lb.configure(yscrollcommand: proc {|*a| sb1.set(*a)})
+$lb.configure(xscrollcommand: proc {|*a| sb2.set(*a)})
+
+# 計算
+def calc()
+  expr = $buffer.value
+  $lb.insert('end', expr)
+  $lb.see('end')
+  val = eval(expr)
+  $buffer.value=(val.to_s)
+end
+
+# 式の取り出し
+def get_expr()
+  $buffer.value=($lb.get('active'))
+end
+
+# バインディング
+e.bind('Return', proc { calc })
+$lb.bind('Double-1', proc { get_expr })
+
+# grid による配置
+e.grid(row: 0, columnspan: 2, sticky: 'ew')
+$lb.grid(row: 1, column: 0, sticky: 'nsew')
+sb1.grid(row: 1, column: 1, sticky: 'ns')
+sb2.grid(row: 2, column: 0, sticky: 'ew')
+
+# フォーカスの設定
+e.focus
+
+Tk.mainloop
+</pre>
+<hr>
+<h4 id="appendix">●補足 (2016/09/10)</h4>
+<p> Ruby/Tk の場合、TkXScrollbar と TkYScrollbar を使うと、スクロールバーを簡単に設定することができます。TkXScrollbar.new で横方向、TkYScrollbar.new で縦方向のスクロールバーを生成し、メソッド assign(widget) でスクロールバーを取り付けるウィジェットを指定します。
+</p> 
+<p> たとえば、履歴付き電卓の場合、リストボックスとスクロールバーの設定は次のようになります。
+</p>
+<pre class="list">
+リスト : リストボックスとスクロールバーの設定
+
+# Listbox の生成
+$lb = TkListbox.new
+
+# Scrollbar の生成
+sb1 = TkYScrollbar.new
+sb1.assign($lb)
+sb2 = TkXScrollbar.new
+sb2.assign($lb)
+</pre>
+<p> たったこれだけでリストボックス $lb にスクロールバー sb1, sb2 を取り付けることができます。
+</p>
+<div class="note">
+-- 参考 URL --------<br>
+1. <a href="http://magazine.rubyist.net/?0003-RubyTkMovement">Rubyist Magazine - Ruby/Tk の動向</a>, (永井さん)
+</div>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="rubytk01.html">PrevPage</a> | <a href="ruby.html#ruby_tk">Ruby</a> | <a href="rubytk03.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

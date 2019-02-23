@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 「6 パズル」と「8 パズル」のプログラムリスト</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881841</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>「6 パズル」と「8 パズル」のプログラムリスト</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h4 id="hex4">●hex4.c</h4>
+<pre class="list">
+/*
+ * hex4.c : パズル「6 パズル」の解法（最長手数の局面を求める）
+ *
+ *          二分探索木を使った高速バージョン
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  7
+#define NIL   (-1)
+
+/* 最大の状態数 7! = 5040 */
+#define MAX_STATE 5040
+
+/* 隣接リスト */
+const char adjacent[SIZE][7] = {
+  1, 2, 3, -1, -1, -1, -1,  /* 0 */
+  0, 3, 4, -1, -1, -1, -1,  /* 1 */
+  0, 3, 5, -1, -1, -1, -1,  /* 2 */
+  0, 1, 2,  4,  5,  6, -1,  /* 3 */
+  1, 3, 6, -1, -1, -1, -1,  /* 4 */
+  2, 3, 6, -1, -1, -1, -1,  /* 5 */
+  3, 4, 5, -1, -1, -1, -1   /* 6 */
+};
+
+/* 二分探索木 */
+typedef struct node {
+  char board[SIZE];
+  int  right;
+  int  left;
+} NODE;
+
+/* キュー */
+NODE state[MAX_STATE + 1];        /* +1 はワーク領域 */
+char space_position[MAX_STATE];
+char move[MAX_STATE];
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 0
+};
+
+int count = 0;
+
+/* 二分探索木への登録 */
+int insert_tree( int i )
+{
+  int r, n = 0, *np = &amp;n;
+  while( *np != NIL ){
+    r = memcmp( state[i].board, state[*np].board, SIZE );
+    count++;
+    if( r == 0 ){
+      return FALSE;      /* 登録済み */
+    } else if( r &lt; 0 ){
+      np = &amp;(state[*np].left);
+    } else {
+      np = &amp;(state[*np].right);
+    }
+  }
+  /* 登録する */
+  *np = i;
+  state[i].left = NIL;
+  state[i].right = NIL;
+  return TRUE;
+}
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int m = move[n - 1], c = 0, i;
+  while( move[--n] == m ){
+    c++;
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[n].board[i] );
+    }
+    printf("\n");
+  }
+  printf("最長手数 %d 手、総数 %d 個\n", m, c );
+}
+
+/* 探索 */
+int search( void )
+{
+  int front = 0, rear = 1, i;
+  /* 初期化 */
+  memcpy( state[0].board, init_state, SIZE );
+  state[0].right = NIL;
+  state[0].left = NIL;
+  space_position[0] = 6;
+  move[0] = 0;
+  while( front &lt; rear ){
+    int s = space_position[front];
+    int n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 状態をコピー */
+      memcpy( state[rear].board, state[front].board, SIZE );
+      /* 移動 */
+      state[rear].board[s] = state[rear].board[n];
+      state[rear].board[n] = 0;
+      if( insert_tree( rear ) ){
+	/* 登録 */
+	space_position[rear] = n;
+	move[rear] = move[front] + 1;
+	rear++;
+      }
+    }
+    front++;
+  }
+  print_answer( rear );
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("比較回数 %d 回、時間 %d \n", count, end - start );
+  return 0;
+}
+</pre>
+<p><a href="puzdoc06.html#hex4">戻る</a>
+</p>
+<hr>
+<h4 id="eight1">●eight1.c</h4>
+<pre class="list">
+/*
+ * eigth1.c : 8 パズルの解法（最長手数の局面を求める）
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  9
+#define NIL   (-1)
+
+/* 状態数 (9! / 2) */
+#define MAX_STATE 181440
+
+/* 隣接リスト */
+const char adjacent[SIZE][5] = {
+  1, 3,-1,-1,-1,
+  0, 4, 2,-1,-1,
+  1, 5,-1,-1,-1,
+  0, 4, 6,-1,-1,
+  1, 3, 5, 7,-1,
+  2, 4, 8,-1,-1,
+  3, 7,-1,-1,-1,
+  4, 6, 8,-1,-1,
+  5, 7,-1,-1,-1,
+};
+
+/* 二分探索木 */
+typedef struct node {
+  char board[SIZE];
+  int  right;
+  int  left;
+} NODE;
+
+/* キュー */
+NODE state[MAX_STATE + 1];      /* +1 はワーク領域 */
+char space_position[MAX_STATE];
+char move[MAX_STATE];
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 7, 8, 0
+};
+
+int count = 0;
+
+/* 二分探索木への登録 */
+int insert_tree( int i )
+{
+  int r, n = 0, *np = &amp;n;
+  while( *np != NIL ){
+    r = memcmp( state[i].board, state[*np].board, SIZE );
+    count++;
+    if( r == 0 ){
+      return FALSE;      /* 登録済み */
+    } else if( r &lt; 0 ){
+      np = &amp;(state[*np].left);
+    } else {
+      np = &amp;(state[*np].right);
+    }
+  }
+  /* 登録する */
+  *np = i;
+  state[i].left = NIL;
+  state[i].right = NIL;
+  return TRUE;
+}
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int m = move[n - 1], c = 0, i;
+  while( move[--n] == m ){
+    c++;
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[n].board[i] );
+    }
+    printf("\n");
+  }
+  printf("最長手数 %d 手、総数 %d 個\n", m, c );
+}
+
+/* 探索 */
+int search( void )
+{
+  int front = 0, rear = 1, i;
+  /* 初期化 */
+  memcpy( state[0].board, init_state, SIZE );
+  state[0].right = NIL;
+  state[0].left = NIL;
+  space_position[0] = 8;
+  move[0] = 0;
+  while( front &lt; rear ){
+    int s = space_position[front];
+    int n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 状態をコピー */
+      memcpy( state[rear].board, state[front].board, SIZE );
+      /* 移動 */
+      state[rear].board[s] = state[rear].board[n];
+      state[rear].board[n] = 0;
+      if( insert_tree( rear ) ){
+	/* 登録 */
+	space_position[rear] = n;
+	move[rear] = move[front] + 1;
+	rear++;
+      }
+    }
+    front++;
+  }
+  printf("総数 %d 個\n", rear );
+  print_answer( rear );
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("比較回数 %d 回、時間 %d \n", count, end - start );
+  return 0;
+}
+</pre>
+<p><a href="puzdoc06.html#eight1">戻る</a>
+</p>
+<hr>
+<h4 id="eight2">●eight2.c</h4>
+<pre class="list">
+/*
+ * eigth2.c : 8 パズルの解法（最長手数の局面を求める）
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  9
+#define NIL   (-1)
+
+/* 状態数 (9! / 2) */
+#define MAX_STATE 181440
+
+/* 隣接リスト */
+const char adjacent[SIZE][5] = {
+  1, 3,-1,-1,-1,
+  0, 4, 2,-1,-1,
+  1, 5,-1,-1,-1,
+  0, 4, 6,-1,-1,
+  1, 3, 5, 7,-1,
+  2, 4, 8,-1,-1,
+  3, 7,-1,-1,-1,
+  4, 6, 8,-1,-1,
+  5, 7,-1,-1,-1,
+};
+
+/* 二分探索木 */
+typedef struct node {
+  char board[SIZE];
+  int  right;
+  int  left;
+} NODE;
+
+/* キュー */
+NODE state[MAX_STATE + 1];      /* +1 はワーク領域 */
+char space_position[MAX_STATE];
+char move_piece[MAX_STATE];
+char move[MAX_STATE];
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 7, 8, 0
+};
+
+int count = 0;
+
+/* 二分探索木への登録 */
+int insert_tree( int i )
+{
+  int r, n = 0, *np = &amp;n;
+  while( *np != NIL ){
+    r = memcmp( state[i].board, state[*np].board, SIZE );
+    count++;
+    if( r == 0 ){
+      return FALSE;      /* 登録済み */
+    } else if( r &lt; 0 ){
+      np = &amp;(state[*np].left);
+    } else {
+      np = &amp;(state[*np].right);
+    }
+  }
+  /* 登録する */
+  *np = i;
+  state[i].left = NIL;
+  state[i].right = NIL;
+  return TRUE;
+}
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int m = move[n - 1], c = 0, i;
+  while( move[--n] == m ){
+    c++;
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[n].board[i] );
+    }
+    printf("\n");
+  }
+  printf("最長手数 %d 手、総数 %d 個\n", m, c );
+}
+
+/* 探索 */
+int search( void )
+{
+  int front = 0, rear = 1, i;
+  /* 初期化 */
+  memcpy( state[0].board, init_state, SIZE );
+  state[0].right = NIL;
+  state[0].left = NIL;
+  space_position[0] = 8;
+  move[0] = 0;
+  move_piece[0] = NIL;
+
+  while( front &lt; rear ){
+    int s = space_position[front];
+    int n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 動かした駒は元に戻さない */
+      if( move_piece[front] != state[front].board[n] ){
+	/* 状態をコピー */
+	memcpy( state[rear].board, state[front].board, SIZE );
+	/* 移動 */
+	move_piece[rear] = state[rear].board[n];
+	state[rear].board[s] = state[rear].board[n];
+	state[rear].board[n] = 0;
+	if( insert_tree( rear ) ){
+	  /* 登録 */
+	  space_position[rear] = n;
+	  move[rear] = move[front] + 1;
+	  rear++;
+	}
+      }
+    }
+    front++;
+  }
+  printf("総数 %d 個\n", rear );
+  print_answer( rear );
+}
+
+int main()
+{
+  int start, end;
+  start = clock();
+  search();
+  end = clock();
+  printf("比較回数 %d 回、時間 %d \n", count, end - start );
+  return 0;
+}
+</pre>
+<p><a href="puzdoc06.html#eight2">戻る</a>
+</p>
+<hr>
+<h4 id="eight3">●eight3.c</h4>
+<pre class="list">
+/*
+ * eigth3.c : 8 パズルの解法（最長手数の局面を求める）
+ *
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+#include &lt;time.h&gt;
+
+#define TRUE  1
+#define FALSE 0
+#define SIZE  9
+#define NIL   (-1)
+
+/* 素数が良い */
+#define HASH_SIZE 19997
+
+/* 状態数 (9! / 2) */
+#define MAX_STATE 181440
+
+/* 隣接リスト */
+const char adjacent[SIZE][5] = {
+  1, 3,-1,-1,-1,
+  0, 4, 2,-1,-1,
+  1, 5,-1,-1,-1,
+  0, 4, 6,-1,-1,
+  1, 3, 5, 7,-1,
+  2, 4, 8,-1,-1,
+  3, 7,-1,-1,-1,
+  4, 6, 8,-1,-1,
+  5, 7,-1,-1,-1,
+};
+
+/* 連結リスト */
+typedef struct {
+  char board[SIZE];
+  int  next;
+} CELL;
+
+/* ハッシュ表 */
+int hash_table[HASH_SIZE];
+
+/* キュー */
+CELL state[MAX_STATE + 1];        /* +1 はワーク領域 */
+char space_position[MAX_STATE];
+char move_piece[MAX_STATE];
+char move[MAX_STATE];
+
+/* 初期状態 */
+char init_state[SIZE] = {
+  1, 2, 3, 4, 5, 6, 7, 8, 0
+};
+
+/* ハッシュ関数 */
+int hash_value( int n )
+{
+  int i, value = 0;
+  for( i = 0; i &lt; SIZE; i++ ){
+    value = value * 10 + state[n].board[i];
+  }
+  return value % HASH_SIZE;
+}
+
+int count = 0;
+
+/* ハッシュ表への登録 */
+int insert_hash( int i )
+{
+  /* ハッシュ表のチェック */
+  int h = hash_value( i );
+  int n = hash_table[h];
+  /* 探索 */
+  while( n != NIL ){
+    count++;
+    if( memcmp( state[i].board, state[n].board, SIZE ) == 0 ){
+      return FALSE;      /* 登録済み */
+    }
+    n = state[n].next;
+  }
+  /* 先頭に追加 */
+  state[i].next = hash_table[h];
+  hash_table[h] = i;
+  return TRUE;
+}
+
+/* 結果を出力 */
+void print_answer( int n )
+{
+  int m = move[n - 1], c = 0, i;
+  while( move[--n] == m ){
+    c++;
+    for( i = 0; i &lt; SIZE; i++ ){
+      printf("%d ", state[n].board[i] );
+    }
+    printf("\n");
+  }
+  printf("最長手数 %d 手、総数 %d 個\n", m, c );
+}
+
+/* 探索 */
+int search( void )
+{
+  int front = 0, rear = 1, i;
+  /* 初期化 */
+  memcpy( state[0].board, init_state, SIZE );
+  space_position[0] = 8;
+  move[0] = 0;
+  move_piece[0] = NIL;
+  /* ハッシュ表への登録 */
+  insert_hash( 0 );
+
+  while( front &lt; rear ){
+    int s = space_position[front];
+    int n;
+    for( i = 0; (n = adjacent[s][i]) != -1; i++ ){
+      /* 動かした駒は元に戻さない */
+      if( move_piece[front] != state[front].board[n] ){
+	/* 状態をコピー */
+	memcpy( state[rear].board, state[front].board, SIZE );
+	/* 移動 */
+	move_piece[rear] = state[rear].board[n];
+	state[rear].board[s] = state[rear].board[n];
+	state[rear].board[n] = 0;
+	if( insert_hash( rear ) ){
+	  /* 登録 */
+	  space_position[rear] = n;
+	  move[rear] = move[front] + 1;
+	  rear++;
+	}
+      }
+    }
+    front++;
+  }
+  printf("総数 %d 個\n", rear );
+  print_answer( rear );
+}
+
+int main()
+{
+  int i, start, end;
+  /* ハッシュ表の初期化 */
+  for( i = 0; i &lt; HASH_SIZE; i++ ){
+    hash_table[i] = NIL;
+  }
+  start = clock();
+  search();
+  end = clock();
+  printf("比較回数 %d 回、時間 %d \n", count, end - start );
+  return 0;
+}
+</pre>
+<p><a href="puzdoc06.html#eight3">戻る</a>
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2002,2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

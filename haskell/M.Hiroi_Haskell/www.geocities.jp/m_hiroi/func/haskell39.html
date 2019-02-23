@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881791</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell38.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell40.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>Haskell で作る micro Scheme (6)</h3>
+<p> 今回は micro Scheme に「継続 (continuation) 」の機能を追加してみましょう。micro Scheme で継続を扱う場合、式を評価する関数を「継続渡しスタイル (CPS) 」で書き直す必要があります。この修正が少々面倒な作業になりますが、継続そのものは簡単に実装することができます。
+</p>
+
+<h4>●継続の使い方</h4>
+<p> Scheme の継続は Haskell の継続モナドとは異なるので、ここで簡単に説明しておきましょう。
+</p>
+
+<p> Scheme の場合、継続を取り出すには関数 call/cc を使います。call/cc には関数をひとつ渡します。call/cc に渡される関数は引数がひとつで、その引数に call/cc が取り出した継続が渡されます。call/cc はその関数を評価し、その結果が call/cc の返り値になります。プログラムは継続渡しスタイルで記述する必要はありません。普通のプログラムの中で継続を取り扱うことができます。
+</p>
+
+<p> Scheme の仕様書 (R5RS) によると、継続は引数を一つ取る関数で表されます。引数を渡して継続を評価すると、今までの処理を破棄して、call/cc で取り出された残りの計算 (継続) を実行します。このとき、継続に渡した引数が call/cc の返り値になります。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+Scm&gt; (call/cc (lambda (k) k))
+&lt;continuation&gt;
+Scm&gt; (+ 1 (* 2 (call/cc (lambda (k) 3))))
+7
+Scm&gt; (+ 1 (* 2 (call/cc (lambda (k) (k 4) 3))))
+9
+</pre>
+<p> 最初の例では、ラムダ式の引数 k に継続が渡されます。ラムダ式は k をそのまま返しているので、call/cc の返り値は取り出された継続になります。micro Scheme では継続を &lt;continuation&gt; と表示します。
+</p>
+
+<p> 次の例を見てください。call/cc によって取り出される継続は、call/cc の返り値を 2 倍して、その結果に 1 を加えるという処理になります。call/cc の返り値を X とすると、継続は (+ 1 (* 2 X)) という式で表すことができます。ラムダ式では継続を評価せずに 3 をそのまま返しているので、(+ 1 (* 2 3)) をそのまま計算して値は 7 になります。
+</p>
+
+<p> 最後の例では、匿名関数の中で (k 4) を評価しています。継続を評価しているので、現在の処理を破棄して、取り出した継続 (+ 1 (* 2 X)) を評価します。したがって、ラムダ式で (k 4) の後ろにある 3 を返す処理は実行されません。X の値は継続の引数 4 になるので、(+ 1 (* 2 4)) を評価して値は 9 になります。
+</p>
+
+<p> Scheme の場合、継続を変数に保存しておいて、あとから実行することもできます。次の例を見てください。
+</p>
+<pre>
+Scm&gt; (define c false)
+c
+Scm&gt; (+ 1 (* 2 (call/cc (lambda (k) (set! c k) 3))))
+7
+Scm&gt; (c 10)
+21
+Scm&gt; (c 100)
+201
+</pre>
+<p> ラムダ式の中で取り出した継続を大域変数 c に保存します。継続で行う処理は (+ 1 (* 2 X)) なので、(c 10) は (+ 1 (* 2 10)) を評価して値は 21 になります。同様に、(c 100) は (+ 1 (* 2 100)) を評価して値は 201 になります。
+</p>
+
+<p> Scheme の継続については拙作のページ Scheme 入門 <a href="abcscm20.html">継続と継続渡しスタイル</a> で詳しく説明しています。よろしければ参考にしてください。
+</p>
+
+<h4>●継続を表すデータ型の定義</h4>
+<p> それではプログラムを作りましょう。最初に、継続を表すデータ型を定義します。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+type Cont r a = (a -&gt; r) -&gt; r
+
+type ScmFunc = Env -&gt; SExpr -&gt; Cont (Scm SExpr) (Scm SExpr)
+
+data SExpr = INT  !Integer
+           | REAL !Double
+           | SYM  String
+           | STR  String
+           | CELL SExpr SExpr
+           | NIL
+           | PRIM ScmFunc
+           | SYNT ScmFunc
+           | CLOS SExpr LEnv
+           | CONT (Scm SExpr -&gt; Scm SExpr)
+           | MACR SExpr
+</pre>
+<p> 継続を表すデータ型 Cont r a を定義します。プリミティブ (PRIM)、シンタックス形式 (SYNT)、S 式を評価する関数はすべて継続渡しスタイルで書き直します。このデータ型を ScmFunc で表します。継続を表す関数の型は Scm SExpr -&gt; Scm SExpr になるので、これを CONT に格納して「継続」を表すことにします。継続 CONT の生成は micro Scheme の関数 call/cc の処理を行うプリミティブ callcc で行い、継続の評価は関数 apply で行います。
+</p>
+
+<h4>●S 式の評価の修正</h4>
+<p> 次は S 式を評価する関数 eval を修正します。
+</p>
+<pre class="list">
+リスト : S 式の評価
+
+eval :: ScmFunc
+eval env NIL        c = c $ return NIL
+eval env v@(INT _)  c = c $ return v
+eval env v@(REAL _) c = c $ return v
+eval env v@(STR _)  c = c $ return v
+eval env (SYM name) c = do
+  a &lt;- liftIO $ lookupLEnv name $ snd env
+  case a of
+    Nothing -&gt; do b &lt;- liftIO $ H.lookup (fst env) name
+                  case b of
+                    Nothing -&gt; throwError $ strMsg $ "unbound variable: " ++ name
+                    Just v  -&gt; c $ return v
+    Just v -&gt; c $ return v
+eval env (CELL func args) c =
+  eval env func (\m -&gt;
+    do v &lt;- m
+       case v of
+         SYNT f -&gt; f env args c
+         MACR f -&gt; apply env f args (\m1 -&gt; do expr &lt;- m1
+                                               eval env expr c)
+         _      -&gt; evalArguments env args (\m2 -&gt; do vs &lt;- m2
+                                                     apply env v vs c))
+</pre>
+
+<p> eval の引数 c が継続を表すクロージャです。たとえば、値 value を返す場合は c に return value を渡して評価します。引数が自己評価フォームの場合はそれ自身を、変数の場合は求めた値を return で包んで継続 c に渡して評価します。エラーを返す場合は継続 c にエラーを渡す必要はありません。継続 c を破棄してエラーを返すだけです。なお、継続 c にエラーを渡した場合でも、モナドの働きによって継続が評価されることは無いので、エラーはそのまま返されることになります。
+</p>
+<p> 引数がリストの場合はちょっと複雑です。まず、先頭要素を eval で評価して、その値を継続 (ラムダ式) の引数 m に渡して処理します。このように、eval を呼び出すときは、必ず継続渡しスタイルでプログラムを記述してください。
+</p>
+<p> m はモナドなので &lt;- で値を取り出して変数 v にセットします。あとは case で処理を振り分けます。SYNT f の場合は引数 args を評価しないで f に渡します。MACR f の場合は apply でマクロ本体を評価し、その結果をラムダ式に渡します。ラムダ式ではモナド m1 から式 expr を取り出して、それを eval で評価します。それ以外の場合は、evalArgument で引数 args を評価して、その結果をラムダ式に渡します。その中でモナド m2 から引数を取り出して apply に渡します。
+</p>
+
+<p> 引数を評価する evalArgument も CPS で書き直します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 引数の評価
+
+evalArguments :: ScmFunc
+evalArguments env NIL c = c $ return NIL
+evalArguments env (CELL expr rest) c =
+  eval env
+       expr
+       (\m1 -&gt; evalArguments env
+                             rest
+                             (\m2 -&gt; do v  &lt;- m1
+                                        vs &lt;- m2
+                                        c $ return (CELL v vs)))
+evalArguments _ _ _ = throwError $ strMsg "invalid function form"
+</pre>
+
+<p> 引数が NIL の場合は継続 c で return NIL を返します。そうでなければ、eval で先頭要素 expr を評価し、その結果を継続 (ラムダ式) の引数 m1 に渡します。この中で evalArgument を再帰呼び出しし、残りのリスト rest を処理します。その結果は継続の引数 m2 に渡されます。ここで、モナド m1, m2 から値を取り出して、その値を CELL に格納して継続 c で返します。これで引数を評価した結果をリストに格納して返すことができます。
+</p>
+<p> 継続渡しスタイルのプログラムはちょっと難しいと思います。よく理解できない方は拙作のページ <a href="haskell38.html">継続渡しスタイル</a> をお読みください。
+</p>
+
+<h4>●シンタックス形式の修正</h4>
+<p> 次はシンタックス形式を処理する関数を修正します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : シンタックス形式 (1)
+
+-- quote
+evalQuote :: ScmFunc
+evalQuote env (CELL expr _) c = c $ return expr
+evalQuote _ _ _ = throwError $ strMsg "invalid quote form"
+
+-- define
+evalDef :: ScmFunc
+evalDef env (CELL sym@(SYM name) (CELL expr NIL)) c =
+  eval env expr (\m -&gt; do
+    v &lt;- m
+    lift $ H.update (fst env) name v
+    c $ return sym)
+evalDef _ _ _ = throwError $ strMsg "invalid define form"
+
+-- define-macro
+evalDefM :: ScmFunc
+evalDefM env (CELL sym@(SYM name) (CELL expr NIL)) c =
+  eval env expr (\m -&gt; do
+    v &lt;- m
+    lift $ H.update (fst env) name (MACR v)
+    c $ return sym)
+evalDefM _ _ _ = throwError $ strMsg "invalid define-macro form"
+</pre>
+
+<p> evalQuote は簡単です。リストの先頭要素 expr を return でモナドに包んで継続 c に渡すだけです。evalDef は eval でリストの第 2 要素 expr を評価して、その値を継続の引数 m に渡します。この中で、モナド m から値を v を取り出して大域変数にセットします。そして、継続 c で return sym を返します。マクロを定義する evalDefM も同じです。
+</p>
+
+<pre class="list">
+リスト : シンタックス形式 (2)
+
+-- if
+evalIf :: ScmFunc
+evalIf env (CELL pred (CELL thenForm rest)) c =
+  eval env pred (\m -&gt; do
+    v &lt;- m
+    if v /= false
+    then eval env thenForm c
+    else case rest of
+           CELL elseForm _ -&gt; eval env elseForm c
+           _               -&gt; c $ return false)
+evalIf _ _ _ = throwError $ strMsg $ "if : " ++ errNEA
+
+-- lambda
+evalLambda :: ScmFunc
+evalLambda env expr c = c $ return (CLOS expr (snd env))
+</pre>
+<p> evalIf は条件部 pred を eval で評価して、その結果を継続の引数 m に渡します。その中でモナド m から値 v を取り出し、その値が真の場合、eval で then 節を評価します。偽の場合、else 節があればそれを eval で評価します。なければ、継続 c で return false を返します。evalLambda は簡単です。クロージャを生成して return でモナドに包み、それを継続 c で返すだけです。
+</p>
+
+<pre class="list">
+リスト : シンタックス形式 (3)
+
+-- set!
+evalSet :: ScmFunc
+evalSet env (CELL (SYM name) (CELL expr _)) c =
+  eval env expr (\m -&gt; do
+    v &lt;- m
+    a &lt;- lift $ lookupLEnv name (snd env)
+    case a of
+      Nothing -&gt; do b &lt;- lift $ H.lookup (fst env) name
+                    case b of
+                      Nothing -&gt; throwError $ strMsg $ "unbound variable: " ++ name
+                      Just _ -&gt; do lift $ H.update (fst env) name v
+                                   c $ return v
+      Just _  -&gt; do lift $ updateLEnv name v (snd env)
+                    c $ return v)
+evalSet _ _ _ = throwError (strMsg "invalid set! form")
+</pre>
+<p> evalSet は eval で式 expr を評価して、継続の引数 m に渡します。この中でモナド m から値 v を取り出します。次に、大域変数から変数 name を探します。見つからない場合は局所変数から name を探します。変数を見つけた場合はその値を v に更新して、継続 c で return v を返します。
+</p>
+
+<h4>●関数適用の修正</h4>
+<p> 次は apply の修正と call/cc を処理するプリミティブを作ります。
+</p>
+
+<pre class="list">
+リスト : micro Scheme 用 call/cc
+
+callcc :: ScmFunc
+callcc env (CELL func _) c = 
+  apply env func (CELL (CONT c) NIL) c
+callcc _ _ _ = throwError $ strMsg $ "call/cc " ++ errNEA
+</pre>
+<p> Scheme の関数 call/cc の処理はプリミティブ callcc で行います。call/cc に渡される関数 func を apply で呼び出します。このとき、継続 c を CONT に格納して func の引数として渡すだけです。
+</p>
+
+<p> apply のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 関数適用
+
+apply :: Env -&gt; SExpr -&gt; SExpr -&gt; Cont (Scm SExpr) (Scm SExpr)
+apply env func actuals c =
+  case func of
+    PRIM f  -&gt; f env actuals c
+    CONT c1 -&gt; case actuals of
+                 NIL -&gt; throwError $ strMsg errNEA
+                 (CELL x _) -&gt; c1 $ return x
+    CLOS (CELL parms body) lenv0 -&gt; do
+      lenv1 &lt;- makeBindings lenv0 parms actuals
+      evalBody (fst env, lenv1) body c
+    _ -&gt; throwError $ strMsg $ "Not Function: " ++ show func
+</pre>
+<p> apply も継続渡しスタイルで記述します。関数 func が PRIM f の場合はプリミティブ f を呼び出すだけです。CONT c1 の場合、継続 c1 に引数を一つ渡して評価します。このとき、apply の継続 c を評価して値を返してはいけません。ここで継続 c を破棄して、call/cc で取り出した継続 c1 を実行します。CLOS の場合、makeBindings で変数束縛を行い、evalBody で本体を評価します。
+</p>
+
+<p> evalBody も継続渡しスタイルでプログラムします。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 本体の評価
+
+evalBody :: ScmFunc
+evalBody env (CELL expr NIL) c = eval env expr c
+evalBody env (CELL expr rest) c =
+  eval env expr (\_ -&gt; evalBody env rest c)
+evalBody _ _ _ = throwError $ strMsg "invalid body form"
+</pre>
+<p> 引数の要素が残り一つの場合、それを eval で評価します。要素が複数有る場合、eval で先頭要素を評価し、その結果を継続に渡しますが、その値は捨てていることに注意してください。それから、ラムダ式の中で evalBody を再帰呼び出しします。結局、最後の S 式の評価結果を継続 c で返すことになります。
+</p>
+
+<h4>●REPL の修正</h4>
+<p> 最後に REPL (read-eval-print-loop) を修正します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : REPL
+
+initGEnv :: [(String, SExpr)]
+initGEnv = [("true",   true),
+            ("false",  false),
+
+            ・・・ 省略 ・・・
+
+            ("display", PRIM display),
+            ("newline", PRIM newline),
+            ("error",   PRIM error'),
+            ("call/cc", PRIM callcc)]
+
+repl :: Env -&gt; String -&gt; IO ()
+repl env xs = do
+  putStr "Scm&gt; "
+  hFlush stdout
+  case readSExpr xs of
+    Left  (ParseErr xs' mes) -&gt; do putStrLn mes
+                                   repl env $ dropWhile (/= '\n') xs'
+    Right (expr, xs') -&gt; do result &lt;- runErrorT $ eval env expr id
+                            case result of
+                              Left mes -&gt; putStrLn mes
+                              Right v  -&gt; print v
+                            repl env xs'
+</pre>
+<p> initGEnv には call/cc のほかに、テストで使うため display と newline を追加します。関数 repl は eval に id を渡すだけです。これで、eval の評価結果を求めて、値を表示することができます。
+</p>
+
+<p> あとの修正は簡単なので説明は割愛します。詳細は <a href="haskell39.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●簡単な実行例</h4>
+<p> それでは実際に継続を使ってみましょう。
+</p>
+<pre>
+Scm&gt; (define a false)
+a
+Scm&gt; (list 'a 'b (call/cc (lambda (k) (set! a k) 'c)) 'd)
+(a b c d)
+Scm&gt; (a 'e)
+(a b e d)
+Scm&gt; (a 'f)
+(a b f d)
+</pre>
+<p> 変数 a に取り出した継続をセットします。この場合、継続は (list 'a 'b [ ] 'd) になります。list の処理だけではなく、'd を評価する処理も残っています。継続 a に引数を渡して評価すると、[ ] の部分に継続の引数がセットされ、'd を評価して list に渡されます。したがって、(a 'e) を評価すると (a b e d) になり、(a 'f) を評価すると (a b f d) になります。正常に動作していますね。
+</p>
+<h4>●大域脱出</h4>
+<p> 次は大域脱出を試してみましょう。
+</p>
+<pre>
+Scm&gt; (define bar1 (lambda (k) (display "call bar1\n")))
+bar1
+Scm&gt; (define bar2 (lambda (k) (display "call bar2\n") (k false)))
+bar2
+Scm&gt; (define bar3 (lambda (k) (display "call bar3\n")))
+bar3
+Scm&gt; (define test (lambda (k) (bar1 k) (bar2 k) (bar3 k)))
+test
+Scm&gt; (call/cc (lambda (k) (test k)))
+call bar1
+call bar2
+false
+</pre>
+<p> bar2 からトップレベルへ脱出するので、bar3 は呼び出されていません。これも正常に動作していますね。
+</p>
+<h4>●繰り返しからの脱出</h4>
+<p> もちろん、繰り返しから脱出することもできます。次の例を見てください。
+</p>
+<pre class="list">
+リスト : do から脱出する場合
+
+(define find-do
+  (lambda (fn ls)
+    (call/cc
+      (lambda (k)
+        (do ((xs ls (cdr xs)))
+            ((null? xs) #f)
+          (if (fn (car xs)) (k (car xs))))))))
+</pre>
+<p> リスト ls から関数 fn が真を返す要素を探します。継続のテストということで、あえて do を使って実装しています。fn が真を返す場合、継続 k でその要素を返します。それでは実行してみましょう。
+</p>
+<pre>
+Scm&gt; (find-do (lambda (x) (eq? x 'c)) '(a b c d e))
+c
+Scm&gt; (find-do (lambda (x) (eq? x 'c)) '(a b d e f))
+false
+</pre>
+<p> もちろん高階関数からも脱出することができます。
+</p>
+<pre class="list">
+リスト : map から脱出する場合
+
+(define map-check (lambda (fn chk ls)
+  (call/cc
+    (lambda (k)
+      (map (lambda (x) (if (chk x) (k '()) (fn x))) ls)))))
+</pre>
+<pre>
+Scm&gt; (map-check (lambda (x) (cons x x)) (lambda (x) (eq? x 'e)) '(a b c d e))
+()
+Scm&gt; (map-check (lambda (x) (cons x x)) (lambda (x) (eq? x 'e)) '(a b c d f))
+((a . a) (b . b) (c . c) (d . d) (f . f))
+</pre>
+<p> 関数 chk が真となる要素がある場合、処理を中断して空リストを返します。これも正常に動いていますね。
+</p>
+<h4>●再帰呼び出しからの脱出</h4>
+<p> 再帰呼び出しから脱出することも簡単です。
+</p>
+<pre class="list">
+リスト : flatten の再帰呼び出しから脱出する場合
+
+(define flatten (lambda (ls)
+  (call/cc
+    (lambda (cont)
+      (letrec ((flatten-sub
+                (lambda (ls)
+                  (cond ((null? ls) '())
+                        ((not (pair? ls)) (list ls))
+                        ((null? (car ls)) (cont '()))
+                        (else (append (flatten-sub (car ls))
+                                      (flatten-sub (cdr ls))))))))
+        (flatten-sub ls))))))
+</pre>
+<p> 拙作のページ Scheme 入門 <a href="abcscm20.html">継続と継続渡しスタイル</a> で作成したプログラムと同じです。リストを平坦化する関数 flatten で、要素に空リストが含まれている場合は空リストを返します。
+</p>
+<pre>
+Scm&gt; (flatten '(a (b (c (d . e) f) g) h))
+(a b c d e f g h)
+Scm&gt; (flatten '(a (b (c (d () . e) f) g) h))
+()
+</pre>
+<p> これも正常に動作しています。
+</p>
+<h4>●イテレータの生成</h4>
+<p> 最後に、イテレータを生成する関数 make-iter を試してみます。
+</p>
+<pre class="list">
+リスト : イテレータを生成する関数
+
+(define make-iter
+  (lambda (proc . args)
+    (letrec ((iter
+              (lambda (return)
+                (apply 
+                 proc
+                 (lambda (x)             ; 高階関数に渡す関数の本体
+                   (set! return          ; 脱出先継続の書き換え
+                         (call/cc
+                          (lambda (cont)
+                            (set! iter cont)  ; 継続の書き換え
+                            (return x)))))
+                 args)
+                ; 終了後は継続 return で脱出
+                (return false))))
+            (lambda ()
+              (call/cc
+               (lambda (cont) (iter cont)))))))
+</pre>
+<pre class="list">
+リスト : 木の高階関数
+
+(define for-each-tree 
+  (lambda (fn ls)
+    (let loop ((ls ls))
+      (cond ((null? ls) '())
+            ((pair? ls)
+             (loop (car ls))
+             (loop (cdr ls)))
+            (else (fn ls))))))
+</pre>
+<p> 拙作のページ Scheme 入門 <a href="abcscm20.html">継続と継続渡しスタイル</a> で作成したプログラムと同じです。詳しい説明は <a href="abcscm20.html">継続と継続渡しスタイル</a> をお読みください。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+Scm&gt; (define a (make-iter for-each-tree '(a (b (c (d . e) f) g) h)))
+a
+Scm&gt; (a)
+a
+Scm&gt; (a)
+b
+Scm&gt; (a)
+c
+Scm&gt; (a)
+d
+Scm&gt; (a)
+e
+Scm&gt; (a)
+f
+Scm&gt; (a)
+g
+Scm&gt; (a)
+h
+Scm&gt; (a)
+false
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> 今回はここまでです。次回は継続を使った例題として、非決定性計算を行う関数 amb を作ってみましょう。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>黒川利明, 『LISP 入門』, 培風館, 1982
+  <li>Patrick Henry Winston, Berthold Klaus Paul Horn, 『LISP 原書第 3 版 (1)』, 培風館, 1992<br>
+18. Lisp で書く Lisp
+  <li>R. Kent Dybvig (著), 村上雅章 (訳), 『プログラミング言語 SCHEME』, 株式会社ピアソン・エデュケーション, 2000<br>
+9.2 Scheme のメタ循環インタプリタ
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』, アジソンウェスレイ, 1995<br>
+第 11 章 定義インタプリタ
+  <li>Harold Abelson, Gerald Jay Sussman, Julie Sussman, <a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs"</a>, <br><a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-26.html#%_sec_4.1">4.1  The Metacircular Evaluator</a>
+  <li><a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/index-j.html">稲葉雅幸</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/index-j.html">ソフトウェア特論</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/soft4-scheme-interp/index.html">Scheme インタプリタ</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+--
+-- mscheme.hs : microScheme
+--
+--              Copyright (C) 2013 Makoto Hiroi
+--
+import Data.Char
+import Data.IORef
+import qualified Data.HashTable as H
+import Control.Monad.Error
+import System.IO
+
+-- S 式の定義
+type Cont r a = (a -&gt; r) -&gt; r
+
+type ScmFunc = Env -&gt; SExpr -&gt; Cont (Scm SExpr) (Scm SExpr)
+
+data SExpr = INT  !Integer
+           | REAL !Double
+           | SYM  String
+           | STR  String
+           | CELL SExpr SExpr
+           | NIL
+           | PRIM ScmFunc
+           | SYNT ScmFunc
+           | CLOS SExpr LEnv
+           | CONT (Scm SExpr -&gt; Scm SExpr)
+           | MACR SExpr
+
+-- 等値の定義
+instance Eq SExpr where
+  INT x  == INT y  = x == y
+  REAL x == REAL y = x == y
+  SYM x  == SYM y  = x == y
+  STR x  == STR y  = x == y
+  NIL    == NIL    = True
+  _      == _      = False
+
+-- パーサエラーの定義
+data ParseErr = ParseErr String String deriving Show
+
+instance Error ParseErr where
+  noMsg    = ParseErr "" ""
+  strMsg s = ParseErr "" s
+
+-- パーサの定義
+type Parser a = Either ParseErr a
+
+-- 評価器の定義
+type Scm a = ErrorT String IO a
+
+-- ローカル環境の定義
+type LEnv = [(String, IORef SExpr)]
+
+pushLEnv :: String -&gt; SExpr -&gt; LEnv -&gt; IO LEnv
+pushLEnv s v env = do
+  a &lt;- v `seq` newIORef v
+  return ((s, a):env)
+
+lookupLEnv :: String -&gt; LEnv -&gt; IO (Maybe SExpr)
+lookupLEnv s env = 
+  case lookup s env of
+    Nothing -&gt; return Nothing
+    Just v  -&gt; do a &lt;- readIORef v
+                  return (Just a)
+
+updateLEnv :: String -&gt; SExpr -&gt; LEnv -&gt; IO (LEnv)
+updateLEnv s v env =
+  case lookup s env of
+    Nothing -&gt; pushLEnv s v env
+    Just a  -&gt; do writeIORef a v
+                  return env
+
+-- グローバルな環境
+type GEnv = H.HashTable String SExpr
+
+-- 両方の環境を保持する
+type Env = (GEnv, LEnv)
+
+-- 真偽値
+true  = SYM "true"
+false = SYM "false"
+
+-- Primitive の定義
+errNUM  = "Illegal argument, Number required"
+errINT  = "Illegal argument, Integer required"
+errNEA  = "Not enough arguments"
+errCELL = "Illegal argument, List required"
+errZERO = "Divide by zero"
+
+-- リスト操作
+car, cdr, cons, pair :: ScmFunc
+car _ NIL c = throwError $ strMsg $ "car : " ++ errNEA
+car _ (CELL (CELL a _) _) c = c $ return a
+car _ _                   c = throwError $ strMsg $ "car : " ++ errCELL
+
+cdr _ NIL c = throwError $ strMsg $ "cdr : " ++ errNEA
+cdr _ (CELL (CELL _ d) _) c = c $ return d
+cdr _ _                   c = throwError $ strMsg $ "cdr : " ++ errCELL
+
+cons _ (CELL a (CELL b _)) c = c $ return (CELL a b)
+cons _ _                   c = throwError $ strMsg $ "cons : " ++ errNEA
+
+pair _ NIL                 c = throwError $ strMsg $ "pair? : " ++ errNEA
+pair _ (CELL (CELL _ _) _) c = c $ return true
+pair _ _                   c = c $ return false
+
+-- 畳み込み
+foldCell :: (SExpr -&gt; SExpr -&gt; Scm SExpr) -&gt; SExpr -&gt; SExpr -&gt; Scm SExpr
+foldCell _ a NIL = return a
+foldCell f a (CELL x rest) = do v &lt;- f a x
+                                foldCell f v rest
+foldCell _ _ _ = throwError $ strMsg $ errCELL
+
+-- 四則演算
+adds, subs, muls, divs, mod' :: ScmFunc
+add, sub, mul, div' :: SExpr -&gt; SExpr -&gt; Scm SExpr
+
+add (INT x)  (INT y)  = return (INT (x + y))
+add (INT x)  (REAL y) = return (REAL (fromIntegral x + y))
+add (REAL x) (INT y)  = return (REAL (x + fromIntegral y))
+add (REAL x) (REAL y) = return (REAL (x + y))
+add _        _        = throwError $ strMsg $ "+ : " ++ errNUM
+
+adds _ xs c = c $ foldCell add (INT 0) xs
+
+sub (INT x)  (INT y)  = return (INT (x - y))
+sub (INT x)  (REAL y) = return (REAL (fromIntegral x - y))
+sub (REAL x) (INT y)  = return (REAL (x - fromIntegral y))
+sub (REAL x) (REAL y) = return (REAL (x - y))
+sub _        _        = throwError $ strMsg $ "- : " ++ errNUM
+
+subs _ (CELL (INT a) NIL)  c = c $ return (INT (-a))
+subs _ (CELL (REAL a) NIL) c = c $ return (REAL (-a))
+subs _ (CELL a rest) c = c $ foldCell sub a rest
+subs _ _ _ = throwError $ strMsg $ "- : " ++ errNEA
+
+mul (INT x)  (INT y)  = return (INT (x * y))
+mul (INT x)  (REAL y) = return (REAL (fromIntegral x * y))
+mul (REAL x) (INT y)  = return (REAL (x * fromIntegral y))
+mul (REAL x) (REAL y) = return (REAL (x * y))
+mul _        _        = throwError $ strMsg $ "- : " ++ errNUM
+
+muls _ xs c = c $ foldCell mul (INT 1) xs
+
+div' _        (INT 0)  = throwError $ strMsg errZERO
+div' _        (REAL 0) = throwError $ strMsg errZERO
+div' (INT x)  (INT y)  = return (INT (x `div` y))
+div' (INT x)  (REAL y) = return (REAL (fromIntegral x / y))
+div' (REAL x) (INT y)  = return (REAL (x / fromIntegral y))
+div' (REAL x) (REAL y) = return (REAL (x / y))
+div' _        _        = throwError $ strMsg $ "- : " ++ errNUM
+
+divs _ (CELL a NIL)  c = c $ div' (INT 1) a
+divs _ (CELL a rest) c = c $ foldCell div' a rest
+divs _ _ _ = throwError $ strMsg $ "/ : " ++ errNEA
+
+mod' _ NIL          c = throwError $ strMsg $ "mod : " ++ errNEA
+mod' _ (CELL _ NIL) c = throwError $ strMsg $ "mod : " ++ errNEA
+mod' _ (CELL _ (CELL (INT 0) _))  c = throwError $ strMsg errZERO
+mod' _ (CELL _ (CELL (REAL 0) _)) c = throwError $ strMsg errZERO
+mod' _ (CELL (INT x) (CELL (INT y) _)) c = c $ return (INT (mod x y))
+mod' _ _ _ = throwError $ strMsg $ "mod : " ++ errINT
+
+-- 等値の判定
+eq', equal' :: ScmFunc
+
+eq' _ (CELL x (CELL y _)) c =
+  if x == y then c (return true) else c (return false)
+eq' _ _ _ = throwError $ strMsg $ "eq : " ++ errNEA
+
+equal' _ (CELL x (CELL y _)) c =
+  if iter x y then c (return true) else c (return false)
+  where iter (CELL a b) (CELL c d) = iter a c &amp;&amp; iter b d
+        iter x y = x == y
+equal' _ _ _ = throwError $ strMsg $ "equal : " ++ errNEA
+
+-- 数値の比較演算子
+compareNum :: SExpr -&gt; SExpr -&gt; Scm Ordering
+compareNum (INT x)  (INT y)  = return $ compare x y
+compareNum (INT x)  (REAL y) = return $ compare (fromIntegral x) y
+compareNum (REAL x) (INT y)  = return $ compare x (fromIntegral y)
+compareNum (REAL x) (REAL y) = return $ compare x y
+compareNum _ _ = throwError $ strMsg errNUM
+
+compareNums :: (Ordering -&gt; Bool) -&gt; SExpr -&gt; Cont (Scm SExpr) (Scm SExpr)
+compareNums _ NIL          _ = throwError $ strMsg errNEA
+compareNums _ (CELL _ NIL) _ = throwError $ strMsg errNEA
+compareNums p (CELL x (CELL y NIL)) c = do
+  r &lt;- compareNum x y
+  if p r then c (return true) else c (return false)
+compareNums p (CELL x ys@(CELL y _)) c = do
+  r &lt;- compareNum x y
+  if p r then compareNums p ys c else c (return false)
+compareNums _ _ _ = throwError $ strMsg "invalid function form"
+
+eqNum, ltNum, gtNum, ltEq, gtEq :: ScmFunc
+eqNum _ = compareNums (== EQ)
+ltNum _ = compareNums (== LT)
+gtNum _ = compareNums (== GT)
+ltEq  _ = compareNums (&lt;= EQ)
+gtEq  _ = compareNums (&gt;= EQ)
+
+
+-- apply
+apply' :: ScmFunc
+apply' _ (CELL _ NIL) _ = throwError $ strMsg $ "apply : " ++ errNEA
+apply' env (CELL func args) c = do
+  xs &lt;- iter args
+  apply env func xs c
+  where iter (CELL NIL NIL) = return NIL
+        iter (CELL xs@(CELL _ _) NIL) = return xs
+        iter (CELL _ NIL) = throwError $ strMsg $ "apply : " ++ errCELL
+        iter (CELL x xs) = do ys &lt;- iter xs
+                              return (CELL x ys)
+apply' _ _ _ = throwError $ strMsg $ "apply : " ++ errNEA
+
+-- call/cc
+callcc :: ScmFunc
+callcc env (CELL func _) c = 
+  apply env func (CELL (CONT c) NIL) c
+callcc _ _ _ = throwError $ strMsg $ "call/cc " ++ errNEA
+
+-- S 式の表示
+display :: ScmFunc
+display _ (CELL x _) c = do case x of
+                              STR s -&gt; lift $ putStr s
+                              _     -&gt; lift $ putStr $ show x
+                            c $ return NIL
+display _ _ _ = throwError $ strMsg $ "display : " ++ errNEA
+
+-- 改行
+newline :: ScmFunc
+newline _ _ c = do lift $ putStrLn ""
+                   c $ return NIL
+
+-- エラー
+error' :: ScmFunc
+error' _ (CELL (STR x) NIL) c = throwError $ strMsg $ "ERROR: " ++ x
+error' _ (CELL (STR x) (CELL y _)) c = throwError $ strMsg $ "ERROR: " ++ x ++ " " ++ show y
+error' _ (CELL x _) c = throwError $ strMsg $ "ERROR: " ++ show x
+error' _ _ _ = throwError $ strMsg "ERROR: "
+
+-- load
+load :: ScmFunc
+load env (CELL (STR filename) _) c = do
+  xs &lt;- lift $ readFile filename
+  r &lt;- lift $ iter xs
+  if r then c (return true) else c (return false)
+  where
+    iter :: String -&gt; IO Bool
+    iter xs = 
+      case readSExpr xs of
+        Left  (ParseErr xs' mes) -&gt; if mes == "EOF"
+                                      then return True
+                                      else do print mes
+                                              return False
+        Right (expr, xs') -&gt; do result &lt;- runErrorT $ eval env expr id
+                                case result of
+                                  Left mes -&gt; do print mes
+                                                 return False
+                                  Right _  -&gt; iter xs'
+load _ _ _ = throwError $ strMsg "invalid load form"
+
+--
+-- S 式の表示
+--
+showCell :: SExpr -&gt; String
+showCell (CELL a d) =
+  show a ++ case d of
+              NIL      -&gt; ""
+              PRIM _   -&gt; "&lt;primitive&gt;"
+              CLOS _ _ -&gt; "&lt;closure&gt;"
+              SYNT _   -&gt; "&lt;syntax&gt;"
+              MACR _   -&gt; "&lt;macro&gt;"
+              CONT _   -&gt; "&lt;continuation&gt;"
+              INT x    -&gt; " . " ++ show x
+              REAL x   -&gt; " . " ++ show x
+              SYM x    -&gt; " . " ++ x
+              STR x    -&gt; " . " ++ show x
+              _        -&gt; " " ++ showCell d
+showCell xs = show xs
+
+instance Show SExpr where
+  show (INT x)    = show x
+  show (REAL x)   = show x
+  show (SYM x)    = x
+  show (STR x)    = show x
+  show NIL        = "()"
+  show (SYNT _)   = "&lt;syntax&gt;"
+  show (PRIM _)   = "&lt;primitive&gt;"
+  show (CLOS _ _) = "&lt;closure&gt;"
+  show (MACR _)   = "&lt;macro&gt;"
+  show (CONT _)   = "&lt;continuation&gt;"
+  show xs         = "(" ++ showCell xs ++ ")"
+
+--
+-- S 式の読み込み
+--
+
+isAlpha' :: Char -&gt; Bool
+isAlpha' x = elem x "!$%&amp;*+-/:&lt;=&gt;?@^_~"
+
+isIdent0 :: Char -&gt; Bool
+isIdent0 x = isAlpha x || isAlpha' x
+
+isIdent1 :: Char -&gt; Bool
+isIdent1 x = isAlphaNum x || isAlpha' x
+
+isREAL :: Char -&gt; Bool
+isREAL x = elem x ".eE"
+
+quote           = SYM "quote"
+quasiquote      = SYM "quasiquote"
+unquote         = SYM "unquote"
+unquoteSplicing = SYM "unquote-splicing"
+
+isNUM :: String -&gt; Bool
+isNUM (x:_) = isDigit x
+isNUM _     = False
+
+getNumber :: String -&gt; Parser (SExpr, String)
+getNumber xs =
+  let (s, ys) = span isDigit xs
+  in if not (null ys) &amp;&amp; isREAL (head ys)
+     then case reads xs of
+            [] -&gt; throwError noMsg  -- ありえないエラー
+            [(y', ys')] -&gt; return (REAL y', ys')
+     else return (INT (read s), ys)
+
+readSExpr :: String -&gt; Parser (SExpr, String)
+readSExpr [] = throwError $ strMsg "EOF"
+readSExpr (x:xs) 
+  | isSpace x  = readSExpr xs
+  | isDigit x  = getNumber (x:xs)
+  | isIdent0 x = if x == '+' &amp;&amp; isNUM xs
+                 then getNumber xs
+                 else if x == '-' &amp;&amp; isNUM xs
+                 then do (y, ys) &lt;- getNumber xs
+                         case y of
+                           INT x  -&gt; return (INT  (- x), ys)
+                           REAL x -&gt; return (REAL (- x), ys)
+                 else let (name, ys) = span isIdent1 (x:xs)
+                      in return (SYM name, ys)
+  | otherwise  =
+      case x of
+        '('  -&gt; readCell 0 xs
+        ';'  -&gt; readSExpr $ dropWhile (/= '\n') xs
+        '"'  -&gt; case reads (x:xs) of
+                  [] -&gt; throwError noMsg
+                  [(y, ys)] -&gt; return (STR y, ys)
+        '\'' -&gt; readSExpr xs &gt;&gt;= \(e, ys) -&gt; return (CELL quote (CELL e NIL), ys)
+        '`'  -&gt; readSExpr xs &gt;&gt;= \(e, ys) -&gt; return (CELL quasiquote (CELL e NIL), ys)
+        ','  -&gt; if not (null xs) &amp;&amp; head xs == '@'
+                  then readSExpr (tail xs) &gt;&gt;= \(e, ys) -&gt; return (CELL unquoteSplicing (CELL e NIL), ys)
+                  else readSExpr xs &gt;&gt;= \(e, ys) -&gt; return (CELL unquote (CELL e NIL), ys)
+        _    -&gt; throwError $ ParseErr xs ("unexpected token: " ++ show x)
+
+readCell :: Int -&gt; String -&gt; Parser (SExpr, String)
+readCell _ [] = throwError $ strMsg "EOF"
+readCell n (x:xs)
+  | isSpace x = readCell n xs
+  | otherwise =
+      case x of
+        ')' -&gt; return (NIL, xs)
+        '.' -&gt; if n == 0
+               then throwError $ ParseErr xs "invalid dotted list"
+               else do (e, ys) &lt;- readSExpr xs
+                       case dropWhile isSpace ys of
+                         ')':zs -&gt; return (e, zs)
+                         _      -&gt; throwError $ ParseErr xs "invalid dotted list"
+        '(' -&gt; do (a, ys) &lt;- readCell 0 xs
+                  (d, zs) &lt;- readCell 1 ys
+                  return (CELL a d, zs)
+        _   -&gt; do (a, ys) &lt;- readSExpr (x:xs)
+                  (d, zs) &lt;- readCell 1 ys
+                  return (CELL a d, zs)
+
+--
+-- S 式の評価
+--
+eval :: ScmFunc
+eval env NIL        c = c $ return NIL
+eval env v@(INT _)  c = c $ return v
+eval env v@(REAL _) c = c $ return v
+eval env v@(STR _)  c = c $ return v
+eval env (SYM name) c = do
+  a &lt;- liftIO $ lookupLEnv name $ snd env
+  case a of
+    Nothing -&gt; do b &lt;- liftIO $ H.lookup (fst env) name
+                  case b of
+                    Nothing -&gt; throwError $ strMsg $ "unbound variable: " ++ name
+                    Just v  -&gt; c $ return v
+    Just v -&gt; c $ return v
+eval env (CELL func args) c =
+  eval env func (\m -&gt;
+    do v &lt;- m
+       case v of
+         SYNT f -&gt; f env args c
+         MACR f -&gt; apply env f args (\m1 -&gt; do expr &lt;- m1
+                                               eval env expr c)
+         _      -&gt; evalArguments env args (\m2 -&gt; do vs &lt;- m2
+                                                     apply env v vs c))
+
+-- 引数の評価
+evalArguments :: ScmFunc
+evalArguments env NIL c = c $ return NIL
+evalArguments env (CELL expr rest) c =
+  eval env
+       expr
+       (\m1 -&gt; evalArguments env
+                             rest
+                             (\m2 -&gt; do v  &lt;- m1
+                                        vs &lt;- m2
+                                        c $ return (CELL v vs)))
+evalArguments _ _ _ = throwError $ strMsg "invalid function form"
+
+-- 変数束縛
+makeBindings :: LEnv -&gt; SExpr -&gt; SExpr -&gt; Scm LEnv
+makeBindings lenv NIL        _    = return lenv
+makeBindings lenv (SYM name) rest = lift $ pushLEnv name rest lenv
+makeBindings lenv (CELL (SYM name) parms) (CELL v args) = do
+  lenv' &lt;- makeBindings lenv parms args
+  lift (pushLEnv name v lenv')
+makeBindings _ _ NIL = throwError $ strMsg errNEA
+makeBindings _ _ _   = throwError $ strMsg "invalid arguments form"
+
+-- 関数適用
+apply :: Env -&gt; SExpr -&gt; SExpr -&gt; Cont (Scm SExpr) (Scm SExpr)
+apply env func actuals c =
+  case func of
+    PRIM f  -&gt; f env actuals c
+    CONT c1 -&gt; case actuals of
+                 NIL -&gt; throwError $ strMsg errNEA
+                 (CELL x _) -&gt; c1 $ return x
+    CLOS (CELL parms body) lenv0 -&gt; do
+      lenv1 &lt;- makeBindings lenv0 parms actuals
+      evalBody (fst env, lenv1) body c
+    _ -&gt; throwError $ strMsg $ "Not Function: " ++ show func
+
+-- 本体の評価
+evalBody :: ScmFunc
+evalBody env (CELL expr NIL) c = eval env expr c
+evalBody env (CELL expr rest) c =
+  eval env expr (\_ -&gt; evalBody env rest c)
+evalBody _ _ _ = throwError $ strMsg "invalid body form"
+
+--
+-- シンタックス形式
+--
+
+-- quote
+evalQuote :: ScmFunc
+evalQuote env (CELL expr _) c = c $ return expr
+evalQuote _ _ _ = throwError $ strMsg "invalid quote form"
+
+-- define
+evalDef :: ScmFunc
+evalDef env (CELL sym@(SYM name) (CELL expr NIL)) c =
+  eval env expr (\m -&gt; do
+    v &lt;- m
+    lift $ H.update (fst env) name v
+    c $ return sym)
+evalDef _ _ _ = throwError $ strMsg "invalid define form"
+
+-- define-macro
+evalDefM :: ScmFunc
+evalDefM env (CELL sym@(SYM name) (CELL expr NIL)) c =
+  eval env expr (\m -&gt; do
+    v &lt;- m
+    lift $ H.update (fst env) name (MACR v)
+    c $ return sym)
+evalDefM _ _ _ = throwError $ strMsg "invalid define-macro form"
+
+-- if
+evalIf :: ScmFunc
+evalIf env (CELL pred (CELL thenForm rest)) c =
+  eval env pred (\m -&gt; do
+    v &lt;- m
+    if v /= false
+    then eval env thenForm c
+    else case rest of
+           CELL elseForm _ -&gt; eval env elseForm c
+           _               -&gt; c $ return false)
+evalIf _ _ _ = throwError $ strMsg $ "if : " ++ errNEA
+
+-- lambda
+evalLambda :: ScmFunc
+evalLambda env expr c = c $ return (CLOS expr (snd env))
+
+-- set!
+evalSet :: ScmFunc
+evalSet env (CELL (SYM name) (CELL expr _)) c =
+  eval env expr (\m -&gt; do
+    v &lt;- m
+    a &lt;- lift $ lookupLEnv name (snd env)
+    case a of
+      Nothing -&gt; do b &lt;- lift $ H.lookup (fst env) name
+                    case b of
+                      Nothing -&gt; throwError $ strMsg $ "unbound variable: " ++ name
+                      Just _ -&gt; do lift $ H.update (fst env) name v
+                                   c $ return v
+      Just _  -&gt; do lift $ updateLEnv name v (snd env)
+                    c $ return v)
+evalSet _ _ _ = throwError (strMsg "invalid set! form")
+
+--
+-- 大域変数の初期化
+--
+initGEnv :: [(String, SExpr)]
+initGEnv = [("true",   true),
+            ("false",  false),
+            ("quote",  SYNT evalQuote),
+            ("define", SYNT evalDef),
+            ("lambda", SYNT evalLambda),
+            ("if",     SYNT evalIf),
+            ("set!",   SYNT evalSet),
+            ("define-macro", SYNT evalDefM),
+            ("eq?",    PRIM eq'),
+            ("equal?", PRIM equal'),
+            ("pair?",  PRIM pair),
+            ("+",      PRIM adds),
+            ("-",      PRIM subs),
+            ("*",      PRIM muls),
+            ("/",      PRIM divs),
+            ("mod",    PRIM mod'),
+            ("=",      PRIM eqNum),
+            ("&lt;",      PRIM ltNum),
+            ("&gt;",      PRIM gtNum),
+            ("&lt;=",     PRIM ltEq),
+            ("&gt;=",     PRIM gtEq),
+            ("car",    PRIM car),
+            ("cdr",    PRIM cdr),
+            ("cons",   PRIM cons),
+            ("load",   PRIM load),
+            ("apply",  PRIM apply'),
+            ("display", PRIM display),
+            ("newline", PRIM newline),
+            ("error",   PRIM error'),
+            ("call/cc", PRIM callcc)]
+
+-- read-eval-print-loop
+repl :: Env -&gt; String -&gt; IO ()
+repl env xs = do
+  putStr "Scm&gt; "
+  hFlush stdout
+  case readSExpr xs of
+    Left  (ParseErr xs' mes) -&gt; do putStrLn mes
+                                   repl env $ dropWhile (/= '\n') xs'
+    Right (expr, xs') -&gt; do result &lt;- runErrorT $ eval env expr id
+                            case result of
+                              Left mes -&gt; putStrLn mes
+                              Right v  -&gt; print v
+                            repl env xs'
+
+main :: IO ()
+main = do
+  xs &lt;- hGetContents stdin
+  ht &lt;- H.fromList H.hashString initGEnv
+  repl (ht, []) xs
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell38.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell40.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

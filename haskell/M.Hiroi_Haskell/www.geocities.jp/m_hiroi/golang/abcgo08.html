@@ -1,0 +1,1141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Go 言語プログラミング入門</title>
+  <meta name="description" content="Go,Golang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881805</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Go Language Programming</h1>
+<h2>お気楽 Go 言語プログラミング入門</h2>
+<div class="small">
+[ <a href="abcgo07.html">PrevPage</a> | <a href="index.html">Golang</a> | <a href="abcgo09.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>構造体 (2)</h3>
+<p> 構造体の続きです。今回は構造体の「埋め込み」について説明します。
+</p>
+
+<h4>●構造体の埋め込み</h4>
+<p> 構造体は自分の中に既存の構造体を格納することができます。ただし、自分自身を格納することはできません。このとき、フィールド名を省略すると、既存の構造体を取り込んで、そのデータ構造やメソッドを引き継ぐことができます。Go 言語ではこれを「埋め込み」といいます。
+</p>
+<p> 簡単な例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 構造体の埋め込み (sample81.go)
+
+package main
+
+import "fmt"
+
+// Foo の定義
+type Foo struct {
+    a, b int
+}
+
+func (x Foo) printA() {
+    fmt.Println("a =", x.a)
+}
+
+func (x Foo) printB() {
+    fmt.Println("b =", x.b)
+}
+
+// Bar の定義
+type Bar struct {
+    foo Foo
+    c   int
+}
+
+func (x Bar) printC() {
+    fmt.Println("c =", x.c)
+}
+
+// Baz の定義
+type Baz struct {
+    Foo
+    c int
+}
+
+// オーバーライド
+func (x Baz) printB() {
+    fmt.Print("Baz:")
+    x.Foo.printB()
+}
+
+func (x Baz) printC() {
+    fmt.Println("c =", x.c)
+}
+
+//
+func main() {
+    x := Foo{1, 2}
+    y := Bar{Foo{10, 20}, 30}
+    z := Baz{Foo{100, 200}, 300}
+    x.printA()
+    x.printB()
+    y.foo.printA()
+    y.foo.printB()
+    y.printC()
+    z.printA()
+    z.printB()
+    z.printC()
+ }
+</pre>
+<p> 構造体 Foo はフィールド a, b int と、メソッド printA, printB があります。構造体 Bar はフィールド foo Foo, c int とメソッド printC があります。フィールド名を指定しているので、Foo は Bar に埋め込まれていません。これに対し、構造体 baz はフィールド名なしに Foo を指定しているので、Foo は Baz に埋め込まれます。これを「匿名フィールド」といいます。
+</p>
+<p> Bar が変数 y に格納されている場合、フィールド c は y.c でアクセスできますが、Foo のフィールド a, b はフィールド名 foo を使って、y.foo.a, y.foo.b としないとアクセスできません。これに対し、Baz が変数 z に格納されている場合、フィールド a, b, c は z.a, z.b, z.c でアクセスすることができます。同様に、メソッド PrintA の呼び出しも Bar からは y.foo.printA() としなければいけませんが、Baz であれば z.printA() と呼び出すことができます。
+</p>
+<p> 埋め込まれた構造体のメソッドとは異なる働きをするメソッドを定義することもできます。これをメソッドの「オーバーライド (override) 」といいます。たとえば、Foo のメソッド printB をオーバーライドするのであれば、メソッド func (x Baz) printB() を定義するだけです。このメソッドから Foo の printA を呼び出す場合は、x.Foo.printA() とします。このとき、埋め込まれた構造体の型名がフィールド名と同じ働きをすることに注意してください。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+C&gt;go run sample81.go
+a = 1
+b = 2
+a = 10
+b = 20
+c = 30
+a = 100
+Baz:b = 200
+c = 300
+</pre>
+<h4>●埋め込みと継承の相違点</h4>
+<p> 埋め込みの動作はオブジェクト指向プログラミングの「継承 (inheritance : インヘリタンス) 」と似ていますが、大きな違いもあります。継承は簡単に言うとクラスに「親子関係」を持たせる機能です。子供のクラスは親クラスの性質を受け継ぐことができます。プログラミング言語の場合、引き継ぐ性質は定義されたフィールド変数やメソッドになります。
+</p>
+
+<p> このほかにも、オブジェクト指向言語によっては「データ型」を引き継ぐ場合があります。たとえば Java の場合、クラス名はデータ型を表す識別子として利用することができます。継承はフィールド変数やメソッドに作用するだけではなく、データ型にも作用します。サブクラスに属するオブジェクトはデータ型も継承されるため、スーパークラスのデータ型として取り扱うことができます。
+</p>
+
+<p> Go 言語の場合、構造体を埋め込むとそのメソッドやフィールドを引き継ぐことはできますが、型を引き継ぐことはできません。たとえば、一般的なオブジェクト指向言語でクラス Foo を継承してクラス Bar を定義すると、型 Foo で宣言されている変数に Bar のオブジェクトを代入することができます。Java ではこれを「アップキャスト」といいます。Go 言語では、構造体 Bar に Foo を埋め込んだとしても、Bar の型はあくまでも Bar であり、型 Foo で宣言されている変数に Bar を代入することはできません。
+</p>
+
+<p> Foo と Bar を同じ型として扱いたい場合、Go 言語では「インターフェース (interface) 」という機能を使います。インターフェースについては次回に詳しく説明する予定です。
+</p>
+
+<h4>●複数の構造体の埋め込み</h4>
+<p> 構造体の埋め込みはひとつだけはなく、複数の構造体を埋め込むこともできます。ただし、埋め込む構造体で重複したフィールド名やメソッド名があると問題が発生します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 複数の構造体の埋め込み (sample82.go)
+
+package main
+
+import "fmt"
+
+// Foo の定義
+type Foo struct {
+    a, b int
+}
+
+func (p *Foo) printA() {
+    fmt.Println(p.a)
+}
+
+func (p *Foo) printB() {
+    fmt.Println(p.b)
+}
+
+// Bar の定義
+type Bar struct {
+    a, c int
+}
+
+func (p *Bar) printA() {
+    fmt.Println(p.a)
+}
+
+func (p *Bar) printC() {
+    fmt.Println(p.c)
+}
+
+// Baz の定義
+type Baz struct {
+    Foo
+    Bar
+}
+
+func main() {
+    x := new(Baz)
+    x.Bar.a = 10    // x.a はコンパイルエラー
+    x.b = 20
+    x.c = 30
+    x.Foo.printA()  // x.printA() はコンパイルエラー
+    x.printB()
+    x.printC()
+}
+</pre>
+<pre>
+C&gt;go run sample82.go
+0
+20
+30
+</pre>
+<p> 構造体 Baz は Foo と Bar を埋め込んでいますが、Foo と Bar でフィールド a とメソッド printA が重複しています。このような場合、x.a とか x.printA() とするとコンパイルエラーになります。フィールド a やメソッド printA は Foo と Bar の両方にあるので、どちらにアクセスしたらよいかコンパイラが判断できないのです。
+</p>
+
+<p> この問題は「多重継承」をサポートしているオブジェクト指向言語でも発生することがあります。多重継承は複数のクラスを継承する機能です。たとえばＣ++の場合、多重継承したクラスに同名のメソッドがあると、どちらを呼び出すのか明確に指定しないとコンパイルでエラーとなります。またＣ++はメンバ変数 (フィールド変数のこと) も継承されるため、変数名の衝突も発生します。この場合も、どちらの変数を使用するのか明確に指定しないとコンパイルエラーとなります。
+</p>
+
+<p> Go 言語の場合も匿名フィールドを指定することでコンパイルエラーを回避することができます。たとえば、Bar のフィールド a を使いたい場合は x.bar.a とし、Foo のメソッド printA を呼び出したい場合は x.Foo.printA() とします。複数の構造体を埋め込む場合はフィールドやメソッドの衝突にご注意ください。
+</p>
+
+<h4>●制限付き連結リスト</h4>
+<p> それでは簡単な例題として、前回作成した連結リスト List を埋め込んで、格納する要素数を制限する連結リスト FixedList という構造体を作ってみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 制限付き連結リスト
+
+// 制限つき連結リスト
+type FixedList struct {
+    List
+    size, limit int
+}
+
+// 制限つき連結リストの生成
+func newFixedList(limit int) *FixedList {
+    p := new(FixedList)
+    p.top = new(Cell)
+    p.limit = limit
+    return p
+}
+
+// データの挿入
+func (p *FixedList) insertNth(n, x int) bool {
+    if p.size &gt;= p.limit { return false }
+    result := p.List.insertNth(n, x)
+    if result { p.size++ }
+    return result
+}
+
+// データの削除
+func (p *FixedList) deleteNth(n int) bool {
+    result := p.List.deleteNth(n)
+    if result { p.size-- }
+    return result
+}
+</pre>
+
+<p> FixedList は指定した上限値までしか要素を格納できません。List で要素を追加するメソッドは insertNth で、削除するメソッドは deleteNth です。この 2 つのメソッドをオーバーライドすることで、FixedList の機能を実現することができます。
+</p>
+
+<p> 構造体 FixedList の定義は簡単です。フィールドは匿名フィールド List、上限値を表す limit、リストの要素数を表す size の 3 つです。FixedList を生成する関数 newFixedList では、new で FixedList のメモリを確保し、フィールド top にヘッダーセルをセットします。そして、フィールド limit に上限値 limt をセットします。
+</p>
+
+<p> insertNth では limit と size を比較して、size が limit よりも小さい場合はデータを挿入します。List のメソッド insertNth を呼び出して、データを挿入できた場合は size を +1 します。deleteNth の場合、List のメソッド deleteNth を呼び出して、データを削除できたら size を -1 します。これで、連結リストに格納される要素数を管理することができます。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre class="list">
+リスト : 簡単な実行例
+
+func main() {
+    a := newList()
+    for i := 0; i &lt; 8; i++ {
+        fmt.Println(a.insertNth(i, i))
+    }
+    a.printList()
+    for i := 0; i &lt; 8; i++ {
+        n, ok := a.nth(i)
+        fmt.Println(n, ok)
+    }
+    for !a.isEmpty() {
+        a.deleteNth(0)
+        a.printList()
+    }
+    b := newFixedList(6)
+    for i := 0; i &lt; 8; i++ {
+        fmt.Println(b.insertNth(i, i))
+    }
+    b.printList()
+    for i := 0; i &lt; 8; i++ {
+        fmt.Println(b.nth(i))
+    }
+    for !b.isEmpty() {
+        b.deleteNth(0)
+        b.printList()
+    }
+}
+</pre>
+<pre>
+C&gt;go run linkedlist.go
+true
+true
+true
+true
+true
+true
+true
+true
+0 1 2 3 4 5 6 7
+0 true
+1 true
+2 true
+3 true
+4 true
+5 true
+6 true
+7 true
+1 2 3 4 5 6 7
+2 3 4 5 6 7
+3 4 5 6 7
+4 5 6 7
+5 6 7
+6 7
+7
+
+true
+true
+true
+true
+true
+true
+false
+false
+0 1 2 3 4 5
+0 true
+1 true
+2 true
+3 true
+4 true
+5 true
+0 false
+0 false
+1 2 3 4 5
+2 3 4 5
+3 4 5
+4 5
+5
+
+</pre>
+
+<p> 正常に動作していますね。このように List を埋め込むことで、FixedList を簡単にプログラムすることができます。
+</p>
+<h4>●スタック</h4>
+<p> 次は連結リストを使って「スタック (stack) 」という基本的なデータ構造を作ってみましょう。次の図を見てください。
+</p>
+<pre class="fig">
+    |-----|     |[ A ]|     |[ B ]|     |[ A ]|     |-----|
+    |  |  |     |-----|     |[ A ]|     |-----|     |  |  |
+    |  |  |     |  |  |     |-----|     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    +-----+     +-----+     +-----+     +-----+     +-----+
+  1. 空の状態  2. PUSH A   3. PUSH B   4. POP B    5. POP A  
+
+                   図 : スタックの動作例
+</pre>
+<p> 上図はバネがついた容器を表していて、上から品物を出し入れすることができます。初めは空の状態です。ここに品物を乗せると、重さによってバネを圧縮し、品物が容器に格納されます。さらにもうひとつ品物を上に乗せると、さらにバネを圧縮し、その品物も容器に格納することができます。バネが限界まで圧縮されると、もう品物は追加できなくなります。取り出す場合は、上にある品物から行います。ひとつ取り出すと、その分バネが伸びて下にある品物が上に押し出されます。
+</p>
+
+<p> この容器の動作がスタックの動作になります。スタックにデータを追加する操作をプッシュ (PUSH) といい、スタックからデータを取り出す操作をポップ (POP) といいます。品物をデータに見立てれば、データ A をスタックにプッシュし (2)、次にデータ B をプッシュします (3)。データを取り出す場合、あとから入れたデータ B が先にポップされ (4)、その次にデータ A がポップされてスタックが空になります (5)。
+</p>
+
+<p> このように、スタックはあとから入れたデータが先に取り出されるので、後入れ先出し (LIFO : Last-In, First-Out) と呼ばれます。 
+</p>
+
+<h4>●is-a 関係と has-a 関係</h4>
+<p> オブジェクト指向プログラミングの場合、関数とデータをひとつにまとめたものがオブジェクトで、このオブジェクトを部品として扱います。実際には、クラス単位でプログラムを作るので、クラス間の関係がとても重要になります。Go 言語の場合、オブジェクトは構造体とメソッドになるので、構造体の関係がとても重要になります。ここで、クラス (構造体) 間の関係を表す is-a と has-a について簡単に説明します。
+</p>
+
+<p> is-a 関係は X is a Y. の略で、「X は Y の一種である」という意味になります。X がサブクラスで Y をスーパークラスと考えると、is-a 関係は継承で表すことができます。Go 言語の場合、継承は構造体の埋め込みで実現できます。たとえば、FixedList は格納する要素数に制限がありますが連結リストの一種であることは明らかです。FixedList は List を埋め込むことで簡単に実装できましたが、それは連結リストとの間に is-a 関係があるからです。
+</p>
+
+<p> has-a 関係は X has a Y. の略で、「X は Y を持っている」という意味です。たとえば、車にはエンジンやタイヤがありますが、車とエンジンやタイヤに成り立つ関係が has-a です。車はエンジンやタイヤがないと走ることができません。このように、has-a 関係は「X が成立するのに欠かせない要素が Y である」という関係を表しています。
+</p>
+
+<p> has-a 関係のほかに、is-implemented-using という関係があります。これは X is implemented using Y. の略で、「X は Y を使って実装される」という意味です。スタックの場合、配列 (スライス) でも連結リストでも実装することが可能です。つまり、Y の種類によらず X を実現できる関係が is-implemented-using 関係なのです。
+</p>
+
+<p> 一般に、has-a 関係や is-implemented-using 関係は、クラス X のフィールド変数にクラス Y のオブジェクトを格納することで表します。これを「X は Y を包含している」といいます。Go 言語の場合、構造体を埋め込まないで、フィールドに格納することで実現できます。そして、これらの関係を表すのに継承を使ってはいけない、ということに注意してください。
+</p>
+
+<p> たとえば、連結リストを埋め込んでスタックを作ることを考えてみましょう。PUSH は連結リストの先頭にデータを追加することで、POP は連結リストの先頭からデータを取り出すことで簡単に実現できます。しかし、連結リストを埋め込むと、ほかの操作も可能になります。スタックの途中にデータを追加したり、途中からデータを取り出すなど、スタックを破壊する危険な操作が可能になってしまいます。構造体の埋め込みは強力な機能ですが万能ではありません。構造体の関係を考えて、適切に使うことが大切です。 
+</p>
+
+<h4>●スタックの実装</h4>
+<p> それでは、実際に連結リストを使ってスタックを実装してみましょう。型名は Stack とし、次の表に示すメソッドを定義します。
+</p>
+<table border=1>
+<caption>表 : スタックのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>(st *Stack) push(x int)  </td><td>スタックにデータを追加する</td></tr>
+  <tr><td>(st *Stack) pop() (int, bool) </td><td>スタックからデータを取り出す</td></tr>
+  <tr><td>(st *Stack) top() (int, bool) </td><td>スタックの先頭データを返す</td></tr>
+  <tr><td>(st *Stack) isEmpty() bool</td><td>スタックが空ならば True を返す</td></tr>
+</tbody>
+</table>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : スタック
+
+// スタック
+type Stack struct {
+    content *List
+}
+
+// スタックの生成
+func newStack() *Stack {
+    st := new(Stack)
+    st.content = newList()
+    return st
+}
+
+// 挿入
+func (st *Stack) push(x int) {
+    st.content.insertNth(0, x)
+}
+
+// 削除
+func (st *Stack) pop() (int, bool) {
+    x, ok := st.content.nth(0)
+    if ok { st.content.deleteNth(0) }
+    return x, ok
+}
+
+// 参照
+func (st *Stack) top() (int, bool) {
+    return st.content.nth(0)
+}
+
+// スタックは空か？
+func (st *Stack) isEmpty() bool {
+    return st.content.isEmpty()
+}
+</pre>
+<p> 関数 newStack はフィールド content に newList の返り値をセットします。メソッド push はスタックにデータ x を追加します。これは連結リストの先頭に x を追加すればいいので、メソッド insertNth(0, x) を呼び出すだけです。メソッド pop は連結リストの先頭の要素を削除してそれを返します。メソッド nth で先頭データを取り出し、deleteNth で先頭データを削除します。メソッド top は先頭のデータを削除せずに返し、メソッド isEmpty() はスタックが空の場合は true を返します。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+
+<pre class="list">
+リスト : 簡単なテスト
+
+func main() {
+    // リスト
+    ・・・ 省略 ・・・
+    // スタック
+    st := newStack()
+    for i := 0; i &lt; 8; i++ {
+        st.push(i)
+        fmt.Println(st.top())
+    }
+    for !st.isEmpty() {
+        fmt.Println(st.pop())
+    }
+}
+</pre>
+<pre>
+C&gt;go run linkedlist.go
+・・・ 省略 ・・・
+0 true
+1 true
+2 true
+3 true
+4 true
+5 true
+6 true
+7 true
+7 true
+6 true
+5 true
+4 true
+3 true
+2 true
+1 true
+0 true
+</pre>
+<p> スタックに 0 から 7 まで push で格納し pop でデータを取り出すと 7, 6, 5, 4, 3, 2, 1, 0 になります。このように、スタックは後から入れたデータが先に取り出されます。
+</p>
+
+<h4>●キュー</h4>
+<p> 次は「キュー (queue) 」という基本的なデータ構造を作ってみましょう。たとえばチケットを買う場合、カウンタの前に並んで順番を待たなくてはいけません。キューはカウンタの前に並ぶ行列と考えてください。列の先頭にいる人から順番にチケットを買うことができますが、あとから来た人は列の後ろに並ばなくてはいけません。列の先頭まで進むと、チケットを購入することができます。これを図に表すと次のようになります。
+</p>
+<pre class="fig">
+ out                            in
+    ──────────────
+&lt;=  A  B  C  D  E  .  .  .  Z    &lt;=
+    ──────────────
+
+       図 : キューの動作
+</pre>
+<p> このように、キューはデータを取り出すときは列の先頭から行い、データを追加するときは列の後ろへ行います。このため、キューは「待ち行列」とか「先入れ先出し (FIFO : first-in, first-out) 」と呼ばれます。
+</p>
+
+<p> キューは連結リストを使って簡単に実装することができますが、大きな欠点もあります。連結リストをキューとして使う場合、データを追加するときに最後尾までセルをたどっていく操作が必要になるため、要素数が多くなるとデータの追加に時間がかかってしまうのです。
+</p>
+
+<p> そこで、先頭のセルを参照する変数のほかに、最後尾のセルを参照する変数を用意します。こうすると、先頭からセルをたどらなくても、最後尾にデータを追加することができます。次の図を見てください。
+</p>
+<pre class="fig">
+rear  ─→ nil
+front ─→ nil
+
+(1) キューが空の状態
+
+rear  ─────────────────────┐
+                                                ↓
+          ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+front ─→│・│・┼→│・│・┼→│・│・┼→│・│・┼→ nil
+          └┼┴─┘  └┼┴─┘  └┼┴─┘  └┼┴─┘
+            ↓          ↓          ↓          ↓
+           data1       data2       data3       data4
+
+(2) キューにデータがある場合
+
+                     図 : キューの構造
+</pre>
+<p> この変数を front と rear としましょう。上図にキューの構造を示します。キューにデータがない場合は、(1) のように front と rear は None になっています。データがある場合は、(2) のように front は先頭のセルを参照し、rear は最後尾のセルを参照しています。これで、データの追加を効率的に行うことができます。 
+</p>
+
+<p> 今回は LinkedList を使わずにセル (Cell) を直接操作してキューを作ってみましょう。定義するメソッドを下表に示します。
+</p>
+
+<table border=1>
+<caption>表 : キューのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>(q *Queue) enqueue(x int)</td><td>キューにデータを追加する</td></tr>
+  <tr><td>(q *Queue) dequeue() (int, bool) </td><td>キューからデータを取り出す</td></tr>
+  <tr><td>(q *Queue) isEmpty() bool</td><td>キューが空ならば True を返す</td></tr>
+</tbody>
+</table>
+
+<h4>●キューの実装</h4>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : キュー
+
+// キュー
+type Queue struct {
+    size int
+    front, rear *Cell
+}
+
+// キューの生成
+func newQueue() *Queue {
+    return new(Queue)
+}
+
+// 挿入
+func (q *Queue) enqueue(x int) {
+    cp := newCell(x, nil)
+    if q.size == 0 {
+        q.front = cp
+        q.rear = cp
+    } else {
+        q.rear.next = cp
+        q.rear = cp
+    }
+    q.size++
+}
+
+// 削除
+func (q *Queue) dequeue() (int, bool) {
+    if q.size == 0 {
+        return 0, false
+    } else {
+        x := q.front.item
+        q.front = q.front.next
+        q.size--
+        if q.size == 0 { q.rear = nil }
+        return x, true
+    }
+}
+
+// キューは空か？
+func (q *Queue) isEmpty() bool {
+    return q.size == 0
+}
+</pre>
+<p> 関数 newQueue は new で Queue のメモリを取得します。これでフィールド size は 0 に、front と rear は nil に初期化されます。メソッド enqueue は、キューが空であれば newCell(x, nil) で新しいセルを生成して fornt と rear にセットします。キューが空でない場合、最後尾にデータを追加します。q.rear.next に新しいセル cp セットして、最後尾のセルの後ろにつなげます。それから、rear を cp に書き換えます。
+</p>
+
+<p> メソッド dequeue は front が参照するセルの要素を返します。要素を x にセットしてから、front の値を次のセルへのポインタ front.next に書き換えます。キューが空になったら、front は nil になりますが、rear は nil にはなりません。rear の値を nil に書き換えます。キューが空の場合は 0 と false を返します。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+
+<pre class="list">
+リスト : 簡単なテスト
+
+func main() {
+    // リスト
+    ・・・ 省略 ・・・
+    // スタック
+    ・・・ 省略 ・・・
+    // キュー
+    que := newQueue()
+    for i := 0; i &lt; 8; i++ {
+        que.enqueue(i)
+        fmt.Println(i)
+    }
+    for !que.isEmpty() {
+        fmt.Println(que.dequeue())
+    }
+}
+</pre>
+<pre>
+C&gt;go run linkedlist.go
+
+・・・ 省略 ・・・
+
+0
+1
+2
+3
+4
+5
+6
+7
+0 true
+1 true
+2 true
+3 true
+4 true
+5 true
+6 true
+7 true
+</pre>
+<p> キューに 0 から 7 まで enqueue で格納して dequeue でデータを取り出すと 0, 1, 2, 3, 4, 5, 6, 7 になります。スタックとは逆に、キューはデータを入れた順番にデータが取り出されます。
+</p>
+<p> 今回はここまでです。次回は「インターフェース (interface) 」について説明します。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+//
+// linkedlist.go : 連結リスト
+//
+//                 Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import "fmt"
+
+// 要素の型
+type int interface{}
+
+// セル
+type Cell struct {
+    item int
+    next *Cell
+}
+
+// リスト
+type List struct {
+    top *Cell
+}
+
+// セルの生成
+func newCell(x int, cp *Cell) *Cell {
+    newcp := new(Cell)
+    newcp.item, newcp.next = x, cp
+    return newcp
+}
+
+// リストの生成
+func newList() *List {
+    lst := new(List)
+    lst.top = new(Cell)
+    return lst
+}
+
+// n 番目のセルを求める
+func (cp *Cell) nthCell(n int) *Cell {
+    i := -1
+    for cp != nil {
+        if i == n { return cp }
+        i++
+        cp = cp.next
+    }
+    return nil
+}
+
+// 参照
+func (lst *List) nth(n int) (int, bool) {
+    cp := lst.top.nthCell(n)
+    if cp == nil { return nil, false }
+    return cp.item, true
+}
+
+// 挿入
+func (lst *List) insertNth(n int, x int) bool {
+    cp :=lst.top.nthCell(n - 1)
+    if cp == nil { return false }
+    cp.next = newCell(x, cp.next)
+    return true
+}
+
+// 削除
+func (lst *List) deleteNth(n int) bool {
+    cp := lst.top.nthCell(n - 1)
+    if cp == nil || cp.next == nil { return false }
+    cp.next = cp.next.next
+    return true
+}
+
+// リストは空か？
+func (lst *List) isEmpty() bool {
+    return lst.top.next == nil
+}
+
+// 表示
+func (lst *List) printList() {
+    cp := lst.top.next
+    for ; cp != nil; cp = cp.next {
+        fmt.Print(cp.item, " ")
+    }
+    fmt.Println("")
+}
+
+// 制限つき連結リスト
+type FixedList struct {
+    List
+    size, limit int
+}
+
+func newFixedList(limit int) *FixedList {
+    p := new(FixedList)
+    p.top = new(Cell)
+    p.limit = limit
+    return p
+}
+
+func (p *FixedList) insertNth(n, x int) bool {
+    if p.size &gt;= p.limit { return false }
+    result := p.List.insertNth(n, x)
+    if result { p.size++ }
+    return result
+}
+
+func (p *FixedList) deleteNth(n int) bool {
+    result := p.List.deleteNth(n)
+    if result { p.size-- }
+    return result
+}
+
+// スタック
+type Stack struct {
+    content *List
+}
+
+// スタックの生成
+func newStack() *Stack {
+    st := new(Stack)
+    st.content = newList()
+    return st
+}
+
+// 挿入
+func (st *Stack) push(x int) {
+    st.content.insertNth(0, x)
+}
+
+// 削除
+func (st *Stack) pop() (int, bool) {
+    x, ok := st.content.nth(0)
+    if ok { st.content.deleteNth(0) }
+    return x, ok
+}
+
+// 参照
+func (st *Stack) top() (int, bool) {
+    return st.content.nth(0)
+}
+
+// スタックは空か？
+func (st *Stack) isEmpty() bool {
+    return st.content.isEmpty()
+}
+
+// キュー
+type Queue struct {
+    size int
+    front, rear *Cell
+}
+
+// キューの生成
+func newQueue() *Queue {
+    return new(Queue)
+}
+
+// 挿入
+func (q *Queue) enqueue(x int) {
+    cp := newCell(x, nil)
+    if q.size == 0 {
+        q.front = cp
+        q.rear = cp
+    } else {
+        q.rear.next = cp
+        q.rear = cp
+    }
+    q.size++
+}
+
+// 削除
+func (q *Queue) dequeue() (int, bool) {
+    if q.size == 0 {
+        return 0, false
+    } else {
+        x := q.front.item
+        q.front = q.front.next
+        q.size--
+        if q.size == 0 { q.rear = nil }
+        return x, true
+    }
+}
+
+// キューは空か？
+func (q *Queue) isEmpty() bool {
+    return q.size == 0
+}
+
+// 簡単なテスト
+func main() {
+    // リスト
+    a := newList()
+    for i := 0; i &lt; 8; i++ {
+        fmt.Println(a.insertNth(i, i))
+    }
+    a.printList()
+    for i := 0; i &lt; 8; i++ {
+        n, ok := a.nth(i)
+        fmt.Println(n, ok)
+    }
+    for !a.isEmpty() {
+        a.deleteNth(0)
+        a.printList()
+    }
+    // 制限つきリスト
+    b := newFixedList(6)
+    for i := 0; i &lt; 8; i++ {
+        fmt.Println(b.insertNth(i, i))
+    }
+    b.printList()
+    for i := 0; i &lt; 8; i++ {
+        fmt.Println(b.nth(i))
+    }
+    for !b.isEmpty() {
+        b.deleteNth(0)
+        b.printList()
+    }
+    // スタック
+    st := newStack()
+    for i := 0; i &lt; 8; i++ {
+        st.push(i)
+        fmt.Println(st.top())
+    }
+    for !st.isEmpty() {
+        fmt.Println(st.pop())
+    }
+    // キュー
+    que := newQueue()
+    for i := 0; i &lt; 8; i++ {
+        que.enqueue(i)
+        fmt.Println(i)
+    }
+    for !que.isEmpty() {
+        fmt.Println(que.dequeue())
+    }
+}
+</pre>
+<hr>
+<h4 id="appendix">Appendix : 配列によるキューの実装</h4>
+<p> ところで、キューは配列を使っても簡単にプログラムすることができます。配列を使ってキューを実装する場合、先頭位置を示す front と末尾を示す rear を用意し、front と rear の間にあるデータをキューに格納されているデータとするのがポイントです。次の図を見てください。
+</p>
+
+<pre class="fig">
+             0  1  2  3  4  5  6  7  8  9
+  rear = 0  ↓
+  queue    [                              ]  : queue は空
+  front= 0  ↑
+
+  rear = 3           ↓
+  queue    [10 20 30                      ]  : データの追加
+  front= 0  ↑
+
+  rear = 3           ↓
+  queue    [10 20 30                      ]  : 10を取り出す
+  front= 1     ↑
+
+  rear = 3           ↓
+  queue    [10 20 30                      ]  : 20,30を取り出す  
+  front= 3           ↑
+
+                図 : キューの動作
+</pre>
+
+<p> 最初、キューは空の状態で、rear, front ともに 0 です。データの追加は、rear が示す位置にデータを書き込み、rear の値を +1 します。データ 10, 20, 30 を追加すると、図のようにデータが追加され rear は 3 になります。このとき front は 0 のままなので、先頭のデータは 10 ということになります。
+</p>
+<p> 次に、データを取り出す場合、front の示すデータを取り出しから front の値を +1 します。この場合、front が 0 なので 10 を取り出して front の値は 1 となり、次のデータ 20 が先頭になります。データを順番に 20, 30 と取り出していくと、3 つしかデータを書き込んでいないので当然キューは空になります。このとき front は 3 になり rear と同じ値になります。このように、front と rear の値が 0 の場合だけが空の状態ではなく、front と rear の値が等しくなると、キューは空になることに注意してください。
+</p>
+<p> rear, fornt ともに値は増加していく方向なので、いつかは配列の範囲をオーバーします。このため、配列を先頭と末尾が繋がっているリング状と考え、rear, front が配列の範囲を超えたら 0 に戻すことにします。これを「循環配列」とか「リングバッファ」と呼びます。一般に、配列を使ってキューを実現する場合は、リングバッファとするのが普通です。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは実際にプログラムを作ってみましょう。最初に、基本的な操作関数を説明します。今回はプログラムを簡単にするため、キューに格納するデータは整数 (int) に限定します。
+</p>
+
+<ul>
+  <li><b>func makeQueue(size int) *Queue</b><br>
+     指定した大きさのキューを作る。
+  <li><b>func (q *Queue) dequeue() (int, bool)</b><br>
+      キューからデータを取り出して返す。
+  <li><b>func (q *Queue) enqueue(x int) bool</b><br>
+      キューにデータを追加する。
+  <li><b>func (q *Queue) top() (int, bool)</b><br>
+      キューの先頭データを返す。データはキューから削除されない。
+  <li><b>func (q *Queue) isEmpty() bool</b><br>
+      キューが空の場合は true を、そうでなければ false を返す。
+  <li><b>func (q *Queue) isFull() bool</b><br>
+      キューが満杯の場合は true を、そうでなければ false を返す。
+  <li><b>func (q *Queue) length() int</b><br>
+      キューに格納されたデータ数を返す。
+  <li><b>func (q *Queue) clear()</b><br>
+      キューを空にする。
+</ul>
+
+<p> キューは構造体を使って定義します。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+type Queue struct {
+    front, rear, cnt int
+    buff []int
+}
+</pre>
+<p> フィールド変数 cnt はキューに格納されたデータ数をカウントします。この変数を用意することで、キューの状態を簡単にチェックすることができます。buff がキューの本体（配列）です。
+</p>
+
+<pre class="list">
+リスト : キューの生成
+
+func makeQueue(size int) *Queue {
+    q := new(Queue)
+    q.buff = make([]int, size)
+    return q
+}
+</pre>
+<p> 関数 makeQueue はキューを生成します。引数 size がキューの大きさです。組み込み関数 new で Queue のメモリを確保します。このとき、フィールド変数 front, rear, cnt はゼロ値で初期化されます。あとは make でスライスを生成して q.buff にセットするだけです。
+</p>
+
+<p> 次はデータを追加する enqueue を作ります。
+</p>
+
+<pre class="list">
+リスト : キューにデータを追加する
+
+// キューは満杯か
+func (q *Queue) isFull() bool {
+    return q.cnt == len(q.buff)
+}
+
+// データの挿入
+func (q *Queue) enqueue(x int) bool {
+    if q.isFull() { return false }
+    q.buff[q.rear] = x
+    q.cnt++
+    q.rear++
+    if q.rear &gt;= len(q.buff) { q.rear = 0 }
+    return true
+}
+
+</pre>
+
+<p> 最初にメソッド isFull を呼び出してキューが満杯かチェックします。isFull は q.cnt と len(q.buff) が等しいかチェックするだけです。満杯であれば false を返します。データは q.rear の位置に格納し、q.cnt と q.rear の値を更新します。そして、q.rear の値が配列の範囲を超えたならば 0 に戻します。
+</p>
+
+<p> 次は、キューからデータを取り出す関数 dequeue を作ります。
+</p>
+<pre class="list">
+リスト : キューからデータを取り出す
+
+// キューは空か
+func (q *Queue) isEmpty() bool {
+    return q.cnt == 0
+}
+
+// データを取り出す
+func (q *Queue) dequeue() (int, bool) {
+    if q.isEmpty() { return 0, false }
+    x := q.buff[q.front]
+    q.cnt--
+    q.front++
+    if q.front &gt;= len(q.buff) { q.front = 0 }
+    return x, true
+}
+</pre>
+
+<p> まず、メソッド isEmpty を呼び出してキューにデータがあるかチェックします。isEmpty は q.cnt が 0 と等しいかチェックするだけです。キューが空の場合はゼロ値と false を返します。データがある場合は q.buff[q.front] の位置にあるデータを取り出します。あとは、q.cnt と q.front の値を更新し、q.front の値が配列の範囲を超えたら 0 に戻します。
+</p>
+<p> あとの操作関数は簡単なので説明は割愛します。詳細は <a href="abcgo08.html#lista">プログラムリスト</a> をお読みくださいませ。
+</p>
+<h4>●使用例</h4>
+<p> これでプログラムは完成です。それでは、簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+func main() {
+    q := makeQueue(10)
+    fmt.Println(q.isEmpty())
+    fmt.Println(q.length())
+    for i := 0; i &lt; 10; i++ {
+        q.enqueue(i)
+    }
+    fmt.Println(q.isFull())
+    fmt.Println(q.length())
+    for !q.isEmpty() {
+        fmt.Println(q.dequeue())
+    }
+    fmt.Println(q.isEmpty())
+    fmt.Println(q.length())
+}
+</pre>
+<pre>
+C&gt;go run queue.go
+true
+0
+true
+10
+0 true
+1 true
+2 true
+3 true
+4 true
+5 true
+6 true
+7 true
+8 true
+9 true
+true
+0
+</pre>
+<p> makeQueue でキューを作成して変数 q にセットします。for ループでキューにデータを 10 個セットします。これでキューは満杯になるので、これ以上データを追加することはできません。次に、dequeue でデータを取り出します。先に入れたデータから順番に取り出されていることがわかりますね。これでキューは空の状態になります。
+</p>
+<hr>
+<h4 id="lista">●プログラムリスト</h4>
+<pre class="list">
+//
+// queue.go : Ring Buffer によるキューの実装
+//
+//            Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import "fmt"
+
+// データ型の定義
+type Queue struct {
+    front, rear, cnt int
+    buff []int
+}
+
+// キューの生成
+func makeQueue(size int) *Queue {
+    q := new(Queue)
+    q.buff = make([]int, size)
+    return q
+}
+
+// キューは空か
+func (q *Queue) isEmpty() bool {
+    return q.cnt == 0
+}
+
+// キューは満杯か
+func (q *Queue) isFull() bool {
+    return q.cnt == len(q.buff)
+}
+
+// データの挿入
+func (q *Queue) enqueue(x int) bool {
+    if q.isFull() { return false }
+    q.buff[q.rear] = x
+    q.cnt++
+    q.rear++
+    if q.rear &gt;= len(q.buff) { q.rear = 0 }
+    return true
+}
+
+// データを取り出す
+func (q *Queue) dequeue() (int, bool) {
+    if q.isEmpty() { return 0, false }
+    x := q.buff[q.front]
+    q.cnt--
+    q.front++
+    if q.front &gt;= len(q.buff) { q.front = 0 }
+    return x, true
+}
+
+// 先頭データの参照
+func (q *Queue) top() (int, bool) {
+    if q.isEmpty() { return 0, false }
+    return q.buff[q.front], true
+}
+
+// キューを空にする
+func (q *Queue) clear() {
+    q.front = 0
+    q.rear = 0
+    q.cnt = 0
+}
+
+// キューの要素数を返す
+func (q *Queue) length() int {
+    return q.cnt
+}
+
+// 簡単なテスト
+func main() {
+    q := makeQueue(10)
+    fmt.Println(q.isEmpty())
+    fmt.Println(q.length())
+    for i := 0; i &lt; 10; i++ {
+        q.enqueue(i)
+    }
+    fmt.Println(q.isFull())
+    fmt.Println(q.length())
+    for !q.isEmpty() {
+        fmt.Println(q.dequeue())
+    }
+    fmt.Println(q.isEmpty())
+    fmt.Println(q.length())
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcgo07.html">PrevPage</a> | <a href="index.html">Golang</a> | <a href="abcgo09.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

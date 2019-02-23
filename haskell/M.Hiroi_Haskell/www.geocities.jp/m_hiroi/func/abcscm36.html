@@ -1,0 +1,1799 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881783</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm35.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm48.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>micro Scheme コンパイラの作成 (4)</h3>
+<p> 今回は micro Scheme コンパイラに「末尾再帰最適化」を実装しましょう。なお、ここでいう末尾再帰最適化は処理速度のことではなく、次に示すような関数呼び出しにおいて、メモリを消費せずに実行できることです。
+</p>
+<pre>
+&gt;&gt;&gt; (define foo (lambda () (foo)))
+foo
+
+&gt;&gt;&gt; (foo)
+=&gt; 無限ループになる
+</pre>
+<p> 末尾再帰最適化が行われる場合、foo を評価すると無限ループになります。
+</p>
+
+<h4>●末尾再帰最適化</h4>
+<p> 末尾再帰の末尾とは最後に行われる処理のことで、一般に末尾で関数を呼び出すことを「末尾呼び出し」といいます。関数を呼び出す場合、そのあとに行う処理のために、必要な情報を保存しておかなければいけません。ところが、末尾呼び出しはそのあと実行する処理がないので、情報を保存しておく必要がありません。このため、末尾再帰は繰り返しに変換することができるのです。
+</p>
+
+<p> 簡単な例として、Common Lisp で階乗を計算する関数 fact を作りましょう。
+</p>
+
+<pre class="list">
+リスト : 末尾再帰を繰り返しに変換する
+
+(defun fact (x a)
+  (if (= x 0)
+      a
+    (fact (- x 1) (* a x))))
+
+(defun facti (x a)
+  (tagbody
+    loop
+    (if (= x 0)
+        (return-from facti a))
+    (setf a (* a x)
+          x (- x 1))
+    (go loop)))
+</pre>
+
+<p> fact は末尾再帰になっています。これを繰り返しに変換すると facti のようになります。引数 x と a の値を保存する必要が無いので、値を書き換えてから先頭の処理へジャンプします。tagbody はジャンプ命令 go を使うための特殊形式 (シンタックス形式) です。Scheme に tagbody と go はありませんが、末尾再帰は最適化が行われるため効率的に処理することができます。
+</p>
+
+<p> micro Scheme の場合、仮想マシン vm は末尾再帰になっています。Scheme で vm を動かす場合、Scheme は末尾再帰最適化が行われるので、vm の実行でメモリを消費することはありません。問題は命令 sel と app を実行するときです。たとえば、fact を micro Scheme でコンパイルすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 階乗 (末尾再帰)
+
+(define fact
+  (lambda (n a)
+    (if (= n 0)
+        a
+      (fact (- n 1) (* a n)))))
+</pre>
+<pre class="fig">
+(closure
+  (
+    ld (0 . 0)
+    ldc 0
+    args 2
+    ldg =
+    app
+    sel
+      (
+        ld (0 . 1)
+        join
+      )
+      (
+        ld (0 . 0)
+        ldc 1
+        args 2
+        ldg - 
+        app
+        ld (0 . 1)
+        ld (0 . 0)
+        args 2
+        ldg *
+        app
+        args 2
+        ldg fact
+        app
+        join
+      )
+    rtn
+  )
+())
+</pre>
+<p> SECD 仮想マシンは sel 命令を実行するとき、コードレジスタ C をダンプに保存します。ここでメモリが消費されます。fact の場合、if は末尾呼び出しであり、その後の命令は rtn しかありません。この場合、join を rtn に変更すると、コードレジスタ C をダンプに保存する必要がなりなります。
+</p>
+<p> そこで、仮想マシンに新しい命令 selr を追加します。selr の状態遷移を図に示します。
+</p>
+<pre class="item">
+(v . s) e (selr ct cf . c) d = v (真) =&gt; s e ct d
+                             = v (偽) =&gt; s e cf d
+</pre>
+<p> sel はコード c をダンプ d に保存します。selr 命令の場合、ct と cf が末尾呼び出しになるので、コード c をダンプに保存する必要はありません。また、ct と cf は join 命令ではなく rtn 命令で終了します。
+</p>
+
+<p> selr 命令を使うと、fact は次のようにコンパイルされます。
+</p>
+<pre class="fig">
+(closure
+  (
+    ld (0 . 0)
+    ldc 0
+    args 2
+    ldg =
+    app
+    selr
+      (
+        ld (0 . 1)
+        rtn
+      )
+      (
+        ld (0 . 0)
+        ldc 1
+        args 2
+        ldg - 
+        app
+        ld (0 . 1)
+        ld (0 . 0)
+        args 2
+        ldg *
+        app
+        args 2
+        ldg fact
+        app
+        rtn
+      )
+  )
+())
+</pre>
+<p> ここで fact を呼び出す app 命令に注目してください。fact は末尾呼び出しで、その後に実行する命令は rtn しかありません。この場合、レジスタ S, E, C をダンプレジスタに保存する必要はありません。そこで、新しい命令 tapp を追加します。tapp の状態遷移を示します。
+</p>
+
+<pre class="item">
+((closure code env) vs . s) e (tapp . c) d =&gt; s (vs . env) code d
+</pre>
+
+<p> app は s, e, c をダンプ d に保存します。tapp 命令の場合、実行する関数は末尾呼び出しになるので、s, e, c をダンプに保存する必要はありません。コード code を環境 (v . env) の元で評価するだけです。
+</p>
+
+<p> このように、selr と tapp 命令を追加することで、micro Scheme で末尾再帰最適化を実現することができます。
+</p>
+
+<h4>●コンパイラの修正</h4>
+<p> それではプログラムを修正しましょう。S 式をコンパイルする関数 comp は次のようになります。
+</p>
+
+<pre class="list">
+リスト : コンパイルの修正
+
+(define (comp expr env code tail)
+  (cond ((self-evaluation? expr)             ; 自己評価フォーム
+         (list* 'ldc expr code))
+        ((symbol? expr)                      ; 変数
+         (let ((pos (location expr env)))
+           (if pos
+               ; 局所変数
+               (list* 'ld pos code)
+             ; 大域変数
+             (list* 'ldg expr code))))
+        ((eq? (car expr) 'quote)
+         (list* 'ldc (cadr expr) code))
+        ((eq? (car expr) 'if)
+         (if tail
+             ; 末尾呼び出し
+             (let ((t-clause (comp (caddr expr) env '(rtn) #t))
+                   (f-clause 
+                     (if (null? (cdddr expr))
+                         (list 'ldc '*undef 'rtn)
+                       (comp (cadddr expr) env '(rtn) #t))))
+               (comp (cadr expr) env (list* 'selr t-clause f-clause (cdr code)) #f))
+           (let ((t-clause (comp (caddr expr) env '(join) #f))
+                 (f-clause 
+                   (if (null? (cdddr expr))
+                       (list 'ldc '*undef 'join)
+                     (comp (cadddr expr) env '(join) #f))))
+             (comp (cadr expr) env (list* 'sel t-clause f-clause code) #f))))
+        ((eq? (car expr) 'lambda)
+         (let ((body (comp-body (cddr expr) (cons (cadr expr) env) '(rtn))))
+           (list* 'ldf body code)))
+        ((eq? (car expr) 'define)
+         (comp (caddr expr) env (list* 'def (cadr expr) code) #f))
+        ((eq? (car expr) 'define-macro)
+         (comp (caddr expr) env (list* 'defm (cadr expr) code) #f))
+        ((eq? (car expr) 'set!)
+         (let ((pos (location (cadr expr) env)))
+           (if pos
+               ; 局所変数
+               (comp (caddr expr) env (list* 'lset pos code) #f)
+             ; 大域変数
+             (comp (caddr expr) env (list* 'gset (cadr expr) code) #f))))
+        ((eq? (car expr) 'call/cc)
+         (list* 'ldct code 'args 1 (comp (cadr expr) env (cons 'app code) #f)))
+        ((eq? (car expr) 'apply)
+         (complis (cddr expr)
+                  env
+                  (list* 'args-ap
+                         (length (cddr expr))
+                         (comp (cadr expr) env (cons 'app code) #f))))
+        ((macro? (car expr))
+         ; マクロ展開してからコンパイルする
+         (let ((new-expr (vm '()
+                             (list (cdr expr))
+                             (get-macro-code (car expr))
+                             (list (list '() '() '(stop))))))
+           (comp new-expr env code #f)))
+        (else  ; 関数呼び出し
+         (complis (cdr expr)
+                  env
+                  (list* 'args
+                         (length (cdr expr))
+                         (comp (car expr) env (cons (if tail 'tapp 'app) code) #f))))))
+</pre>
+<p> comp の引数に末尾呼び出しを示すフラグ tail を追加します。tail が真の場合、引数 expr は末尾呼び出しです。tail が真になるときは、ラムダ式本体の最後尾の S 式をコンパイルするときと、tail が真のときに if の then 節と else 節をコンパイルするときです。あとはすべて #f になります。
+</p>
+
+<p> if をコンパイルするとき、tail が偽の場合は今までと同じです。tail が真の場合、then 節と else 節をコンパイルするとき、tail に #t を指定して、最後の命令を rtn にします。生成するコードは (list* 'selr t-clause f-clause (cdr code)) となります。このとき、code の先頭は rtn 命令になります。rtn が重複するので cdr で取り除きます。
+</p>
+
+<p> 関数呼び出しの場合、tail が真であれば命令を tapp に、そうでなければ app にします。tail が真の場合、code の先頭は rtn 命令になります。評価する関数がクロージャの場合、この rtn を削除することができますが、primitive の場合は rtn が必要になります。コンパイルの段階では区別がつかないので、rtn は削除しないでそのままにしておきます。
+</p>
+
+<p> ラムダ式本体をコンパイルする関数 comp-body は簡単です。
+</p>
+<pre class="list">
+リスト : ラムダ式本体のコンパイル
+
+(define (comp-body body env code)
+  (if (null? (cdr body))
+      (comp (car body) env code #t)
+    (comp (car body)
+          env
+          (list* 'pop
+                 (comp-body (cdr body) env code))
+          #f)))
+</pre>
+<p> 本体末尾の S 式をコンパイルするとき、comp の引数 tail を #t にセットします。それ以外の場合は #f にセットします。
+</p>
+
+<h4>●仮想マシンの修正</h4>
+<p> 次は仮想マシン vm を修正します。
+</p>
+<pre class="list">
+リスト : 仮想マシン vm の修正
+
+(define (vm s e c d)
+  (case (pop! c)
+    ...
+    ((tapp)
+     (let ((clo (car s)) (lvar (cadr s)))
+       (case (pop! clo)
+         ((primitive)
+          (vm (cons (apply (car clo) lvar) (cddr s)) e c d))
+         ((continuation)
+          (vm (cons (car lvar) (car clo)) (cadr clo) (caddr clo) (cadddr clo)))
+         (else
+          (vm (cddr s) (cons lvar (cadr clo)) (car clo) d)))))
+    ...
+    ((selr)
+     (let ((t-clause (car c))
+           (e-clause (cadr c)))
+       (if (car s)
+           (vm (cdr s) e t-clause d)
+         (vm (cdr s) e e-clause d))))
+    ...
+  ))
+</pre>
+<p> tapp の場合、primitive と continuation の処理は app と同じです。それ以外の場合はコード (car clo) を環境 (cons lvar (cadr clo)) の元で評価します。s, e, c をダンプ d に保存する必要はありません。selr も簡単です。then 節 (t-clause) と else 節 (e-clause) どちらを評価するにしても、ダンプ d にコード c を保存する必要はありません。
+</p>
+<h4>●簡単な実行例</h4>
+<p> それでは簡単な実行例を示しましょう。なお、簡単にテストできるように、primitive に算術演算子 (+, -, *, /) と比較演算子 (=, &lt;, &gt;, &lt;=, &gt;=) を追加しました。簡単な例として 1 から x までの合計値を求めるプログラムを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 1 から x までの合計値を求める
+
+(define sum
+  (lambda (x)
+    (if (= x 0)
+        0
+      (+ x (sum (- x 1))))))
+
+(define sum1
+  (lambda (x a)
+    (if (= x 0)
+        a
+      (sum1 (- x 1) (+ a x)))))
+</pre>
+
+<p> 関数 sum は末尾再帰になっていないので、大きな値を計算するとメモリを大量に消費します。関数 sum1 は末尾再帰になっているので、大きな値でもメモリを消費せずに計算することができます。実行結果は次のようになりました。
+</p>
+
+<pre>
+>>> (sum 1000000)
+500000500000
+
+>>> (sum1 1000000 0)
+500000500000
+</pre>
+<p> Gauche version 0.8.14, Windows XP で実行した場合、どちらの関数でも値を求めることができますが、sum は sum1 よりも約 100 MB ほどメモリの消費量が多くなります。
+</p>
+
+<p> また、次の関数を実行するとメモリを消費せずに無限ループとなります。
+</p>
+<pre>
+&gt;&gt;&gt; (define foo (lambda () (foo)))
+foo
+
+&gt;&gt;&gt; (foo)
+=&gt; 無限ループになる
+</pre>
+<h4>●たらいまわし関数</h4>
+<p> 次は「たらいまわし関数」でインタプリタとコンパイラの実行速度を計測してみましょう。プログラムリストと実行結果を示します。
+</p>
+<pre class="list">
+リスト : たらいまわし関数
+
+(define tarai
+  (lambda (x y z)
+    (if (&lt;= x y)
+        y
+      (tarai (tarai (- x 1) y z) (tarai (- y 1) z x) (tarai (- z 1) x y)))))
+
+(define tak
+  (lambda (x y z)
+    (if (&lt;= x y)
+        z
+      (tak (tak (- x 1) y z) (tak (- y 1) z x) (tak (- z 1) x y)))))
+</pre>
+<pre>
+  表 : たらいまわし関数の実行結果
+
+                 |  A   |  B
+  ---------------+------+------
+  (tarai 10 5 0) | 19.1 | 8.3
+  (tak   14 7 0) | 22.1 | 9.6
+
+  A : インタプリタ (micro.scm)
+  B : コンパイラ   (secd.scm)
+
+  単位 : 秒
+
+  Gauche version 0.8.14, Windows XP, celeron 1.40 GHz
+</pre>
+<p> インタプリタよりもコンパイラの方が約 2.3 倍速くなりました。簡単なコンパイラなので、処理速度が劇的に高速化するわけではありません。それでも、マクロを多用したプログラムでは、もっと差がつくでしょう。コンパイラの性能ですが、末尾呼び出し以外の最適化はほとんど行っていないので、改良する余地はまだまだあると思います。興味のある方はいろいろ試してみてください。
+</p>
+
+<h4>●遅延評価</h4>
+<p> 関数 tarai は「遅延評価 (delayed evaluation または lazy evaluation) 」を行う処理系、たとえば関数型言語の Haskell では高速に実行することができます。また、Scheme でも delay と force を使って遅延評価を行うことができます。
+</p>
+
+<p> tarai のプログラムを見てください。x &lt;= y のときに y を返しますが、このとき引数 z の値は必要ありませんね。引数 z の値は x &gt; y のときに計算するようにすれば、無駄な計算を省略することができます。なお、関数 tak は x &lt;= y のときに z を返しているため、遅延評価で高速化することはできません。ご注意ください。
+</p>
+
+<p> Scheme の delay と force は、micro Scheme でもマクロを使って簡単に実装することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : delay と force
+
+(define-macro delay 
+  (lambda (expr)
+    `(make-promise (lambda () ,expr))))
+
+(define make-promise
+  (lambda (f)
+    (let ((flag #f) (result #f))
+      (lambda ()
+        (if (not flag)
+            (let ((x (f)))
+              (if (not flag)
+                  (begin (set! flag #t)
+                         (set! result x)))))
+        result))))
+
+(define force 
+  (lambda (promise) (promise)))
+</pre>
+
+<p> リストの delay と force は <a href="abcscm36.html#cite">参考文献 [1]</a> に掲載されているプログラムを micro Scheme で書き直したものです。delay の引数 expr をクロージャに格納して関数 make-promis に渡します。make-promise はクロージャを生成して返します。このデータを Scheme では「プロミス」といいます。force は簡単で、引数 promise を評価するだけです。
+</p>
+<p> make-promise はクロージャを生成し、その中にクロージャ f の評価結果を格納します。flag が #f の場合は f を評価していないので、f を評価して返り値を result にセットし、flag の値を #t に書き換えます。flag が #t ならば f は評価済みなので result を返します。
+</p>
+
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (define a (delay (+ 10 20)))
+a
+
+&gt;&gt;&gt; (force a)
+30
+</pre>
+<p> (delay (+ 10 20)) の返り値を変数 a にセットします。このとき、S 式 (+ 10 20) は評価されていません。プロミスの値を実際に求める関数が force です。(force a) を評価すると、S 式 (+ 10 20) を評価して値 30 を返します。
+</p>
+<p> また、プロミスは式の評価結果をキャッシュします。したがって、(force a) を再度実行すると、同じ式を再評価することなく値を求めることができます。次の例を見てください。
+</p>
+<pre>
+&gt;&gt;&gt; (define b (delay (begin (display "oops! ") (+ 10 20))))
+b
+
+&gt;&gt;&gt; (force b)
+oops! 30
+
+&gt;&gt;&gt; (force b)
+30
+</pre>
+<p> 最初に (force b) を実行すると、S 式 (begin (display "oops! ") (+ 10 20)) が評価されるので、画面に oops! が表示されます。次に、(force b) を実行すると、式を評価せずにキャッシュした値を返すので oops! は表示されません。
+</p>
+
+<p> delay と force を使うと、tarai は次のようになります。
+</p>
+
+<pre class="list">
+リスト : delay と force による遅延評価
+
+(define tarai
+  (lambda (x y z)
+    (if (&lt;= x y)
+        y
+      (let ((zz (force z)))
+        (tarai (tarai (- x 1) y (delay zz))
+               (tarai (- y 1) zz (delay x))
+               (delay (tarai (- zz 1) x (delay y))))))))
+</pre>
+
+<p> 関数 tarai の引数 z にデータを渡すとき、delay で遅延オブジェクトを生成します。そして、その値を取り出すときは (force z) とします。これで遅延評価を行うことができます。
+</p>
+
+<p> それでは、実際に実行してみましょう。
+</p>
+<pre class="item">
+(tarai 80 40 (delay 0))
+インタプリタ : 5.45 [s]
+コンパイラ   : 0.28 [s]
+</pre>
+<p> tarai に大きな値を与えても、高速に実行することができます。遅延評価の効果は十分に出ていると思います。また、インタプリタよりもコンパイラのほうが約 20 倍高速になりました。マクロを使ったプログラムは、コンパイラのほうが高速に実行できることがわかります。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>R. Kent Dybvig (著), 村上雅章 (訳), 『プログラミング言語 SCHEME』, 株式会社ピアソン・エデュケーション, 2000
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; secd.scm : SECD 仮想マシンによる Scheme コンパイラ
+;
+;            (1) 基本機能の実装
+;            (2) 伝統的なマクロの実装
+;            (3) 継続の実装
+;            (4) 末尾再帰最適化
+;
+;            Copyright (C) 2009 Makoto Hiroi
+;
+
+; 変数の位置を求める
+(define (position-var sym ls)
+  (let loop ((i 0) (ls ls))
+    (cond ((null? ls) #f)
+          ((symbol? ls)
+           (if (eq? sym ls) (- (+ i 1)) #f))
+          ((eq? sym (car ls)) i)
+          (else
+           (loop (+ i 1) (cdr ls))))))
+
+; フレームと変数の位置を求める
+(define (location sym ls)
+  (let loop ((i 0) (ls ls))
+    (if (null? ls)
+        #f
+      (let ((j (position-var sym (car ls))))
+        (if j
+            (cons i j)
+          (loop (+ i 1) (cdr ls)))))))
+
+; 自己評価フォームか
+(define (self-evaluation? expr)
+  (and (not (pair? expr)) (not (symbol? expr))))
+
+; マクロか
+(define (macro? expr)
+  (let ((val (assoc expr *global-environment*)))
+    (and val (pair? (cdr val)) (eq? 'macro (cadr val)))))
+
+; マクロのコードを取得する
+(define (get-macro-code expr)
+  (caddr (get-gvar expr)))
+
+; S 式をコンパイルする
+(define (compile expr)
+  (comp expr '() '(stop) #f))
+
+; コンパイル本体
+(define (comp expr env code tail)
+  (cond ((self-evaluation? expr)             ; 自己評価フォーム
+         (list* 'ldc expr code))
+        ((symbol? expr)                      ; 変数
+         (let ((pos (location expr env)))
+           (if pos
+               ; 局所変数
+               (list* 'ld pos code)
+             ; 大域変数
+             (list* 'ldg expr code))))
+        ((eq? (car expr) 'quote)
+         (list* 'ldc (cadr expr) code))
+        ((eq? (car expr) 'if)
+         (if tail
+             ; 末尾呼び出し
+             (let ((t-clause (comp (caddr expr) env '(rtn) #t))
+                   (f-clause 
+                     (if (null? (cdddr expr))
+                         (list 'ldc '*undef 'rtn)
+                       (comp (cadddr expr) env '(rtn) #t))))
+               (comp (cadr expr) env (list* 'selr t-clause f-clause (cdr code)) #f))
+           (let ((t-clause (comp (caddr expr) env '(join) #f))
+                 (f-clause 
+                   (if (null? (cdddr expr))
+                       (list 'ldc '*undef 'join)
+                     (comp (cadddr expr) env '(join) #f))))
+             (comp (cadr expr) env (list* 'sel t-clause f-clause code) #f))))
+        ((eq? (car expr) 'lambda)
+         (let ((body (comp-body (cddr expr) (cons (cadr expr) env) '(rtn))))
+           (list* 'ldf body code)))
+        ((eq? (car expr) 'define)
+         (comp (caddr expr) env (list* 'def (cadr expr) code) #f))
+        ((eq? (car expr) 'define-macro)
+         (comp (caddr expr) env (list* 'defm (cadr expr) code) #f))
+        ((eq? (car expr) 'set!)
+         (let ((pos (location (cadr expr) env)))
+           (if pos
+               ; 局所変数
+               (comp (caddr expr) env (list* 'lset pos code) #f)
+             ; 大域変数
+             (comp (caddr expr) env (list* 'gset (cadr expr) code) #f))))
+        ((eq? (car expr) 'call/cc)
+         (list* 'ldct code 'args 1 (comp (cadr expr) env (cons 'app code) #f)))
+        ((eq? (car expr) 'apply)
+         (complis (cddr expr)
+                  env
+                  (list* 'args-ap
+                         (length (cddr expr))
+                         (comp (cadr expr) env (cons 'app code) #f))))
+        ((macro? (car expr))
+         ; マクロ展開してからコンパイルする
+         (let ((new-expr (vm '()
+                             (list (cdr expr))
+                             (get-macro-code (car expr))
+                             (list (list '() '() '(stop))))))
+           (comp new-expr env code #f)))
+        (else  ; 関数呼び出し
+         (complis (cdr expr)
+                  env
+                  (list* 'args
+                         (length (cdr expr))
+                         (comp (car expr) env (cons (if tail 'tapp 'app) code) #f))))))
+
+; ラムダ式本体のコンパイル
+(define (comp-body body env code)
+  (if (null? (cdr body))
+      (comp (car body) env code #t)
+    (comp (car body)
+          env
+          (list* 'pop
+                 (comp-body (cdr body) env code))
+          #f)))
+
+; 引数を評価するコードを生成
+(define (complis expr env code)
+  (if (null? expr)
+      code
+    (comp (car expr) env (complis (cdr expr) env code) #f)))
+
+;;; 仮想マシン
+
+; ls の先頭から n 個の要素を取り除く
+(define (drop ls n)
+  (if (zero? n)
+      ls
+    (drop (cdr ls) (- n 1))))
+
+; 局所変数の値を求める
+(define (get-lvar e i j)
+  (if (&lt;= 0 j)
+      (list-ref (list-ref e i) j)
+    (drop (list-ref e i) (- (+ j 1)))))
+
+; 局所変数の値を更新する
+(define (set-lvar! e i j val)
+  (if (&lt;= 0 j)
+      (set-car! (drop (list-ref e i) j) val)
+    (if (= j -1)
+        (set-car! (drop e i) val)
+      (set-cdr! (drop (list-ref e i) (- (+ j 2))) val))))
+
+; 大域変数の値を求める
+(define (get-gvar sym)
+  (let ((val (assoc sym *global-environment*)))
+    (if val
+        (cdr val)
+      (error "unbound variable: " sym))))
+
+; 大域変数の値を更新する
+(define (set-gvar! sym val)
+  (let ((cell (assoc sym *global-environment*)))
+    (if cell
+        (set-cdr! cell val)
+      (error "unbound variable: " sym))))
+
+; 仮想マシンでコードを実行する
+(define (vm s e c d)
+  (case (pop! c)
+    ((ld)
+     (let ((pos (car c)))
+       (vm (cons (get-lvar e (car pos) (cdr pos)) s) e (cdr c) d)))
+    ((ldc)
+     (vm (cons (car c) s) e (cdr c) d))
+    ((ldg)
+     (vm (cons (get-gvar (car c)) s) e (cdr c) d))
+    ((ldf)
+     (vm (cons (list 'closure (car c) e) s) e (cdr c) d))
+    ((ldct)
+     (vm (cons (list 'continuation s e (car c) d) s) e (cdr c) d))
+    ((lset)
+     (let ((pos (car c)))
+       (set-lvar! e (car pos) (cdr pos) (car s))
+       (vm s e (cdr c) d)))
+    ((gset)
+     (set-gvar! (car c) (car s))
+     (vm s e (cdr c) d))
+    ((app)
+     (let ((clo (car s)) (lvar (cadr s)))
+       (case (pop! clo)
+         ((primitive)
+          (vm (cons (apply (car clo) lvar) (cddr s)) e c d))
+         ((continuation)
+          (vm (cons (car lvar) (car clo)) (cadr clo) (caddr clo) (cadddr clo)))
+         (else
+          (vm '() (cons lvar (cadr clo)) (car clo) (cons (list (cddr s) e c) d))))))
+    ((tapp)
+     (let ((clo (car s)) (lvar (cadr s)))
+       (case (pop! clo)
+         ((primitive)
+          (vm (cons (apply (car clo) lvar) (cddr s)) e c d))
+         ((continuation)
+          (vm (cons (car lvar) (car clo)) (cadr clo) (caddr clo) (cadddr clo)))
+         (else
+          (vm (cddr s) (cons lvar (cadr clo)) (car clo) d)))))
+    ((rtn)
+     (let ((save (car d)))
+       (vm (cons (car s) (car save)) (cadr save) (caddr save) (cdr d))))
+    ((sel)
+     (let ((t-clause (car c))
+           (e-clause (cadr c)))
+       (if (car s)
+           (vm (cdr s) e t-clause (cons (cddr c) d))
+         (vm (cdr s) e e-clause (cons (cddr c) d)))))
+    ((selr)
+     (let ((t-clause (car c))
+           (e-clause (cadr c)))
+       (if (car s)
+           (vm (cdr s) e t-clause d)
+         (vm (cdr s) e e-clause d))))
+    ((join)
+     (vm s e (car d) (cdr d)))
+    ((pop)
+     (vm (cdr s) e c d))
+    ((args)
+     (let loop ((n (car c)) (a '()))
+       (if (zero? n)
+           (vm (cons a s) e (cdr c) d)
+         (loop (- n 1) (cons (pop! s) a)))))
+    ((args-ap)
+     (let loop ((n (- (car c) 1)) (a (list-copy (pop! s))))
+       (if (zero? n)
+           (vm (cons a s) e (cdr c) d)
+         (loop (- n 1) (cons (pop! s) a)))))
+    ((def)
+     (let ((sym (car c)))
+       (push! *global-environment* (cons sym (car s)))
+       (vm (cons sym (cdr s)) e (cdr c) d)))
+    ((defm)
+     (let ((sym (car c)))
+       (push! *global-environment*
+              (cons sym (cons 'macro (car s))))
+       (vm (cons sym (cdr s)) e (cdr c) d)))
+    ((stop) (car s))
+    (else (error "unknown opcode"))))
+
+; 大域変数
+(define *global-environment*
+        (list
+          (list 'car   'primitive car)
+          (list 'cdr   'primitive cdr)
+          (list 'cons  'primitive cons)
+          (list 'eq?   'primitive eq?)
+          (list 'eqv?  'primitive eqv?)
+          (list 'pair? 'primitive pair?)
+          (list 'display 'primitive display)
+          (list 'newline 'primitive newline)
+          (list '+  'primitive +)
+          (list '-  'primitive -)
+          (list '*  'primitive *)
+          (list '/  'primitive /)
+          (list '=  'primitive =)
+          (list '&lt;  'primitive &lt;)
+          (list '&gt;  'primitive &gt;)
+          (list '&lt;= 'primitive &lt;=)
+          (list '&gt;= 'primitive &gt;=)
+        ))
+
+;;; read-eval-print-loop
+(define (repl)
+  (let loop ()
+    (display "\n&gt;&gt;&gt; ")
+    (let ((expr (compile (read))))
+      (print expr)
+      (display (time (vm '() '() expr '()))))
+    (newline)
+    (loop)))
+
+; 実行
+(define (main args)
+  ; ファイルの読み込み
+  (for-each
+    (lambda (name)
+      (with-input-from-file name
+        (lambda ()
+          (let loop ()
+            (let ((output (vm '() '() (compile (read)) '())))
+              (display output)
+              (newline)
+              (if (not (eof-object? output))
+                  (loop)
+                  #f))))))
+    (cdr args))
+  ; 実行
+  (repl))
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h4 id="appendix">●Appendix: ldg, gset 命令の改良 (2012/03/03)</h4>
+<p> sasagawa さんの <a href="http://practical-scheme.net/wiliki/wiliki.cgi?sasagawa%3aPoly">SECDマシン　Schemeコンパイラ　Simpleの開発記録</a> に触発されて、M.Hiroi も micro Scheme コンパイラの改良に挑戦してみました。プログラムと開発記録を公開されている sasagawa さんに感謝いたします。
+</p>
+
+<p> 今まで作成した micro Scheme コンパイラは、命令 ldg, gset で大域変数にアクセスするとき、大域変数の環境 *global-environment* を関数 assoc で線形探索していました。sasagawa さんがご指摘されているように、プログラムの実行時に探索を行うと、実行時間はどうしても遅くなります。コンパイル時に大域変数の配置を決めておくと、実行時間はもう少し速くなると思われます。
+</p>
+
+<p> micro Scheme コンパイラで一番簡単な修正方法は、コンパイル時に変数 sym を環境 *global-environment* から探索し、見つけた場合は sym ではなくセル (sym . value) を ldg, gset 命令に渡すようにコンパイルすることです。そうすると、ldg はセルの CDR 部の値 value をスタックに積むだけ、gset はセルの CDR 部をスタックトップの値に書き換えるだけで実現できます。
+</p>
+
+<p> 変数 sym が見つからない場合、セル (sym . *undef*) を生成して環境に追加することにします。*undef* は未束縛の変数であることを表すシンボルとして使います。これで define, define-macro を処理する命令 def, defm に対応することができます。*undef* のチェックは ldg, gset 命令で行えばいいでしょう。もちろん、コンパイル時にエラーチェックしてもかまいませんが、今回は簡単な方法を選びました。
+</p>
+
+<h4>●コンパイラの修正</h4>
+<p> それではプログラムを修正しましょう。最初に、環境から大域変数を格納したセルを求める関数 location-gvar を作ります。
+</p>
+
+<pre class="list">
+リスト :  大域変数の配置を求める
+
+; 大域変数の配置を求める
+(define (location-gvar expr)
+  (let ((cell (assoc expr *global-environment*)))
+    (unless cell
+      (set! cell (cons expr '*undef*))
+      (push! *global-environment* cell))
+    cell))
+
+; 大域変数の値を求める
+(define (get-gvar expr)
+  (cdr (location-gvar expr)))
+</pre>
+<p> location-gvar は環境 *global-environment* から引数 expr を assoc で探索します。見つからない場合、(cons expr '*undef*) で expr 用のセルを生成し、それを環境に追加します。最後にそのセル cell を返します。関数 get-gvar は大域変数 expr の値を返します。location-gvar でセルを求め、その CDR 部の値を返します。
+</p>
+
+<p> 次はコンパイル処理を修正します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : コンパイラの修正
+
+  ・・・・・
+
+        ((symbol? expr)                      ; 変数
+         (let ((pos (location expr env)))
+           (if pos
+               ; 局所変数
+               (list* 'ld pos code)
+             ; 大域変数
+             (list* 'ldg (location-gvar expr) code))))
+
+  ・・・・・
+
+        ((eq? (car expr) 'define)
+         (comp (caddr expr) env (list* 'def (location-gvar (cadr expr)) code) #f))
+        ((eq? (car expr) 'define-macro)
+         (comp (caddr expr) env (list* 'defm (location-gvar (cadr expr)) code) #f))
+        ((eq? (car expr) 'set!)
+         (let ((pos (location (cadr expr) env)))
+           (if pos
+               ; 局所変数
+               (comp (caddr expr) env (list* 'lset pos code) #f)
+             ; 大域変数
+             (comp (caddr expr) env (list* 'gset (location-gvar (cadr expr)) code) #f))))
+
+  ・・・・・
+
+</pre>
+<p> 変数のアクセスで、大域変数の場合は location-gvar で大域変数のセルを求めて ldg のあとにセットします。set! も同様にコンパイルします。define, define-macro も修正が必要で、def, defm 命令のあとに location-gvar の返り値をセットします。
+</p>
+<h4>●仮想マシンの修正</h4>
+<p> 次は仮想マシン vm を修正します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 仮想マシンの修正
+
+  ・・・・・
+
+    ((ldg)
+     (let ((v (cdar c)))
+       (when (eq? v '*undef*)
+         (error "unbound variable:" (caar c)))
+       (vm (cons v s) e (cdr c) d)))
+
+  ・・・・・
+
+    ((gset)
+     (when (eq? (cdar c) '*undef*)
+       (error "unbound variable:" (caar c)))
+     (set-cdr! (car c) (car s))
+     (vm s e (cdr c) d))
+
+  ・・・・・
+
+    ((def)
+     (let ((cell (car c)))
+       (set-cdr! cell (car s))
+       (vm (cons (car cell) (cdr s)) e (cdr c) d)))
+    ((defm)
+     (let ((cell (car c)))
+       (set-cdr! cell (cons 'macro (car s)))
+       (vm (cons (car cell) (cdr s)) e (cdr c) d)))
+
+  ・・・・・
+
+</pre>
+<p> ldg の場合、c の先頭に大域変数のセルが格納されているので、(cdar c) で変数の値 v を求め、それが *undef* ならばエラーを送出します。そうでなければ v をスタックに積むだけです。gset の場合も c の先頭に大域変数のセルが格納されているので、その CDR 部を set-cdr! でスタックトップの値 (car s) に書き換えるだけです。def と defm は gset と同様に大域変数のセル (cell) の CDR 部を書き換えて、変数名 (car cell) をスタックに積むだけです。
+</p>
+<p> 修正はこれだけです。プログラムの詳細は <a href="abcscm36.html#list2">プログラムリスト２</a> をお読みください。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実行してみましょう。1 から n までの和を求める関数 sum1 (末尾再帰版) とたらいまわし関数で試してみました。
+</p>
+<pre>
+            表 : 実行結果
+
+                   |   A   |   B
+  -----------------+-------+--------
+  (sum1  500000 0) |  8.96 |  7.28
+  (tarai 10 5 0)   |  4.97 |  4.22 
+  (tak   14 7 0)   |  5.77 |  4.86 
+
+  A : 改良前
+  B : 改良後
+
+  単位 : 秒
+
+実行環境 : Windows XP, celeron 1.40 GHz, Gauche version 0.9.1
+</pre>
+<p> 大域変数のアクセス方法を改良することで、実行時間は sum1 で約 19 %, たらいまわし関数で約 15 % ほど速くなりました。簡単な方法ですが、関数を呼び出すときに ldg 命令を使っているので、その効果はけっこう大きいようです。
+</p>
+<p> なお、今回の修正方法がベストというわけではありません。たとえば、他の言語で実装する場合、シンボルを表すデータ構造を作り、その中に大域変数の値を格納する領域を用意します。そうすると、ldg, gset, def, defm 命令にはシンボルを渡すだけで、大域変数の値にアクセスすることができます。いろいろな方法を考えて試してみるのも面白いと思います。
+</p>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+;
+; secd.scm : SECD 仮想マシンによる Scheme コンパイラ
+;
+;            (1) 基本機能の実装
+;            (2) 伝統的なマクロの実装
+;            (3) 継続の実装
+;            (4) 末尾再帰最適化
+;            (5) ldg, gset 命令の改良
+;
+;            Copyright (C) 2009-2012 Makoto Hiroi
+;
+
+; 変数の位置を求める
+(define (position-var sym ls)
+  (let loop ((i 0) (ls ls))
+    (cond ((null? ls) #f)
+          ((symbol? ls)
+           (if (eq? sym ls) (- (+ i 1)) #f))
+          ((eq? sym (car ls)) i)
+          (else
+           (loop (+ i 1) (cdr ls))))))
+
+; フレームと変数の位置を求める
+(define (location sym ls)
+  (let loop ((i 0) (ls ls))
+    (if (null? ls)
+        #f
+      (let ((j (position-var sym (car ls))))
+        (if j
+            (cons i j)
+          (loop (+ i 1) (cdr ls)))))))
+
+; 大域変数の配置を求める
+(define (location-gvar expr)
+  (let ((cell (assoc expr *global-environment*)))
+    (unless cell
+      (set! cell (cons expr '*undef*))
+      (push! *global-environment* cell))
+    cell))
+
+; 大域変数の値を求める
+(define (get-gvar expr)
+  (cdr (location-gvar expr)))
+
+; 自己評価フォームか
+(define (self-evaluation? expr)
+  (and (not (pair? expr)) (not (symbol? expr))))
+
+; マクロか
+(define (macro? expr)
+  (let ((val (assoc expr *global-environment*)))
+    (and val (pair? (cdr val)) (eq? 'macro (cadr val)))))
+
+; マクロのコードを取得する
+(define (get-macro-code expr)
+  (caddr (get-gvar expr)))
+
+; S 式をコンパイルする
+(define (compile expr)
+  (comp expr '() '(stop) #f))
+
+; コンパイル本体
+(define (comp expr env code tail)
+  (cond ((self-evaluation? expr)             ; 自己評価フォーム
+         (list* 'ldc expr code))
+        ((symbol? expr)                      ; 変数
+         (let ((pos (location expr env)))
+           (if pos
+               ; 局所変数
+               (list* 'ld pos code)
+             ; 大域変数
+             (list* 'ldg (location-gvar expr) code))))
+        ((eq? (car expr) 'quote)
+         (list* 'ldc (cadr expr) code))
+        ((eq? (car expr) 'if)
+         (if tail
+             ; 末尾呼び出し
+             (let ((t-clause (comp (caddr expr) env '(rtn) #t))
+                   (f-clause 
+                     (if (null? (cdddr expr))
+                         (list 'ldc '*undef 'rtn)
+                       (comp (cadddr expr) env '(rtn) #t))))
+               (comp (cadr expr) env (list* 'selr t-clause f-clause (cdr code)) #f))
+           (let ((t-clause (comp (caddr expr) env '(join) #f))
+                 (f-clause 
+                   (if (null? (cdddr expr))
+                       (list 'ldc '*undef 'join)
+                     (comp (cadddr expr) env '(join) #f))))
+             (comp (cadr expr) env (list* 'sel t-clause f-clause code) #f))))
+        ((eq? (car expr) 'lambda)
+         (let ((body (comp-body (cddr expr) (cons (cadr expr) env) '(rtn))))
+           (list* 'ldf body code)))
+        ((eq? (car expr) 'define)
+         (comp (caddr expr) env (list* 'def (location-gvar (cadr expr)) code) #f))
+        ((eq? (car expr) 'define-macro)
+         (comp (caddr expr) env (list* 'defm (location-gvar (cadr expr)) code) #f))
+        ((eq? (car expr) 'set!)
+         (let ((pos (location (cadr expr) env)))
+           (if pos
+               ; 局所変数
+               (comp (caddr expr) env (list* 'lset pos code) #f)
+             ; 大域変数
+             (comp (caddr expr) env (list* 'gset (location-gvar (cadr expr)) code) #f))))
+        ((eq? (car expr) 'call/cc)
+         (list* 'ldct code 'args 1 (comp (cadr expr) env (cons 'app code) #f)))
+        ((eq? (car expr) 'apply)
+         (complis (cddr expr)
+                  env
+                  (list* 'args-ap
+                         (length (cddr expr))
+                         (comp (cadr expr) env (cons 'app code) #f))))
+        ((macro? (car expr))
+         ; マクロ展開してからコンパイルする
+         (let ((new-expr (vm '()
+                             (list (cdr expr))
+                             (get-macro-code (car expr))
+                             (list (list '() '() '(stop))))))
+           (comp new-expr env code #f)))
+        (else  ; 関数呼び出し
+         (complis (cdr expr)
+                  env
+                  (list* 'args
+                         (length (cdr expr))
+                         (comp (car expr) env (cons (if tail 'tapp 'app) code) #f))))))
+
+; ラムダ式本体のコンパイル
+(define (comp-body body env code)
+  (if (null? (cdr body))
+      (comp (car body) env code #t)
+    (comp (car body)
+          env
+          (list* 'pop
+                 (comp-body (cdr body) env code))
+          #f)))
+
+; 引数を評価するコードを生成
+(define (complis expr env code)
+  (if (null? expr)
+      code
+    (comp (car expr) env (complis (cdr expr) env code) #f)))
+
+;;; 仮想マシン
+
+; ls の先頭から n 個の要素を取り除く
+(define (drop ls n)
+  (if (zero? n)
+      ls
+    (drop (cdr ls) (- n 1))))
+
+; 局所変数の値を求める
+(define (get-lvar e i j)
+  (if (&lt;= 0 j)
+      (list-ref (list-ref e i) j)
+    (drop (list-ref e i) (- (+ j 1)))))
+
+; 局所変数の値を更新する
+(define (set-lvar! e i j val)
+  (if (&lt;= 0 j)
+      (set-car! (drop (list-ref e i) j) val)
+    (if (= j -1)
+        (set-car! (drop e i) val)
+      (set-cdr! (drop (list-ref e i) (- (+ j 2))) val))))
+
+; 仮想マシンでコードを実行する
+(define (vm s e c d)
+  (case (pop! c)
+    ((ld)
+     (let ((pos (car c)))
+       (vm (cons (get-lvar e (car pos) (cdr pos)) s) e (cdr c) d)))
+    ((ldc)
+     (vm (cons (car c) s) e (cdr c) d))
+    ((ldg)
+     (let ((v (cdar c)))
+       (when (eq? v '*undef*)
+         (error "unbound variable:" (caar c)))
+       (vm (cons v s) e (cdr c) d)))
+    ((ldf)
+     (vm (cons (list 'closure (car c) e) s) e (cdr c) d))
+    ((ldct)
+     (vm (cons (list 'continuation s e (car c) d) s) e (cdr c) d))
+    ((lset)
+     (let ((pos (car c)))
+       (set-lvar! e (car pos) (cdr pos) (car s))
+       (vm s e (cdr c) d)))
+    ((gset)
+     (when (eq? (cdar c) '*undef*)
+       (error "unbound variable:" (caar c)))
+     (set-cdr! (car c) (car s))
+     (vm s e (cdr c) d))
+    ((app)
+     (let ((clo (car s)) (lvar (cadr s)))
+       (case (pop! clo)
+         ((primitive)
+          (vm (cons (apply (car clo) lvar) (cddr s)) e c d))
+         ((continuation)
+          (vm (cons (car lvar) (car clo)) (cadr clo) (caddr clo) (cadddr clo)))
+         (else
+          (vm '() (cons lvar (cadr clo)) (car clo) (cons (list (cddr s) e c) d))))))
+    ((tapp)
+     (let ((clo (car s)) (lvar (cadr s)))
+       (case (pop! clo)
+         ((primitive)
+          (vm (cons (apply (car clo) lvar) (cddr s)) e c d))
+         ((continuation)
+          (vm (cons (car lvar) (car clo)) (cadr clo) (caddr clo) (cadddr clo)))
+         (else
+          (vm (cddr s) (cons lvar (cadr clo)) (car clo) d)))))
+    ((rtn)
+     (let ((save (car d)))
+       (vm (cons (car s) (car save)) (cadr save) (caddr save) (cdr d))))
+    ((sel)
+     (let ((t-clause (car c))
+           (e-clause (cadr c)))
+       (if (car s)
+           (vm (cdr s) e t-clause (cons (cddr c) d))
+         (vm (cdr s) e e-clause (cons (cddr c) d)))))
+    ((selr)
+     (let ((t-clause (car c))
+           (e-clause (cadr c)))
+       (if (car s)
+           (vm (cdr s) e t-clause d)
+         (vm (cdr s) e e-clause d))))
+    ((join)
+     (vm s e (car d) (cdr d)))
+    ((pop)
+     (vm (cdr s) e c d))
+    ((args)
+     (let loop ((n (car c)) (a '()))
+       (if (zero? n)
+           (vm (cons a s) e (cdr c) d)
+         (loop (- n 1) (cons (pop! s) a)))))
+    ((args-ap)
+     (let loop ((n (- (car c) 1)) (a (list-copy (pop! s))))
+       (if (zero? n)
+           (vm (cons a s) e (cdr c) d)
+         (loop (- n 1) (cons (pop! s) a)))))
+    ((def)
+     (let ((cell (car c)))
+       (set-cdr! cell (car s))
+       (vm (cons (car cell) (cdr s)) e (cdr c) d)))
+    ((defm)
+     (let ((cell (car c)))
+       (set-cdr! cell (cons 'macro (car s)))
+       (vm (cons (car cell) (cdr s)) e (cdr c) d)))
+    ((stop) (car s))
+    (else (error "unknown opcode"))))
+
+; 大域変数
+(define *global-environment*
+        (list
+          (list 'car   'primitive car)
+          (list 'cdr   'primitive cdr)
+          (list 'cons  'primitive cons)
+          (list 'eq?   'primitive eq?)
+          (list 'eqv?  'primitive eqv?)
+          (list 'pair? 'primitive pair?)
+          (list 'display 'primitive display)
+          (list 'newline 'primitive newline)
+          (list '+  'primitive +)
+          (list '-  'primitive -)
+          (list '*  'primitive *)
+          (list '/  'primitive /)
+          (list '=  'primitive =)
+          (list '&lt;  'primitive &lt;)
+          (list '&gt;  'primitive &gt;)
+          (list '&lt;= 'primitive &lt;=)
+          (list '&gt;= 'primitive &gt;=)
+        ))
+
+;;; read-eval-print-loop
+(define (repl)
+  (call/cc
+    (lambda (break)
+      (let loop ()
+        (display "\n&gt;&gt;&gt; ")
+        (guard (err
+                ((&lt;error&gt; err)
+                (format #t "ERROR:~S~%" (condition-ref err 'message))))
+          (let* ((expr (compile (read)))
+                 (val (time (vm '() '() expr '()))))
+            (if (eof-object? val) (break #t))
+            (write/ss val)
+            (newline)))
+        (loop)))))
+
+; 実行
+(define (main args)
+  ; ファイルの読み込み
+  (for-each
+    (lambda (name)
+      (with-input-from-file name
+        (lambda ()
+          (let loop ()
+            (let ((output (vm '() '() (compile (read)) '())))
+              (write/ss output)
+              (newline)
+              (if (not (eof-object? output))
+                  (loop)
+                  #f))))))
+    (cdr args))
+  ; 実行
+  (repl))
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h4 id="appendix1">●Appendix: バッククォートの修正 (2013/08/24)</h4>
+<p> 拙作のページ <a href="abcscm31.html">Scheme で作る micro Scheme (2)</a> や <a href="abcscm34.html">micro Scheme コンパイラの作成 (2)</a> で作成したバッククォートの処理は簡略版で、 Scheme の仕様書 (R5RS など) に準拠しておりません。具体的には、バッククォートは入れ子にすることができるのですが、拙作の簡略版では対応していません。今回はちょっと複雑になりますが、バッククォートの入れ子にも対応するようにプログラムを修正しましょう。
+</p>
+
+<p> バッククォートの入れ子は、レベルを考えると理解しやすいと思います。一番外側にある `expr0 をレベルを 0 とします。expr0 の中で `expr1 を見つけたら、レベルを +1 します。このとき、` はそのまま出力して、expr1 の処理を行います。その中で ,expr2 や ,@expr2 を見つけた場合、レベルが 0 ならば expr2 を評価するようにマクロ展開し、そうでなければレベルを -1 します。このとき、, や ,@ はそのまま出力して、expr2 の処理を行います。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; `(a `(b ,(c ,(+ 1 2 3))) ,(car '(d e f)))
+(a `(b ,(c 6)) d)
+</pre>
+<p> リスト A = (a ...) のレベルは 0 です。次の要素が quasiquote なので、リスト B = (b ...) のレベルは 1 になります。リスト B の 2 番目の要素は unquote ですが、レベルが 1 なので、unquote をそのまま出力して、リスト C = (c ,(+ 1 2 3)) を処理します。このとき、レベルは -1 されて 0 になります。リスト C の中の unquote はレベルが 0 なので、(+ 1 2 3) を評価して 6 になります。リスト A の最後の要素はレベル 0 の unquote なので (car '(d e f)) を評価して d になります。
+</p>
+
+<p> バッククォートはリストだけではなくアトムにも適用することができます。拙作の簡略版はこの処理にも対応していません。次の例を見てください。
+</p>
+<pre>
+gosh&gt; (define a '(1 2 3))
+a
+gosh&gt; `,a
+(1 2 3)
+gosh&gt; `,@a
+=> エラー
+gosh&gt; ``,,@a
+`(unquote 1 2 3)
+gosh&gt; ``,@,@a
+`(unquote-splicing 1 2 3)
+</pre>
+<p> `,a は (1 2 3) に展開されますが、`,@a はリストを外せないのでエラーになります。ただし、unquote-splicing の前に unquote や unquote-splicing がそのまま展開される場合は、リストを外すことができるのでエラーにはなりません。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。
+</p>
+
+<pre class="list">
+リスト : バッククオートの処理
+
+(define unquote
+  (lambda (x) (error "unquote appeared outside quasiquote")))
+
+(define unquote-splicing
+  (lambda (x) (error "unquote-splicing appeared outside quasiquote")))
+
+(define translator
+  (lambda (ls n)
+    (if (pair? ls)
+        (if (pair? (car ls))
+	    (translator-list ls n)
+	  (translator-atom ls n))
+      (list 'quote ls))))
+
+(define-macro quasiquote (lambda (x) (translator x 0)))
+</pre>
+<p> 関数 unquote と unquote-splicing はエラーを返します。これは `,,a のように、対応する quasiquote がない場合に呼び出されます。micro Scheme コンパイラ (secd.scm) に primitive の関数 error を追加してください。
+</p>
+
+<pre class="list">
+リスト : secd.scm の修正
+
+(define *global-environment*
+        (list
+          
+          ・・・ 省略 ・・・
+          
+          (list 'error   'primitive error)    ; 追加
+        ))
+</pre>
+
+<p> quasiquote の実際の処理は関数 translator で行います。引数が ls がリストでその先頭要素がリストの場合は tranlator-list を呼び出します。これはリストの中にある unquote や unquote-splicing を展開します。先頭要素がアトムの場合は tranlator-atom を呼び出します。これは quasiquote の直後にある unquote や unquote-splicing を展開します。それ以外の場合は (quote ls) を生成するコード (list 'quote ls) を出力します。
+</p>
+
+<p> 次は translator-list を作ります。
+</p>
+<pre class="list">
+リスト : バッククオートの処理 (2)
+
+(define translator-list
+  (lambda (ls n)
+    (if (eq? (caar ls) 'unquote)
+	(translator-unquote ls n)
+      (if (eq? (caar ls) 'unquote-splicing)
+	  (translator-unquote-splicing ls n)
+	(if (eq? (caar ls) 'quasiquote)
+	    (translator-quasiquote ls n)
+	  (list 'cons
+		(translator (car ls) n)
+		(translator (cdr ls) n)))))))
+</pre>
+<p> translator-list は (caar ls) の種類によって処理を振り分けるだけです。unquote であれば translator-unquote を、unquote-splicing であれば translator-unquote-splicing を、quasiquote であれば translator-quasiquote を呼び出します。それ以外の場合は (car ls) と (cdr ls) に対して translator を適用し、その結果を cons で連結するコードを生成します。
+</p>
+
+<p> 次は unquote を展開する translator-unquote を作ります。
+</p>
+<pre class="list">
+リスト : バッククオートの処理 (3)
+
+(define translator-sub
+  (lambda (sym ls n succ)
+    (list 'list
+	  (list 'quote sym)
+	  (translator ls (+ n succ)))))
+
+(define translator-unquote
+  (lambda (ls n)
+    (list 'cons
+	  (if (zero? n)
+	      (cadar ls)
+	    (translator-sub 'unquote (cadar ls) n -1))
+	  (translator (cdr ls) n))))
+</pre>
+<p> レベル n が 0 の場合、unquote の次の要素 (cadar ls) を評価するコードを生成します。これは (cadar ls) をそのまま出力するだけです。そうでなければ、unquote をそのまま出力して、(cadar ls) の中を調べます。この処理を関数 translator-sub で行います。このときレベルを -1 します。あとは、(cdr ls) に traslator を適用して、2 つの引数を cons で連結するコードを生成します。
+</p>
+
+<p> 次は unquote-splicing を展開する関数 translator-unquote-splicing を作ります。
+</p>
+<pre class="list">
+リスト : バッククオートの処理 (4)
+
+(define translator-unquote-splicing
+  (lambda (ls n)
+    (if (zero? n)
+	(list 'append (cadar ls) (translator (cdr ls) n))
+      (list 'cons
+	    (translator-sub 'unquote-splicing (cadar ls) n -1)
+	    (translator (cdr ls) n)))))
+</pre>
+<p> レベル n が 0 の場合は、(cadar ls) を評価した結果と (cdr ls) に translator を適用した結果を append するコードを生成します。これで (cadar ls) の評価結果のリストを外すことができます。そうでなければ、translator-sub で unquote-splicing をそのまま出力するコードを生成し、(cdr ls) に translator を適用した結果と cons するコードを生成します。translator-sub を呼び出すときはレベルを -1 することをお忘れなく。
+</p>
+
+<p> 次は quasiquote をそのまま出力する関数 translator-quasiquote を作ります。
+</p>
+<pre class="list">
+リスト : バッククオートの処理 (5)
+
+(define translator-quasiquote
+  (lambda (ls n)
+    (list 'cons
+	  (translator-sub 'quasiquote (cadar ls) n 1)
+	  (translator (cdr ls) n))))
+</pre>
+<p> translator-quasiquote は簡単です。translator-sub で quasiquote をそのまま出力するコードを生成し、(cdr ls) に translator を適用した結果と cons するコードを生成します。translator-sub を呼び出すときはレベルを +1 することに注意してください。
+</p>
+
+<p> 最後に translator-atom を作ります。
+</p>
+<pre class="list">
+リスト : バッククオートの処理 (6)
+
+(define translator-atom
+  (lambda (ls n)
+    (if (eq? (car ls) 'unquote)
+	(if (zero? n)
+	    (cadr ls)
+	  (if (= n 1)
+	      (if (eq? (car (cadr ls)) 'unquote-splicing)
+		  (list 'cons (list 'quote 'unquote) (cadr (cadr ls)))
+		(translator-sub 'unquote (cadr ls) n -1))
+	    (translator-sub 'unquote (cadr ls) n -1)))
+      (if (eq? (car ls) 'unquote-splicing)
+	  (if (zero? n)
+	      (error "invalid unquote-splicing form")
+	    (if (= n 1)
+		(if (eq? (car (cadr ls)) 'unquote-splicing)
+		    (list 'cons (list 'quote 'unquote-splicing) (cadr (cadr ls)))
+		  (translator-sub 'unquote-splicing (cadr ls) n -1))
+	      (translator-sub 'unquote-splicing (cadr ls) n -1)))
+	(if (eq? (car ls) 'quasiquote)
+	    (translator-sub 'quasiquote (cadr ls) n 1)
+	  (list 'cons 
+		(list 'quote (car ls))
+		(translator (cdr ls) n)))))))
+</pre>
+<p> (car ls) が unquote でレベル n が 0 の場合、(cadr ls) をそのまま出力します。これでマクロ展開されたあと (cadr ls) が評価されます。レベル n が 1 で、(cadr ls) の先頭要素が unquote-splicing の場合、次の要素 (cadr (cadr ls)) を評価して、そのリストの先頭に unquote を cons で追加するコードを生成します。それ以外の場合は、translator-sub で unquote をそのまま出力するコードを生成します。
+</p>
+<p> (car ls) が unquote-splicing でレベル n が 0 の場合、リストを外せないのでエラーを返します。レベル n が 1 で、(cadr ls) の先頭要素が unquote-splicing の場合、次の要素 (cadr (cadr ls)) を評価して、そのリストの先頭に unquote-splicing を cons で追加するコードを生成します。それ以外の場合は、translator-sub で unquote-splicing をそのまま出力するコードを生成します。
+</p>
+<p> (car ls) を quasiquote の場合は translator-sub で quasiquote をそのまま出力するコードを生成します。それ以外の場合は (car ls) をそのまま出力するコードを生成し、(cdr ls) に translator-sub を適用したコードと cons するコードを生成します。
+</p>
+<h4>●実行例</h4>
+<p> それでは実際に試してみましょう。必要なプログラムはファイル <a href="abcscm36.html#list3">lib.scm</a> に格納されているものとします。
+</p>
+
+<pre>
+&gt;&gt;&gt; (define a 1)
+a
+
+&gt;&gt;&gt; (define b '(a b c))
+b
+
+&gt;&gt;&gt; `(a b)
+(a b)
+
+&gt;&gt;&gt; `(,a ,b)
+(1 (a b c))
+
+&gt;&gt;&gt; `(,a ,@b)
+(1 a b c)
+
+&gt;&gt;&gt; `(a `(b ,(c ,(+ 1 2 3))) ,(car '(d e f)))
+(a `(b ,(c 6)) d)
+
+&gt;&gt;&gt; `(a `(b ,(+ 1 2) ,(foo ,(+ 1 3) d) e) f)
+(a `(b ,(+ 1 2) ,(foo 4 d) e) f)
+
+&gt;&gt;&gt; (let ((name1 'x) (name2 'y)) `(a `(b ,,name1 ,',name2 d) e))
+(a `(b ,x ,'y d) e)
+
+&gt;&gt;&gt; `,a
+1
+
+&gt;&gt;&gt; `,b
+(a b c)
+
+&gt;&gt;&gt; ``,,a
+`,1
+
+&gt;&gt;&gt; ``,,b
+`,(a b c)
+
+&gt;&gt;&gt; ``,,@b
+`(unquote a b c)
+
+&gt;&gt;&gt; ``,@,@b
+`(unquote-splicing a b c)
+
+&gt;&gt;&gt; ,a
+ERROR:"unquote appeared outside quasiquote"
+
+&gt;&gt;&gt; ,@b
+ERROR:"unquote-splicing appeared outside quasiquote"
+
+&gt;&gt;&gt; `,@b
+ERROR:"invalid unquote-splicing form"
+
+&gt;&gt;&gt; `,,@b
+ERROR:"unquote-splicing appeared outside quasiquote"
+
+&gt;&gt;&gt; `,,a
+ERROR:"unquote appeared outside quasiquote"
+
+</pre>
+<p> どうやら正常に動作しているようですが、まだバグが残っているかもしれません。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+;
+; lib.scm : micro Scheme 用簡易ライブラリ
+;
+;           Copyright (C) 2013 Makoto Hiroi
+;
+
+; 述語
+(define not (lambda (x) (if x #f #t)))
+(define null? (lambda (x) (eq? x ())))
+
+; 数
+(define zero? (lambda (x) (= x 0)))
+(define positive? (lambda (x) (&lt; 0 x)))
+(define negative? (lambda (x) (&gt; 0 x)))
+(define even? (lambda (x) (zero? (mod x 2))))
+(define odd? (lambda (x) (not (even? x))))
+(define abs (lambda (x) (if (negative? x) (- x) x)))
+(define max
+  (lambda (x . xs)
+    (fold-left (lambda (a b) (if (&lt; a b) b a)) x xs)))
+(define min
+  (lambda (x . xs)
+    (fold-left (lambda (a b) (if (&gt; a b) b a)) x xs)))
+
+(define gcdi
+  (lambda (a b)
+    (if (zero? b)
+	a
+      (gcdi b (mod a b)))))
+(define gcd
+  (lambda xs
+    (if (null? xs)
+	0
+      (fold-left (lambda (a b) (gcdi a b)) (car xs) (cdr xs)))))
+
+(define lcmi (lambda (a b) (/ (* a b) (gcdi a b))))
+(define lcm
+  (lambda xs
+    (if (null? xs)
+	1
+      (fold-left (lambda (a b) (lcmi a b)) (car xs) (cdr xs)))))
+
+; cxxr
+(define caar (lambda (xs) (car (car xs))))
+(define cadr (lambda (xs) (car (cdr xs))))
+(define cdar (lambda (xs) (cdr (car xs))))
+(define cddr (lambda (xs) (cdr (cdr xs))))
+
+; cxxxr
+(define caaar (lambda (xs) (car (caar xs))))
+(define caadr (lambda (xs) (car (cadr xs))))
+(define cadar (lambda (xs) (car (cdar xs))))
+(define caddr (lambda (xs) (car (cddr xs))))
+(define cdaar (lambda (xs) (cdr (caar xs))))
+(define cdadr (lambda (xs) (cdr (cadr xs))))
+(define cddar (lambda (xs) (cdr (cdar xs))))
+(define cdddr (lambda (xs) (cdr (cddr xs))))
+
+
+; リスト操作
+
+(define list (lambda x x))
+
+(define append-1
+  (lambda (xs ys)
+    (if (null? xs)
+	ys
+      (cons (car xs) (append-1 (cdr xs) ys)))))
+
+(define append
+  (lambda xs
+    (if (null? xs)
+	'()
+      (if (null? (cdr xs))
+	  (car xs)
+	(append-1 (car xs) (apply append (cdr xs)))))))
+
+(define length
+  (lambda (xs)
+    (fold-left (lambda (a x) (+ a 1)) 0 xs)))
+
+(define reverse
+  (lambda (xs)
+    (fold-left (lambda (a x) (cons x a)) () xs)))
+
+(define list-tail
+  (lambda (xs k)
+    (if (zero? k)
+	xs
+      (list-tail (cdr xs) (- k 1)))))
+
+(define list-ref 
+  (lambda (xs k)
+    (if (zero? k)
+	(car xs)
+      (list-ref (cdr xs) (- k 1)))))
+
+; リストの探索
+(define memq
+  (lambda (x ls)
+    (if (null? ls)
+        #f
+        (if (eq? x (car ls))
+            ls
+          (memq x (cdr ls))))))
+
+(define memv
+  (lambda (x ls)
+    (if (null? ls)
+        #f
+        (if (eqv? x (car ls))
+            ls
+          (memv x (cdr ls))))))
+
+(define member
+  (lambda (x ls)
+    (if (null? ls)
+        #f
+        (if (equal? x (car ls))
+            ls
+          (member x (cdr ls))))))
+
+; 高階関数
+(define map-1
+  (lambda (f xs)
+    (if (null? xs)
+	()
+      (cons (f (car xs)) (map f (cdr xs))))))
+
+(define map
+  (lambda (f . args)
+    (if (memq '() args)
+	'()
+      (cons (apply f (map-1 car args))
+	    (apply map f (map-1 cdr args))))))
+
+(define filter
+  (lambda (p xs)
+    (if (null? xs)
+	()
+      (if (p (car xs))
+	  (cons (car xs) (filter p (cdr xs)))
+	(filter p (cdr xs))))))
+
+(define fold-left
+  (lambda (f a xs)
+    (if (null? xs)
+	a
+      (fold-left f (f a (car xs)) (cdr xs)))))
+
+(define fold-right
+  (lambda (f a xs)
+    (if (null? xs)
+	a
+      (f (car xs) (fold-right f a (cdr xs))))))
+
+
+;;
+;; マクロ
+;;
+(define unquote
+  (lambda (x) (error "unquote appeared outside quasiquote")))
+
+(define unquote-splicing
+  (lambda (x) (error "unquote-splicing appeared outside quasiquote")))
+
+(define translator-sub
+  (lambda (sym ls n succ)
+    (list 'list
+	  (list 'quote sym)
+	  (translator ls (+ n succ)))))
+
+(define translator-unquote
+  (lambda (ls n)
+    (list 'cons
+	  (if (zero? n)
+	      (cadar ls)
+	    (translator-sub 'unquote (cadar ls) n -1))
+	  (translator (cdr ls) n))))
+
+(define translator-unquote-splicing
+  (lambda (ls n)
+    (if (zero? n)
+	(list 'append (cadar ls) (translator (cdr ls) n))
+      (list 'cons
+	    (translator-sub 'unquote-splicing (cadar ls) n -1)
+	    (translator (cdr ls) n)))))
+
+(define translator-quasiquote
+  (lambda (ls n)
+    (list 'cons
+	  (translator-sub 'quasiquote (cadar ls) n 1)
+	  (translator (cdr ls) n))))
+
+(define translator-list
+  (lambda (ls n)
+    (if (eq? (caar ls) 'unquote)
+	(translator-unquote ls n)
+      (if (eq? (caar ls) 'unquote-splicing)
+	  (translator-unquote-splicing ls n)
+	(if (eq? (caar ls) 'quasiquote)
+	    (translator-quasiquote ls n)
+	  (list 'cons
+		(translator (car ls) n)
+		(translator (cdr ls) n)))))))
+
+(define translator-atom
+  (lambda (ls n)
+    (if (eq? (car ls) 'unquote)
+	(if (zero? n)
+	    (cadr ls)
+	  (if (= n 1)
+	      (if (eq? (car (cadr ls)) 'unquote-splicing)
+		  (list 'cons (list 'quote 'unquote) (cadr (cadr ls)))
+		(translator-sub 'unquote (cadr ls) n -1))
+	    (translator-sub 'unquote (cadr ls) n -1)))
+      (if (eq? (car ls) 'unquote-splicing)
+	  (if (zero? n)
+	      (error "invalid unquote-splicing form")
+	    (if (= n 1)
+		(if (eq? (car (cadr ls)) 'unquote-splicing)
+		    (list 'cons (list 'quote 'unquote-splicing) (cadr (cadr ls)))
+		  (translator-sub 'unquote-splicing (cadr ls) n -1))
+	      (translator-sub 'unquote-splicing (cadr ls) n -1)))
+	(if (eq? (car ls) 'quasiquote)
+	    (translator-sub 'quasiquote (cadr ls) n 1)
+	  (list 'cons 
+		(list 'quote (car ls))
+		(translator (cdr ls) n)))))))
+
+(define translator
+  (lambda (ls n)
+    (if (pair? ls)
+        (if (pair? (car ls))
+	    (translator-list ls n)
+	  (translator-atom ls n))
+      (list 'quote ls))))
+
+(define-macro quasiquote (lambda (x) (translator x 0)))
+
+; let (named-let)
+(define-macro let
+  (lambda (args . body)
+    (if (pair? args)
+        `((lambda ,(map car args) ,@body) ,@(map cadr args))
+      ; named-let
+      `(letrec ((,args (lambda ,(map car (car body)) ,@(cdr body))))
+        (,args ,@(map cadr (car body)))))))
+
+; and
+(define-macro and
+  (lambda args
+    (if (null? args)
+        #t
+      (if (null? (cdr args))
+          (car args)
+        `(if ,(car args) (and ,@(cdr args)) #f)))))
+
+; or
+(define-macro or
+  (lambda args
+    (if (null? args)
+        #f
+      (if (null? (cdr args))
+          (car args)
+        `(let ((+value+ ,(car args)))
+          (if +value+ +value+ (or ,@(cdr args))))))))
+
+; let*
+(define-macro let*
+  (lambda (args . body) 
+    (if (null? (cdr args))
+        `(let (,(car args)) ,@body)
+      `(let (,(car args)) (let* ,(cdr args) ,@body)))))
+
+; letrec
+(define-macro letrec
+  (lambda (args . body)
+    (let ((vars (map car args))
+          (vals (map cadr args)))
+      `(let ,(map (lambda (x) `(,x '*undef*)) vars)
+            ,@(map (lambda (x y) `(set! ,x ,y)) vars vals)
+            ,@body))))
+
+; begin
+(define-macro begin
+  (lambda args
+    (if (null? args)
+        `((lambda () '*undef*))
+      `((lambda () ,@args)))))
+
+; cond
+(define-macro cond
+  (lambda args
+    (if (null? args)
+        '*undef*
+      (if (eq? (caar args) 'else)
+          `(begin ,@(cdar args))
+        (if (null? (cdar args))
+            (caar args)
+          `(if ,(caar args)
+               (begin ,@(cdar args))
+            (cond ,@(cdr args))))))))
+
+; case
+(define-macro case
+  (lambda (key . args)
+    (if (null? args)
+        '*undef*
+      (if (eq? (caar args) 'else)
+          `(begin ,@(cdar args))
+        `(if (memv ,key ',(caar args))
+             (begin ,@(cdar args))
+           (case ,key ,@(cdr args)))))))
+
+; do
+(define-macro do
+  (lambda (var-form test-form . args)
+    (let ((vars (map car var-form))
+          (vals (map cadr var-form))
+          (step (map cddr var-form)))
+      `(letrec ((loop (lambda ,vars
+                        (if ,(car test-form)
+                            (begin ,@(cdr test-form))
+                          (begin
+                            ,@args
+                            (loop ,@(map (lambda (x y)
+					   (if (null? x) y (car x)))
+                                           step
+                                           vars)))))))
+        (loop ,@vals)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009-2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm35.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm48.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

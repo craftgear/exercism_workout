@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 bash 超入門 (前編)</title>
+  <meta name="description" content="bash 入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881807</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 bash 超入門 (前編)</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="linuxbash2.html">後編</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>CONTENTS</h3>
+<ul>
+  <li><a href="linuxbash1.html#chap00">はじめに</a>
+  <li><a href="linuxbash1.html#chap01">ファイルとディレクトリ</a>
+  <li><a href="linuxbash1.html#chap02">コマンドの形式</a>
+  <li><a href="linuxbash1.html#chap03">コマンドラインの機能</a>
+  <li><a href="linuxbash1.html#chap04">グロブ (glob)</a>
+  <li><a href="linuxbash1.html#chap05">リダイレクトとパイプ</a>
+  <li><a href="linuxbash1.html#chap06">プロセスとジョブ</a>
+  <li><a href="linuxbash1.html#chap07">シグナル</a>
+  <li><a href="linuxbash1.html#chap08">シェル変数と環境変数</a>
+  <li><a href="linuxbash1.html#chap09">環境変数 PATH</a>
+  <li><a href="linuxbash1.html#chap10">コマンドのグループ化</a>
+</ul>
+<hr>
+<h4 id="chap00">●はじめに</h4>
+<p> bash は Unix 系 OS で使用する「シェル (shell) 」のひとつです。シェルはユーザーの命令を OS に伝える橋渡しの役割を持っています。シェルには殻、亀の甲羅、外観、というような意味がありますが、OS 全体を包み込んでいてユーザーから直接見えるプログラムであることから、名づけられたのでしょう。bash は FSF の GNU プロジェクトのために作成されました。Linux では標準のシェルとして bash が搭載されています。</p>
+
+<p> bash がどんなものかというと、たとえば Lubuntu にログインして端末を起動すると "xxxx$ " という表示が出るはずです。これが bash の顔になります。$ をプロンプト (prompt : 促進メッセージ) といって、命令を入力できますよ、とユーザーに通知しているのです。xxxx の部分はユーザー名やコンピュータ名、カレントディレクトリなどが表示され、$ は一般ユーザーであることを表します。ここで、ls と入力すればディレクトリの一覧を表示することができます。このほかにも、cd でディレクトリを移動したり echo でメッセージを表示するなど、いろいろな操作を行うことができるのも bash の働きです。</p>
+
+<p> シェルは特別なプログラムではなく、OS 上で動作するプログラムのひとつに過ぎません。したがって取り替えることもできます。初期の Unix では、sh だけが唯一のシェルでしたが、シェルはとても有用なプログラムなので、今日までにいろいろなシェルが作成されています。代表的なシェルを示します。</p>
+<ul>
+  <li><b>sh</b><br>
+最も基本的なシェル。ユーザーインターフェースとしての機能は貧弱であった。Bourne Shell, B Shell とも呼ばれる。
+  <li><b>bash</b><br>
+B Shell のユーザーインターフェース機能を強化したシェル。Bourne Again Shell。
+  <li><b>csh</b><br>
+BSD Unix 用に開発されたシェル。Ｃ言語風のシンタックスを持つ。C Shell。
+  <li><b>tcsh</b><br>
+C Shell の強化版。
+  <li><b>ksh</b><br>
+B Shell の機能を引き継ぐとともに、コマンド履歴など C Shell から多くの機能を取り入れている。Korn Shell。
+  <li><b>zsh</b><br>
+B Shell のシンタックスを持ち、さまざまな独自機能を追加したシェル。
+</ul>
+<p> zsh は便利な機能がいろいろ用意されていて、根強いファンが多いといわれています。</p>
+<p> シェルはコマンドが書かれているファイルを読み込んで実行することもできます。一般に、拡張子が .sh となっているファイルを「シェルスクリプト (Shell Script) 」といって、シェルは中に書かれているコマンドを順番に実行します。コマンドは外部コマンドと内部コマンドの 2 つに分けることができます。</p>
+
+<p> 外部コマンドはプログラムのことです。パーミッションで実行が許可されているファイルは実行ファイルといって、OS 上で実行できるプログラムです。内部コマンドは、シェルに組み込まれている命令 (組み込み関数) のことです。cd, fg, bg, echo などは内部コマンドです。help を入力すると、内部コマンドの一覧が表示されます。内部コマンドの詳しい説明は help コマンド名 で参照することができます。</p>
+
+<p> また、制御構造 (条件分岐や繰り返しなど) を実現するコマンドもあります。これらのコマンドを使うと、シェルスクリプトでも複雑な処理を実行することができます。つまり、シェルは簡単なプログラミング言語と考えることができます。別名「コマンドインタプリタ」ともいわれます。</p>
+
+<p> 本稿では bash の基本的な使い方を簡単に説明します。Cygwin も標準で bash を使っているので、Cygwin でも試してみることができると思います。</p>
+
+<h4 id="chap01">●ファイルとディレクトリ</h4>
+<p> Unix 系 OS のファイルシステムは主にデータを格納する「通常ファイル (regular file) 」、周辺機器をファイルとして扱うための「デバイスファイル (device file) 」、ファイルを格納する「ディレクトリ (directory) 」からなります。ディレクトリは Windows の「フォルダ」と考えてください。Unix 系 OS はディレクトリの中にディレクトリを作ることができるので、Unix 系 OS のファイルシステムは「階層構造 (木構造) 」になります。</p>
+
+<p> 木の根にあたるのが「ルートディレクトリ (root directory) 」です。ルートは <b>/</b> で表します。Windows の場合、ドライブ番号 (A:, B:, C:, ...) ごとにルート ( <b>\</b> ) がありますが、Unix 系 OS にはドライブ番号がありません。ファイルシステムは一つだけなので、ルートも一つしか存在しません。</p>
+
+<p> 「パス (path) 」は、あるディレクトリからファイル (またはディレクトリ) に至るまでの道筋を表します。ディレクトリやファイルの区切り記号には <b>/</b> を使います。Unix 系 OS の場合、ファイル名に <b>/</b> を使うことはできません。とくに、ルートディレクトリから指定することを「絶対パス指定」といいます。たとえば、ユーザー mhiroi のホームディレクトリを絶対パスで表すと次のようになります。</p>
+<pre class="item">
+/user/home/mhiroi
+</pre>
+<p> ユーザーのホームディレクトリはチルダ ( <b>~</b> ) で表すことができます。チルダを使ってパスを指定することもできます。たとえば、bash の設定ファイル .bashrc はホームディレクトリにありますが、次のように指定することができます。</p>
+<pre class="item">
+~/.bashrc ==&gt; /user/home/mhiroi/.bashrc と同じ意味
+</pre>
+<p> なお、Unix 系 OS でドット ( <b>.</b> ) から始まるファイルは「隠しファイル」になります。</p>
+<p> これに対し、あるディレクトリを基準にしてパス名を指定する方法を「相対パス指定」といいます。相対パスはカレントディレクトリを表す <b>.</b> や一つ上の親ディレクトリを表す <b>..</b> を使います。また、パスの先頭がカレントディレクトリ直下のサブディレクトリ名でもかまいません。パスの先頭に <b>/</b> をつけると、それはルートディレクトリを表しますので、絶対パス指定と判断されてしまいます。相対パス指定の場合は先頭に <b>/</b> をつけないように注意してください。</p>
+
+<p> たとえば、ユーザー mhiroi のホームディレクトリにサブディレクトリ work と test があり、test の中にファイル test.txt があるとしましょう。カレントディレクトリが work とすると、test.txt の相対パスは次のようになります。</p>
+<pre class="item">
+../test/test.txt
+</pre>
+<p> <b>..</b> で親ディレクトリ (ホームディレクトリ) にもどり、そこから test に移動して、最後に test.txt でファイル名を指定します。カレントディレクトリがホームディレクトリであれば、次のように指定することができます。</p>
+<pre class="item">
+./test/test.txt
+test/test.txt
+</pre>
+<p> このように、相対パス指定はカレントディレクトリが基準になります。なお、カレントディレクトリはコマンド pwd で表示することができます。</p>
+
+<h4 id="chap02">●コマンドの形式</h4>
+<p> コマンドは次のような形式で入力します。</p>
+<pre class="item">
+コマンド名 引数１ 引数２ ... 
+</pre>
+<p> 最初はコマンド名で、その後ろに引数が必要になる場合もあります。引数にはコマンドのオプションを指定するフラグがあります。Windows では「 / 」の後ろの 1 文字で表しますが、Unix 系 OS では「 - 」の後ろの 1 文字で表すか、「 -- 」の後ろの文字列で表す場合が多いようです。このほかにも引数でファイル名やディレクトリ名、あるいは特別なオプションを指定する場合もあります。これは、コマンドによって異なります。</p>
+<p> コマンド名や引数の間は空白で区切ります。そして最後にリターンキーを入力すると、シェルがこのコマンドを実行します。</p>
+
+<h4 id="chap03">●コマンドラインの機能</h4>
+<p> シェルでコマンドを入力するエリアを「コマンドライン」といい、ラインエディタ (行エディタ) と同等の機能が備わっています。コマンドラインの主な編集機能を下表に示します。</p>
+<table border=1>
+<caption>表 : コマンドラインの編集機能</caption>
+<tbody>
+  <tr><td>C-b, ←</td><td>カーソルを左に移動</td></tr>
+  <tr><td>C-f, →</td><td>カーソルを右へ移動</td></tr>
+  <tr><td>M-b</td><td>カーソルを 1 ワード左に移動</td></tr>
+  <tr><td>M-f</td><td>カーソルを 1 ワード右に移動</td></tr>
+  <tr><td>C-a</td><td>カーソルを行頭に移動</td></tr>
+  <tr><td>C-e</td><td>カーソルを行末に移動</td></tr>
+  <tr><td>C-h, Backspace</td><td>カーソルの左側の文字を削除</td></tr>
+  <tr><td>C-d, Delete</td><td>カーソル位置の文字を削除</td></tr>
+  <tr><td>M-d</td><td>カーソル位置から右側の 1 ワードを削除</td></tr>
+  <tr><td>M-C-h</td><td>カーソル位置から左側の 1 ワードを削除</td></tr>
+  <tr><td>C-k</td><td>カーソル位置から行末まで削除</td></tr>
+  <tr><td>C-y</td><td>最後に削除されたものを取り出す</td></tr>
+</tbody>
+</table>
+<p> C-記号 は CTRL キーと記号を同時に押すという意味で、M-記号は ESC キーを押してから記号を押す、または Alt キーと記号を同時に押すという意味です。編集機能のほとんどはエディタ Emacs と同じです。</p>
+
+<p> bash は実行したコマンドの履歴を覚えていて、以前のコマンドを取り出して編集したり実行することができます。履歴を操作する主なコマンドを下表に示します。</p>
+
+<table border=1>
+<caption>表 : コマンド履歴の操作</caption>
+<tbody>
+  <tr><td>C-p, ↑</td><td>一つ前のコマンドに移動</td></tr>
+  <tr><td>C-n, ↓</td><td>一つ後ろのコマンドに移動</td></tr>
+  <tr><td>M-&lt;</td><td>履歴の先頭に移動 (一番古いコマンド)</td></tr>
+  <tr><td>M-&gt;</td><td>履歴の末尾に移動 (一番新しいコマンド)</td></tr>
+  <tr><td>C-r</td><td>履歴の検索 (古い方向)</td></tr>
+  <tr><td>history</td><td>コマンド履歴の一覧表示、または履歴の操作</td></tr>
+  <tr><td>!n</td><td>history で表示される n 番目のコマンドを実行</td></tr>
+  <tr><td>!!</td><td>直前のコマンドを実行</td></tr>
+</tbody>
+</table>
+<p> C-r は Emacs のインクリメンタルサーチと同じです。C-r を入力すると (reverse-i-search)`': というプロンプトが表示されるので、文字を入力していくとそれにマッチするコマンドを検索してくれます。同じ文字列で次の候補を検索したい場合は再度 C-r を押してください。</p>
+
+<p> bash は Tab キーを用いてコマンドやファイル名を補完することができます。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ ls
+bigrev  hexrev  kalah  octagon  octrev  reversi  updepon
+mhiroi@mhiroi-VirtualBox:~/work$ cd b        &lt;- Tab キーを押す
+mhiroi@mhiroi-VirtualBox:~/work$ cd bigrev/  &lt;- 補完
+</pre>
+<p> ディレクトリ work に 7 つのサブディレクトリがあります。bigrev に移動する場合、cd b を入力して Tab キーを押すと、bash は b で始まるファイル (ディレクトリ) を探して、残りの文字を補ってくれます。この場合、b で始まるディレクトリは 1 つしかないので、コマンドラインに bigrev/ が表示されます。</p>
+<p> 次は octagon に移動してみましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ cd o         &lt;- Tab キーを押す
+mhiroi@mhiroi-VirtualBox:~/work$ cd oct       &lt;- まで補完
+mhiroi@mhiroi-VirtualBox:~/work$ cd oct       &lt;- Tab キーを 2 回押す
+octagon/ octrev/                              &lt;- Tab 候補が表示される
+mhiroi@mhiroi-VirtualBox:~/work$ cd octa      &lt;- Tab キーを押す
+mhiroi@mhiroi-VirtualBox:~/work$ cd cotagon/  &lt;- 補完
+</pre>
+<p> cd o を入力して Tab キーを押します。o で始まるディレクトリは octagon と octrev の 2 つがあります。コマンドラインには両者に共通の文字列 oct までが表示されます。ここで Tab キーを 2 回押すと、oct で始まるファイル (ディレクトリ) が表示荒れます。このあと、a を入力して Tab キーを押すと octagon/ が表示されます。</p>
+
+<p> コマンドも同じように補完することができます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ w　&lt;- Tab キーを 2 回押す
+w                   whereis             wish8.6
+w.procps            which               word-list-compress
+wait                while               wpa_action
+wall                whiptail            wpa_cli
+watch               who                 wpa_passphrase
+wc                  whoami              wpa_supplicant
+wdctl               whoopsie            write
+wftopfa             widget              wvdial
+wget                wipefs              wvdialconf
+whatis              wish                
+mhiroi@mhiroi-VirtualBox:~/work$ wg &lt;- Tab キーを押す
+mhiroi@mhiroi-VirtualBox:~/work$ wget 
+</pre>
+<p> コマンドラインで w と入力してから Tab キーを 2 回押すと、w で始まるコマンド名が表示されます。このあと g を入力して Tab キーを押すと wget と表示されます。</p>
+
+
+<h4 id="chap04">●グロブ (glob)</h4>
+<p> Windows (MS-DOS) では、ワイルドカード (*, ?) を使ってファイルを指定することができますが、Unix 系 OS では特殊文字 (メタ文字)、たとえば ? * [ ] などを含むパターンを使ってファイルを指定することができます。そして、パターンから実際のファイル名を求める処理 (ファイル名の展開) を「グロブ (glob) 」とか globbing と呼びます。Unix 系 OS の場合、ファイル名の展開はシェルが行うので、アプリケーション側ではファイル名を受け取るだけで済みます。なお、使用できるメタ文字はシェルによって異なります。</p>
+
+<p> Linux の標準的なシェル (bash) で使用できる特殊文字（メタ文字）には、次の種類があります。</p>
+<table class="list" border=1>
+<caption>表：glob で使用できるメタ文字</caption>
+<tbody>
+<tr><td>*    </td><td>任意の長さの文字列と一致 (空文字列も含む)</td></tr>
+<tr><td>?    </td><td>任意の文字と一致</td></tr>
+<tr><td>[...]</td><td>[ ] の中の文字と一致</td></tr>
+<tr><td>[^...]</td><td>[ ] の中の文字以外と一致</td></tr>
+<tr><td>\x   </td><td>\ の直後の文字と一致 (メタ文字を打ち消すために使用する)</td></tr>
+</table>
+
+<p> * と ? は MS-DOS のワイルドカードと同じ働きをします。[ ] は中に含まれる文字と一致します。たとえば、foo.[ch] は foo.c と foo.h というファイル名と一致します。文字をハイフン ( - ) でつなぐと範囲を指定することができます。たとえば、foo[0-9].dat は foo0.dat から foo9.dat というファイル名と一致します。</p>
+
+<p> このほかに、{ } を使った文字列の展開機能があります。カンマで区切った文字列を { } の中に指定すると、その文字列を展開してくれます。簡単な例を示します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ echo {foo,bar,test}.txt
+foo.txt bar.txt test.txt
+mhiroi@mhiroi-VirtualBox:~$ echo foo.{txt,doc}
+foo.txt foo.doc
+</pre>
+<p> グロブと違って、ファイルの存在に関係なく展開されることに注意してください。</p>
+
+<h4 id="chap05">●リダイレクトとパイプ</h4>
+<p> Unix 系 OS では、ほとんどのコマンドが「標準入力 (standard input) 」からデータを読み込み、実行結果を「標準出力 (standard output) 」へ出力するように作られています。一般に、標準入力にはキーボードが割り当てられていて、標準出力には画面が割り当てられています。</p>
+
+<p> たとえば、ファイルを連結するコマンド cat は、引数にファイルが指定されていないと標準入力からデータを読み込み、それを標準出力へ書き込みます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ cat
+hello, world  &lt;- 入力
+hello, world  &lt;- 出力
+good by       &lt;- 入力
+good by       &lt;- 出力  入力の終了は Ctrl-D を押す
+mhiroi@mhiroi-VirtualBox:~/work$ 
+</pre>
+<p> 入力を終了する場合、Windows では Ctrl-Z を押しますが、Unix 系 OS は Ctrl-D になります。ご注意くださいませ。</p>
+
+<P> それから、エラーメッセージは標準出力ではなく「標準エラー出力 (standard error output) 」に出力されます。出力先は標準出力と同じく「画面」です。たとえば、cat で引数に指定したファイルが見つからない場合は次のようなメッセージが出力されます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ cat test.dat
+cat: test.dat: そのようなファイルやディレクトリはありません
+</pre>
+<p> シェルは標準入力や標準出力をほかのファイルに切り替えることができます。これを「リダイレクト (Redirect) 」といいます。よく使われるリダイレクトには次のようなものがあります。</p>
+<pre class="item">
+1. command &gt; file  : command の標準出力を file に書き込む
+2. command &gt;&gt;file  : command の標準出力を file の末尾に追加する
+3. command &lt; file  : command の標準入力を file に切り替える
+4. command &gt;&amp; file : command の標準出力と標準エラー出力を file に書き込む
+</pre>
+<p> 標準出力のリダイレクトは &gt; を使います。1 の場合、file が存在すればファイルサイズを 0 に切り詰めてから command の結果を書き込みますが、2 の場合は command の結果を file の末尾に追加します。</p>
+
+<p> 標準入力のリダイレクトは &lt; を使います。3 の場合、シェルは標準入力をキーボードから file に切り替えます。キーボードからデータを受け取るように作られたプログラムであれば、リダイレクトによってファイルからの入力に切り替えることができます。標準出力と標準エラー出力をいっしょにリダイレクトする場合は &gt;&amp; を使います。</p>
+
+<p> たとえば、ls コマンドはファイルの一覧を画面へ表示しますが、次のようにすると結果を test.dat に書き込むことができます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ ls &gt; test.dat
+</pre>
+<p> もう一つ簡単な例を示しましょう。ファイルの中から文字列を探すコマンド grep がありますね。grep はファイル名を指定して実行しますが、ファイル名なしで実行すると、標準入力からデータを読み込みます。</p>
+
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ grep -n abcd
+ABCDEFG
+abcdefg
+2:abcdefg
+HIJKLMN
+ABCDabcd
+4:ABCDabcd
+</PRE>
+
+<P> このようなプログラムであれば、次のようにリダイレクトで標準入力をファイルに切り替えても動作します。</p>
+<PRE>
+mhiroi@mhiroi-VirtualBox:~/work$ grep -n oct &lt; test.dat
+4:octagon
+5:octrev
+</PRE>
+<p> また、grep -n oct &lt; test.dat &gt; result.dat とすれば、検索結果を result.dat に格納することができます。このとき、エラーメッセージを標準出力へ出力しても画面上には表示されないことになります。このような場合でも、標準エラー出力を使えば画面へメッセージを出力することができます。</p>
+
+<p> Windows や Unix 系 OS では、コマンドの標準出力を他のコマンドの標準入力に結合することができます。この機能を「パイプ (pipe) 」といいます。パイプは <b>|</b> を使います。簡単な例として、Windows (シフト JIS) で作成されたドキュメントを UTF-8 に変換することを考えてみましょう。</p>
+<p> 文字コードの変換はコマンド iconv で簡単にできますが、改行コードの変換は行ってくれません。Windows の場合、改行コードは \r\n ですが Unix 系 OS では \n だけです。この場合、コマンド tr で \r を削除すれば Windows の改行文字を Unix 系 OS の形式に直すことができます。</p>
+<p> あとは、iconv と tr をパイプでつないで、tr の結果をファイルにリダイレクトするだけです。</p>
+<pre class="item">
+$ iconv -f SJIS -t UTF-8 file1.txt | tr -d \\r &gt; file2.txt
+</pre>
+<p> ただし、この方法はちょっと困ることがあります。ASCII コードのバックスラッシュ (0x5c) はシフト JIS では円記号になりますが、上記の方法では 0x5c を UTF-8 の円記号 (0xa5) に変換します。プログラムの場合、0x5c をエスケープシーケンスに割り当てていることが多く、0xa5 に変換されるとプログラムは正常に動作しなくなります。</p>
+
+<p> プログラムの文字コードを変換する場合はコマンド nkf を使ったほうが簡単です。nkf は次のコマンドでインストールすることができます。</p>
+<pre class="item">
+sudo apt-get install nkf
+</pre>
+<pre class="item">
+$ nkf -w -Lu input file1.txt &gt; file2.txt
+</pre>
+<p> nkf は入力ファイルの文字コードを自動的に判別するので、文字コードの指定は必要ありません。-w オプションで UTF-8 に、-Lu オプションで改行コードを Unix 系 OS の形式に変換することができます。</p>
+
+<h4 id="chap06">●プロセスとジョブ</h4>
+<p> コマンドの実行は OS (カーネル) によって管理されます。この処理単位を「プロセス (process) 」といいます。通常、ひとつのコマンドがひとつのプロセスに対応します。プロセスは「プロセス識別子 (PID) 」という番号が割り当てられていて、PID でプロセスを指定することができます。</p>
+<p> 今、実行しているプロセスの情報はコマンド ps で表示することができます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ ps
+  PID TTY          TIME CMD
+ 2006 pts/7    00:00:00 bash
+ 2032 pts/7    00:00:00 ps
+</pre>
+<p> ps aux | less を実行すると、全ユーザーのすべてのプロセスを一画面ずつ表示することができます。</p>
+
+<p> シェルは一つ以上のコマンドを組み合わて実行することができます。この処理単位を「ジョブ (job) 」といいます。プロセスはカーネルが管理しますが、ジョブはシェルが管理します。ジョブも「ジョブ番号」が割り当てられていて、これでジョブを指定することができます。</p>
+<p> シェルでコマンドを実行すると、そのコマンドが終了するまでシェルは待機します。いま実行しているプロセス (ジョブ) のことを「フォアグランドプロセス (ジョブ) 」といいます。これに対し、コマンドの後ろに &amp; を付けて実行すると、コマンドの終了を待たずに、シェルのプロンプトが表示されて、新たなコマンドを入力することができます。</p>
+<pre class="item">
+$ command args ... &amp;     &lt;- Enter
+[ジョブ番号] PID         &lt;- ジョブ番号と PID が表示される
+$                        &lt;- すぐにプロンプトが表示される
+</pre>
+<p> これを「並列実行」といい、&amp; を付けて実行したプロセス (ジョブ) のことを「バックグランドプロセス (ジョブ) 」といいます。この場合、ユーザーからはシェルと command が並行に実行されているように見えます。</p>
+
+<p> 実行中のフォアグランドプロセスは Ctrl-C を入力すると強制終了させることができます。また、Ctrl-Z を入力すると、一時停止してバックグランドに移り、シェルのプロンプトが表示されます。たとえば、less でファイルの内容を表示しているとき、Ctrl-Z を入力してください。bash に戻ってプロンプトが表示されます。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ less test.dat
+
+[1]+  停止                  less test.dat
+mhiroi@mhiroi-VirtualBox:~/work$ 
+</pre>
+<p> [1] はジョブ番号を表します。次に、ps aux | less を実行し、同様に Ctrl-Z を入力してください。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ ps aux | less
+
+[2]+  停止                  ps aux | less
+mhiroi@mhiroi-VirtualBox:~/work$ jobs
+[1]-  停止                  less test.dat
+[2]+  停止                  ps aux | less
+mhiroi@mhiroi-VirtualBox:~/work$ jobs -l
+[1]-  2401 停止                  less test.dat
+[2]+  2409 終了                  ps aux
+      2410 停止                  | less
+</pre>
+<p> これでバックグランドには 2 つのジョブが停止状態で存在することになります。シェルが管理しているジョブはコマンド jobs で表示することができます。オプション -l を付けると PID も表示されます。</p>
+<p> バックグランドで停止中のジョブをフォアグランドで再開するにはコマンド fg を使います。また、バックグランドで停止中のジョブをバックグランドで再開するコマンド bg もあります。</p>
+<pre class="item">
+fg ジョブ番号
+bg ジョブ番号
+</pre>
+<p> 2 つのジョブを順番に再開して終了すると、次のようになります。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ fg 1
+less test.dat
+mhiroi@mhiroi-VirtualBox:~/work$ fg 2
+ps aux | less
+mhiroi@mhiroi-VirtualBox:~/work$ jobs
+mhiroi@mhiroi-VirtualBox:~/work$ 
+</pre>
+<p> これでユーザー mhiroi がバックグランドで実行しているジョブはすべてなくなります。</p>
+
+<h4 id="chap07">●シグナル</h4>
+<p> Ctrl-C や Ctrl-Z のような外部からの割り込み信号を「シグナル (signal) 」といいます。Unix 系 OS はプロセスにシグナルを送って、その状態を変化させることができます。プロセスにシグナルを送出するコマンドが kill です。</p>
+<pre class="item">
+kill -[シグナル名 or シグナル番号] PID
+</pre>
+<p> オプション -l を指定すると、すべてのシグナル名と番号を表示します。また、シグナルの種別を省略すると SIGTERM (通常終了) を PID に送出します。主なシグナルを下表に示します。</p>
+<table border=1>
+<caption>表 : 主なシグナルの種類</caption>
+<thead>
+  <tr><th>名前</th><th>番号</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>SIGHUP</td><td>1</td><td>端末終了時に発生 (ハングアップ)</td></tr>
+  <tr><td>SIGINT</td><td>2</td><td>キーボードからの割り込み (Ctrl-C)</td></tr>
+  <tr><td>SIGQUIT</td><td>3</td><td>キーボードからのプロセスの中止</td></tr>
+  <tr><td>SIGKILL</td><td>9</td><td>強制終了</td></tr>
+  <tr><td>SIGTERM</td><td>15</td><td>通常終了</td></tr>
+  <tr><td>SIGCONT</td><td>18</td><td>一時停止中のプロセスを再開</td></tr>
+  <tr><td>SIGSTOP</td><td>19</td><td>プロセスの一時停止</td></tr>
+</tbody>
+</table>
+<p> 簡単な例を示しましょう。GUI のタスクマネージャ (lxtask) を起動します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/work$ lxtask &amp;
+[1] 2471
+mhiroi@mhiroi-VirtualBox:~/work$ ps
+  PID TTY          TIME CMD
+ 2006 pts/7    00:00:00 bash
+ 2471 pts/7    00:00:00 lxtask
+ 2473 pts/7    00:00:00 ps
+mhiroi@mhiroi-VirtualBox:~/work$ kill 2471
+mhiroi@mhiroi-VirtualBox:~/work$ ps
+  PID TTY          TIME CMD
+ 2006 pts/7    00:00:00 bash
+ 2474 pts/7    00:00:00 ps
+[1]+  Terminated              lxtask
+</pre>
+<p> lxtask の PID は 2471 です。kill 2471 を実行すると、lxtask に SIGTERM を送出して、lxtask の実行を終了させることができます。</p>
+
+<h4 id="chap08">●シェル変数と環境変数</h4>
+<p> シェルにはプログラミング言語のようにデータを格納する「変数」があります。これを「シェル変数」といいます。シェルの場合、Ｃ言語や Java と違って、あらかじめ変数やその種類 (型) を宣言する必要はありません。データは文字列として扱われます。変数名は英文字かアンダーバー ( _ ) で始まり、その後ろに英数字かアンダーバーが続きます。</p>
+
+<p> 変数に値をセットすることを「代入」といいます。 代入には = を使います。これはＣ言語や Java などのプログラミング言語と同じですが、シェルの場合は = の前後に空白を入れてはいけません。ご注意くださいませ。</p>
+
+<P> 変数から値を取り出すには、変数名の前に $ を付けるか、${ ... } の中に変数名を書きます。これを「変数展開」といいます。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ a=10
+mhiroi@mhiroi-VirtualBox:~$ echo $a
+10
+mhiroi@mhiroi-VirtualBox:~$ echo ${a}
+10
+mhiroi@mhiroi-VirtualBox:~$ echo a
+a
+</pre>
+<p> 変数 a に 10 をセットします。echo $a とすると、a の前に $ がついているので、a に格納されている値 10 に置き換えてから echo コマンドが実行されるので 10 と表示されます。echo a だと、引数の文字列 a が表示されるだけです。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ b=$a
+mhiroi@mhiroi-VirtualBox:~$ echo $b
+10
+mhiroi@mhiroi-VirtualBox:~$ c=a
+mhiroi@mhiroi-VirtualBox:~$ echo $c
+a
+</pre>
+<p> 次に、変数 a の値を b に代入します。b に 10 が代入されます。最後の例では、$ がついていないので、a を文字列としてそのまま c に代入します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ echo $a1
+
+mhiroi@mhiroi-VirtualBox:~$ echo ${a}1
+101
+</pre>
+<p> 変数 a の直後に文字 1 を書くと、シェルは a1 を変数名として扱います。値のない変数は空文字列に置換されます。${a}1 とすると、変数 a の値を置換して 101 と表示されます。</p>
+<p> コマンド set は現在定義されているシェル変数の一覧を表示します。コマンド unset はシェル変数を削除します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ unset a
+mhiroi@mhiroi-VirtualBox:~$ echo $a
+
+mhiroi@mhiroi-VirtualBox:~$ 
+</pre>
+
+<p> シェル変数の有効範囲 (スコープ : scope) は現在実行中のシェルの中だけですが、シェルから起動したプロセス (コマンドやシェルスクリプトなど) から参照できる変数もあります。これを「環境変数」といいます。bash の場合、export コマンドでシェル変数を外部に公開することで、そのシェル変数を環境変数として扱うことができます。</p>
+
+<p> 簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ foo=bar
+mhiroi@mhiroi-VirtualBox:~$ export baz=oops
+mhiroi@mhiroi-VirtualBox:~$ echo $foo
+bar
+mhiroi@mhiroi-VirtualBox:~$ echo $baz
+oops
+</pre>
+<p> シェル変数 foo に文字列 bar をセットします。次に、シェル変数 baz に文字列 oops をセットします。baz は export されているので、環境変数になります。echo で foo と bar を表示すると、どちらの変数の値も表示できます。</p>
+<p> 次に、コマンドラインで bash と入力します。シェルもアプリケーションのひとつなので、bash と入力すれば新しいシェルが起動し、今までのシェルは待機状態になります。新しく起動したシェルのことを「サブシェル」といいます。次の例を見てください。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ bash
+mhiroi@mhiroi-VirtualBox:~$ echo $foo
+
+mhiroi@mhiroi-VirtualBox:~$ echo $baz
+oops
+mhiroi@mhiroi-VirtualBox:~$ baz=100
+mhiroi@mhiroi-VirtualBox:~$ echo $baz
+100
+mhiroi@mhiroi-VirtualBox:~$ exit
+exit
+mhiroi@mhiroi-VirtualBox:~$ echo $baz
+oops
+mhiroi@mhiroi-VirtualBox:~$ 
+</pre>
+<p> このとき、変数 baz は環境変数なので、サブシェルからでも参照することができます。foo は環境変数ではないので、前のシェルで定義した値を参照することはできません。また、環境変数の値を書き換えても、前のシェルには影響を及ぼしません。baz の値を 100 に書き換えました。そのあと、コマンド exit でサブシェルを終了すると前のシェルに戻りますが、baz の値は oops のままです。</p>
+
+<p> シェル変数や環境変数は、シェルや実行されるコマンドの動作を設定するために使われます。あらかじめ定義されている主な環境変数を下表に示します。</p>
+<table border=1>
+<caption>表 : 主な環境変数</caption>
+<thead>
+  <tr><th>名前</th><th>説明</th></tr>
+</thead>
+<tbody>
+  <tr><td>HOME</td><td>ホームディレクトリ</td>
+  <tr><td>PWD</td><td>カレントディレクトリ</td>
+  <tr><td>USER</td><td>ユーザー名</td>
+  <tr><td>TERM</td><td>端末名</td>
+  <tr><td>PATH</td><td>コマンド検索パス</td>
+  <tr><td>SHELL</td><td>シェル名</td>
+  <tr><td>LANG</td><td>文字コード</td>
+  <tr><td>HOSTNAME</td><td>ホストコンピュータ名</td>
+</tbody>
+</table>
+<p> 実際に環境変数の値をいくつか表示してみましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ echo $LANG
+ja_JP.UTF-8
+mhiroi@mhiroi-VirtualBox:~$ echo $TERM
+xterm-256color
+mhiroi@mhiroi-VirtualBox:~$ echo $SHELL
+/bin/bash
+mhiroi@mhiroi-VirtualBox:~$ echo $PATH
+/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games
+</pre>
+<p> M.Hiroi の Lubuntu は日本語に設定してあるので、LANG には ja_JP.UTF-8 がセットされています。TERM の値が xterm だと、端末で使用できる色は 8 色までですが、最近の端末であれば xterm-256color とすると 256 色まで使えるようになります。</p>
+
+<h4 id="chap09">●環境変数 PATH</h4>
+<p> ここで環境変数 PATH について簡単に説明しておきましょう。一般に、ハードディスクには多数のファイルが格納されています。コマンドを実行する場合、シェルはディスクの中からコマンドに該当するファイルを探します。パスを指定してコマンドを起動することもできますが、通常はコマンド名だけで起動できますね。これはシェルがディスクの中からコマンドを探しているからできることなのです。</p>
+
+<p> ただし、すべてのファイルをしらみつぶしに探していたのでは、時間がかかってしまいます。そこで、シェルは指定されたディレクトリの中からコマンドを探します。そのディレクトリのパスを格納している環境変数が PATH になります。パスの区切り記号は <b>:</b> で、設定された左側のディレクトリから順番に探して、最初に見つけたコマンドを実行します。</p>
+
+<p> Windows (MS-DOS) の場合、カレントディレクトリからもコマンドを検索しますが、Unix 系 OS の場合は PATH に設定されているディレクトリからしか検索しません。したがって、カレントディレクトリにあるプログラム (たとえば a.out) を実行する場合は、次のようにパスを指定する必要があります。</p>
+<pre class="item">
+$ ./a.out
+</pre>
+<p> a.out と入力しても、Windows と違って実行することはできません。ご注意くださいませ。</p>
+<p> なお、シェルに組み込まれている内部コマンドは PATH に関係なく実行することができます。コマンドの種別は type で調べることができます。また、コマンドの絶対パスは which で調べることができます。</p>
+<p> 簡単な実行例を示します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ type cd
+cd はシェル組み込み関数です
+mhiroi@mhiroi-VirtualBox:~$ type which
+which は /usr/bin/which です
+mhiroi@mhiroi-VirtualBox:~$ which which
+/usr/bin/which
+mhiroi@mhiroi-VirtualBox:~$ which cd
+mhiroi@mhiroi-VirtualBox:~$ 
+</pre>
+<p> bash の場合、外部コマンドを起動したとき、コマンドの絶対パスを覚えていて、同じコマンドを起動したときは覚えているパスを使います。コマンド名の探索には「ハッシュ表 (hash table) 」という高速な探索アルゴリズムが使われています。記憶されているコマンドは hash というコマンドで表示することができます。また、hash -r とすると、記憶したコマンドをクリアすることができます。</p>
+<p> 簡単な使用例を示します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ hash
+hits	command
+   1	/usr/bin/which
+   1	/bin/cat
+   1	/usr/bin/emacs
+mhiroi@mhiroi-VirtualBox:~$ hash -r
+mhiroi@mhiroi-VirtualBox:~$ hash
+hash: ハッシュテーブルが空です
+</pre>
+<h4 id="chap10">●コマンドのグループ化</h4>
+<p> シェルは複数のコマンドをまとめて一つのコマンドのように動作させることができます。これを「コマンドのグループ化」といいます。パイプによるコマンドの結合もグループ化の一つです。グループ化はカッコ ( ) または波カッコ { } を使います。
+</p>
+<p> 簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ date; ps aux
+
+  ・・・省略・・・
+
+mhiroi@mhiroi-VirtualBox:~$ (date; ps aux) &gt; foo
+</pre>
+<p> コマンドをセミコロン ( ; ) で区切ると、シェルは区切られたコマンドを左から順番に実行します。これを「逐次実行」といいます。この結果を一つのファイルに格納したい場合、date &gt; foo1; ps aux &gt;&gt; foo のように、コマンドごとにリダイレクトするのでは面倒ですね。</p>
+<p> この場合、コマンドをグループ化すると入出力を統一して扱うことができるので、(date; ps aux) &gt; foo とすれば、date と ps aux の出力をファイル foo にリダイレクトすることができます。また、( ) の後ろに &amp; を付けると、グループ化したコマンドがバックグランドで実行されます。</p>
+
+<p> bash はグループ化したコマンドを見つけると、新しい bash を起動して、そのコマンドを実行させます。サブシェルでディレクトリを移動したり、シェル変数や環境変数の値を書き換えても、元のシェルの状態に影響を及ぼすことはありません。簡単な例を示しましょう。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ (cd work; echo $PWD)
+/home/mhiroi/work
+mhiroi@mhiroi-VirtualBox:~$ a=10
+mhiroi@mhiroi-VirtualBox:~$ (a=100; echo $a)
+100
+mhiroi@mhiroi-VirtualBox:~$ echo $a
+10
+</pre>
+<p> これに対し、{ ... } によるグループ化はサブシェルを起動しません。したがって、ディレクトリを移動したり変数の値を書き換えると、次のようにシェルの状態が変化します。</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~$ { cd work; echo $PWD; }
+/home/mhiroi/work
+mhiroi@mhiroi-VirtualBox:~/work$ { a=100; echo $a; }
+100
+mhiroi@mhiroi-VirtualBox:~/work$ echo $a
+100
+</pre>
+<p> { } の前後は空白を入れてください。また、最後のコマンドにもセミコロン ( ; ) が必要になります。ご注意くださいませ。</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="linuxbash2.html">後編</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

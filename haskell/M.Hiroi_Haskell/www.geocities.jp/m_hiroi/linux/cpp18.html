@@ -1,0 +1,769 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ++プログラミング超入門</title>
+  <meta name="description" content="Ｃ++,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881812</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ++プログラミング超入門</h2>
+<div class="small">
+[ <a href="cpp17.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp19.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>標準ライブラリの基礎知識 (vector 編)</h4>
+<p> 今回は標準ライブラリ (Standard Template Library) の中から「vector (ベクタ)」の基本的な使い方を説明します。
+</p>
+<h4>●vector とは？</h4>
+<p> vector は可変長の一次元配列を実装したコンテナクラスです。他のプログラミング言語、たとえば Scheme では一次元配列のことを「vector (ベクタ)」と呼びます。
+</p>
+<p> Ｃ/Ｃ++の場合、配列を宣言したあとで、その大きさを変更することはできません。vector の場合、保持している配列の容量が足りなくなると自動的に拡張してくれます。本稿では vector が保持している配列のことをベクタと表記することにします。一般に、大きさを自由に変えることができる配列を「可変長配列」といいます。Perl, Python, Ruby などスクリプト言語の多くは可変長配列をサポートしています。
+</p>
+<p> vector を使用するときは、ヘッダファイル vector をインクルードしてください。変数の宣言は次のように行います。
+</p>
+<pre class="item">
+vector&lt;データ型&gt; 変数名;
+</pre>
+<p> vector はテンプレートなので、&lt; &gt; の中に格納する要素のデータ型を指定してください。この場合、空 (要素数が 0) のベクタが生成されます。vector のコンストラクタは複数用意されていて、ベクタの大きさを指定することもできます。よく使われるコンストラクタを下表に示します。
+</p>
+<table border=1>
+<caption>表 : vector の主なコンストラクタ</caption>
+<thead>
+  <tr><th>書式</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>vector(n)</td><td>大きさ n のベクタを生成</td></tr>
+  <tr><td>vector(n, m)</td><td>大きさ n のベクタを生成して値 m で初期化する</td></tr>
+  <tr><td>vector(const vector&amp; v)</td><td>コピーコンストラクタ</td></tr>
+  <tr><td>vector(s, e)</td><td>イテレータ s から e の手前までの要素を格納したベクタを生成する</td></tr>
+</tbody>
+</table>
+<p> 初期値を指定しない場合、vector&lt;T&gt; の要素は T() で初期化されます。代入演算子 = による vector の代入も可能です。また、最近の規格 (C++11) では、配列と同様に { ... } を使って vector を初期化できるようになりました。
+</p>
+<pre class="item">
+vector&lt;int&gt; a{1, 2, 3, 4, 5};
+vector&lt;int&gt; b = {1, 2, 3, 4, 5};
+</pre>
+<p> この方法は vector を簡単に初期化できるので、とても便利だと思います。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : vector の簡単な使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+using namespace std;
+
+int main()
+{
+  vector&lt;int&gt; a{0,1,2,3,4,5,6,7};
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (int i = 0; i &lt; 8; i++) a[i] *= 2;
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  vector&lt;double&gt; b = {1.1, 2.2, 3.3, 4.4, 5.5};
+  for (double y : b) cout &lt;&lt; y &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (int i = 0; i &lt; 5; i++) b[i] *= 2;
+  for (double y : b) cout &lt;&lt; y &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<p> vector は配列と同様に添字演算子 [] で要素にアクセスすることができます。プログラムは簡単なので説明は割愛します。実行結果は次のようになります。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0 1 2 3 4 5 6 7 
+0 2 4 6 8 10 12 14 
+1.1 2.2 3.3 4.4 5.5 
+2.2 4.4 6.6 8.8 11 
+</pre>
+<p> なお、要素の読み書きはメンバ関数 at() を使って行うこともできます。配列と同様に添字演算子 [] は添字の範囲チェックを行いませんが、at() は添字が範囲外であれば例外 out_of_range を送出します。
+</p>
+<h4>●データの追加と取り出し</h4>
+<p> vector はメンバ関数 push_back() を使って配列の末尾にデータを追加することができます。データを追加できない場合、vector はベクタの容量を自動的に増やします。ベクタの容量はメンバ関数 capacity() で、実際に格納されている要素数はメンバ関数 size() で求めることができます。
+</p>
+<p> 逆に、配列の末尾からデータを削除するメンバ関数が pop_back() です。pop_back() は取り出した要素を返さないことに注意してください。末尾の要素を求めるにはメンバ関数 back() を使います。vector の先頭要素はメンバ関数 front() で求めることができます。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : push_back と pop_back の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+using namespace std;
+
+int main()
+{
+  vector&lt;int&gt; a;
+  cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  for (int i = 0; i &lt; 10; i++) {
+    a.push_back(i);
+    cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  }
+  for (int i = 0; i &lt; 10; i++) {
+    cout &lt;&lt; a.back() &lt;&lt; endl;
+    a.pop_back();
+    cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  }
+}
+</pre>
+
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+size = 0, capacity = 0
+size = 1, capacity = 1
+size = 2, capacity = 2
+size = 3, capacity = 4
+size = 4, capacity = 4
+size = 5, capacity = 8
+size = 6, capacity = 8
+size = 7, capacity = 8
+size = 8, capacity = 8
+size = 9, capacity = 16
+size = 10, capacity = 16
+9
+size = 9, capacity = 16
+8
+size = 8, capacity = 16
+7
+size = 7, capacity = 16
+6
+size = 6, capacity = 16
+5
+size = 5, capacity = 16
+4
+size = 4, capacity = 16
+3
+size = 3, capacity = 16
+2
+size = 2, capacity = 16
+1
+size = 1, capacity = 16
+0
+size = 0, capacity = 16
+</pre>
+<p> push_back() でデータを追加すると、ベクタの容量は自動的に拡張されますが、pop_back() でデータを取り出しても自動的に縮小はされません。
+</p>
+<p> vector を空にするメンバ関数に clear() がありますが、これはサイズを 0 にするだけで容量は変化しません。また、vector のサイズを指定した値に設定するメンバ関数 resize() もあります。今の容量よりも大きなサイズを指定すると、容量は自動的に拡張されますが、容量以下のサイズを指定しても、容量が減少する (不要なメモリを解放する) わけではありません。
+</p>
+<p> 最近の規格 (C++11) では、現在のサイズに容量を合わせるメンバ関数 shrink_to_fit() が追加されました。この関数を使うと、簡単に容量を減らすことができます。簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : vector のサイズと容量の変更
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+using namespace std;
+
+int main()
+{
+  vector&lt;int&gt; a(10);
+  cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  a.resize(5);
+  cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  a.shrink_to_fit();
+  cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  a.clear();
+  cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  a.shrink_to_fit();
+  cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+size = 10, capacity = 10
+size = 5, capacity = 10
+size = 5, capacity = 5
+size = 0, capacity = 5
+size = 0, capacity = 0
+</pre>
+<p> ところで、vector の大きさは自動的に拡張されますが、このとき新しいメモリ領域が取得され、そこにデータがコピーされます。これが度重なるとパフォーマンスに悪影響を与えるかもしれません。追加するデータ数の上限値がわかっている場合、メンバ関数 reserve() を使って容量の大きさを指定しておくといいでしょう。簡単な例を示します。
+</p>
+<pre class="list">
+リスト : reserve() の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+
+using namespace std;
+
+int main()
+{
+  vector&lt;int&gt; a;
+  a.reserve(10);
+  cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  for (int i = 0; i &lt; 10; i++) {
+    a.push_back(i);
+    cout &lt;&lt; "size = " &lt;&lt; a.size() &lt;&lt; ", capacity = " &lt;&lt; a.capacity() &lt;&lt; endl;
+  }
+}
+</pre>
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+size = 0, capacity = 10
+size = 1, capacity = 10
+size = 2, capacity = 10
+size = 3, capacity = 10
+size = 4, capacity = 10
+size = 5, capacity = 10
+size = 6, capacity = 10
+size = 7, capacity = 10
+size = 8, capacity = 10
+size = 9, capacity = 10
+size = 10, capacity = 10
+</pre>
+<p> あらかじめベクタの容量を 10 に増やしているので、データを 10 個追加しても容量は増えません。これ以上データを追加すると、容量は自動的に拡張されます。
+</p>
+<h4>●Ｃ++のイテレータ</h4>
+<p> vector のイテレータを説明する前に、イテレータの概要を簡単に説明しておきましょう。イテレータはコンテナの要素を指し示すオブジェクトです。間接演算子 (*, -&gt;, [] など) で要素にアクセスすることができます。イテレータに ++ 演算子を適用すると、イテレータは次の要素に移動します。等値演算子 (==, !=) も用意されていて、イテレータを使って先頭から末尾の要素までアクセスすることができます。
+</p>
+<p> Ｃ++のイテレータは大きく分けると次に示す 5 種類があります。
+</p>
+<ol>
+  <li>入力イテレータ (input_iterator)<br>
+イテレータを前に進めながらデータの読み込みが可能
+  <li>出力イテレータ (output_iterator)<br>
+イテレータを前に進めながらデータの書き込みが可能
+  <li>前方向イテレータ (forward_iterator)<br>
+イテレータを前に進めながらデータの読み書きが可能
+  <li>双方向イテレータ (bidirectional_iterator)<br>
+イテレータを前後に移動しながらデータの読み書きが可能
+  <li>ランダムイテレータ (random_iterator)<br>
+イテレータを任意の位置に移動しながらデータの読み書きが可能
+</ol>
+<p> 1 は読み込み専用、2 は書き込み専用のイテレータです。残りは読み書き両方できますが、イテレータの移動方法に制限があります。3 の前方向イテレータは ++ 演算子で次の要素に進むことしかできません。単方向連結リスト &lt;forward_list&gt; がこれに相当します。4 の双方向イテレータは ++, -- 演算子で次の要素に進んだり、前の要素に戻ることができます。双方向連結リスト &lt;list&gt; がこれに相当します。
+</p>
+<p> 5 のランダムイテレータは任意の位置にイテレータ移動することができます。++, -- 演算子だけではなく、+, -, +=, -= 演算子を使ってイテレータを移動することができます。また、比較演算子を使ってイテレータの大小関係を判定したり、添字演算子 [] を使って要素にアクセスできるのもランダムイテレータの特徴です。&lt;vector&gt; や &lt;array&gt; はランダムイテレータをサポートしています。
+</p>
+<p> イテレータはコンテナクラスのメンバ関数で生成します。begin() は先頭要素を指し示すイテレータを、end() は末尾要素の次 (終端) を指し示すイテレータを生成します。等値演算子を使えば、イテレータが終端に到達したか判定することができます。たとえば、コンテナの全要素に関数 func を適用する関数 for_each は。イテレータを使って次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト : for_each の定義例
+
+template&lt;class I, class F&gt;
+F for_each(I first, I end, F func)
+{
+  for (; first != end; ++first) func(*first);
+  return func;
+}
+</pre>
+<p> イテレータをサポートしているコンテナクラスであれば、関数 for_each を利用することができます。
+</p>
+<h4>●vector のイテレータ</h4>
+<p> vector はランダムイテレータをサポートしています。どの要素でも定数時間 O(1) でアクセスすることが可能です。イテレータを生成するメンバ関数を下表に示します。
+</p>
+<table border=1>
+<caption>表 : イテレータの生成 (vector)</caption>
+<thead>
+  <tr><th>メンバ関数</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>begin()</td><td>先頭要素を指し示すイテレータを返す</td></tr>
+  <tr><td>end()</td><td>終端を指し示すイテレータを返す</td></tr>
+  <tr><td>cbegin()</td><td>先頭要素を指し示す const イテレータを返す</td></tr>
+  <tr><td>cend()</td><td>終端を指し示す const イテレータを返す</td></tr>
+  <tr><td>rbegin()</td><td>先頭要素を指し示すリバースイテレータを返す</td></tr>
+  <tr><td>rend()</td><td>終端を指し示すリバースイテレータを返す</td></tr>
+  <tr><td>crbegin()</td><td>先頭要素を指し示す const リバースイテレータを返す</td></tr>
+  <tr><td>crend()</td><td>終端を指し示す const リバースイテレータを返す</td></tr>
+</tbody>
+</table>
+<p> const イテレータは要素を更新することができません。リバースイテレータは末尾要素が先頭で、先頭要素が末尾になります。要素が n 個ある場合、n - 1 番目の要素が先頭で、0 番目の要素が末尾になります。
+</p>
+<p> イテレータのデータ型は次のようになります。
+</p>
+<pre class="item">
+vector&lt;T&gt;::iterator               // 通常のイテレータ
+vector&lt;T&gt;::const_iterator         // const イテレータ
+vector&lt;T&gt;::reverse_iterator       // リバースイテレータ
+vector&lt;T&gt;::const_reverse_iterator // リバースイテレータ
+</pre>
+<p> 最近の規格 (C++11) を利用できるコンパイラでは auto を使ったほうが簡単でしょう。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : イテレータの使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+using namespace std;
+
+int main()
+{
+  vector&lt;int&gt; a = {1,2,3,4,5,6,7,8};
+  for (vector&lt;int&gt;::const_iterator iter = a.cbegin(); iter != a.cend(); ++iter)
+    cout &lt;&lt; *iter &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  for (auto iter = a.begin(); iter != a.end(); ++iter)
+    *iter *= 2;
+  for (auto iter = a.rbegin(); iter != a.rend(); ++iter)
+    cout &lt;&lt; *iter &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  // auto iter = a.cbegin();
+  // *iter = 10;   コンパイルエラー
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1 2 3 4 5 6 7 8 
+16 14 12 10 8 6 4 2 
+</pre>
+<p> iter が const イテレータの場合、*iter でデータを参照することはできても、*iter = 10 のように書き換えることはできません。コンパイルエラーになります。
+</p>
+<h4>●データの挿入と削除</h4>
+<p> vector はメンバ関数 insert でベクタの途中にデータを挿入したり、メンバ関数 erase でベクタの途中の要素を取り除くことができます。
+</p>
+<table border=1>
+<caption>表 : データの挿入と削除</caption>
+<thead>
+  <tr><th>メンバ関数</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>insert(it, x)</td><td>イテレータ it の位置にデータ x を挿入する</td></tr>
+  <tr><td>insert(it, n, x)</td><td>イテレータ it の位置にデータ x を n 個挿入する</td></tr>
+  <tr><td>insert(it, s, e)</td><td>イテレータ it の位置にイテレータ s から e の手前までの要素を挿入する</td></tr>
+  <tr><td>erase(it)</td><td>イテレータ it の位置の要素を削除する</td></tr>
+  <tr><td>erase(s, e)</td><td>イテレータ s から e の手前までの要素を削除する</td></tr>
+</tbody>
+</table>
+<p> insert() でデータを挿入するとき、ベクタの容量が足りない場合は自動的に拡張されます。erase() でデータ削除したあと、ベクタのサイズは減少します。このとき、ベクタの容量は変化しません。どちらのメンバ関数も要素の移動が行われるので、要素数 N に比例する時間がかかります。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : insert と erase の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+using namespace std;
+
+int main()
+{
+  vector&lt;int&gt; a = {1, 2, 3, 4, 5};
+  vector&lt;int&gt; b = {10, 20, 30, 40, 50};  
+  a.insert(a.begin(), 0);
+  a.insert(a.begin() + 1, 5, 1); 
+  a.insert(a.end(), b.begin(), b.end());
+  for (int x: a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  a.erase(a.begin());
+  a.erase(a.begin(), a.begin() + 5);
+  for (int x: a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0 1 1 1 1 1 1 2 3 4 5 10 20 30 40 50 
+1 2 3 4 5 10 20 30 40 50 
+</pre>
+<p> a.insert(a.end(), b.begin(), b.end()) は vector a に vector b を連結することになります。
+</p>
+<h4>●algorithm の関数</h4>
+<p> Ｃ++の標準ライブラリ &lt;algorithm&gt; には vector といっしょに使うと便利な関数が用意されています。まずは最初に、もうお馴染みの for_each から説明しましょう。
+</p>
+<pre class="item">
+template&lt;class I, class F&gt;
+F for_each(I first, I last, F func)
+</pre>
+<p> for_each はイテレータ first から last の手前までの要素に関数 func を適用します。引数 func には関数ポインタまたは関数オブジェクトを渡します。簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : for_each の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+using namespace std;
+
+template&lt;class T&gt;
+void print(T x) { cout &lt;&lt; x &lt;&lt; endl; }
+
+class Sum {
+  int n;
+public:
+  Sum() : n(0) {}
+  void operator()(int x) { n += x; }
+  int sum() const { return n; }
+};
+
+int main()
+{
+  vector&lt;int&gt; a = {1,2,3,4,5,6,7,8,9,10};
+  for_each(a.begin(), a.end(), print&lt;int&gt;);
+  Sum s = for_each(a.begin(), a.end(), Sum());
+  cout &lt;&lt; s.sum() &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+55
+</pre>
+<p> for_each に print&lt;int&gt; を渡すと、要素の値を表示することができます。クラス Sum は関数呼び出し演算子 () を多重定義していて、引数 x をメンバ変数 n に加算します。Sum のインスタンス (関数オブジェクト) を for_each に渡すと、ベクタの要素の合計値を求めることができます。ただし、このような処理は for_each ではなく、もっと適した関数を使ったほうが良いでしょう。これはあとで説明します。
+</p>
+<h4>●データの探索</h4>
+<p> データの探索は find, find_if を使うと簡単です。
+</p>
+<pre class="item">
+template&lt;class I, class T&gt; I find(I first, I last, const T&amp; val);
+template&lt;class I, class P&gt; I find_if(I first, I last, P pred);
+</pre>
+<p> find は引数 val と等しい要素を探索し、見つけたら要素を指し示すイテレータを返します。find_if は関数 pred が真を返す要素の位置を指し示すイテレータを返します。見つからない場合、どちらの関数も終端を指し示すイテレータを返します。
+</p>
+<p> 関数型言語では、真偽を返す関数のことを「述語 (predicate)」と呼びます。<a href="cpp.html#cite">参考文献 1</a> によると、Ｃ++では「叙述関数」と呼ぶそうです。Ｃ++の標準ライブラリ &lt;functional&gt; には、よく使われる叙述関数があらかじめ定義されています。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : find, find_if の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+using namespace std;
+
+bool is_odd(int x) { return x % 2 == 1; }
+bool is_even(int x) { return x % 2 == 0; }
+
+int main()
+{
+  vector&lt;int&gt; a = {11, 12, 13, 14, 15};
+  auto it1 = find(a.begin(), a.end(), 15);
+  if (it1 != a.end())
+    cout &lt;&lt; *it1 &lt;&lt; endl;
+  else
+    cout &lt;&lt; "not found\n";
+  auto it2 = find(a.begin(), a.end(), 16);
+  if (it2 != a.end())
+    cout &lt;&lt; *it2 &lt;&lt; endl;
+  else
+    cout &lt;&lt; "not found\n";
+  auto it3 = find_if(a.begin(), a.end(), is_even);
+  if (it3 != a.end())
+    cout &lt;&lt; *it3 &lt;&lt; endl;
+  else
+    cout &lt;&lt; "not found\n";
+  auto it4 = find_if(a.begin(), a.end(), is_odd);
+  if (it4 != a.end())
+    cout &lt;&lt; *it4 &lt;&lt; endl;
+  else
+    cout &lt;&lt; "not found\n";
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+15
+not found
+12
+11
+</pre>
+<p> find_if() に is_even を渡すと、最初に見つけた偶数の要素を返します。is_odd を渡すと奇数の要素を返します。
+</p>
+<p> 見つけた要素の位置が必要な場合、関数 distance で先頭のイテレータとの距離を求めます。
+</p>
+<pre class="item">
+size_t distance(iterator i, iterator j)
+</pre>
+<p> たとえば、distance(a.begin(), it1) は 4 になり、distance(a.begin(), it2) とすれば 5 が返ってきます。
+</p>
+<p> 関数 count は等しい要素の個数を返します。count_if は叙述関数が真を返す要素の個数を返します。
+</p>
+<pre class="item">
+template&lt;class I, class T&gt; size_t count(I first, I last, const T&amp; val);
+template&lt;class I, class P&gt; size_t count_if(I first, I last, P pred);
+</pre>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : count と count_if の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+using namespace std;
+
+bool is_odd(int x) { return x % 2 == 1; }
+bool is_even(int x) { return x % 2 == 0; }
+
+int main()
+{
+  vector&lt;int&gt; a = {1, 2, 1, 2, 3, 1, 2, 3, 4};
+  for (int i = 0; i &lt;= 4; i++)
+    cout &lt;&lt; count(a.begin(), a.end(), i) &lt;&lt; endl;
+  cout &lt;&lt; count_if(a.begin(), a.end(), is_odd) &lt;&lt; endl;
+  cout &lt;&lt; count_if(a.begin(), a.end(), is_even) &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0
+3
+3
+2
+1
+5
+4
+</pre>
+<h4>●ソート</h4>
+<p> もちろん、algorithm には sort() も用意されています。
+</p>
+<pre class="item">
+template&lt;class I&gt; void sort(I first, I last);
+template&lt;class I, class C&gt; void sort(I first, I last, C comp);
+</pre>
+<p> 最初の定義は operator&lt; を使ってソートします。次の定義は関数 comp を使ってソートします。
+</p>
+<pre class="item">
+ bool comp(const T&amp; a, const T&amp; b);
+</pre>
+<p> a が b よりも小さい場合、comp は true を返します。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre class="list">
+リスト : sort の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+using namespace std;
+
+bool gt(int&amp; x, int&amp; y) { return x &gt; y; }
+
+int main()
+{
+  vector&lt;int&gt; a = {5,6,4,7,3,8,2,9,1,0};
+  sort(a.begin(), a.end());
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+  vector&lt;int&gt; b = {5,6,4,7,3,8,2,9,1,0};
+  sort(b.begin(), b.end(), gt);
+  for (int x : a) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+0 1 2 3 4 5 6 7 8 9 
+9 8 7 6 5 4 3 2 1 0 
+</pre>
+<p> 関数 gt のかわりに叙述関数 greater を渡しても同じことができます。
+</p>
+<pre class="list">
+リスト : greater の使用例
+
+sort(b.begin(), b.end(), greater&lt;int&gt;());
+</pre>
+<p> 叙述関数はクラステンプレートで定義されているので、greater&lt;int&gt; の後ろに () を付けてコンストラクタを呼び出します。これで、関数オブジェクトを生成して sort() に渡すことができます。比較演算子に対応する叙述関数を下表に示します。
+</p>
+<table border=1>
+<caption>表 : 叙述関数</caption>
+<thead>
+  <tr><th>叙述関数</th><th>比較演算子</th></tr>
+</thead>
+<tbody>
+  <tr><td>equal_to</td><td>==</td></tr>
+  <tr><td>not_equal_to</td><td>!=</td></tr>
+  <tr><td>greater</td><td>&gt;</td></tr>
+  <tr><td>less</td><td>&lt;</td></tr>
+  <tr><td>greater_equal</td><td>&gt;=</td></tr>
+  <tr><td>less_equal</td><td>&lt;=</td></tr>
+</tbody>
+</table>
+
+<h4>●畳み込み</h4>
+<p> 2 つの引数を取る関数 f と配列を引数に受け取る関数 reduce を考えます。reduce は配列の各要素に対して関数 f を下図のように適用します。
+<pre class="fig">
+(1) [a1, a2, a3, a4, a5]
+    =&gt; f( f( f( f( a1, a2 ), a3 ), a4 ), a5 )
+
+(2) [a1, a2, a3, a4, a5]
+    =&gt; f( a1, f( a2, f( a3, f( a4, a5 ) ) ) )
+
+        図 : reduce の動作
+</pre>
+<p> 関数 f を適用する順番で 2 通りの方法があります。図 (1) は配列の先頭から f を適用し、図 (2) は配列の後ろから f を適用します。たとえば、関数 f が単純な加算関数とすると、reduce の結果はどちらの場合も配列の要素の和になります。
+</p>
+<pre class="item">
+f(x, y) = x + y の場合
+reduce =&gt; a1 + a2 + a3 + a4 + a5
+</pre>
+<p> このように、reduce はスライスのすべての要素を関数 f を用いて結合します。一般に、このような操作を「縮約」とか「畳み込み」といいます。また、reduce の引数に初期値 g を指定することがあります。この場合、reduce は下図に示す動作になります。
+</p>
+<pre class="fig">
+(1) [a1, a2, a3, a4, a5]
+    =&gt; f( f( f( f( f( g, a1 ), a2 ), a3 ), a4 ), a5 )
+
+(2) [a1, a2, a3, a4, a5]
+    =&gt; f( a1, f( a2, f( a3, f( a4, f( a5, g ) ) ) ) )
+
+        図 : reduce() の動作 (2)
+</pre>
+<p> 関数型言語では、畳み込みを行う関数を reduce とか fold と呼びます。上図 (1) の動作を行う関数は fold_left や foldl、上図 (2) の動作を行う関数は fold_right や foldr などと呼ばれています。畳み込みは関数型言語でよく使われる高階関数です。
+</p>
+<p> Ｃ++の &lt;algorithm&gt; には、畳み込みの処理を行う関数 accumulate が用意されています。
+</p>
+<pre class="item">
+template&lt;class I, class T&gt; T accumulate(I first, I last, T init);
+template&lt;class I, class T, class F&gt; T accumulate(I first, I last, T init, F bin_op);
+</pre>
+<p> 関数名からもおわかりのように、Ｃ++の accumulate は配列の合計値を求める処理を一般化したものです。最初の定義は operator+ を使って配列の要素を初期値 init に加算していきます。次の定義が畳み込みで、bin_op には 2 引数の関数ポインタまたは関数オブジェクトを渡します。どちらの関数もイテレータを使って簡単に定義することができます。
+</p>
+<pre class="list">
+リスト : accumulate の定義例
+
+template&lt;class I, class T&gt;
+T accmulate(I first, I last, T init)
+{
+  for (;first != last; ++first) init = init + *first;
+  return init;
+}
+
+template&lt;class I, class T, class F&gt;
+T accmulate(I first, I last, T init, F bin_op)
+{
+  for (;first != last; ++first) init = bin_op(init, *first);
+  return init;
+}
+</pre>
+<p> 二番目の定義は、配列の先頭から末尾に向かって畳み込みを行います。どちらの関数も引数 init を累積変数として使っています。bin_op の第 1 引数に累積変数、第 2 引数に配列の要素が渡されることに注意してください。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+<pre class="list">
+リスト : accumulate の使用例
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;algorithm&gt;
+using namespace std;
+
+int main()
+{
+  vector&lt;int&gt; a = {1,2,3,4,5,6,7,8,9,10};
+  cout &lt;&lt; accumulate(a.begin(), a.end(), 0) &lt;&lt; endl;
+  cout &lt;&lt; accumulate(a.begin(), a.end(), 0, plus&lt;int&gt;()) &lt;&lt; endl;
+  cout &lt;&lt; accumulate(a.begin(), a.end(), 1, multiplies&lt;int&gt;()) &lt;&lt; endl;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+55
+55
+3628800
+</pre>
+<p> 最初の例は vector a の合計値を求めます。2 番目の例のように、2 引数の関数オブジェクト plus を渡しても同じことができます。3 番目のように、引数を乗算する関数オブジェクト multiplies を渡すと、要素をすべて乗算した値を求めることができます。
+</p>
+<p> Ｃ++の標準ライブラリには標準的な算術演算子に対応する算術関数オブジェクトが用意されています。下表に主な算術関数オブジェクトを示します。
+</p>
+<table border=1>
+<caption>表 : 算術関数</caption>
+<thead>
+  <tr><th>算術関数</th><th>算術演算子</th></tr>
+</thead>
+<tbody>
+  <tr><td>plus</td><td>+</td></tr>
+  <tr><td>minus</td><td>-</td></tr>
+  <tr><td>multiplies</td><td>*</td></tr>
+  <tr><td>divides</td><td>/</td></tr>
+  <tr><td>modulus</td><td>%</td></tr>
+</tbody>
+</table>
+<h4>●二次元配列</h4>
+<p> vector を入れ子にすることで二次元配列を実現することができます。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 二次元配列
+
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+using namespace std;
+
+int main()
+{
+  vector&lt;vector&lt;int&gt;&gt; mat(3, vector&lt;int&gt;(3));
+  int n = 1;
+  for (int i = 0; i &lt; 3; i++) {
+    for (int j = 0; j &lt; 3; j++) {
+      mat[i][j] = n++;
+    }
+  }
+  for (auto x : mat) {
+    for (int y : x) cout &lt;&lt; y &lt;&lt; " ";
+    cout &lt;&lt; endl;
+  }
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp$ ./a.out 
+1 2 3 
+4 5 6 
+7 8 9 
+</pre>
+<p> データ型は vector の中に vector を入れた vector&lt;vector&lt;int&gt;&gt; となります。コンストラクタで vector の大きさと要素になる vector を渡します。vector の要素にインスタンスを格納するとき、コピーコンストラクタが働くので、引数に渡した vector のインスタンスがコピーされることに注意してください。したがって、要素の vector には異なるメモリ領域が割り当てられます。要素のアクセスは今までの多次元配列と同様に行うことができます。
+</p>
+<p> 最近の規格 (C++11) では、{ ... } を入れ子にして初期値を指定することもできます。
+</p>
+<pre class="list">
+リスト : 二次元配列の初期化
+
+vector&lt;vector&lt;int&gt;&gt; a = {
+  {1, 2, 3},
+  {4, 5, 6},
+  {7, 8, 9}
+};
+
+vector&lt;vector&lt;int&gt;&gt; b = {
+  {1, 2, 3},
+  {4, 5, 6, 7},
+  {8, 9}
+};
+</pre>
+<p> vector は可変長配列なので、変数 b のように中の vector の要素数が異なっていても問題ありません。
+</p>
+<h4>●インスタンスを格納するときの注意点</h4>
+<p> ところで、vector にインスタンスを格納する場合、そのクラスにはデストラクタ、コピーコンストラクタ、代入演算子の多重定義が必要になることがあります。たとえば、vector の容量を増やすとき、新しいベクタに要素がコピーされ、元のベクタの要素にはデストラクタが実行されます。pop_back() や erase() で要素を削除したときや vector を廃棄したときにも、各々の要素に対してデストラクタが実行されます。vector にインスタンスを代入するときには代入演算子の処理が実行されます。
+</p>
+<p> 最近の規格 (C++11) では「右辺値参照 (rvalue reference)」という機能が追加され、ムーブコンストラクタや関数 move() が使えるようになりました。インスタンスにメモリ領域を保持したポインタ変数がある場合、コピーコンストラクタはその中身を新しいメモリ領域にコピーしますが、コピー元のインスタンスが不要になる (廃棄される) ことがわかっているならば、中身をコピーせずにポインタ変数のつけ替えで済ますことができる場合があります。このようなとき、ムーブコンストラクタや move() がとても役に立ちます。この辺の話はちょっと難しいので、右辺値参照 (rvalue reference) を説明するときにあらためて取り上げることにしましょう。
+</p>
+<p> 今回はここまでです。次回は標準ライブラリ (STL) &lt;list&gt; と &lt;map&gt; の基本的な使い方について説明します。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="cpp17.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp19.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

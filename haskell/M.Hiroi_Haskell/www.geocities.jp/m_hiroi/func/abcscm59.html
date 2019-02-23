@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881784</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm58.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm60.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>関数型電卓プログラム fncalc の作成 (5)</h3>
+<p> 今回は fncalc に「ベクタ (vector) 」を追加します。また、and と or の処理を修正して、短絡演算子として機能するようにしましょう。
+</p>
+
+<h4>●and と or の修正</h4>
+<p> 今までの fncalc で x and y (または x or y) を処理する場合、x と y の両方を評価していました。一般に、and と or は短絡演算子といって、x, y の両方が評価されるとは限りません。and の場合、x が偽ならば and の結果は偽になるので、y を評価する必要はありません。また、or の場合も x が真ならば or の結果も真になるので、これも y を評価する必要はないのです。
+</p>
+<p> fncalc で and と or を短絡演算子として実装する一番簡単な方法は、and と or を if 文と同様にコンパイルすることです。基本的な考え方は拙作のページ <a href="abcscm34.html">micro Scheme コンパイラの作成 (2)</a> で作成したマクロ and, or と同じです。この場合、x and y は x の評価結果が偽であれば y の評価結果を返し、x or y は x または y の評価結果が真であれば、その値を返すことになります。
+</p>
+<p> and と or のコンパイルは下図のようになります。
+</p>
+<pre class="item">
+x and y =&gt; if not x then 0; else y; end
+        =&gt; xの評価コード not sel (ldc 0 join) (yの評価コード join)
+
+x or y =&gt; if x then x; else y; end
+       =&gt; xの評価コード dup sel (join) (pop yの評価コード join)
+
+        図 : and と or のコンパイル
+</pre>
+<p> x and y は最初に x を評価するコードを出力します。そのあと、not でスタックトップの値を反転して sel でチェックします。真であれば 0 を返すコードを出力し、そうでなければ y を評価するコードを出力します。
+</p>
+<p> x or y はちょっとした工夫が必要になります。sel はスタックトップの値を削除するので、このままでは x の評価結果を返すことができません。そこで、SECD 仮想マシンにスタックトップの値をコピーする命令 dup を追加します。dup の動作を下図に示します。
+</p>
+<pre class="item">
+(v . s) e (dup . c) d =&gt; (v v . s) e c d
+
+        図 : dup の状態遷移
+</pre>
+<p> dup の動作は簡単で、スタックトップの値 v をコピーするだけです。
+</p>
+<p> dup のあと sel を実行するとスタックトップの値が取り除かれますが、その下にある値も x の評価結果です。真の場合は何もせずに join 命令を実行するだけです。これで x の評価結果を返すことができます。偽の場合は pop で x の評価結果を取り除いてから、y を評価するコードを出力します。
+</p>
+<p> なお、今回の修正により SECD 仮想マシンに用意した命令 and と or は不要になります。
+</p>
+<h4>●and と or のコンパイル</h4>
+<p> それではプログラムを修正しましょう。and と or のコンパイルは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 論理演算子 (and と or の優先順位は同じとする)
+
+(define (expr1 env)
+  (let loop ((val1 (expr2 env)))
+    (case *token*
+      ((and)
+       (get-token)
+       (loop (append val1
+                     (list 'not
+                           'sel
+                           (list 'ldc 0 'join)
+                           (append (expr2 env) (list 'join))))))
+      ((or)
+       (get-token)
+       (loop (append val1
+                     (list 'dup
+                           'sel
+                           (list 'join)
+                           (append (list 'pop) (expr2 env) (list 'join))))))
+      (else val1))))
+</pre>
+<p> 演算子の左辺値をコンパイルした結果が val1 になります。and の場合、val1 のあとに not, sel を連結して、次に then 節 (ldc 0 join) を、その次に else 節として右辺値を expr2 でコンパイルして連結します。
+</p>
+<p> or の場合も同様です。val1 のあとに dup と sel を連結して、次に then 節 (join) を、その次に else 節として右辺値を expr2 でコンパイルして連結します。このとき、先頭に pop を追加することをお忘れなく。
+</p>
+<p> SECD 仮想マシンの修正は簡単なので説明は割愛します。詳細は <a href="abcscm59.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例 (1)</h4>
+<p> それでは簡単な実行例を示しましょう。最初は and の場合です。
+</p>
+<pre>
+Calc&gt; 1 and print(1);
+1
+=&gt; 1
+Calc&gt; 0 and print(1);
+=&gt; 0
+Calc&gt; 1 and print(1) and print(2);
+1
+2
+=&gt; 2
+Calc&gt; 1 and print(0) and print(2);
+0
+=&gt; 0
+Calc&gt; 0 and print(0) and print(2);
+=&gt; 0
+</pre>
+<p> 最初の例は左辺値と右辺値の両方が評価されます。次の例では、左辺値が 0 なので and の結果は 0 になります。print で値が表示されないので、右辺値は評価されていないことがわかります。and を連結した場合も同様です。
+</p>
+<p> 次は or の場合です。
+</p>
+<pre>
+Calc&gt; 1 or print(1) or print(2);
+=&gt; 1
+Calc&gt; 0 or print(1) or print(2);
+1
+=&gt; 1
+Calc&gt; 0 or print(0) or print(2);
+0
+2
+=&gt; 2
+</pre>
+<p> 最初の例は 1 が真になるので、or の値も真になります。print(1) と print(2) は評価されません。次の例では、0 が偽になるので、print(1) が評価されて 1 が返されるので、 or は真になります。この場合、print(2) は評価されません。最後の例では、0 と print(0) が偽に評価されるので、最後の print(2) が評価されて or の値は 2 になります。
+</p>
+
+<h4>●ベクタの生成とアクセス方法</h4>
+<p> 次は fncalc にベクタを追加しましょう。ベクタは Scheme のベクタをそのまま使います。ベクタの生成は組み込み関数 make_vector と角カッコ [ ] で行います。make_vector は Scheme の関数 make-vector を呼び出すだけです。角カッコによるベクタの生成は Ruby や Python などスクリプト言語で使われている方法と同じです。文法は次のようになります。
+</p>
+<pre class="item">
+配列生成式 = "[", [要素リスト], "]"
+要素リスト = 式, {",", 式 }
+</pre>
+<p> 配列生成式の処理は関数 factor で行います。式を評価した値が配列の要素になります。配列生成式は「式」なので、配列生成式を入れ子にして多次元配列を実現することも可能です。
+</p>
+<p> ベクタのアクセスも角カッコを使います。文法は次のようになります。
+</p>
+<pre class="item">
+代入式 = 左辺値, "=", 式.
+左辺値 = 変数 | 変数, "[", 式, "]", {"[", 式, "]"}.
+
+ 因子  = 定数 | ("+" | "-" | "not"), 因子 | "(", 式, ")" | 変数 | fn式 |
+         変数, "(", [引数リスト], ")" | fn式, "(", [引数リスト], ")" |
+         配列生成式 | 変数, "[", 式, "]", {"[", 式, "]"}.
+</pre>
+<p> ベクタのアクセスは一般的な手続き型言語と同じです。a[0] はベクタ a の 0 番目の要素を取り出し、a[4] = 10 はベクタ a の 4 番目の要素を 10 に書き換えます。角カッコを 2 つ使うと入れ子の配列を 2 次元配列として利用することができます。簡単な例を示しましょう。
+</p>
+<pre>
+Calc&gt; a = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+=&gt; [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+Calc&gt; a[0];
+=&gt; [1, 2, 3]
+Calc&gt; a[0][1];
+=&gt; 2
+Calc&gt; a[2];
+=&gt; #(7 8 9)
+Calc&gt; a[2][2];
+=&gt; 9
+</pre>
+<p> ベクタの中にベクタを入れることで 2 次元配列を表すことができます。a の 0 番目の要素はベクタ [1, 2, 3] で、そのベクタの 1 番目の要素は 2 です。この要素は角カッコを 2 つ使って a[0][1] とアクセスすることができます。a[0] で 0 番目のベクタを取り出し、そのベクタの 1 番目の要素を [1] で取り出します。同様に、a[2][2] の値は 9 になります。
+</p>
+<p> このほかに、組み込み関数としてデータ型を判定する述語 vector と、ベクタの大きさを求める関数 length を追加します。
+</p>
+<h4>●ベクタのコンパイル</h4>
+<p> それではプログラムを作りましょう。関数 get-token に '[' と ']' を表すトークン lbra と rbra を追加します。そして、関数 factor にベクタを生成する処理と、ベクタの要素にアクセスする処理を追加します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ベクタのコンパイル
+
+; ベクタの生成
+(define (create-vector env)
+  (get-token)
+  (if (eq? *token* 'rbra)
+      (begin (get-token) (list 'mvec 0))
+    (let loop ((n 1) (a '()))
+      (let ((expr (expression env)))
+        (case *token*
+          ((rbra)
+           (get-token)
+           (append (append a expr) (list 'mvec n)))
+          ((comma)
+           (get-token)
+           (loop (+ n 1) (append a expr)))
+          (else
+           (compile-error "unexpected token")))))))
+
+; ベクタのコンパイル
+(define (compile-vector code env)
+  (let loop ((code1 code))
+    (get-token)
+    (let ((pos (append (expression env) (list 'vref))))
+      (unless (eq? *token* 'rbra)
+        (compile-error "']' expected"))
+      (get-token)
+      (cond ((not (eq? *token* 'lbra))
+             (append code1 pos))
+            (else
+             (loop (append code1 pos)))))))
+
+; 因子
+(define (factor env)
+
+    ・・・省略・・・
+
+    ((lbra)
+     ; ベクタの生成
+     (create-vector env))
+
+    ・・・省略・・・
+
+    ((ident)
+     (let ((code #f)
+           (pos (location *value* env)))
+       (if pos
+           ; 局所変数
+           (set! code (list 'ld pos))
+         ; 大域変数
+         (set! code (list 'ldg (get-gvar *value*))))
+       (get-token)
+       (cond ((eq? *token* 'lpar)
+              ; 関数呼び出し
+              (append (compile-argument env) code (list 'app)))
+             ((eq? *token* 'lbra)
+              ; ベクタのアクセス
+              (compile-vector code env))
+             (else
+              ; 変数
+              code))))
+    (else
+     (compile-error "unexpected token"))))
+</pre>
+<p> 関数 factor で *token* が lbra であればベクタを生成するコードを出力します。この処理を関数 create-vector で行います。この処理は関数の実引数を処理する compile-argument とほとんど同じです。要素はスタックに積まれるので、スタックから要素を取り出してベクタにセットする命令 mvec を SECD マシンに追加します。
+</p>
+
+<pre class="item">
+(vn ... v1 . s) e (mvec n . c) d =&gt; (vs . s) e c d
+vs = [v1, ..., vn]
+
+        図 : mvec の状態遷移
+</pre>
+<p> たとえば、n 個の要素がある場合、スタックには v1 から vn までの値が格納されています。それをスタックから取り出してベクタ vs に格納し、それをスタックに積むのが mvec の役目です。
+</p>
+<p> トークンが ident で次のトークンが lbra の場合は、ベクタの要素にアクセスするコードを出力します。この処理を関数 compile-vector で行います。引数 code には変数から値を取り出すコードがセットされています。つまり、スタックトップの値はベクタになります。次に、角カッコの中の式を expression でコンパイルします。評価結果は 0 以上の整数値で、スタックトップにセットされます。この 2 つの値を使ってベクタから要素を取り出す命令 vref を SECD マシンに追加します。
+</p>
+<pre class="item">
+(n vec . s) e (vref . c) d =&gt; (v . s) e c d
+v = vec[n]
+
+        図 : vref の状態遷移
+</pre>
+<p> vref は添字 n とベクタ vec をスタックから取り出し、vec[n] の値をスタックに追加します。
+</p>
+<p> 多次元配列のアクセスはこの処理を繰り返すだけです。vec[n] のあとに [m] が続く場合、vec[n] のアクセスで vec[n] の要素がスタックに積まれます。多次元配列の場合、この値がベクタになるので、このあとに式 m を評価するコードを出力して vref を実行すれば、vec[n] のベクタの m 番目の要素を取り出すことができます。compile-vector では、rbra のあとのトークンが lbra であれば、角カッコ内の式をコンパイルして命令 vref を追加する処理を繰り返します。
+</p>
+<h4>●要素の書き換え</h4>
+<p> 次はベクタの要素を書き換える処理を追加します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 式の評価
+
+(define (expression env)
+  (let ((val (expr1 env)))
+    (case *token*
+      ((=)
+       (get-token)
+       (cond ((eq? (last val) 'vref)
+              ; ベクタの代入
+              (append (drop-right val 1) (expression env) (list 'vset)))
+             (else
+              (case (car val)
+                ((ld)
+                 ; 局所変数の代入
+                 (append (expression env) (list 'lset (cadr val))))
+                ((ldg)
+                 ; 大域変数の代入
+                 (append (expression env) (list 'gset (cadr val))))
+                (else
+                 (compile-error "invalid assignment form"))))))
+      (else val))))
+</pre>
+<p> 代入式の処理で、左辺値をコンパイルしたコードの最後の命令が vref であれば、ベクタの要素を更新する命令 vset に書き換えます。vset の動作は次のようになります。
+</p>
+<pre class="item">
+(v n vec . s) e (vset . c) d =&gt; (v . s) e c d
+vec[n] = v
+
+        図 : vset の状態遷移
+</pre>
+<p> v が値、n が添字、vec がベクタです。スタックから v, n, vec を取り出して、vec[n] に v を代入するだけです。
+</p>
+<p> expression では、drop-right で val の最後の要素 vref を削除し、expression を再帰呼び出しして式を評価して、最後に命令 vset を追加します。なお、多次元配列はベクタの入れ子にすぎないので、最後のベクタの要素を書き換えるだけで大丈夫です。
+</p>
+
+<h4>●SECD マシンの修正</h4>
+<p> 最後に SECD マシンに新しい命令を追加します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : SECD マシン
+
+(define (vm s e c d)
+  (case (car c)
+
+    ・・・省略・・・
+
+    ((dup)
+     (vm (cons (car s) s) e (cdr c) d))
+
+    ・・・省略・・・
+
+    ((vref)
+     (vm (cons (vector-ref (cadr s) (car s)) (cddr s)) e (cdr c) d))
+    ((vset)
+     (let ((v (car s)))
+       (vector-set! (caddr s) (cadr s) v)
+       (vm (cons v (cdddr s)) e (cdr c) d)))
+    ((mvec)
+     (let ((a (make-vector (cadr c))))
+       (let loop ((n (cadr c)))
+         (cond ((zero? n)
+                (vm (cons a s) e (cddr c) d))
+               (else
+                (vector-set! a (- n 1) (pop! s))
+                (loop (- n 1)))))))
+    ((halt)
+     (car s))
+    (else
+     (error "vm: unexpected code:" (car c)))))
+</pre>
+<p> dup は (cons (car s) s) でスタックトップの値を複製します。vref は (vector-ref (cadr s) (car s)) でベクタの要素を取り出し、それをスタックトップに追加します。vset は (vector-set! (caddr s) (cadr s) v) でベクタの要素を v に書き換えます。mvec は make-vector でベクタを生成し、スタックからデータを取り出して vector-set! でベクタにセットします。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="abcscm59.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例 (2)</h4>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+Calc&gt; a = [1, 2, 3, 4, 5];
+=&gt; [1, 2, 3, 4, 5]
+Calc&gt; a[0];
+=&gt; 1
+Calc&gt; a[4];
+=&gt; 5
+Calc&gt; a[0] = 10;
+=&gt; 10
+Calc&gt; a;
+=&gt; [10, 2, 3, 4, 5]
+Calc&gt; b = [[1, 2, 3], [4, 5, 6], [7, 8, 9]];
+=&gt; [[1, 2, 3], [4, 5, 6], [7, 8, 9]]
+Calc&gt; b[0];
+=&gt; [1, 2, 3]
+Calc&gt; b[0][0];
+=&gt; 1
+Calc&gt; b[2][2];
+=&gt; 9
+Calc&gt; b[2][2] = 100;
+=&gt; 100
+Calc&gt; b;
+=&gt; [[1, 2, 3], [4, 5, 6], [7, 8, 100]]
+Calc&gt; c = make_vector(10, 0);
+=&gt; [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+Calc&gt; length(c);
+=&gt; 10
+</pre>
+<p> 正常に動作していますね。今回はここまでです。次回はベクタを使った簡単なサンプルプログラムを作ってみましょう。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; fncalc4.scm : 関数型電卓プログラム
+;
+;               Copyright (C) 2011 Makoto Hiroi
+;
+; and, or の修正 (短絡演算子とする)
+; ベクタの追加
+;
+
+(use srfi-1)
+
+;;;
+;;; 大域変数
+;;;
+(define *ch*    #f)
+(define *token* #f)
+(define *value* #f)
+(define *input* (standard-input-port))
+(define *line*  #f)
+(define *col*   #f)
+
+;;;
+;;; グローバルな環境
+;;;
+(define *global-environment*
+  `((exp     primitive ,exp)
+    (log     primitive ,log)
+    (sin     primitive ,sin)
+    (cos     primitive ,cos)
+    (tan     primitive ,tan)
+    (asin    primitive ,asin)
+    (acos    primitive ,acos)
+    (atan    primitive ,atan)
+    (sqrt    primitive ,sqrt)
+    (expt    primitive ,expt)
+    (number   primitive ,(lambda (x) (if (number? x) 1 0)))
+    (string   primitive ,(lambda (x) (if (string? x) 1 0)))
+    (function primitive ,(lambda (x) (if (pair? x) 1 0)))
+    (vector   primitive ,(lambda (x) (if (vector? x) 1 0)))
+    (make_vector primitive ,(lambda (x y) (make-vector x y)))
+    (length   primitive ,(lambda (x) (vector-length x)))
+    (load     primitive ,(lambda (x) (load-file x) 1))
+    (display  primitive ,(lambda (x) (print-data x) x))
+    (newline  primitive ,(lambda () (newline) 0))
+    (print    primitive ,(lambda (x) (print-data x) (newline) x))))
+
+; ベクタの表示
+(define (print-vector v)
+  (display "[")
+  (do ((i 0 (+ i 1)))
+      ((= i (vector-length v)) (display "]"))
+    (if (vector? (vector-ref v i))
+        (print-vector (vector-ref v i))
+      (display (vector-ref v i)))
+    (when (&lt; i (- (vector-length v) 1))
+      (display ", "))))
+
+; データの表示
+(define (print-data data)
+  (cond ((pair? data) (display (car data)))
+        ((vector? data) (print-vector data))
+        (else (display data))))
+
+; 大域変数を求める
+(define (get-gvar sym)
+  (let ((val (assoc sym *global-environment*)))
+    (unless val
+      (set! val (cons sym 0))
+      (push! *global-environment* val))
+    val))
+
+;;;
+;;; 入力処理
+;;;
+
+; 文字の読み込み
+(define (nextch)
+  (set! *ch* (read-char *input*))
+  (cond ((eof-object? *ch*)
+         (set! *ch* #\null))
+        ((eqv? *ch* #\newline)
+         (inc! *line*)
+         (set! *col* 0))
+        (else
+         (inc! *col*))))
+
+; コンパイルエラー
+(define (compile-error mes)
+  (errorf "~A: token ~A, line ~D, column ~D" mes *token* *line* *col*))
+
+; 先読み記号の取得
+(define (getch) *ch*)
+
+; 数値
+(define (get-number)
+  (let ((buff '()))
+    ; 整数を buff に格納
+    (define (get-numeric)
+      (while (char-numeric? (getch))
+        (push! buff (getch))
+        (nextch)))
+    ; 整数部
+    (get-numeric)
+    (case (getch)
+      ((#\.)
+       ; 小数部
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)
+       (case (getch)
+         ((#\d #\D #\e #\E)
+          ; 指数部
+          (push! buff (getch))
+          (nextch)
+          (when (or (eqv? (getch) #\+)
+                    (eqv? (getch) #\-))
+            (push! buff (getch))
+            (nextch))
+          ; 指数の数字
+          (get-numeric))))
+      ((#\/)
+       ; 分数
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)))
+    (string-&gt;number (list-&gt;string (reverse buff)))))
+
+; 識別子
+(define (get-ident)
+  (let loop ((a '()))
+    (if (and (not (char-alphabetic? (getch)))
+             (not (char-numeric? (getch)))
+             (not (eqv? (getch) #\_)))
+        (string-&gt;symbol (list-&gt;string (reverse a)))
+      (loop (begin0 (cons (getch) a) (nextch))))))
+
+; 文字列
+(define (escape-code c)
+  (case c
+    ((#\t) #\tab)
+    ((#\n) #\newline)
+    (else c)))
+
+(define (get-string)
+  (nextch)
+  (let loop ((buff '()))
+    (cond ((eqv? (getch) #\")
+           (nextch)
+           (list-&gt;string (reverse buff)))
+          ((eqv? (getch) #\\)
+           ; エスケープ記号
+           (nextch)
+           (loop (begin0 (cons (escape-code (getch)) buff) (nextch))))
+          (else
+           (loop (begin0 (cons (getch) buff) (nextch)))))))
+
+; トークンの切り出し
+(define (get-token)
+  ; 空白文字の読み飛ばし
+  (while (char-whitespace? (getch))
+    (nextch))
+  (cond ((char-numeric? (getch))
+         (set! *token* 'number)
+         (set! *value* (get-number)))
+        ((char-alphabetic? (getch))
+         (set! *value* (get-ident))
+         (case *value*
+           ((def end if then else and or not while do begin let in fn eq callcc)
+            (set! *token* *value*))
+           (else
+            (set! *token* 'ident))))
+        (else
+         (case (getch)
+          ((#\#)
+           ; コメントの読み飛ばし
+           (while (not (eqv? (getch) #\newline))
+             (nextch))
+           (get-token))
+          ((#\")
+           ; 文字列
+           (set! *token* 'string)
+           (set! *value* (get-string)))
+          ((#\=)
+           (set! *token* '=)
+           (nextch)
+           (when (eqv? (getch) #\=)
+             (set! *token* '==)
+             (nextch)))
+          ((#\+)
+           (set! *token* '+)
+           (nextch))
+          ((#\-)
+           (set! *token* '-)
+           (nextch))
+          ((#\*)
+           (set! *token* '*)
+           (nextch))
+          ((#\%)
+           (set! *token* '%)
+           (nextch))
+          ((#\/)
+           (set! *token* '/)
+           (nextch)
+           (when (eqv? (getch) #\/)
+             (set! *token* '//)
+             (nextch)))
+          ((#\()
+           (set! *token* 'lpar)
+           (nextch))
+          ((#\))
+           (set! *token* 'rpar)
+           (nextch))
+          ((#\[)
+           (set! *token* 'lbra)
+           (nextch))
+          ((#\])
+           (set! *token* 'rbra)
+           (nextch))
+          ((#\&lt;)
+           (set! *token* '&lt;)
+           (nextch)
+           (when (eqv? (getch) #\=)
+             (set! *token* '&lt;=)
+             (nextch)))
+          ((#\&gt;)
+           (set! *token* '&gt;)
+           (nextch)
+           (when (eqv? (getch) #\=)
+             (set! *token* '&gt;=)
+             (nextch)))
+          ((#\!)
+           (set! *token* 'not)
+           (nextch)
+           (when (eqv? (getch) #\=)
+             (set! *token* '!=)
+             (nextch)))
+          ((#\,)
+           (set! *token* 'comma)
+           (nextch))
+          ((#\;)
+           (set! *token* 'semic)
+           (nextch))
+          ((#\null)
+           (set! *token* 'eof))
+          (else
+           (set! *token* 'others))))))
+
+;;;
+;;; 式の評価
+;;;
+
+(define (expression env)
+  (let ((val (expr1 env)))
+    (case *token*
+      ((=)
+       (get-token)
+       (cond ((eq? (last val) 'vref)
+              ; ベクタの代入
+              (append (drop-right val 1) (expression env) (list 'vset)))
+             (else
+              (case (car val)
+                ((ld)
+                 ; 局所変数の代入
+                 (append (expression env) (list 'lset (cadr val))))
+                ((ldg)
+                 ; 大域変数の代入
+                 (append (expression env) (list 'gset (cadr val))))
+                (else
+                 (compile-error "invalid assignment form"))))))
+      (else val))))
+
+; 論理演算子 (and と or の優先順位は同じとする)
+(define (expr1 env)
+  (let loop ((val1 (expr2 env)))
+    (case *token*
+      ((and)
+       (get-token)
+       (loop (append val1
+                     (list 'not
+                           'sel
+                           (list 'ldc 0 'join)
+                           (append (expr2 env) (list 'join))))))
+      ((or)
+       (get-token)
+       (loop (append val1
+                     (list 'dup
+                           'sel
+                           (list 'join)
+                           (append (list 'pop) (expr2 env) (list 'join))))))
+      (else val1))))
+
+; 比較演算子 (==, !=, &lt;, &lt;=, &gt;, &gt;= の優先順位は同じとする)
+(define (expr2 env)
+  (let ((val1 (expr3 env)))
+    (case *token*
+      ((==)
+       (get-token)
+       (append val1 (expr3 env) (list '==)))
+      ((!=)
+       (get-token)
+       (append val1 (expr3 env) (list '!=)))
+      ((&lt;)
+       (get-token)
+       (append val1 (expr3 env) (list '&lt;)))
+      ((&lt;=)
+       (get-token)
+       (append val1 (expr3 env) (list '&lt;=)))
+      ((&gt;)
+       (get-token)
+       (append val1 (expr3 env) (list '&gt;)))
+      ((&gt;=)
+       (get-token)
+       (append val1 (expr3 env) (list '&gt;=)))
+      ((eq)
+       (get-token)
+       (append val1 (expr3 env) (list 'eq)))
+      (else val1))))
+
+(define (expr3 env)
+  (let loop ((val (term env)))
+    (case *token*
+      ((+)
+       (get-token)
+       (loop (append val (term env) (list '+))))
+      ((-)
+       (get-token)
+       (loop (append val (term env) (list '-))))
+      (else val))))
+
+; 項
+(define (term env)
+  (let loop ((val (factor env)))
+    (case *token*
+      ((*)
+       (get-token)
+       (loop (append val (factor env) (list '*))))
+      ((/)
+       (get-token)
+       (loop (append val (factor env) (list '/))))
+      ((//)
+       (get-token)
+       (loop (append val (factor env) (list '//))))
+      ((%)
+       (get-token)
+       (loop (append val (factor env) (list '%))))
+      (else val))))
+
+; 実引数のコンパイル
+(define (compile-argument env)
+  (get-token)
+  (if (eq? *token* 'rpar)
+      (begin (get-token) (list 'args 0))
+    (let loop ((n 1) (a '()))
+      (let ((expr (expression env)))
+        (case *token*
+          ((rpar)
+           (get-token)
+           (append (append a expr) (list 'args n)))
+          ((comma)
+           (get-token)
+           (loop (+ n 1) (append a expr)))
+          (else
+           (compile-error "unexpected token")))))))
+
+; 仮引数の取得
+(define (get-parameter)
+  (get-token)
+  (unless (eq? *token* 'lpar)
+    (compile-error "'(' expected"))
+  (get-token)
+  (let loop ((a '()))
+    (let ((val *value*))
+      (case *token*
+        ((rpar)
+         (get-token)
+         (reverse a))
+        ((ident)
+         (let ((val *value*))
+           (get-token)
+           (loop (cons val a))))
+        ((comma)
+         (get-token)
+         (loop a))
+        (else
+         (compile-error "unexpected token"))))))
+
+; 位置を求める
+(define (position var ls)
+  (let loop ((i 0) (ls ls))
+    (cond ((null? ls) #f)
+          ((eqv? var (car ls)) i)
+          (else
+           (loop (+ i 1) (cdr ls))))))
+
+; フレームと局所変数の位置を求める
+(define (location var ls)
+  (let loop ((i 0) (ls ls))
+    (if (null? ls)
+        #f
+      (let ((j (position var (car ls))))
+        (if j
+            (cons i j)
+          (loop (+ i 1) (cdr ls)))))))
+
+; ベクタの生成
+(define (create-vector env)
+  (get-token)
+  (if (eq? *token* 'rbra)
+      (begin (get-token) (list 'mvec 0))
+    (let loop ((n 1) (a '()))
+      (let ((expr (expression env)))
+        (case *token*
+          ((rbra)
+           (get-token)
+           (append (append a expr) (list 'mvec n)))
+          ((comma)
+           (get-token)
+           (loop (+ n 1) (append a expr)))
+          (else
+           (compile-error "unexpected token")))))))
+
+; ベクタのコンパイル
+(define (compile-vector code env)
+  (let loop ((code1 code))
+    (get-token)
+    (let ((pos (append (expression env) (list 'vref))))
+      (unless (eq? *token* 'rbra)
+        (compile-error "']' expected"))
+      (get-token)
+      (cond ((not (eq? *token* 'lbra))
+             (append code1 pos))
+            (else
+             (loop (append code1 pos)))))))
+
+; 因子
+(define (factor env)
+  (case *token*
+    ((lpar)
+     (get-token)
+     (let ((val (expression env)))
+       (if (eq? *token* 'rpar)
+           (get-token)
+         (compile-error "')' expected"))
+       val))
+    ((number)
+     (begin0 (list 'ldc *value*) (get-token)))
+    ((string)
+     (begin0 (list 'ldc *value*) (get-token)))
+    ((lbra)
+     ; ベクタの生成
+     (create-vector env))
+    ((not)
+     (get-token)
+     (append (factor env) (list 'not)))
+    ((+)
+     ; 単項演算子 (+ をはずすだけ)
+     (get-token)
+     (factor env))
+    ((-)
+     ; 単項演算子
+     (get-token)
+     (append (factor env) (list 'neg)))
+    ((fn)
+     ; クロージャの生成
+     (let ((code (list 'ldf
+                       (append (compile-block (cons (get-parameter) env))
+                               (list 'rtn)))))
+       (get-token)
+       (if (eq? *token* 'lpar)
+           ; 関数呼び出し
+           (append (compile-argument env) code (list 'app))
+         code)))
+    ((callcc)
+     ; 継続 callcc(f) 
+     ; ldct next args 1 引数 f の評価 app next ... 
+     (get-token)
+     (unless (eq? *token* 'lpar)
+       (compile-error "callcc: '(' expected"))
+     (get-token)
+     (let ((code (append (list 'args 1) (expression env) (list 'app))))
+       (unless (eq? *token* 'rpar)
+         (compile-error "callcc: invalid token"))
+       (get-token)
+       (append (list 'ldct (length code)) code)))
+    ((ident)
+     (let ((code #f)
+           (pos (location *value* env)))
+       (if pos
+           ; 局所変数
+           (set! code (list 'ld pos))
+         ; 大域変数
+         (set! code (list 'ldg (get-gvar *value*))))
+       (get-token)
+       (cond ((eq? *token* 'lpar)
+              ; 関数呼び出し
+              (append (compile-argument env) code (list 'app)))
+             ((eq? *token* 'lbra)
+              ; ベクタのアクセス
+              (compile-vector code env))
+             (else
+              ; 変数
+              code))))
+    (else
+     (compile-error "unexpected token"))))
+
+; if 文のコンパイル
+(define (compile-if env)
+  (let ((test-form (expression env))
+        (then-form #f)
+        (else-form #f))
+    (unless (eq? *token* 'then)
+      (compile-error "if: then expected"))
+    (get-token)
+    (set! then-form (append (compile-statement env) (list 'join)))
+    (get-token)  ; end, semic を読み飛ばす
+    (if (eq? *token* 'else)
+        (begin (get-token)
+               (set! else-form
+                     (append (begin0 (compile-statement env)
+                                     (get-token)) ; end, semic を読み飛ばす
+                             (list 'join))))
+      (set! else-form (list 'ldc 0 'join)))
+    (unless (eq? *token* 'end)
+      (compile-error "if: end expected"))
+    (append test-form (list 'sel then-form else-form))))
+
+; while 文のコンパイル
+(define (compile-while env)
+  (let ((test (expression env))
+        (body #f))
+    (unless (eq? *token* 'do)
+      (compile-error "while: do expected"))
+    (get-token)
+    (set! body (append (compile-block env) (list 'rpt)))
+    (append (list 'bgn) test (list 'whl) (list body))))
+
+; block 文のコンパイル
+(define (compile-block env)
+  (let loop ((code '()))
+    (let ((code1 (compile-statement env)))
+      (get-token)  ; 実行文の終端 (semic, end) を読み飛ばす
+      (cond ((eq? *token* 'end)
+             (append code code1))
+            (else
+             (loop (append code code1 (list 'pop))))))))
+
+; let 文のコンパイル
+(define (compile-let env)
+  (let loop ((vars '()) (code '()))
+    (cond ((eq? *token* 'in)
+           (get-token)
+           ; 本体コードの生成
+           (append code
+                   (list 'args
+                         (length vars)
+                         'ldf
+                         (append (compile-block (cons (reverse vars) env))
+                                 (list 'rtn))
+                         'app)))
+          ((eq? *token* 'ident)
+           (let ((var *value*))
+             (get-token)
+             (unless (eq? *token* '=)
+               (compile-error "let: invalid assignment form"))
+             (get-token)
+             (loop (cons var vars) (append code (expr1 env)))))
+          ((eq? *token* 'comma)
+           (get-token)
+           (loop vars code))
+          (else
+           (compile-error "let: unexpected token")))))
+
+; 実行文のコンパイル
+(define (compile-statement env)
+  (case *token*
+    ((begin)
+     (get-token)
+     (compile-block env))
+    ((if)
+     (get-token)
+     (compile-if env))
+    ((while)
+     (get-token)
+     (compile-while env))
+    ((let)
+     (get-token)
+     (compile-let env))
+    (else
+     ; 式文
+     (begin0
+       (expression env)
+       (unless (eq? *token* 'semic)
+         (compile-error "';' expected"))))))
+
+; 最適化
+(define (optimize code)
+  (let loop ((code code))
+    (when (pair? code)
+      (cond ((or (eq? (car code) 'ld)
+                 (eq? (car code) 'ldg))
+             ; スキップする
+             (loop (cddr code)))
+            ((pair? (car code))
+             (optimize (car code))
+             (loop (cdr code)))
+            ((and (eq? (car code) 'sel)
+                  (eq? (cadddr code) 'rtn))
+             ; sel then else rtn ならば最適化
+             (set-car! code 'selr)
+             (set-car! (last-pair (cadr code)) 'rtn)  ; then 節
+             (set-car! (last-pair (caddr code)) 'rtn) ; else 節
+             (loop (cdr code)))
+            ((and (eq? (car code) 'app)
+                  (eq? (cadr code) 'rtn))
+             ; app rtn ならば最適化
+             (set-car! code 'tapp)
+             (loop (cdr code)))
+            (else
+             (loop (cdr code)))))))
+
+; コンパイル
+(define (compile)
+  (cond ((eq? *token* 'def)
+         ; 関数定義
+         (get-token)
+         (unless (eq? *token* 'ident)
+           (compile-error "invalid def form"))
+         (let ((name *value*)
+               (code (append (compile-block (list (get-parameter)))
+                     (list 'rtn))))
+           (list 'ldf code 'gset (get-gvar name))))
+        (else
+         (compile-statement '()))))
+
+;;;
+;;; 仮想マシン
+;;;
+
+; 局所変数の値を求める
+(define (get-lvar e i j)
+  (list-ref (list-ref e i) j))
+
+; 局所変数の値を更新する
+(define (set-lvar! e i j val)
+  (set-car! (drop (list-ref e i) j) val))
+
+(define (vm s e c d)
+  (case (car c)
+    ((+)
+     (vm (cons (+ (cadr s) (car s)) (cddr s)) e (cdr c) d))
+    ((-)
+     (vm (cons (- (cadr s) (car s)) (cddr s)) e (cdr c) d))
+    ((*)
+     (vm (cons (* (cadr s) (car s)) (cddr s)) e (cdr c) d))
+    ((/)
+     (vm (cons (/ (cadr s) (car s)) (cddr s)) e (cdr c) d))
+    ((//)
+     (vm (cons (quotient (cadr s) (car s)) (cddr s)) e (cdr c) d))
+    ((%)
+     (vm (cons (modulo (cadr s) (car s)) (cddr s)) e (cdr c) d))
+    ((==)
+     (vm (cons (if (= (cadr s) (car s)) 1 0) (cddr s)) e (cdr c) d))
+    ((!=)
+     (vm (cons (if (= (cadr s) (car s)) 0 1) (cddr s)) e (cdr c) d))
+    ((&lt;)
+     (vm (cons (if (&lt; (cadr s) (car s)) 1 0) (cddr s)) e (cdr c) d))
+    ((&lt;=)
+     (vm (cons (if (&lt;= (cadr s) (car s)) 1 0) (cddr s)) e (cdr c) d))
+    ((&lt;)
+     (vm (cons (if (&lt; (cadr s) (car s)) 1 0) (cddr s)) e (cdr c) d))
+    ((&lt;=)
+     (vm (cons (if (&lt;= (cadr s) (car s)) 1 0) (cddr s)) e (cdr c) d))
+    ((&gt;)
+     (vm (cons (if (&gt; (cadr s) (car s)) 1 0) (cddr s)) e (cdr c) d))
+    ((&gt;=)
+     (vm (cons (if (&gt;= (cadr s) (car s)) 1 0) (cddr s)) e (cdr c) d))
+    ((eq)
+     (vm (cons (if (eqv? (cadr s) (car s)) 1 0) (cddr s)) e (cdr c) d))
+    ((neg)
+     (vm (cons (- (car s)) (cdr s)) e (cdr c) d))
+    ((not)
+     (vm (cons (if (zero? (car s)) 1 0) (cdr s)) e (cdr c) d))
+    ((ld)
+     (let ((pos (cadr c)))
+       (vm (cons (get-lvar e (car pos) (cdr pos)) s) e (cddr c) d)))
+    ((ldc)
+     (vm (cons (cadr c) s) e (cddr c) d))
+    ((ldg)
+     ; c = (ldg (sym . val) ...)
+     (vm (cons (cdr (cadr c)) s) e (cddr c) d))
+    ((ldf)
+     (vm (cons (list 'closure (cadr c) e) s) e (cddr c) d))
+    ((ldct)
+     ; 継続
+     (vm (cons (list 'continuation s e (drop (cddr c) (cadr c)) d) s)
+         e
+         (cddr c)
+         d))
+    ((lset)
+     (let ((pos (cadr c)))
+       (set-lvar! e (car pos) (cdr pos) (car s))
+       (vm s e (cddr c) d)))
+    ((gset)
+     ; c = (gset (sym . val) ...)
+     (set-cdr! (cadr c) (car s))
+     (vm s e (cddr c) d))
+    ((app)
+     (let ((clo (car s)) (lvar (cadr s)))
+       (case (pop! clo)
+         ((primitive)
+          ; (primitive function)
+          (vm (cons (apply (car clo) lvar) (cddr s)) e (cdr c) d))
+         ((continuation)
+          (vm (cons (car lvar) (car clo)) (cadr clo) (caddr clo) (cadddr clo)))
+         (else
+          ; (closure code env)
+          (vm '()
+              (cons lvar (cadr clo))
+              (car clo)
+              (cons (list (cddr s) e (cdr c)) d))))))
+    ((tapp)
+     (let ((clo (car s)) (lvar (cadr s)))
+       (case (pop! clo)
+         ((primitive)
+          ; (primitive function)
+          (vm (cons (apply (car clo) lvar) (cddr s)) e (cdr c) d))
+         ((continuation)
+          (vm (cons (car lvar) (car clo)) (cadr clo) (caddr clo) (cadddr clo)))
+         (else
+          ; (closure code env)
+          (vm (cddr s) (cons lvar (cadr clo)) (car clo) d)))))
+    ((rtn)
+     (let ((save (car d)))
+       (vm (cons (car s) (car save)) (cadr save) (caddr save) (cdr d))))
+    ((sel)
+     (let ((t-clause (cadr c))
+           (e-clause (caddr c)))
+       (if (zero? (car s))
+           (vm (cdr s) e e-clause (cons (cdddr c) d))
+         (vm (cdr s) e t-clause (cons (cdddr c) d)))))
+    ((selr)
+     (let ((t-clause (cadr c))
+           (e-clause (caddr c)))
+       (if (zero? (car s))
+           (vm (cdr s) e e-clause d)
+         (vm (cdr s) e t-clause d))))
+    ((join)
+     (vm s e (car d) (cdr d)))
+    ((pop)
+     (vm (cdr s) e (cdr c) d))
+    ((dup)
+     (vm (cons (car s) s) e (cdr c) d))
+    ((args)
+     (let loop ((n (cadr c)) (a '()))
+       (if (zero? n)
+           (vm (cons a s) e (cddr c) d)
+         (loop (- n 1) (cons (pop! s) a)))))
+    ((bgn)
+     (vm s e (cdr c) (cons (cdr c) d)))
+    ((whl)
+     (if (zero? (car s))
+         (vm (cons 0 (cdr s)) e (cddr c) (cdr d))
+       (vm (cdr s) e (cadr c) d)))
+    ((rpt)
+     (vm (cdr s) e (car d) d))
+    ((vref)
+     (vm (cons (vector-ref (cadr s) (car s)) (cddr s)) e (cdr c) d))
+    ((vset)
+     (let ((v (car s)))
+       (vector-set! (caddr s) (cadr s) v)
+       (vm (cons v (cdddr s)) e (cdr c) d)))
+    ((mvec)
+     (let ((a (make-vector (cadr c))))
+       (let loop ((n (cadr c)))
+         (cond ((zero? n)
+                (vm (cons a s) e (cddr c) d))
+               (else
+                (vector-set! a (- n 1) (pop! s))
+                (loop (- n 1)))))))
+    ((halt)
+     (car s))
+    (else
+     (error "vm: unexpected code:" (car c)))))
+
+;;;
+;;;
+;;;
+
+; ファイルのロード
+(define (load-file name)
+  (call-with-input-file name
+    (lambda (in)
+      (let ((save-input *input*)
+            (save-token *token*)
+            (save-value *value*)
+            (save-ch    *ch*)
+            (save-line  *line*)
+            (save-col   *col*))
+        (set! *input* in)
+        (set! *line* 1)
+        (set! *col*  0)
+        (nextch)
+        (unwind-protect
+          (let loop ()
+            (get-token)
+            (when (not (eq? *token* 'eof))
+              (let ((code (append (compile) (list 'halt))))
+                (optimize code)
+                (vm '() '() code '()))
+              (loop)))
+          (begin
+            (set! *input* save-input)
+            (set! *token* save-token)
+            (set! *value* save-value)
+            (set! *ch*    save-ch)
+            (set! *line*  save-line)
+            (set! *col*   save-col)))))))
+
+; 入力をクリアする
+(define (clear-input-data)
+  (while (not (eqv? *ch* #\return))
+    (nextch)))
+
+; プロンプトの表示
+(define (prompt)
+  (display "Calc&gt; ")
+  (flush)
+  (set! *line* 0)
+  (set! *col* 0))
+
+; 実行
+(define (calc)
+  (prompt)
+  (nextch)
+  (call/cc
+    (lambda (break)
+      (let loop ()
+        (guard (err
+                 ((&lt;error&gt; err)
+                  (format #t "ERROR: ~S~%" (condition-ref err 'message))
+                  (clear-input-data)))
+          (get-token)
+          (when (eqv? *token* 'eof) (break #t))
+          (let ((code (append (compile) (list 'halt))))
+            (optimize code)
+            ; (print code)
+            (let ((val (vm '() '() code '())))
+              (display "=&gt; ")
+              (print-data val)
+              (newline))))
+        (prompt)
+        (loop)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm58.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm60.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

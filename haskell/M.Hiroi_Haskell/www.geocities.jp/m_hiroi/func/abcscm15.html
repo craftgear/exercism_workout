@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881781</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm14.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm16.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>二分木 (binary tree)</h3>
+<p> 今回はプログラムでよく用いられる「二分木 (binary tree) 」というデータ構造を取り上げます。二分木は「木構造 (tree structer) 」または「木 (tree) 」と呼ばれるデータ構造の一種です。最初に木について簡単に説明します。
+</p>
+
+<h4>●木</h4>
+<p> 木は節 (ノード) と呼ばれる要素に対して、階層的な関係を表したものです。身近な例では、ディレクトリの階層構造が木にあたります。ディレクトリに「ルートディレクトリ」があるように、木にも「根 (ルート) 」と呼ばれる節が存在します。下図を見てください。
+</p>
+<pre class="fig">
+          (root)
+            Ａ    ────────  レベル０
+          ／｜＼                ↑
+        ／  ｜  ＼
+      Ｂ    Ｃ    Ｄ            木  レベル１
+    ／｜＼        ｜＼          の
+  ／  ｜  ＼      ｜  ＼        高
+Ｅ    Ｆ    Ｇ    Ｈ    Ｉ      さ  レベル２
+          ／  ＼
+        ／      ＼              ↓
+      Ｊ          Ｋ    ─────  レベル３
+
+
+        図 : 一般的な木構造の一例
+</pre>
+<p> 木を図示する場合、階層関係がはっきりわかるように、根を上にして同じ階層にある節を並べて書きます。根からレベル 0、レベル 1 と階層を数えていき、最下層の節までの階層数を「木の高さ」といいます。木は、ある節から下の部分を切り出したものも、木としての性質を持っています。これを「部分木」といいます。
+</p>
+
+<p> 木は、ある節からほかの節に至る「経路」を考えることができます。たとえば、A から J には、A - B - G - J という経路がありますね。これは、ディレクトリやファイルを指定するときのパスと同じです。
+</p>
+
+<p> ある節から根の方向にさかのぼるとき、途中で通っていく節を「先祖」といい、直接つながっている節を「親」といいます。これは、逆から見ると「子孫」と「子」という関係になります。子を持たない節をとくに「葉 (leaf) 」と呼びます。上図でいうと、G は J, K の親で、J は G の子になります。J は子を持っていないので葉となります。
+</p>
+
+<p> 子は、「左 &lt; 右」の順番で節に格納するのが一般的です。これを「順序木」といいます。また、順番がない木を「無順序木」と呼びます。節が持っている子の数を「次数」といいます。上図の場合、A は 3 つの子 B, C, D を持っているので、A の次数は 3 となります。そして、すべての節の次数を n に揃えた順序木を「 n 分木」と呼びます。
+</p>
+
+<h4>●二分木</h4>
+<p> とくに、次数が 2 の二分木は、プログラムでよく使われるデータ構造です。
+</p>
+<pre class="fig">
+                    (root)
+                      18
+                    ／  ＼
+                  ／      ＼
+                ／          ＼
+              ／              ＼
+            ／                  ＼
+          14                      22
+        ／  ＼                  ／  ＼
+      ／      ＼              ／      ＼
+    12          16          20          24
+  ／  ＼      ／  ＼      ／  ＼      ／  ＼
+11      13  15      17  19      21  23      25
+
+
+             図 : 二分木の一例
+</pre>
+<p> 上図に二分木の例を示します。二分木では、節に一つのデータを格納します。そして、その節の左側の子には小さいデータが、右側の子には大きいデータが配置されるように木を構成します。
+</p>
+
+<p> この二分木をデータの探索に使うアルゴリズムが「二分探索木」です。二分探索木はデータの探索・挿入を高速に行うことができます。たとえば、上図の木から 19 を探してみましょう。まず root の 18 と比較します。18 &lt; 19 ですから、右側の子をたどり 22 と比較します。今度は 19 &lt; 22 なので左側の子をたどります。次は 20 と比較し 19 &lt; 20 なので左側の子をたどり、ここで 19 を見つけることができます。
+</p>
+
+<p> 二分木の探索は <a href="abcscm13.html">Scheme プログラミング中級編 [1]</a> で説明した「二分探索」と同じ原理です。左右どちらかの子をたどるたびに、探索するデータ数は半分になります。上図の場合でも、探索するデータ数が 15, 7, 3, 1 となり、最後に見つけることができました。
+</p>
+
+<p> データ数を N とすると、単純な線形探索では平均で N / 2 回の比較が必要になりますが、二分木を使うと log <SUB>2</SUB> N 程度の回数で収まります。たとえば、データが 100個ある場合、線形探索では 50 回データを比較しなければいけないのに、二分探索木では 7 回程度の比較で済むわけです。また、データの挿入や削除も、log <SUB>2</SUB> N 程度の比較回数で行うことができます。
+</p>
+
+<p> ただし、これは左右の部分木のバランスがとれている理想的な状態での話です。バランスが崩れると二分木の性能は劣化し、最悪の場合は線形探索と同じになってしまいます。そこで、左右のバランスを一定の範囲に収める「平衡木 (balanced tree) 」が考案されています。有名なところでは AVL 木、2 色木 (赤黒木)、2-3 木、B 木、B* 木などがあります。
+</p>
+<p> なお、Gauche には平衡木を使った「ツリーマップ (tree-map) 」という組み込みライブラリがあり、内部の実装には赤黒木が用いられています。
+</p>
+
+<h4>●リストによる二分木の実装</h4>
+<p> Scheme (Lisp) の場合、木はリストを使って表すことができます。たとえば、リストの第 1 要素が節の種類を表し、残りの要素に子を格納すると、最初の木構造は次のように表すことができます。
+</p>
+<pre class="fig">
+(A (B (E) (F) (G (J) (K))) (C) (D (H)(I)))
+
+        (A
+           (B
+              (E)
+              (F)
+              (G
+                 (J)
+                 (K)))
+           (C)
+           (D
+              (H)
+              (I)))
+
+        図 : 木構造のリスト表現
+</pre>
+<p> 一列に並べると、なにがなんだかさっぱりわかりませんが、同じレベルの節を並べると、その構造がよくわかると思います。
+</p>
+
+<p> 二分木も同様にリストで表すことができます。リストの先頭がデータで、次が左側の子、最後に右側の子を格納します。子がない場合は空リスト () を格納することにすると、二分木の例は次のように表せます。
+</p>
+<pre class="fig">
+ (18 (14 (12 (11 () ()) (13 () ())) (16 (15 () ()) (17 () ())))
+     (22 (20 (19 () ()) (21 () ())) (24 (23 () ()) (25 () ()))))
+
+                (18
+                    (14
+                        (12
+                            (11 () ())
+                            (13 () ()))
+                        (16
+                            (15 () ())
+                            (17 () ())))
+                    (22
+                        (20
+                            (19 () ())
+                            (21 () ()))
+                        (24
+                            (23 () ())
+                            (25 () ()))))
+
+                図 : 二分木をリストで表した場合
+</pre>
+<p> このように、リストを使えば二分木でも多分木でも作ることができます。もっとも、最近の Scheme (Lisp) には、構造体やオブジェクトシステム (オブジェクト指向機能) が用意されているので、それらを使って二分木を実装することもできます。Gauche には優れたオブジェクトシステムがありますが、この講座ではまだ説明していないので、二分木の節はリストで表すことにします。
+</p>
+
+<h4>●節の構造</h4>
+<p> 今回のプログラムでは、節 (node) を表すリストの第 1 要素にデータを、第 2 要素に左部分木を、第 3 要素に右部分木をセットすることにします。子を持たない場合は、空リストをセットすることにします。節を箱で表すと下図のようになります。
+</p>
+<pre class="fig">
+ 変数 root
+   ┌─┐    
+   │  ┼──┐
+   └─┘    │
+             ↓
+           ┌─┬─┬─┐
+           │18│・│・│
+           └─┴┼┴┼┘
+                 │  │
+   ┌──────┘  └─┐
+   ↓                    ↓
+ ┌─┬─┬─┐        ┌─┬─┬─┐
+ │14│／│／│        │22│／│／│
+ └─┴─┴─┘        └─┴─┴─┘
+
+      ┌─┬─┬─┐
+  節：│Ｄ│Ｌ│Ｒ│
+      └─┴─┴─┘
+  Ｄ：data, Ｌ：left, Ｒ：right, ／：空リスト
+
+           図 : 二分木の構造
+</pre>
+
+<p> ルートへの参照を変数 root に格納しておけば、この変数を使って二分木にアクセスすることができます。また、節が一つもない空の木は、変数 root に空リストをセットすれば表すことができます。なお、空リストのかわりに終端を表す節を用意する方法もあります。
+</p>
+
+<h4>●データ抽象</h4>
+<p> 節をリストで表す場合、各要素のアクセスは次のように行うことができます。
+</p>
+<pre class="fig">
+            表 : 節のアクセス方法
+
+         |  参照        |  更新
+---------+--------------+--------------------------------
+ データ  | (car node)   | (set-car! node obj)
+左部分木 | (cadr node)  | (set-car! (cdr node) new-node)
+右部分木 | (caddr node) | (set-car! (cddr node) new-node)
+</pre>
+<p> このように、節のアクセスは簡単にできますが、これをそのままプログラムするのは、あまり良い方法とはいえません。データにアクセスするとき、要素の位置とデータの対応をプログラマが把握していないといけないからです。左部分木はリストの何番目の要素か確かめながらプログラムするようでは、ストレスがたまってしまいますね。
+</p>
+
+<p> もうひとつは、データ構造を変更するときです。たとえば、リストの先頭にデータ型を表現するため、シンボルを追加することになったとしましょう。すると、データ、左部分木、右部分木の位置がひとつずつ後ろへずれるので、アクセスしている個所をすべて修正しなければいけません。
+</p>
+<p> データへのアクセスは単なるリスト操作関数にすぎないので、その関数が目的のデータを操作しているのか、それとも、それ以外のデータを操作しているのかを区別しながら、すべてのプログラムを修正しなければいけません。この修正作業は、プログラムの規模が大きくなればなるほど困難なものになります。
+</p>
+
+<p> ようするに、データに直接アクセスするから、このような問題を引き起こすのです。そこで、次のようなアクセス関数を定義することにします。
+</p>
+
+<pre class="list">
+リスト : 節のアクセス関数
+
+; 参照
+(define (data-of node) (car node))
+(define (left-of node) (cadr node))
+(define (right-of node) (caddr node))
+
+; 更新
+(define (set-data! node x) (set-car! node x))
+(define (set-left! node x) (set-car! (cdr node) x))
+(define (set-right! node x) (set-car! (cddr node) x))
+</pre>
+
+<p> アクセス関数の仕様さえわかっていれば、左部分木がリストの 2 番目の要素に対応するといった、データ構造の詳細を把握する必要はありません。それから、関数名によって節の要素にアクセスしていることが明確になります。また、データ構造を修正するにしても、これらのアクセス関数を修正するだけで、ほかのプログラムを見直す必要はまったくありません。
+</p>
+
+<p> このように、データ構造に直接アクセスせず、アクセス関数を経由してデータの参照・更新を行うことを、「データ抽象」とか「カプセル化」といいます。わざわざアクセス関数を用意するのは面倒なようですが、そのことによりデータ構造の細かいところを気にしなくてもいいわけです。それだけプログラムも読みやすくなり、修正にも強いプログラムを作ることができます。 
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。最初にクロージャを生成する関数 make-tree を作ります。
+</p>
+
+<pre class="list">
+リスト : 二分木
+
+(define (make-tree cmp)
+    (let ((root '()))
+        ; アクセス関数、内部関数の定義
+
+        ; クロージャを返すラムダ式
+        (lambda (msg . args)
+            (cond ((eq? msg 'insert!)
+                   (set! root (insert! root (car args)))
+                   #t)
+                  ((eq? msg 'search)
+                   (search root (car args)))
+                  ((eq? msg 'delete!)
+                   (set! root (delete! root (car args)))
+                   #t)
+                  ((eq? msg 'for-each)
+                   (traverse (car args) root))
+                  (else #f)))))
+</pre>
+<p> make-tree の引数 cmp はデータを比較する関数で、<a href="abcscm13.html">Scheme プログラミング中級編 [1]</a> で説明した「二分探索」と同じ仕様です。(cmp x y) は、x &lt; y ならば負の値を返し、x = y ならば 0 を返し、x &gt; y ならばせいの値を帰すものとします。次に、let で局所変数 root を定義して空リストに初期化します。これで二分木を空の木に初期化することができます。
+</p>
+<p> その次に、二分木を操作するアクセス関数と内部関数を定義します。これは後で詳しく説明します。最後に、クロージャを返すラムダ式を定義します。ラムダ式の第 1 引数 msg で、実行する処理を指定します。
+</p>
+<h4>●データの探索</h4>
+<p> それでは、データを探索する関数 search から作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データの探索
+
+(define (search node data)
+    (if (null? node)
+        #f
+        (let ((r (cmp data (data-of node))))
+            (cond ((zero? r) (data-of node))
+                  ((&lt; r 0)
+                   (search (left-of node) data))
+                  (else
+                   (search (right-of node) data))))))
+</pre>
+<p> 関数 search には節 node と探索するデータ data を渡します。data と node に格納されているデータ (data-of node) を比較し、値が等しければ (data-of node) を返します。data が小さいのであれば左の子をたどり、そうでなければ右の子をたどります。たどるべき子がなくなれば node の値は空リストになるので #f を返します。二分探索木の動作をそのままプログラムしているだけなので、とくに難しいところはないと思います。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データを挿入する関数 insert! を作ります。この関数は木を引数として受け取り、データを挿入した新しい木を返します。たとえば、変数 root に木が格納されている場合、データを挿入するときは次のように呼び出します。
+</p>
+<pre class="item">
+(set! root (insert! root data))
+</pre>
+<p> この処理は再帰定義を使うと簡単にプログラムできます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : データの挿入
+
+; 新しい節を作る
+(define (make-node data) (list data '() '()))
+
+; データの挿入
+(define (insert! node data)
+    (if (null? node)
+        (make-node data)
+        (let ((r (cmp data (data-of node))))
+            (cond ((zero? r) node)
+                  ((&lt; r 0)
+                   (set-left! node (insert! (left-of node) data))
+                   node)
+                  (else
+                   (set-right! node (insert! (right-of node) data)))
+                   node)))))
+</pre>
+<p> 最初に節 node が空リストかチェックします。そうであれば木は空なので、関数 make-node で新しい節を生成して返します。たとえば、変数 root が空リストの場合、すなわち空の木であれば、新しい節が生成されて root にセットされます。
+</p>
+
+<p> そうでなければ、data と (data-of node) を比較します。data と等しいデータが見つかった場合は data を挿入する必要はないので、何も行わずに node を返します。data が小さい場合は、左部分木に data を挿入します。ここで関数 insert! を再帰呼び出しします。そして、その返り値をアクセス関数 set-left! で左の子にセットして node を返します。
+</p>
+
+<p> たとえば、左部分木が空リストの場合、再帰呼び出しの返り値は新しい節なので、それが左部分木にセットされ、木にデータが挿入されたことになります。そして、新しいデータが挿入された木 (node) を返せばいいわけです。data が (data-of node) よりも大きければ、同様に右部分木にデータを挿入します。
+</p>
+
+<p> けっきょく、子を格納している節には、同じ子が再度セットされることになります。無駄なように思われるかもしれませんが、その分だけ簡単にプログラムを作ることができます。
+</p>
+
+<h4>●データの削除</h4>
+<p> 次はデータを削除する処理を作りましょう。これは今までと違って少々面倒です。削除するデータが葉の場合は、それを削除するだけなので簡単です。ところが、木の途中のデータを削除する場合は、二分木の構成を崩さないように注意しないといけません。
+</p>
+<p> 最初に、葉を削除する場合を説明します。下図を見てください。
+</p>
+<pre class="fig">
+          14                            14
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          16
+  ／  ＼      ／  ＼            ／  ＼      ／  ＼
+11      13  15      17        11      13  ()      17
+                                          ↑
+    15 を削除する                        削除
+
+             図 : データの削除（葉の場合）
+</pre>
+<p> 15 を削除する場合を考えてみましょう。15 は「葉」にあたるので、それを削除するだけで大丈夫です。親の左の子に空リストを代入するだけです。
+</p>
+<p> 次に、子が一つある場合を考えてみましょう。
+</p>
+<pre class="fig">
+          14                            14
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          15
+  ／  ＼      ／                ／  ＼
+11      13  15                11      13
+
+    16 を削除する
+
+          図 : データの削除（子が一つの場合）
+</pre>
+<p> 16 を削除する場合、その子である 15 と置き換えれば二分探索木の構成は保たれます。これも簡単ですね。問題は、子が二つある節を削除する場合です。
+</p>
+<pre class="fig">
+          14                            15  &lt;- 最小値と置き換え
+        ／  ＼                        ／  ＼
+      ／      ＼                    ／      ＼
+    12          16       =&gt;       12          16
+  ／  ＼      ／  ＼            ／  ＼      ／  ＼
+11      13  15      17        11      13  ()      17
+                                          ↑
+    14 を削除する                        削除
+
+          図 : データの削除（子が二つの場合）
+</pre>
+<p> この場合、削除するデータの右部分木の中から最小値のデータ <sup><a href="abcscm15.html#note1">[*1]</a></sup> を探し、それと削除するデータと置き換えれば「右部分木 &lt; 節 &lt; 左部分木」の構成を崩さなくてすみます。
+</p>
+<p> たとえば、上図で 14 を削除することを考えてみましょう。右部分木の中で 15 が最小値なので、それと 14 を置き換えます。そして、15 を格納していた節は削除します。節が最小値を格納している場合、その節の左側の子は存在しないので、その節を削除することは簡単です。
+</p>
+
+<p> まず、木の中から最小値を探す関数と、最小値の節を削除する関数を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 最小値の探索と削除
+
+; 最小値を求める
+(define (search-min node)
+    (if (null? (left-of node))
+        (data-of node)
+        (search-min (left-of node))))
+
+; 最小値を削除
+(define (delete-min node)
+    (cond ((null? (left-of node)) (right-of node))
+          (else
+           (set-left! node (delete-min (left-of node)))
+           node)))
+</pre>
+<p> 二分木の場合、最小値は簡単に求めることができます。左の子を順番にたどっていき、左の子がない節に行き着いたとき、その節のデータが最小値になります。関数 search-min は、最初に (left-of node) の値をチェックします。もし、空リストであれば左の子がないので、その節のデータが最小値です。(data-of node) を返します。そうでなければ、search-min を再帰呼び出しして左の子をたどります。
+</p>
+<p> 関数 delete-min は最小値を格納している節を削除します。(left-of node) が空リストの節を探すのは search-min と同じです。見つけたら、もう一つの子 (right-of node) を返します。これで、親の左の子が書き換えられて、最小値を持つ節が削除されます。葉の場合であれば node.right は空リストなので、単純に削除されることになります。
+</p>
+<p> 左の子があれば delete-min を再帰呼び出しして、その左部分木の中から最小値を探し出して削除します。そして、その返り値を左の子にセットして node を返します。
+</p>
+
+<p> それでは、データを削除する関数 delete を作ります。まず削除するデータを探索して、見つけたら子の有無に合わせた削除処理を行います。
+</p>
+
+<pre class="list">
+リスト : データの削除
+
+(define (delete! node data)
+    (if (null? node)
+        node
+        (let ((r (cmp data (data-of node))))
+            (cond ((zero? r)
+                   (cond ((null? (left-of node)) (right-of node))
+                         ((null? (right-of node)) (left-of node))
+                         (else
+                          ; 最小値に書き換える
+                          (set-data! node (search-min (right-of node)))
+                          ; 最小値の節を削除
+                          (set-right! node (delete-min (right-of node)))
+                          node)))
+                  ((&lt; r 0)
+                   (set-left! node (delete! (left-of node) data))
+                   node)
+                  (else
+                   (set-right! node (delete! (right-of node) data))
+                   node)))))
+</pre>
+<p> まず、node が空リストならば木は空なので、何もしないで node を返します。削除するデータが見つからない場合がこれに相当します。次に、削除するデータ data と (data-of node) を比較します。等しい場合はその節を削除します。(left-of node) が空リストの場合は (right-of node) を返し、(right-of node) が空リストの場合は (left-of node) を返します。
+</p>
+<p> 子が 2 つある場合は、右部分木の最小値を関数 search-min で求め、set-data! で値を書き換えます。そして、関数 delete-min で最小値を格納していた節を削除します。これで、削除するデータを最小値で置き換えて、不要になった節を二分木から削除することができます。
+</p>
+<p> data と (data-of node) が等しくない場合は、左右の部分木をたどって削除するデータを探索します。この処理は関数 insert! と同じです。最後に node を返します。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 逆に、左部分木の中から最大値を探し、それと削除するデータを置き換えてもかまいません。
+</div>
+<h4>●巡回 (traverse)</h4>
+<p> 最後に、二分木の全データにアクセスする関数を作りましょう。二分木はデータの大小関係を使って構成されているので、ある順番で節をすべて出力すると、それはソートした結果と同じになります。「木」のすべての節を規則的な順序で回ることを「巡回 (traverse) 」といいいます。このなかで、次の 3 つの方法が重要です。
+</p>
+<OL>
+ <LI>行きがけ順<BR>
+    まず節のデータを出力、その後左の子、右の子の順番で出力する。
+ <LI>帰りがけ順<BR>
+    左の子、右の子と出力してから、節のデータを出力する。
+ <LI>通りがけ順<BR>
+    左の子を出力、次に節のデータを出力、最後に右の子を出力する。
+</OL>
+
+<p> 名前の由来は、節のデータを出力するタイミングからきています。節に最初に到達したときに出力する方法が「行きがけ」、子を出力してその節に戻ってきたときに出力する方法が「帰りがけ」、子を出力する途中でその節に戻ってきたときに出力する方法が「通りがけ」です。
+</p>
+<p> 二分木は「左の子 &lt; 節のデータ &lt; 右の子」という関係が成り立つので、通りがけ順に出力すれば、ソートされた出力結果を得ることができます。この処理も、再帰定義を使えば簡単に実現できます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 木の巡回
+
+(define (traverse func node)
+    (cond ((pair? node)
+           (traverse func (left-of node))
+           (func (data-of node))
+           (traverse func (right-of node)))))
+</pre>
+<p> 関数 traverse は高階関数で、通りがけ順で木を巡回して節のデータに関数 func を適用します。node が空リストでなければ、再帰呼び出しで左部分木を巡回してから (func (data-of node)) を評価し、そのあとで右部分木を巡回します。たとえば、(lambda (x) (display x) (newline)) を引数 func に与えれば、二分木のデータを昇順に表示することができます。
+</p>
+<h4>●実行例</h4>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+gosh&gt; (define (num-cmp x y) (- x y))
+num-cmp
+gosh&gt; (define a (make-tree num-cmp))
+a
+gosh&gt; (for-each (lambda (x) (a 'insert x)) '(5 6 4 7 3 8 2 9 1))
+#&lt;undef&gt;
+gosh&gt; (a 'search 1)
+1
+gosh&gt; (a 'search 5)
+5
+gosh&gt; (a 'search 9)
+9
+gosh&gt; (a 'search 0)
+#f
+gosh&gt; (a 'search 10)
+#f
+gosh&gt; (a 'delete 1)
+#t
+gosh&gt; (a 'delete 5)
+#t
+gosh&gt; (a 'delete 9)
+#t
+gosh&gt; (a 'for-each (lambda (x) (display x) (newline)))
+2
+3
+4
+6
+7
+8
+#&lt;undef&gt;
+</pre>
+<p> 正常に動作していますね。このプログラムでは、search! と delete! は無条件に #t を返しています。それでは都合が悪い場合は、プログラムを改造してみてください。
+</p>
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+;
+; bintree.scm : 二分木
+;
+;               Copyright (C) 2008 Makoto Hiroi
+;
+; 節はリスト (data left right) で表す
+;
+
+(define (make-tree cmp)
+    (let ((root '()))
+        ; アクセス関数
+        (define (data-of node) (car node))
+        (define (left-of node) (cadr node))
+        (define (right-of node) (caddr node))
+        (define (set-data! node x) (set-car! node x))
+        (define (set-left! node x) (set-car! (cdr node) x))
+        (define (set-right! node x) (set-car! (cddr node) x))
+
+        ; 新しい節を作る
+        (define (make-node data) (list data '() '()))
+
+        ; データの挿入
+        (define (insert! node data)
+            (if (null? node)
+                (make-node data)
+                (let ((r (cmp data (data-of node))))
+                    (cond ((zero? r) node)
+                          ((&lt; r 0)
+                           (set-left! node (insert! (left-of node) data))
+                           node)
+                          (else
+                           (set-right! node (insert! (right-of node) data)))
+                           node)))))
+
+        ; データの探索
+        (define (search node data)
+            (if (null? node)
+                #f
+                (let ((r (cmp data (data-of node))))
+                    (cond ((zero? r) (data-of node))
+                          ((&lt; r 0)
+                           (search (left-of node) data))
+                          (else
+                           (search (right-of node) data))))))
+
+        ; 最小値を求める
+        (define (search-min node)
+            (if (null? (left-of node))
+                (data-of node)
+                (search-min (left-of node))))
+
+        ; 最小値を削除
+        (define (delete-min node)
+            (cond ((null? (left-of node)) (right-of node))
+                  (else
+                   (set-left! node (delete-min (left-of node)))
+                   node)))
+
+        ; データの削除
+        (define (delete! node data)
+            (if (null? node)
+                node
+                (let ((r (cmp data (data-of node))))
+                    (cond ((zero? r)
+                           (cond ((null? (left-of node)) (right-of node))
+                                 ((null? (right-of node)) (left-of node))
+                                 (else
+                                  ; 最小値に書き換える
+                                  (set-data! node (search-min (right-of node)))
+                                  ; 最小値の節を削除
+                                  (set-right! node (delete-min (right-of node)))
+                                  node)))
+                          ((&lt; r 0)
+                           (set-left! node (delete! (left-of node) data))
+                           node)
+                          (else
+                           (set-right! node (delete! (right-of node) data))
+                           node)))))
+
+        ; 巡回
+        (define (traverse func node)
+            (cond ((pair? node)
+                   (traverse func (left-of node))
+                   (func (data-of node))
+                   (traverse func (right-of node)))))
+
+        ;
+        (lambda (msg . args)
+            (cond ((eq? msg 'insert!)
+                   (set! root (insert! root (car args)))
+                   #t)
+                  ((eq? msg 'search)
+                   (search root (car args)))
+                  ((eq? msg 'delete!)
+                   (set! root (delete! root (car args)))
+                   #t)
+                  ((eq? msg 'for-each)
+                   (traverse (car args) root))
+                  (else #f)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2008 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm14.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm16.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>M.Hiroi's Home Page / Memorandum</title>
+  <meta name="description" content="M.Hiroi's Home Page,memorandum">
+  <link rel="stylesheet" type="text/css" href="home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881754</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Memorandum</h1>
+プログラミングに関する覚え書や四方山話です。
+</div>
+<div class="small">
+[ <a href="index.html">Home</a> ]
+<hr>
+</div>
+<div class="small">
+2010年 <a href="memo11.html#1002">2月</a> <a href="memo11.html#1008">8月</a><br>
+2011年 <a href="memo11.html#1102">2月</a> <a href="memo11.html#1105">5月</a> <a href="memo11.html#1108">8月</a>
+        <a href="memo11.html#1110">10月</a> <a href="memo11.html#1111">11月</a>  <a href="memo11.html#1112">12月</a> 
+</div>
+<hr>
+<a name="1112">2011 年 12 月</a>
+<hr>
+<section class="contents">
+<h3 id="111230">12月30日</h3>
+<h4 id="111230_1">●部分和問題 (2)</h4>
+<p> 部分和問題の続きです。今回は「分岐限定法」を使って部分和問題の高速化に挑戦してみましょう。分岐限定法を簡単に説明すると、深さ優先探索において不要な局面の生成を省くため枝刈りを行う方法です。思考ルーチンでよく使われる「アルファベータ法」や反復深化の高速化で用いられる「下限値枝刈り法」も分岐限定法の一種です。
+</p>
+<p> 今回の部分和問題は要素を正整数値に限定しているので、二種類の枝刈りを考えることができます。ひとつは部分集合の総和が求める値 N を超えた場合です。残りの要素は正整数なので、これ以上要素を追加しても解を得られないのは明白ですね。もうひとつは、部分集合の総和に残りの要素をすべて足しても N に満たない場合です。これも解を得られないのは明白です。
+</p>
+<p> 部分集合の総和を S, 残りの要素の総和を R, 求める値を N とすると、探索を行う条件は次の式で表すことができます。
+</p>
+<pre class="item">
+S &lt; N and S + R &gt;= N
+</pre>
+<p> これをプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 部分和問題 (分岐限定法)
+
+def subset_sum1(n, xs):
+    def iter(i, a, s, r):
+        if s == n:
+            print a
+        elif s &lt; n and s + r &gt;= n:
+            iter(i + 1, a, s, r - xs[i])
+            a.append(xs[i])
+            iter(i + 1, a, s + xs[i], r - xs[i])
+            a.pop()
+    #
+    iter(0, [], 0, sum(xs))
+</pre>
+<p> 実際の処理は局所関数 iter で行います。引数 s は求めている部分集合の総和、r は残りの要素の総和を表します。s &lt; n かつ s + r &gt;= n ならば条件を満たすので、iter を再帰呼び出しして探索を続行します。とても簡単ですね。
+</p>
+<p> それでは試してみましょう。
+</p>
+<pre>
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597]
+0.00125658428655
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584]
+0.0010730414061
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181]
+0.00112723823838
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765]
+0.00124596841219
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946]
+0.00130659064211
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<p> とても速くなりましたね。ただし、これは枝刈りがうまくいった場合であり、データによっては枝刈りが機能しない場合もありえます。たとえば、xs の最後尾の要素から 1 を引いた値 (xs[-1] - 1) を判定してみましょう。結果は次のようになりました。
+</p>
+<pre>
+[1, 3, 8, 21, 55, 144, 377, 987]
+0.146714177361
+[2, 5, 13, 34, 89, 233, 610, 1597]
+0.287069725342
+[1, 3, 8, 21, 55, 144, 377, 987, 2584]
+0.57078287883
+[2, 5, 13, 34, 89, 233, 610, 1597, 4181]
+1.13939145897
+[1, 3, 8, 21, 55, 144, 377, 987, 2584, 6765]
+2.27316404739
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<p> 実行時間はそれほど速くなりません。ところが、xs を降順に並べておくと、実行時間はとても高速になります。
+</p>
+<pre>
+[987, 377, 144, 55, 21, 8, 3, 1]
+0.000765460414662
+[1597, 610, 233, 89, 34, 13, 5, 2]
+0.000548952450661
+[2584, 987, 377, 144, 55, 21, 8, 3, 1]
+0.000614603252648
+[4181, 1597, 610, 233, 89, 34, 13, 5, 2]
+0.000608736585236
+[6765, 2584, 987, 377, 144, 55, 21, 8, 3, 1]
+0.000667961989582
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<p> ちなみに、関数 random.shuffle() でシャッフルしてみたところ、実行時間は次のようになりました。
+</p>
+<pre>
+[21, 3, 8, 987, 55, 377, 1, 144]
+0.13137451827
+[233, 610, 89, 1597, 34, 13, 2, 5]
+0.115811087722
+[2584, 3, 21, 377, 144, 1, 8, 987, 55]
+0.0510975556949
+[5, 1597, 610, 13, 233, 4181, 89, 2, 34]
+0.0236759141176
+[377, 21, 2584, 144, 1, 3, 6765, 8, 55, 987]
+0.0977931552753
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<p> 今回の問題では、大きな値から試した方が枝刈りの効果は高いようです。興味のある方はいろいろ試してみてください。
+</p>
+<p> 今回はここまでです。次回は「動的計画法」でプログラムを作ってみましょう。
+</p>
+<hr>
+<h3 id="111225">12月25日</h3>
+<h4 id="111225_1">●部分和問題</h4>
+<p> 部分和問題は、要素が数値の集合 S において、要素の総和が M となる部分集合があるか判定する問題です。たとえば、集合 {2, 3, 5, 8} の場合、総和が 10 となる部分集合は {2, 3, 5} と {2, 8} がありますが、14 となる部分集合はありません。部分集合の総数は、要素数を n とすると 2<sup>n</sup> 個になるので、n が大きくなるとナイーブな方法では時間がかかってしまいます。実際には、「分岐限定法」や「動的計画法」を使うことで、現実的な時間で部分和問題を解くことができます。
+</p>
+<p> 最初にナイーブな方法で部分和問題を解いてみましょう。今回は要素を正整数に限定します。使用するプログラミング言語は Python です。部分和問題は「べき集合」を生成する高階関数 power_set を作ると簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : べき集合
+
+def power_set(func, xs):
+    def iter(i, a):
+        if i == len(xs):
+            func(a)
+        else:
+            iter(i + 1, a)
+            a.append(xs[i])
+            iter(i + 1, a)
+            a.pop()
+    #
+    iter(0, [])
+</pre>
+<p> 引数 func が関数で、xs が集合を表すリストです。実際の処理は局所関数 iter で行います。引数 i が添字で、a が累積変数 (リスト) です。処理内容は簡単で、i が len(xs) と等しい場合、部分集合がひとつできたので func(a) を評価します。あとは、i 番目の要素を選ばない場合は iter を再帰呼び出しし、選ぶ場合は a に xs[i] を追加してから iter を再帰呼び出しします。戻ってきたら追加した要素を削除します。これですべての部分集合を生成することができます。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt;&gt;&gt; def display(x): print x
+...
+&gt;&gt;&gt; power_set(display, [1, 2, 3, 4])
+[]
+[4]
+[3]
+[3, 4]
+[2]
+[2, 4]
+[2, 3]
+[2, 3, 4]
+[1]
+[1, 4]
+[1, 3]
+[1, 3, 4]
+[1, 2]
+[1, 2, 4]
+[1, 2, 3]
+[1, 2, 3, 4]
+&gt;&gt;&gt;
+</pre>
+<p> 部分集合は空集合 [ ]  を含めて 16 通りあります。この power_set を使うと部分和問題のプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 部分和問題
+
+def subset_sum0(n, xs):
+    def check(ys):
+        if sum(ys) == n: print ys
+    power_set(check, xs)
+</pre>
+<p> 部分集合 ys の総和を sum で求め、n と等しい場合は print で出力します。それでは実行してみましょう。
+</p>
+<pre>
+&gt;&gt;&gt; subset_sum0(10, [2, 3, 5, 8])
+[2, 8]
+[2, 3, 5]
+&gt;&gt;&gt; subset_sum0(14, [2, 3, 5, 8])
+&gt;&gt;&gt;
+</pre>
+<p> とても簡単ですね。ただし、集合の要素数が多くなると、実行時間がかかるようになります。次のテストプログラムを見てください。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+nums = [  1,   2,   3,   5,   8,   13,   21,   34,   55,    89,
+        144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946]
+
+def test():
+    for x in [16,17,18,19,20]:
+        xs = nums[0:x]
+        s = time.clock()
+        subset_sum0(sum(xs) - 1, xs)
+        print time.clock() - s
+</pre>
+<p> 配列 nums はフィボナッチ数列になっています。要素の総和を M とすると、1 から M までの整数は、要素を組み合わせて必ず作ることができます。これはフィボナッチ数列の面白い特徴です。
+</p>
+<p> テストは数列の長さを 16 から一つずつ増やしながら、総和 - 1 となる組み合わせを subset_sum0 で求め、その実行時間を計測します。結果は次のようになりました。
+</p>
+<pre>
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597]
+0.20169155577
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584]
+0.397479288569
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181]
+0.795420926403
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765]
+1.59920269196
+[2, 3, 5, 8, 13, 21, 34, 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765, 10946]
+3.25745702317
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<p> 要素がひとつ増えると実行時間は約 2 倍になっていることがわかります。要素数を n とすると、subset_sum0 の実行時間は 2<SUP>n</SUP> に比例する遅いプログラムなのです。
+</p>
+<p> 今回はここまでです。次回は部分和問題の高速化に挑戦してみましょう。
+</p>
+<hr>
+<h3 id="111220">12月20日</h3>
+<h4 id="111220_1">●sasagawa さんのミニマム Lisp 処理系 Mono</h4>
+<p> sasagawa さんが開発されている <a href="http://practical-scheme.net/wiliki/wiliki.cgi?sasagawa%3aMono">ミニマム Lisp 処理系 Mono</a> で (tak 12 6 0) が動作しないとのことですが、思い当たる節があったのでちょっと調べてみました。
+</p>
+<pre class="list">
+リスト : mono.c の修正
+
+int evlis(int addr){
+  int car_addr,cdr_addr;
+
+  checkgbc();
+  argpush(addr);
+  if(IS_NIL(addr)){
+    argpop();
+    return(addr);
+  }
+  else{
+    car_addr = eval(car(addr));
+    argpush(car_addr);             /* 追加 */
+    cdr_addr = evlis(cdr(addr));
+    argpop();                      /* 追加 */
+    argpop();
+    return(cons(car_addr,cdr_addr));
+  }
+}
+</pre>
+<p> Mono の場合、ガベージコレクション (GC) が起動されるのは evlis だけです。eval(car(addr)) で新しいセルが生成された場合、そのセルはＣ言語の変数 car_addr だけが保持しています。このあと evlis(cdr(addr)) を実行したときに GC が起動すると、car_addr のセルはマークされずに回収されてしまいます。car_addr のセルをマークするように argpush(car_addr) を追加し、evlis(cdr(addr)) のあと argpop() を追加すれば、M.Hiroi の実行環境では問題なく (tak 12 6 0) を評価することができました。
+</p>
+
+<p> 昔々の話になりますが、X68000 で動作する Lisp インタプリタ VTOL を作ったとき、GC のバグで大変苦労したこと思い出しました。VTOL はアスキーの『Ｃプログラムブック３』を参考にして作ったのですが、GC の基本的な考え方は Mono と同じです。Ｃ言語の変数で保持しているセルは、GC でマークするため明示的に専用のスタックに積んでおく必要がありました。ところが、人間は間違いをおかすもので、M.Hiroi も積み忘れてしまうことがよくありました。これがなかなか取れないバグの原因となるわけです。
+</p>
+
+<p> もし、M.Hiroi がいまＣ言語で小さな Lisp 処理系を作るのであれば、保守的な GC または Gauche のように Boehm GC を使ってみたいですね。保守的な GC については、拙作のページ Lisp 入門番外編 <a href="clisp/clispb40.html">仮想計算機 COMETⅡの簡易シミュレータ (10)</a> で簡単に説明しています。興味のある方はお読みくださいませ。また、Ｃ言語の実装例では、飯野卓見さんの <a href="http://www.net.c.dendai.ac.jp/~takumi/">ガベージコレクションの実装法と評価</a> が参考になると思います。
+</p>
+
+<hr>
+<h3 id="111217">12月17日</h3>
+<h4 id="111217_1">●do と do*</h4>
+<p> Lisp / Scheme のお話です。Common Lisp には do と do* という繰り返しを行うためのマクロがあります。do と do* の違いは変数の初期化と更新処理を並列に行うか逐次的に行うかだけで、let と let* の違いとよく似ています。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; (let ((x 0)) (do ((x 1 (1+ x)) (y x x)) ((&lt; 5 x)) (print (list x y))))
+
+(1 0)
+(2 1)
+(3 2)
+(4 3)
+(5 4)
+NIL
+&gt; (let ((x 0)) (do* ((x 1 (1+ x)) (y x x)) ((&lt; 5 x)) (print (list x y))))
+
+(1 1)
+(2 2)
+(3 3)
+(4 4)
+(5 5)
+NIL
+</pre>
+<p> do の場合、y の初期値は let で定義した x の値 0 になります。これに対し、do* の場合は do* で定義した x の初期値 1 が y の初期値になります。更新処理も同様です。do の場合、y の値は更新前の x の値となり、do* の場合は更新後の x の値となります。
+</p>
+<p> これらのプログラムは下記のプログラムと同じ動作になります。
+</p>
+<pre>
+&gt; (let ((x 0))
+    (let ((x 1) (y x))
+      (block nil
+        (tagbody loop
+          (if (&lt; 5 x) (return))
+          (print (list x y))
+          (psetq x (1+ x) y x)
+          (go loop)))))
+
+(1 0)
+(2 1)
+(3 2)
+(4 3)
+(5 4)
+NIL
+&gt; (let ((x 0))
+    (let* ((x 1) (y x))
+      (block nil
+        (tagbody loop
+          (if (&lt; 5 x) (return))
+          (print (list x y))
+          (setq x (1+ x) y x)
+          (go loop)))))
+
+(1 1)
+(2 2)
+(3 3)
+(4 4)
+(5 5)
+NIL
+</pre>
+<p> do は let で変数の初期化を行い、psetq で変数の更新処理を行いますが、do* の場合は let* と setq で行うわけです。ここで psetq と psetf を簡単に説明しておきましょう。
+</p>
+<p> Common Lisp の場合、代入を並行に行うマクロ psetq や psetf を使うと、テンポラリ変数を使わなくても値を交換することができます。
+</p>
+
+<pre class="item">
+psetq symbol1 value1 symbol2 value2 ...
+</pre>
+
+<p> psetq はシンボル symbol1 に value1 を評価した結果を代入し、symbol2 に value2 を評価した結果を代入する、というように値を順番に代入します。このとき、psetq は setq と違って代入した値の影響をうけません。簡単な例を示します。
+</p>
+<pre>
+(setq x 100 y 200) =&gt; 200
+x =&gt; 100
+y =&gt; 200
+
+(psetq x y y x) =&gt; nil
+x =&gt; 200
+y =&gt; 100
+</pre>
+<p> psetq で x に y の値 200 を代入し、そのあとで x の値を y に代入しています。このとき x の値は 200 ではなく、代入される前の値 100 のままなのです。したがって、y に代入される値は 100 になります。
+</p>
+<p> psetf は setf と同様に指定された場所へ値を代入しますが、setf と違って代入した値の影響をうけません。psetf は nil を返します。簡単な例を示します。
+</p>
+<pre>
+(setq board '(1 2 3 4))             =&gt; (1 2 3 4)
+(psetf (nth 0 board) (nth 3 board)
+       (nth 3 board) (nth 0 board)) =&gt; nil
+
+board =&gt; (4 2 3 1)
+</pre>
+<p> このように、psetq や psetf を使うと簡単に値を交換することができます。
+</p>
+<h4 id="111217_2">●Scheme の do</h4>
+<p> Scheme の場合、Common Lisp の go のようなジャンプ命令がないので、do は letrec を使って定義するのが一般的です。簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; (let ((x 0)) (do ((x 1 (+ x 1)) (y x x)) ((&lt; 5 x)) (print (list x y))))
+(1 0)
+(2 1)
+(3 2)
+(4 3)
+(5 4)
+#t
+gosh&gt; (let ((x 0))
+ (letrec ((iter (lambda (x y)
+                  (cond ((&gt;= 5 x)
+                         (print (list x y))
+                         (iter (+ x 1) x))))))
+   (iter 1 x)))
+(1 0)
+(2 1)
+(3 2)
+(4 3)
+(5 4)
+#&lt;undef&gt;
+</pre>
+<p> Scheme の仕様書 R5RS に do* はありませんが、let* を使って同様な動作を行わせることは可能です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : do* と同様の動作をするプログラム
+
+(let ((x 0))
+  (letrec ((iter (lambda (x y)
+                    (cond ((&gt;= 5 x)
+                           (print (list x y))
+                           (let* ((x (+ x 1)) (y x))
+                             (iter x y)))))))
+    (let* ((x 1) (y x))
+      (iter x y))))
+</pre>
+<p> let* で逐次的に変数の値を書き換えて、それを局所関数 iter に渡します。実行例を示します。
+</p>
+
+<pre>
+gosh&gt; (let ((x 0))
+  (letrec ((iter (lambda (x y)
+                    (cond ((&gt;= 5 x)
+                           (print (list x y))
+                           (let* ((x (+ x 1)) (y x))
+                             (iter x y)))))))
+    (let* ((x 1) (y x))
+      (iter x y))))
+(1 1)
+(2 2)
+(3 3)
+(4 4)
+(5 5)
+#&lt;undef&gt;
+</pre>
+<p> 今回は let* を使いましたが、set! で変数の値を破壊的に書き換えても同様の動作を実現することができます。
+</p>
+<h4 id="111217_3">●do の動作は Common Lisp と Scheme で異なる</h4>
+<p> ところで <a href="memo11.html#cite2">参考 URL</a> によると、Common Lisp の do は変数の値を破壊的に書き換えるため、Scheme の do と動作が異なる場合があるとのことです。簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; (map (lambda (x) (x)) (do ((i 0 (+ i 1)) (a '())) ((&lt; 4 i) a)
+ (push! a (lambda () i))))
+(4 3 2 1 0)
+</pre>
+<p> do の本体でクロージャ (lambda () i) を生成してリストに格納します。Scheme の場合、do は再帰で実装されているので、繰り返すたびに変数 i の環境は新しく生成され、それがクロージャに保存されます。したがって、map でクロージャを評価すると (4 3 2 1 0) となります。
+</p>
+<p> Common Lisp (CLISP) の場合は次のようになります。
+</p>
+<pre>
+&gt; (mapcar #'(lambda (x) (funcall x)) (do ((i 0 (1+ i)) (a nil)) ((&lt; 4 i) a)
+(push #'(lambda () i) a)))
+(5 5 5 5 5)
+</pre>
+<p> Common Lisp (CLISP) の do では、変数 i の環境を 1 回だけ生成し、繰り返しのたびに i の値を破壊的に書き換えています。この場合、クロージャに保存される環境はみな同じものであり、その値を破壊的に書き換えているので、mapcar でクロージャを評価するとすべて同じ値 (5) になるわけです。ちなみに、dotimes や dolist でも同じです。
+</p>
+<pre>
+&gt; (let ((a nil)) (mapcar #'(lambda (x) (funcall x)) (dotimes (i 5 a)
+ (push #'(lambda () i) a))))
+(5 5 5 5 5)
+&gt; (let ((a nil)) (mapcar #'(lambda (x) (funcall x)) (dolist (i '(1 2 3 4 5) a)
+ (push #'(lambda () i) a))))
+(5 5 5 5 5)
+</pre>
+<p> Common Lisp で繰り返し (do, do*, dotimes, dolist など) とクロージャを組み合わせて使う場合はご注意くださいませ。
+</p>
+<h4 id="cite2">●参考 URL</h4>
+[1] <a href="http://blog.practical-scheme.net/shiro/20060110-for">Island Life - 関数型言語で for 文が無いのは</a><br>
+[2] <a href="http://practical-scheme.net/wiliki/wiliki.cgi?Scheme%3agenerator%E3%81%A8do%E3%81%A8while">Scheme:generatorとdoとwhile</a>
+<hr>
+<h3 id="111203">12月3日</h3>
+<h4 id="111203_1">●ノームソート</h4>
+<p> ソートのお話です。<a href="http://www1.s2.starcat.ne.jp/fussy/">Fussy さん</a> の <a href="http://fussy.web.fc2.com/algo/index.htm">アルゴリズムの紹介</a> <a href="http://fussy.web.fc2.com/algo/sort1_slow_sort.htm">遅いソート・ルーチン</a> で紹介されていた「ノームソート (gnome sort) 」に興味を持ったので、M.Hiroi も Python でプログラムを作ってみました。
+</p>
+
+<p> ノームソートのアルゴリズムはとても簡単です。配列 buff をノームソートする場合、手順は次のようになります。
+</p>
+<ol>
+  <li>i を 0 に初期化する。
+  <li>buff[i] と buff[i + 1] を比較する。
+  <li>順序が正しい場合は i を +1 する。
+  <li>順序が間違っている場合は buff[i] と buff[i + 1] を交換して i を -1 する。
+  <li>ただし、i が 0 の場合は -1 しない。
+  <li>i が終端に到達した場合は終了する。そうでなければ 2 に戻る。
+</ol>
+<p> 基本的な考え方は単純挿入ソートとよく似ています。単純挿入ソートは 0 から i 番目の要素を整列済みと考えて、その中に i + 1 番目の要素を正しい位置に挿入します。ノームソートの場合、i 番目と i + 1 番目の要素が正しい順序になるまで、要素を交換していくことでデータをソートします。つまり、要素を交換しながら挿入する位置を探しているわけです。
+</p>
+<p> このアルゴリズムをそのままプログラムにすると次のようになります。参考までに、単純挿入ソートのプログラムも示します。
+</p>
+
+<pre class="list">
+リスト : ノームソート
+
+def gnome_sort(buff):
+    k = len(buff) - 1
+    i = 0
+    while i &lt; k:
+        if buff[i] &lt;= buff[i + 1]:
+            i += 1
+        else:
+            buff[i], buff[i + 1] = buff[i + 1], buff[i]
+            if i &gt; 0: i -= 1
+</pre>
+
+<pre class="list">
+リスト : 単純挿入ソート
+
+def insert_sort(buff):
+    k = len(buff)
+    for i in xrange(1, k):
+        temp = buff[i]
+        j = i - 1
+        while j &gt;= 0 and temp &lt; buff[j]:
+            buff[j + 1] = buff[j]
+            j -= 1
+        buff[j + 1] = temp
+</pre>
+<p> このように、単純挿入ソートは二重ループになりますが、ノームソートは単純なループでプログラムを作成することができます。
+</p>
+<p> それでは単純挿入ソートと実行時間を比較してみましょう。ソートするデータは拙作のページ <a href="light/index.html#python_algo">Algorithms with Python</a> <a href="light/pyalgo06.html">整列 (sorting) [1]</a> と同じです。結果は次のようになりました。
+</p>
+<pre>
+    表 : ノームソートの実行結果
+
+個数    乱数     昇順     逆順     山型
+-----+---------+-------+--------+--------
+1000 :  0.290  : 0.000 :  0.569 :  0.284
+2000 :  1.148  : 0.001 :  2.278 :  1.136
+4000 :  4.585  : 0.001 :  9.121 :  4.547
+8000 : 18.299  : 0.002 : 36.435 : 18.204
+
+    表 : 単純挿入ソートの実行結果
+
+個数   乱数    昇順     逆順    山型
+-----+-------+-------+--------+-------
+1000 : 0.112 : 0.001 :  0.222 : 0.109
+2000 : 0.432 : 0.001 :  0.878 : 0.433
+4000 : 1.745 : 0.002 :  3.496 : 1.730
+8000 : 6.895 : 0.004 : 13.943 : 6.970
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<p> ノームソートの場合、整列済みのデータはとても高速ですが、それ以外のデータは単純挿入ソートよりもかなり遅くなりました。実は、ノームソートには無駄な処理があるのです。それは M 番目の要素を N 番目 (N &lt; M) にセットしたあと、先頭から M 番目までの要素は整列済みのはずですが、ノームソートはインデックス i を +1 しながらデータの比較を行っています。つまり、i が N から M までの間は要素を比較する必要がないのです。この処理を改良すると、実行速度はもう少し速くなるかもしれません。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ノームソート (改良版)
+
+def gnome_sort1(buff):
+    k = len(buff) - 1
+    i = 0
+    j = 0
+    while i < k:
+        if buff[i] <= buff[i + 1]:
+            if i == j:
+                i += 1
+                j += 1
+            else:
+                i = j
+        else:
+            buff[i], buff[i + 1] = buff[i + 1], buff[i]
+            if i > 0: i -= 1
+</pre>
+<p> 変数 j にソート済みの位置を保存しておきます。i を増加するとき、i と j が等しい場合は両方とも +1 します。そうでなければ、先頭から j までの要素は整列済みなので、i に j の値をセットします。これで不要な比較処理を省くことができます。
+</p>
+<p> 実行結果は次のようになりました。
+</p>
+<pre>
+  表 : ノームソート改良版の実行結果
+
+個数    乱数    昇順     逆順     山型
+-----+--------+-------+--------+--------
+1000 :  0.208 : 0.001 :  0.414 :  0.205
+2000 ;  0.822 : 0.001 :  1.638 :  0.812
+4000 :  3.292 : 0.002 :  6.603 :  3.271
+8000 : 13.086 : 0.004 : 26.191 : 13.071
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<p> 改良版のほうが少し速くなりました。効果は確かにあるのですが、それでも単純挿入ソートにはかないませんでした。興味のある方はいろいろ試してみてください。
+</p>
+</section>
+<hr>
+<a name="1111">2011 年 11 月</a>
+<hr>
+<section class="contents">
+<h3 id="111103">11月3日</h3>
+<h4 id="111103_1">●リストの平坦化</h4>
+<p> Shiro さんの Islnad Life <a href="http://blog.practical-scheme.net/shiro/20111030-fold">foldパターン</a> の話に興味を持ったので、M.Hiroi も Prolog でプログラムを作ってみました。リストを平坦化する flatten は Prolog でも簡単に作ることができます。
+</p>
+<pre class="list">
+リスト : リストの平坦化
+
+flatten0([], []) :- !.
+flatten0([X | Xs], Ys) :-
+    !, flatten0(X, Ys1), flatten0(Xs, Ys2), append(Ys1, Ys2, Ys).
+flatten0(X, [X]).
+</pre>
+<p> flatten は拙作のページ <a href="prolog/index.html">Prolog Programming</a> <a href="prolog/prolog03.html">データ型と型述語</a> で取り上げていますが、上のプログラムはデータ型のチェックは行わずにカットで済ましています。2 番目の規則で第 1 引数がリストの場合、リストを X と Xs に分解します。そして、リストの先頭の要素 X を平坦化し、残りのリスト Xs を平坦化して、その結果を append で結合します。第 1 引数がアトムの場合は最後の規則が選択されます。1, 2 番目の規則が選択された場合、カットを通過しているのでバックトラックで最後の規則が再試行されることはありません。
+</p>
+<p> SWI-Prolog での実行例を示します。
+</p>
+<pre>
+?- flatten0([a, [b, [c, d | e], f], g], X).
+
+X = [a, b, c, d, e, f, g] ;
+
+No
+</pre>
+<p> ところで、append を使うとリストのコピーが何度も行われるため、flatten0 は効率のよいプログラムとはいえません。append を使わないでリストを平坦化するには次のようにプログラムします。
+</p>
+<pre class="list">
+リスト : 平坦化 (append を使わないバージョン)
+
+flatten1([], Ys, Ys) :- !.
+flatten1([X | Xs], A, Ys) :-
+    !, flatten1(Xs, A, Ys1), flatten1(X, Ys1, Ys).
+flatten1(X, A, [X | A]).
+
+flatten1(Xs, Ys) :- flatten1(Xs, [], Ys).
+</pre>
+<p> flatten1 はリストの最後尾から順番に要素を取り出し、累積変数 A に要素を追加していきます。リストを分解して flatten1 を再帰呼び出しするとき、Xs から平坦化するところがポイントです。それから、その結果 Ys1 を flatten1 に渡して X を平坦化するわけです。
+</p>
+<p> 実行例を示します。
+</p>
+<pre>
+?- flatten1([a, [b, [c, d | e], f], g], X).
+
+X = [a, b, c, d, e, f, g] ;
+
+No
+</pre>
+<p> 次はリストを木とみなして畳み込みを行う fold_tree_right を作ってみましょう。プログラムの基本的な考え方は flatten1 と同じです。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 木の畳み込み
+
+fold_tree_right(_, Ys, [], Ys) :- !.
+fold_tree_right(F, A, [X | Xs], Ys) :-
+    !, fold_tree_right(F, A, Xs, Ys1), fold_tree_right(F, Ys1, X, Ys).
+fold_tree_right(F, A, X, X1) :- call(F, X, A, X1).
+
+% リストの平坦化
+cons(X, Y, [X | Y]).
+flatten2(Xs, Ys) :- fold_tree_right(cons, [], Xs, Ys).
+</pre>
+<p> fold_tree_right の第 1 引数 F が関数 (述語)、第 2 引数 A が累積変数、第 3 引数がリストです。1, 2 番目の規則は flatten1 とほとんど同じです。3 番目の規則で、F に要素 X と累積変数 A を渡して call で呼び出します。結果は X1 に格納されます。これでリストを木とみなして畳み込みを行うことができます。
+</p>
+<p> flatten2 は fold_tree_right に cons を渡して呼び出すだけです。それでは実行してみましょう。
+</p>
+<pre>
+?- flatten2([a, [b, [c, d | e], f], g], X).
+
+X = [a, b, c, d, e, f, g] ;
+
+No
+</pre>
+<p> リストの先頭から畳み込みを行う fold_tree_left も簡単にプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 木の畳み込み (2)
+
+fold_tree_left(_, Ys, [], Ys) :- !.
+fold_tree_left(F, A, [X | Xs], Ys) :-
+    !, fold_tree_left(F, A, X, Ys1), fold_tree_left(F, Ys1, Xs, Ys).
+fold_tree_left(F, A, X, X1) :- call(F, X, A, X1).
+</pre>
+<p> 2 番目の規則で fold_tree_left を再帰呼び出しするとき、最初にリストの先頭要素 X に fold_tree_left を適用し、それから残りのリスト Xs に fold_tree_left を適用します。これでリストを木とみなして先頭要素から畳み込みを行うことができます。
+</p>
+<p> 実行例を示します。
+</p>
+<pre>
+?- fold_tree_left(cons, [], [a, [b, [c, d | e], f], g], X).
+
+X = [g, f, e, d, c, b, a] ;
+
+No
+</pre>
+<p> 正常に動作していますね。
+</p>
+</section>
+<hr>
+<a name="1110">2011 年 10 月</a>
+<hr>
+<section class="contents">
+<h3 id="111023">10月23日</h3>
+<h4 id="111023_1">●パターンマッチングとユニフィケーション</h4>
+<p> 最近、M.Hiroi は Erlang という関数型言語を勉強しています。Erlang のパターンマッチング、とくにリストのマッチングは Prolog とよく似ていますが、Prolog の「ユニフィケーション (unification) 」とは異なります。Erlang のパターンマッチングは右辺式に未束縛変数 (自由変数) があるとエラーになりますが、Prolog のユニフィケーションは右辺式に自由変数があってもかまいません。Prolog の場合、自由変数同士のマッチングは成功しますし、右辺式 (たとえばリストなど) の中に自由変数が含まれていてもかまいません。
+</p>
+
+<p> また、Prolog のユニフィケーションは、教科書に載っているユニフィケーションとも少し異なります。M.Hiroi はユニフィケーションを <a href="memo11.html#cite">参考文献 [1]</a> で勉強しました。パターンマッチングやユニフィケーションは Lisp で簡単にプログラムすることができます。興味のある方は拙作のページ <a href="xyzzy_lisp.html">Common Lisp 入門</a> <a href="xyzzy_lisp/abclisp22.html">記号のパターンマッチング (1)</a>, <a href="xyzzy_lisp/abclisp23.html">(2)</a> をお読みください。
+</p>
+
+<p> 拙作のページで作成したプログラムでは、ユニフィケーションを関数 unify で行います。変数は先頭が ? のシンボルで表します。unify の場合も自由変数同士の照合は成功します。ところが、自由変数とリストを照合する場合、リストの中に同じ自由変数が含まれていると照合は失敗します。簡単な例を示しましょう。
+</p>
+
+<pre class="item">
+(unify '?x '(a . ?y) '())
+=&gt; ((?x a . ?y))
+(unify '?x '(a . ?x) '())
+=&gt; fail
+</pre>
+
+<p> 最初の例は ?x と (a . ?y) を照合します。?x と ?y は自由変数です。変数束縛は第 3 引数に連想リストとして渡します。リストの中には同じ変数 ?x がないので照合は成功します。返り値は変数束縛を表す連想リストです。次の例はリストの中に同じ自由変数 ?x があるので照合は失敗します。返り値は失敗を表すシンボル fail です。
+</p>
+
+<p> Prolog ではどちらの場合も照合に成功します。SWI-Prolog での実行例を示します。
+</p>
+<pre>
+?- X = [a | Y].
+
+X = [a|Y] ;
+
+No
+?- X = [a | X].
+
+X = [a, a, a, a, a, a, a, a, a|...] ;
+
+No
+</pre>
+<p> 結果を見ればおわかりのように、X = [a | X] は「循環リスト」になります。右辺のリストにある X は自由変数ですが、Prolog はこのようなリストでも扱うことができます。また、右辺と左辺で同じ自由変数 X がありますが、このようなユニフィケーションでも Prolog では実行することができます。X は自由変数なので、X の値はリスト (セルの先頭アドレス) になります。セルの終端は X なので、先頭のセルとつながって循環リストになるわけです。
+</p>
+
+<p> M.Hiroi は Prolog で循環リストを使ったことがなかったので、今回は FizzBuzz 問題に循環リストを使ってみました。なお、リストを循環させて解くアイデアは deepgreen さんに教えていただきました。deepgreen さんに感謝いたします。
+</p>
+<pre class="list">
+リスト : FizzBuzz 問題 (循環リスト版)
+
+fizzbuzz2(N, _, _, []) :- N &gt; 100, !.
+fizzbuzz2(N, [X | Xs], [Y | Ys], [Z | A]) :-
+    toStr(X, Y, N, Z),
+    N1 is N + 1,
+    fizzbuzz2(N1, Xs, Ys, A).
+
+toStr(0, 0, N, N).
+toStr(1, 0, _, fizz).
+toStr(0, 1, _, buzz).
+toStr(1, 1, _, fizzbuzz).
+
+fizzbuzz2(A) :-
+    Xs = [0, 0, 1 | Xs],
+    Ys = [0, 0, 0, 0, 1 | Ys],
+    fizzbuzz2(1, Xs, Ys, A).
+</pre>
+
+<p> Xs と Ys が循環リストです。N が 3 の倍数のとき Xs の先頭要素は 1 になり、N が 5 の倍数のとき Ys の先頭要素は 1 になります。どちらの先頭要素も 1 のときが 15 の倍数になります。これを toStr でチェックして整数値 N を fizz, buzz, fizzbuzz に変換します。
+</p>
+
+<p> ところで、unify を Prolog と同じような動作に変更することは、制限をはずすことで対応できると思います。ただし、循環したデータ構造を扱うことになるので、それにきちんと対応しないと無限ループに陥る場合があります。これはプログラムを Scheme に移植して試してみたいと思っています。
+</p>
+
+<div class="note">
+-- <a name="cite">参考文献</a> --------<br>
+[1] Patrick Henry Winston, Berthold Klaus Paul Horn, 『LISP 原書第 3 版 (1) (2)』, 培風館, 1992
+</div>
+<hr>
+<h3 id="111017">10月17日</h3>
+<h4 id="111017_1">●FizzBuzz 問題再び</h4>
+<p> FizzBuzz 問題は 1 から 100 までの値を表示するとき、3 の倍数のときは Fizz を、5 の倍数ときは Buzz を表示するというものです。FizzBuzz 問題の詳細については <a href="http://ja.wikipedia.org/wiki/Fizz_Buzz">Fizz Buzz - Wikipedia</a> をお読みください。
+</p>
+<p> FizzBuzz 問題を Prolog で解く場合、答えをリストで返すことにすると次のようになるでしょう。
+</p>
+<pre class="list">
+リスト : FizzBuzz 問題
+
+fizzbuzz(N, []) :- N &gt; 100, !.
+fizzbuzz(N, [fizzbuzz | A]) :-
+    N mod 15 =:= 0, !, N1 is N + 1, fizzbuzz(N1, A).
+fizzbuzz(N, [fizz | A]) :-
+    N mod 3 =:= 0,  !, N1 is N + 1, fizzbuzz(N1, A).
+fizzbuzz(N, [buzz | A]) :-
+    N mod 5 =:= 0,  !, N1 is N + 1, fizzbuzz(N1, A).
+fizzbuzz(N, [N | A]) :- N1 is N + 1, fizzbuzz(N1, A).
+</pre>
+<p> 実行結果を示します。
+</p>
+<pre>
+?- fizzbuzz(1, A), write(A), fail.
+[1, 2, fizz, 4, buzz, fizz, 7, 8, fizz, buzz, 11, fizz, 13, 14, fizzbuzz, 16, 17,
+ fizz, 19, buzz, fizz, 22, 23, fizz, buzz, 26, fizz, 28, 29, fizzbuzz, 31, 32,
+fizz, 34, buzz, fizz, 37, 38, fizz, buzz, 41, fizz, 43, 44, fizzbuzz, 46, 47, fizz,
+ 49, buzz, fizz, 52, 53, fizz, buzz, 56, fizz, 58, 59, fizzbuzz, 61, 62, fizz,
+ 64, buzz, fizz, 67, 68, fizz, buzz, 71, fizz, 73, 74, fizzbuzz, 76, 77, fizz,
+79, buzz, fizz, 82, 83, fizz, buzz, 86, fizz, 88, 89, fizzbuzz, 91, 92, fizz, 94,
+ buzz, fizz, 97, 98, fizz, buzz]
+
+No
+</pre>
+<p> ここで「演算子 mod を使わない」という制約をつけて、FizzBuzz 問題を解くことを考えてみてください。いろいろな方法があると思いますが、M.Hiroi は次のようにプログラムしてみました。
+</p>
+<pre class="list">
+リスト : FizzBuzz 問題 (2)
+
+fizzbuzz1(N, _, _, []) :- N &gt; 100, !.
+fizzbuzz1(N, X, Y, [fizzbuzz | A]) :-
+    N =:= X,
+    N =:= Y,
+    !,
+    N1 is N + 1,
+    X1 is X + 3,
+    Y1 is Y + 5,
+    fizzbuzz1(N1, X1, Y1, A).
+fizzbuzz1(N, X, Y, [fizz | A]) :-
+    N =:= X,
+    !,
+    N1 is N + 1,
+    X1 is X + 3,
+    fizzbuzz1(N1, X1, Y, A).
+fizzbuzz1(N, X, Y, [buzz | A]) :-
+    N =:= Y,
+    !,
+    N1 is N + 1,
+    Y1 is Y + 5,
+    fizzbuzz1(N1, X, Y1, A).
+fizzbuzz1(N, X, Y, [N | A]) :-
+    N1 is N + 1, fizzbuzz1(N1, X, Y, A).
+</pre>
+<p> 引数 X には次に現れる 3 の倍数を、引数 Y には次に現れる 5 の倍数をセットします。N と X と Y が等しい場合、N は 15 の倍数なので fizzbuzz に変換します。そして、X の値を +3, Y の値を +5 します。N と X が等しい場合、N は 3 の倍数なので fizz に変換します。X の値は +3 しますが、Y の値はそのままです。N と Y の値が等しい場合、N は 5 の倍数なので buzz に変換します。X の値はそのままにして Y の値を +5 します。それ以外の場合は N をそのまま出力します。
+</p>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+?- fizzbuzz1(1, 3, 5, A), write(A), fail.
+[1, 2, fizz, 4, buzz, fizz, 7, 8, fizz, buzz, 11, fizz, 13, 14, fizzbuzz, 16, 17,
+ fizz, 19, buzz, fizz, 22, 23, fizz, buzz, 26, fizz, 28, 29, fizzbuzz, 31, 32,
+fizz, 34, buzz, fizz, 37, 38, fizz, buzz, 41, fizz, 43, 44, fizzbuzz, 46, 47, fizz,
+ 49, buzz, fizz, 52, 53, fizz, buzz, 56, fizz, 58, 59, fizzbuzz, 61, 62, fizz,
+ 64, buzz, fizz, 67, 68, fizz, buzz, 71, fizz, 73, 74, fizzbuzz, 76, 77, fizz,
+79, buzz, fizz, 82, 83, fizz, buzz, 86, fizz, 88, 89, fizzbuzz, 91, 92, fizz, 94,
+ buzz, fizz, 97, 98, fizz, buzz]
+
+No
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> 他の言語でも簡単にプログラムできるでしょう。たとえば、Common Lisp で do ループを使うと、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : FizzBuzz 問題 (3)
+
+(defun fizzbuzz ()
+  (do ((n 1 (1+ n))
+       (a nil) (x 3) (y 5))
+      ((&gt; n 100) (nreverse a))
+    (cond ((= n x y)
+           (incf x 3)
+           (incf y 5)
+           (push 'fizzbuzz a))
+          ((= n x)
+           (incf x 3)
+           (push 'fizz a))
+          ((= n y)
+           (incf y 5)
+           (push 'buzz a))
+          (t (push n a)))))
+</pre>
+<p> 実行結果を示します。
+</p>
+<pre>
+(fizzbuzz) =&gt;
+(1 2 fizz 4 buzz fizz 7 8 fizz buzz 11 fizz 13 14 fizzbuzz 16 17 fizz 19 buzz fizz 
+22 23 fizz buzz 26 fizz 28 29 fizzbuzz 31 32 fizz 34 buzz fizz 37 38 fizz buzz 41 
+fizz 43 44 fizzbuzz 46 47 fizz 49 buzz fizz 52 53 fizz buzz 56 fizz 58 59 fizzbuzz 
+61 62 fizz 64 buzz fizz 67 68 fizz buzz 71 fizz 73 74 fizzbuzz 76 77 fizz 79 buzz 
+fizz 82 83 fizz buzz 86 fizz 88 89 fizzbuzz 91 92 fizz 94 buzz fizz 97 98 fizz 
+buzz)
+</pre>
+</section>
+<hr>
+<a name="1108">2011 年 8 月</a>
+<hr>
+<section class="contents">
+<h3 id="110824">8月24日</h3>
+<h4 id="110824_1">●整数の分割</h4>
+<p> <a href="http://homepage1.nifty.com/~skz/Entry/">sasagawa さん</a> が「整数の分割」を Prolog で <a href="http://homepage1.nifty.com/~skz/Entry/chapter7.pl">プログラム</a> されていたので、M.Hiroi も Prolog で作ってみました。整数の分割については、拙作のページ Yet Another Scheme Problems <a href="func/yasp06.html#p92">問題 92</a>, <a href="func/yasp06.html#p93">問題 93</a> をお読みください。
+</p>
+<p> 最初に分割数を求めるプログラムを作りましょう。整数 n を k 以下で分割する総数を求める関数を p(n, k) で表します。<a href="memo11.html#cite1">参考文献 [1]</a> によると、p(n, k) は次の式で表すことができるそうです。
+</p>
+<pre class="item">
+p(n, 1) = 1
+p(1, k) = 1
+p(0, k) = 1
+p(n, k) = p(n - 1, 1) + p(n - 2, 2) + ... + p(n - k, k)
+</pre>
+<p> r = 1 の場合は簡単ですね。n 個の 1 を選ぶ方法しかありません。同様に n = 1 の場合も、1 を選ぶ方法しかありません。なお、n = 0 の場合は 1 とします。Prolog の場合、この公式をそのままプログラムすることができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 分割数
+
+part_num(0, _, 1) :- !.
+part_num(1, _, 1) :- !.
+part_num(_, 1, 1) :- !.
+part_num(N, K, 0) :- (N &lt; 0 ; K &lt; 1), !.
+
+part_num(N, K, A) :-
+    N1 is N - K,
+    part_num(N1, K, A1),
+    K1 is K - 1,
+    part_num(N, K1, A2),
+    A is A1 + A2.
+
+partition_number(N, A) :- part_num(N, N, A).
+</pre>
+<p> 実際の処理は述語 part_num で行います。最初の 3 つの規則で、分割数が 1 になる場合を定義しています。次の規則は N が負または K が 1 未満の場合を表します。この場合、分割数は 0 になります。最後の規則で、p(n - 1, 1) + ... + p(n - k, k) を計算します。プログラムでは K の値をひとつずつ減らしていることに注意してください。
+</p>
+<p> それでは実際に SWI-Prolog で試してみましょう。
+</p>
+<pre>
+?- between(1, 20, I), partition_number(I, N), write(N), nl, fail.
+1
+2
+3
+5
+7
+11
+15
+22
+30
+42
+56
+77
+101
+135
+176
+231
+297
+385
+490
+627
+
+No
+</pre>
+<p> 分割の仕方を列挙する述語 partition_of_integer も公式にそってプログラムすることができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 整数の分割
+
+part_int(0, _, []) :- !.
+
+part_int(N, K, [K | A]) :-
+    N1 is N - K,
+    N1 &gt;= 0,
+    part_int(N1, K, A).
+
+part_int(N, K, A) :-
+    K1 is K - 1,
+    K1 &gt;= 1,
+    part_int(N, K1, A).
+
+partition_of_integer(N, A) :- part_int(N, N, A).
+</pre>
+<p> 実際の処理は述語 part_int で行います。最初の規則は N が 0 の場合です。分割する整数がないので空リストになります。これが再帰呼び出しの停止条件になります。次の規則は整数 N から K を選択する場合です。N - K が 0 以上であれば K を選択できるので、part_int を再帰呼び出ししてリスト A に K を追加します。
+</p>
+<p> N - K が負になった場合は 3 番目の規則が選択されます。ここで K の値を -1 して part_int を再帰呼び出しします。K - 1 が 1 未満の場合は失敗してバックトラックすることになります。これで分割の仕方をすべて求めることができます。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+?- partition_of_integer(6, L), write(L), nl, fail.
+[6]
+[5, 1]
+[4, 2]
+[4, 1, 1]
+[3, 3]
+[3, 2, 1]
+[3, 1, 1, 1]
+[2, 2, 2]
+[2, 2, 1, 1]
+[2, 1, 1, 1, 1]
+[1, 1, 1, 1, 1, 1]
+
+No
+?- partition_of_integer(7, L), write(L), nl, fail.
+[7]
+[6, 1]
+[5, 2]
+[5, 1, 1]
+[4, 3]
+[4, 2, 1]
+[4, 1, 1, 1]
+[3, 3, 1]
+[3, 2, 2]
+[3, 2, 1, 1]
+[3, 1, 1, 1, 1]
+[2, 2, 2, 1]
+[2, 2, 1, 1, 1]
+[2, 1, 1, 1, 1, 1]
+[1, 1, 1, 1, 1, 1, 1]
+
+No
+</pre>
+<p> やっぱり Prolog は面白いですね。Prolog でのプログラミングはひさしぶりだったので、頭を切り替えるのに時間がかかりました。最初に作ったプログラムはひどいもので、ぜんぜん Prolog らしくなかったのですが、試行錯誤しているうちに今のプログラムになりました。けっきょく、公式をそのままプログラムしているだけですが、それが Prolog らしくてよいかもしれない、と思っています。
+</p>
+<div class="note">
+-- <a name="cite1">参考文献</a> -------- <br>
+[1] 奥村晴彦,『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991
+</div>
+</section>
+<hr>
+<a name="1105">2011 年 5 月</a>
+<hr>
+<section class="contents">
+<h3 id="110525">5月25日</h3>
+<h4 id="110525_1">●Interface 7 月号</h4>
+<p> <a href="http://www.cqpub.co.jp/">ＣＱ出版社</a> 発行の月刊誌 <a href="http://www.cqpub.co.jp/interface/">Interface 7 月号</a> (5/25 発売) で、M.Hiroi は特集「CPUの動作原理とアセンブラの基礎知識」の第 5 章「アセンブリ言語の基本を理解する」と第 6 章「Ｃ言語とコンパイル結果のアセンブリ言語の比較」を執筆しました。第 1 章から第 4 章は中森章氏が執筆されていて、CPU の動作原理をわかりやすく丁寧に解説されています。興味のある方はぜひお読みください。
+</p>
+</section>
+<hr>
+<a name="1102">2011 年 2 月</a>
+<hr>
+<section class="contents">
+<h3 id="110226">2月26日</h3>
+<h4 id="110226_1">●値呼びと参照呼び</h4>
+<p> 一般に、関数の呼び出し方には二つの方法があります。一つが「値呼び (call by value) 」で、もう一つが「参照呼び (call by reference) 」です。近代的なプログラミング言語では「値呼び」が主流です。
+</p>
+<p> 値呼びと参照呼びは「値渡し」と「参照渡し」と呼ばれることもあります。また、Ｃ言語は値呼びですが、変数やデータのアドレスを関数に渡すことを「参照渡し」と呼ぶ場合があって、参照呼びと混同することがあります。拙作の入門講座 (Python, Ruby, Java) でも、オブジェクトへの参照を渡しているから参照呼びと間違って記述していました。訂正するとともに深くお詫び申しあげます。
+</p>
+
+<p> 参照呼びを簡単に説明すると、呼び出し先 (callee) の仮引数の値を更新すると、それが呼び出し元 (caller) の変数にも直ちに反映されるような呼び出し方のことをいいます。値呼びと参照呼びは関数呼び出しにおける仮引数と実引数の対応を表したもので、渡される値のデータ型とは関係ありません。
+</p>
+<p> Ｃ言語はポインタを使って参照呼びと同じことができます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 値の交換
+
+#include &lt;stdio.h&gt;
+
+void swap(int *a, int *b)
+{
+  int tmp = *a;
+  *a = *b;
+  *b = tmp;
+}
+
+int main()
+{
+  int a = 10;
+  int b = 20;
+  swap(&amp;a, &amp;b);
+  printf("a = %d, b = %d\n", a, b);
+  return 0;
+}
+</pre>
+<p> &amp; 演算子で変数 a, b のアドレスを取り出し、関数 swap の仮引数 x, y に渡します。これで関数 main の変数 a, b の値を swap で書き換えることができますが、これを「参照呼び」とはいいません。Ｃ言語は値呼びであり、あくまでも変数のアドレスを値渡ししているだけなのです。
+</p>
+<p> swap を呼び出す箇所は次のようにコンパイルされます。
+</p>
+<pre class="list">
+リスト : swap を呼び出す箇所のアセンブリコード (Ｃ言語 : gcc)
+
+        movl    $10, -8(%ebp)
+        movl    $20, -4(%ebp)
+        leal    -4(%ebp), %eax
+        movl    %eax, 4(%esp)
+        leal    -8(%ebp), %eax
+        movl    %eax, (%esp)
+        call    _swap
+</pre>
+<p> movl はデータの転送命令、leal はアドレスの転送命令です。leal で局所変数のアドレスをレジスタ EAX にセットし、それを movel でスタックに積んでいることがわかります。
+</p>
+<p> ここで、変数に値を代入する式 a = 10, b = 20 に注目してください。= の右側を「右辺式」、左側を「左辺式」といいます。一般に、左辺式は変数やその定義を表していて、右辺式は値を生成する式になります。値呼びは右辺の式 (値) が渡されると考えてください。Ｃ言語の場合、アドレスを取り出す演算子 &amp;a と &amp;b は swap の仮引数 x と y の値を表す右辺式と考えることができます。
+</p>
+
+<p> これに対し、参照呼びは左辺式 (変数) が渡されると考えてください。たとえば、値を交換する swap はＣ++の「参照」を使うと次のようになります。
+</p>
+
+<pre class="list">
+リスト : 値の交換
+
+#include &lt;iostream&gt;
+
+using namespace std;
+
+void swap(int&amp; x, int&amp; y)
+{
+  int tmp = x;
+  x = y;
+  y = tmp;
+}
+
+int main(void)
+{
+  int a = 10;
+  int b = 20;
+  swap(a, b);
+  cout &lt;&lt; "a = " &lt;&lt; a &lt;&lt; endl;
+  cout &lt;&lt; "b = " &lt;&lt; b &lt;&lt; endl;
+  return 0;
+}
+</pre>
+<p> Ｃ++は値呼びが基本ですが、関数の仮引数に &amp; を付けると、その引数は参照呼びになります。main() では swap(a, b) を呼び出していますが、swap の仮引数 x, y は参照呼びなので、変数 a, b の参照 (アドレス) が x, y に渡されます。そして、x, y の値を更新すると、呼び出し元の変数 a, b の値も更新されます。また、swap(a, 20) のような呼び出しはコンパイルエラーになります。
+</p>
+<p> swap を呼び出す箇所は次のようにコンパイルされます。
+</p>
+<pre class="list">
+リスト : swap を呼び出す箇所のアセンブリコード (Ｃ++ : g++)
+
+        movl    $10, -8(%ebp)
+        movl    $20, -4(%ebp)
+        leal    -4(%ebp), %eax
+        movl    %eax, 4(%esp)
+        leal    -8(%ebp), %eax
+        movl    %eax, (%esp)
+        call    __Z4swapRiS_
+</pre>
+<p> Ｃ言語と同様に leal で局所変数のアドレスをレジスタ EAX にセットし、それを movel でスタックに積んでいます。けっきょく、Ｃ++の参照も変数のアドレスを仮引数に渡すことで実現しているのですが、それを処理系が自動的に行ってくれるところが「参照呼び」のメリットです。Ｃ++ の場合はコンパイル時に型チェックも行われるので、Ｃ言語のようにポインタを使って参照呼びを実現するよりも安全といえるでしょう。なお、Ｃ++の参照は高機能で、参照呼びだけではなく、いろいろなところでポインタの代わりに使うことができます。
+</p>
+
+<p> このほかにも参照呼びをサポートしている言語があります。たとえば Pascal は値呼びが基本ですが、関数や手続きの仮引数に var を付けると参照呼びになります。Pascal はこの機能を「変数引数」または「変数パラメータ (variable parameter) 」と呼んでいます。
+</p>
+
+<p> スクリプト言語では Perl が参照呼びです。Perl の場合、実引数は $_ という特別な配列に格納されていて、その要素を書き換えると、呼び出し元の変数の値を書き換えることができます。Perl では $_ から値を取り出して局所変数にセットすることで「値呼び」と同様の動作になります。
+</p>
+
+</section>
+<hr>
+<a name="1008">2010 年 8 月</a>
+<hr>
+<section class="contents">
+<h3 id="100825">8月25日</h3>
+<h4 id="100825_1">●Interface 10 月号</h4>
+<p> <a href="http://www.cqpub.co.jp/">ＣＱ出版社</a> 発行の月刊誌 <a href="http://www.cqpub.co.jp/interface/">Interface 10 月号</a> (8/25発売) で、M.Hiroi は特集「進化するコンピュータ・アーキテクチャの 30 年」の第 6 章「プログラミング言語の歴史」を執筆しました。拙作の記事はともかく、コンピュータが発展してきた歴史を振り返る素晴らしい特集記事なので、興味のある方はぜひお読みください。
+</p>
+</section>
+<hr>
+<a name="1002">2010 年 2 月</a>
+<hr>
+<section class="contents">
+<h3 id="100227">2月27日</h3>
+<h4 id="100227_1">●JavaScript</h4>
+<p> 拙作のページ Memorandum 2008 年 4 月、5 月に書いた JavaScript のお話は、<a href="light/index.html">Lightweight Language</a> <a href="light/javascript.html">JavaScript Programming</a> にまとめたので削除しました。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2010,2011 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="index.html">Home</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

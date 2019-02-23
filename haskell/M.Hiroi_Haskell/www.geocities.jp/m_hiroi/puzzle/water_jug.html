@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 水差し問題</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881774</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>水差し問題</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>問題の説明</h3>
+<p> 今回のパズル「水差し問題」はいろいろな呼び方があって、<a href="water_jug.html#cite">参考文献 1</a> では「水をはかる問題」ですが、<a href="water_jug.html#cite_2">参考文献 2</a> は「水差し問題」と呼んでいます。このほかに、「水を測り出す問題」と呼ぶ場合があります。それでは問題です。
+</p>
+<div class="question">
+<b>[問題]</b> 水差し問題
+<p> 大きな容器に水が入っています。目盛の付いていない 8 リットルと 5 リットルの容器を使って、大きな容器から 4 リットルの水を汲み出してください。4 リットルの水は、どちらの容器に入れてもかまいません。水をはかる最短手順を求めてください。なお、水の総量に制限はありません。
+</p>
+</div>
+<p><a href="water_jug.html#answer">解答</a>
+</p>
+<hr>
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作ります。今回は「幅優先探索」で解いてみましょう。使用するプログラミング言語は Perl です。
+</p>
+
+<pre class="list">
+リスト：グローバル変数の定義
+
+@state = ();   # 局面を格納する
+@prev  = ();   # 1 手前の局面の番号
+%check = {};   # 同一局面チェック用ハッシュ  
+
+$MAX_A = 8;    # 容器 A の容量
+$MAX_B = 5;    # 容器 B の容量
+$GOAL  = 4;    # 求める水の容量
+</pre>
+<p> 最初にグローバル変数を定義します。左のリストを見てください。8 リットルの容器を A、5 リットルの容器を B とします。2 つの容器の状態は 1 つの整数値 ((A &lt;&lt; 8) | B) で表すことにします。A の容量は $MAX_A で、B の容量は $MAX_B で表します。
+</p>
+
+<p> @state は局面を格納する配列、@prev は 1 手前の局面の番号を格納する配列、%check は同一局面をチェックするためのハッシュです。これらの変数は幅優先探索を行う関数 solve で使用します。
+</p>
+
+<p> 水差し問題の場合、次に示す 3 通りの操作があります。
+</p>
+<ol>
+  <li>容器いっぱいに水を満たす。
+  <li>容器を空にする。
+  <li>他の容器に水を移す。
+</ol>
+<p> 3 の操作は、容器が空になるまで水を移す場合と、もう一方の容器が満杯になるまで水を移す場合があります。容器は 2 つあるので、全部で 6 通りの操作があります。これらの操作を関数 operation で行うことにします。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：容器の操作
+
+sub operation {
+  my ($n, $s) = @_;
+  my $a = &amp;get_A( $s );
+  my $b = &amp;get_B( $s );
+  if( $n == 0 ){
+    $a = 0;         # A を空にする
+  } elsif( $n == 1 ){
+    $a = $MAX_A;    # A を満杯にする
+  } elsif( $n == 2 ){
+    $b = 0;         # B を空にする
+  } elsif( $n == 3 ){
+    $b = $MAX_B;    # B を満杯にする  
+  } elsif( $n == 4 ){
+    # A --&gt; B
+    my $b1 = $MAX_B - $b;
+    if( $a &lt;= $b1 ){
+      $b += $a;
+      $a = 0;
+    } else {
+      $a -= $b1;
+      $b += $b1;
+    }
+  } else {
+    # B --&gt; A
+    my $a1 = $MAX_A - $a;
+    if( $b &lt;= $a1 ){      
+      $a += $b;
+      $b = 0;
+    } else {
+      $b -= $a1;
+      $a += $a1;
+    }
+  }
+  ($a &lt;&lt; 8) | $b;
+}
+
+</pre>
+<p> 関数 operation の引数 $n が操作番号で、$s が容器の状態です。関数 get_A と get_B は、状態 $s から容器 A と B に入っている水の量を求める関数です。番号 0 から 3 までの操作は、容器を空にするに操作と容器に水を満たす操作です。番号 4 と 5 は容器からもう一方の容器に水を移す操作です。容器の空き容量を調べて、水が全部入るかチェックしています。
+</p>
+
+<p> これらの操作を行うためには、容器に入っている水の量をチェックする必要がありますが、operation では行っていません。意味の無い操作、たとえば空の容器を空にする、または満杯の容器に水を満たす操作を行っても、容器の状態は変化しません。関数 solve で容器の状態をチェックすることで、無効な操作を省くようにしました。
+</p>
+
+<p> あとはオーソドックスな「幅優先探索」なので、難しいところはないと思います。詳細は <a href="water_jug.html#list">プログラムリスト</a> をお読みくださいませ。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。手順は容器の状態 (A, B) で表しています。
+</p>
+<pre class="fig">
+(0, 0)(0, 5)(5, 0)(5, 5)(8, 2)(0, 2)(2, 0)(2, 5)(7, 0)(7, 5)(8, 4)
+</pre>
+<p> 最短手数は 10 手になります。今回は「幅優先探索」で解きましたが、「反復深化」でも簡単に解けると思います。興味のある方は挑戦してみてください。
+</p>
+<hr>
+<h4 id="water">●水差し問題の数理</h4>
+<p> ところで、このパズルは容器の大きさの最大公約数の倍数だけ水をはかることができます。その理由を簡単に説明しましょう。
+</p>
+<p> この問題は 8 リットルの容器 A と 5 リットルの容器 B の 2 つしかないので、最初は A で水を汲むか B で水を汲むことになります。B で水を汲んだ場合、それを空にしては後戻りするので、B から A に水を移すことになります。次に、A から B に水を移すのは後戻りするので、B で水を汲むことになります。そして、B から A に水を移しますが、A が満杯になると水を移すことができないので A を空にします。
+</p>
+<p> このように考えると、水の流れは B で水を汲む、B から A に移す、A を空にする、と一方向になります。けっきょく、B で水を m 回汲み A の水を n 回捨てたとき、容器に残っている水の容量だけをはかることができるわけです。これを式で表すと次のようになります。
+</p>
+<pre class="item">
+z = b * m - a * n
+</pre>
+<p> z が水の容量、a は A の容量、b は B の容量を表します。ここで、a と b の最大公約数を k とすると、a = k * a1, b = k * b1 と書き直すことができるので、z は次の式で表すことができます。
+</p>
+<pre class="item">
+z = k * (b1 * m - a1 * n)
+</pre>
+<p> z は k の倍数になりますね。したがって、水は a と b の最大公約数の倍数だけしかはかることができない、というわけです。8 と 5 の最大公約数は 1 になるので <sup><a href="water_jug.html#note_21">[*1]</a></sup>、1 リットル単位で水をはかることができます。容器が 10 リットルと 4 リットルになると最大公約数が 2 になるので、2 の倍数の水をはかることはできますが、5 リットルとか 7 リットルの水をはかることはできません。
+</p>
+
+<p> それでは、5m - 8n = 4 を満たす m と n を求めてみましょう。<a href="water_jug.html#cite_3">参考文献 3</a> の「油分け算」に面白い方法が紹介されています。最初に、5m - 8n = 1 になる m と n を求めます。a と b が互いに素であれば、a * 1, a * 2, ... a * (b - 1), a * b の値を b で割ると、余りは 0 から b - 1 までの値がひとつずつ現れます。したがって、5m - 8n = 1 を満たす m と n の値は必ず見つけることができます。
+</p>
+<pre class="item">
+5 * 1 / 8 = 0 余り 5
+5 * 2 / 8 = 1 余り 2
+5 * 3 / 8 = 1 余り 7
+5 * 4 / 8 = 2 余り 4
+5 * 5 / 8 = 3 余り 1
+5 * 6 / 8 = 3 余り 6
+5 * 7 / 8 = 4 余り 3
+5 * 8 / 8 = 5 余り 0
+</pre>
+<p> m = 5, n = 3 であることがわかります。次に、両辺を 4 倍します。
+</p>
+<pre class="item">
+5 * 5 - 8 * 3 = 1 
+5 * 20 - 8 * 12 = 4
+</pre>
+<p> ここで、5 * 20 = 5 * (8 * 2 + 4), 8 * 20 = 8 * (5 * 2 + 2) と表すことができるので、式を展開すると次のようになります。
+</p>
+<pre class="item">
+  5 * (8 * 2 + 4) - 8 * (5 * 2 + 2) 
+= 5 * 8 * 2 + 5 * 4 - 8 * 5 * 2 - 8 * 2
+= 5 * 4 - 8 * 2
+</pre>
+<p> この式は、5 リットルの容器で水を 4 回汲み、8 リットルの容器で水を 2 回捨てると 4 リットルの水が残ることを表しています。<a href="water_jug.html#answer">最短手順</a> と比べてみると、確かに 5 リットルの容器で水を 4 回汲み上げています。ただし、このパズルは 4 リットルの水をはかることが目的なので、8 リットルの容器で水を捨てる回数は 1 回少なくても、5 リットルの容器に 4 リットルの水をはかることができます。
+</p>
+
+<p> 最初に A から水を汲む場合も同じように解くことができます。今度は、A で水を汲み、A から B に移し、B を空にする、という流れになります。この場合は次のようになります。
+</p>
+<pre class="item">
+  8 * m - 5 * n = 1
+  8 * 2 - 5 * 3 = 1
+  8 * 8 - 5 * 12 = 4
+
+  8 * (5 + 3) - 5 * (8 + 4)
+= 8 * 3 - 5 * 4
+</pre>
+<p> この場合、8 リットルの容器で水を 3 回汲み、5 リットルの容器で水を 4 回捨てます。こちらの方が手数は長くなります。実際に試してみてください。このほかにも、グラフを使った解き方があります。興味のある方は、青木先生のホームページ <a href="http://web2.incl.ne.jp/yaoki/">数学の部屋</a> の <a href="http://web2.incl.ne.jp/yaoki/oil2.htm">油をはかろう</a> を読んでください。とても参考になります。
+</p>
+<div class="note">
+<a name="note_21">-- note --------</a><br>
+[*1] a と b の最大公約数が 1 の場合、「a と b は互いに素である」といいます。
+</div>
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>奥村晴彦, 『Ｃ言語による最新アルゴリズム事典』, 技術評論社, 1991
+  <li>Leon Sterling, Ehud Shapiro, 『Prolog の技芸』, 共立出版, 1988
+  <li>中村義作, 『どこまで解ける日本の算法 和算で頭のトレーニング』, 講談社（ブルーバックス）, 1994
+</ol>
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+#
+# water_jug.pl : 水差し問題
+#
+#                Copyright (C) 2005 Makoto Hiroi
+#
+
+@state = ();   # 局面を格納する
+@prev  = ();   # 1 手前の局面の番号
+%check = {};   # 同一局面チェック用ハッシュ  
+
+$MAX_A = 8;    # 容器 A の容量
+$MAX_B = 5;    # 容器 B の容量
+$GOAL  = 4;    # 求める水の容量
+
+# A に入っている水を求める
+sub get_A {
+  my $s = shift;
+  ($s &gt;&gt; 8) &amp; 0xff;
+}
+
+# B に入っている水を求める
+sub get_B {
+  my $s = shift;
+  $s &amp; 0xff;
+}
+
+# 操作
+sub operation {
+  my ($n, $s) = @_;
+  my $a = &amp;get_A( $s );
+  my $b = &amp;get_B( $s );
+  if( $n == 0 ){
+    $a = 0;         # A を空にする
+  } elsif( $n == 1 ){
+    $a = $MAX_A;    # A を満杯にする
+  } elsif( $n == 2 ){
+    $b = 0;         # B を空にする
+  } elsif( $n == 3 ){
+    $b = $MAX_B;    # B を満杯にする
+  } elsif( $n == 4 ){
+    # A --&gt; B
+    my $b1 = $MAX_B - $b;
+    if( $a &lt;= $b1 ){
+      $b += $a;
+      $a = 0;
+    } else {
+      $a -= $b1;
+      $b += $b1;
+    }
+  } else {
+    # B --&gt; A
+    my $a1 = $MAX_A - $a;
+    if( $b &lt;= $a1 ){
+      $a += $b;
+      $b = 0;
+    } else {
+      $b -= $a1;
+      $a += $a1;
+    }
+  }
+  ($a &lt;&lt; 8) | $b;
+}
+
+# 手順の表示
+sub print_answer {
+  my $n = shift;
+  print_answer( $prev[$n] ) if $n &gt; 0;
+  printf("(%d, %d)", &amp;get_A( $state[$n] ), &amp;get_B( $state[$n] ) );
+}
+
+# 幅優先探索
+sub solve {
+  my $front = 0;
+  my $rear  = 1;
+  # 初期化
+  $state[0] = 0;
+  $prev[0]  = -1;
+  $check{0} = 1;
+  
+  while( $front &lt; $rear ){
+    my $i;
+    for( $i = 0; $i &lt; 6; $i++ ){
+      my $ns = &amp;operation( $i, $state[$front] );
+      # 無効な操作をチェック
+      next if $ns == $state[$front];
+      $state[$rear] = $ns;
+      $prev[$rear] = $front;
+      if( &amp;get_A( $ns ) == $GOAL or &amp;get_B( $ns ) == $GOAL ){
+        # 解を発見
+        &amp;print_answer( $rear );
+        return;
+      }
+      if( !$check{$ns} ){
+        # 同一局面が無ければキューに登録
+        $rear++;
+        $check{$ns} = 1;
+      }
+    }
+    $front++;
+  }
+}
+
+# 実行
+&amp;solve;
+</pre>
+<hr>
+<h4 id="answer">パズル「水差し問題」の解答</h4>
+<h4>●8 リットルと 5 リットルの容器で 4 リットルの水をはかる</h4>
+<table border=1>
+<caption>A(8), B(5)の場合</caption>
+<thead>
+  <tr><th>回</th><th>Ａ</th><th>Ｂ</th><th>操作</th></tr>
+</thead>
+<tbody>
+  <tr><td>０</td><td>０</td><td>０</td><td>初期状態</td></tr>
+  <tr><td>１</td><td>０</td><td>５</td><td>Ｂを満たす</td></tr>
+  <tr><td>２</td><td>５</td><td>０</td><td>ＢからＡへ移す</td></tr>
+  <tr><td>３</td><td>５</td><td>５</td><td>Ｂを満たす</td></tr>
+  <tr><td>４</td><td>８</td><td>２</td><td>ＢからＡへ移す</td></tr>
+  <tr><td>５</td><td>０</td><td>２</td><td>Ａを空にする</td></tr>
+  <tr><td>６</td><td>２</td><td>０</td><td>ＢからＡへ移す</td></tr>
+  <tr><td>７</td><td>２</td><td>５</td><td>Ｂを満たす</td></tr>
+  <tr><td>８</td><td>７</td><td>０</td><td>ＢからＡへ移す</td></tr>
+  <tr><td>９</td><td>７</td><td>５</td><td>Ｂを満たす</td></tr>
+  <tr><td>10</td><td>８</td><td>４</td><td>ＢからＡへ移す</td></tr>
+</tbody>
+</table>
+<hr>
+<h3 id="abura">油分け算</h3>
+<p> 「油分け算」は大きな容器に入っている油を 2 つの容器で二等分する古典的な問題 <sup><a href="water_jug.html#note1">[*1]</a></sup> です。
+</p>
+<div class="question">
+<b>[問題]</b> 油分け算<br>
+<p> 14 リットルの容器 A に油が満杯に入っています。これを 11 リットルの容器 B と 3 リットルの容器 C を使って二等分してください。容器 A と B には 7 リットルずつ油が入ります。油を二等分する最短手順を求めてください。
+</p>
+</div>
+<p> 簡単に解けた方は、容器 B と C のサイズが 9 リットルと 5 リットルの場合も考えてみてください。
+</p>
+<p><a href="water_jug.html#abura_ans">解答</a>
+</p>
+<div class="note">
+<a name="note1">-- note --------</a><br>
+[*1] 日本では、江戸時代の和算書『塵劫記（じんこうき）』にあります。今回の問題は容器の大きさを変更しています。
+</div>
+<hr>
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作りましょう。水差し問題のプログラムを改造すると簡単に作成することができます。
+</p>
+
+<pre class="list">
+リスト：グローバル変数の定義
+
+@state = ();   # 局面を格納する
+@prev  = ();   # 1 手前の局面の番号
+%check = {};   # 同一局面チェック用ハッシュ  
+
+$MAX_A = 14;   # 容器 A の容量
+$MAX_B = 11;   # 容器 B の容量
+$MAX_C = 3;    # 容器 C の容量
+$GOAL  = 0x070700;
+</pre>
+<p> 最初にグローバル変数を定義します。左のリストを見てください。14 リットルの容器を A、11 リットルの容器を B、3 リットルの容器を C とします。3 つの容器の状態は 1 つの整数値 ((A &lt;&lt; 16) | (B &lt;&lt; 8) | C) で表すことにします。A の容量は $MAX_A で、B の容量は $MAX_B で、C の容量は $MAX_C で表します。
+</p>
+
+<p> @state は局面を格納する配列、@prev は 1 手前の局面の番号を格納する配列、%check は同一局面をチェックするためのハッシュです。これらの変数は幅優先探索を行う関数 solve で使用します。
+</p>
+<p> 油分け算の場合、容器が 3 つあるので次に示す 6 通りの操作があります。
+</p>
+<ul>
+  <li>A の油を B へ移す。
+  <li>A の油を C へ移す。
+  <li>B の油を A へ移す。
+  <li>B の油を C へ移す。
+  <li>C の油を A へ移す。
+  <li>C の油を B へ移す。
+</ul>
+<p> これらの操作は関数 operation で行います。実際に油を移す処理は、関数 transfer で行います。次のリストを見てください。
+</p>
+<pre class="list">
+リスト：油を移す
+
+sub transfer {
+  my ($from, $to, $max) = @_;
+  my $m = $max - $to;
+  if( $from &lt;= $m ){
+    $to += $from;
+    $from = 0;
+  } else {
+    $to += $m;
+    $from -= $m;
+  }
+  ($from, $to);
+}
+</pre>
+<p> 関数 transfer は容器 $from の油を容器 $to へ移します。$max は容器 $to の大きさです。最初に、容器 $to の空き容量を求めて変数 $m にセットします。$form &lt;= $m であれば、$from の油をすべて $to に移すことができます。$to に $form を加算して $form を 0 にします。そうでなければ、油を $m だけ移します。$form から $m を減算して、$to に $m を加算します。最後に、$form と $to の値をリストで返します。
+</p>
+
+<p> 関数 transfer を使うと関数 operation は簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト：油を移す操作
+
+sub operation {
+  my ($n, $s) = @_;
+  my $a = &amp;get_A( $s );
+  my $b = &amp;get_B( $s );
+  my $c = &amp;get_C( $s );
+  if( $n == 0 ){
+    ($a, $b) = transfer( $a, $b, $MAX_B );   # A --&gt; B  
+  } elsif( $n == 1 ){
+    ($a, $c) = transfer( $a, $c, $MAX_C );   # A --&gt; C
+  } elsif( $n == 2 ){
+    ($b, $a) = transfer( $b, $a, $MAX_A );   # B --&gt; A
+  } elsif( $n == 3 ){
+    ($b, $c) = transfer( $b, $c, $MAX_C );   # B --&gt; c
+  } elsif( $n == 4 ){
+    ($c, $a) = transfer( $c, $a, $MAX_A );   # C --&gt; A
+  } else {
+    ($c, $b) = transfer( $c, $b, $MAX_B );   # C --&gt; B
+  }
+  ($a &lt;&lt; 16) | ($b &lt;&lt; 8) | $c;
+}
+</pre>
+
+<p> 関数 operation の引数 $n が操作番号で、$s が容器の状態です。関数 get_A, get_B, get_C は、状態 $s から容器 A, B, C に入っている水の量を求める関数です。あとは $n に従って、油を transfer で移すだけです。最後に、$a, $b, $c から新しい状態を生成して返します。
+</p>
+
+<p> あとはオーソドックスな「幅優先探索」なので、難しいところはないと思います。詳細は <a href="water_jug.html#lista">プログラムリスト</a> をお読みくださいませ。
+</p>
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre class="item">
+(14, 0, 0)(3, 11, 0)(3, 8, 3)(6, 8, 0)(6, 5, 3)(9, 5, 0)(9, 2, 3)(12, 2, 0)
+(12, 0, 2)(1, 11, 2)(1, 10, 3)(4, 10, 0)(4, 7, 3)(7, 7, 0)
+</pre>
+<p> 最短手数は 13 手になりました。今回は「幅優先探索」で解きましたが、「反復深化」でも簡単に解けると思います。興味のある方は挑戦してみてください。
+</p>
+<hr>
+<h4>●油分け算の解法</h4>
+<p> ところで、高木茂男氏の著書「パズル遊びへの招待」 <a href="http://www.torito.co.jp/puzzles/puzzle_asobi.html">オンライン版</a> の <a href="http://www.torito.co.jp/puzzles/107.html">油分け算</a> には、一般的な解法が示されています。同ページより引用します。
+</p>
+<blockquote><cite>
+Ａ、Ｂ、Ｃ、３種類の容器があって、Ａ＞Ｂ＞Ｃだとすると、<br>
+油分け算の一般的な解法は次のとおりである。<br><br>
+(1)Ｂが空なら、Ａの油をＢに満たす。<br>
+(2)Ｂに油が入っていたら、次のどちらかを行う。<br>
+　(ア)Ｃが一杯でなければ、Ｂの油でＣを満たす。<br>
+　(イ)Ｃが一杯なら、それをＡにあけてから、(ア)を行う。 <br><br>
+以上の操作を繰り返せばよい。
+</cite></blockquote>
+<p> 実際、今回の問題はこの方法で求めた手順が最短手数となります。また、<a HREF="http://homepage2.nifty.com/m_kamada/index.htm">M.Kamada さん</a> の <a href="http://homepage2.nifty.com/m_kamada/di200201.htm#04_02">油分け算の解き方</a> では、M.Kamada さんが考案された三角形のグラフを使って解く方法が説明されています。とても素晴らしい方法なので、興味のある方は一読されることをお勧めします。
+</p>
+
+<p> ところが、油分け算はどんな大きさの容器を使っても解ける、というわけではありません。油分け算は 2 つの容器を使って油を分けるので、<a href="water_jug.html#water">水差し問題</a> と同じように容器の最大公約数の倍数だけ油をはかることができます。
+</p>
+<p> たとえば、14 リットルの油を 9 リットルと 5 リットルの容器で 7 リットルに分ける場合、9 と 5 は互いに素なので 1 リットル単位で油を分けることができます。ところが、10 リットルと 4 リットルの容器を使う場合、10 と 4 の最大公約数は 2 なので、油は 2 リットル単位でしかはかることができません。この場合、7 リットルずつに分けることはできないのです。
+</p>
+
+<p> このほかに、もうひとつ条件があります。水差し問題では水の総量に制限はありませんが、油分け算では油の総量が決まっています。容器 A, B で水をはかる場合、B で水を汲む、B から A に移す、A を空にする、という操作を行います。B で水を m 回汲み A の水を n 回捨てたとき、容器に残っている水の容量は次の式で表すことができます。
+</p>
+<pre class="item">
+z = b * m - a * n
+</pre>
+<p> この式は B で水を汲むとき満杯にならないと成立しません。水差し問題がこの条件を満たしていることは明らかです。ところが、油分け算では油の総量と容器の大きさによって、この条件が成立しない場合があります。
+</p>
+
+<p> たとえば、9 リットルと 5 リットルの容器の場合、油が 14 リットル以上あれば、9 リットルの容器が満杯でも必ず 5 リットルの容器に油を満たすことができますね。つまり、2 つの容器の合計が油の総量以下であれば、油分け算は水をはかる問題と同様に解くことができるのです。実際、9 リットルと 5 リットルの容器を使うと、14 リットルの油は次のように 1 リットル単位で分けることが可能です。
+</p>
+<pre class="item">
+(13, 1), (12, 2), (11, 3), (10, 4), (9, 5), (8, 6), (7, 7) 
+</pre>
+<p> 2 つの容器の合計が油の総量よりも大きくなると、容器の大きさが互いに素でも、油を 1 リットル単位で分けることができない場合があります。たとえば、14 リットルの油を 11 リットルと 6 リットルの容器で分ける場合、11 と 6 は互いに素なので、油を 1 リットル単位で分けることができるように思われます。ところが、この場合は 10 リットルと 4 リットルに分けることはできません。実際に試してみましょう。
+</p>
+<pre class="fig">
+Ａ  Ｂ  Ｃ  (A = 14, B = 11, C = 6)
+-----------------------------------
+14  ０  ０  初期状態
+３  11  ０  A から B へ移す
+３  ５  ６  B から C へ移す
+９  ５  ０  C から A へ戻す
+９  ０  ５  B から C へ移す
+０  ９  ５  A から B へ移す（満杯にできない）
+
+０  11  ５  もしも B を満杯にできると
+０  10  ６  B から C へ移して 10 リットルをはかることができる
+</pre>
+<p> このように、油の総量が少ないと分割できない場合があります。たとえば、10 リットルの油を分ける場合を考えてみましょう。容器の大きさを変えて試してみたところ、結果は次のようになりました。
+</p>
+
+<table border=1>
+<caption>表：10 リットルの油を分ける</caption>
+<thead>
+  <tr><th>分割</th><th>6,5</th><th>7,4</th><th>8,3</th><th>7,5</th><th>7,6</th><th>8,5</th><th>9,4</th><th>9,5</th></tr>
+</thead>
+<tbody>
+  <tr><td> 9 : 1 </td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td><td>×</td><td>○</td><td>○</td></tr>
+  <tr><td> 8 : 2 </td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td><td>×</td></tr>
+  <tr><td> 7 : 3 </td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td><td>×</td><td>×</td></tr>
+  <tr><td> 6 : 4 </td><td>○</td><td>○</td><td>○</td><td>○</td><td>○</td><td>×</td><td>○</td><td>○</td></tr>
+  <tr><td> 5 : 5 </td><td>○</td><td>○</td><td>○</td><td>○</td><td>×</td><td>○</td><td>○</td><td>○</td></tr>
+</tbody>
+</table>
+
+<p> 容器の大きさは 10 &gt; B &gt; C, B + C &gt; 10 を満たしています。容器の合計が 11 リットルまたは 12 リットルの場合は、1 リットル単位で分割することができました。容器の合計が大きくなると分割できない場合が出てきます。分割の可否を簡単に調べる方法がないかいろいろ考えてみたのですが、残念ながらよくわかりませんでした。何か良い方法がありましたら教えてくださいませ。
+</p>
+<hr>
+<h4 id="lista">●プログラムリスト</h4>
+<pre class="list">
+#
+# abura.pl : 油分け算
+#
+#            Copyright (C) 2005 Makoto Hiroi
+#
+
+# 局面 ((A &lt;&lt; 16) | (B &lt;&lt; 8) | C )
+@state = ();
+@prev  = ();
+%check = {};
+
+$MAX_A = 14;
+$MAX_B = 11;
+$MAX_C = 3;
+$GOAL  = 0x070700;
+
+sub get_A {
+  my $s = shift;
+  ($s &gt;&gt; 16) &amp; 0xff;
+}
+
+sub get_B {
+  my $s = shift;
+  ($s &gt;&gt; 8) &amp; 0xff;
+}
+
+sub get_C {
+  my $s = shift;
+  $s &amp; 0xff;
+}
+
+# 油を移す
+sub transfer {
+  my ($from, $to, $max) = @_;
+  my $m = $max - $to;
+  if( $from &lt;= $m ){
+    $to += $from;
+    $from = 0;
+  } else {
+    $to += $m;
+    $from -= $m;
+  }
+  ($from, $to);
+}
+
+# 操作
+sub operation {
+  my ($n, $s) = @_;
+  my $a = &amp;get_A( $s );
+  my $b = &amp;get_B( $s );
+  my $c = &amp;get_C( $s );
+  if( $n == 0 ){
+    # A --&gt; B
+    ($a, $b) = transfer( $a, $b, $MAX_B );
+  } elsif( $n == 1 ){
+    # A --&gt; C
+    ($a, $c) = transfer( $a, $c, $MAX_C );
+  } elsif( $n == 2 ){
+    # B --&gt; A
+    ($b, $a) = transfer( $b, $a, $MAX_A );
+  } elsif( $n == 3 ){
+    # B --&gt; c
+    ($b, $c) = transfer( $b, $c, $MAX_C );
+  } elsif( $n == 4 ){
+    # C --&gt; A
+    ($c, $a) = transfer( $c, $a, $MAX_A );
+  } else {
+    # C --&gt; B
+    ($c, $b) = transfer( $c, $b, $MAX_B );
+  }
+  ($a &lt;&lt; 16) | ($b &lt;&lt; 8) | $c;
+}
+
+# 手順の表示
+sub print_answer {
+  my $n = shift;
+  print_answer( $prev[$n] ) if $n &gt; 0;
+  printf("(%d, %d, %d)", &amp;get_A( $state[$n] ), &amp;get_B( $state[$n] ), &amp;get_C( $state[$n] ) );
+}
+
+# 幅優先探索
+sub solve {
+  my $front = 0;
+  my $rear  = 1;
+  # 初期化
+  $state[0] = $MAX_A &lt;&lt; 16;
+  $prev[0]  = -1;
+  $check{ $state[0] } = 1;
+  
+  while( $front &lt; $rear ){
+    my $i;
+    for( $i = 0; $i &lt; 6; $i++ ){
+      my $ns = &amp;operation( $i, $state[$front] );
+      next if $ns == $state[$front];
+      $state[$rear] = $ns;
+      $prev[$rear] = $front;
+      if( $ns == $GOAL ){
+        # 解を発見
+        &amp;print_answer( $rear );
+        return;
+      }
+      if( !$check{$ns} ){
+        # 同一局面が無ければキューに登録
+        $rear++;
+        $check{$ns} = 1;
+      }
+    }
+    $front++;
+  }
+}
+
+# 実行
+&amp;solve;
+</pre>
+<HR>
+<h4 id="abura_ans">●パズル「油分け算」の解答</h4>
+<table border=1>
+<caption>A(14), B(11), C(3) の場合</caption>
+<thead>
+  <tr><th>回</th><th>Ａ</th><th>Ｂ</th><th>Ｃ</th><th>操作</th></tr>
+</thead>
+<tbody>
+  <tr><td>０</td><td>14</td><td>０</td><td>０</td><td>初期状態</td></tr>
+  <tr><td>１</td><td>３</td><td>11</td><td>０</td><td>ＡからＢへ移す</td></tr>
+  <tr><td>２</td><td>３</td><td>８</td><td>３</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>３</td><td>６</td><td>８</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+  <tr><td>４</td><td>６</td><td>５</td><td>３</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>５</td><td>９</td><td>５</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+  <tr><td>６</td><td>９</td><td>２</td><td>３</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>７</td><td>12</td><td>２</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+  <tr><td>８</td><td>12</td><td>０</td><td>２</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>９</td><td>１</td><td>11</td><td>２</td><td>ＡからＢへ移す</td></tr>
+  <tr><td>10</td><td>１</td><td>10</td><td>３</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>11</td><td>４</td><td>10</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+  <tr><td>12</td><td>４</td><td>７</td><td>３</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>13</td><td>７</td><td>７</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+</tbody>
+</table>
+<br>
+<table border=1>
+<caption>A(14), B(9), C(5) の場合</caption>
+<thead>
+  <tr><th>回</th><th>Ａ</th><th>Ｂ</th><th>Ｃ</th><th>操作</th></tr>
+</thead>
+<tbody>
+  <tr><td>０</td><td>14</td><td>０</td><td>０</td><td>初期状態</td></tr>
+  <tr><td>１</td><td>５</td><td>９</td><td>０</td><td>ＡからＢへ移す</td></tr>
+  <tr><td>２</td><td>５</td><td>４</td><td>５</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>３</td><td>10</td><td>４</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+  <tr><td>４</td><td>10</td><td>０</td><td>４</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>５</td><td>１</td><td>９</td><td>４</td><td>ＡからＢへ移す</td></tr>
+  <tr><td>６</td><td>１</td><td>８</td><td>５</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>７</td><td>６</td><td>８</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+  <tr><td>８</td><td>６</td><td>３</td><td>５</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>９</td><td>11</td><td>３</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+  <tr><td>10</td><td>11</td><td>０</td><td>３</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>11</td><td>２</td><td>９</td><td>３</td><td>ＡからＢへ移す</td></tr>
+  <tr><td>12</td><td>２</td><td>７</td><td>５</td><td>ＢからＣへ移す</td></tr>
+  <tr><td>13</td><td>７</td><td>７</td><td>０</td><td>ＣからＡへ戻す</td></tr>
+</tbody>
+</table>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2005 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

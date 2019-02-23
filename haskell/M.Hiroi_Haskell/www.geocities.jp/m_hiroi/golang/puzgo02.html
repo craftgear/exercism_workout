@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Go 言語プログラミング入門 / Puzzle DE Go!</title>
+  <meta name="description" content="Go,Golang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881807</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Go Language Programming</h1>
+<h2>お気楽 Go 言語プログラミング入門</h2>
+<h2>Puzzle DE Go!</h2>
+<div class="small">
+[ <a href="puzgo01.html">PrevPage</a> | <a href="index.html#puzgo">Golang</a> | <a href="puzgo03.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>生成検定法</h3>
+<p> 今回は「生成検定法（generate and test) 」という方法を使ってパズルを解いてみましょう。生成検定法は問題を解くときによく用いられる方法で、正解の可能性があるデータを生成してチェックすることで正解をひとつ、またはすべて見つけることができます。可能性のあるデータをもれなく作るのにバックトラックは最適です。ただし、「生成するデータ数が多くなると時間がとてもかかる」という弱点があるので注意してください。
+</p>
+
+<h4>●小町算</h4>
+<div class="question">
+<b>[問題１]</b> 小町算
+<p>1 から 9 までの数字を順番に並べ、間に + と - を補って 100 になる式を作ってください。1 の前に - 符号はつけないものとします。
+</p>
+<p> 例：1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 = 100
+</p>
+</DIV>
+<p> パズルの世界では、1 から 9 までの数字を 1 個ずつすべて使った数字を「小町数」といいます。たとえば、123456789 とか 321654987 のような数字です。「小町算」というものもあり、たとえば 123 + 456 + 789 とか 321 * 654 + 987 のようなものです。この問題は小町算の中でも特に有名なパズルです。
+</p>
+<p><a href="puzgo02.html#answer1">解答</a>
+</p>
+
+<h4>●覆面算</h4>
+<div class="question">
+<b>[問題２]</b> 覆面算
+<pre class="fig">
+    ＳＥＮＤ 
+ ＋ ＭＯＲＥ 
+ ----------- 
+  ＭＯＮＥＹ 
+
+  図：覆面算
+</pre>
+<p> 計算式の数字を文字や記号に置き換えて、それを元の数字に戻すパズルを「覆面算」といいます。異なる文字は異なる数字を表し、同じ文字は同じ数字を表します。使用する数字は 0 から 9 までで、最上位の桁に 0 を入れることはできません。
+</p>
+</div>
+<p> 問題２はデュードニーが 1924 年に発表したもので、覆面算の古典といわれる有名なパズルです。
+</p>
+<p><a href="puzgo02.html#answer2">解答</a>
+</p>
+<h4>●魔方陣</h4>
+<div class="question">
+<b>[問題３] 魔方陣</b>
+<pre class="fig">
+ ┌─┬─┬─┐   式
+ │Ａ│Ｂ│Ｃ│   A + B + C = N, A + E + I = N
+ ├─┼─┼─┤   D + E + F = N. C + E + G = N
+ │Ｄ│Ｅ│Ｆ│   G + H + I = N
+ ├─┼─┼─┤   A + D + G = N
+ │Ｇ│Ｈ│Ｉ│   B + E + H = N
+ └─┴─┴─┘   C + F + I = N
+
+        図：魔方陣
+</pre>
+<p> 上図の A から I の場所に 1 から 9 までの数字をひとつずつ配置します。縦横斜めの合計が等しくなるように数字を配置してください。
+</p>
+</div>
+
+<p><a href="puzgo02.html#answer3">解答</a>
+</p>
+
+<h4>●マスターマインド</h4>
+<p> 「マスターマインド」は 0 から 9 までの重複しない 4 つの数字からなる隠しコードを当てるゲームです。数字は合っているが位置が間違っている個数を cows で表し、数字も位置も合っている個数を bulls で表します。bulls が 4 になると正解です。
+</p>
+<pre class="fig">
+     [6 2 8 1] : 正解
+---------------------------------
+1.   [0 1 2 3] : cows 2 : bulls 0
+2.   [1 0 4 5] : cows 1 : bulls 0
+3.   [2 3 5 6] : cows 2 : bulls 0
+4.   [3 2 7 4] : cows 0 : bulls 1
+5.   [3 6 0 8] : cows 2 : bulls 0
+6.   [6 2 8 1] : cows 0 : bulls 4
+
+  図 : マスターマインドの動作例
+</pre>
+<p> マスターマインドを解くプログラムを作ってください。
+</p>
+
+<p> <a href="puzgo02.html#answer4">解答</a>
+</p>
+</section>
+<hr>
+<section class="contents">
+<h4 id="answer1">●解答１</h4>
+<p> それではプログラムを作りましょう。式は次のように文字列のスライスで表すことにします。
+</p>
+<pre class="item">
+1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 =&gt; ["1" "+" "2" "+" "3" "-" "4" "+" "5" "+" "6" "+" "78" "+" "9"]
+</pre>
+<p> あとは、式を生成して値を計算するだけです。次の図を見てください。
+</p>
+<pre class="fig">
+[1] =&gt; [1 + 2] =&gt; [1 + 2 + 3]
+               =&gt; [1 + 2 - 3]
+               =&gt; [1 + 23]
+    =&gt; [1 - 2] =&gt; [1 - 2 + 3]
+               =&gt; [1 - 2 - 3]
+               =&gt; [1 - 23]
+    =&gt; [12]    =&gt; [12 + 3]
+               =&gt; [12 - 3]
+               =&gt; [123]
+</pre>
+<p> 式を生成するとき、スライスに数字と演算子を順番に追加していきます。数字と +, - を追加する処理は簡単です。プログラムのポイントは数字を連結する処理、たとえば 1 と 2 を連結して一つの数値 12 にする処理です。この処理はスライスの末尾の数字 1 を 12 ("1" + "2") に置き換えることで実現できます。リストが [1 + 2] であれば、数字 2 を 23 ("2" + "3") に置き換えます。
+</p>
+<p> 式を生成するプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：式の生成
+
+func makeExpr(n int, expr []string) {
+    if n == 10 {
+        if calcExpr(expr) == 100 {
+            printExpr(expr)
+        }
+    } else {
+        m := strconv.Itoa(n)
+        makeExpr(n + 1, append(expr, "+", m))
+        makeExpr(n + 1, append(expr, "-", m))
+        k := len(expr) - 1
+        save := expr[k]
+        expr[k] += m
+        makeExpr(n + 1, expr)
+        expr[k] = save
+    }
+}
+</pre>
+<p> makeExpr の引数 n が追加する数字、expr が生成する式 (スライス) です。n が 10 の場合は、式が完成したので値を計算します。関数 calcExpr で式 expr を計算します。値が 100 になれば関数 printExpr で式を出力します。
+</p>
+<p> n が 10 未満であれば、n を expr に追加します。最初に、n を関数 Itoa で文字列に変換して変数 m にセットします。Itoa はパッケージ strconv に定義されています。次に、append で "+" と m を expr に追加して makeExpr を再帰呼び出しします。その次が"-" と m を追加する場合です。
+</p>
+<p> 最後は文字列を連結する場合です。この場合、スライスの内容を破壊的に修正するので、スライス末尾の文字列を変数 save に保存しておきます。それから、末尾の文字列に m を追加して makeExpr を再帰呼び出しします。戻ってきたら末尾の文字列を元に戻します。この処理を忘れると正常に動作しません。ご注意くださいませ。
+</p>
+
+<p> 次は式を計算する calcExpr を作ります。今回の問題は演算子に + と - しかないので、スライスで表現した式を計算することは簡単です。次のプログラムを見てください。
+</p>
+
+<pre class="list">
+リスト：式の計算 (+ と - だけ)
+
+func calcExpr(expr []string) int {
+    a, _ := strconv.Atoi(expr[0])
+    for i := 1; i &lt; len(expr); i += 2 {
+        n, _ := strconv.Atoi(expr[i + 1])
+        switch expr[i] {
+        case "+": a += n
+        case "-": a -= n
+        }
+    }
+    return a
+}
+</pre>
+<p> スライスの先頭文字列を関数 Atoi で数字に変換して変数 a にセットします。Atoi はパッケージ strconv に定義されています。あとは、for ループの中でスライスから演算子を表す文字 (expr[i]) と数値を表す文字列 (expr[i + 1]) を順番に取り出して計算します。expr[i + 1] は Atoi で数値に変換して変数 n にセットします。expr[i] が "+" であれば a に n を加算し、"-" であれば a から n を減算します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="puzgo02.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+C&gt;go run komachi.go
+1 + 2 + 3 - 4 + 5 + 6 + 78 + 9 = 100
+1 + 2 + 34 - 5 + 67 - 8 + 9 = 100
+1 + 23 - 4 + 5 + 6 + 78 - 9 = 100
+1 + 23 - 4 + 56 + 7 + 8 + 9 = 100
+12 + 3 + 4 + 5 - 6 - 7 + 89 = 100
+12 + 3 - 4 + 5 + 67 + 8 + 9 = 100
+12 - 3 - 4 + 5 - 6 + 7 + 89 = 100
+123 + 4 - 5 + 67 - 89 = 100
+123 + 45 - 67 + 8 - 9 = 100
+123 - 4 - 5 - 6 - 7 + 8 - 9 = 100
+123 - 45 - 67 + 89 = 100
+</pre>
+<p> 全部で 11 通りの解が出力されます。
+</p>
+<p> ところで、今回のプログラムは数式を [ ]string で表したので、文字列と数値の変換が必要になりました。数値と演算子を別々のスライス ([ ]int と [ ]string) に格納すると、このような処理は不要になります。興味のある方は <a href="puzgo02.html#list11">別解</a> をお読みください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+//
+// komachi.go : パズル「小町算」の解法
+//
+//              Copyright (C) 2014 Makoto Hiroi
+//
+
+package main
+
+import (
+    "fmt"
+    "strconv"
+)
+
+// 数式の計算
+func calcExpr(expr []string) int {
+    a, _ := strconv.Atoi(expr[0])
+    for i := 1; i &lt; len(expr); i += 2 {
+        n, _ := strconv.Atoi(expr[i + 1])
+        switch expr[i] {
+        case "+": a += n
+        case "-": a -= n
+        }
+    }
+    return a
+}
+
+// 数式の表示
+func printExpr(expr []string) {
+    for _, x := range expr {
+        fmt.Print(x, " ")
+    }
+    fmt.Println("= 100")
+}
+
+// 数式の生成
+func makeExpr(n int, expr []string) {
+    if n == 10 {
+        if calcExpr(expr) == 100 {
+            printExpr(expr)
+        }
+    } else {
+        m := strconv.Itoa(n)
+        makeExpr(n + 1, append(expr, "+", m))
+        makeExpr(n + 1, append(expr, "-", m))
+        k := len(expr) - 1
+        save := expr[k]
+        expr[k] += m
+        makeExpr(n + 1, expr)
+        expr[k] = save
+    }
+}
+
+func main() {
+    makeExpr(2, []string{"1"})
+}
+</pre>
+<hr>
+<h4 id="list11">●別解</h4>
+<pre class="list">
+//
+// komachi1.go : パズル「小町算」の解法
+//
+//               Copyright (C) 2014 Makoto Hiroi
+//
+
+package main
+
+import "fmt"
+
+// 数式の表示
+func printExpr(nums []int, ops []string) {
+    i := 0
+    for ; i &lt; len(ops); i++ {
+        fmt.Print(nums[i], " ", ops[i], " ")
+    }
+    fmt.Println(nums[i], "= 100")
+}
+
+// 数式の計算
+func calcExpr(nums []int, ops []string) int {
+    a := nums[0]
+    for i := 1; i &lt; len(nums); i++ {
+        switch ops[i - 1] {
+        case "+": a += nums[i]
+        case "-": a -= nums[i]
+        }
+    }
+    return a
+}
+
+// 数式の生成
+func makeExpr(n int, nums []int, ops []string) {
+    if n == 10 {
+        if calcExpr(nums, ops) == 100 {
+            printExpr(nums, ops)
+        }
+    } else {
+        makeExpr(n + 1, append(nums, n), append(ops, "+"))
+        makeExpr(n + 1, append(nums, n), append(ops, "-"))
+        k := len(nums) - 1
+        save := nums[k]
+        nums[k] = save * 10 + n
+        makeExpr(n + 1, nums, ops)
+        nums[k] = save
+    }
+}
+
+func main() {
+    makeExpr(2, []int{1}, []string{})
+}
+</pre>
+<hr>
+<h4 id="answer2">●解答２</h4>
+<p> 式 SEND + MORE = MONEY は足し算なので、M が 1 であることはすぐにわかります。ここでは、それ以外の数字を求めるプログラムを作ります。単純な生成検定法でプログラムを作ると、次のようになります。
+</p>
+
+<pre class="list">
+//
+// hukumen.go : send + more = money
+//
+//              Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import "fmt"
+
+func member(n int, xs []int) bool {
+    for _, x := range xs {
+        if n == x { return true }
+    }
+    return false
+}
+
+// 順列の生成
+// n から m までの数字の中から k 個を選ぶ
+func permutation(f func([]int), n, m, k int, xs []int) {
+    if len(xs) == k {
+        f(xs)
+    } else {
+        for i := n; i &lt;= m; i++ {
+            if !member(i, xs) {
+                permutation(f, n, m, k, append(xs, i))
+            }
+        }
+    }
+}
+
+// 数値の計算
+func calc(xs []int, args ...int) int {
+    v := 0
+    for _, x := range args {
+        v = v * 10 + xs[x]
+    }
+    return v
+}
+
+//  文字と添字の対応
+//  0 1 2 3 4 5 6 7
+//  m s e n d o r y
+//  1
+func check(xs []int) {
+    send  := calc(xs, 1,2,3,4)
+    more  := calc(xs, 0,5,6,2)
+    money := calc(xs, 0,5,3,2,7)
+    if send + more == money {
+        fmt.Println(send, "+", more, "=", money)
+    }
+}
+
+func main() {
+    permutation(check, 0, 9, 8, []int{1})
+}
+</pre>
+<p> permutation は n から m までの数字の中から k 個の数字を選ぶ順列を生成します。順列の生成は拙作のページ <a href="yagp02.html">Yet Another Golang Problems 問題 16</a> とほぼ同じです。あとは関数 calc で数値 send, more, money を計算して、関数 check で send + more = money を満たしているかチェックします。とても簡単なプログラムですね。さっそく実行してみましょう。
+</p>
+<pre>
+C&gt;go run hukumen.go
+9567 + 1085 = 10652
+</pre>
+<p> 答えは 9567 + 1085 = 10652 の 1 通りしかありません。興味のある方は、ほかの方法でも試してみてください。
+</p>
+
+<hr>
+<h4 id="answer3">●解答３</h4>
+<p> 3 行 3 列の魔方陣は生成検定法で簡単に解くことができます。次のリストを見てください。
+</p>
+<pre class="list">
+//
+// mahou.go : 魔方陣
+//
+//            Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import "fmt"
+
+func member(n int, xs []int) bool {
+    for _, x := range xs {
+        if n == x { return true }
+    }
+    return false
+}
+
+// 順列の生成
+// n から m までの数字の中から k 個を選ぶ
+func permutation(f func([]int), n, m, k int, xs []int) {
+    if len(xs) == k {
+        f(xs)
+    } else {
+        for i := n; i &lt;= m; i++ {
+            if !member(i, xs) {
+                permutation(f, n, m, k, append(xs, i))
+            }
+        }
+    }
+}
+
+// 直線
+var lines = [8][3]int{
+    {0, 1, 2}, {3, 4, 5}, {6, 7, 8}, {0, 3, 6},
+    {1, 4, 7}, {2, 5, 8}, {0, 4, 8}, {2, 4, 6},
+}
+
+// 直線の合計値を求める
+func lineSum(xs []int, pos *[3]int) int {
+    return xs[pos[0]] + xs[pos[1]] + xs[pos[2]]
+}
+
+func check(xs []int) {
+    m := lineSum(xs, &amp;lines[0])
+    for i := 1; i &lt; 8; i++ {
+        n := lineSum(xs, &amp;lines[i])
+        if m != n { return }
+    }
+    fmt.Println(xs)
+}
+
+func main() {
+    permutation(check, 1, 9, 9, make([]int, 0))
+}
+</pre>
+
+<p> 関数 permutation で 1 から 9 までの数字の順列を生成します。それを関数 check に渡して、魔方陣の条件を満たしているかチェックします。関数 lineSum で各直線の和を求めて、すべて同じ値であれば魔方陣の条件を満たすので、Println で盤面 xs を表示します。
+</p>
+
+<p> それでは実行結果を示します。
+</p>
+<pre>
+C&gt;go run mahou0.go
+[2 7 6 9 5 1 4 3 8]
+[2 9 4 7 5 3 6 1 8]
+[4 3 8 9 5 1 2 7 6]
+[4 9 2 3 5 7 8 1 6]
+[6 1 8 7 5 3 2 9 4]
+[6 7 2 1 5 9 8 3 4]
+[8 1 6 3 5 7 4 9 2]
+[8 3 4 1 5 9 6 7 2]
+</pre>
+<p> 対称解を含めると、解は 8 通りあります。最近のパソコンはハイスペックなので、このままでも高速に解けるのですが、対称解を排除すると枝刈りの効果により、実行時間はもう少し速くなります。
+</p>
+
+<h4>●対称解の排除</h4>
+<p> 対称解のチェックは、下図のように四隅の大小関係を利用すると簡単です。
+</p>
+
+<pre class="fig">
+┌─┬─┬─┐   
+│Ａ│Ｂ│Ｃ│   
+├─┼─┼─┤   A &lt; C &lt; G
+│Ｄ│Ｅ│Ｆ│   
+├─┼─┼─┤   A &lt; I
+│Ｇ│Ｈ│Ｉ│   
+└─┴─┴─┘   
+
+    図 : 対称解のチェック
+</pre>
+
+<p> 魔方陣の場合、回転解が 4 種類あって、鏡像解が 2 種類あります。四隅の大小関係をチェックすることで、これらの対称解を排除することができます。また、早い段階で枝刈りを行うため、盤面の番号と試行順序を工夫します。
+</p>
+
+<pre class="fig">
+    ┌─┬─┬─┐  
+    │０│４│１│  
+    ├─┼─┼─┤  
+    │５│８│６│  
+    ├─┼─┼─┤  
+    │２│７│３│  
+    └─┴─┴─┘  
+
+図 : 盤面の番号と試行順序
+</pre>
+
+<p> 試行順序を上図のように定義し、スライスの添字と対応させます。そうすると、最初に四隅 (0, 1, 2, 3) の数字が選択されますね。ここで対称解のチェックが行われるので、枝刈りの効率は良くなります。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+//
+// mahou1.go : 魔方陣
+//
+//             Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import "fmt"
+
+/* 盤面
+  0 4 1
+  5 8 6
+  2 7 3
+*/
+
+func member(n int, xs []int) bool {
+    for _, x := range xs {
+        if n == x { return true }
+    }
+    return false
+}
+
+// 直線
+var lines = [8][3]int{
+    {0, 4, 1}, {5, 8, 6}, {2, 7, 3}, {0, 5, 2},
+    {4, 8, 7}, {1, 6, 3}, {0, 8, 3}, {1, 8, 2},
+}
+
+// 直線の合計値を求める
+func lineSum(xs []int, pos *[3]int) int {
+    return xs[pos[0]] + xs[pos[1]] + xs[pos[2]]
+}
+
+// 魔方陣になっているか
+func check(xs []int) {
+    m := lineSum(xs, &amp;lines[0])
+    for i := 1; i &lt; 8; i++ {
+        n := lineSum(xs, &amp;lines[i])
+        if m != n { return }
+    }
+    fmt.Println(xs[0], xs[4], xs[1])
+    fmt.Println(xs[5], xs[8], xs[6])
+    fmt.Println(xs[2], xs[7], xs[3])
+}
+
+// 解法
+func solver(xs []int) {
+    k := len(xs)
+    switch {
+    case k == 9: check(xs); return
+    case k == 2 &amp;&amp; xs[0] &gt; xs[1]: return
+    case k == 3 &amp;&amp; xs[1] &gt; xs[2]: return
+    case k == 4 &amp;&amp; xs[0] &gt; xs[3]: return
+    }
+    for i := 1; i &lt;= 9; i++ {
+        if !member(i, xs) {
+            solver(append(xs, i))
+        }
+    }
+}
+
+func main() {
+    solver(make([]int, 0))
+}
+</pre>
+<p> 実行結果を示します。
+</p>
+<pre>
+C&gt;go run mahou1.go
+2 9 4 
+7 5 3 
+6 1 8 
+</pre>
+<hr>
+<h4 id="answer4">●解答４</h4>
+<p> このゲームは 10 個の数字の中から 4 個選ぶわけですから、全体では 10 * 9 * 8 * 7 = 5040 通りのコードしかありません。この中から正解を見つける方法ですが、質問したコードとその結果を覚えておいて、それと矛盾しないコードを作るようにします。具体的には、4 つの数字の順列を生成し、それが今まで質問したコードと矛盾しないことを確かめます。これは生成検定法と同じですね。
+</p>
+<p> 矛盾しているかチェックする方法も簡単で、以前に質問したコードと比較して、bulls と cows が等しいときは矛盾していません。たとえば、次の例を考えてみてください。
+</p>
+<pre class="fig">
+[6 2 8 1] が正解の場合
+
+[0 1 2 3] =&gt; bulls = 0, cows = 2
+
+           [0 1 2 3]  と比較する
+     --------------------------------------------------------
+           [0 X X X]  0 から始まるコードは bulls = 1
+                      になるので矛盾する。
+           ・・・・
+
+           [1 0 3 4]  cows = 3, bulls = 0 になるので矛盾する
+
+           ・・・・
+
+           [1 0 4 5]  cows = 2, bulls = 0 で矛盾しない。
+     --------------------------------------------------------
+
+[1 0 4 5] =&gt; bulls = 0, cows = 1
+
+次は、[0 1 2 3] と [1 0 4 5] に矛盾しない数字を選ぶ
+
+        図 : マスターマインドの推測アルゴリズム
+</pre>
+<p> [0 1 2 3] で bulls が 0 ですから、その位置にその数字は当てはまりません。したがって、[0 X X X] というコードは [0 1 2 3] と比較すると bulls が 1 となるので、矛盾していることがわかります。
+</p>
+<p> 次に [1 0 3 4] というコードを考えてみます。[0 1 2 3] の結果は cows が 2 ですから、その中で合っている数字は 2 つしかないわけです。ところが、[1 0 3 4] と [0 1 2 3] と比較すると cows が 3 になります。当たっている数字が 2 つしかないのに、同じ数字を 3 つ使うのでは矛盾していることになりますね。
+</p>
+<p> 次に [1 0 4 5] というコードと比較すると、bulls が 0 で cows が 2 となります。これは矛盾していないので、このコードを質問することにします。その結果が bulls = 0, cows = 1 となり、今度は [0 1 2 3] と [1 0 4 5] に矛盾しないコードを選択するのです。
+</p>
+<h4>●プログラムの作成</h4>
+<p> それでは、プログラムを作っていきましょう。まず、質問したコードとその結果を格納する構造体と大域変数を定義します。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+// 構造体の定義
+type Query struct {
+    bulls, cows int
+    code []int
+}
+
+// 大域変数
+var querys []*Query
+var collect []int
+</pre>
+
+<p> 型名は Query としました。bulls, cows と質問したコード code を格納します。これを大域変数 querys のスライスに格納します。collect は正解のコードを格納します。
+</p>
+<p> 次は bulls を数える関数 countBulls を作ります。
+</p>
+<pre class="list">
+リスト : bulls を数える
+
+func countBulls(xs, ys []int) int {
+    c := 0
+    for i := 0; i &lt; len(xs); i++ {
+        if xs[i] == ys[i] { c++ }
+    }
+    return c
+}
+</pre>
+<p> countBulls は簡単ですね。スライス xs, ys の要素を順番に比較して、等しい場合は変数 c の値を +1 します。
+</p>
+<p> 次は cows を数える処理を作ります。いきなり cows を数えようとすると難しいのですが、2 つのリストに共通の数字を数えることは簡単にできます。この方法では、bulls の個数を含んだ数を求めることになりますが、そこから bulls を引けば cows を求めることができます。関数名は countSameNumber としましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 同じ数字の個数を数える
+
+func countSameNumber(xs, ys []int) int {
+    c := 0
+    for _, x := range xs {
+        if member(x, ys) { c++ }
+    }
+    return c
+}
+</pre>
+<p> for ループで xs の要素を順番に取り出して変数 x にセットします。x が ys に含まれているか member でチェックして、そうであれば c の値を +1 します。、
+</p>
+
+<p> 次は、今まで質問したコードと矛盾していないか調べる関数 check を作ります。
+</p>
+
+<pre class="list">
+リスト : 今まで質問したコードと矛盾していないか
+
+func checkQuery(xs []int) bool {
+    for _, q := range querys {
+        b := countBulls(q.code, xs)
+        c := countSameNumber(q.code, xs) - b
+        if b != q.bulls || c != q.cows {
+            return false
+        }
+    }
+    return true
+}
+
+func check(xs []int) {
+    if checkQuery(xs) {
+        q := new(Query)
+        ys := make([]int, 4)
+        copy(ys, xs)
+        q.bulls = countBulls(collect, xs)
+        q.cows  = countSameNumber(collect, xs) - q.bulls
+        q.code  = ys
+        querys  = append(querys, q)
+    }
+}
+</pre>
+
+<p> 関数 checkQuery は大域変数 querys に格納されたデータをチェックしていきます。引数 xs は生成したコードです。すべてのデータで矛盾がなければ true を返します。関数 countBulls と countSameNumber を使って bulls (変数 b) と cows (変数 c) を求めて、質問したときの q.bulls と q.cows に矛盾しないかチェックします。
+</p>
+
+<p> 関数 check は checkQuery でコード xs が矛盾しないことを確認します。それから、正解のコード collect と xs を比較して bulls と cows を求め、それらを構造体にまとめて querys に追加します。
+</p>
+
+<p> あとは関数 permutation で順列を生成するだけです。詳細は <a href="puzgo02.html#list4">プログラムリスト</a> をお読みください。
+</p>
+<h4>●何回で当たるか</h4>
+<p> これでプログラムは完成です。それでは実行例を示しましょう。
+</p>
+<pre>
+C&gt;go run master.go
+1 [0 1 2 3] bulls =  0 , cows =  2
+2 [1 0 4 5] bulls =  0 , cows =  2
+3 [2 3 5 4] bulls =  0 , cows =  2
+4 [3 4 0 6] bulls =  1 , cows =  1
+5 [3 5 6 1] bulls =  1 , cows =  1
+6 [6 5 0 2] bulls =  0 , cows =  0
+7 [7 4 3 1] bulls =  3 , cows =  0
+8 [8 4 3 1] bulls =  3 , cows =  0
+9 [9 4 3 1] bulls =  4 , cows =  0
+</pre>
+
+<p> 肝心の質問回数ですが、5, 6 回で当たる場合が多いようです。実際に、5040 個のコードをすべて試してみたところ、平均は 5.56 回になりました。これは <a href="puzgo02.html#cite">参考文献 1</a> の結果と同じです。質問回数の最大値は 9 回で、そのときのコードは [9 4 3 1], [9 2 4 1], [5 2 9 3], [9 2 0 4], [9 2 1 4] でした。
+</p>
+<p> なお、参考文献 1 には平均質問回数がこれよりも少なくなる方法が紹介されています。単純な数当てゲームだと思っていましたが、その奥はけっこう深いようです。興味のある方はいろいろ試してみてください。
+</p>
+
+<h4 id="cite">●参考文献</h4>
+<ol>
+  <li>田中哲郎 「数当てゲーム (MOO, マスターマインド) 」, 松原仁、竹内郁雄 編 『bit 別冊 ゲームプログラミング』 pp150 - 157, 共立出版, 1997
+</ol>
+<hr>
+<h4 id="list4">●プログラムリスト</h4>
+<pre class="list">
+//
+// master.go : マスターマインド
+//
+//             Copyright (C) 2014 Makoto Hiroi
+//
+package main
+
+import "fmt"
+
+func member(n int, xs []int) bool {
+    for _, x := range xs {
+        if n == x { return true }
+    }
+    return false
+}
+
+// 順列の生成
+// n から m までの数字の中から k 個を選ぶ
+func permutation(f func([]int), n, m, k int, xs []int) {
+    if len(xs) == k {
+        f(xs)
+    } else {
+        for i := n; i &lt;= m; i++ {
+            if !member(i, xs) {
+                permutation(f, n, m, k, append(xs, i))
+            }
+        }
+    }
+}
+
+// 構造体の定義
+type Query struct {
+    bulls, cows int
+    code []int
+}
+
+// bulls を数える
+func countBulls(xs, ys []int) int {
+    c := 0
+    for i := 0; i &lt; len(xs); i++ {
+        if xs[i] == ys[i] { c++ }
+    }
+    return c
+}
+
+// 同じ数字の個数を数える
+func countSameNumber(xs, ys []int) int {
+    c := 0
+    for _, x := range xs {
+        if member(x, ys) { c++ }
+    }
+    return c
+}
+
+// 大域変数
+var querys []*Query
+var collect []int
+
+// 今まで質問したコードと矛盾しないか
+func checkQuery(xs []int) bool {
+    for _, q := range querys {
+        b := countBulls(q.code, xs)
+        c := countSameNumber(q.code, xs) - b
+        if b != q.bulls || c != q.cows {
+            return false
+        }
+    }
+    return true
+}
+
+func check(xs []int) {
+    if checkQuery(xs) {
+        q := new(Query)
+        ys := make([]int, 4)
+        copy(ys, xs)
+        q.bulls = countBulls(collect, xs)
+        q.cows  = countSameNumber(collect, xs) - q.bulls
+        q.code  = ys
+        querys  = append(querys, q)
+    }
+}
+
+func main() {
+    collect = []int{9,4,3,1}
+    permutation(check, 0, 9, 4, make([]int, 0))
+    for i, q := range querys {
+        fmt.Println(i + 1, q.code, "bulls = ", q.bulls, ", cows = ", q.cows)
+    }
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="puzgo01.html">PrevPage</a> | <a href="index.html#puzgo">Golang</a> | <a href="puzgo03.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

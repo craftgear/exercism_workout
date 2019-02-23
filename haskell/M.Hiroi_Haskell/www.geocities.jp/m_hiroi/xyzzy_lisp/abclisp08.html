@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門</title>
+  <meta name="description" content="xyzzy,xyzzy Lisp,Common Lisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881766</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>xyzzy Lisp Programming</h1>
+<h2>Common Lisp 入門</h2>
+<div class="small">
+[ <a href="abclisp07.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp09.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap14">リストの操作（その２）</h3>
+<p> <a href="abclisp02.html">リストの操作</a> では、リストの分解や合成など簡単なリスト操作を説明しました。また、リストの操作には <a href="abclisp06.html">列関数</a> を使うことができます。このほかにも Common Lisp にはリストを扱う便利な関数が用意されています。
+</p>
+
+<h4>●リストの探索</h4>
+<p> リストの探索は find や position などの列関数で行うことができますが、このほかに <b>member</b> というリスト専用の関数が用意されています。
+</p>
+<table border=1>
+<caption>表 1 : リストの探索</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td><b>member</b> item list</td><td>item と等しい最初の要素を探す</td></tr>
+  <tr><td><b>member-if</b> predicate list</td><td>predicate が真となる最初の要素を探す</td></tr>
+  <tr><td><b>member-if-not</b> predicate list</td><td>predicate が偽となる最初の要素を探す</td></tr>
+</tbody>
+</table>
+
+<p> 伝統的な Lisp では、リストの中にデータが含まれているか調べる述語として member を使います。伝統のある Lisp 関数なのですが、Common Lisp では -if や -if-not も用意されています。
+</p>
+<p> member は list の中に item が含まれているか調べます。もし見つからなければ nil を返します。見つけた場合は、item 以降のリストの残りを返します。返り値は member-if, -if-not も同じです。ここが find や position と異なるところです。member はリストのトップレベルの中から item を探すことに気をつけてください。
+</p>
+<p> それでは、簡単な使用例を示します。
+</p>
+<pre>
+(member 'd '(b c d e f))   =&gt; (d e f)
+(member 'a '(b c d e f))   =&gt; nil
+(member 'c '((a b) (c d))) =&gt; nil
+
+(member-if #'oddp '(0 2 4 6 1 3 5 7))
+=&gt; (1 3 5 7)
+</pre>
+<p> member, -if, -if-not はキーワード :key を指定することができます。それから、member は :test と :test-not も指定することができます。デフォルトは列関数と同じく eql です。ただし、列関数と違って :start と :end は指定できません。ご注意ください。簡単な例を示しましょう。
+</p>
+<pre>
+(member 'c '((a b) (c d) (e f)) :key #'car)   =&gt; ((c d) (e f))
+(member 1.0 '(0 2 4 6 1 3 5 7) :test #'equal) =&gt; (1 3 5 7)
+</pre>
+<h4>●リストの置換</h4>
+<p> リストの要素を置き換えるには、列関数の substitute を使うと便利ですが、リストのトップレベルの要素にしか適用できません。したがって、((a b) (c d)) のようなリストの要素を置換することはできません。このように、入れ子になっているリスト構造を<b>木 (tree)</b> といいますが、Lisp には木の要素を置換する関数 <b>subst</b> が用意されています。
+</p>
+<table border=1>
+<caption>表 2 : リストの置換</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td><b>subst</b> new old tree</td><td>old と等しい要素を new に置き換える</td></tr>
+  <tr><td><b>subst-if</b> new predicate tree</td><td>predicate が真となる要素を new に置き換える</td></tr>
+  <tr><td><b>subst-if-not</b> new predicate tree</td><td>predicate が偽となる要素を new に置き換える</td></tr>
+</tbody>
+</table>
+
+<p> subst も伝統的な関数ですが、Common Lisp には -if, -if-not も用意されています。subst は、リスト tree の old に等しい (eql) 部分を、new に置き換えた新しいリストを返します。subst はリストの構造を再帰的にたどり、すべての要素を検査します。元のリストは破壊されません。簡単な例を示しましょう。
+</p>
+<pre>
+(subst 1 'a '(a b c (a b c (a b c . a))))
+=&gt; (1 b c (1 b c (1 b c . 1)))
+
+(subst-if 0 #'(lambda (x) (and (integerp x) (evenp x))) '(((1 2) (3 4)) (5 6)))
+=&gt; (((1 0) (3 0)) (5 0))
+</pre>
+<p> subst-if, -if-not を使う場合、述語にはリストも渡されるので、最後の例は #'evenp だけでは動作しません。つまり、1 や 2 だけではなく、(1 2) や ((1 2) (3 4)) も検査されるのです。ご注意ください。
+</p>
+<p> subst, -if, -if-not はキーワード :key を指定することができます。それから、subst は :test と :test-not も指定することができます。また、tree のリスト構造を破壊的に修正する関数 nsubst もあります。
+</p>
+<h4>●連想リスト</h4>
+<p> もうひとつ Lisp らしいリスト構造を紹介しましょう。<b>連想リスト (association list : a-list)</b> はドット対を要素とするリストです。ドット対の CAR 部がキーで、CDR 部がデータに対応します。次の図を見てください。
+</p>
+
+<pre class="fig">
+                    ┌───┬───┬───┬──→ データ 
+                    │      │      │      │
+ 連想リスト =&gt; ((a . b) (c . d) (e . f) (g . h))
+                 │      │      │      │
+                 └───┴───┴───┴──→ キー
+
+                図 1 : 連想リストの構造
+</pre>
+<p> 上図の場合、a, c, e, g がキーで、b, d, f, h がデータとなります。キーやデータはシンボル以外の S 式でもかまいません。そして、連想リストからデータを検索する関数が <b>assoc</b> です。
+</p>
+<table border=1>
+<caption>表 3 : 連想リストの検索（その１）</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td><b>assoc</b> item a-list</td><td>item と等しいキーを探す</td></tr>
+  <tr><td><b>assoc-if</b> predicate a-list</td><td>predicate が真となるキーを探す</td></tr>
+  <tr><td><b>assoc-if-not</b> predicate a-list</td><td>predicate が偽となるキーを探す</td></tr>
+</tbody>
+</table>
+
+<p> assoc も Lisp の伝統的な関数ですが、Common Lisp では -if, -if-not も用意されています。assoc は連想リスト a-list から item と等しい (eql) キーを探します。見つからない場合は nil を返します。簡単な使用例を示しましょう。
+</p>
+<pre>
+(setq z '((a . b) (c . d) (e . f) (g . h)))
+=&gt; ((a . b) (c . d) (e . f) (g . h))
+
+(assoc 'e z) =&gt; (e . f)
+(assoc 'h z) =&gt;  nil
+</pre>
+<p> assoc は、見つけたキーのデータを返すのではなく、ドット対を返すことに注意してください。それから、assoc, -if, -if-not はキーワード :key を指定することができ、assoc は :test と :test-not も指定することができます。
+</p>
+<p> assoc の動作は、列関数 find の :key に car を指定した場合とほとんど同じです。ただひとつの違いは nil の扱い方です。次の例を見てください。
+</p>
+<pre>
+(find nil '((a . b) nil (c . d) (nil . e)) :key #'car)
+=&gt; nil
+
+(assoc nil '((a . b) nil (c . d) (nil . e)))
+=&gt; (nil . e)
+</pre>
+<p> find の場合、リストの要素に無条件で car を適用します。探索するキーが nil の場合、リストの要素に nil が含まれていると、(car nil) の結果が nil になるので、find はデータを見つけたと判断します。これに対し、assoc は連想リスト中に nil が含まれているとそれを無視するので、キーが nil のデータを見つけることができます。
+</p>
+<p> assoc はキーを探索しますが、データ（ドット対の CDR 部）を探索する関数が <b>rassoc</b> です。
+</p>
+
+<table border=1>
+<caption>表 4 : 連想リストの検索（その２）</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td><b>rassoc</b> item a-list</td><td>item と等しいデータを探す</td></tr>
+  <tr><td><b>rassoc-if</b> predicate a-list</td><td>predicate が真となるデータを探す</td></tr>
+  <tr><td><b>rassoc-if-not</b> predicate a-list</td><td>predicate が偽となるデータを探す</td></tr>
+</tbody>
+</table>
+
+<p> rassoc は連想リスト a-list から item と等しい (eql) データを探します。見つからない場合は nil を返します。簡単な使用例を示しましょう。
+</p>
+<pre>
+(setq z '((a . b) (c . d) (e . f) (g . h)))
+=&gt; ((a . b) (c . d) (e . f) (g . h))
+
+(rassoc 'e z) =&gt; nil
+(rassoc 'h z) =&gt; (g . h)
+</pre>
+<p> assoc と同様にドット対を返すことに注意してください。また、rassoc, -if, -if-not はキーワード :key を指定することができ、rassoc は :test と :test-not も指定することができます。
+</p>
+<p> 連想リストにデータを追加する場合、cons でも簡単にできますが <b>acons</b> を使うと便利です。
+</p>
+<pre class="item">
+acons key data a-list
+</pre>
+<p> acons は (cons (cons key data) a-list) と同じです。また、連想リストの新規に作成する場合や、まとめてデータを追加する場合は <b>pairlis</b> を使うと便利です。
+</p>
+<pre class="item">
+pairlis key-list data-list &amp;optional a-list
+</pre>
+<pre>
+(pairlis '(a b c d) '(1 2 3 4)) =&gt; ((d . 4) (c . 3) (b . 2) (a . 1))
+</pre>
+
+<p> もうひとつ便利な関数を紹介しましょう。<b>sublis</b> は、連想リストのキーに等しい tree の部分を、キーに対応するデータに置き換えます。sublis は subst を複数回実行した場合と同じ効果が得られます。tree は破壊されません。
+</p>
+<pre class="item">
+sublis a-list tree
+</pre>
+<pre>
+(sublis '((a . 1) (b . 2)) '(a b c (a b c . a) d . b))
+=&gt; (1 2 c (1 2 c . 1) d . 2)
+</pre>
+<p> sublis にはキーワード :key, :test, :test-not を指定することができます。
+</p>
+
+<h4>●その他の関数</h4>
+<p> 関数 <b>endp</b> はリストの終端を検査する述語です。コンスセルに対しては偽、nil に対しては真を返します。それ以外のデータはエラーになります。
+</p>
+<pre>
+(endp nil)    =&gt; t
+(endp '(1 2)) =&gt; nil
+</pre>
+<p> 関数 <b>nth</b> はリストの n 番目の要素を返します。列関数と同様に先頭の要素が 0 番目になります。n がリストの長さより大きい場合は nil を返します。 
+</p>
+<pre class="item">
+nth n list 
+</pre>
+<pre>
+(nth 0 '(a b c d)) =&gt; a
+(nth 3 '(a b c d)) =&gt; d
+(nth 4 '(a b c d)) =&gt; nil
+</pre>
+<p> 関数 <b>nthcdr</b> はリストに対して n 回だけ cdr を実行します。n がリストの長さより大きい場合は nil を返します。 
+</p>
+<pre class="item">
+nthcdr n list
+</pre>
+<pre>
+(nthcdr 0 '(a b c d)) =&gt; (a b c d)
+(nthcdr 2 '(a b c d)) =&gt; (c d)
+(nthcdr 5 '(a b c d)) =&gt; nil
+</pre>
+<p> 関数 <b>last</b> はリストの最後から n 個のコンスセルを返します。空リストの場合は、nil を返します。
+</p>
+<pre class="item">
+last list &amp;optional (n 1)
+</pre>
+<pre>
+(last '(a b c d))     =&gt; (d)
+(last '(a b c d . e)) =&gt; (d . e)
+(last '(a b c d) 2)   =&gt; (c d)
+</pre>
+<p> 関数 <b>butlast</b> は n 個のコンスセルをリストの最後尾から取り除きます。
+</p>
+<pre class="item">
+butlast list &amp;optional (n 1)
+</pre>
+<pre>
+(butlast '(a b c d))       =&gt; (a b c)
+(butlast '(a b c d) 2)     =&gt; (a b)
+(butlast '(a b c d . e) 2) =&gt; (a b)
+(butlast nil)              =&gt; nil
+</pre>
+<p> 関数 <b>make-list</b> は、要素が size 個のリストを作成します。キーワード :initial-element が指定されると、その値に初期化されます。デフォルト値は nil です。
+</p>
+<pre class="item">
+make-list size &amp;key :initial-element
+</pre>
+<pre>
+(make-list 5) =&gt; (nil nil nil nil nil)
+(make-list 5 :initial-element 0)
+=&gt; (0 0 0 0 0)
+</pre>
+<p> 関数 <b>copy-list</b> はリストのトップレベルをコピーして返します。関数 <b>copy-tree</b> はリストの木構造をコピーして返します。
+</p>
+<pre class="item">
+copy-list list
+copy-tree object
+</pre>
+<pre>
+(copy-list '((a b) (c d))) =&gt; ((a b) (c d))
+(copy-tree '((a b) (c d))) =&gt; ((a b) (c d))
+
+(copy-list 1) =&gt; エラー
+(copy-tree 1) =&gt; 1
+</pre>
+<p> copy-tree は引数がリストでなければ、引数をそのまま返します。copy-list は引数がリストでなければエラーになります。
+</p>
+<p> 次に、copy-list と copy-tree の違いを簡単に説明します。次の図を見てください。
+</p>
+
+<pre class="fig">
+     Ａ          Ｂ
+ ┌─┬─┐  ┌─┬─┐
+ │・│・┼→│・│／│
+ └┼┴─┘  └┼┴─┘
+   │          │
+   │          ↓Ｃ          Ｄ
+   │        ┌─┬─┐  ┌─┬─┐ 
+   │        │・│・┼→│・│／│ 
+   │        └┼┴─┘  └┼┴─┘ 
+   │          ↓          ↓
+   │          ｃ          ｄ
+   ↓Ｅ          Ｆ
+ ┌─┬─┐  ┌─┬─┐
+ │・│・┼→│・│／│
+ └┼┴─┘  └┼┴─┘
+   ↓          ↓
+   ａ          ｂ
+
+ 図 2 : リスト ((a b) (c d)) の構造
+</pre>
+
+<p> 上図はリスト ((a b) (c d)) の構造を表したものです。コンスセルは全部で 6 つありますね。copy-list はトップレベルのセル A と B だけをコピーします。残りのセルはコピーしません。つまり、新しいセル A' と B' を生成して、A の CAR と CDR を A' にコピーし、B の CAR と CDR を B' にコピーします。
+</p>
+<p> これに対し、copy-tree はすべてのコンスセルをコピーします。トップレベルのセル A と B だけではなく、C, D, E, F のセルもコピーするのです。これが copy-list と copy-tree の違いです。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap15">属性リスト</h3>
+<p> 属性リスト (property list : plist) は、キーとなるシンボル（属性名）とそれに対応するデータ（属性値）が交互に配置されたリストです。次の図を見てください。
+</p>
+
+<pre class="fig">
+ (key1 data1 key2 data2 ... )
+  │    │
+  │    └─→ key1 に対応するデータ（属性値） 
+  └────→ キーシンボル（属性名）
+
+        図 3 : 属性リストの構造
+</pre>
+
+<p> このままでは要素の並び方を決めただけで、普通のリストと同じではないかと思われることでしょう。確かに、属性リストの構造は属性名と属性値を交互に並べただけで、普通のリストとの違いはまったくありません。では、どこが違うのでしょうか。それは、属性リストがシンボルに格納されるところです。次の図を見てください。
+</p>
+
+<pre class="fig">
+ ┌───┐
+ │  ・─┼─→ 名前を格納
+ ├───┤
+ │  ・─┼─→ 関数定義を格納
+ ├───┤
+ │  ・─┼─→ 変数値を格納
+ ├───┤
+ │  ・─┼─→ 属性リストを格納 
+ └───┘
+
+  図 4 : シンボルの構造（概略）
+</pre>
+<p> 上図にシンボルの概略図を示します。このように、シンボルは 4 つの要素を持ったデータ構造と考えることができます。
+</p>
+<p> まず、自分自身の名前ですね。この名前があるおかげで、シンボルを特定することができます。次は関数定義を格納する場所です。defun で関数を定義すると、その関数はここに格納されます。その次が変数の値を格納する場所です。関数定義と変数値を格納する場所が異なっているので、関数が定義されているシンボルでも変数として使うことができます。最後が属性リストです。属性リストも変数値とは異なる場所に格納されるので、属性リストをセットしたシンボルでも、それを変数として使うことができます。
+</p>
+<p> それでは、属性リストを操作する関数を説明します。
+</p>
+
+<pre class="fig">
+          ┌──────────┐
+ setf ─→│シンボル[属性リスト]│ ─→ get 取得 
+ 設定     └──────────┘
+                     ↑
+     remprop ────┘
+      削除
+
+      図 5 : 属性リストのアクセス関数
+</pre>
+<p> Common Lisp の場合、属性リストにデータを書き込むときは setf を使います。ほかの Lisp 処理系では、専用の関数 putprop を使う場合もあります。ご注意くださいませ。
+</p>
+<pre class="item">
+get symbol key &amp;optional default
+</pre>
+<p> symbol の属性リストから属性名 key の属性値を返します。見つからない場合は default を返します。default が省略された場合は nil を返します。
+</p>
+<pre class="item">
+remprop symbol key
+</pre>
+<p> symbol の属性リストから属性名 key を削除します。属性名 key が見つからない場合は nil を返します。key を見つけて削除したら nil 以外の値を返します。xyzzy Lisp では t を返しています。
+</p>
+<p> このほかに、Common Lisp には関数 symbol-plist があります。
+</p>
+<pre class="item">
+symbol-plist symbol
+</pre>
+<p> symbol にセットされた属性リストを返します。
+</p>
+<p> それでは、簡単な使用例を示しましょう。
+</p>
+<pre>
+(setf (get '太郎 'height) 180) =&gt; 180
+(setf (get '太郎 'weight) 80)  =&gt; 80
+(symbol-plist '太郎)           =&gt; (weight 80 height 180)
+
+(get '太郎 'height)     =&gt; 180
+(get '太郎 'bust)       =&gt; nil
+(remprop '太郎 'height) =&gt; t
+(get '太郎 'height)     =&gt; nil
+(symbol-plist '太郎)    =&gt; (weight 80)
+</pre>
+
+<p> 最初に setf で太郎君の身長 (height) と体重 (weight) を属性リストに設定します。symbol-plist でシンボル太郎の属性リストを求めると、weight と height という 2 つの属性が設定されていることがわかります。それから、get と remprop は関数なので引数は評価されます。太郎, height, weight のシンボルにはクォートを忘れないで下さいね。
+</p>
+<p> 次に get でデータを取り出します。height という属性名はありますが、属性名 bust は設定されていないので nil を返します。remprop でデータを削除したあとは、get でデータを取り出すことはできません。実際に symbol-plist で属性リストを表示すると、height という属性が削除されていることがわかります。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori10">ちょっと寄り道</h3>
+<h4 id="rand">■乱数</h4>
+<p> 今回は乱数のお話です。私たちが適当な数字を決める場合、たとえばサイコロを使えば、1 から 6 までの数字を簡単に決めることができます。サイコロを振って出た目を記録したら、次のようになったとしましょう。
+</p>
+<pre class="item">
+5, 2, 1, 2, 6, 3, 4, 3, 1, 5, .....
+</pre>
+<p> サイコロの目は、イカサマをしないかぎり、出る確率が 1/6 で規則性はまったくありません。いま 2 が出たから次は 1 が出るとか、3,  4 と続いたから次は 5 が出るといったように、前に出た数字から次に出る数字を予測することはできないのです。このように、でたらめに並んだ数列を<b>乱数列</b>といい、乱数列の中のひとつひとつつの数字を<b>乱数</b>といいます。
+</p>
+<p> コンピュータは、決められた手順（プログラム）を高速に実行することは得意ですが、まったくでたらめな数を作れといわれると、とたんに困ってしまいます。そこで、何かしらの数式をプログラムして、それを実行することで乱数を発生させます。厳密にいえば乱数ではありませんが、それを乱数としてみなして使うことにするのです。このような乱数を<b>疑似乱数</b>といいます。現在では、ほとんどのコンピュータが疑似乱数を使っています。
+</p>
+<p> Common Lisp には、乱数を発生させる関数 random  が用意されています。
+</p>
+<pre class="item">
+random integer &amp;optional state
+</pre>
+<p> random  は 0 以上 integer 未満の整数を返します。それでは、乱数を 5 個作ってみましょう。
+</p>
+<pre>
+(dotimes (x 5) (print (random 100000)))
+
+80959 
+91269 
+70299 
+85279 
+67067 
+nil
+</pre>
+
+<p> xyzzy Lisp の場合、xyzzy を立ち上げたあとで random を評価すると、必ずこの乱数列が発生します。一般に、乱数を発生させるためには種 (seed : シード) となる数値が必要になります。Common Lisp ではシードを <b>random-state</b> 型のデータとして扱います。そして、random はスペシャル変数 <b>*random-state*</b> に格納されている値を使って乱数列を発生させます。xyzzy を立ち上げると *random-state* は同じ値に初期化されるため、同じ乱数列が発生するというわけです。
+</p>
+<p> 違う乱数列を発生させるためには、新しい random-state 型のデータ state を *radom-state* にセットするか、state を random の引数として渡します。新しい state を生成するには関数 <b>make-random-state</b> を使います。
+</p>
+<pre class="item">
+make-random-state &amp;optional state
+</pre>
+<p> 引数 state を省略するか nil の場合、make-random-state は *random-state* のコピーを返します。state が random-state 型のデータであれば、そのコピーを返します。そして、state が t の場合は、何らかの方法を用いてランダムに初期化された random-state 型のデータを返します。xyzzy Lisp では現在時刻を使って初期化されます。それでは実際に試してみましょう。
+</p>
+<pre>
+(setq *random-state* (make-random-state t))
+=&gt; #S(random-state data #(0 ... 省略 ...))
+
+(dotimes (x 5) (print (random 100000)))
+
+9520 
+74178 
+50736 
+55545 
+73702 
+nil
+</pre>
+<p> xyzzy Lisp の場合、random-state 型のデータは<b>構造体</b>で定義されています。このように、*random-state* に新しい値をセットすることで、異なる乱数列を発生させることができます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap16">マクロ</h3>
+<p> 今までにいろいろな関数を作ってきましたが、Common Lisp は関数だけではなく、<b>マクロ (macro)</b> を定義することができます。Lisp でプログラミングする場合、ほとんどの処理は defun で定義する関数で作成することができます。ところが、場合によっては引数を評価しない関数が必要になることもあります。ここで役に立つのがマクロなのです。また、マクロを使って新しい制御構造を定義することもできます。
+</p>
+
+<h4>●マクロの使い方</h4>
+<p> Ｃ/Ｃ++ユーザーであればマクロはお馴染みの機能なので、よく使っていることと思います。ところが Lisp のマクロはちょっと毛色が変わっています。Ｃ言語のマクロは、記号を定義した文字列に置き換えるという機能です。これに対して Lisp のマクロは、まさに Lisp らしいといえる機能を持っています。Ｃ言語との対比でいえば、「S 式を置き換える」と表現することができます。
+</p>
+<p> それでは、Lisp におけるマクロの使い方を説明します。Lisp ではマクロを関数のように定義します。マクロを定義するには <b>defmacro</b> を使います。
+</p>
+<pre class="item">
+(defmacro マクロ名 (仮引数 ...) Ｓ式 ...)
+</pre>
+<p> defmacro の構文は defun と同じです。defmacro で定義されたマクロは、次のような特徴を持ちます。
+</p>
+<ol>
+  <li>引数は評価されない。
+  <li>S 式を順番に評価し、いちばん最後の評価結果を再度評価して、その結果を返す。
+</ol>
+<p> この 2 番目の機能が Lisp におけるマクロの特徴です。これを図に示すと、次のようになります。
+</p>
+
+<pre class="fig">
+ [Ｓ式] ─  評価  → [新しいＳ式] ─ 評価 → [マクロの返り値] 
+       （マクロ展開）
+
+                    図 6 : マクロの動作
+</pre>
+
+<p> S 式を評価することで新しい S 式を組み立てます。この部分がマクロ展開に相当します。そして、その S 式を評価した値がマクロの返り値となります。S 式を組み立てるということはプログラムを作ることと同じです。これは、リストにプログラムとデータの 2 つの役割を持たせている Lisp だからこそ可能なことなのです。
+</p>
+<p> それでは関数とマクロを比較するため、リストに格納された数値の合計を求める処理を作ってみましょう。これは、マクロにしなくても apply を使えば簡単に実現できますね。
+</p>
+<pre>
+(defun sum-func (x) (apply #'+ x))
+=&gt; sum-func
+(sum-func '(1 2 3 4 5))
+=&gt; 15
+</pre>
+
+<p> この処理をマクロで作ってみましょう。マクロを使いこなすポイントですが、まず評価したい S 式を組み立てることを考えます。最初の評価で S 式を組み立て、それを評価することで目的の処理を実現するのがマクロなのです。
+</p>
+<p> この例では、(+ 1 2 3 4 5) という S 式を組み立てることができれば、それを評価することで合計値を求めることができます。これはリストの先頭にシンボル + を追加すればいいですね。マクロ定義は次のようになります。
+</p>
+<pre>
+(defmacro sum-macro (x) (cons '+ x))
+=&gt; sum-macro
+(sum-macro (1 2 3 4 5))
+=&gt; 15
+</pre>
+
+<p> マクロの場合、最初に (cons '+ x) が評価されます。この例では、その結果 (+ 1 2 3 4 5) という S 式が組み立てられ、それを再度評価することで 15 という合計値を求めることができます。マクロは引数を評価しないので、sum-macro の引数 (1 2 3 4 5) には引用符 (クォート) がないことに注意してください。
+</p>
+<p> 今度は、もう少し複雑な例を見てみましょう。スタックを操作する関数をマクロで定義してみます。 <a href="abclisp04.html#chap08">逐次実行</a> で作成した関数 push-stack と pop-stack は、スペシャル変数 *stack* にスタックを保持しましたが、これから作成するマクロは、スタック用の変数を引数として渡すことにします。Common Lisp には push と pop が用意されているので、マクロ名は my-push と my-pop にします。my-push は次のようになります。
+</p>
+<pre class="list">
+List 1 : my-push
+
+(defmacro my-push (item place)
+  (list 'setq
+        place
+        (list 'cons item place)))
+</pre>
+
+<p> それでは、実際に試してみましょう。
+</p>
+<pre>
+(setq a nil)   =&gt; nil
+(my-push 10 a) =&gt; (10)
+(my-push 20 a) =&gt; (20 10)
+a              =&gt; (20 10)
+</pre>
+
+<p> 最初に変数 a を nil に初期化しておきます。my-push は list を使って S 式を組み立てます。place には a が、item には 10 がセットされているので、(setq a (cons 10 a)) という S 式が組み立てられます。この S 式が再度評価されて、変数 a に (10) がセットされます。マクロですから引数は評価されません。もし、引数 item の評価結果をスタックに積みたい場合は、item を eval で評価するといいでしょう。
+</p>
+<p> my-pop も同様に実現できます。
+</p>
+
+<pre class="list">
+List 2 : my-pop
+
+(defmacro my-pop (place)
+  (list 'prog1
+        (list 'car place)
+        (list 'setq
+              place
+              (list 'cdr place))))
+</pre>
+
+<p> それでは、実際に試してみましょう。
+</p>
+<pre>
+a          =&gt; (30 20 10)
+(my-pop a) =&gt; 30
+a          =&gt; (20 10)
+(my-pop a) =&gt; 20
+a          =&gt; (10)
+</pre>
+<p> (my-pop a) は (prog1 (car a) (setq a (cdr a))) という S 式に展開され、この S 式が評価されます。実際には prog1 がマクロなので、prog1 をマクロ展開したあとの S 式を評価することになります。ちなみに、マクロ展開の結果は関数 macroexpand と macroexpand-1 を使って確認することができます。
+</p>
+<pre class="item">
+macroexpand   form &amp;optional env
+macroexpand-1 form &amp;optional env
+</pre>
+<p> Common Lisp の場合、局所的なマクロを定義することができます。そのようなマクロを考慮する場合は引数 env に設定します。ふつうのマクロであれば env を指定する必要はありません。macroexpand-1 はマクロを 1 回だけ展開します。つまり、(my-pop a) であればマクロ my-pop を展開するだけで、その中の prog1 は展開されません。macroexpand はマクロを最後まで展開するので、prog1 も展開されます。
+</p>
+<p> それでは (my-pop a) を macroexpand-1 で展開してみましょう。
+</p>
+<pre>
+(macroexpand-1 '(my-pop a)) =&gt; (prog1 (car a) (setq a (cdr a)))
+</pre>
+<p> このように、マクロ展開の結果を確認することができます。
+</p>
+
+<h4>●バッククオート</h4>
+<p> ところで、マクロを定義するとき、S 式を組み立てるため list や cons をたくさん使うことになり少々面倒です。実は、<b>バッククォート ( ` )</b> という機能を使うと、S 式を簡単に組み立てることができます。
+</p>
+<p> バッククォートはクォート ( ' ) と同様に引数の評価を行いません。ですが、バッククォートの中でコンマ ( , ) で始まる S 式があると、その S 式を評価した値で置き換えられます。簡単な例を示しましょう。
+</p>
+<pre>
+(setq var 'pen)   =&gt; pen
+`(this is a ,var) =&gt; (this is a pen)
+</pre>
+
+<p> 変数 var にはシンボル pen がセットされています。次の S 式の中で ,var はvar を評価した値、つまり pen に置き換わるのです。また、S 式の評価結果がリストの場合は、コンマアットマーク (,@) を使うことができます。,@ を使うと、リストをはずした値と置き換わります。,@ を使う場合、値がリストでなければエラーになります。次の例を見てください。
+</p>
+<pre>
+(setq var '(pen))  =&gt;(pen)
+`(this is a ,var)  =&gt; (this is a (pen))
+`(this is a ,@var) =&gt; (this is a pen)
+</pre>
+<p> 今度は変数 var にリスト (pen) がセットされました。次の S 式の中で ,varは (pen) に置き換わります。そして、その次の S 式の中では、,@var は pen に置き換わるのです。それから、コンマやコンマアットマークはバッククォートの中でしか使うことができません。ほかの S 式の中で評価した場合はエラーとなります。ご注意くださいませ。
+</p>
+<p> それではバッククォートを使って my-push と my-pop を書き直してみましょう。
+</p>
+
+<pre class="list">
+List 3 : my-push と my-pop の改良
+
+(defmacro my-push (item place)
+  `(setq ,place (cons ,item ,place)))
+
+(defmacro my-pop (place)
+  `(prog1 (car ,place)
+          (setq ,place (cdr ,place))))
+</pre>
+
+<p> my-push は item にコンマ ( , ) がついているので、item を評価した結果がスタックに積まれることに注意してください。list を使うよりもバッククォートの方が、どんな S 式が組み立てられて評価されるのかよくわかると思います。ですが、関数に比べるとマクロは理解するのが難しいですね。そのマクロがどんなことをするのか、きちんとコメントを書くことをお勧めします。
+</p>
+<p> ところで、(my-push x a) をマクロ展開すると (setq a (cons x a)) になります。展開後の S 式に x が含まれていますね。この x は、どのように評価されるのでしょうか。次の例を見てください。
+</p>
+
+<pre class="fig">
+ (dotimes (x 10) (my-push x a))
+                 ~~~~~~~~~~~~~
+                 マクロ呼び出し
+
+ (dotimes (x 10) (setq a (cons x a))) 
+                 ^^^^^^^^^^^^^^^^^^^
+                 マクロ展開されたＳ式
+
+    図 7 : my-push の実行環境
+</pre>
+
+<p> マクロ展開された S 式は、マクロ呼び出しと置き換えた状態で評価されます。上の例では、dotimes の中でマクロ my-push が評価されますが、この部分をマクロ展開後の S 式に置き換えて評価するのです。したがって、変数 x は dotimes で定義された局所変数として扱われます。
+</p>
+<p> 関数呼び出しでは、関数の仮引数やその中で定義された変数をレキシカル変数として扱いますが、それ以外の変数はスペシャル変数として扱われます。ところがマクロの場合、マクロ展開時には関数呼び出しと同じ規則が適用されますが、展開後の S 式を評価するときは、マクロ呼び出し時に定義されている局所変数が有効になるのです。ご注意くださいませ。
+</p>
+
+<h4>●マクロとラムダリストキーワード</h4>
+<p> defmacro は defun と同じように、&amp;optional や &amp;rest などのラムダリストキーワードを使うことができます。簡単な例題として、Scheme の define をマクロで定義してみましょう。Scheme は Lisp の方言のひとつです。言語仕様は Lisp よりシンプルで美しいといわれ、熱烈なファンが多いプログラミング言語です。define は次の形式で関数を定義します。
+</p>
+<pre class="item">
+(define (関数名 引数１ ... 引数ｎ) 本体)
+</pre>
+<p> define を defun に変換するマクロを定義します。動作例を示しましょう。
+</p>
+<pre>
+(define (foo x y) (+ x y)) =&gt; (defun foo (x y) (+ x y))
+</pre>
+<p> この場合、本体は (+ x y) のひとつしかありませんが、複数の S 式が定義できることに注意してください。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 4 : define マクロ
+
+(defmacro define (args-list &amp;rest body)
+  `(defun ,(car args-list) ,(cdr args-list) ,@body))
+</pre>
+<p> 本体は &amp;rest を使って受け取ります。本体はリストに格納されて変数 body にセットされます。あとはバッククオートを使って S 式を組み立てます。関数名は args-list の先頭要素なので、,(car args-list) で取り出すことができます。残りは引数なので ,(cdr args-list) でいいですね。,@ を使うとリストをはずしてしまうので、期待通りにマクロ展開されません。逆に、body はリストに本体が格納されているので、,@ を使ってリストをはずす必要があります。
+</p>
+<p> それでは実行してみしょう。
+</p>
+<pre>
+(define (foo x y) (+ x y))
+=&gt; foo
+(foo 10 20)
+=&gt; 30
+</pre>
+
+<h4>●分配</h4>
+<p> define マクロは defmacro の<b>分配 (destructuring)</b> という機能を使うと、もっと簡単に定義することができます。この機能は、defmacro のラムダリストを入れ子にすることができる、というものです。ただし、マクロ呼び出しするときは、そのラムダリストと同じリスト構造を与えなければいけません。簡単な例を示しましょう。
+</p>
+<pre class="fig">
+(defmacro foo ((a b c) ((d e) (f g))) .....)
+
+(foo ((1 (2 a) (3 b)) (((4 c) 5) ((6 d) 7))))
+
+a =&gt; 1
+b =&gt; (2 a)
+c =&gt; (3 b)
+d =&gt; (4 c)
+e =&gt; 5
+f =&gt; (6 d)
+g =&gt; 7
+</pre>
+<p> なかなか複雑な構造ですが、defmacro のラムダリストと foo に与える引数が、同じリスト構造になっていることに注意してください。たとえば、最初の引数は (a b c) とリストになっているので、リスト以外のデータを与えるとエラーになります。また、入れ子のリストにラムダリストキーワードを設定することもできます。
+</p>
+<p> それでは define マクロを書き換えてみましょう。
+</p>
+
+<pre class="list">
+List 5 : define マクロ(改良版)
+
+(defmacro define ((name &amp;rest args) &amp;rest body)
+  `(defun ,name ,args ,@body))
+</pre>
+
+<p> とても簡単になりましたね。分配はとても強力な機能で、複雑なマクロを書くための必須機能といえます。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="yori11">ちょっと寄り道</h3>
+<h4>■集合としてのリスト</h4>
+<p> 今回は、リストを使って<b>集合</b>を表してみましょう。たとえば、{1, 3, 5, 7} という集合は、リストを使って (1 3 5 7) と表すことができます。集合は要素の順番に意味はないので、集合 {1, 3, 5, 7} は (1 3 5 7) だけではなく、(7 5 3 1) や (5 3 1 7) と表すこともできます。このように、要素は適当に並べてもかまわないのですが、ある規則で要素を整列させておく場合 (正規化) もあります。
+</p>
+<p> 集合をリストで表す場合、<a href="abclisp08.html#chap14">リストの操作（その２）</a> で説明した関数 member は、要素が集合に含まれているか調べる述語と考えることができます。このほかにも、集合 A は集合 B の部分集合か調べたり、集合 A と B の和や積を求める、といった操作を考えることができます。
+</p>
+<p> それでは、集合の和と積を求める関数 union と intersection を作ってみましょう。関数 union は 2 つのリスト (集合) を受け取り、2 つの集合の要素をすべて含むリストを返します。このとき、2 つの集合で重複している要素はひとつだけ結果のリストに含まれます。簡単な例を示しましょう。
+</p>
+<pre>
+(union '(a b c) '(d e f)) =&gt; (a b c d e f)
+(union '(a b c) '(c b d)) =&gt; (a c b d)
+</pre>
+<p> Common Lisp には union が用意されているので、関数名は my-union とします。my-union は append と同じように作ることができます。第 1 引数のリストから要素を取り出し、それが第 2 引数のリストに含まれていなければ、その要素を結果のリストに追加します。含まれていれば、その要素は追加しません。そして最後に、第 2 引数のリストを追加します。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 6 : 集合の和
+
+(defun my-union (x y)
+  (cond ((atom x) y)
+        ((member (car x) y) (my-union (cdr x) y))
+        (t (cons (car x) (my-union (cdr x) y)))))
+</pre>
+
+<p> リスト x の要素を car で取り出して、同じ要素がリスト y に含まれているか member でチェックします。含まれていれば my-union を再帰呼び出します。そうでなければ、my-union を再帰呼び出しした結果に要素を追加します。それでは実行してみましょう。
+</p>
+<pre>
+(my-union '(1 2) '(4 5))     =&gt; (1 2 4 5)
+(my-union '(1 2 3) '(2 3 4)) =&gt; (1 2 3 4)
+</pre>
+
+<p> 次は集合の積を求める関数 intersection を作ります。intersection は 2 つのリストに共通な要素を取り出し、それをリストに格納して返します。簡単な例を示しましょう。
+</p>
+<pre>
+(intersection '(a b c) '(b c d)) =&gt; (c b)
+(intersection '(a b c) '(d e f)) =&gt; nil
+</pre>
+<p> Common Lisp には intersection が用意されているので、関数名は my-intersection としました。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 7 : 集合の積
+
+(defun my-intersection (x y)
+  (cond ((atom x) nil)
+        ((member (car x) y) (cons (car x) (my-intersection (cdr x) y)))
+        (t (my-intersection (cdr x) y))))
+</pre>
+
+<p> これも簡単ですね。リスト x の要素を car で取り出して、同じ要素がリスト y に含まれているか member でチェックします。含まれていれば、my-intersection を再帰呼び出しした結果に要素を追加します。そうでなければ、my-intersection を再帰呼び出しするだけです。実行結果は次のようになります。
+</p>
+<pre>
+(my-intersection '(1 2 3) '(2 3 4 5)) =&gt; (2 3)
+(my-intersection '(1 2 3) '(4 5 6))   =&gt; nil
+</pre>
+
+<p> 最後に、Common Lisp に用意されている関数を表にまとめます。
+</p>
+
+<table border=1>
+<caption>表 5 : 集合としてリストを操作する関数</caption>
+<thead>
+  <tr><th>関数名</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td><b>union</b> list1 list2</td><td>list1 と list2 の和を求める</td></tr>
+  <tr><td><b>intersection</b> list1 list2</td><td>list1 と list2 の積を求める</td></tr>
+  <tr><td><b>set-difference</b> list1 list2</td><td>list2 に現れない list1 の要素をリストにして返す</td></tr>
+  <tr><td><b>set-exclusive-or</b> list1 list2</td><td>list1 と list2 の両方にちょうど 1 つだけ現れる要素をリストにして返す</td></tr>
+  <tr><td><b>subsetp</b> list1 list2</td><td>list1 の要素がすべて list2 に含まれていれば真を返す</td></tr>
+</tbody>
+</table>
+
+<p> これらの関数はキーワード :key, :test, :test-not を使うことができます。簡単な使用例を示しましょう。
+</p>
+<pre>
+(union '((1 2) (3 4)) '((5 6) (1 2))) 
+=&gt; ((1 2) (3 4) (5 6) (1 2))       ; :test のデフォルトは eql
+
+(union '((1 2) (3 4)) '((5 6) (1 2)) :test #'equal)
+=&gt; ((3 4) (5 6) (1 2))
+
+(union '((a 1) (b 2)) '((c 1) (a 3)) :key #'car)
+=&gt; ((b 2) (c 1) (a 3))
+
+(set-difference '(1 2 3 4) '(3 4 5 6))
+=&gt; (2 1)
+
+(set-exclusive-or '(1 2 3 4 5 6) '(4 5 6 2 7 8))
+=&gt; (3 1 8 7)
+
+(subsetp '(1 2) '(1 2 3))   =&gt; t
+(subsetp '(0 1 2) '(1 2 3)) =&gt; nil
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abclisp07.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp09.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

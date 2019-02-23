@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Node.js 超入門</title>
+  <meta name="description" content="JavaScript,Underscore.js,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881858</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>お気楽 Node.js 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="node.html">Node.js</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3 id="chap02">テンプレートエンジンの利用</h3>
+<p> 前回は静的コンテンツ用の簡易サーバーを作りました。今回は「テンプレートエンジン」を取り上げます。一般に、Web アプリケーションの開発で用いられるテンプレートエンジンは、テンプレート (template, 雛型) と呼ばれるファイルとデータを合成して、Web ページやその一部を出力するものです。Node.js にはいろいろなテンプレートエンジンがありますが、今回は EJS (Embedded JavaScript templates) を使ってみることにします。
+</p>
+<h4>●EJS のインストール</h4>
+<p> EJS を使うときは、最初に npm でモジュール ejs をインストールします。<a href="https://www.npmjs.com/">npm</a> には便利なモジュールがたくさん登録されていて EJS もその一つです。インストール方法や使い方は <a href="https://www.npmjs.com/package/ejs">ejs</a> に書かれています。このページに書かれているように、シェルで次のコマンドを実行します。
+</p>  
+<pre class="item">
+npm install ejs
+</pre>
+<p> これでカレントディレクトリに node_modules というディレクトリが作成され、そこにモジュール ejs がインストールされます。これを「ローカルインストール」といいます。グローバルな環境にインストールしたい場合は次のように -g オプションを付けます。
+<pre class="item">
+npm install -g ejs
+</pre>
+<p> これを「グローバルインストール」といいます。一般的なモジュールであれば、ローカルインストールで大丈夫だと思います。インストールしたモジュールは require() で読み込むことができます。 
+</p>
+<p> モジュールのアンインストールも簡単です。次のコマンドを入力するだけです。
+</p>
+<pre class="item">
+npm unistall moduleNmae
+</pre>
+<p> グローバルインストールしたモジュールをアンインストールする場合はオプション -g を付けてください。
+</p>
+<h4>●テンプレートファイルの作成</h4>
+<p> EJS のテンプレートファイルは、基本的には HTML 形式のテキストファイルです。そこに EJS 用の特別なタグを書き込むことでデータを埋め込んだり、JavaScript のプログラムを実行して HTML 形式のテキストを生成することができます。
+</p>
+<p> EJS でよく使われるタグを以下に示します。
+</p>
+<ol>
+  <li>&lt;%= expr %&gt;</li>
+  <li>&lt;%- expr %&gt;</li>
+  <li>&lt;% script %&gt;</li>
+</ol>
+<p> タグは &lt;% と %&gt; で囲みます。1, 2 は JavaScript の式 expr を評価して、タグをその値に置き換えます。このとき、1 は値をエスケープ処理しますが、2 はエスケープ処理を行いません。3 は script を JavaScript のプログラムとして実行します。if, for, while などの制御構造を使うことができます。
+</p>
+<p> 簡単な例を示しましょう。  
+</p>
+<pre class="list">
+リスト : テンプレートファイル (index.ejs)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;お気楽 Node.js 超入門&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;&lt;%= title %&gt;&lt;/h1&gt;
+&lt;p&gt;&lt;%- message %&gt;&lt;/p&gt;
+&lt;% for (let i = 0; i &lt; cnt; i++) { %&gt;
+&lt;p&gt;Good Job!&lt;/p&gt;
+&lt;% } %&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> テンプレートファイルの拡張子は .ejs としました。タグ &lt;%= title %&gt; は変数 title の値に、タグ &lt;%- message %&gt; は変数 message の値に置き換わります。タグ &lt;% for (...) %&gt; は JavaScript の for 文を実行します。左カッコ { でタグを閉じて、右カッコ } は別のタグに記述します。このタグの間の処理が cnt 回繰り返されます。つまり、&lt;@&gt;Good Job!&lt;/p&gt; が cnt 回出力されます。変数 title, message, cnt はテンプレートファイルを HTML 形式のテキストに変換するメソッド render() で指定します。
+</p>
+<h4>●HTML テキストの生成</h4>
+<p> 次はサーバー側のプログラムを作りましょう。基本的にはテンプレートファイル index.ejs を読み込み、それを EJS のメソッド render() で処理して、その結果をブラウザに送信します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : EJS の使用例
+
+const http = require('http'),
+      fs = require('fs'),
+      ejs = require('ejs'),
+      template = fs.readFileSync(__dirname + '/public_html/index.ejs', 'utf-8'),
+      server = http.createServer();
+
+server.on('request', (req, res) =&gt; {
+  if (req.url == '/') {
+    let data = ejs.render(template, {
+      title: "お気楽 Node.js 超入門",
+      message: "&lt;b&gt;hello, EJS!!&lt;/b&gt;",
+      cnt: Math.floor(Math.random() * 5)
+    });
+    res.writeHead(200, {'Content-Type': 'text/html'});
+    res.write(data);
+  } else {
+    res.writeHead(404, {'Content-Type': 'text/plain'});
+    res.write('not found');
+  }
+  res.end();
+});
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> require('ejs') でモジュール ejs を読み込みます。テンプレートファイルは最初に読み込んでおくと簡単です。この処理を readFileSync() で行います。このメソッドは同期処理 (ブロッキング) でファイルを読み込むので、コールバック関数は必要ありません。この段階ではサーバーとしてまだ動作していないので、同期処理でも問題ありません。
+</p>
+<p> 次に、リクエストに対応するコールバック関数の中で、メソッド ejs.render() を呼び出します。第 1 引数がテンプレートで、第 2 引数に変数と値を格納したオブジェクトを渡します。message のタグは &lt;%- なのでエスケープ処理はされません。したがって、b タグで文字は太字で表示されるはずです。cnt は乱数で 0 から 4 までの値を生成してセットします。これで、アクセスするたびに Good Job! の表示を変化させることができます。興味のある方は実際に動かしてみてください。
+</p>
+<h4>●フォーム</h4>
+<p> HTML のフォーム (form) 要素は、ブラウザ上でユーザーがデータを入力し、それをサーバーに送るための基本的な仕組みです。フォームはタグ &lt;form&gt; と &lt;/form&gt; の間に、テキスト入力ボックス、ボタン、チェックボタン、プルダウンメニューなど、データを入力するための HTML 要素を配置します。そして、'Submit' ボタンを押すと、ユーザーが入力したデータをサーバーに送信します。サーバーは送られてきたデータを処理して、その結果をブラウザに返します。
+</p>
+<p> 一般に、サーバー側の処理は CGI プログラムで行われますが、Node.js では処理を JavaScript で記述することができます。最初にフォームの基本を簡単に説明します。
+</p>
+<p> フォームにはいろいろな属性が用意されていますが、基本的には次に示す 2 つの属性を設定します。
+</p>
+<ul>
+  <li>action="URL"<br>
+データを送信する URL を指定する</li>
+  <li>method="HTTPメソッド"<br>
+データの送信方法 (get or post) を指定する</li>
+</ul>
+<p> action を省略すると、送信先はフォームを表示している Web ページの URL になります。method には get と post の 2 種類があります。get は action で指定した URL の後ろに ? を付けて、その後ろに入力データを付加します。post は action で指定した URL のサーバーに接続し、そのあとで入力データを送信します。どちらの方法でも入力データはクエリ文字列に変換してから送信されます。
+</p>
+<p> 使い分けの基準ですが、簡単に言うと入力データが少ないときには get を、入力データが多いときには post を使うとよいようです。
+</p>
+<p> データを入力する HTML 要素には input, textarea, select などがありますが、ここでは input を取り上げることにします。input には多くの機能があり、属性 type で指定します。type で指定できる主な種類を下表に示します。
+</p>
+<table border=1>
+<caption>表 : 属性 type の種類</caption>
+<thead>
+  <tr><th>値</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>text</td><td>1 行のテキストボックスを作る</td></tr>
+  <tr><td>password</td><td>パスワード入力ボックスを作る</td></tr>
+  <tr><td>checkbox</td><td>チェックボックスを作る</td></tr>
+  <tr><td>radio</td><td>ラジオボタンを作る</td></tr>
+  <tr><td>file</td><td>送信するファイルを選択する</td></tr>
+  <tr><td>hidden</td><td>隠しデータを定義する</td></tr>
+  <tr><td>button</td><td>汎用のボタンを作る</td></tr>
+  <tr><td>submit</td><td>送信ボタンを作る</td></tr>
+  <tr><td>reset</td><td>リセットボタンを作る</td></tr>
+</tbody>
+</table>
+<p> 入力データを区別するため、input などの入力フォームには属性 name で名前を付けます。サーバーには 名前=値 の形式でデータが送信されます。text は属性 size でテキストボックスに表示される文字数を、属性 maxlenght で入力文字数の最大長を指定することができます。また、属性 value 初期値を指定することもできます。
+</p>
+<p> checkbox と radio は同じ名前のフォームをいくつても作ることができます。そして、checkbox はチェックされたボタンの値がサーバーに送信されます。ラジオボタンは同じ名前のボタンを一つだけ選択することができます。なお、これらのボタンは属性 value で値を設定しておく必要があります。
+</p>
+<h4>●簡単な掲示板</h4>
+<p> それでは簡単な例として、名前、性別、コメントを投稿する掲示板を作ってみましょう。最初に EJS 用のテンプレートファイルを作ります。次のリストを見てください。 
+</p>
+<pre class="list">
+リスト : テンプレートファイル (bbs.ejs)
+
+&lt;!DOCTYPE html&gt;
+&lt;html lang="ja"&gt;
+&lt;head&gt;
+  &lt;meta charset="UTF-8"&gt;
+  &lt;title&gt;BBS&lt;/title&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;form method="post" action="/send"&gt;
+&lt;label&gt;名前: &lt;input type="text" name="name"&gt;&lt;/label&gt;&lt;br&gt;
+&lt;label&gt;性別:
+  &lt;input type="radio" checked name="sex" value="男"&gt; 男
+  &lt;input type="radio" name="sex" value="女"&gt; 女 
+&lt;/label&gt;&lt;br&gt;
+&lt;label&gt;コメント: &lt;input type="text" name="comment" size=60&gt;&lt;/label&gt;&lt;br&gt;
+&lt;input type="submit" value="投稿"&gt;
+&lt;/form&gt;
+&lt;hr&gt;
+&lt;% for (let data of posts) { %&gt;
+日付: &lt;%= data.date %&gt;&lt;br&gt;
+名前: &lt;%= data.name %&gt;&lt;br&gt;
+性別: &lt;%= data.sex %&gt;&lt;br&gt;
+コメント: &lt;%= data.comment %&gt;&lt;br&gt;
+&lt;hr&gt;
+&lt;% } %&gt;&lt;/body&gt;
+&lt;/html&gt;
+</pre>
+<p> フォームの属性 method に post を、action に /send を指定します。サーバーの URL が localhost:1337 とすると、データの送信先は localhost:1337/send になります。あとは input タグで、名前、性別、コメントを入力するフォームを作ります。その後ろに投稿されたデータを表示します。データはサーバー内の配列 posts に格納します。データを保存していないので、サーバーを再起動すると今まで投稿されたデータは消失します。実用的な掲示板を作る場合、データの保存 (永続化) の処理が不可欠になります。ご注意くださいませ。
+</p>
+<p> 次はサーバー側のプログラムを作ります。フォームから送信されたデータを受け取る処理がポイントになります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 一行簡易掲示板
+
+const http = require('http'),
+      fs = require('fs'),
+      ejs = require('ejs'),
+      url = require('url'),
+      qs = require('querystring'),
+      template = fs.readFileSync(__dirname + '/public_html/bbs.ejs', 'utf-8'),
+      posts = [],
+      server = http.createServer();
+
+function renderForm(posts, res) {
+  const data = ejs.render(template, {
+      posts: posts
+  });
+  res.writeHead(200, {'Content-Type': 'text/html'});
+  res.write(data);
+  res.end();
+}
+
+function insertData(query, posts, res) {
+  query.date = (new Date()).toLocaleString();
+  posts.push(query);
+  renderForm(posts, res);
+}
+
+server.on('request', (req, res) =&gt; {
+  const u = url.parse(req.url, true);
+  if (u.pathname == '/send') {
+    if (req.method == 'POST') {
+      let data = "";
+      req.on('data', x =&gt; data += x);
+      req.on('end', () =&gt; insertData(qs.parse(data), posts, res));
+    } else {
+      insertData(u.query, posts, res);
+    }
+  } else {
+    renderForm(posts, res);
+  }
+});
+server.listen(1337, 'localhost');
+console.log("server listening...");
+</pre>
+<p> 'request' のコールバック関数で、URL を url.parse() で解析して、u.pathname が /send ならばフォームからの送信です。この処理はあとで説明します。そうでなければ、関数 renderForm() を呼び出して、bbs.ejs を HTML 形式のページに変換してブラウザに返します。引数 posts が投稿データを格納した配列です。ejs.render() を呼び出すときは { posts: posts } を渡します。これで投稿されたデータを Web ページに表示することができます。
+</p>
+<p> URL が /send の場合、プロパティ method で HTTP メソッドの種別をチェックします。'POST' のときはデータの受信処理を行います。データを受信したとき、イベント 'readable' または 'data' が発生するので、req.on() でコールバック関数を登録します。イベントが 'data' の場合、受信したデータはコールバック関数の引数 x に渡されます。一度にすべてのデータを受信できるとは限らないので、データを格納する変数 data を用意しておいて、data += x のようにデータを追加していきます。
+</p>
+<p> データの受信が完了したときに発生するイベントが 'end' です。qs.parse() でクエリ文字列を解析し、その結果を関数 insertData() に渡します。ここで現在の日付を query に追加してから、それを posts の末尾に追加します。あとは、renderForm() を呼び出して Web ページを生成します。HTTP メソッドが POST でなければ GET の処理を行います。これは簡単で、送信されたデータは url.parse() で解析済みなので、u.query を insertData() に渡して実行するだけです。
+</p>
+<p> これでプログラムは完成です。興味のある方は実際に動かしてみてください。
+</p>
+<h4>●参考文献, URL</h4>
+<ol>
+  <li><a href="https://developer.mozilla.org/ja/docs/Learn/HTML/Forms/Your_first_HTML_form">初めての HTML フォーム - ウェブ開発を学ぶ | MDN</a></li>
+  <li><a href="https://developer.mozilla.org/ja/docs/Learn/HTML/Forms/Sending_and_retrieving_form_data">フォームデータを送信する - ウェブ開発を学ぶ | MDN</a></li>
+</ol>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap03">Node.js DE SQLite</h3>
+<p> SQLite は D. Richard Hipp 氏が開発しているパブリックドメインな軽量のリレーショナルデータベース管理システム (RDBMS) です。一般的な RDBMS (たとえば MySQL など) はサーバとして動作させるのですが、SQLite はアプリケーションに組み込んで使用することができます。中小規模なシステムであれば、SQLite でも十分なパフォーマンスが得られるようです。SQLite の基本は拙作のページ <a href="../linux/index.html">Linux Programming</a> <a href="../linux/sqlite.html">お気楽 SQLite 超入門 </a> で簡単に説明しています。よろしければお読みくださいませ。
+</p>
+<p> SQLite は Perl, Python, Ruby などのスクリプト言語からでも簡単に利用することができます。もちろん、Node.js でも SQLite を利用することができます。本稿では Node.js から SQLite にアクセスする基本的な方法について簡単に説明します。
+</p>
+<h4>●SQLite のインストール</h4>
+<p> Node.js から SQLite にアクセスする場合、モジュール sqlite3 が必要になります。npm を使って簡単にインストールすることができます。
+</p>
+<pre class="item">
+npm install sqlite3
+</pre>
+<p> これで SQLite にアクセスすることができます。
+</p>
+<h4>●接続と切断</h4>
+<p> Node.js で SQLite を使用する場合、最初に require('sqlite3') でモジュール sqlite3 をロードしてください。データベースの接続は new で sqlite3.Database クラスのオブジェクトを生成します。切断はメソッド close() を使います。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 接続と切断 (test01.js)
+
+const sqlite3 = require('sqlite3'),
+      db = new sqlite3.Database('sample.sqlite');
+
+// SQL 文を逐次処理する
+db.serialize();
+
+db.close();
+console.log("OK");
+</pre>
+<p> Database のコンストラクタにはデータベース名を指定します。データベース名と一致するファイルが見つからない場合、新しいファイルが生成されます。同名のファイルがある場合はそれをデータベースとして使用します。コンストラクタの返り値 (データベースオブジェクト) はデータベースの操作に必要なので、変数 db に格納しておきます。
+</p>
+<p> メソッド db.serialize() は、SQL 文を逐次処理するための命令です。これ以降の SQL 文は並行に実行されることはありません。逆に、メソッド db.parallel() は SQL 文を並行処理するための命令です。これらのメソッドは引数に関数を渡して、その処理を実行することもできます。切断はメソッド close() を呼び出すだけです。
+</p>
+<h4>●テーブルの作成</h4>
+<p> Node.js で結果を返さない SQL 文を実行するには、データベースオブジェクトのメソッド run() または exec() を使います。
+</p>
+<pre class="item">
+db.run(sql, [parm, ...], [callback])
+db.exec(sql, [callback])
+</pre>
+<p> run() と exec() は、第 1 引数に渡された文字列 sql を SQL 文として実行します。run() は SQL 文にパラメータ ? を含めることができます。これを「プレスホルダー」といいます。パラメータに対応する値は run() の第 2 引数以降に渡します。複数の値を配列に格納して渡すこともできます。
+</p>
+<p> Node.js の SQLite では、? のかわりに $名前 を使うこともできます。この場合、run() の第 2 引数に $名前 と 値 を格納したオブジェクト { $名前: 値, ... } を渡します。run() と exec() の最後の引数はエラーが発生したときに実行するコールバック関数です。第 1 引数にエラー情報が渡されます。コールバック関数は省略してもかまいません。
+</p>
+<p> なお、同じようなクエリ (問い合わせ) を何度も繰り返すと、RDBMS では同じような解析処理を繰り返すというオーバーヘッドが発生します。メソッド prepare() を使うと、このようなオーバーヘッドを避けることができます。
+</p>
+<pre class="item">
+db.prepare(sql, [param, ...], [callback]) =&gt; statement
+statement.run([param, ...], [callback])
+</pre>
+<p> prepare() はパラメータを含んだ SQL 文をプリコンパイルします。prepare() の返り値をステートメントハンドルと呼びます。プリコンパイルした SQL 文を実行するにはメソッド run() を使います。パラメータ parm の与え方は db.run() と同じです。
+</p>
+<p> それでは簡単な例題として、次に示すテーブルを作成してみましょう。
+</p>
+<table border=1>
+<caption>テーブル名 : person</caption>
+<thead>
+  <tr><th>id</th><th>name</th><th>age</th><th>sex</th><th>email</th></tr>
+</thead>
+<tbody>
+  <tr><td>1</td><td>Foo</td><td>50</td><td>male</td><td>foo@yahoo.co.jp</td></tr>
+  <tr><td>2</td><td>Bar</td><td>35</td><td>female</td><td>bar@yahoo.co.jp</td></tr>
+  <tr><td>3</td><td>Baz</td><td>40</td><td>male</td><td>baz@yahoo.co.jp</td></tr>
+  <tr><td>4</td><td>Oops</td><td>30</td><td>female</td><td>oops@yahoo.co.jp</td></tr>
+</tbody>
+</table>
+<pre class="list">
+リスト : テーブルの作成 (test02.js)
+
+const sqlite3 = require('sqlite3'),
+      db = new sqlite3.Database('sample.sqlite'),
+      data = [[1, 'Foo', 50, 'male', 'foo@yahoo.co.jp'],
+              [2, 'Bar', 35, 'female', 'bar@yahoo.co.jp'],
+              [3, 'Baz', 40, 'male', 'baz@yahoo.co.jp'],
+              [4, 'Oops', 30, 'female', 'oops@yahoo.co.jp']];
+
+db.serialize();
+db.run("create table person (id integer, name text, age integer, sex text, email text)");
+
+const sth = db.prepare("insert into person (id, name, age, sex, email) values (?,?,?,?,?)");
+for (let xs of data) {
+  sth.run(xs);
+}
+sth.finalize();
+
+db.close();
+console.log("OK");
+</pre>
+<p> ステートメントハンドル sth の使用が終了したらメソッド finalize() で sth を廃棄します。これでデータベース sample.sqlite にデータを追加することができます。
+</p>
+
+<h4>●データの抽出</h4>
+<p> select 文のように結果を返す SQL 文は、次に示すメソッドを使って実行します。
+</p>
+<pre class="item">
+db.get(sql, [parm, ...], [callback])
+db.all(sql, [parm, ...], [callback])
+db.each(sql, [parm, ...], [callback])
+</pre>
+<p> callback の第 1 引数にはエラー情報、第 2 引数に結果が渡されます。get() は SQL 文を実行して、その結果の先頭行だけを取得します。all() はすべての結果を格納した配列を受け取ります。each() は結果を 1 行ずつ取り出して callback に渡します。なお、prepare() で SQL 文をプリコンパイルした場合は、ステートメントハンドルのメソッド get(), all(), each() を使ってください。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : データの抽出 (test03.js)
+
+const sqlite3 = require('sqlite3'),
+      db = new sqlite3.Database('sample.sqlite');
+
+db.serialize();
+
+db.get("select * from person", (err, data) =&gt; {
+  console.log(data);
+});    
+
+db.all("select * from person", (err, data) =&gt; {
+  console.log(data);
+});    
+
+db.each("select * from person", (err, data) =&gt; {
+  console.log(data);
+});    
+
+db.close();
+console.log("OK");
+</pre>
+<pre>
+C&gt;node test03.js
+OK
+{ id: 1,
+  name: 'Foo',
+  age: 50,
+  sex: 'male',
+  email: 'foo@yahoo.co.jp' }
+[ { id: 1,
+    name: 'Foo',
+    age: 50,
+    sex: 'male',
+    email: 'foo@yahoo.co.jp' },
+  { id: 2,
+    name: 'Bar',
+    age: 35,
+    sex: 'female',
+    email: 'bar@yahoo.co.jp' },
+  { id: 3,
+    name: 'Baz',
+    age: 40,
+    sex: 'male',
+    email: 'baz@yahoo.co.jp' },   
+  { id: 4,
+    name: 'Oops',
+    age: 30,
+    sex: 'female',
+    email: 'oops@yahoo.co.jp' } ]
+{ id: 1,
+  name: 'Foo',
+  age: 50,
+  sex: 'male',
+  email: 'foo@yahoo.co.jp' }
+{ id: 2,
+  name: 'Bar',
+  age: 35,
+  sex: 'female',
+  email: 'bar@yahoo.co.jp' }
+{ id: 3,
+  name: 'Baz',
+  age: 40,
+  sex: 'male',
+  email: 'baz@yahoo.co.jp' }
+{ id: 4,
+  name: 'Oops',
+  age: 30,
+  sex: 'female',
+  email: 'oops@yahoo.co.jp' }   
+</pre>
+<h4>●トランザクションとオートコミット</h4>
+<p> 「トランザクション (transaction)」は処理とか取引という意味ですが、SQL では「関連した複数の処理を一つの処理にまとめたもの」をトランザクションといいます。SQL 文では、BEGIN でトランザクションを開始します。この場合、データベースの変更を伴う行う作業 (insert, update など) では、そのつどデータベースに変更が反映されるのではありません。トランザクションを終了して実際にデータベースの変更を行う SQL 文が COMMIT (コミット) です。
+</p>
+<p> Node.js で SQLite を操作する場合、オートコミット (AutoCommit) モードが設定されていると、トランザクションやコミットを明示的に指定しなくても、データベースを操作することができます。insert や update などの SQL 文を実行するとき、SQLite は暗黙のうちにトランザクションを開始します。さらに、オートコミットモードが有効だと、SQL 文が終了したとき、SQLite は自動的にコミットしてくれます。
+</p>
+<p> これはとても便利な機能なのですが、コミットはけっこう時間がかかる処理なので、オートコミットモードのままでたくさんのデータをいっきに挿入しようとすると、時間がとてもかかるのです。次の例を見てください。
+</p>
+
+<pre class="list">
+リスト : オートコミットモードでの挿入 (test04.js)
+
+const sqlite3 = require('sqlite3'),
+      db = new sqlite3.Database('sample02.sqlite');
+
+db.serialize();
+
+// テーブル作成
+db.run('create table test (name text, val real)');
+db.run('create index name_idx on test(name)');
+
+// 時間計測
+console.time('insert');
+process.on('exit', code =&gt; console.timeEnd('insert'));
+
+// データ挿入
+const sth = db.prepare('insert into test (name, val) values (?, ?)');
+for (let n = 1; n &lt;= 1000; n++) {
+  sth.run("test" + n, Math.random());
+}
+sth.finalize();
+
+db.close();
+console.log("OK");
+</pre>
+<p> Node.js で時間を計測する場合、console.time(label) と console.timeEnd(label) を使うと簡単です。console.time(label) はタイマーを生成し、console.timeEnd(label) は console.time(label) からの経過時間を計測します。ただし、データベースの処理は非同期で行われるため、メインプログラムはすぐに終了します。このため、プログラムの最後に console.timeEnd() を実行しても時間を計測することはできません。
+</p>
+<p> そこで、Node.js が終了するときに発生するイベント 'exit' で、console.timeEnd() を実行することにします。Node.js にはプロセスを表すオブジェクトが用意されていて、グローバル変数 process に格納されています。process.on('exit', code =&gt; ...) でコールバック関数を登録することができます。引数 code には終了コードが渡されます。これで、データ挿入処理の時間を計測 <sup><a href="node02.html#note1">[*1]</a></sup> することができます。
+</p>
+<pre>
+C&gt;node test04.js
+OK
+insert: 93477.554ms
+
+実行環境 : Windows 10, Intel Core i5-6200U 2.3 GHz
+</pre>
+<p> sample02.sqlite に TEXT と REAL を 1000 件挿入したところ、実行時間は 1 分 33 秒もかかりました。トランザクションを明示的に指定すると、もっと高速にデータを挿入することができます。
+</p>
+<pre class="list">
+リスト : トランザクションの利用 (test05.js)
+
+const sqlite3 = require('sqlite3'),
+      db = new sqlite3.Database('sample03.sqlite');
+
+db.serialize();
+
+// テーブル作成
+db.run('create table test (name text, val real)');
+db.run('create index name_idx on test(name)');
+
+// 時間計測
+console.time('insert');
+process.on('exit', code =&gt; console.timeEnd('insert'));
+
+// トランザクション開始
+db.exec('begin transaction');
+
+// データ挿入
+const sth = db.prepare('insert into test (name, val) values (?, ?)');
+for (let n = 1; n &lt;= 1000; n++) {
+  sth.run("test" + n, Math.random());
+}
+sth.finalize();
+
+// トランザクション終了
+db.exec('commit');
+
+db.close();
+console.log("OK");
+</pre>
+<p> db.exec('begin transaction') でトランザクションを開始し、db.exec('commit') でトランザクションを終了します。実行結果は次のようになりました。
+</p>
+<pre>
+C&gt;node test05.js
+OK
+insert: 352.986ms
+
+実行環境 : Windows 10, Intel Core i5-6200U 2.3 GHz
+</pre>
+<p> 1000 件のデータを 0.35 秒で挿入することができました。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> Windows の場合、プログラムの時間計測は PowerShell のコマンド Measure-Command {...} を使うと簡単です。
+<pre>
+PS C&gt; Measure-Command {node test05.js}
+
+
+Days              : 0
+Hours             : 0
+Minutes           : 0
+Seconds           : 0
+Milliseconds      : 531
+Ticks             : 5314073
+TotalDays         : 6.1505474537037E-06
+TotalHours        : 0.000147613138888889
+TotalMinutes      : 0.00885678833333333
+TotalSeconds      : 0.5314073
+TotalMilliseconds : 531.4073
+</pre>
+</div>
+<h4>●メモリ上にデータベースを作成する</h4>
+<p> SQLite はデータベース名に :memory: を指定すると、メモリ上にデータベースを作成することができます。簡単な実行例として、test04.js のデータベースをメモリに変更してみましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : インメモリデータベース (test06.js)
+
+const sqlite3 = require('sqlite3'),
+      db = new sqlite3.Database(':memory:');
+
+db.serialize();
+
+// テーブル作成
+db.run('create table test (name text, val real)');
+db.run('create index name_idx on test(name)');
+
+// 時間計測
+console.time('insert');
+process.on('exit', code =&gt; console.timeEnd('insert'));
+
+// データ挿入
+const sth = db.prepare('insert into test (name, val) values (?, ?)');
+for (let n = 1; n &lt;= 1000; n++) {
+  sth.run("test" + n, Math.random());
+}
+sth.finalize();
+
+db.close();
+console.log("OK");
+</pre>
+<p> ファイル名を :memory: に変更しただけです。実行結果は次のようになりました。
+</p>
+<pre>
+C&gt;node test06.js
+OK
+insert: 23.345ms
+
+実行環境 : Windows 10, Intel Core i5-6200U 2.3 GHz
+</pre>
+<p> オートコミットしているはずですが、とても高速ですね。インメモリで利用する場合、オートコミットのままでもよいかもしれません。興味のある方はいろいろ試してみてください。
+</p>
+<h4>●参考 URL</h4>
+<ol>
+  <li><a href="https://www.npmjs.com/package/sqlite3">sqlite3 - npm</a>, (本家)
+  <li><a href="https://github.com/mapbox/node-sqlite3/wiki">API documentation</a>, (リファレンス)
+  <li><a href="http://info-i.net/sqlite3">Node.jsでSQLite3を使用する</a>, (情報アイランドさん)
+</ol>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="node.html">Node.js</a> ]
+</div>
+</body>
+</html><!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

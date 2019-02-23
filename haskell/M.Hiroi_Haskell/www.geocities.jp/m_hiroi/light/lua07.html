@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Lua プログラミング超入門</title>
+  <meta name="description" content="Lua,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881802</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Lua Programming</h1>
+<h2>お気楽 Lua プログラミング超入門</h2>
+<div class="small">
+[ <a href="lua06.html">PrevPage</a> | <a href="lua.html">L u a</a> | NextPage ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap14">スタックとキュー</h3>
+<p> 今回は簡単な例題として、「スタック (stack) 」と「キュー (queue) 」という基本的なデータ構造を作ってみましょう。
+</p>
+
+<h4>●スタックとは？</h4>
+<p> まず最初に、スタックについて簡単に説明します。下図を見てください。
+</p>
+<pre class="fig">
+    |-----|     |[ A ]|     |[ B ]|     |[ A ]|     |-----|
+    |  |  |     |-----|     |[ A ]|     |-----|     |  |  |
+    |  |  |     |  |  |     |-----|     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    |  |  |     |  |  |     |  |  |     |  |  |     |  |  |
+    +-----+     +-----+     +-----+     +-----+     +-----+
+  1. 空の状態  2. PUSH A   3. PUSH B   4. POP B    5. POP A  
+
+                   図 : スタックの動作例
+</pre>
+<p> 上図はバネがついた容器を表していて、上から品物を出し入れすることができます。初めは空の状態です。ここに品物を乗せると、重さによってバネを圧縮し、品物が容器に格納されます。さらにもうひとつ品物を上に乗せると、さらにバネを圧縮し、その品物も容器に格納することができます。バネが限界まで圧縮されると、もう品物は追加できなくなります。取り出す場合は、上にある品物から行います。ひとつ取り出すと、その分バネが伸びて下にある品物が上に押し出されます。
+</p>
+
+<p> この容器の動作がスタックの動作になります。スタックにデータを追加する操作をプッシュ (PUSH) といい、スタックからデータを取り出す操作をポップ (POP) といいます。品物をデータに見立てれば、データ A をスタックにプッシュし (2)、次にデータ B をプッシュします (3)。データを取り出す場合、あとから入れたデータ B が先にポップされ (4)、その次にデータ A がポップされてスタックが空になります (5)。
+</p>
+
+<p> このように、スタックはあとから入れたデータが先に取り出されるので、後入れ先出し (LIFO : Last-In, First-Out) と呼ばれます。 
+</p>
+
+<h4>●スタックのプログラム</h4>
+<p> Lua の場合、スタックは配列を使って簡単に実装することができます。クラス名は Stack とし、下表に示すメソッドを定義します。
+</p>
+<table border=1>
+<caption>表 : スタックのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>s:push(x)  </td><td>スタックにデータを追加する</td></tr>
+  <tr><td>s:pop()    </td><td>スタックからデータを取り出す</td></tr>
+  <tr><td>s:top()    </td><td>スタックの先頭データを返す</td></tr>
+  <tr><td>s:isEmpty()</td><td>スタックが空ならば true を返す</td></tr>
+</tbody>
+</table>
+<p> s はスタックのオブジェクトを表します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : スタック
+
+Stack = {}
+
+function Stack.new()
+  local obj = { buff = {} }
+  return setmetatable(obj, {__index = Stack})
+end
+
+function Stack:push(x)
+  table.insert(self.buff, x)
+end
+
+function Stack:pop()
+  return table.remove(self.buff)
+end
+
+function Stack:top()
+  return self.buff[#self.buff]
+end
+
+function Stack:isEmpty()
+  return #self.buff == 0
+end
+</pre>
+
+<p> Stack.new でスタックを生成します。オブジェクト obj にはデータを格納する配列 buff をセットします。メソッド push はスタックにデータ x を追加します。これは buff の最後尾に x を追加すればいいので、関数 table.insert を呼び出すだけです。メソッド pop は buff の最後尾の要素を削除してそれを返せばよいので、関数 table.remove を呼び出すだけです。メソッド top は最後尾のデータを削除せずに返し、メソッド isEmpty はスタックが空であれば true を返します。
+</p>
+<p> なお、スタックにデータがない場合、pop と top は nil を返すことになります。nil を返さずに関数 error を使ってエラーを送出することもできます。興味のある方は試してみてください。
+</p>
+
+<h4>●スタックの実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+
+<pre>
+&gt; a = Stack.new()
+&gt; for i = 1, 8 do a:push(i) end
+&gt; while not a:isEmpty() do print(a:pop()) end
+8
+7
+6
+5
+4
+3
+2
+1
+</pre>
+
+<p> スタックに 1 から 8 までを push で格納し pop でデータを取り出すと 8, 7, 6, 5, 4, 3, 2, 1 になります。このように、スタックは後から入れたデータが先に取り出されます。
+</p>
+
+<h4>●キューとは？</h4>
+<p> 次は「キュー (queue) 」について簡単に説明します。たとえばチケットを買う場合、カウンタの前に並んで順番を待たなくてはいけません。キューはカウンタの前に並ぶ行列と考えてください。列の先頭にいる人から順番にチケットを買うことができますが、あとから来た人は列の後ろに並ばなくてはいけません。列の先頭まで進むと、チケットを購入することができます。これを表したのが下図です。
+</p>
+<pre class="fig">
+ out                            in
+    ──────────────
+&lt;=  A  B  C  D  E  .  .  .  Z    &lt;=
+    ──────────────
+
+       図 : キューの動作
+</pre>
+<p> このように、キューはデータを取り出すときは列の先頭から行い、データを追加するときは列の後ろへ行います。このため、キューは「待ち行列」とか「先入れ先出し (FIFO : first-in, first-out) 」と呼ばれます。
+</p>
+
+<h4>●キューのプログラム</h4>
+<p> Lua の場合、table.insert と table.remove を使うとキューを簡単に実装することができます。クラス名は Queue とし、下表に示すメソッドを定義します。
+</p>
+<table border=1>
+<caption>表 : キューのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>q:enqueue(x)</td><td>キューにデータを追加する</td></tr>
+  <tr><td>q:dequeue() </td><td>キューからデータを取り出す</td></tr>
+  <tr><td>q:top()     </td><td>キューの先頭データを返す</td></tr>
+  <tr><td>q:isEmpty() </td><td>キューが空ならば true を返す</td></tr>
+</tbody>
+</table>
+<p> q はキューのオブジェクトを表します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : キュー
+
+Queue = {}
+
+function Queue.new()
+  local obj = { buff = {} }
+  return setmetatable(obj, {__index = Queue})
+end
+
+function Queue:enqueue(x)
+  table.insert(self.buff, x)
+end
+
+function Queue:dequeue()
+  return table.remove(self.buff, 1)
+end
+
+function Queue:top()
+  if #self.buff &gt; 0 then
+    return self.buff[1]
+  end
+end
+
+function Queue:isEmpty()
+  return #self.buff == 0
+end
+</pre>
+<p> Queue.new でキューを生成します。オブジェクト obj にはデータを格納する配列 buff をセットします。enqueue はキューにデータ x を追加します。これは buff の最後尾に x を追加すればいいので、関数 table.insert を呼び出すだけです。dequeue は buff の先頭要素を削除してそれを返せばよいので、関数 table.remove の引数に 1 を指定して呼び出します。top は先頭要素を削除せずに返し、isEmpty はキューが空であれば true を返します。
+</p>
+
+<h4>●キューの実行例</h4>
+<p> 簡単な実行例を示します。
+</p>
+
+<pre>
+&gt; b = Queue.new()
+&gt; for i = 1, 8 do a:enqueue(i) end
+&gt; while not a:isEmpty() do print(a:dequeue()) end
+1
+2
+3
+4
+5
+6
+7
+8
+</pre>
+
+<p> キューに 1 から 8 までを enqueue で格納して、dequeue でデータを取り出すと 1, 2, 3, 4, 5, 6, 7, 8 になります。スタックとは逆に、キューはデータを入れた順番にデータが取り出されます。
+</p>
+
+<h4>●リングバッファよるキューの実装</h4>
+<p> ところで、table.remove で先頭要素を削除するとき、後ろの要素を前へ移動する処理が行われますが、データの移動を行わないでキューを実装する方法もあります。先頭位置を示す front と末尾を示す rear を用意し、front と rear の間にあるデータをキューに格納されているデータとするのがポイントです。次の図を見てください。
+</p>
+<pre class="fig">
+           0  1  2  3  4  5  6  7  8  9
+rear = 0  ↓
+QUEUE    [                              ]  : QUEUE は空
+front= 0  ↑
+
+rear = 3           ↓
+QUEUE    [10 20 30                      ]  : データの追加
+front= 0  ↑
+
+rear = 3           ↓
+QUEUE    [10 20 30                      ]  : 10を取り出す
+front= 1     ↑
+
+rear = 3           ↓
+QUEUE    [10 20 30                      ]  : 20,30を取り出す
+front= 3           ↑
+
+                図 : キューの動作
+</pre>
+<p> まずキューは空の状態で、rear, front ともに 0 です。データの追加は、rear が示す位置にデータを書き込み、rear の値を +1 します。データ 10, 20, 30 を追加すると、図のようにデータが追加され rear は 3 になります。このとき front は 0 のままなので、先頭のデータは 10 ということになります。
+</p>
+<p> 次に、データを取り出す場合、front の示すデータを取り出しから front の値を +1 します。この場合、front が 0 なので 10 を取り出して front の値は 1 となり、次のデータ 20 が先頭になります。データを順番に 20, 30 と取り出していくと、3 つしかデータを書き込んでいないので当然キューは空になります。このとき front は 3 になり rear と同じ値になります。このように、front と rear の値が 0 の場合だけが空の状態ではなく、front と rear の値が等しくなると、キューは空になることに注意してください。
+</p>
+<p> rear, fornt ともに値は増加していく方向なので、いつかは配列の範囲をオーバーします。このため、配列を先頭と末尾がつがっているリング状と考え、rear, front が配列の範囲を超えたら先頭に戻すことにします。これを「循環配列」とか「リングバッファ」と呼びます。一般に、配列を使ってキューを実装する場合は、リングバッファとするのがふつうです。
+</p>
+
+<h4>●キューのプログラム (2)</h4>
+<p> それでは、プログラムを作りましょう。クラス名は SizedQueue とし、下表に示すメソッドを定義します。
+</p>
+<table border=1>
+<caption>表 : キューのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>q:enqueue(x)</td><td>キューにデータを追加する</td></tr>
+  <tr><td>q:dequeue() </td><td>キューからデータを取り出す</td></tr>
+  <tr><td>q:top() </td><td>キューの先頭にあるデータを求める</td></tr>
+  <tr><td>q:isEmpty() </td><td>キューが空ならば true を返す</td></tr>
+  <tr><td>q:isFull() </td><td>キューが満杯ならば true を返す</td></tr>
+</tbody>
+</table>
+
+<p> q は SizedQueue のオブジェクトです。今回はリングバッファの大きさを固定するので、キューが満杯になる場合があります。そこで、メソッド isFull を用意して、キューが満杯の場合は true を返すことにします。
+</p>
+
+<p> 次はクラスを定義します。
+</p>
+<pre class="list">
+リスト : リングバッファによるキューの実装
+
+SizedQueue = {}
+
+function SizedQueue.new(size)
+  local obj = {
+    front = 1,
+    rear  = 1,
+    count = 0,
+    size  = size,
+    buff  = {}
+  }
+  return setmetatable(obj, {__index = SizedQueue})
+end
+</pre>
+
+<p> SizedQueue.new でキューを生成します。引数の size はキューの大きさです。インスタンス変数 size はキューの大きさ、buff には配列をセットします。インスタンス変数 count はキューに格納されたデータ数をカウントします。この変数を用意することで、キューが空なのか満杯なのか簡単にチェックすることができます。
+</p>
+
+<p> 次はデータを追加するメソッド enqueue を作ります。
+</p>
+<pre class="list">
+リスト : データの追加
+
+function SizedQueue:enqueue(x)
+  if self.count &lt; self.size then
+    self.buff[self.rear] = x
+    self.rear = self.rear + 1
+    self.count = self.count + 1
+    if self.rear &gt; self.size then
+      self.rear = 1
+    end
+    return x
+  end
+end
+</pre>
+<p> まず、count と size を比較して、キューにデータを格納できるかチェックします。満杯の場合は nil を返します。データは rear の位置に格納し、count と rear の値を更新します。そして、rear の値が配列の範囲を超えたならば 1 に戻します。最後に return で x を返します。
+</p>
+
+<p> 次は、キューからデータを取り出すメソッド dequeue を作ります。
+</p>
+<pre class="list">
+リスト : データを取り出す
+
+function SizedQueue:dequeue()
+  if self.count &gt; 0 then
+    local val = self.buff[self.front]
+    self.front = self.front + 1
+    self.count = self.count - 1
+    if self.front &gt; self.size then
+      self.front = 1
+    end
+    return val
+  end
+end
+</pre>
+
+<p> まず、キューにデータがあるかチェックします。キューが空の場合は nil を返します。データがある場合は front の位置にある buff の要素を取り出して val にセットします。次に count と front の値を更新し、front の値が配列の範囲を超えたら 1 に戻します。最後に return で val を返します。
+</p>
+
+<p> あとのメソッドは簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : その他のメソッド
+
+function SizedQueue:top()
+  if self.count &gt; 0 then
+    return self.buff[self.front]
+  end
+end
+
+function SizedQueue:isFull()
+  return self.count == self.size
+end
+
+function SizedQueue:isEmpty()
+  return self.count == 0
+end
+</pre>
+<p> top は front の位置にある要素を返します。キューが空の場合は nil を返します。isFull は count と size が等しいときに true を返します。isEmpty は count が 0 のときに true を返します。
+</p>
+
+<h4>●キューの実行例 (2)</h4>
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+&gt; c = SizedQueue.new(5)
+&gt; for i = 1, 5 do c:enqueue(i) end
+&gt; c:isFull()
+true
+&gt; while not c:isEmpty() do print(c:dequeue()) end
+1
+2
+3
+4
+5
+&gt; c:isEmpty()
+true
+&gt; for i = 1, 3 do c:enqueue(i) end
+&gt; c:isFull()
+false
+&gt; while not c:isEmpty() do print(c:dequeue()) end
+1
+2
+3
+&gt; c:isEmpty()
+true
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> なお、スタックとキューは「連結リスト」を使って実装することもできます。興味のある方はプログラムを作ってみてください。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+--
+-- stackqueue.lua : スタックとキュー
+--
+--                  Copyright (C) 2011 Makoto Hiroi
+--
+
+-- スタック
+Stack = {}
+
+function Stack.new()
+  local obj = { buff = {} }
+  return setmetatable(obj, {__index = Stack})
+end
+
+function Stack:push(x)
+  table.insert(self.buff, x)
+end
+
+function Stack:pop()
+  return table.remove(self.buff)
+end
+
+function Stack:top()
+  return self.buff[#self.buff]
+end
+
+function Stack:isEmpty()
+  return #self.buff == 0
+end
+
+-- キュー
+Queue = {}
+
+function Queue.new()
+  local obj = { buff = {} }
+  return setmetatable(obj, {__index = Queue})
+end
+
+function Queue:enqueue(x)
+  table.insert(self.buff, x)
+end
+
+function Queue:dequeue()
+  return table.remove(self.buff, 1)
+end
+
+function Queue:top()
+  if #self.buff &gt; 0 then
+    return self.buff[1]
+  end
+end
+
+function Queue:isEmpty()
+  return #self.buff == 0
+end
+
+-- リングバッファ
+SizedQueue = {}
+
+function SizedQueue.new(size)
+  local obj = {
+    front = 1,
+    rear  = 1,
+    count = 0,
+    size  = size,
+    buff  = {}
+  }
+  return setmetatable(obj, {__index = SizedQueue})
+end
+
+-- メソッド
+function SizedQueue:enqueue(x)
+  if self.count &lt; self.size then
+    self.buff[self.rear] = x
+    self.rear = self.rear + 1
+    self.count = self.count + 1
+    if self.rear &gt; self.size then
+      self.rear = 1
+    end
+    return x
+  end
+end
+
+function SizedQueue:dequeue()
+  if self.count &gt; 0 then
+    local val = self.buff[self.front]
+    self.front = self.front + 1
+    self.count = self.count - 1
+    if self.front &gt; self.size then
+      self.front = 1
+    end
+    return val
+  end
+end
+
+function SizedQueue:top()
+  if self.count &gt; 0 then
+    return self.buff[self.front]
+  end
+end
+
+function SizedQueue:isFull()
+  return self.count == self.size
+end
+
+function SizedQueue:isEmpty()
+  return self.count == 0
+end
+</pre>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap15">コルーチン (2)</h3>
+<p> 今回はコルーチンの応用例として、簡単な「並行プログラミング」に挑戦してみましょう。並行プログラミングといっても、複数のプログラム (関数) を擬似的に並行に動かすだけなので、大げさに考えないでくださいね。ノンプリエンプティブなマルチプロセス (マルチタスク) の基本的な動作は、コルーチンを使って簡単に実装することができます。
+</p>
+<p> なお、このドキュメントは拙作のページ <a href="../func/scheme.html">Scheme Programming</a> <a href="../func/abcscm49.html">コルーチン (2)</a> のプログラムを Lua で書き直したものです。内容は重複しますが、あしからずご了承ください。
+</p>
+<h4>●並行プログラミングとは？</h4>
+<p> 「並行 (concurrent) プログラミング」は複数のプログラムを並行に実行しますが、このとき複数の CPU で同時に動かす場合と、ひとつの CPU で複数のプログラムを動かす場合があります。一般的には、前者を「並列 (parallel) プログラミング」といい、複数のハードウェアを並列に実行することによる処理速度の向上が主な目的となります。
+</p>
+
+<p> 後者の場合、一定時間毎に実行するプログラムを切り替えることで、複数のプログラムを並列に実行しているかのように見せることができます。この処理を「時分割 (time sharing) 」もしくは「タイム・スライス (time slice) 」といいます。一般に、タイム・スライスは OS でサポートされている機能です。OS が実行するプログラムのことを「プロセス (process) 」または「タスク (task) 」といいます。本稿ではプロセスとタスクは同じものとして扱います。
+</p>
+
+<p> 並列的に動作するプログラムをひとつのプロセスだけで作るのはけっこう大変です。そこで、プロセス内では逐次的な処理にとどめ、複数のプロセス間で情報交換を行うことにより、全体で並列的な動作を実現することを考えます。このほうが自然にプログラムを記述できる場合があるのです。これが後者の主な目的となります。
+</p>
+
+<p> プロセスは互いに独立したプログラムですが、OS にはプロセス間でデータをやり取りする機能 (プロセス間通信) が用意されています。たとえば、UNIX ライクな OS では「パイプ (pipe) 」を使って複数のプログラム (コマンド) を連結することができます。この場合、パイプを通してデータがプログラムに送られ、各プログラムは並行に動作することになります。入出力処理で待たされるコマンドがあったとしても、その間に他のコマンドが実行されるので、各コマンドを逐次的に実行するよりも、効率的に処理することが可能です。
+</p>
+
+<p> 最近では、ひとつのプログラムの中で独立した複数の処理を記述できるようになりました。この機能を「スレッド (thread) 」とか「マルチスレッド」いいます。スレッドは「縫い糸」という意味ですが、プログラムでは「制御の流れ」という意味で使われています。並列的な動作をプログラムする場合、逐次的な処理をひとつのスレッドに割り当て、複数のスレッドを並行に動作させることにより、全体で並列的な動作を実現するわけです。
+</p>
+
+<p> また、スレッドは同じプロセス内に存在するので、メモリ空間を共有することができます。これを「共有メモリ」といいます。スレッド間の通信は共有メモリを使って簡単に行うことができますが、プリエンプティブなスレッドの場合、共有メモリのアクセス時に発生する「競合」が問題になります。このため、マルチスレッドをサポートしているプログラミング言語では、競合を回避するための仕組みが用意されています。
+</p>
+
+<p> 今回作成するプログラムはコルーチンを利用したノンプリエンプティブなものなので、競合について考慮する必要はありません。ただし、複数のプロセス間で「通信 communication) 」を行うので、待ち合わせが必要になることがあります。この処理を「同期 (synchronization) 」といいます。並行プログラミングの場合、通信と同期という 2 つの処理が重要になります。
+</p>
+
+<h4>●簡単なマルチプロセスの作成</h4>
+<p> それではプログラムを作りましょう。プロセスは引数なしの関数で表します。一般に、プロセスには優先順位 (プライオリティ) がありますが、今回はプログラムを簡単にするため、すべてのプロセスは同じ優先順位とします。この場合、コルーチンをそのままプロセスとして扱うと簡単です。
+</p>
+<p> 最初に、メインプロセスをひとつ用意し、そこでコルーチンを生成して呼び出します。中断したコルーチンはキューに格納しておけばいいでしょう。つまり、キューからコルーチンを取り出して実行を再開し、中断したら再びキューに追加すればいいわけです。コルーチンの実行が終了した場合、そのコルーチンはキューに追加しません。これで生成したプロセスを擬似的にですが並行に実行することができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 簡単なマルチプロセス
+
+-- 前回作成したキューのプログラム
+require("stackqueue")
+
+-- キュー
+queue = Queue.new()
+
+-- プロセスの生成
+function fork(fn)
+  queue:enqueue(coroutine.wrap(fn))
+end
+
+-- メインプロセス
+function main_process(...)
+  -- プロセスの登録
+  for _, fn in ipairs({...}) do
+    fork(fn)
+  end
+  -- 実行
+  while not queue:isEmpty() do
+    local p = queue:dequeue()
+    if(p()) then queue:enqueue(p) end
+  end
+end
+
+-- 待機
+function wait(pred)
+  repeat
+    coroutine.yield(true)
+  until pred()
+end
+
+-- 実行権を放棄するだけ
+function yield()
+  coroutine.yield(true)
+end
+</pre>
+<p> 大域変数 queue には中断したプロセスを格納するキューをセットします。プロセスの生成は関数 fork で行います。引数 fn は引数なしの関数とします。プロセスの終了は nil で表すことにします。あとは coroutine.wrap でコルーチンを生成し、それを enqueue でキューに追加します。
+</p>
+<p> メインプロセスの実行は関数 main_process で行います。引数はプロセスの実体を表す関数です。最初に可変引数式から関数をひとつずつ取り出し、それを fork に渡してプロセスを生成します。あとはキューからプロセスを順番に取り出して変数 p にセットし、p() でプロセス p の実行を再開します。返り値が真の場合、プロセス p はまだ終了していないので、p をキューに追加します。返り値が偽の場合はキューに追加しません。
+</p>
+<p> 関数 wait は述語 pred が真を返すまでプロセスを待機させます。まず最初に coroutine.yield を実行して main_process に戻ります。これで他のプロセスに実行権を渡すことができます。あとは repeat - until 文を使って、述語 pred が真を返すまで処理を繰り返します。関数 yield はプロセスの実行権を他のプロセスに渡すだけです。
+</p>
+
+<h4>●簡単な実行例</h4>
+<p> それでは簡単な例を示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+function test0(name, n)
+  for i = 1, n do
+    print(name .. " " .. i)
+    yield()
+  end
+end
+</pre>
+<p> test0 は name を n 回表示します。name と n を表示したあと、yield で実行権を放棄します。これで他のプロセスが実行されるので、複数のプロセスを並行に動作させることができます。実行例を示します。
+</p>
+<pre>
+&gt; main_process(function() test0("foo", 7) end, function() test0("bar", 5) end)
+foo 1
+bar 1
+foo 2
+bar 2
+foo 3
+bar 3
+foo 4
+bar 4
+foo 5
+bar 5
+foo 6
+foo 7
+&gt; main_process(function() test0("foo", 5) end, function() test0("bar", 4) end)
+foo 1
+bar 1
+foo 2
+bar 2
+foo 3
+bar 3
+foo 4
+bar 4
+foo 5
+</pre>
+<p> このように、他のプロセスと通信を行わない場合、プログラムはとても簡単になります。
+</p>
+<p> また、次に示すような擬似的なタイマーを作ることもできます。
+</p>
+<pre class="list">
+リスト : タイマーもどき
+
+function make_timer(n)
+  return function()
+    n = n - 1
+    return n &lt; 0
+  end
+end
+</pre>
+<p> make_timer はクロージャを返します。クロージャは評価するたびに引数 n の値を -1 します。n が負になったら真を返します。wait と make_timer を組み合わせると、処理を n 回スキップする、つまり時間待ちと同様の効果を得ることができます。
+</p>
+
+<p> 簡単な例を示します。
+</p>
+<pre class="list">
+リスト : 簡単なテスト (2)
+
+function test01(name, n, m)
+  for i = 1, n do
+    print(name .. " " .. n)
+    wait(make_timer(m))
+  end
+end
+</pre>
+<p> wait(make_timer(m)) で時間待ちを行います。たとえば、m に 0 を指定すると時間待ちは行われませんが、1 を指定すると処理を 1 回スキップすることになります。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+&gt; main_process(function() test01("foo", 10, 0) end, function() test01("bar", 5, 1) end)
+foo 1
+bar 1
+foo 2
+foo 3
+bar 2
+foo 4
+foo 5
+bar 3
+foo 6
+foo 7
+bar 4
+foo 8
+foo 9
+bar 5
+foo 10
+</pre>
+<p> bar を表示する処理は 1 回待たされるので、foo と bar の表示は 2 対 1 の割合になります。
+</p>
+
+<h4>●キューによる同期処理</h4>
+<p> 次はプロセス間で通信を行う場合を考えてみましょう。この場合、いろいろな方法が考えられますが、今回は簡単な例としてキューを使ってみましょう。キューは前回作成した SizedQueue を使います。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : キューによる同期処理
+
+function enq(q, x)
+  wait(function() return not q:isFull() end)
+  q:enqueue(x)
+end
+
+function deq(q)
+  wait(function() return not q:isEmpty() end)
+  return q:dequeue()
+end
+</pre>
+<p> ポイントはキューにデータを追加する関数 enq  とデータを取り出す関数 deq で待ち合わせを行うところです。enq では、キューが満杯のときに wait で待ち合わせを行います。逆に deq の場合、キューが空のときに wait で待ち合わせを行います。キューの大きさが少ない場合でも、データを書き込むプロセスと読み出すプロセスが並行に動作することで、キューの大きさ以上のデータを受け渡すことができます。
+</p>
+
+<p> それでは簡単な実行例を示します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : キューの実行例
+
+-- キュー
+que = false
+
+-- データを送る
+function send_color(color, n)
+  for i = 1, n do
+    enq(que, color)
+    -- wait(make_timer(1))
+  end
+end
+
+-- データを受け取る
+function receive_color(n)
+  for i = 1, n do
+    print(deq(que))
+  end
+end
+
+-- テスト
+function test_color()
+  que = SizedQueue.new(10)
+  main_process(
+    function() send_color("red", 8) end,
+    function() send_color("blue", 8) end,
+    function() send_color("yellow", 8) end,
+    function() receive_color(24) end
+  )
+end
+</pre>
+<p> SizedQueue.new でキューを生成して大域変数 que に格納します。キューの大きさは 10 とします。send_color はデータ (color) を n 個キューに書き込みます。receive_color は n 個のデータをキューから取り出して表示します。test_color では、キューに書き込むプロセスを 3 つ生成し、取り出すプロセスを 1 つ生成します。データを書き込む総数は 8 * 3 = 24 個なので、取り出すデータ数も 24 個とします。
+</p>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+&gt; test_color()
+red
+blue
+yellow
+red
+blue
+yellow
+red
+blue
+yellow
+red
+blue
+yellow
+red
+blue
+red
+red
+red
+blue
+blue
+blue
+yellow
+yellow
+yellow
+yellow
+</pre>
+<p> 24 個のデータすべて表示されています。キューが満杯になると、receive_color でデータを取り出さない限り、データを書き込むことはできません。このため、receive_color のあとに評価されるプロセスが優先されることになり、red が続けて書き込まれ、そのあとに blue が、最後に yellow がキューに書き込まれることになります。send_color に wait(make_timer(1)) を追加すると、receive_color のプロセスのほうが多く評価されることになるため、red, blue, yellow の順番でデータが取り出されるようになります。
+</p>
+<h4>●哲学者の食事</h4>
+<p> 最後に、「哲学者の食事」という並行プログラミングでは有名な問題を解いてみましょう。
+</p>
+<div class="question">
+<b>[哲学者の食事]</b>
+<p> 5 人の哲学者が丸いテーブルに座っています．テーブルの中央にはスパゲッティが盛られた大皿があり、哲学者の間には 5 本のフォークが置かれています。哲学者は思索することとスパゲッティを食べることを繰り返します。食事のときには 2 本のフォークを持たなければなりません。食事が終わると 2 本のフォークを元の位置に戻します。
+</p>
+</div>
+<p> 詳しい説明は <a href="http://ja.wikipedia.org/wiki/%E9%A3%9F%E4%BA%8B%E3%81%99%E3%82%8B%E5%93%B2%E5%AD%A6%E8%80%85%E3%81%AE%E5%95%8F%E9%A1%8C">食事する哲学者の問題 -- Wikipedia</a> をお読みください。
+</p>
+
+<p> それではプログラムを作りましょう。最初にフォークを操作する関数を定義します。
+</p>
+<pre class="list">
+リスト : フォークを操作する関数
+
+-- フォーク
+forks = false
+
+-- フォークの番号を求める
+function fork_num(person, side)
+  local n = person
+  if side == "left" then
+    n = n + 1
+    if n &gt; #forks then
+      n = 1
+    end
+  end
+  return n
+end
+
+-- フォークがあるか？
+function isFork(person, side)
+  return forks[fork_num(person, side)]
+end
+
+-- フォークの書き換え
+function fork_set(person, side, val)
+  forks[fork_num(person, side)] = val
+end
+
+-- フォークを取る
+function get_fork(person, side)
+  wait(function() return isFork(person, side) end)
+  fork_set(person, side, false)
+end
+
+-- フォークを置く
+function put_fork(person, side)
+  fork_set(person, side, true)
+  yield()
+end
+</pre>
+<p> フォークの有無は真偽値で表して、それをベクタに格納します。ベクタは大域変数 forks にセットします。n 番目の哲学者の場合、右側のフォークがベクタの n 番目の要素、左側のフォークが n + 1 番目の要素になります。関数 fork_num はフォークに対応する番号を返します。関数 isFork は n 番目の哲学者の side にフォークがあるとき真を返します。fork_set は n 番目の哲学者の side 側にあるフォークの値を val で書き換えます。
+</p>
+<p> get_fork はフォークを取る関数です。wait で isFork が真を返すまで待ちます。そのあとで、fork_set で対応するフォークの値を false に書き換えます。put_fork はフォークを元に戻す関数です。fork_set でフォークの値を true に書き換え、yiled を実行して他のプロセスに実行権を渡します。
+</p>
+<p> 今回はノンプリエンプティブなコルーチンを使用しているので、forks をアクセスするときに競合は発生しません。プリエンプティブなマルチスレッドを使用する場合、共有メモリにアクセスするときは競合について考慮する必要があります。ご注意ください。
+</p>
+<p> 次は哲学者の動作をプログラムします。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 哲学者の動作
+
+function person0(n)
+  local m = 0
+  while m &lt; 2 do
+    print("Philosopher" .. n .. " is thinking")
+    get_fork(n, "right")
+    get_fork(n, "left")
+    print("Philosopher" .. n .. " is eating")
+    yield()
+    put_fork(n, "right")
+    put_fork(n, "left")
+    m = m + 1
+  end
+  print("Philosopher" .. n .. " is sleeping")
+end
+</pre>
+<p> 関数 person0 の引数 n は哲学者の番号を表します。変数 m は食事をした回数です。2 回食事をしたら処理を終了します。食事をする場合、最初に get_fork で右側のフォークを取り、次に左側のフォークを取ります。食事を終えたら put_fork で右側のフォークを置き、次に左側のフォークを置きます。
+</p>
+<p> このように、マルチプロセスを使うと簡単にプログラムできますが、実は並行プログラミング特有の大きな問題点があるのです。これはプログラムを実行してみるとわかります。
+</p>
+<h4>●実行結果 (1)</h4>
+<p> プログラムの実行は関数 test2 で行います。
+</p>
+<pre class="list">
+リスト : 実行
+
+function test2(person)
+  forks = {true, true, true, true, true}
+  main_process(
+    function() person(1) end,
+    function() person(2) end,
+    function() person(3) end,
+    function() person(4) end,
+    function() person(5) end
+  )
+end
+</pre>
+<p> 最初に true で初期化したベクタを froks にセットします。そして、main_process に 5 人の哲学者を表すプロセスを渡して実行します。実行結果は次のようになります。
+</p>
+<pre>
+&gt; test2(person0)
+Philosopher0 is thinking
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+
+</pre>
+<p> このように、すべてのプロセスが待ち状態となり進むことができなくなります。これを「デッドロック (deadlock) 」といいます。この場合、0 番目の哲学者の右側のフォークは、4 番目の哲学者の左側のフォークになります。各哲学者が右側のフォークを取り、左側のフォークが置かれるのを待つときにデッドロックとなるわけです。
+</p>
+
+<h4>●デッドロックの防止</h4>
+<p> デッドロックを防止する簡単な方法は、右側のフォークを取っても左側のフォークを取れないときは、右側のフォークを元に戻すことです。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : デッドロックの防止 (1)
+
+function person1(n)
+  local m = 0
+  while m &lt; 2 do
+    print("Philosopher" .. n .. " is thinking")
+    get_fork(n, "right")
+    if isFork(n, "left") then
+      fork_set(n, "left", false)
+      print("Philosopher" .. n .. " is eating")
+      yield()
+      put_fork(n, "right")
+      put_fork(n, "left")
+      m = m + 1
+    else
+      put_fork(n, "right")
+    end
+  end
+  print("Philosopher" .. n .. " is sleeping")
+end
+</pre>
+<p> 右側のフォークを取ったあと、isFork で左側のフォークをチェックします。フォークがある場合は、fork_set で値を true に書き換えます。これでフォークを取って食事をすることができます。get_fork を使うと他のプロセスに実行権が移るため、フォークの状態が変わる可能性があります。左側のフォークがない場合は put_fork で右側のフォークを元に戻します。
+</p>
+<h4>●実行結果 (2)</h4>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+&gt; test2(person1)
+Philosopher0 is thinking
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher0 is eating
+Philosopher2 is eating
+Philosopher4 is thinking
+Philosopher1 is eating
+Philosopher3 is eating
+Philosopher0 is thinking
+Philosopher2 is thinking
+Philosopher0 is eating
+Philosopher2 is eating
+Philosopher1 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher1 is eating
+Philosopher3 is eating
+Philosopher0 is sleeping
+Philosopher2 is sleeping
+Philosopher4 is eating
+Philosopher1 is sleeping
+Philosopher3 is sleeping
+Philosopher4 is thinking
+Philosopher4 is eating
+Philosopher4 is sleeping
+</pre>
+<p> このように、デッドロックしないで実行することができます。
+</p>
+<h4>●デッドロックの防止 (2)</h4>
+<p> もうひとつ簡単な方法を紹介しましょう。奇数番目の哲学者は、まず左側のフォークを取り上げてから右側のフォークを取り、偶数番目の哲学者は、今までのように右側のフォークを取り上げてから左側のフォークを取ります。こんな簡単な方法で動作するのは不思議なように思います。たとえば、哲学者が 2 人の場合を考えてみてください。
+</p>
+<p> 哲学者 0 の右側のフォークを A、左側のフォークを B とします。哲学者 1 からみると、B が右側のフォークで、A が左側のフォークになります。デッドロックは、哲学者 0 が A を取り、哲学者 1 が B を取ったときに発生します。ここで、哲学者 1 が左側のフォーク A から取るようにします。先に哲学者 0 が A を取った場合、哲学者 1 は A があくまで待つことになるので、哲学者 0 はフォーク B を取って食事をすることができます。哲学者 1 が先にフォーク A を取った場合も同じです。これでデッドロックを防止することができます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : デッドロックの防止 (2)
+
+function person2(n)
+  local m = 0
+  while m &lt; 2 do
+    print("Philosopher" .. n .. " is thinking")
+    if n % 2 == 0 then
+      get_fork(n, "right")
+      get_fork(n, "left")
+    else
+      get_fork(n, "left")
+      get_fork(n, "right")
+    end
+    print("Philosopher" .. n .. " is eating")
+    yield()
+    put_fork(n, "right")
+    put_fork(n, "left")
+    m = m + 1
+  end
+  print("Philosopher" .. n .. " is sleeping")
+end
+</pre>
+<p> if 文で n が偶数の場合は右側から、奇数の場合は左側のフォークから取るように処理を分けるだけです。
+</p>
+<h4>●実行結果 (3)</h4>
+<p> 実行結果は次のようになります。
+</p>
+<pre>
+&gt; test2(person2)
+Philosopher0 is thinking
+Philosopher1 is thinking
+Philosopher2 is thinking
+Philosopher3 is thinking
+Philosopher4 is thinking
+Philosopher0 is eating
+Philosopher3 is eating
+Philosopher1 is eating
+Philosopher0 is thinking
+Philosopher3 is thinking
+Philosopher4 is eating
+Philosopher1 is thinking
+Philosopher2 is eating
+Philosopher4 is thinking
+Philosopher0 is eating
+Philosopher3 is eating
+Philosopher2 is thinking
+Philosopher1 is eating
+Philosopher0 is sleeping
+Philosopher3 is sleeping
+Philosopher4 is eating
+Philosopher1 is sleeping
+Philosopher2 is eating
+Philosopher4 is sleeping
+Philosopher2 is sleeping
+</pre>
+<p> 正常に動作していますね。興味のある方はいろいろ試してみてください。
+</p>
+<h4>●参考文献, URL</h4>
+<ol>
+  <li>Paul Graham (著)，野田 開 (訳), 『On Lisp』, <a href="http://www.komaba.utmc.or.jp/~flatline/">Web 版</a>
+  <li>Timothy Buddy (著), 吉田雄二 (監修), 長谷川明生・大田義勝 (訳), 『Little Smalltake 入門』, アスキー出版, 1989
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』, アジソンウェスレイ, 1995
+</ol>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+--
+-- process.lua : 簡単なマルチプロセスの実装
+--
+--               Copyright (C) 2011 Makot Hiroi
+--
+
+require("stackqueue")
+
+-- キュー
+queue = Queue.new()
+
+-- プロセスの生成
+function fork(fn)
+  queue:enqueue(coroutine.wrap(fn))
+end
+
+-- メインプロセス
+function main_process(...)
+  -- プロセスの登録
+  for _, fn in ipairs({...}) do
+    fork(fn)
+  end
+  -- 実行
+  while not queue:isEmpty() do
+    local p = queue:dequeue()
+    if(p()) then queue:enqueue(p) end
+  end
+end
+
+-- 待機
+function wait(pred)
+  repeat
+    coroutine.yield(true)
+  until pred()
+end
+
+-- 実行権を放棄するだけ
+function yield()
+  coroutine.yield(true)
+end
+
+-- タイマーもどき
+function make_timer(n)
+  return function()
+    n = n - 1
+    return n &lt; 0
+  end
+end
+
+-- 簡単なテスト
+function test0(name, n)
+  for i = 1, n do
+    print(name .. " " .. i)
+    yield()
+  end
+end
+
+function test01(name, n, m)
+  for i = 1, n do
+    print(name .. " " .. i)
+    wait(make_timer(m))
+  end
+end
+
+--
+-- キューによる同期処理
+--
+function enq(q, x)
+  wait(function() return not q:isFull() end)
+  q:enqueue(x)
+end
+
+function deq(q)
+  wait(function() return not q:isEmpty() end)
+  return q:dequeue()
+end
+
+-- キュー
+que = false
+
+-- データを送る
+function send_color(color, n)
+  for i = 1, n do
+    enq(que, color)
+    -- wait(make_timer(1))
+  end
+end
+
+-- データを受け取る
+function receive_color(n)
+  for i = 1, n do
+    print(deq(que))
+  end
+end
+
+-- テスト
+function test_color()
+  que = SizedQueue.new(10)
+  main_process(
+    function() send_color("red", 8) end,
+    function() send_color("blue", 8) end,
+    function() send_color("yellow", 8) end,
+    function() receive_color(24) end
+  )
+end
+
+--
+-- 哲学者の食事
+--
+
+-- フォーク
+forks = false
+
+-- フォークの番号を求める
+function fork_num(person, side)
+  local n = person
+  if side == "left" then
+    n = n + 1
+    if n &gt; #forks then
+      n = 1
+    end
+  end
+  return n
+end
+
+-- フォークがあるか？
+function isFork(person, side)
+  return forks[fork_num(person, side)]
+end
+
+-- フォークの書き換え
+function fork_set(person, side, val)
+  forks[fork_num(person, side)] = val
+end
+
+-- フォークを取る
+function get_fork(person, side)
+  wait(function() return isFork(person, side) end)
+  fork_set(person, side, false)
+end
+
+-- フォークを置く
+function put_fork(person, side)
+  fork_set(person, side, true)
+  yield()
+end
+
+-- 哲学者の動作
+function person0(n)
+  local m = 0
+  while m &lt; 2 do
+    print("Philosopher" .. n .. " is thinking")
+    get_fork(n, "right")
+    get_fork(n, "left")
+    print("Philosopher" .. n .. " is eating")
+    yield()
+    put_fork(n, "right")
+    put_fork(n, "left")
+    m = m + 1
+  end
+  print("Philosopher" .. n .. " is sleeping")
+end
+
+function person1(n)
+  local m = 0
+  while m &lt; 2 do
+    print("Philosopher" .. n .. " is thinking")
+    get_fork(n, "right")
+    if isFork(n, "left") then
+      fork_set(n, "left", false)
+      print("Philosopher" .. n .. " is eating")
+      yield()
+      put_fork(n, "right")
+      put_fork(n, "left")
+      m = m + 1
+    else
+      put_fork(n, "right")
+    end
+  end
+  print("Philosopher" .. n .. " is sleeping")
+end
+
+function person2(n)
+  local m = 0
+  while m &lt; 2 do
+    print("Philosopher" .. n .. " is thinking")
+    if n % 2 == 0 then
+      get_fork(n, "right")
+      get_fork(n, "left")
+    else
+      get_fork(n, "left")
+      get_fork(n, "right")
+    end
+    print("Philosopher" .. n .. " is eating")
+    yield()
+    put_fork(n, "right")
+    put_fork(n, "left")
+    m = m + 1
+  end
+  print("Philosopher" .. n .. " is sleeping")
+end
+
+-- 実行
+function test2(person)
+  forks = {true, true, true, true, true}
+  main_process(
+    function() person(1) end,
+    function() person(2) end,
+    function() person(3) end,
+    function() person(4) end,
+    function() person(5) end
+  )
+end
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="lua06.html">PrevPage</a> | <a href="lua.html">L u a</a> | NextPage ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

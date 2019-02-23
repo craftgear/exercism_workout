@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Standard ML of New Jersey 入門</title>
+  <meta name="description" content="Standard ML of New Jersey,SML/NJ,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881758</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Standard ML of New Jersey 入門</h2>
+<div class="small">
+[ <a href="smlnj26.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj28.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>電卓プログラムの作成 (5)</h3>
+<p> 今回は複数の式を順番に実行する begin 式と、処理を繰り返し実行する while 式を追加してみましょう。
+</p>
+<p> なお、このドキュメントは拙作のページ Scheme 入門 <a href="abcscm54.html">電卓プログラムの作成 (5)</a> を SML/NJ 向けに書き直したものです。内容は重複していますが、あしからずご了承くださいませ。
+</p>
+
+<h4>●begin 式と while 式</h4>
+<p> 最初に、begin と while の構文を示します。
+</p>
+<pre class="item">
+begin 式1, 式2, ..., 式n end
+while 条件式 do 式 end
+</pre>
+<p> begin は複数の式を順番に評価し、最後に評価した式の返り値が begin の値になります。機能は Scheme の begin と同じです。while は条件式を評価して、その値が真であれば本体の式を繰り返し評価します。条件式が偽の場合は本体の式を評価しないで 0 を返します。
+</p>
+<p> 文法を EBNF で表すと次のようになります。
+</p>
+<pre class="item">
+[EBNF]
+   文    = 関数定義 | 式.
+関数定義 = "def", 関数, "(", [仮引数リスト], ")", 式, "end".
+   式    = 代入式 | 式１.
+ 代入式  = 変数, "=", 式.
+  式１   = 式２, { ("and" | "or"), 式２}.
+  式２   = 式３, ("==" | "!=" | "&lt;" | "&lt;=" | "&gt;" | "&gt;="), 式３.
+  式３   = 項, { ("+" | "-"), 項 }.
+   項    = 因子, { ("*" | "/"), 因子 }.
+  因子   = 数値 | ("+" | "-" | "not"), 因子 | "(", 式, ")" | 変数 | 関数, "(", [引数リスト], ")" |
+           if式 | begin式 | while式.
+  if式   = "if", 式, "then", 式, ["else", 式], "end".
+ begin式 = "begin", 式, { ",", 式 }, "end".
+ while式 = "while", 式, "do", 式, "end".
+  変数   = 識別子
+  関数   = 識別子
+
+仮引数リスト = 変数, { ",", 変数 }.
+引数リスト   = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+<p> 最初に、begin と while を表すデータ型を定義します。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+(* トークンの定義 *)
+datatype token = Number of value        (* 数 *)
+               | Ident of string        (* 識別子 *)
+               | Oper of operator       (* 演算子 *)
+               | Lpar | Rpar            (* (, ) *)
+               | Semic                  (* ; *)
+               | Comma                  (* , *)
+               | DEF                    (* def *)
+               | END                    (* end *)
+               | IF                     (* if *)
+               | THEN                   (* then *)
+               | ELSE                   (* else *)
+               | WHL                    (* while *)
+               | DO                     (* do *)
+               | BGN                    (* begin *)
+               | Quit                   (* 終了 *)
+               | Others                 (* その他 *)
+
+(* 式の定義 *)
+datatype func = F1 of value -&gt; value
+              | F2 of (value * value) -&gt; value
+              | UF of expr list option ref * expr option ref
+and expr = Num of value                      (* 数値 *)
+         | Var of string                     (* 変数 *)
+         | Op1 of operator * expr            (* 単項演算子 *)
+         | Op2 of operator * expr * expr     (* 二項演算子 *)
+         | Ops of operator * expr * expr     (* 短絡演算子 *)
+         | Sel of expr * expr * expr         (* if expr then expr else expr end *)
+         | Whl of expr * expr                (* while expr do expr end *)
+         | Bgn of expr list                  (* begin expr, ... end *)
+         | App of func * expr list           (* 関数の適用 *)
+</pre>
+
+<p> token に while 式を表す WHL と DO を、begin 式を表す BGN を追加します。expr には while 式に対応する Whl of expr * expr を追加します。最初の expr が条件式で、次の要素が while 式で繰り返す本体になります。Bgn は begin 式を表します。複数の式はリスト (expr list) に格納して保持します。
+</p>
+<p> 字句解析を行う関数 get_token の修正は簡単なので説明は割愛します。詳細は <a href="smlnj27.html#list1">プログラムリスト</a> をお読みください。
+</p>
+
+<h4>●構文解析</h4>
+<p> begin と while の構文解析は関数 factor で行います。
+</p>
+<pre class="list">
+リスト : 因子の処理
+
+and factor(s) =
+    case !tokenBuff of
+      Lpar =&gt; (
+          get_token(s);
+          let
+            val v = expression(s)
+          in
+            case !tokenBuff of
+              Rpar =&gt; (get_token(s); v)
+            | _ =&gt; raise Syntax_error("')' expected")
+          end
+        )
+    | Number(n) =&gt; (get_token(s); Num(n))
+    | Quit =&gt; raise Calc_exit
+    | IF =&gt; (get_token(s); make_sel(s))
+    | WHL =&gt; (get_token(s); make_while(s))
+    | BGN =&gt; (get_token(s); make_begin(s))
+    | Oper(NOT) =&gt; (get_token(s); Op1(NOT, factor(s)))
+    | Oper(Sub) =&gt; (get_token(s); Op1(Sub, factor(s)))
+    | Oper(Add) =&gt; (get_token(s); Op1(Add, factor(s)))
+
+    ・・・ 省略 ・・・
+
+    | _ =&gt; raise Syntax_error("unexpected token")
+</pre>
+<p> トークンが WHL の場合は関数 make_while を呼び出します。トークンが BGN の場合は関数 make_begin を呼び出します。
+</p>
+
+<h4>●while 式の処理</h4>
+<p> 次は関数 make_while を作ります。
+</p>
+<pre class="list">
+リスト : while 式の処理
+
+and make_while(s) = 
+    let val test_form = expression(s) in
+      case !tokenBuff of
+           DO =&gt; (get_token(s);
+                  let val body = expression(s) in
+                    case !tokenBuff of
+                         END =&gt; (get_token(s); Whl(test_form, body))
+                       | _ =&gt; raise Syntax_error("end expected")
+                  end)
+        | _ =&gt; raise Syntax_error("do expected")
+    end
+</pre>
+<p> 最初に expression で条件式を取り出し、変数 test_form にセットします。そして、トークンが DO であることを確認したら、expression で while 式の本体を取り出し、変数 body にセットします。最後にトークンが END であることを確認して、Whl(test_form, body) を返します。do や end がない場合はエラーを送出します。
+</p>
+
+<h4>●begin 式の処理</h4>
+<p> 次は関数 make_begin を作ります。
+</p>
+<pre class="list">
+リスト : begin 式の処理
+
+and make_begin(s) =
+    let
+      val body = get_comma_list(s, [])
+    in
+      case !tokenBuff of
+           END =&gt; (get_token(s); Bgn(body))
+         | _ =&gt; raise Syntax_error("end expected")
+    end
+</pre>
+<p> make_begin の処理は簡単です。get_comma_list を呼び出して、カンマで区切られた式を取得します。そして、トークンが END で終わっていることを確認して、Bgn(body) を返します。END で終わっていない場合はエラーを送出します。
+</p>
+
+<h4>●式の評価</h4>
+<p> 最後に、式を評価する関数 eval_expr を修正します。
+</p>
+<pre class="list">
+リスト : 式の評価
+
+    ・・・ 省略 ・・
+
+|   eval_expr(Whl(expr_c, expr_b), env) = (
+      while isTrue(eval_expr(expr_c, env)) do eval_expr(expr_b, env);
+      Integer(0)
+    )
+|   eval_expr(Bgn(xs), env) =
+    let
+      fun iter [] = raise Calc_run_error("invalid begin form")
+      |   iter [x] = eval_expr(x, env)
+      |   iter (x::xs) = (eval_expr(x, env); iter(xs))
+    in
+      iter(xs)
+    end
+</pre>
+<p> Whl の場合は SML/NJ の while を使って簡単に実装できます。条件式 expr_c を eval_expr で評価し、isTrue で真偽を判定します。真であれば、本体を表す式 expr_b を eval_expr で評価します。繰り返しを終了したら Integer(0) を返します。
+</p>
+<p> Bgn の場合も簡単です。リスト xs に格納された式を順番に eval_expr で評価していくだけです。ただし、最後の式の評価結果を返すことに注意してください。 xs が空リストの場合はエラーを送出しますが、他の値、たとえば Integer(0) を返してもかまいません。
+</p>
+
+<p> 大きな修正はこれだけです。あとの修正は簡単なので説明は割愛します。プログラムの詳細は <a href="smlnj27.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示します。組み込み関数に値を表示する print を追加して試してみました。
+</p>
+<pre>
+Calc&gt; print(10);
+10
+10
+Calc&gt; begin print(1), print(2), print(3) end;
+1
+2
+3
+3
+Calc&gt; a = 0;
+0
+Calc&gt; while a &lt; 10 do begin print(a), a = a + 1 end end;
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+0
+Calc&gt; a;
+10
+</pre>
+<p> print は引数を表示したあと、引数をそのまま返します。begin と while は正常に動作していますね。
+</p>
+<p> 次は while で階乗を計算する関数 fact を作ってみましょう。
+</p>
+<pre>
+Calc&gt; def fact(n, a) begin a = 1, while n > 0 do begin a = a * n, n = n - 1 end　end, a end end
+fact
+Calc&gt; n = 0;
+0
+Calc&gt; while n &lt; 15 do begin print(fact(n, 0)), n = n + 1 end end;
+1
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+39916800
+479001600
+6227020800
+87178291200
+0
+</pre>
+<p> 電卓プログラムは関数内で局所変数を定義する機能がないので、局所変数の代用として関数の引数を使っています。fact は変数 a を 1 に初期化し、n が 0 よりも大きければ、a = a * n を計算して n の値を -1 します。最後に a を返します。これで階乗を計算することができます。
+</p>
+<p> 関数 fact を清書すると次のようになります。
+</p>
+<pre class="list">
+リスト : 階乗
+
+def fact(n, a)
+  begin
+    a = 1,
+    while n &gt; 0 do
+      begin
+        a = a * n,
+        n = n - 1
+      end
+    end,
+    a
+  end
+end
+</pre>
+<p> begin の中では式をカンマで区切っているので、見た目はちょっと変わっていますが、雰囲気はずいぶんとプログラミング言語らしくなってきましたね。begin, if, while を「式」ではなく「文」として定義すると、もっとプログラミング言語らしくなると思います。
+</p>
+
+<h4>●参考文献</h4>
+<ul>
+  <li> 松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li> 水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li> 松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li> 高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li> 久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+</ul>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+(*
+ * calc.sml : 電卓プログラム
+ *
+ *            Copyright (C) 2012 Makoto Hiroi
+ *
+ * (1) 四則演算の実装
+ * (2) 変数と組み込み関数の追加
+ * (3) ユーザー定義関数の追加
+ * (4) 論理演算子, 比較演算子, if の追加
+ * (5) begin, while の追加
+ *
+ *)
+
+open TextIO
+
+(* 例外 *)
+exception Calc_exit
+exception Syntax_error of string
+exception Calc_run_error of string
+
+(* 値の定義 *)
+datatype value = Integer of IntInf.int | Float of real
+
+(* 演算子の定義 *)
+datatype operator = Add | Sub | Mul | Quo | Assign
+                  | NOT | AND | OR 
+                  | EQ  | NE  | LT  | GT  | LE  | GE
+
+(* トークンの定義 *)
+datatype token = Number of value        (* 数 *)
+               | Ident of string        (* 識別子 *)
+               | Oper of operator       (* 演算子 *)
+               | Lpar | Rpar            (* (, ) *)
+               | Semic                  (* ; *)
+               | Comma                  (* , *)
+               | DEF                    (* def *)
+               | END                    (* end *)
+               | IF                     (* if *)
+               | THEN                   (* then *)
+               | ELSE                   (* else *)
+               | WHL                    (* while *)
+               | DO                     (* do *)
+               | BGN                    (* begin *)
+               | Quit                   (* 終了 *)
+               | Others                 (* その他 *)
+
+(* 式の定義 *)
+datatype func = F1 of value -&gt; value
+              | F2 of (value * value) -&gt; value
+              | UF of expr list option ref * expr option ref
+and expr = Num of value                      (* 数値 *)
+         | Var of string                     (* 変数 *)
+         | Op1 of operator * expr            (* 単項演算子 *)
+         | Op2 of operator * expr * expr     (* 二項演算子 *)
+         | Ops of operator * expr * expr     (* 短絡演算子 *)
+         | Sel of expr * expr * expr         (* if expr then expr else expr end *)
+         | Whl of expr * expr                (* while expr do expr end *)
+         | Bgn of expr list                  (* begin expr, ... end *)
+         | App of func * expr list           (* 関数の適用 *)
+
+(* グローバル変数を格納する配列 *)
+val global_env : (string * value ref) list ref = ref []
+
+(* 探索 *)
+fun lookup(name) =
+    let
+      fun iter [] = NONE
+      |   iter ((x as (n, _))::xs) =
+          if n = name then SOME x else iter xs
+    in
+      iter(!global_env)
+    end
+
+(* 追加 *)
+fun update(name, value) = 
+    global_env := (name, ref value)::(!global_env)
+
+(* value を real に変換 *)
+fun toReal(Float(v)) = v
+|   toReal(Integer(v)) = Real.fromLargeInt(v)
+
+(* 関数を呼び出す *)
+fun call_real_func1 f v = Float(f(toReal v))
+fun call_real_func2 f (v, w) = Float(f(toReal v, toReal w))
+
+(* 値の表示 *)
+fun print_value(x) =
+    case x of
+         Integer(n) =&gt; (print(IntInf.toString(n) ^ "\n"); x)
+       | Float(n) =&gt; (print(Real.toString(n) ^ "\n"); x)
+
+(* 関数を格納する配列 *)
+val func_table= ref [("sqrt",  F1 (call_real_func1 Math.sqrt)),
+                     ("sin",   F1 (call_real_func1 Math.sin)),
+                     ("cos",   F1 (call_real_func1 Math.cos)),
+                     ("tan",   F1 (call_real_func1 Math.tan)),
+                     ("asin",  F1 (call_real_func1 Math.asin)),
+                     ("acos",  F1 (call_real_func1 Math.acos)),
+                     ("atan",  F1 (call_real_func1 Math.atan)),
+                     ("atan2", F2 (call_real_func2 Math.atan2)),
+                     ("exp",   F1 (call_real_func1 Math.exp)),
+                     ("pow",   F2 (call_real_func2 Math.pow)),
+                     ("ln",    F1 (call_real_func1 Math.ln)),
+                     ("log10", F1 (call_real_func1 Math.log10)),
+                     ("sinh",  F1 (call_real_func1 Math.sinh)),
+                     ("cosh",  F1 (call_real_func1 Math.cosh)),
+                     ("tanh",  F1 (call_real_func1 Math.tanh)),
+                     ("print", F1 print_value)]
+
+(* 関数の探索 *)
+fun lookup_function(name) =
+    let
+      fun iter([]) = NONE
+      |   iter((n, f)::xs) =
+          if n = name then SOME f else iter(xs)
+    in
+      iter(!func_table)
+    end
+
+(* 切り出したトークンを格納するバッファ *)
+val tokenBuff = ref Others
+
+(* 整数の切り出し *)
+fun get_number(s) =
+    let
+      val buff = ref []
+      fun get_numeric() =
+          let val c = valOf(lookahead s) in
+            if Char.isDigit(c) then (
+              buff := valOf(input1(s)) :: (!buff);
+              get_numeric()
+            ) else ()
+          end
+      fun check_float(c) =
+          case c of
+            #"." =&gt; true
+          | #"e" =&gt; true
+          | #"E" =&gt; true
+          | _ =&gt; false
+    in
+      get_numeric();    (* 整数部の取得 *)
+      if check_float(valOf(lookahead s)) then (
+        if valOf(lookahead s) = #"." then (
+          (* 小数部の取得 *)
+          buff := valOf(input1(s)) :: (!buff);
+          get_numeric()
+        ) else ();
+        if Char.toUpper(valOf(lookahead s)) = #"E" then (
+          (* 指数形式 *)
+          buff := valOf(input1(s)) :: (!buff);
+          let val c = valOf(lookahead s) in
+            if c = #"+" orelse c = #"-" then
+              buff := (valOf(input1(s))) :: (!buff)
+            else ()
+          end;
+          get_numeric()
+        ) else ();
+        tokenBuff := Number(Float(valOf(Real.fromString(implode(rev (!buff))))))
+      ) else
+        tokenBuff := Number(Integer(valOf(IntInf.fromString(implode(rev (!buff))))))
+    end
+
+(* 識別子の切り出し *)
+fun get_ident(s) =
+    let fun iter a =
+      if Char.isAlphaNum(valOf(lookahead(s))) then
+        iter ((valOf(input1(s))) :: a)
+      else Ident(implode(rev a))
+    in
+      iter []
+    end
+
+(* トークンの切り出し *)
+fun get_token(s) =
+    let val c = valOf(lookahead s) in
+      if Char.isSpace(c) then (input1(s); get_token(s))
+      else if Char.isDigit(c) then get_number(s)
+      else if Char.isAlpha(c) then
+        let val (id as Ident(name)) = get_ident(s) in
+          tokenBuff := (
+            case name of 
+                 "quit" =&gt; Quit
+               | "def"  =&gt; DEF
+               | "end"  =&gt; END
+               | "not"  =&gt; Oper(NOT)
+               | "and"  =&gt; Oper(AND)
+               | "or"   =&gt; Oper(OR)
+               | "if"   =&gt; IF
+               | "then" =&gt; THEN
+               | "else" =&gt; ELSE
+               | "while" =&gt; WHL
+               | "do"    =&gt; DO
+               | "begin" =&gt; BGN
+               | _       =&gt; id
+          )
+        end
+      else (
+        input1(s); (* s から c を取り除く *)
+        tokenBuff := (case c of
+            #"+" =&gt; Oper(Add)
+          | #"-" =&gt; Oper(Sub)
+          | #"*" =&gt; Oper(Mul)
+          | #"/" =&gt; Oper(Quo)
+          | #"=" =&gt; (case valOf(lookahead s) of
+                          #"=" =&gt; (input1(s); Oper(EQ))
+                        | _ =&gt; Oper(Assign))
+          | #"!" =&gt; (case valOf(lookahead s) of
+                          #"=" =&gt; (input1(s); Oper(NE))
+                        | _ =&gt; Oper(NOT))
+          | #"&lt;" =&gt; (case valOf(lookahead s) of
+                          #"=" =&gt; (input1(s); Oper(LE))
+                        | _ =&gt; Oper(LT))
+          | #"&gt;" =&gt; (case valOf(lookahead s) of
+                          #"=" =&gt; (input1(s); Oper(GE))
+                        | _ =&gt; Oper(GT))
+          | #"(" =&gt; Lpar
+          | #")" =&gt; Rpar
+          | #";" =&gt; Semic
+          | #"," =&gt; Comma
+          | _    =&gt; Others
+        )
+      )
+    end
+
+(* 構文木の組み立て *)
+fun expression(s) =
+    let
+      fun iter v =
+        case !tokenBuff of
+             Oper(Assign) =&gt; (
+               case v of
+                    Var(_) =&gt; (get_token(s); Op2(Assign, v, expression(s)))
+                  | _ =&gt; raise Syntax_error("invalid assign form")
+             )
+           | _ =&gt; v
+    in
+      iter(expr1(s))
+    end
+(* 論理演算子 and, or の処理 *)
+and expr1(s) =
+    let
+      fun iter v =
+          case !tokenBuff of
+               Oper(AND) =&gt; (get_token(s); iter(Ops(AND, v, expr2(s))))
+             | Oper(OR)  =&gt; (get_token(s); iter(Ops(OR,  v, expr2(s))))
+             | _ =&gt; v
+    in
+      iter(expr2(s))
+    end
+(* 比較演算子の処理 *)
+and expr2(s) =
+    let
+      fun iter v =
+          case !tokenBuff of
+               Oper(EQ) =&gt; (get_token(s); iter(Op2(EQ, v, expr3(s))))
+             | Oper(NE) =&gt; (get_token(s); iter(Op2(NE, v, expr3(s))))
+             | Oper(LT) =&gt; (get_token(s); iter(Op2(LT, v, expr3(s))))
+             | Oper(GT) =&gt; (get_token(s); iter(Op2(GT, v, expr3(s))))
+             | Oper(LE) =&gt; (get_token(s); iter(Op2(LE, v, expr3(s))))
+             | Oper(GE) =&gt; (get_token(s); iter(Op2(GE, v, expr3(s))))
+             | _ =&gt; v
+    in
+      iter(expr3(s))
+    end
+and expr3(s) =
+    let
+      fun iter v =
+          case !tokenBuff of
+            Oper(Add) =&gt; (get_token(s); iter(Op2(Add, v, term(s))))
+          | Oper(Sub) =&gt; (get_token(s); iter(Op2(Sub, v, term(s))))
+          | _ =&gt; v
+    in
+      iter (term(s))
+    end
+and term(s) =
+    let
+      fun iter v =
+          case !tokenBuff of
+            Oper(Mul) =&gt; (get_token(s); iter(Op2(Mul, v, factor(s))))
+          | Oper(Quo) =&gt; (get_token(s); iter(Op2(Quo, v, factor(s))))
+          | _ =&gt; v
+    in
+      iter (factor(s))
+    end
+and factor(s) =
+    case !tokenBuff of
+      Lpar =&gt; (
+          get_token(s);
+          let
+            val v = expression(s)
+          in
+            case !tokenBuff of
+              Rpar =&gt; (get_token(s); v)
+            | _ =&gt; raise Syntax_error("')' expected")
+          end
+        )
+    | Number(n) =&gt; (get_token(s); Num(n))
+    | Quit =&gt; raise Calc_exit
+    | IF =&gt; (get_token(s); make_sel(s))
+    | WHL =&gt; (get_token(s); make_while(s))
+    | BGN =&gt; (get_token(s); make_begin(s))
+    | Oper(NOT) =&gt; (get_token(s); Op1(NOT, factor(s)))
+    | Oper(Sub) =&gt; (get_token(s); Op1(Sub, factor(s)))
+    | Oper(Add) =&gt; (get_token(s); Op1(Add, factor(s)))
+    | Ident(name) =&gt; (
+        get_token(s);
+        case lookup_function(name) of
+             NONE =&gt; Var(name)
+           | SOME f =&gt; let val args = get_argument(s) in
+                         case f of
+                           F1 _ =&gt; if length(args) &lt; 1
+                                   then raise Syntax_error("not enough args")
+                                   else ()
+                         | F2 _ =&gt; if length(args) &lt; 2
+                                   then raise Syntax_error("not enough args")
+                                   else ()
+                         | UF(ref (SOME ps), _) =&gt;
+                                   if length(args) &lt; length(ps)
+                                   then raise Syntax_error("not enough args")
+                                   else ();
+                         App(f, args)
+                       end
+      )
+    | _ =&gt; raise Syntax_error("unexpected token")
+(* カンマで区切られた式を取得 *)
+and get_comma_list(s, a) =
+    let val v = expression(s) in
+      case !tokenBuff of
+           Comma =&gt; (get_token(s); get_comma_list(s, v::a))
+         | _ =&gt; rev(v::a)
+    end
+(* 引数の取得 *)
+and get_argument(s) =
+    case !tokenBuff of
+         Lpar =&gt; (get_token(s);
+                  case !tokenBuff of
+                       Rpar =&gt; (get_token(s); [])
+                     | _ =&gt; let val args = get_comma_list(s, []) in
+                              case !tokenBuff of
+                                   Rpar =&gt; (get_token(s); args)
+                                 | _ =&gt; raise Syntax_error("unexpected token")
+                            end)
+       | _ =&gt; raise Syntax_error("'(' expected")
+(* 仮引数の取得 *)
+and get_parameter(s) =
+    let val parm = get_argument(s) in
+      app (fn x =&gt; case x of
+                        Var(_) =&gt; ()
+                      | _ =&gt; raise Syntax_error("bad parameter"))
+          parm;
+      parm
+    end
+(* if *)
+and make_sel(s) =
+    let val test_form = expression(s) in
+      case !tokenBuff of
+           THEN =&gt; (
+             get_token(s);
+             let val then_form = expression(s) in
+               case !tokenBuff of
+                    ELSE =&gt; (
+                      get_token(s);
+                      let val else_form = expression(s) in
+                        case !tokenBuff of
+                             END =&gt; (get_token(s);
+                                     Sel(test_form, then_form, else_form))
+                           | _ =&gt; raise Syntax_error("end expected")
+                      end
+                    )
+                  | END =&gt; (get_token(s);
+                            Sel(test_form, then_form, Num(Integer(0))))
+                  | _ =&gt; raise Syntax_error("else or end expected")
+             end
+           )
+         | _ =&gt; raise Syntax_error("then expected")
+    end
+(* while *)
+and make_while(s) = 
+    let val test_form = expression(s) in
+      case !tokenBuff of
+           DO =&gt; (get_token(s);
+                  let val body = expression(s) in
+                    case !tokenBuff of
+                         END =&gt; (get_token(s); Whl(test_form, body))
+                       | _ =&gt; raise Syntax_error("end expected")
+                  end)
+        | _ =&gt; raise Syntax_error("do expected")
+    end
+(* begin *)
+and make_begin(s) =
+    let
+      val body = get_comma_list(s, [])
+    in
+      case !tokenBuff of
+           END =&gt; (get_token(s); Bgn(body))
+         | _ =&gt; raise Syntax_error("end expected")
+    end
+
+(* 変数束縛 *)
+fun add_binding([], _, a) = a
+|   add_binding(_, [], _) = raise Calc_run_error("not enough argument")
+|   add_binding(Var(name)::ps, x::xs, a) = add_binding(ps, xs, (name, ref x)::a)
+
+(* 変数を求める *)
+fun get_var(name, []) = lookup(name)
+|   get_var(name, (x as (n, _))::xs) =
+    if name = n then SOME x else get_var(name, xs)
+
+(* 真偽のチェック *)
+fun isTrue(Float(v))  = Real.!=(v, 0.0)
+|   isTrue(Integer(v)) = v &lt;&gt; 0
+
+(* 演算子の評価 *)
+fun eval_op(op1, op2, v, w) =
+    case (v, w) of
+         (Integer(n), Integer(m)) =&gt; Integer(op1(n, m))
+       | (Integer(n), Float(m)) =&gt; Float(op2(Real.fromLargeInt(n), m))
+       | (Float(n), Integer(m)) =&gt; Float(op2(n, Real.fromLargeInt(m)))
+       | (Float(n), Float(m)) =&gt; Float(op2(n, m))
+
+(* 比較演算子の評価 *)
+fun eval_comp(op1, op2, v, w) =
+    let val vt = Integer(1)
+        val vf = Integer(0) in
+      case (v, w) of
+           (Integer(n), Integer(m)) =&gt; if op1(n, m) then vt else vf
+         | (Integer(n), Float(m)) =&gt; if op2(Real.fromLargeInt(n), m) then vt else vf
+         | (Float(n), Integer(m)) =&gt; if op2(n, Real.fromLargeInt(m)) then vt else vf
+         | (Float(n), Float(m)) =&gt; if op2(n, m) then vt else vf
+    end
+
+(* 式の評価 *)
+fun eval_expr(Num(n), _) = n
+|   eval_expr(Var(name), env) = (
+      case get_var(name, env) of
+           NONE =&gt; raise Calc_run_error("unbound variable")
+         | SOME (_, ref v) =&gt; v
+    )
+|   eval_expr(Op2(Assign, expr1, expr2), env) =
+    let
+      val w = eval_expr(expr2, env)
+    in
+      case expr1 of
+           Var(name) =&gt; (case get_var(name, env) of
+                              NONE =&gt; (update(name, w); w)
+                            | SOME (_, v) =&gt; (v := w; w) )
+         | _ =&gt; raise Calc_run_error("Illegal assign form")
+    end
+|   eval_expr(Op2(op2, expr1, expr2), env) = 
+    let
+      val v = eval_expr(expr1, env)
+      val w = eval_expr(expr2, env)
+    in
+      case op2 of
+           Add =&gt; eval_op(op +, op +, v, w)
+         | Sub =&gt; eval_op(op -, op -, v, w)
+         | Mul =&gt; eval_op(op *, op *, v, w)
+         | Quo =&gt; eval_op(op div, op /, v, w)
+         | EQ =&gt; eval_comp(op =, Real.==, v, w)
+         | NE =&gt; eval_comp(op &lt;&gt;, Real.!=, v, w)
+         | LT =&gt; eval_comp(op &lt;, op &lt;, v, w)
+         | GT =&gt; eval_comp(op &gt;, op &gt;, v, w)
+         | LE =&gt; eval_comp(op &lt;=, op &lt;=, v, w)
+         | GE =&gt; eval_comp(op &gt;=, op &gt;=, v, w)
+    end
+|   eval_expr(Op1(op1, expr1), env) =
+    let
+      val v = eval_expr(expr1, env)
+    in
+      case (op1, v) of
+           (Add, _) =&gt; v
+         | (Sub, Integer(n)) =&gt; Integer(~n)
+         | (Sub, Float(n)) =&gt; Float(~n)
+         | (NOT, _) =&gt; if isTrue(v) then Integer(0) else Integer(1)
+         | _ =&gt; raise Calc_run_error("Illegal expression")
+    end
+|   eval_expr(Ops(ops, expr1, expr2), env) =
+    let val v  = eval_expr(expr1, env) in
+      case ops of
+           AND =&gt; if isTrue(v) then eval_expr(expr2, env) else v
+         | OR  =&gt; if isTrue(v) then v else eval_expr(expr2, env)
+    end
+|   eval_expr(Sel(expr_c, expr_t, expr_e), env) =
+    if isTrue(eval_expr(expr_c, env))
+    then eval_expr(expr_t, env) else eval_expr(expr_e, env)
+|   eval_expr(App(f, args), env) =
+    let
+      val vs = map (fn e =&gt; eval_expr(e, env)) args
+    in
+      case f of
+           F1 f1 =&gt; f1(hd vs)
+         | F2 f2 =&gt; f2(hd vs, hd (tl vs))
+         | UF(ref (SOME parm), ref (SOME body)) =&gt; 
+           eval_expr(body, add_binding(parm, vs, []))
+    end
+|   eval_expr(Whl(expr_c, expr_b), env) = (
+      while isTrue(eval_expr(expr_c, env)) do eval_expr(expr_b, env);
+      Integer(0)
+    )
+|   eval_expr(Bgn(xs), env) =
+    let
+      fun iter [] = raise Calc_run_error("invalid begin form")
+      |   iter [x] = eval_expr(x, env)
+      |   iter (x::xs) = (eval_expr(x, env); iter(xs))
+    in
+      iter(xs)
+    end
+
+(* 実行 *)
+fun toplevel() = (
+    print "Calc&gt; ";
+    flushOut(stdOut);
+    get_token(stdIn);
+    case !tokenBuff of
+      DEF =&gt; (
+        get_token(stdIn);
+        case !tokenBuff of
+             Ident(name) =&gt; (
+               get_token(stdIn);
+               let
+                 val (cell as UF(a, b)) = UF(ref NONE, ref NONE)
+               in
+                 func_table := (name, cell) :: (!func_table);
+                 a := SOME (get_parameter(stdIn));
+                 b := SOME (expression(stdIn));
+                 case !tokenBuff of
+                      END =&gt; print (name ^ "\n")
+                    | _ =&gt; raise Syntax_error("end expected")
+               end
+             )
+           | _ =&gt; raise Syntax_error("invalid def form")
+    )
+    | _ =&gt; let val result = expression(stdIn) in
+        case !tokenBuff of
+          Semic =&gt; ()
+        | Quit  =&gt; raise Calc_exit
+        | _ =&gt; raise Syntax_error("unexpected token");
+        case eval_expr(result, []) of
+          Integer(n) =&gt; print(IntInf.toString(n) ^ "\n")
+        | Float(n) =&gt; print(Real.toString(n) ^ "\n")
+      end
+)
+
+fun calc() =
+    while true do 
+      toplevel() handle 
+        Syntax_error(mes) =&gt; (inputLine(stdIn); print("ERROR: " ^ mes ^ "\n"))
+      | Calc_run_error(mes) =&gt; (inputLine(stdIn); print("ERROR: " ^ mes ^ "\n"))
+      | Div =&gt; (inputLine(stdIn); print("ERROR: divide by zero\n"))
+      | err =&gt; raise err
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2012 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="smlnj26.html">PrevPage</a> | <a href="index.html">SML/NJ</a> | <a href="smlnj28.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

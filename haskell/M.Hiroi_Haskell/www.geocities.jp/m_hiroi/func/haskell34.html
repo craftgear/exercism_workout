@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881791</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell33.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell35.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>Haskell で作る micro Scheme (2)</h3>
+<p> micro Scheme の続きです。今回は S 式を評価する処理を作りましょう。
+</p>
+
+<h4>●関数の定義</h4>
+<p> 最初に、関数の定義をデータ型 SExpr に追加します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : S 式の定義
+
+import qualified Data.Map as M
+
+data SExpr = INT  Integer
+           | REAL Double
+           | SYM  String
+           | STR  String
+           | CELL SExpr SExpr
+           | NIL
+           | PRIM (SExpr -&gt; Scm SExpr)
+           | SYNT (GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv))
+           | CLOS SExpr LEnv
+
+-- 評価器の定義
+type Scm a = Either String a
+
+-- 局所変数の環境
+type LEnv = [(String, SExpr)]
+
+-- 大域変数の環境
+type GEnv = M.Map String SExpr
+</pre>
+<p> PRIM はプリミティブ (primitive) の略で、eq?, car, cdr, cons など基本的な関数を表します。引数は評価して、その結果をコンスセル (CELL) に格納して渡します。SYNT はシンタックス形式 (syntax) の略で、quote, if, define など基本的なシンタックス形式を表します。引数は評価せずにそのままシンタックス形式に渡します。このとき、いっしょに環境 (environment) も渡します。CLOS はクロージャ (closure) を表します。Scheme の場合、ラムダ式を評価するとクロージャが生成され、その時点で定義されている局所変数の環境 LEnv がクロージャに保存されます。
+</p>
+<p> LEnv は連想リスト [(String, SExpr)] で表します。今回の micro Scheme は変数の値を書き換えるシンタックス形式 set! を実装しないので、単純な連想リストでも大丈夫です。グローバルな環境 (大域変数) はモジュール Data.Map の Map を使って表します。Scm は S 式を評価する関数の返り値のデータ型を表します。エラーを表すため Either モナドを使います。
+</p>
+
+<h4>●S 式の評価</h4>
+<p> micro Scheme インタプリタの主役は関数 eval と apply です。eval は S 式と環境を受け取り、渡された環境の下で S 式を評価します。eval の仕事は簡単です。S 式が自己評価フォームであれば、それをそのまま返します。シンボル (変数) であれば環境からその値を求めて返します。リストの場合はちょっと複雑です。先頭の要素を評価して、それが関数値であればそれを呼び出します。プリミティブとクロージャの処理は apply で行います。
+</p>
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : S 式の評価
+
+eval :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+eval genv lenv NIL        = return (NIL, genv)
+eval genv lenv v@(INT _)  = return (v, genv)
+eval genv lenv v@(REAL _) = return (v, genv)
+eval genv lenv v@(STR _)  = return (v, genv)
+eval genv lenv (SYM name) =
+  case lookup name lenv of
+    Nothing -&gt; case M.lookup name genv of
+                 Nothing -&gt; throwError $ strMsg $ "unbound variable: " ++ name
+                 Just v  -&gt; return (v, genv)
+    Just v -&gt; return (v, genv)
+eval genv lenv (CELL func args) = do
+  (v, genv1) &lt;- eval genv lenv func
+  case v of
+    SYNT f -&gt; f genv1 lenv args
+    _      -&gt; do (vs, genv2) &lt;- evalArguments genv1 lenv args
+                 apply genv2 lenv v vs
+</pre>
+
+<p> eval の引数 genv, lenv が環境で、第 2 引数が評価する S 式です。返り値は評価結果と大域変数の環境です。S 式が NIL, INT, REAL, STR の場合は自己評価フォームなので、S 式をそのまま返します。S 式がシンボルの場合は環境 lenv から局所変数を探します。局所変数が見つからない場合は環境 genv から大域変数を探します。それでも変数が見つからない場合はエラーを返します。
+</p>
+<p> S 式がリストの場合は、その先頭要素 func を eval で評価して値を v にセットします。v が SYNT f の場合は、シンタックス形式 f を呼び出します。このとき、引数として args と genv1, lenv をそのまま渡します。そうでなければ、引数 args を関数 evalArguments で評価して、その結果を apply に渡して関数 v を呼び出します。
+</p>
+
+<p> 引数を評価する関数 evalArguments は簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 引数の評価
+
+evalArguments :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalArguments genv lenv NIL = return (NIL, genv)
+evalArguments genv lenv (CELL expr rest) = do
+  (v, genv1) &lt;- eval genv lenv expr
+  (vs, genv2) &lt;- evalArguments genv1 lenv rest
+  return (CELL v vs, genv2)
+evalArguments _ _ _ = throwError $ strMsg "invalid function form"
+</pre>
+<p> S 式が NIL の場合は NIL を返します。これが再帰呼び出しの停止条件になります。S 式が CELL の場合、CAR の要素 expr を eval で評価します。次に、残りの S 式を evalArguments で評価します。そして、2 つの返り値を CELL に格納して返します。これで引数を評価して、その結果をリストに格納して返すことができます。S 式が NIL, CELL 以外の値はエラーを返します。
+</p>
+
+<h4>●関数適用</h4>
+<p> 次は関数 apply を作りましょう。
+</p>
+
+<pre class="list">
+リスト : 関数適用
+
+apply :: GEnv -&gt; LEnv -&gt; SExpr -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+apply genv lenv func actuals =
+  case func of
+    PRIM f -&gt; do v &lt;- f actuals
+                 return (v, genv)
+    CLOS (CELL parms body) lenv0 -&gt; do
+      lenv1 &lt;- makeBindings lenv0 parms actuals
+      evalBody genv lenv1 body
+    _ -&gt; throwError $ strMsg $ "Not Function: " ++ show func
+</pre>
+<p> 引数 func が PRIM の場合、実引数リスト actuals にプリミティブ f を適用して値 v を求め、モナドに包んで返します。func が CLOS の場合はちょっと複雑です。actuals と仮引数リスト parms と環境 lenv0 を makeBindings に渡して新しい環境 lenv1 を生成します。クロージャが保持している環境 lenv0 も新しい環境 lenv1 に追加されることに注意してください。
+</p>
+
+<p> ラムダ式の本体は複数の S 式を格納することができます。これらの S 式の評価は関数 evalBody で行います。evalBody は複数の S 式を順番に eval で評価し、最後に評価した S 式の結果を返します。グローバルの環境は genv と同じですが、ローカルな環境を新しく生成された lenv1 に切り替えます。この環境でラムダ式の本体が評価されます。
+</p>
+
+<p> 次は変数束縛を生成する関数 makeBindings を作ります。
+</p>
+<pre class="list">
+リスト : 変数束縛
+
+makeBindings :: LEnv -&gt; SExpr -&gt; SExpr -&gt; Scm LEnv
+makeBindings lenv NIL        _    = return lenv
+makeBindings lenv (SYM name) rest = return ((name, rest):lenv)
+makeBindings lenv (CELL (SYM name) parms) (CELL v args) = do
+  lenv' &lt;- makeBindings lenv parms args
+  return ((name, v):lenv')
+makeBindings lenv _ NIL = throwError $ strMsg errNEA
+makeBindings lenv _ _   = throwError $ strMsg "invalid arguments form"
+</pre>
+
+<p> 仮引数リストが NIL の場合はクロージャの環境 lenv をそのまま返します。残っている実引数は捨て去ることに注意してください。仮引数リストが SYM name の場合、仮引数リストはドットリストまたはシンボルだけの場合です。残っている実引数リスト rest と name をタプルに格納し、それを lenv に追加します。どちらも CELL の場合は、name と v をタプルに格納し、それを makeBindings の返り値に追加します。それ以外の場合はエラーを返します。
+</p>
+
+<p> 次はラムダ式の本体を評価する関数 evalBody を作ります。
+</p>
+<pre class="list">
+リスト : 本体の評価
+
+evalBody :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalBody genv lenv (CELL expr NIL) = eval genv lenv expr
+evalBody genv lenv (CELL expr rest) = do
+  (_, genv1) &lt;- eval genv lenv expr
+  evalBody genv1 lenv rest
+evalBody _ _ _ = throwError $ strMsg "invalid body form"
+</pre>
+<p> evalBody は簡単で、先頭から順番にコンスセルの要素 expr を取り出し、それを eval で評価するだけです。途中の返り値は捨てて、最後の S 式の値だけを返します。
+</p>
+
+<h4>●等値の判定</h4>
+<p> 次は等値を判定する述語 eq? と equal? を作ります。
+</p>
+<pre class="list">
+リスト : 等値の判定
+
+-- 真偽値
+true = SYM "true"
+false = SYM "false"
+
+-- 等値の定義
+instance Eq SExpr where
+  INT x  == INT y  = x == y
+  REAL x == REAL y = x == y
+  SYM x  == SYM y  = x == y
+  STR x  == STR y  = x == y
+  NIL    == NIL    = True
+  _      == _      = False
+
+eq' :: SExpr -&gt; Scm SExpr
+eq' (CELL x (CELL y _)) =
+  if x == y then return true else return false
+eq' _ = throwError $ strMsg $ "eq : " ++ errNEA
+
+equal' :: SExpr -&gt; Scm SExpr
+equal' (CELL x (CELL y _)) =
+  if iter x y then return true else return false
+  where iter (CELL a b) (CELL c d) = iter a c &amp;&amp; iter b d
+        iter x y = x == y
+equal' _ = throwError $ strMsg $ "equal : " ++ errNEA
+</pre>
+<p> 真偽値はシンボル true と false で表します。true と false の値は自分自身になるよう初期化します。つまり、自己評価フォームと同じ働きになります。次に、SExpr を型クラス Eq のインスタンスに設定します。INT, REAL, SYM の場合は、演算子 == で比較します。NIL と NIL は True を返します。それ以外の場合は False を返します。
+</p>
+<p> Scheme の述語 eq? (Lisp の eq) はデータの同一性を判定します。つまり、データが配置されたメモリのアドレスが等しい場合に真を返します。この仕様を Haskell で実現するのはちょっと難しいので、データの値を使ってチェックすることにします。これは Scheme の述語 eqv? (Lisp の eql) と同じ動作になります。
+</p>
+<p> 関数 eq' は実引数リストから二つの要素 x, y を取り出して演算子 == でチェックするだけです。関数 equal' はリストの要素が eq' を満たせば真を返します。実際の判定は局所関数 iter で行います。どちらの引数も CELL の場合は、CAR 部と CDR 部を iter で比較します。そうでなければ、引数を演算子 == で比較します。
+</p>
+
+<h4>●シンタックス形式</h4>
+<p> 次はシンタックス形式を処理する関数を作りましょう。
+</p>
+<pre class="list">
+リスト : シンタックス形式
+
+-- quote
+evalQuote :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalQuote genv lenv (CELL expr _) = return (expr, genv)
+evalQuote _ _ _ = throwError $ strMsg "invalid quote form"
+
+-- define
+evalDef :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalDef genv lenv (CELL sym@(SYM name) (CELL expr NIL)) = do
+  (v, genv1) &lt;- eval genv lenv expr
+  return (sym, M.insert name v genv1)
+evalDef _ _ _ = throwError $ strMsg "invalid define form"
+
+-- if
+evalIf :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalIf genv lenv (CELL pred (CELL thenForm rest)) = do
+  (v, genv1) &lt;- eval genv lenv pred
+  if v /= false
+  then eval genv1 lenv thenForm
+  else case rest of
+         CELL elseForm _ -&gt; eval genv1 lenv elseForm
+         _               -&gt; return (false, genv1)
+evalIf _ _ _ = throwError $ strMsg $ "if : " ++ errNEA
+
+-- lambda
+evalLambda :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalLambda genv lenv expr = return (CLOS expr lenv, genv)
+</pre>
+<p> quote の処理は関数 evalQuote で行います。引数にはリスト (expr) が渡されるので、リストの先頭要素 expr を返すだけです。define の処理は関数 evalDefine で行います。define は変数 name と値 expr を大域変数に追加します。値 expr を eval で評価して、M.insert で Map に追加します。このとき新しい Map が生成されるので、その Map を返すことに注意してください。
+</p>
+
+<p> if の処理は関数 evalIf で行います。最初に述語 pred を eval で評価し、それが false でなければ then 節を評価して返します。そうでなければ、else 節を有無をチェックして、else 節があればそれを評価します。else 節が無い場合は false を返します。ラムダ式の処理は関数 evalLambda で行います。これはクロージャを生成する処理です。ローカルな環境 lenv と引数の S 式 expr を CLOS に格納して返します。
+</p>
+
+<h4>●リストの操作</h4>
+<p> 次はリストを操作する関数 (primitive) を作りましょう。
+</p>
+<pre class="list">
+リスト : リスト操作の基本関数
+
+car :: SExpr -&gt; Scm SExpr
+car NIL = throwError $ strMsg $ "car : " ++ errNEA
+car (CELL (CELL a _) _) = return a
+car _                   = throwError $ strMsg $ "car : " ++ errCELL
+
+cdr :: SExpr -&gt; Scm SExpr
+cdr NIL = throwError $ strMsg $ "cdr : " ++ errNEA
+cdr (CELL (CELL _ d) _) = return d
+cdr _                   = throwError $ strMsg $ "cdr : " ++ errCELL
+
+cons :: SExpr -&gt; Scm SExpr
+cons (CELL a (CELL b _)) = return (CELL a b)
+cons _                   = throwError $ strMsg $ "cons : " ++ errNEA
+
+pair :: SExpr -&gt; Scm SExpr
+pair NIL                 = throwError $ strMsg $ "pair? : " ++ errNEA
+pair (CELL (CELL _ _) _) = return true
+pair (CELL _ _)          = return false
+</pre>
+<p> PRIM の場合、引数はコンスセルに格納されています。car は先頭要素がコンスセルであれば CAR 部に格納されているデータを返します。cdr は CDR 部に格納されているデータを返します。引数がコンスセルでない場合はエラーを返します。cons は第 1 引数 a と第 2 引数 b を取り出して、CELL に格納して返します。pair は第 1 引数が CELL ならば true を返します。そうでなければ false を返します。どの関数も引数の個数が足りない場合はエラーを返します。引数の数が多い場合は無視することとします。
+</p>
+
+<h4>●REPL の作成</h4>
+<p> 最後に REPL (read - eval - print - loop) を作ります。
+</p>
+
+<pre class="list">
+リスト : REPL (read - eval - print - loop)
+
+initGEnv :: GEnv
+initGEnv = M.fromList [("true",   true),
+                       ("false",  false),
+                       ("quote",  SYNT evalQuote),
+                       ("define", SYNT evalDef),
+                       ("lambda", SYNT evalLambda),
+                       ("if",     SYNT evalIf),
+                       ("eq?",    PRIM eq'),
+                       ("equal?", PRIM equal'),
+                       ("pair?",  PRIM pair),
+                       ("car",    PRIM car),
+                       ("cdr",    PRIM cdr),
+                       ("cons",   PRIM cons)]
+
+-- read-eval-print-loop
+repl :: GEnv -&gt; LEnv -&gt; String -&gt; IO ()
+repl genv lenv xs = do
+  putStr "Scm&gt; "
+  hFlush stdout
+  case readSExpr xs of
+    Left  (ParseErr xs' mes) -&gt; do putStrLn mes
+                                   repl genv lenv $ dropWhile (/= '\n') xs'
+    Right (expr, xs') -&gt; do case eval genv lenv expr of
+                              Left mes -&gt; do putStrLn mes
+                                             repl genv lenv xs'
+                              Right (v, genv1) -&gt; do print v
+                                                     repl genv1 lenv xs'
+
+main :: IO ()
+main = do
+  xs &lt;- hGetContents stdin
+  repl initGEnv [] xs
+</pre>
+<p> repl はプロンプト Scm&gt; を出力してから readSExpr を呼び出して S 式を読み込みます。エラーが返ってきた場合はエラーメッセージを出力し、改行までの入力を読み捨ててから repl を再帰呼び出しします。S 式 expr を読み込んだら、eval を呼び出して expr を評価します。エラーの場合はエラーメッセージを出力して repl を再帰呼び出しします。正常に評価できた場合は、その値 v を表示して repl を再帰呼び出しします。このとき、大域変数の環境は eval が返した genv1 を渡すことに注意してください。
+</p>
+<p> main は hGetContents で標準入力から文字列を読み込み、それを repl に渡します。大域変数の環境は initGEnv で局所関数の環境は空リストになります。
+</p>
+
+<h4>●簡単な実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+Scm&gt; ()
+()
+Scm&gt; 1
+1
+Scm&gt; 1.2345
+1.2345
+Scm&gt; "hello, world"
+"hello, world"
+Scm&gt; 'a
+a
+Scm&gt; (quote a)
+a
+Scm&gt; '(1 2 3 4 5)
+(1 2 3 4 5)
+Scm&gt; (cons 1 ())
+(1)
+Scm&gt; (cons 1 2)
+(1 . 2)
+Scm&gt; (car '(a b c d))
+a
+Scm&gt; (cdr '(a b c d))
+(b c d)
+Scm&gt; (cons 'a '(b c d))
+(a b c d)
+Scm&gt; (eq? 1 1)
+true
+Scm&gt; (eq? 1 2)
+false
+Scm&gt; (eq? 1.234 1.234)
+true
+Scm&gt; (eq? 1.234 1.2)
+false
+Scm&gt; (eq? 'a 'a)
+true
+Scm&gt; (eq? 'a 'b)
+false
+Scm&gt; (eq? "abc" "abc")
+true
+Scm&gt; (eq? "abc" "ABC")
+false
+Scm&gt; (equal? '(1 2 3 4) '(1 2 3 4))
+true
+Scm&gt; (equal? '(1 2 3 4) '(1 2 3 4.0))
+false
+Scm&gt; (equal? '((1 2) (3 4)) '((1 2) (3 4)))
+true
+Scm&gt; (equal? '((1 2) (3 4)) '((1 2) (3 . 4)))
+false
+Scm&gt; (pair? '(a b c))
+true
+Scm&gt; (pair? 'a)
+false
+</pre>
+<p> quote, if, car, cdr, cons, eq?, equal?, pair? は正常に動作していますね。次は lambda と define を試してみます。
+</p>
+
+<pre>
+Scm&gt; (define a 'b)
+a
+Scm&gt; a
+b
+Scm&gt; (lambda (x) x)
+&lt;closure&gt;
+Scm&gt; ((lambda (x) x) 1)
+1
+Scm&gt; ((lambda (x) x) 'a)
+a
+Scm&gt; (define list (lambda x x))
+list
+Scm&gt; (list 1 2 3 4 5)
+(1 2 3 4 5)
+Scm&gt; (list 'a 'b 'c 'd 'e)
+(a b c d e)
+</pre>
+<p> define で変数 a を定義します。シンボル a を入力すると、その値を求めることができます。lambda はクロージャを生成します。リストの先頭要素にラムダ式を指定すると、それを呼び出すことができます。そして、define と lambda を使って関数を定義することができます。
+</p>
+<h4>●レキシカルスコープとクロージャの動作</h4>
+<p> 次は、レキシカルスコープとクロージャが正常に動作するか試してみましょう。
+</p>
+<pre>
+Scm&gt; (define x 'a)
+x
+Scm&gt; x
+a
+Scm&gt; (define foo (lambda () x))
+foo
+Scm&gt; (foo)
+a
+Scm&gt; (define bar (lambda (x) (foo)))
+bar
+Scm&gt; (bar 'b)
+a
+</pre>
+<p> まず大域変数 x を a に初期化します。次に、関数 foo を定義します。foo の引数はないので、x は大域変数を参照します。したがって、foo を評価すると返り値は a になります。次に、関数 bar から foo を呼び出します。bar の仮引数は x ですが、(bar 'b) を評価すると a が返ってきます。確かにレキシカルスコープになっています。
+</p>
+<p> 今度はクロージャの動作を確かめます。
+</p>
+<pre>
+Scm&gt; (define baz (lambda (x) (lambda (y) (cons x y))))
+baz
+Scm&gt; (define baz-a (baz 'a))
+baz-a
+Scm&gt; (baz-a 'b)
+(a . b)
+Scm&gt; (baz-a 'c)
+(a . c)
+</pre>
+<p> 関数 baz はクロージャを生成して返します。このとき、baz の引数 x の値がクロージャに保存されます。(baz 'a) の返り値を baz-a にセットすると、baz-a は a と baz-a の引数を組にしたものを返す関数となります。したがって、(baz-a 'b) は (a . b) を、(baz-a 'c) は (a . c) を返します。クロージャも正常に動作していますね。
+</p>
+
+<h4>●再帰定義とリスト操作</h4>
+<p> define で定義する関数は再帰呼び出しが可能です。簡単なリスト操作関数を再帰定義で作ってみました。プログラムリストと実行結果を示します。
+</p>
+<pre class="list">
+リスト : リストの結合
+
+(define append
+  (lambda (xs ys)
+    (if (pair? xs)
+        (cons (car xs) (append (cdr xs) ys))
+       ys)))
+</pre>
+<pre>
+Scm&gt; (define append (lambda (xs ys) (if (pair? xs) (cons (car xs) (append (cdr xs) ys)) ys)))
+append
+Scm&gt; (append '(a b c d) '(e f g h))
+(a b c d e f g h)
+Scm&gt; (append '((a b) (c d)) '((e f) (g h)))
+((a b) (c d) (e f) (g h))
+</pre>
+<pre class="list">
+リスト : リストの反転
+
+(define reverse
+  (lambda (xs)
+    (if (pair? xs)
+        (append (reverse (cdr xs)) (list (car xs)))
+      ())))
+</pre>
+<pre>
+Scm&gt; (define reverse (lambda (xs) (if (pair? xs) (append (reverse (cdr xs)) (list (car xs))) ())))
+reverse
+Scm&gt; (reverse '(a b c d e f))
+(f e d c b a)
+Scm&gt; (reverse '((a b) (c d) (e f)))
+((e f) (c d) (a b))
+</pre>
+<p> もちろん、高階関数も定義することができます。
+</p>
+<pre class="list">
+リスト : マッピング
+
+(define map
+  (lambda (f xs)
+    (if (pair? xs)
+        (cons (f (car xs)) (map f (cdr xs)))
+      ())))
+</pre>
+<pre>
+Scm&gt; (define map (lambda (f xs) (if (pair? xs) (cons (f (car xs)) (map f (cdr xs))) ())))
+map
+Scm&gt; (map (lambda (x) (cons x x)) '(1 2 3 4 5))
+((1 . 1) (2 . 2) (3 . 3) (4 . 4) (5 . 5))
+Scm&gt; (map car '((a 1) (b 2) (c 3) (d 4) (e 5)))
+(a b c d e)
+Scm&gt; (map cdr '((a 1) (b 2) (c 3) (d 4) (e 5)))
+((1) (2) (3) (4) (5))
+</pre>
+<pre class="list">
+リスト : フィルター
+
+(define filter
+  (lambda (f xs)
+    (if (pair? xs)
+        (if (f (car xs))
+            (cons (car xs) (filter f (cdr xs)))
+          (filter f (cdr xs)))
+      ())))
+</pre>
+<pre>
+Scm&gt; (define filter (lambda (f xs) (if (pair? xs) (if (f (car xs)) (cons (car xs) (filter f (cdr xs))) (filter f (cdr xs))) ())))
+filter
+Scm&gt; (filter (lambda (x) (eq? x 'a)) '(a b c a b c a b c))
+(a a a)
+</pre>
+<pre class="list">
+リスト : 畳み込み
+
+(define fold-left
+  (lambda (f a xs)
+    (if (pair? xs)
+        (fold-left f (f a (car xs)) (cdr xs))
+      a)))
+
+(define fold-right
+  (lambda (f a xs)
+    (if (pair? xs)
+        (f (car xs) (fold-rightf a (cdr xs)))
+      a)))
+</pre>
+<pre>
+Scm&gt; (define fold-left (lambda (f a xs) (if (pair? xs) (fold-left f (f a (car xs)) (cdr xs)) a)))
+fold-left
+Scm&gt; (fold-left (lambda (a x) (cons x a)) () '(1 2 3 4 5))
+(5 4 3 2 1)
+
+Scm&gt; (define fold-right (lambda (f a xs) (if (pair? xs) (f (car xs) (fold-rightf a (cdr xs))) a)))
+fold-right
+Scm&gt; (fold-right cons () '(1 2 3 4 5))
+(1 2 3 4 5)
+</pre>
+<p> 今回はここまでです。次回は変数の値を書き換えるシンタックス形式 set! と数の算術演算、比較演算を追加します。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>黒川利明, 『LISP 入門』, 培風館, 1982
+  <li>Patrick Henry Winston, Berthold Klaus Paul Horn, 『LISP 原書第 3 版 (1)』, 培風館, 1992<br>
+18. Lisp で書く Lisp
+  <li>R. Kent Dybvig (著), 村上雅章 (訳), 『プログラミング言語 SCHEME』, 株式会社ピアソン・エデュケーション, 2000<br>
+9.2 Scheme のメタ循環インタプリタ
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』, アジソンウェスレイ, 1995<br>
+第 11 章 定義インタプリタ
+  <li>小西弘一, 清水剛, 『ＣプログラムブックⅢ』, アスキー, 1986
+  <li>Harold Abelson, Gerald Jay Sussman, Julie Sussman, <a href="http://mitpress.mit.edu/sicp/full-text/book/book.html">"Structure and Interpretation of Computer Programs"</a>, <br><a href="http://mitpress.mit.edu/sicp/full-text/book/book-Z-H-26.html#%_sec_4.1">4.1  The Metacircular Evaluator</a>
+  <li><a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/index-j.html">稲葉雅幸</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/index-j.html">ソフトウェア特論</a>, <a href="http://www.jsk.t.u-tokyo.ac.jp/~inaba/soft4/soft4-scheme-interp/index.html">Scheme インタプリタ</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+--
+-- mscheme.hs : microScheme
+--
+--              Copyright (C) 2013 Makoto Hiroi
+--
+import Data.Char
+import Control.Monad.Error
+import qualified Data.Map as M
+import System.IO
+
+-- S 式の定義
+data SExpr = INT  Integer
+           | REAL Double
+           | SYM  String
+           | STR  String
+           | CELL SExpr SExpr
+           | NIL
+           | PRIM (SExpr -&gt; Scm SExpr)
+           | SYNT (GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv))
+           | CLOS SExpr LEnv
+
+-- 等値の定義
+instance Eq SExpr where
+  INT x  == INT y  = x == y
+  REAL x == REAL y = x == y
+  SYM x  == SYM y  = x == y
+  STR x  == STR y  = x == y
+  NIL    == NIL    = True
+  _      == _      = False
+
+-- パーサエラーの定義
+data ParseErr = ParseErr String String deriving Show
+
+instance Error ParseErr where
+  noMsg    = ParseErr "" ""
+  strMsg s = ParseErr "" s
+
+-- パーサの定義
+type Parser a = Either ParseErr a
+
+-- 評価器の定義
+type Scm a = Either String a
+
+-- ローカル環境の定義
+type LEnv = [(String, SExpr)]
+
+-- グローバルな環境
+type GEnv = M.Map String SExpr
+
+-- 真偽値
+true  = SYM "true"
+false = SYM "false"
+
+-- Primitive の定義
+errNEA  = "Not enough arguments"
+errCELL = "Illegal argument, List required"
+errINT  = "Illegal argument, Integer required"
+errNUM  = "Illegal argument, Number required"
+
+-- リスト操作
+car :: SExpr -&gt; Scm SExpr
+car NIL = throwError $ strMsg $ "car : " ++ errNEA
+car (CELL (CELL a _) _) = return a
+car _                   = throwError $ strMsg $ "car : " ++ errCELL
+
+cdr :: SExpr -&gt; Scm SExpr
+cdr NIL = throwError $ strMsg $ "cdr : " ++ errNEA
+cdr (CELL (CELL _ d) _) = return d
+cdr _                   = throwError $ strMsg $ "cdr : " ++ errCELL
+
+cons :: SExpr -&gt; Scm SExpr
+cons (CELL a (CELL b _)) = return (CELL a b)
+cons _                   = throwError $ strMsg $ "cons : " ++ errNEA
+
+-- 述語
+eq' :: SExpr -&gt; Scm SExpr
+eq' (CELL x (CELL y _)) =
+  if x == y then return true else return false
+eq' _ = throwError $ strMsg $ "eq : " ++ errNEA
+
+equal' :: SExpr -&gt; Scm SExpr
+equal' (CELL x (CELL y _)) =
+  if iter x y then return true else return false
+  where iter (CELL a b) (CELL c d) = iter a c &amp;&amp; iter b d
+        iter x y = x == y
+equal' _ = throwError $ strMsg $ "equal : " ++ errNEA
+
+pair :: SExpr -&gt; Scm SExpr
+pair NIL                 = throwError $ strMsg $ "pair? : " ++ errNEA
+pair (CELL (CELL _ _) _) = return true
+pair (CELL _ _)          = return false
+
+
+--
+-- S 式の表示
+--
+showCell :: SExpr -&gt; String
+showCell (CELL a d) =
+  show a ++ case d of
+              NIL      -&gt; ""
+              PRIM _   -&gt; "&lt;primitive&gt;"
+              CLOS _ _ -&gt; "&lt;closure&gt;"
+              SYNT _   -&gt; "&lt;syntax&gt;"
+              INT x    -&gt; " . " ++ show x
+              REAL x   -&gt; " . " ++ show x
+              SYM x    -&gt; " . " ++ x
+              STR x    -&gt; " . " ++ show x
+              _        -&gt; " " ++ showCell d
+showCell xs = show xs
+
+instance Show SExpr where
+  show (INT x)    = show x
+  show (REAL x)   = show x
+  show (SYM x)    = x
+  show (STR x)    = show x
+  show NIL        = "()"
+  show (SYNT _)   = "&lt;syntax&gt;"
+  show (PRIM _)   = "&lt;primitive&gt;"
+  show (CLOS _ _) = "&lt;closure&gt;"
+  show xs         = "(" ++ showCell xs ++ ")"
+
+--
+-- S 式の読み込み
+--
+
+isAlpha' :: Char -&gt; Bool
+isAlpha' x = elem x "!$%&amp;*+-/:&lt;=&gt;?@^_~"
+
+isIdent0 :: Char -&gt; Bool
+isIdent0 x = isAlpha x || isAlpha' x
+
+isIdent1 :: Char -&gt; Bool
+isIdent1 x = isAlphaNum x || isAlpha' x
+
+isREAL :: Char -&gt; Bool
+isREAL x = elem x ".eE"
+
+quote = SYM "quote"
+
+isNUM :: String -&gt; Bool
+isNUM (x:_) = isDigit x
+isNUM _     = False
+
+getNumber :: String -&gt; Parser (SExpr, String)
+getNumber xs =
+  let (s, ys) = span isDigit xs
+  in if not (null ys) &amp;&amp; isREAL (head ys)
+     then case reads xs of
+            [] -&gt; throwError noMsg  -- ありえないエラー
+            [(y', ys')] -&gt; return (REAL y', ys')
+     else return (INT (read s), ys)
+
+readSExpr :: String -&gt; Parser (SExpr, String)
+readSExpr [] = throwError $ strMsg "EOF"
+readSExpr (x:xs) 
+  | isSpace x  = readSExpr xs
+  | isDigit x  = getNumber (x:xs)
+  | isIdent0 x = if x == '+' &amp;&amp; isNUM xs
+                 then getNumber xs
+                 else if x == '-' &amp;&amp; isNUM xs
+                 then do (y, ys) &lt;- getNumber xs
+                         case y of
+                           INT x  -&gt; return (INT  (- x), ys)
+                           REAL x -&gt; return (REAL (- x), ys)
+                 else let (name, ys) = span isIdent1 (x:xs)
+                      in return (SYM name, ys)
+  | otherwise  =
+      case x of
+        '('  -&gt; readCell 0 xs
+        ';'  -&gt; readSExpr $ dropWhile (/= '\n') xs
+        '"'  -&gt; case reads (x:xs) of
+                  [] -&gt; throwError noMsg
+                  [(y, ys)] -&gt; return (STR y, ys)
+        '\'' -&gt; readSExpr xs &gt;&gt;= \(e, ys) -&gt; return (CELL quote (CELL e NIL), ys)
+        _    -&gt; throwError $ ParseErr xs ("unexpected token: " ++ show x)
+
+readCell :: Int -&gt; String -&gt; Parser (SExpr, String)
+readCell _ [] = throwError $ strMsg "EOF"
+readCell n (x:xs)
+  | isSpace x = readCell n xs
+  | otherwise =
+      case x of
+        ')' -&gt; return (NIL, xs)
+        '.' -&gt; if n == 0
+               then throwError $ ParseErr xs "invalid dotted list"
+               else do (e, ys) &lt;- readSExpr xs
+                       case dropWhile isSpace ys of
+                         ')':zs -&gt; return (e, zs)
+                         _      -&gt; throwError $ ParseErr xs "invalid dotted list"
+        '(' -&gt; do (a, ys) &lt;- readCell 0 xs
+                  (d, zs) &lt;- readCell 1 ys
+                  return (CELL a d, zs)
+        _   -&gt; do (a, ys) &lt;- readSExpr (x:xs)
+                  (d, zs) &lt;- readCell 1 ys
+                  return (CELL a d, zs)
+
+--
+-- S 式の評価
+--
+eval :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+eval genv lenv NIL        = return (NIL, genv)
+eval genv lenv v@(INT _)  = return (v, genv)
+eval genv lenv v@(REAL _) = return (v, genv)
+eval genv lenv v@(STR _)  = return (v, genv)
+eval genv lenv (SYM name) =
+  case lookup name lenv of
+    Nothing -&gt; case M.lookup name genv of
+                 Nothing -&gt; throwError $ strMsg $ "unbound variable: " ++ name
+                 Just v  -&gt; return (v, genv)
+    Just v -&gt; return (v, genv)
+eval genv lenv (CELL func args) = do
+  (v, genv1) &lt;- eval genv lenv func
+  case v of
+    SYNT f -&gt; f genv1 lenv args
+    _      -&gt; do (vs, genv2) &lt;- evalArguments genv1 lenv args
+                 apply genv2 lenv v vs
+
+-- 引数の評価
+evalArguments :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalArguments genv lenv NIL = return (NIL, genv)
+evalArguments genv lenv (CELL expr rest) = do
+  (v, genv1) &lt;- eval genv lenv expr
+  (vs, genv2) &lt;- evalArguments genv1 lenv rest
+  return (CELL v vs, genv2)
+evalArguments _ _ _ = throwError $ strMsg "invalid function form"
+
+-- 変数束縛
+makeBindings :: LEnv -&gt; SExpr -&gt; SExpr -&gt; Scm LEnv
+makeBindings lenv NIL        _    = return lenv
+makeBindings lenv (SYM name) rest = return ((name, rest):lenv)
+makeBindings lenv (CELL (SYM name) parms) (CELL v args) = do
+  lenv' &lt;- makeBindings lenv parms args
+  return ((name, v):lenv')
+makeBindings lenv _ NIL = throwError $ strMsg errNEA
+makeBindings lenv _ _   = throwError $ strMsg "invalid arguments form"
+
+-- 関数適用
+apply :: GEnv -&gt; LEnv -&gt; SExpr -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+apply genv lenv func actuals =
+  case func of
+    PRIM f -&gt; do v &lt;- f actuals
+                 return (v, genv)
+    CLOS (CELL parms body) lenv0 -&gt; do
+      lenv1 &lt;- makeBindings lenv0 parms actuals
+      evalBody genv lenv1 body
+    _ -&gt; throwError $ strMsg $ "Not Function: " ++ show func
+
+-- 本体の評価
+evalBody :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalBody genv lenv (CELL expr NIL) = eval genv lenv expr
+evalBody genv lenv (CELL expr rest) = do
+  (_, genv1) &lt;- eval genv lenv expr
+  evalBody genv1 lenv rest
+evalBody _ _ _ = throwError $ strMsg "invalid body form"
+
+--
+-- シンタックス形式
+--
+
+-- quote
+evalQuote :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalQuote genv lenv (CELL expr _) = return (expr, genv)
+evalQuote _ _ _ = throwError $ strMsg "invalid quote form"
+
+-- define
+evalDef :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalDef genv lenv (CELL sym@(SYM name) (CELL expr NIL)) = do
+  (v, genv1) &lt;- eval genv lenv expr
+  return (sym, M.insert name v genv1)
+evalDef _ _ _ = throwError $ strMsg "invalid define form"
+
+-- if
+evalIf :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalIf genv lenv (CELL pred (CELL thenForm rest)) = do
+  (v, genv1) &lt;- eval genv lenv pred
+  if v /= false
+  then eval genv1 lenv thenForm
+  else case rest of
+         CELL elseForm _ -&gt; eval genv1 lenv elseForm
+         _               -&gt; return (false, genv1)
+evalIf _ _ _ = throwError $ strMsg $ "if : " ++ errNEA
+
+-- lambda
+evalLambda :: GEnv -&gt; LEnv -&gt; SExpr -&gt; Scm (SExpr, GEnv)
+evalLambda genv lenv expr = return (CLOS expr lenv, genv)
+
+--
+-- 大域変数の初期化
+--
+initGEnv :: GEnv
+initGEnv = M.fromList [("true",   true),
+                       ("false",  false),
+                       ("quote",  SYNT evalQuote),
+                       ("define", SYNT evalDef),
+                       ("lambda", SYNT evalLambda),
+                       ("if",     SYNT evalIf),
+                       ("eq?",    PRIM eq'),
+                       ("equal?", PRIM equal'),
+                       ("pair?",  PRIM pair),
+                       ("car",    PRIM car),
+                       ("cdr",    PRIM cdr),
+                       ("cons",   PRIM cons)]
+
+--
+-- read-eval-print-loop
+--
+repl :: GEnv -&gt; LEnv -&gt; String -&gt; IO ()
+repl genv lenv xs = do
+  putStr "Scm&gt; "
+  hFlush stdout
+  case readSExpr xs of
+    Left  (ParseErr xs' mes) -&gt; do putStrLn mes
+                                   repl genv lenv $ dropWhile (/= '\n') xs'
+    Right (expr, xs') -&gt; do case eval genv lenv expr of
+                              Left mes -&gt; do putStrLn mes
+                                             repl genv lenv xs'
+                              Right (v, genv1) -&gt; do print v
+                                                     repl genv1 lenv xs'
+
+main :: IO ()
+main = do
+  xs &lt;- hGetContents stdin
+  repl initGEnv [] xs
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell33.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell35.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

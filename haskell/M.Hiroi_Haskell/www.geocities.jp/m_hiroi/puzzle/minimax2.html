@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Puzzle DE Programming / 思考ゲーム「MiniMax」</title>
+  <meta name="description" content="Puzzle,パズル,プログラミング,解法">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881774</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Puzzle DE Programming</h1>
+<h2>思考ゲーム「MiniMax」(2)</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>αβ枝刈り</h3>
+<p> 今回はゲーム「MiniMax」に <b>αβ枝刈り</b> を実装してみます。最初に「αβ枝刈り」を説明します。αβ枝刈りを理解されている方は読み飛ばしてください。
+</p>
+<p><a href="minimax2.html#next">次へ進む</a>
+</p>
+
+<p>  説明のための仮想ゲームとして、先手後手とも指し手は常に 2 通りあって、そのうちのひとつを選ぶゲームを考えてみましょう。評価値は先手を基準にします。つまり、評価値が高いほど先手が有利であり、逆に評価値が低いほど後手が有利となります。探索のレベルは、「先手－後手－先手」の 3 手先まで読むことにします。ある局面 R を探索すると、下図に示すゲームの木になりました。
+</p>
+
+<pre class="fig">
+  先手番                        Ｒ
+                    ┌─────┴─────┐
+                    │                      │
+  後手番            Ａ(3)                   Ｂ(2)
+                  ／  ＼                  ／  ＼
+                ／      ＼              ／      ＼
+  先手番      ａ(3)       ｂ(4)       ｃ(2)       ｄ(5)
+            ／  ＼      ／  ＼      ／  ＼      ／  ＼
+          α      β  γ      δ  ε      ζ  η      θ
+
+  評価値  １      ３  ４      ２  ２      １  ３      ５  
+
+                        図：仮想ゲーム(1)
+</pre>
+<p>  局面 R で先手の指し手は 2 通りあり、A と B という局面になります。局面 A で後手の指し手は 2 通りあり、a と b という局面になります。局面 a で先手がもう 1 手指すと、αとβという局面になります。ここで、局面の評価値を計算します。ミニマックスでは、木をすべて探索するので 8 回評価値を計算しますが、「αβ枝刈り」を使うと木の探索をある程度省くことができます。次の図を見てください。
+</p>
+
+<pre class="fig">
+  先手番                        Ｒ
+                    ┌─────┴─────┐
+                    │                      │
+  後手番            Ａ(3)                   Ｂ(2)
+                  ／  ＼                  ／  ×
+                ／      ＼              ／      ×
+  先手番      ａ(3)       ｂ(4)       ｃ(2)       ｄ(5)
+            ／  ＼      ／  ×      ／  ＼      ／  ＼
+          α      β  γ      δ  ε      ζ  η      θ
+
+  評価値  １      ３  ４      ２  ２      １  ３      ５  
+                              ×              ×      ×
+
+                    図：仮想ゲームのαβ枝刈り
+</pre>
+
+<p> ×で示した箇所で枝刈りが行われ、評価値の計算が 5 回で済んでいますね。それでは、なぜ枝刈りが可能なのか説明します。
+</p>
+<p> 今、局面 a の評価値 3 が決定し、局面 b の評価値を決めるため、局面γの評価値を計算したら 4 になりました。 この時点で、局面δの評価値を計算しなくてもいいのです。
+</p>
+
+<pre class="fig">
+  MAX を選択              Ａ(3)
+                        ／  ＼
+                      ／      ＼
+  MIN を選択        ａ(3)       ｂ      評価値≦３（基準値） 
+                  ／  ＼      ／  ×            │
+  MAX を選択    α      β  γ      δ          │
+                                                │
+  評価値        １      ３  ４                  │
+                                                │
+                            評価値≧４＞基準値←┘
+
+                            枝刈りが可能！
+
+        図：仮想ゲームのαβ枝刈り(2)
+</pre>
+
+<p> 局面 a と b は後手が指した局面なので、この中から最小値を選ばなくてはいけません。いま局面 a の評価値は 3 なので、この手番で選択される指手の評価値は、3 より大きくならないことがわかります。もしも、局面 b の評価値が 3 より大きいのであれば、a が選択されることになるからです。
+</p>
+<p> ところが、b の評価値はγの評価値が 4 になった時点で、この値より小さくはなりません。なぜならば、γとδの中では最大値を選ぶからです。δが 3 より小さい値になったとしても、b の評価値は 4 になるし、δがγより大きくなっても 3 より大きな値になるので、局面 a が選択されることに変わりがありません。
+</p>
+<p> つまり、局面γとδの評価値から最大値を求める場合、ひとつつ上のレベルの局面 a の評価値 (基準値と呼ぶ) より大きな値になった時点で、それ以降の探索は不要になるのです。このときの基準値を<b>β値</b>といい、この枝刈りを<b>βカット</b>といいます。
+</p>
+<p> これで、局面 A の評価値は 3 に決まりました。次に、B の評価値を求めますが、このときも局面 A の評価値を基準にした枝刈りが可能です。
+</p>
+
+<pre class="fig">
+                    Ｒ
+                  ／  ＼
+                ／      ＼
+  MAX を選択  Ａ(3)       Ｂ(2)         評価値≧３（基準値）  
+                        ／  ×                  │
+                      ／      ×                ↓
+  MIN を選択        ｃ(2)       ｄ  評価値≦２＜基準値
+                  ／  ＼
+  MAX を選択    ε      ζ              枝刈りが可能！
+
+  評価値        ２      １
+
+        図：仮想ゲームのαβ枝刈り(3)
+</pre>
+
+<p> 局面 A と B は先手が指した局面ですから、この中から最大値を選ばないといけません。局面 A の評価値は 3 なので、局面 B が選ばれるには 3 より大きい値が必要です。まず、局面 c の値を求めるため、εとζの評価値を計算します。このとき、局面 A の評価値は基準にならないので注意してください。ここは素直にεとζの評価値を計算し、c の評価値は 2 に決定しました。この時点で、局面 d の探索を枝刈りすることができます。
+</p>
+<p> 局面 c と d は後手が指した局面なので、この中から最小値を選びます。そして、それが局面 B の評価値となります。局面 c の評価値が 2 に決定した時点で、局面 B の評価値は 2 より小さい値にしかなりません。これは局面 A の評価値より小さいので、局面 d の評価値がどんな値になろうとも、局面 B を選択することはないのです。このときの基準値を<b>α値</b>といい、この枝刈りを<b>αカット</b>といいます。
+</p>
+
+<p> まとめてみましょう。ひとつ上のレベルで評価値がわかっている場合は、それを基準値として用います。最大値 (MAX) を求める場合は、基準値より大きい評価値になった時点で、それ以降の探索をカットできます。また、最小値 (MIN) を求める場合は、基準値より小さい評価値になった時点で、それ以降の探索をカットできます。
+</p>
+
+<p> 説明だけでは難しくてわからない、と思われた方もいるでしょう。ところが、αβ枝刈りのプログラムはとても簡単です。心配することはありません。
+</p>
+<hr>
+<h4 id="next">●プログラムの修正</h4>
+<p> それではαβ枝刈りを実装しましょう。ポイントは基準値（α値、β値）の管理です。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：先手の選択
+
+int select_first( int his, int prev_move, <b>int limit,</b> int *move )
+{
+  if( his == depth ){
+    return first_value - last_value;    /* 先読み終了 */
+  } else {
+    int x;
+    int py = GET_Y( prev_move );
+    <b>int value = MIN_LIMIT;</b>
+    for( x = 0; x &lt; SIZE; x++ ){     /* 先手は横方向 */
+      if( board[x][py] != NO_VALUE ){
+	int v;
+	int m;
+	int save_board = board[x][py];
+	int save_value = first_value;
+	first_value += board[x][py];
+	board[x][py] = NO_VALUE;
+        count++;
+        if( check_finish( x, py ) ){
+	  v = finish_value();	      /* 終了 */
+	} else {
+	  v = select_last( his + 1, MAKE_XY( x, py ), <b>value,</b> &m );
+	}
+        /* 盤面を元に戻す */
+	board[x][py] = save_board;
+	first_value = save_value;
+
+        /* 単純なミニマックス -- 大きい方を選ぶ */
+	if( v &gt; value ){
+	  value = v;
+	  *move = MAKE_XY( x, py );
+	}
+        <b>/* αβ枝刈り */
+        if( value &gt; limit ) break;</b>
+      }
+    }
+    return value;
+  }
+}
+</pre>
+
+<p> 引数 limit がαβ枝刈りで使用する基準値です。この値は 1 手前の局面の評価値です。変数 value に評価値を格納します。前回は NO_VALUE で初期化しましたが、今回は MIN_LIMIT (-2000) で初期化します。この値は MIN_VALUE よりも小さくしておきます。つまり、評価値の中で最小の値として定義します。先手の場合、ミニマックスでは大きな値を選ぶので、最初に求めた評価値は無条件に選択されます。前回のように、NO_VALUE をチェックする処理は不用になります。この値が次の局面（後手番）での基準値となります。
+</p>
+<p> 逆に、後手 (select_last) の場合は value を MAX_LIMIT (2000) で初期化します。これが評価値の中で最大の値となります。後手の場合、ミニマックスでは小さな値を選ぶので、最初に求めた評価値が無条件に選択されます。
+</p>
+<p> αβ枝刈りの処理は簡単です。value が limit より大きな値になった時点で、for ループから break で抜けるだけです。まだ評価値が求まっていない場合、limit は 1 手前（後手番）の局面の評価値ですから MAX_LIMIT がセットされています。MAX_LIMIT より大きな評価値はないので、αβ枝刈りが実行されることはありません。後手の場合は、逆に vlaue が limit より小さな値になった時点で、αβ枝刈りを行えばいいわけです。
+</p>
+<p> あとは、関数 play を修正します。αβ枝刈りの効果を確かめるため、先手、後手とも同じレベルの思考ルーチンを対戦させ、生成した局面数をカウントすることにします。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト：ゲームの実行
+
+void play( void )
+{
+  int prev_move = 0;
+  int turn = 1;
+  while( TRUE ){
+    int move, x, y;
+    if( turn &amp; 0x01 ){
+      /* 先手 */
+      <b>select_first( 0, prev_move, MAX_LIMIT, &move );</b>
+      x = GET_X( move );
+      y = GET_Y( move );
+      printf( "先手 (%d,%d) %d を選びます：", x, y, board[x][y] );
+      first_value += board[x][y];
+    } else {
+      /* 後手(COM) */
+      <b>select_last( 0, prev_move, MIN_LIMIT, &move );</b>
+      x = GET_X( move );
+      y = GET_Y( move );
+      printf( "後手 (%d,%d) %d を選びます：", x, y, board[x][y] );
+      last_value += board[x][y];
+
+    }
+    board[x][y] = NO_VALUE;
+    prev_move = move;
+    printf("先手 %3d 点 : 後手 %3d 点 \n", first_value, last_value );
+    turn++;
+    if( check_finish( x, y ) ){
+      printf("試合終了\n");
+      break;
+    }
+  }
+}
+</pre>
+
+<p> 注意する個所は、select_first を呼び出すとき、引数 limit には MAX_LIMIT をセットし、select_last を呼び出すときは MIN_LIMIT をセットするところだけです。プログラムの主な修正はこれだけです。
+</p>
+
+<h4>●実行結果</h4>
+<p> それでは、実行結果を示しましょう。先手、後手とも同じレベルの思考ルーチンを対戦させ、生成した局面数をカウントすることにします。αβ枝刈りが有効に機能すれば、単純なミニマックス法よりも局面数は少なくなるはずです。結果は次のようになりました。
+</p>
+
+<table border=1>
+<caption>表：αβ枝刈りの効果</caption>
+<thead>
+  <tr><th></th><th>Lv 2</th><th>Lv 4</th><th>Lv 6</th></tr>
+</thead>
+<tbody>
+  <tr><td>ミニマックス</td><td>1120</td><td>41,800</td><td>1,410,000</td></tr>
+  <tr><td>αβ枝刈り</td><td> 760</td><td>12,300</td><td>183,600</td></tr>
+</tbody>
+</table>
+
+<p> 回数は 5 回対戦させた平均値です。結果を見ればおわかりのように、ゲーム「MiniMax」ではαβ枝刈りの効果は極めて高いですね。実行環境は Pentium 166 MHz ですが、αβ枝刈りを入れると Lv 6 でもサクサクとゲームが進行します。
+</p>
+<p> ところで、MiniMax の <a href="../tcltkgame.html#minimax">Tcl/Tk バージョン</a> を作成しました。Tcl/Tk に興味のある方は遊んでみてください。
+</p>
+<hr>
+<h4 id="list">●プログラムリスト</h4>
+<pre class="list">
+/*
+ * minimax1.c : 数字を取り合うゲーム
+ *
+ *             Copyright (C) 2001 by Makoto Hiroi
+ *
+ *             αβ枝刈りを追加
+ */
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;ctype.h&gt;
+#include &lt;time.h&gt;
+
+/* 定数定義 */
+#define TRUE  1
+#define FALSE 0
+#define SIZE  8
+#define FIRST 0
+#define LAST  1
+#define	RSIZE 256  /* リードバッファサイズ */
+#define NO_LINE (-1)
+#define NO_VALUE  10000
+#define MAX_VALUE 1000
+#define MIN_VALUE (-1000)
+
+<b>/* αβの限界値 */
+#define MAX_LIMIT (MAX_VALUE + 1000)
+#define MIN_LIMIT (MIN_VALUE - 1000)</b>
+
+/* マクロ */
+#define GET_X( c )      ((c)&gt;&gt; 8)
+#define GET_Y( c )      ((c) &amp; 0xff)
+#define MAKE_XY( x, y ) (((x) &lt;&lt; 8) + (y))
+
+/* 関数宣言 */
+int select_last( int his, int prev_move, int limit, int *move );
+
+/* 大域変数定義 */
+int board[SIZE][SIZE];    /* ８行８列 */
+int first_value = 0;
+int last_value = 0;
+int depth = 3;            /* 先読みの手数(default) */
+
+/* 盤面の初期化 */
+void init_board( void )
+{
+  int x, y;
+  for( x = 0; x &lt; SIZE; x++ ){
+    for( y = 0; y &lt; SIZE; y++ ){
+      int n = rand();
+      if( n &gt; RAND_MAX / 2 ){
+	board[x][y] = - (n % 9 + 1);
+      } else {
+	board[x][y] = n % 9 + 1;
+      }
+    }
+  }
+}
+
+/* 盤面の出力 */
+void print_board( int line )
+{
+  int x, y;
+  printf("  ");
+  for( x = 0; x &lt; SIZE; x++ ){
+    printf("%3d", x );
+  }
+  printf("\n  --------------------------\n");
+  for( y = 0; y &lt; SIZE; y++ ){
+    printf("%c ", ( line == y ? '[' : ' ' ) );
+    for( x = 0; x &lt; SIZE; x++ ){
+      if( board[x][y] == NO_VALUE ){
+	printf( " **" );
+      } else {
+	printf( "%3d", board[x][y] );
+      }
+    }
+    printf(" %c", ( line == y ? ']' : ' ' ) );
+    printf("\n");
+  }
+}
+
+/****** 思考ルーチン ******/
+
+/* 終了時の評価値 */
+int finish_value( void )
+{
+  if( first_value &gt; last_value ){
+    /* 先手の勝ち */
+    return MAX_VALUE + first_value - last_value;
+  } else if( first_value &lt; last_value ){
+    /* 後手の勝ち */
+    return MIN_VALUE + first_value - last_value;
+  } else {
+    /* 引き分け */
+    return 0;
+  }
+}
+
+/* 終了のチェック */
+int check_finish( int x, int y )
+{
+  int i, xf = 0, yf = 0;
+  /* 縦、横で数字が無くなったか */
+  for( i = 0; i &lt; SIZE; i++ ){
+    if( board[x][i] != NO_VALUE ) xf = 1;
+    if( board[i][y] != NO_VALUE ) yf = 1;
+  }
+  if( xf == 0 || yf == 0 ) return TRUE;
+  return FALSE;
+}
+
+
+/* 局面の生成数をカウント */
+int count = 0;
+
+/* 先手の選択 */
+int select_first( int his, int prev_move, int limit, int *move )
+{
+  if( his == depth ){
+    /* 先読み終了 */
+    return first_value - last_value;
+  } else {
+    int x;
+    int py = GET_Y( prev_move );
+    <b>int value = MIN_LIMIT;</b>
+    /* 先手は横方向 */
+    for( x = 0; x &lt; SIZE; x++ ){
+      if( board[x][py] != NO_VALUE ){
+	int v;
+	int m;
+	int save_board = board[x][py];
+	int save_value = first_value;
+	first_value += board[x][py];
+	board[x][py] = NO_VALUE;
+        count++;
+        if( check_finish( x, py ) ){
+	  /* 終了 */
+	  v = finish_value();
+	} else {
+	  /* 後手番 */
+	  v = select_last( his + 1, MAKE_XY( x, py ), value, &m );
+	}
+        /* 盤面を元に戻す */
+	board[x][py] = save_board;
+	first_value = save_value;
+
+        /* 単純なミニマックス -- 大きい方を選ぶ */
+	if( v &gt; value ){
+	  value = v;
+	  *move = MAKE_XY( x, py );
+	}
+        <b>/* αβ枝刈り */
+        if( value &gt; limit ) break;</b>
+      }
+    }
+    return value;
+  }
+}
+
+/* 後手の選択 */
+int select_last( int his, int prev_move, int limit, int *move )
+{
+  if( his == depth ){
+    /* 先読み終了 */
+    return first_value - last_value;
+  } else {
+    int y;
+    int px = GET_X( prev_move );
+    <b>int value = MAX_LIMIT;</b>
+    /* 後手は縦方向 */
+    for( y = 0; y &lt; SIZE; y++ ){
+      if( board[px][y] != NO_VALUE ){
+	int v;
+	int m;
+	int save_board = board[px][y];
+	int save_value = last_value;
+	last_value += board[px][y];
+	board[px][y] = NO_VALUE;
+        count++;
+	if( check_finish( px, y ) ){
+	  /* 終了 */
+	  v = finish_value();
+	} else {
+	  /* 先手番 */
+	  v = select_first( his + 1, MAKE_XY( px, y ), value, &m );
+	}
+	/* 盤面を元に戻す */
+	board[px][y] = save_board;
+	last_value = save_value;
+
+        /* 単純なミニマックス -- 小さいを選ぶ */
+	if( v &lt; value ){
+	  value = v;
+	  *move = MAKE_XY( px, y );
+	}
+        <b>/* αβ枝刈り */
+        if( value &lt; limit ) break;</b>
+      }
+    }
+    return value;
+  }
+}
+
+/* ゲームの実行 */
+void play( void )
+{
+  int prev_move = 0;
+  int turn = 1;
+  while( TRUE ){
+    int move, x, y;
+    if( turn &amp; 0x01 ){
+      /* 先手 */
+      select_first( 0, prev_move, MAX_LIMIT, &move );
+      x = GET_X( move );
+      y = GET_Y( move );
+      printf( "先手 (%d,%d) %d を選びます：", x, y, board[x][y] );
+      first_value += board[x][y];
+    } else {
+      /* 後手(COM) */
+      select_last( 0, prev_move, MIN_LIMIT, &move );
+      x = GET_X( move );
+      y = GET_Y( move );
+      printf( "後手 (%d,%d) %d を選びます：", x, y, board[x][y] );
+      last_value += board[x][y];
+
+    }
+    board[x][y] = NO_VALUE;
+    prev_move = move;
+    printf("先手 %3d 点 : 後手 %3d 点 \n", first_value, last_value );
+    turn++;
+    if( check_finish( x, y ) ){
+      printf("試合終了\n");
+      break;
+    }
+  }
+}
+
+/* 引数解析 */
+void getargs( int argc, char *argv[] )
+{
+  int i;
+  for( i = 1; i &lt; argc &amp;&amp; argv[i][0] == '-'; i++ ){
+    int opt = toupper( argv[i][1] );
+    if( opt == 'L' ){
+      int lv = atoi( &argv[i][2] );
+      if( lv &lt; 1 || lv &gt; 6 ){
+        fprintf( stderr, "レベルは 1 - 6 を指定してください\n");
+        exit( EXIT_FAILURE );
+      }
+      depth = lv;
+    } else {
+      fprintf( stderr, "不正なオプションスイッチです\n" );
+      exit( EXIT_FAILURE );
+    }
+  }
+}
+
+int main( int argc, char *argv[] )
+{
+  srand( time( NULL ) );
+  getargs( argc, argv );
+  init_board();
+  play();
+  printf("局面数 %d\n", count );
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Puzzle</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

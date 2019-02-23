@@ -1,0 +1,1364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Linux Programming / お気楽 Rust プログラミング超入門</title>
+  <meta name="description" content="Rust,入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881817</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽 Rust プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>ファイルの圧縮</h3>
+<h4 id="chap01">●ハフマン符号</h4>
+<p> ハフマン符号は 1952 年にハフマン (D. Huffman) が考案した、平均符号長を最小にすることができる符号化法です。ハフマン符号については拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo31.html">シャノン・ファノ符号とハフマン符号</a> をお読みください。
+</p>
+<h4 id="chap01a">●ハフマン木</h4>
+<p> ハフマン木はハフマン符号を構成するときに作成する「符号木」のことです。符号木については<a href="../light/pyalgo30.html">整数の符号化</a> をお読みください。今回はハフマン木を操作するプログラムを作ります。作成する関数を示します。
+</p>
+<ul>
+  <li>fn make_tree(freq_table: &amp;Vec&lt;u64&gt;) -&gt; Tree<br>
+ハフマン木 (Tree) の生成</li>
+  <li>fn make_code(node: &amp;Tree) -&gt; HashMap&lt;u64, (u64, u64)&gt;<br>
+符号語の生成</li>
+  <li>fn write_tree(node: &amp;Tree, bits: u64, writer: &amp;mut BitWriter) -&gt; std::io::Result&lt;()&gt;<br>
+ハフマン木の出力, bits は記号のビット長</li>
+  <li>fn read_tree(bits: u64, reader: &amp;mut BitReader) -&gt; std::io::Result&lt;Tree&gt;<br>
+ハフマン木の入力, bits は記号のビット長</li>
+  <li>fn huffman_decode(tree: &amp;Tree, reader: &amp;mut BitReader) -&gt; std::io::Result&lt;u64&gt;<br>
+ハフマン符号の復号</li>
+  <li>fn huffman_encode(code: &amp;HashMap&lt;u64, (u64, u64)&gt;, code: u64, writer: &amp;mut BitWriter) -&gt; std::io::Result&lt;()&gt;<br>
+code の符号化</li>
+</ul>
+<p> 拙作のページ <a href="rust09.html#chap02">整数の符号化</a> で作成したライブラリ bitio.rs を使っています。あらかじめコンパイルしておいてください。
+</p>
+<pre class="list">
+//
+// huffman.rs : ハフマン木の操作
+//
+//              Copyright (C) 2018 Makoto Hiroi
+//
+use std::cmp::Ordering;
+use std::collections::{BinaryHeap, HashMap};
+
+extern crate bitio;
+use bitio::*;
+
+// ハフマン木
+#[derive(Debug)]
+pub enum Tree {
+    Leaf(u64, u64),
+    Node(u64, Box&lt;Tree&gt;, Box&lt;Tree&gt;)
+}
+
+impl Tree {
+    fn get_cnt(&amp;self) -&gt; u64 {
+        match self {
+            &amp;Leaf(n, _) =&gt; n,
+            &amp;Node(n, _, _) =&gt; n
+        }
+    }
+}
+
+use Tree::*;
+
+// BinaryHeap を最小ヒープにするため Ord を定義する
+impl Ord for Tree {
+    fn cmp(&amp;self, other: &amp;Tree) -&gt; Ordering {
+        self.get_cnt().cmp(&amp;other.get_cnt()).reverse()
+    }
+}
+
+impl PartialOrd for Tree {
+    fn partial_cmp(&amp;self, other: &amp;Tree) -&gt; Option&lt;Ordering&gt; {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Tree {
+    fn eq(&amp;self, other: &amp;Tree) -&gt; bool {
+        self.get_cnt() == other.get_cnt()
+    }
+}
+
+impl Eq for Tree { }
+
+// ハフマン木の生成
+pub fn make_tree(freq_table: &amp;Vec&lt;u64&gt;) -&gt; Tree {
+    let mut que = BinaryHeap::new();
+    for x in 0 .. freq_table.len() {
+        let cnt = freq_table[x];
+        if cnt &gt; 0 { que.push(Leaf(cnt, x as u64)); }
+    }
+    if que.len() == 1 {
+        if let Some(&amp;Leaf(_, x)) = que.peek() {
+            let c = if x == 0 { 1 } else { 0 };
+            que.push(Leaf(0, c));
+        }
+    }
+    loop {
+        let n = que.pop().unwrap();
+        if que.is_empty() { return n; }
+        let m = que.pop().unwrap();
+        let node = Node(n.get_cnt() + m.get_cnt(), Box::new(n), Box::new(m));
+        que.push(node);
+    }
+}
+
+// 符号語の生成
+fn make_code_sub(node: &amp;Tree, n: u64, code: u64, table: &amp;mut HashMap&lt;u64, (u64, u64)&gt;) {
+    match node {
+        &amp;Leaf(_, c) =&gt; {
+            table.insert(c, (n, code));
+        }
+        &amp;Node(_, ref left, ref right) =&gt; {
+            make_code_sub(left, n + 1, code &lt;&lt; 1, table);
+            make_code_sub(right, n + 1, (code &lt;&lt; 1) | 1, table);
+        }
+    }
+
+}
+
+pub fn make_code(node: &amp;Tree) -&gt; HashMap&lt;u64, (u64, u64)&gt; {
+    let mut table = HashMap::new();
+    make_code_sub(node, 0, 0, &amp;mut table);
+    table
+}
+
+// ハフマン木の出力
+pub fn write_tree(node: &amp;Tree, bits: u64, writer: &amp;mut BitWriter) -&gt; std::io::Result&lt;()&gt; {
+    match node {
+        &amp;Leaf(_, c) =&gt; {
+            writer.putbit(1)?;
+            writer.putbits(bits, c)?;
+        },
+        &amp;Node(_, ref left, ref right) =&gt; {
+            writer.putbit(0)?;
+            write_tree(left, bits, writer)?;
+            write_tree(right, bits, writer)?;
+        }
+    }
+    Ok(())
+}
+
+// ハフマン木の入力
+pub fn read_tree(bits: u64, reader: &amp;mut BitReader) -&gt; std::io::Result&lt;Tree&gt; {
+    if reader.getbit()? == 1 {
+        // 葉
+        let code = reader.getbits(bits)?;
+        Ok(Leaf(0, code))
+    } else {
+        let left = read_tree(bits, reader)?;
+        let right = read_tree(bits, reader)?;
+        Ok(Node(0, Box::new(left), Box::new(right)))
+    }
+}
+
+// 復号
+pub fn huffman_decode(tree: &amp;Tree, reader: &amp;mut BitReader) -&gt; std::io::Result&lt;u64&gt; {
+    let mut node = tree;
+    loop {
+        match node {
+            &amp;Leaf(_, c) =&gt; return Ok(c),
+            &amp;Node(_, ref left, ref right) =&gt; {
+                node = if reader.getbit()? == 0 { left } else { right };
+            }
+        } 
+    }
+}
+
+// 符号化
+pub fn huffman_encode(code_table: &amp;HashMap&lt;u64, (u64, u64)&gt;, code: u64, writer: &amp;mut BitWriter) -&gt; std::io::Result&lt;()&gt; {
+    let &amp;(n, c) = code_table.get(&amp;code).unwrap();
+    writer.putbits(n, c)?;
+    Ok(())
+}
+</pre>
+<pre class="list">
+リスト : 簡単なテスト (huff_test.rs)
+
+use std::io::prelude::*;
+use std::io::{self, BufReader};
+
+extern crate huffman;
+use huffman::*;
+use Tree::*;
+
+extern crate bitio;
+use bitio::*;
+
+// ハフマン木の表示
+fn print_space(mut n: usize) {
+    while n &gt; 0 {
+        print!("  ");
+        n -= 1;
+    }
+}
+
+pub fn print_tree(node: &amp;Tree, code: &amp;mut Vec&lt;i32&gt;) {
+    match node {
+        &amp;Leaf(_, c) =&gt; {
+            print_space(code.len());
+            println!("* {}, {:?}", c, code);
+        },
+        &amp;Node(_, ref left, ref right) =&gt; {
+            code.push(0);
+            print_tree(left, code);
+            code.pop();
+            print_space(code.len());
+            println!("*");
+            code.push(1);
+            print_tree(right, code);
+            code.pop();
+        }
+    }
+}
+
+fn main() {
+    let reader = BufReader::new(io::stdin());
+    // 出現頻度票の生成
+    let mut freq_table = vec![0u64; 256];
+    for c in reader.bytes() {
+        freq_table[c.unwrap() as usize] += 1;
+    }
+    // ハフマン木の生成
+    let tree = make_tree(&amp;freq_table);
+    print_tree(&amp;tree, &amp;mut vec![]);
+    println!("{:?}", make_code(&amp;tree));
+
+    // ハフマン木の出力
+    {
+        let mut writer = BitWriter::create("huff_test.en").unwrap();
+        write_tree(&amp;tree, 8, &amp;mut writer).unwrap();
+    }
+    // ハフマン木の入力
+    let mut reader = BitReader::open("huff_test.en").unwrap();
+    let tree1 = read_tree(8, &amp;mut reader).unwrap();
+    print_tree(&amp;tree1, &amp;mut vec![]);
+    println!("{:?}", make_code(&amp;tree1));
+
+}
+</pre>
+<p> コンパイルは、最初に rustc -O -L . --crate-type=lib huffman.rs でライブラリを作成し、そのあとで rustc -L . huff_test.rs とします。
+</p>
+<pre class="item">
+test.txt: abccddeeeeffffgggggggghhhhhhhh
+</pre>
+<pre>
+$ huff_test &lt; test.txt
+      * 100, [0, 0, 0]
+    *
+      * 102, [0, 0, 1]
+  *
+    * 103, [0, 1]
+*
+    * 104, [1, 0]
+  *
+        * 99, [1, 1, 0, 0]
+      *
+          * 97, [1, 1, 0, 1, 0]
+        *
+          * 98, [1, 1, 0, 1, 1]
+    *
+      * 101, [1, 1, 1]
+{104: (2, 2), 101: (3, 7), 100: (3, 0), 99: (4, 12), 102: (3, 1), 103: (2, 1), 97: (5, 26), 98: (5, 27)}
+      * 100, [0, 0, 0]
+    *
+      * 102, [0, 0, 1]
+  *
+    * 103, [0, 1]
+*
+    * 104, [1, 0]
+  *
+        * 99, [1, 1, 0, 0]
+      *
+          * 97, [1, 1, 0, 1, 0]
+        *
+          * 98, [1, 1, 0, 1, 1]
+    *
+      * 101, [1, 1, 1]
+{99: (4, 12), 97: (5, 26), 104: (2, 2), 101: (3, 7), 102: (3, 1), 103: (2, 1), 100: (3, 0), 98: (5, 27)}
+</pre>
+<p> ハフマン木の形は <a href="../light/pyalgo31.html">シャノン・ファノ符号とハフマン符号</a> の例題とは異なりますが、これでも同じ平均符号長 (80 / 30) になります。
+</p>
+<h4 id="chap01b">●ハフマン符号 (符号化)</h4>
+<pre class="list">
+//
+// huff_encode.rs : ハフマン符号化
+//
+//                  Copyright (C) 2018 Makoto Hiroi
+//
+extern crate bitio;
+extern crate huffman;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::error::Error;
+use bitio::BitWriter;
+use huffman::*;
+
+fn encode_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut wr = BitWriter::create(dst)?;
+    // 出現頻度表の作成
+    let mut freq_table = vec![0u64; 256];
+    let mut size = 0;
+    {
+        let rd = BufReader::new(File::open(src)?);
+        for r in rd.bytes() {
+            freq_table[r? as usize] += 1;
+            size += 1;
+        }
+    }
+    // ファイルサイズ
+    wr.putbits(64, size)?;
+    if size == 0 { return Ok(()); }    
+    // ハフマン木
+    let tree = make_tree(&amp;freq_table);
+    write_tree(&amp;tree, 8, &amp;mut wr)?;
+    // 符号語の生成
+    let code = make_code(&amp;tree);
+    // 符号化
+    let rd = BufReader::new(File::open(src)?);
+    for r in rd.bytes() {
+        huffman_encode(&amp;code, r? as u64, &amp;mut wr)?;
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: huff_encode input_file output_file");
+    } else {
+        match encode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<h4 id="chap01c">●ハフマン符号 (復号)</h4>
+<pre class="list">
+//
+// huff_decode.rs :: ハフマン符号 (復号)
+//
+//                   Copyright (C) 2018 Makoto Hiroi
+//
+extern crate bitio;
+extern crate huffman;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+use std::error::Error;
+use bitio::BitReader;
+use huffman::*;
+
+fn decode_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut rd = BitReader::open(src)?;
+    let mut wr = BufWriter::new(File::create(dst)?);
+    let mut size = rd.getbits(64)?;   // ファイルサイズの取得
+    if size == 0 { return Ok(()); }
+    let tree = read_tree(8, &amp;mut rd)?; // ハフマン木の取得
+    while size &gt; 0 {
+        let c = huffman_decode(&amp;tree, &amp;mut rd)?;
+        wr.write(&amp;[c as u8])?;
+        size -= 1;
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: huff_decode input_file output_file");
+    } else {
+        match decode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<h4 id="chap01d">●簡単な実行例</h4>
+<p> それでは簡単な実行例として、<a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#large">The Large Corpus</a> を圧縮してみましょう。
+</p>
+<table border=1>
+<caption>表：The Large Corpus の評価結果</caption>
+<thead>
+  <tr><th>ファイル名</th><th>サイズ</th><th>エントロピー</th><th>下限値</th><th>Huffman</th></tr>
+</thead>
+<tbody>
+  <tr><td>bible.txt   </td><td> 4,047,392</td><td>4.342751</td><td>2,197,103</td><td>2,218,536</td></tr>
+  <tr><td>e.coli      </td><td> 4,638,690</td><td>1.999821</td><td>1,159,569</td><td>1,159,686</td></tr>
+  <tr><td>world192.txt</td><td> 2,473,400</td><td>4.998313</td><td>1,545,354</td><td>1,558,721</td></tr>
+  <tr><td>合計        </td><td>11,159,482</td><td></td><td>4,902,026</td><td>4,936,943</td></tr>
+</tbody>
+</table>
+<p> どのファイルも下限値に近い圧縮率になりました。ただし、同じ記号が極端に多いファイルの場合、ハフマン符号では下限値の近くまで圧縮できないことがあります。
+</p>
+<p> たとえば、<a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> の ptt5 は記号 0 がとても多く出現するファイルです。ptt5 のエントロピーを計算すると 1.210176 になるので、下限値は 77,636 byte になりますが、ハフマン符号では 106,758 byte までしか圧縮することができません。記号 0 に 1 ビットの符号語を割り当てても、限界に近い圧縮率を達成することはできないのです。「算術符号」または「レンジコーダ (Range Coder)」を用いると、記号に 1 ビット未満の符号語を割り当てることができるので、このような場合でも限界に近い圧縮率を達成することができます。
+</p>
+<hr>
+<h4 id="chap02">●LZSS 符号</h4>
+<p> ハフマン符号は、出現頻度の高い記号には短い符号語を、低い記号には長い符号語を割り当てることでデータ圧縮を実現しました。これに対して、LZ 符号は「辞書に基づく符号化方式 (辞書法, dictionary-based coding) 」といって、ハフマン符号とはまったく異なるアプローチでデータ圧縮を実現しています。辞書法は入力された記号列を辞書に登録し、その辞書を使って符号化を行います。辞書法は多くの圧縮ツールで用いられているオーソドックスな方法です。
+</p>
+<p> 今回は辞書法の一つで「スライド辞書法」と呼ばれている LZ77 符号 (LZSS 符号) のプログラムを Rust で作ってみましょう。アルゴリズムの詳しい説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo32.html">LZ77 符号 (LZSS 符号)</a> をお読みくださいませ。
+</p>
+<h4 id="chap02a">●LZSS 符号の符号化</h4>
+<pre class="list">
+//
+// lzss_encode.rs : LZSS 符号 (符号化)
+//
+//                   Copyright (C) 2018 Makoto Hiroi
+//
+extern crate bitio;
+
+use std::fs::{self, File};
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::collections::HashMap;
+use std::error::Error;
+use bitio::BitWriter;
+
+// 定数
+const MIN_LEN: usize = 3;
+const MAX_LEN: usize = 18;
+const LEN_BITS: u64 = 4;
+const POS_BITS: u64 = 13;
+const SW_SIZE: usize = 1 &lt;&lt; POS_BITS;
+const SW_LIMIT: usize = SW_SIZE * 2;
+const NIL: usize = SW_LIMIT + MAX_LEN;
+
+struct SWindow {
+    reader: BufReader&lt;File&gt;,
+    buffer: [u8; SW_LIMIT + MAX_LEN],
+    htable: HashMap&lt;u32, usize&gt;,
+    next: [usize; SW_SIZE],
+    data_size: usize,
+    match_len: usize,
+    match_pos: usize
+}
+
+impl SWindow {
+    fn new(filename: &amp;str) -&gt; std::io::Result&lt;SWindow&gt; {
+        let fs = File::open(filename)?;
+        let mut sw = SWindow {
+            reader: BufReader::new(fs),
+            buffer: [0u8; SW_LIMIT + MAX_LEN],
+            htable: HashMap::new(),
+            next: [NIL; SW_SIZE],
+            data_size: 0,
+            match_len: 0,
+            match_pos: 0,
+        };
+        // ファイルの読み込み
+        sw.data_size = sw.reader.read(&amp;mut sw.buffer)?;
+        Ok(sw)
+    }
+
+    // ハッシュ値を求める
+    fn hash_value(&amp;self, rp: usize) -&gt; u32 {
+        let mut value = 0u32;
+        for i in 0 .. MIN_LEN {
+            value = (value &lt;&lt; 8) + self.buffer[rp + i] as u32;
+        }
+        value
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        match self.htable.get(&amp;value) {
+            Some(x) if *x != NIL =&gt; self.next[rp &amp; (SW_SIZE - 1)] = *x,
+            _ =&gt; self.next[rp &amp; (SW_SIZE - 1)] = NIL
+        }
+        self.htable.insert(value, rp);
+    }
+
+    // 最長一致列の探索
+    fn search(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        let limit = if rp &lt; SW_SIZE { 0 } else { rp - SW_SIZE };
+        self.match_len = 0;
+        self.match_pos = 0;
+        if let Some(m) = self.htable.get(&amp;value) {
+            let mut n = *m; 
+            while n != NIL &amp;&amp; n &gt;= limit {
+                if self.buffer[rp + self.match_len] == self.buffer[n + self.match_len] {
+                    let mut x = 0;
+                    while x &lt; MAX_LEN {
+                        if self.buffer[rp + x] != self.buffer[n + x] {
+                            break;
+                        }
+                        x += 1;
+                    }
+                    if self.match_len &lt; x {
+                        self.match_len = x;
+                        self.match_pos = n;
+                        if x == MAX_LEN { break; }
+                    }
+                }
+                n = self.next[n &amp; (SW_SIZE - 1)];
+            }
+            // データの終端をチェック
+            if self.match_len != 0 &amp;&amp; self.match_len &gt;= self.data_size - rp {
+                self.match_len = self.data_size - rp;
+            }
+        }
+    }
+
+    // 更新
+    fn update(&amp;mut self, rp: usize) -&gt; std::io::Result&lt;usize&gt; {
+        if self.data_size &lt; SW_LIMIT + MAX_LEN {
+            return Ok(rp);
+        }
+        // データの移動
+        for i in 0 .. SW_SIZE + MAX_LEN {
+            self.buffer[i] = self.buffer[i + SW_SIZE];
+        }
+        self.data_size = SW_SIZE + MAX_LEN + self.reader.read(&amp;mut self.buffer[SW_SIZE + MAX_LEN ..])?;
+        // ハッシュ表の更新
+        let mut work = vec![];
+        for (k, v) in self.htable.iter_mut() {
+            if *v &lt; SW_SIZE {
+                work.push(*k);
+            } else if *v != NIL {
+                *v -= SW_SIZE; 
+            }
+        }
+        for k in work {
+            self.htable.remove(&amp;k);
+        }
+        for i in 0 .. SW_SIZE {
+            if self.next[i] != NIL &amp;&amp; self.next[i] &gt; SW_SIZE {
+                self.next[i] -= SW_SIZE;
+            } else {
+                self.next[i] = NIL;
+            }
+        }
+        Ok(rp - SW_SIZE)
+    }
+}
+
+fn encode_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut wr = BitWriter::create(dst)?;
+
+    // ファイルサイズ
+    let metadata = fs::metadata(src)?;
+    let size = metadata.len();
+    if size == 0 { return Ok(()); }    
+    wr.putbits(64, size)?;
+
+    let mut sw = SWindow::new(src)?;
+    let mut rp = 0;
+    while rp &lt; sw.data_size {
+        let num;
+        sw.search(rp);
+        if sw.match_len &lt; MIN_LEN {
+            num = 1;
+            wr.putbit(0)?;
+            wr.putbits(8, sw.buffer[rp] as u64)?;
+        } else {
+            num = sw.match_len;
+            wr.putbit(1)?;
+            wr.putbits(LEN_BITS, (num - MIN_LEN) as u64)?;
+            wr.putbits(POS_BITS, (rp - sw.match_pos - 1) as u64)?;
+        }
+        for _ in 0 .. num {
+            sw.insert(rp);
+            rp += 1;
+            if rp &gt;= SW_LIMIT {
+                rp = sw.update(rp).unwrap();
+            }
+        }
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: lzss_encode input_file output_file");
+    } else {
+        match encode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<p> ライブラリ bitio.rs を使っているので、あらかじめコンパイルしておいてください。あとは、rustc -O -L . lzss_encode.rs でコンパイルすることができます。
+</p>
+<h4 id="chap02b">●LZSS 符号の復号</h4>
+<pre class="list">
+//
+// lzss_decode.rs :: LZSS 符号 (復号)
+//
+//                   Copyright (C) 2018 Makoto Hiroi
+//
+extern crate bitio;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+use std::error::Error;
+use bitio::BitReader;
+
+// 以下の定数は lzss_enocde.rs と同じにすること
+const MIN_LEN: usize = 3;
+const LEN_BITS: u64 = 4;
+const POS_BITS: u64 = 13;
+const SW_SIZE: usize = 1 &lt;&lt; POS_BITS;
+
+fn decode_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut rd = BitReader::open(src)?;
+    let mut wr = BufWriter::new(File::create(dst)?);
+    let mut size = rd.getbits(64)?;   // ファイルサイズの取得
+    if size == 0 { return Ok(()); }
+    let mut buffer = [0u8; SW_SIZE];
+    let mut rp: usize = 0;
+    while size &gt; 0 {
+        let num;
+        if rd.getbit()? == 1 {
+            num = rd.getbits(LEN_BITS)? + MIN_LEN as u64;
+            let mut pos = (rd.getbits(POS_BITS)? + 1) as usize;
+            pos = if rp &gt;= pos { rp - pos } else { (rp + SW_SIZE) - pos };
+            for _ in 0 .. num {
+                let c = buffer[pos];
+                wr.write(&amp;[c])?;
+                buffer[rp] = c;
+                pos += 1;
+                rp += 1;
+                if pos &gt;= SW_SIZE { pos = 0; }
+                if rp &gt;= SW_SIZE { rp = 0; }
+            }
+        } else {
+            num = 1;
+            let c = rd.getbits(8)? as u8;
+            wr.write(&amp;[c])?;
+            buffer[rp] = c;
+            rp += 1;
+            if rp &gt;= SW_SIZE { rp = 0}
+        }
+        size -= num;
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: lzss_decode input_file output_file");
+    } else {
+        match decode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<p> ライブラリ bitio.rs を使っているので、あらかじめコンパイルしておいてください。あとは、rustc -O -L . lzss_decode.rs でコンパイルすることができます。
+</p>
+<h4 id="chap02c">●簡単な実行例</h4>
+<p> それでは簡単な実行例として、<a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#large">The Large Corpus</a> を圧縮してみましょう。
+</p>
+<table border=1>
+<caption>表：The Large Corpus の評価結果</caption>
+<thead>
+  <tr><th>ファイル名</th><th>サイズ</th><th>LZSS</th><th>Huffman</th></tr>
+</thead>
+<tbody>
+  <tr><td>bible.txt   </td><td> 4,047,392</td><td>1,523,519</td><td>2,218,536</td></tr>
+  <tr><td>e.coli      </td><td> 4,638,690</td><td>1,576,480</td><td>1,159,686</td></tr>
+  <tr><td>world192.txt</td><td> 2,473,400</td><td>1,172,800</td><td>1,558,721</td></tr>
+  <tr><td>合計        </td><td>11,159,482</td><td>4,272,799</td><td>4,936,943</td></tr>
+</tbody>
+</table>
+<p> LZSS 符号はテキストファイルとの相性が良くて、ハフマン符号よりも高い圧縮率になります。なお、スライド窓を大きくすると、圧縮率はもう少し高くなります。ただし、符号化に時間がかかるようになるので注意してください。
+</p>
+<hr>
+<h4 id="chap03">●LZB 符号</h4>
+<p> 一般的なテキストファイルを LZSS 符号で符号化する場合、最長一致系列の長さは短い場合が多く、長い場合は少ないと考えられます。したがって、長さを固定長で符号化すると圧縮率はどうしても悪くなってしまいます。このような場合、小さな正整数ほど短い符号語で表せる可変長符号、具体的には Elias のガンマ符号を使うと圧縮率を改善することができます。1987 年に T. C. Bell が開発した LZB 符号は、長さと位置の符号化に可変長符号を用いることで圧縮率を改善しています。詳しい説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo33.html">LZB 符号と LZH 符号</a> をお読みくださいませ。
+</p>
+<p> 今回作成するプログラムは、長さだけをガンマ符号で符号化する簡略版ですが、符号語を区別するフラグ (0: 記号, 1: 長さと位置) を長さの符号語に含める、具体的には長さ 0 のあとに記号 (8 bit) を、正整数のあとに位置を出力すると、ちょっとだけですが圧縮率を改善することができました。詳細はプログラムリストをお読みくださいませ。
+</p>
+<h4 id="chap03a">●LZB 符号 (符号化)</h4>
+<pre class="list">
+//
+// lzb_encode.rs : LZB 符号 (符号化)
+//
+//                 Copyright (C) 2018 Makoto Hiroi
+//
+extern crate bitio;
+
+use std::fs::{self, File};
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::collections::HashMap;
+use std::error::Error;
+use bitio::BitWriter;
+
+// 定数
+const MIN_LEN: usize = 3;
+const MAX_LEN: usize = 256;
+const POS_BITS: u64 = 16;
+const SW_SIZE: usize = 1 &lt;&lt; POS_BITS;
+const SW_LIMIT: usize = SW_SIZE * 2;
+const NIL: usize = SW_LIMIT + MAX_LEN;
+
+// スライド窓
+struct SWindow {
+    reader: BufReader&lt;File&gt;,
+    buffer: Box&lt;[u8; SW_LIMIT + MAX_LEN]&gt;,  // 大きな配列は Box でヒープ上に確保する
+    htable: HashMap&lt;u32, usize&gt;,
+    next: Box&lt;[usize; SW_SIZE]&gt;,
+    data_size: usize,
+    match_len: usize,
+    match_pos: usize
+}
+
+impl SWindow {
+    fn new(filename: &amp;str) -&gt; std::io::Result&lt;SWindow&gt; {
+        let fs = File::open(filename)?;
+        let mut sw = SWindow {
+            reader: BufReader::new(fs),
+            buffer: Box::new([0u8; SW_LIMIT + MAX_LEN]),
+            htable: HashMap::new(),
+            next: Box::new([NIL; SW_SIZE]),
+            data_size: 0,
+            match_len: 0,
+            match_pos: 0,
+        };
+        // ファイルの読み込み
+        sw.data_size = sw.reader.read(&amp;mut *sw.buffer)?;
+        Ok(sw)
+    }
+
+    // ハッシュ値を求める
+    fn hash_value(&amp;self, rp: usize) -&gt; u32 {
+        let mut value = 0u32;
+        for i in 0 .. MIN_LEN {
+            value = (value &lt;&lt; 8) + self.buffer[rp + i] as u32;
+        }
+        value
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        match self.htable.get(&amp;value) {
+            Some(x) if *x != NIL =&gt; self.next[rp &amp; (SW_SIZE - 1)] = *x,
+            _ =&gt; self.next[rp &amp; (SW_SIZE - 1)] = NIL
+        }
+        self.htable.insert(value, rp);
+    }
+
+    // 最長一致列の探索
+    fn search(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        let limit = if rp &lt; SW_SIZE { 0 } else { rp - SW_SIZE };
+        self.match_len = 0;
+        self.match_pos = 0;
+        if let Some(m) = self.htable.get(&amp;value) {
+            let mut n = *m; 
+            while n != NIL &amp;&amp; n &gt;= limit {
+                if self.buffer[rp + self.match_len] == self.buffer[n + self.match_len] {
+                    let mut x = 0;
+                    while x &lt; MAX_LEN {
+                        if self.buffer[rp + x] != self.buffer[n + x] {
+                            break;
+                        }
+                        x += 1;
+                    }
+                    if self.match_len &lt; x {
+                        self.match_len = x;
+                        self.match_pos = n;
+                        if x == MAX_LEN { break; }
+                    }
+                }
+                n = self.next[n &amp; (SW_SIZE - 1)];
+            }
+            // データの終端をチェック
+            if self.match_len != 0 &amp;&amp; self.match_len &gt;= self.data_size - rp {
+                self.match_len = self.data_size - rp;
+            }
+        }
+    }
+
+    // 更新
+    fn update(&amp;mut self, rp: usize) -&gt; std::io::Result&lt;usize&gt; {
+        if self.data_size &lt; SW_LIMIT + MAX_LEN {
+            return Ok(rp);
+        }
+        // データの移動
+        for i in 0 .. SW_SIZE + MAX_LEN {
+            self.buffer[i] = self.buffer[i + SW_SIZE];
+        }
+        self.data_size = SW_SIZE + MAX_LEN + self.reader.read(&amp;mut self.buffer[SW_SIZE + MAX_LEN ..])?;
+        // ハッシュ表の更新
+        let mut work = vec![];
+        for (k, v) in self.htable.iter_mut() {
+            if *v &lt; SW_SIZE {
+                work.push(*k);
+            } else if *v != NIL {
+                *v -= SW_SIZE; 
+            }
+        }
+        for k in work {
+            self.htable.remove(&amp;k);
+        }
+        for i in 0 .. SW_SIZE {
+            if self.next[i] != NIL &amp;&amp; self.next[i] &gt; SW_SIZE {
+                self.next[i] -= SW_SIZE;
+            } else {
+                self.next[i] = NIL;
+            }
+        }
+        Ok(rp - SW_SIZE)
+    }
+}
+
+fn encode_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut wr = BitWriter::create(dst)?;
+
+    // ファイルサイズ
+    let metadata = fs::metadata(src)?;
+    let size = metadata.len();
+    if size == 0 { return Ok(()); }    
+    wr.putbits(64, size)?;
+
+    let mut sw = SWindow::new(src)?;
+    let mut rp = 0;
+    while rp &lt; sw.data_size {
+        let num;
+        sw.search(rp);
+        if sw.match_len &lt; MIN_LEN {
+            num = 1;
+            wr.gamma_encode(0)?;
+            wr.putbits(8, sw.buffer[rp] as u64)?;
+        } else {
+            num = sw.match_len;
+            wr.gamma_encode((num - MIN_LEN + 1) as u64)?;
+            wr.putbits(POS_BITS, (rp - sw.match_pos - 1) as u64)?;
+        }
+        for _ in 0 .. num {
+            sw.insert(rp);
+            rp += 1;
+            if rp &gt;= SW_LIMIT {
+                rp = sw.update(rp).unwrap();
+            }
+        }
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: lzb_encode input_file output_file");
+    } else {
+        match encode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+
+<h4 id="chap03b">●LZB 符号 (復号)</h4>
+<pre class="list">
+//
+// lzb_decode.rs : LZB 符号 (復号)
+//
+//                 Copyright (C) 2018 Makoto Hiroi
+//
+extern crate bitio;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+use std::error::Error;
+use bitio::BitReader;
+
+// 以下の定数は lzb_enocde.rs と同じにすること
+const MIN_LEN: usize = 3;
+const POS_BITS: u64 = 16;
+const SW_SIZE: usize = 1 &lt;&lt; POS_BITS;
+
+fn decode_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut rd = BitReader::open(src)?;
+    let mut wr = BufWriter::new(File::create(dst)?);
+
+    let mut size = rd.getbits(64)?;   // ファイルサイズの取得
+    if size == 0 { return Ok(()); }
+
+    let mut buffer = [0u8; SW_SIZE];
+    let mut rp: usize = 0;
+    while size &gt; 0 {
+        let mut num = rd.gamma_decode()?;
+        if num &gt; 0 {
+            num = num - 1 + MIN_LEN as u64;
+            let mut pos = (rd.getbits(POS_BITS)? + 1) as usize;
+            pos = if rp &gt;= pos { rp - pos } else { (rp + SW_SIZE) - pos };
+            for _ in 0 .. num {
+                let c = buffer[pos];
+                wr.write(&amp;[c])?;
+                buffer[rp] = c;
+                pos += 1;
+                rp += 1;
+                if pos &gt;= SW_SIZE { pos = 0; }
+                if rp &gt;= SW_SIZE { rp = 0; }
+            }
+        } else {
+            num = 1;
+            let c = rd.getbits(8)? as u8;
+            wr.write(&amp;[c])?;
+            buffer[rp] = c;
+            rp += 1;
+            if rp &gt;= SW_SIZE { rp = 0}
+        }
+        size -= num;
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: lzb_decode input_file output_file");
+    } else {
+        match decode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<h4 id="chap03c">●簡単な実行例</h4>
+<p> それでは簡単な実行例として、<a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#large">The Large Corpus</a> と <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> の ptt5 を圧縮してみましょう。
+</p>
+<table border=1>
+<caption>表：The Large Corpus と ptt5 の評価結果</caption>
+<thead>
+  <tr><th>ファイル名</th><th>サイズ</th><th>LZB(18)</th><th>LZB(256)</th><th>LZSS</th><th>Huffman</th></tr>
+</thead>
+<tbody>
+  <tr><td>bible.txt   </td><td> 4,047,392</td><td>1,503,191</td><td>1,467,703</td><td>1,523,519</td><td>2,218,536</td></tr>
+  <tr><td>e.coli      </td><td> 4,638,690</td><td>1,585,902</td><td>1,584,648</td><td>1,576,480</td><td>1,159,686</td></tr>
+  <tr><td>world192.txt</td><td> 2,473,400</td><td>1,136,319</td><td>1,110,237</td><td>1,172,800</td><td>1,558,721</td></tr>
+  <tr><td>ptt5        </td><td>   513,216</td><td>117,627</td><td>65,687</td><td>  107,293</td><td>  106,758</td></tr>
+</tbody>
+</table>
+<ul>
+  <li>スライド窓の大きさは 8192, 最大一致長は LZSS と LZB(18) が 18 で、LZB(256) が 256</li>
+</ul>
+<p> 最大一致長が短い場合、可変長符号を使うと逆効果になることもありますが、最大一致長を長くすると、その効果は大きくなります。特に、ptt5 のように同じ記号が連続するファイルの場合、最大一致長を長くするとファイルの圧縮率はとても高くなります。
+</p>
+<p> 次は最大一致長を 256 に固定して、スライド窓の大きさを大きくしてみましょう。
+</p>
+<table border=1>
+<caption>表：The Large Corpus と ptt5 の評価結果 (2)</caption>
+<thead>
+  <tr><th>ファイル名</th><th>サイズ</th><th>8 k</th><th>16 k</th><th>32 k</th><th>64 k</th></tr>
+</thead>
+<tbody>
+  <tr><td>bible.txt   </td><td> 4,047,392</td><td>1,467,703</td><td>1,390,180</td><td>1,326,614</td><td>1,272,164</td></tr>
+  <tr><td>e.coli      </td><td> 4,638,690</td><td>1,584,648</td><td>1,560,720</td><td>1,544,914</td><td>1,535,620</td></tr>
+  <tr><td>world192.txt</td><td> 2,473,400</td><td>1,110,237</td><td>876,062</td><td>801,622</td><td>747,720</td></tr>
+  <tr><td>ptt5        </td><td>   513,216</td><td>65,687</td><td>65,905</td><td>66,369</td><td>67,049</td></tr>
+</tbody>
+</table>
+<p> LZ77 符号の場合、スライド窓を大きくすると圧縮率が高くなることが多いのですが、符号化に時間がかかるようになります。興味のある方はいろいろ試してみてください。
+</p>
+<hr>
+<h4 id="chap04">●LZH 符号</h4>
+<p> LZSS 符号はスライド窓から最長一致系列を探して、その位置と長さで符号化しました。最長一致系列が見つからなかった場合、LZSS 符号は記号をそのまま出力しています。この場合、可変長の符号語を使って平均符号長を短くすることができれば、圧縮率はさらに良くなるはずです。この二段階目の圧縮にハフマン符号を用いたものを一般に「LZH 符号」といいます。詳しい説明は拙作のページ <a href="../light/index.html#python_algo">Algorithms with Python</a> <a href="../light/pyalgo33.html">LZB 符号と LZH 符号</a> をお読みくださいませ。
+</p>
+<h4 id="chap04a">●LZH 符号の符号化</h4>
+<pre class="list">
+//
+// lzh_encode.rs : LZH 符号 (符号化)
+//
+//                 Copyright (C) 2018 Makoto Hiroi
+//
+extern crate bitio;
+extern crate huffman;
+
+use std::fs::{self, File};
+use std::io::prelude::*;
+use std::io::BufReader;
+use std::collections::HashMap;
+use std::error::Error;
+use bitio::BitWriter;
+use huffman::*;
+
+// 定数
+const MIN_LEN: usize = 4;
+const MAX_LEN: usize = 256;
+const POS_BITS: u64 = 16;
+const SW_SIZE: usize = 1 &lt;&lt; POS_BITS;
+const SW_LIMIT: usize = SW_SIZE * 2;
+const NIL: usize = SW_LIMIT + MAX_LEN;
+const HUFF_BITS: u64 = 14;
+const HUFF_SIZE: usize = 1 &lt;&lt; HUFF_BITS;
+const CODE_SIZE: u64 = 256;
+const CODE1_BITS: u64 = 9;   // 記号と長さをハフマン符号で符号化するときのビット長
+const CODE2_BITS: u64 = 5;   // 位置をハフマン符号で符号化するときのビット長
+
+struct SWindow {
+    reader: BufReader&lt;File&gt;,
+    buffer: Box&lt;[u8; SW_LIMIT + MAX_LEN]&gt;,
+    htable: HashMap&lt;u32, usize&gt;,
+    next: Box&lt;[usize; SW_SIZE]&gt;,
+    data_size: usize,
+    match_len: usize,
+    match_pos: usize
+}
+
+impl SWindow {
+    fn new(filename: &amp;str) -&gt; std::io::Result&lt;SWindow&gt; {
+        let fs = File::open(filename)?;
+        let mut sw = SWindow {
+            reader: BufReader::new(fs),
+            buffer: Box::new([0u8; SW_LIMIT + MAX_LEN]),
+            htable: HashMap::new(),
+            next: Box::new([NIL; SW_SIZE]),
+            data_size: 0,
+            match_len: 0,
+            match_pos: 0,
+        };
+        // ファイルの読み込み
+        sw.data_size = sw.reader.read(&amp;mut *sw.buffer)?;
+        Ok(sw)
+    }
+
+    // ハッシュ値を求める
+    fn hash_value(&amp;self, rp: usize) -&gt; u32 {
+        let mut value = 0u32;
+        for i in 0 .. MIN_LEN {
+            value = (value &lt;&lt; 8) + self.buffer[rp + i] as u32;
+        }
+        value
+    }
+
+    // データの挿入
+    fn insert(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        match self.htable.get(&amp;value) {
+            Some(x) if *x != NIL =&gt; self.next[rp &amp; (SW_SIZE - 1)] = *x,
+            _ =&gt; self.next[rp &amp; (SW_SIZE - 1)] = NIL
+        }
+        self.htable.insert(value, rp);
+    }
+
+    // 最長一致列の探索
+    fn search(&amp;mut self, rp: usize) {
+        let value = self.hash_value(rp);
+        let limit = if rp &lt; SW_SIZE { 0 } else { rp - SW_SIZE };
+        self.match_len = 0;
+        self.match_pos = 0;
+        if let Some(m) = self.htable.get(&amp;value) {
+            let mut n = *m; 
+            while n != NIL &amp;&amp; n &gt;= limit {
+                if self.buffer[rp + self.match_len] == self.buffer[n + self.match_len] {
+                    let mut x = 0;
+                    while x &lt; MAX_LEN {
+                        if self.buffer[rp + x] != self.buffer[n + x] {
+                            break;
+                        }
+                        x += 1;
+                    }
+                    if self.match_len &lt; x {
+                        self.match_len = x;
+                        self.match_pos = n;
+                        if x == MAX_LEN { break; }
+                    }
+                }
+                n = self.next[n &amp; (SW_SIZE - 1)];
+            }
+            // データの終端をチェック
+            if self.match_len != 0 &amp;&amp; self.match_len &gt;= self.data_size - rp {
+                self.match_len = self.data_size - rp;
+            }
+        }
+    }
+
+    // 更新
+    fn update(&amp;mut self, rp: usize) -&gt; std::io::Result&lt;usize&gt; {
+        if self.data_size &lt; SW_LIMIT + MAX_LEN {
+            return Ok(rp);
+        }
+        // データの移動
+        for i in 0 .. SW_SIZE + MAX_LEN {
+            self.buffer[i] = self.buffer[i + SW_SIZE];
+        }
+        self.data_size = SW_SIZE + MAX_LEN + self.reader.read(&amp;mut self.buffer[SW_SIZE + MAX_LEN ..])?;
+        // ハッシュ表の更新
+        let mut work = vec![];
+        for (k, v) in self.htable.iter_mut() {
+            if *v &lt; SW_SIZE {
+                work.push(*k);
+            } else if *v != NIL {
+                *v -= SW_SIZE; 
+            }
+        }
+        for k in work {
+            self.htable.remove(&amp;k);
+        }
+        for i in 0 .. SW_SIZE {
+            if self.next[i] != NIL &amp;&amp; self.next[i] &gt; SW_SIZE {
+                self.next[i] -= SW_SIZE;
+            } else {
+                self.next[i] = NIL;
+            }
+        }
+        Ok(rp - SW_SIZE)
+    }
+}
+
+// ビット数を求める
+fn get_bit_num(n: u64) -&gt; u64 {
+    let mut n1 = 0;
+    let mut n2 = (n + 1) &gt;&gt; 1;
+    while n2 &gt; 0 {
+        n1 += 1;
+        n2 &gt;&gt;= 1;
+    }
+    n1
+}
+
+// ハフマン符号化
+fn huff_encode(mut wr: &amp;mut BitWriter, huff_buff: &amp;[(u64, u64)], size: usize) -&gt; std::io::Result&lt;()&gt; {
+    let mut freq1 = vec![0u64; CODE_SIZE as usize + MAX_LEN - MIN_LEN + 1];
+    let mut freq2 = vec![0u64; (POS_BITS + 1) as usize];
+    for i in 0 .. size {
+        freq1[huff_buff[i].0 as usize] += 1;
+        if huff_buff[i].0 &gt;= CODE_SIZE {
+            freq2[get_bit_num(huff_buff[i].1) as usize] += 1;
+        }
+    }
+    let tree1 = make_tree(&amp;freq1);
+    let code1 = make_code(&amp;tree1);
+    let tree2 = make_tree(&amp;freq2);
+    let code2 = make_code(&amp;tree2);
+    wr.putbits(HUFF_BITS, (size - 1) as u64)?;   // データサイズ
+    write_tree(&amp;tree1, CODE1_BITS, &amp;mut wr)?;
+    write_tree(&amp;tree2, CODE2_BITS, &amp;mut wr)?;
+    // 符号化
+    for i in 0 .. size {
+        let (x, p) = huff_buff[i];
+        huffman_encode(&amp;code1, x, &amp;mut wr)?;
+        if x &gt;= CODE_SIZE {
+            let n = get_bit_num(p);
+            huffman_encode(&amp;code2, n, &amp;mut wr)?;
+            if n &gt; 0 { wr.putbits(n, p + 1)?; }
+        }
+    }
+    Ok(())
+}
+
+fn encode_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut wr = BitWriter::create(dst)?;
+
+    // ファイルサイズ
+    let metadata = fs::metadata(src)?;
+    let size = metadata.len();
+    if size == 0 { return Ok(()); }    
+    wr.putbits(64, size)?;
+    // ハフマン符号用のバッファ
+    let mut huff_buff = Box::new([(0u64, 0u64); HUFF_SIZE]);
+    let mut huff_cnt = 0;
+
+    let mut sw = SWindow::new(src)?;
+    let mut rp = 0;
+    while rp &lt; sw.data_size {
+        let num;
+        sw.search(rp);
+        if sw.match_len &lt; MIN_LEN {
+            num = 1;
+            huff_buff[huff_cnt] = (sw.buffer[rp] as u64, 0);
+        } else {
+            num = sw.match_len;
+            huff_buff[huff_cnt] = (CODE_SIZE + (num - MIN_LEN) as u64, (rp - sw.match_pos - 1) as u64);
+        }
+        huff_cnt += 1;
+        if huff_cnt &gt;= HUFF_SIZE {
+            huff_encode(&amp;mut wr, &amp; *huff_buff, huff_cnt)?;
+            huff_cnt = 0;
+        }
+        for _ in 0 .. num {
+            sw.insert(rp);
+            rp += 1;
+            if rp &gt;= SW_LIMIT {
+                rp = sw.update(rp).unwrap();
+            }
+        }
+    }
+    if huff_cnt &gt; 0 {
+        huff_encode(&amp;mut wr, &amp; *huff_buff, huff_cnt)?;
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: lzh_encode input_file output_file");
+    } else {
+        match encode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+<h4 id="chap04b">●LZH 符号の復号</h4>
+<pre class="list">
+//
+// lzh_decode.rs : LZH 符号 (復号)
+//
+//                 Copyright (C) 2018 Makoto Hiroi
+//
+extern crate bitio;
+extern crate huffman;
+
+use std::fs::File;
+use std::io::prelude::*;
+use std::io::BufWriter;
+use std::error::Error;
+use bitio::BitReader;
+use huffman::*;
+
+// 以下の定数は lzh_enocde.rs と同じにすること
+const MIN_LEN: usize = 4;
+const POS_BITS: u64 = 16;
+const SW_SIZE: usize = 1 &lt;&lt; POS_BITS;
+const HUFF_BITS: u64 = 14;
+const HUFF_SIZE: usize = 1 &lt;&lt; HUFF_BITS;
+const CODE_SIZE: u64 = 256;
+const CODE1_BITS: u64 = 9; // 記号と長さをハフマン符号で符号化するときのビット長
+const CODE2_BITS: u64 = 5; // 位置をハフマン符号で符号化するときのビット長
+
+// ハフマン符号の復号
+fn huff_decode(huff_buff: &amp;mut [(u64, u64)], mut rd: &amp;mut BitReader) -&gt; std::io::Result&lt;usize&gt; {
+    let size = (rd.getbits(HUFF_BITS)? + 1) as usize;   // データサイズの取得
+    let tree1 = read_tree(CODE1_BITS, &amp;mut rd)?;
+    let tree2 = read_tree(CODE2_BITS, &amp;mut rd)?;
+    for i in 0 .. size {
+        let c = huffman_decode(&amp;tree1, &amp;mut rd)?;
+        let p = if c &gt;= CODE_SIZE {
+            let n = huffman_decode(&amp;tree2, &amp;mut rd)?;
+            if n &gt; 0 {
+                (1 &lt;&lt; n) + rd.getbits(n)? - 1
+            } else {
+                n
+            }
+        } else {
+            0
+        };
+        huff_buff[i] = (c, p);
+    }
+    Ok(size)
+}
+
+fn decode_file(src: &amp;String, dst: &amp;String) -&gt; std::io::Result&lt;()&gt; {
+    let mut rd = BitReader::open(src)?;
+    let mut wr = BufWriter::new(File::create(dst)?);
+    let mut size = rd.getbits(64)?;   // ファイルサイズの取得
+    if size == 0 { return Ok(()); }
+
+    // ハフマン符号用
+    let mut huff_buff = Box::new([(0u64, 0u64); HUFF_SIZE]);
+    let mut hsize = 0;
+    let mut hcnt = 0;
+    // スライド窓
+    let mut buffer = Box::new([0u8; SW_SIZE]);
+    let mut rp: usize = 0;
+    while size &gt; 0 {
+        let num;
+        if hsize == hcnt {
+            hsize = huff_decode(&amp;mut *huff_buff, &amp;mut rd)?;
+            hcnt = 0;
+        }
+        if huff_buff[hcnt].0 &gt;= CODE_SIZE {
+            num = huff_buff[hcnt].0 - CODE_SIZE + MIN_LEN as u64; 
+            let mut pos = (huff_buff[hcnt].1 + 1) as usize;
+            pos = if rp &gt;= pos { rp - pos } else { (rp + SW_SIZE) - pos };
+            for _ in 0 .. num {
+                let c = buffer[pos];
+                wr.write(&amp;[c])?;
+                buffer[rp] = c;
+                pos += 1;
+                rp += 1;
+                if pos &gt;= SW_SIZE { pos = 0; }
+                if rp &gt;= SW_SIZE { rp = 0; }
+            }
+        } else {
+            num = 1;
+            let c = huff_buff[hcnt].0 as u8;
+            wr.write(&amp;[c])?;
+            buffer[rp] = c;
+            rp += 1;
+            if rp &gt;= SW_SIZE { rp = 0}
+        }
+        hcnt += 1;
+        size -= num;
+    }
+    Ok(())
+}
+
+fn main() {
+    let args: Vec&lt;_&gt; = std::env::args().collect();
+    if args.len() &lt; 3 {
+        println!("usage: lzh_decode input_file output_file");
+    } else {
+        match decode_file(&amp;args[1], &amp;args[2]) {
+            Ok(_) =&gt; (),
+            Err(err) =&gt; println!("{}", err.description())
+        }
+    }
+}
+</pre>
+
+<h4 id="chap04c">●簡単な実行例</h4>
+<p> それでは簡単な実行例として、<a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#large">The Large Corpus</a> と <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> の ptt5 を圧縮してみましょう。
+</p>
+<table border=1>
+<caption>表：The Large Corpus と ptt5 の評価結果</caption>
+<thead>
+  <tr><th>ファイル名</th><th>サイズ</th><th>LZH</th><th>LZB</th></tr>
+</thead>
+<tbody>
+  <tr><td>bible.txt   </td><td> 4,047,392</td><td>1,147,129</td><td>1,272,164</td></tr>
+  <tr><td>e.coli      </td><td> 4,638,690</td><td>1,291,234</td><td>1,535,620</td></tr>
+  <tr><td>world192.txt</td><td> 2,473,400</td><td>692,173</td><td>747,720</td></tr>
+  <tr><td>ptt5        </td><td>   513,216</td><td>56,513</td><td>67,049</td></tr>
+</tbody>
+</table>
+<p> LZH 符号のスライド窓の大きさ (64 k) と最大一致長 (256) は LZB 符号と同じです。ただし、最小の一致長 (MIN_LEN) の値を 3 から 4 に変更しています。LZH 符号の場合、記号の符号化にハフマン符号を用いるため、それだけでも圧縮することが可能です。つまり、不一致の場合が多くても、ある程度は圧縮できるわけです。実際に試してみたところ、LZH 符号の場合、MIN_LEN は 3 よりも 4 の方が少しですが圧縮率は高くなります。興味のある方はいろいろ試してみてください。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Linux</a> | <a href="rust.html">Rust</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

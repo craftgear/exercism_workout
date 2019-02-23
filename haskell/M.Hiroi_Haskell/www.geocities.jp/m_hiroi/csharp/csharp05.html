@@ -1,0 +1,965 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ＃プログラミング超入門</title>
+  <meta name="description" content="C#,C#入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881817</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>C# Programming</h1>
+<h2>お気楽Ｃ＃プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Ｃ＃</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>数で遊ぼう</h3>
+<h4>●多倍長整数</h4>
+<p> C# はライブラリ System.Numerics に定義されている構造体 BigInteger を使うと、任意の桁の整数 (多倍長整数) を扱うことができます。Windows の場合、プログラムをコンパイルするときはオプション -r: に System.Numerics.dll を指定してください。
+</p>
+<pre class="list">
+リスト : 多倍長整数 (bigint.cs)
+
+using System;
+using System.Numerics;
+
+class Test {
+  // 階乗
+  static BigInteger Fact(int n) {
+    if (n == 0)
+      return 1;
+    else
+      return n * Fact(n - 1);
+  }
+
+  // フィボナッチ数
+  static BigInteger Fibo(int n) {
+    BigInteger a = 0, b = 1;
+    while (n-- &gt; 0) {
+      BigInteger c = a;
+      a = b;
+      b += c;
+    }
+    return a;
+  }
+  
+  // 累乗
+  static BigInteger Power(BigInteger n, int m) {
+    if (m == 0) {
+      return 1;
+    } else if (m % 2 == 1) {
+      return n * Power(n, m - 1);
+    } else {
+      BigInteger a = Power(n, m / 2);
+      return a * a;
+    }
+  }
+
+  static void Main() {
+    for (int i = 0; i &lt;= 20; i++)
+      Console.WriteLine("{0}! = {1}", i, Fact(i));
+    for (int i = 40; i &lt;= 60; i++)
+      Console.WriteLine("Fibo({0}) = {1}", i, Fibo(i));
+    Console.WriteLine("Power(2, 100) = {0}", Power(2, 100));
+    Console.WriteLine("Power(3, 100) = {0}", Power(3, 100));
+    Console.WriteLine("Power(5, 100) = {0}", Power(5, 100));
+  }
+}
+</pre>
+<pre>
+C&gt;mcs -r:System.Numerics.dll bigint.cs
+
+C&gt;bigint
+0! = 1
+1! = 1
+2! = 2
+3! = 6
+4! = 24
+5! = 120
+6! = 720
+7! = 5040
+8! = 40320
+9! = 362880
+10! = 3628800
+11! = 39916800
+12! = 479001600
+13! = 6227020800
+14! = 87178291200
+15! = 1307674368000
+16! = 20922789888000
+17! = 355687428096000
+18! = 6402373705728000
+19! = 121645100408832000
+20! = 2432902008176640000
+Fibo(40) = 102334155
+Fibo(41) = 165580141
+Fibo(42) = 267914296
+Fibo(43) = 433494437
+Fibo(44) = 701408733
+Fibo(45) = 1134903170
+Fibo(46) = 1836311903
+Fibo(47) = 2971215073
+Fibo(48) = 4807526976
+Fibo(49) = 7778742049
+Fibo(50) = 12586269025
+Fibo(51) = 20365011074
+Fibo(52) = 32951280099
+Fibo(53) = 53316291173
+Fibo(54) = 86267571272
+Fibo(55) = 139583862445
+Fibo(56) = 225851433717
+Fibo(57) = 365435296162
+Fibo(58) = 591286729879
+Fibo(59) = 956722026041
+Fibo(60) = 1548008755920
+Power(2, 100) = 1267650600228229401496703205376
+Power(3, 100) = 515377520732011331036461129765621272702107522001
+Power(5, 100) = 7888609052210118054117285652827862296732064351090230047702789306640625
+</pre>
+<hr>
+<h4>●分割数</h4>
+<p> 整数 n を 1 以上の自然数の和で表すことを考えます。これを「整数の分割」といいます。整数を分割するとき、同じ自然数を何回使ってもかまいませんが、並べる順序が違うだけのものは同じ分割とします。簡単な例を示しましょう。次の図を見てください。
+</p>
+<pre class="fig">
+─┬─ 6                           : 6
+  │
+  ├─ 5 ─ 1                      : 5 + 1
+  │
+  ├─ 4 ┬ 2                      : 4 + 2
+  │     │
+  │     └ 1 ─ 1                 : 4 + 1 + 1
+  │
+  ├─ 3 ┬ 3                      : 3 + 3
+  │     │
+  │     ├ 2 ─ 1                 : 3 + 2 + 1
+  │     │
+  │     └ 1 ─ 1 ─ 1            : 3 + 1 + 1 + 1
+  │
+  ├─ 2 ┬ 2 ┬ 2                 : 2 + 2 + 2
+  │     │   │
+  │     │   └ 1 ─ 1            : 2 + 2 + 1 + 1
+  │     │
+  │     └ 1 ─ 1 ─ 1 ─ 1       : 2 + 1 + 1 + 1 + 1
+  │
+  └─ 1 ─ 1 ─ 1 ─ 1 ─ 1 ─ 1  : 1 + 1 + 1 + 1 + 1 + 1
+
+
+                    図 : 整数 6 の分割
+</pre>
+<p> 6 の場合、分割の仕方は上図のように 11 通りあります。この数を「分割数」といいます。分割の仕方を列挙する場合、整数 n から k 以下の整数を選んでいくと考えてください。まず、6 から 6 を選びます。すると、残りは 0 になるので、これ以上整数を分割することはできません。次に、6 から 5 を選びます。残りは 1 になるので、1 を選ぶしか方法はありません。
+</p>
+<p> 次に、4 を選びます。残りは 2 になるので、2 から 2 以下の整数を分割する方法になります。2 から 2 を選ぶと残りは 0 になるので 2 が得られます。1 を選ぶと残りは 1 になるので、1 + 1 が得られます。したがって、4 + 2, 4 + 1 + 1 となります。同様に、6 から 3 を選ぶと、残りは 3 から 3 以下の整数を選ぶ方法になります。
+</p>
+<p> 6 から 2 以下の整数を選ぶ方法は、残り 4 から 2 以下の整数を選ぶ方法になり、そこで 2 を選ぶと 2 から 2 以下の整数を選ぶ方法になります。1 を選ぶと 4 から 1 以下の整数を選ぶ方法になりますが、これは 1 通りしかありません。最後に 6 から 1 を選びますが、これも 1 通りしかありません。これらをすべて足し合わせると 11 通りになります。
+</p>
+<p> それでは問題です。
+</p>
+<ol>
+  <li> 分割数を求めるプログラムを作ってください。
+  <li> 分割の仕方をすべて求めるプログラムを作ってください。
+</ol>
+<ul>
+  <li><a href="csharp05.html#ans01">解答１</a>
+  <li><a href="csharp05.html#ans02">解答２</a>
+</ul>
+<hr>
+<h4 id="ans01">●解答１</h4>
+<p> 整数 n を k 以下の整数で分割する総数を求める関数を p(n, k) とすると、p(n, k) は次のように定義することができます。
+</p>
+<pre class="item">
+p(n, k) = 1                          ; n = 0 または k = 1
+p(n, k) = 0                          ; n &lt; 0 または k &lt; 1
+p(n, k) = p(n - k, k) + p(n, k - 1)
+</pre>
+<p> たとえば、p(6, 6) は次のように計算することができます。
+</p>
+<pre class="fig">
+p(6, 6) =&gt; p(0, 6) + p(6, 5)
+        =&gt; 1 + p(1, 5) + p(6, 4)
+        =&gt; 1 +    1    + p(2, 4) + p(6, 3)
+        =&gt; 1 + 1 + 2 + 7
+        =&gt; 11
+
+p(2, 4) =&gt; p(-2, 4) + p(2, 3)
+        =&gt;    0     + p(-1, 3) + p(2, 2)
+        =&gt;    0     +    0     + p(0, 2) + p(2, 1)
+        =&gt; 0 + 0 + 1 + 1
+        =&gt; 2
+
+p(6, 3) =&gt; p(3, 3) + p(6, 2)
+        =&gt; p(0, 3) + p(3, 2) + p(4, 2) + p(6, 1)
+        =&gt;    1    + p(1, 2) + p(3, 1) + p(2, 2) + p(4, 1) + 1
+        =&gt;    1    +    1    +    1    + p(0, 2) + p(2, 1) + 1 + 1
+        =&gt; 1 + 1 + 1 + 1 + 1 + 1 + 1
+        =&gt; 7
+</pre>
+<p> 分割数を求める関数を PartitionNumber() とすると、関数 p(n, k) を使って次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 分割数
+
+using System;
+
+class Test {
+  static int PartNum(int n, int k) {
+    if (n == 1 || k == 1)
+      return 1;
+    else if (n &lt; 0 || k &lt; 1)
+      return 0;
+    else
+      return PartNum(n - k, k) + PartNum(n, k - 1);
+  }
+
+  static int PartitionNumber(int n) {
+    return PartNum(n, n);
+  }
+
+  static void Main() {
+    for (int n = 1; n &lt;= 20; n++)
+      Console.Write("{0} ", PartitionNumber(n));
+    Console.WriteLine("");
+  }
+}
+</pre>
+<pre>
+C&gt;partnum
+1 2 3 5 7 11 15 22 30 42 56 77 101 135 176 231 297 385 490 627
+</pre>
+<p> 関数 PartNum() は p(n, k) の定義をそのままプログラムしただけです。ただし、このプログラムは二重再帰で何度も同じ値を求めているため実行速度はとても遅くなります。
+</p>
+<h4>●動的計画法による高速化</h4>
+<p> 動的計画法を使うと、大きな値でも高速に計算することができます。次の図を見てください。
+</p>
+<pre class="fig">
+k 
+1 : [1,  1,  1,  1,  1,  1,  1] 
+
+2 : [1,  1,  1+1=2, 1+1=2, 2+1=3, 2+1=3, 3+1=4]
+ =&gt; [1,  1,  2,  2,  3,  3,  4]
+
+3:  [1,  1,  2,  1+2=3, 1+3=4, 2+3=5, 3+4=7]
+ =&gt; [1,  1,  2,  3,  4,  5,  7]
+
+4:  [1,  1,  2,  3,  1+4=4, 1+5=6, 2+7=9]
+ =&gt; [1,  1,  2,  3,  5,  6,  9
+
+5:  [1,  1,  2,  3,  5,  1+6=7, 1+9=10]
+ =&gt; [1,  1,  2,  3,  5,  7,  10]
+
+6:  [1,  1,  2,  3,  5,  7,  10+1=11]
+ =&gt; [1,  1,  2,  3,  5,  7,  11]
+</pre>
+<p> 大きさ n + 1 の配列を用意します。配列の添字が n を表していて、p(n, 1) から順番に値を求めていきます。p(n, 1) の値は 1 ですから、配列の要素は 1 に初期化します。次に、p(n, 2) の値を求めます。定義により p(n, 2) = p(n - 2, 2) + p(n, 1) なので、2 番目以降の要素に n - 2 番目の要素を加算すれば求めることができます。あとは、k の値をひとつずつ増やして同様の計算を行えば p(n, n) の値を求めることができます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 分割数 (動的計画法)
+
+using System;
+using System.Numerics;
+
+class Test {
+  static BigInteger PartitionNumber2(int n) {
+    var table = new BigInteger [n + 1];
+    for (int i = 0; i &lt;= n; i++)
+      table[i] = 1;
+    for (int i = 2; i &lt;= n; i++) {
+      for (int j = i; j &lt;= n; j++) {
+        table[j] += table[j - i];
+      }
+    }
+    return table[n];
+  }
+
+  static void Main() {
+    DateTime s = DateTime.Now;
+    Console.WriteLine("{0}", PartitionNumber2(1000));
+    DateTime e = DateTime.Now;
+    Console.WriteLine("{0}", e - s);
+    s = DateTime.Now;
+    Console.WriteLine("{0}", PartitionNumber2(2000));
+    e = DateTime.Now;
+    Console.WriteLine("{0}", e - s);
+    s = DateTime.Now;
+    Console.WriteLine("{0}", PartitionNumber2(4000));
+    e = DateTime.Now;
+    Console.WriteLine("{0}", e - s);
+  }
+}
+</pre>
+<p> 説明をそのままプログラムしただけなので、とくに難しいところはないと思います。
+</p>
+<p> それでは実際に試してみましょう。1000, 2000, 4000 の分割数を求めてみました。
+</p>
+<pre>
+C&gt;partnum
+24061467864032622473692149727991
+00:00:00.1800003
+4720819175619413888601432406799959512200344166
+00:00:00.2800004
+1024150064776551375119256307915896842122498030313150910234889093895
+00:00:01.0100014
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz
+</pre>
+<p> 動的計画法の効果はとても高いですね。
+</p>
+<h4>●さらなる高速化</h4>
+<p> ところで、数がもっと大きくなると動的計画法を使ったプログラムでも遅くなります。実際に 5000, 6000, 7000 の分割数を求めてみましょう。
+</p>
+<pre>
+169820168825442121851975101689306431361757683049829233322203824652329144349
+00:00:01.6550026
+46717275319702090929710246439736906433646291532700370338566055289250724053492461
+29
+00:00:02.4300034
+32856930803440615786280925635924166861950151574532240659699032157432236394374450791229199
+00:00:03.4150056
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz
+</pre>
+<p> <a href="csharp05.html#cite">参考 URL 1</a> によると、次の漸化式を使うと分割数を高速に求めることができるそうです。
+</p>
+<pre class="item">
+p(k) = p(k - 1) + p(k - 2) - p(k - 5) - p(k - 7) + p(k - 12) + p(k - 15) - p(k - 22) - ...
+</pre>
+<p> 漸化式の説明を <a href="csharp05.html#cite">参考 URL 1</a> より引用します。
+</p>
+<p> <cite>『ここで p(0) = 1 および負の整数 k に対して p(k) = 0 とし、和は (1/2)n(3n - 1) の形（ただし n は正または負の整数全体を走る）の一般五角数全体にわたってとるものとする（順に n = 1, -1, 2, -2, 3, -3, 4, -4 ..., とすると、値として 1, 2, 5, 7, 12, 15, 22, 26, 35, 40, 51, ... が得られる）。和における符号は交互に +, +, -, -, +, +, ... と続く。』</cite>
+</p>
+
+<p> 分割数 p(k) は k - 1 以下の分割数がわかれば求めることができます。この漸化式も動的計画法を使えば簡単にプログラムできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 分割数 (オイラーの五角数定理)
+
+  // 五角数
+  static int Pentagon(int n) {
+    return n * (3 * n - 1) / 2;
+  }
+
+  static BigInteger PartitionNumber3(int n) {
+    var p = new BigInteger [n + 1];
+    p[0] = 1;
+    for (int i = 1; i &lt;= n; i++) {
+      int j = 1, s = 1;
+      while (true) {
+        int k = Pentagon(j);
+        if (i &lt; k) break;
+        p[i] += p[i - k] * s;
+        k = Pentagon(-j);
+        if (i &lt; k) break;
+        p[i] += p[i - k] * s;
+        j++;
+        s *= -1;
+      }
+    }
+    return p[n];
+  }
+</pre>
+<p> 配列 p は分割数 p(k) を記憶するために使います。p[0] を 1 に初期化したあと、for ループで 1 から n までの分割数を順番に求めていきます。あとは、漸化式をそのままプログラムするだけです。変数 s は符号 (+. -) を表していて、j が奇数のとき s は 1 になり、j が偶数のときは -1 になります。
+</p>
+<p> それでは実際に 5000, 10000, 20000 の分割数を求めてみましょう。
+</p>
+<pre>
+169820168825442121851975101689306431361757683049829233322203824652329144349
+00:00:00.1200002
+36167251325636293988820471890953695495016030339315650422081868605887952568754066
+420592310556052906916435144
+00:00:00.2100003
+25211481381252969791661953323047045228132894960181159343685031410803428442380156
+4956623970731689824369192324789351994903016411826230578166735959242113097
+00:00:00.6500009
+
+実行環境 : Windows 7, Core i7-2670QM 2.20GHz
+</pre>
+<p> このように、20000 の分割数でも 1 秒かからずに求めることができます。
+</p>
+<hr>
+<h4 id="ans02">●解答２</h4>
+
+<pre class="list">
+リスト : 整数の分割
+
+  static void PrintPartInt(List&lt;int&gt; a, int n) {
+    foreach(int x in a) {
+      Console.Write("{0} ", x);
+    }
+    while (n-- &gt; 0) Console.Write("1 ");
+    Console.WriteLine("");
+  }
+  
+  static void PartIntSub(int n, int k, List&lt;int&gt; a) {
+    if (n == 0) {
+      PrintPartInt(a, 0);
+    } else if (n == 1) {
+      PrintPartInt(a, 1);
+    } else if (k == 1) {
+      PrintPartInt(a, n);
+    } else {
+      if (n &gt;= k) {
+        a.Add(k);
+        PartIntSub(n - k, k, a);
+        a.RemoveAt(a.Count - 1);
+      }
+      PartIntSub(n, k - 1, a);
+    }
+  }
+
+  static void PartitionOfInt(int n) {
+    PartIntSub(n, n, new List&lt;int&gt;());
+  }
+</pre>
+<p> 基本的な考え方は PartitionNumber() と同じです。関数 PartIntSub() は選んだ数値を累積変数 a の配列に格納していくだけです。n が 0 の場合は a を出力し、n が 1 の場合は a と 1 をひとつ出力します。k が 1 の場合は a と 1 を n 個出力します。
+</p>
+<p> 5, 6, 7 の分割の仕方は次のようになります。
+</p>
+<pre>
+5
+4 1
+3 2
+3 1 1
+2 2 1
+2 1 1 1
+1 1 1 1 1
+
+6
+5 1
+4 2
+4 1 1
+3 3
+3 2 1
+3 1 1 1
+2 2 2
+2 2 1 1
+2 1 1 1 1
+1 1 1 1 1 1
+
+7
+6 1
+5 2
+5 1 1
+4 3
+4 2 1
+4 1 1 1
+3 3 1
+3 2 2
+3 2 1 1
+3 1 1 1 1
+2 2 2 1
+2 2 1 1 1
+2 1 1 1 1 1
+1 1 1 1 1 1 1
+</pre>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="https://ja.wikipedia.org/wiki/%E5%88%86%E5%89%B2%E6%95%B0">分割数 - Wikipedia</a>
+  <li><a href="https://ja.wikipedia.org/wiki/%E8%87%AA%E7%84%B6%E6%95%B0%E3%81%AE%E5%88%86%E5%89%B2">自然数の分割 - Wikipedia</a>
+  <li><a href="http://d.hatena.ne.jp/inamori/20121216/p1">分割数 - 桃の天然水<a/>, (inamori さん)
+</ol>
+<hr>
+<h4>●完全順列</h4>
+<p> N 個の整数 1, 2, ..., N の順列を考えます。このとき、i 番目 (先頭要素が 1 番目) の要素が整数 i ではない順列を「完全順列 (derangement)」といいます。今回は 1 から N までの整数値で完全順列を生成する関数 Derangement() を作ってみましょう。
+</p>
+<pre class="list">
+リスト : 完全順列
+
+using System;
+using System.Collections.Generic;
+
+class Test {
+  static void PrintList(List&lt;int&gt; a) {
+    foreach(int x in a) {
+      Console.Write("{0} ", x);
+    }
+    Console.WriteLine("");
+  }
+  
+  static void DerangeSub(int n, List&lt;int&gt; a) {
+    if (a.Count == n) {
+      PrintList(a);
+    } else {
+      for (int i = 1; i &lt;= n; i++) {
+        if (i == a.Count + 1 || a.Contains(i)) continue;
+        a.Add(i);
+        DerangeSub(n, a);
+        a.RemoveAt(a.Count - 1);
+      }
+    }
+  }
+
+  static void Derangement(int n) {
+    DerangeSub(n, new List&lt;int&gt;());
+  }
+
+  static void Main() {
+    for (int i = 3; i &lt;= 5; i++)
+      Derangement(i);
+  }
+}
+</pre>
+<p> プログラムは簡単です。DerangeSub() の変数 a に完全順列を格納します。数字 i を a に追懐するとき、i が a.Count または i が a に含まれているならば、数字 i を a には追加しません。あとは、メソッド Add() で i を a の末尾に追加して、DerangeSub() を再帰呼び出しします。戻ってきたら末尾の数字をメソッド RemoveAt() で削除するだけです。
+</p>
+<p> 実行結果を示します。
+</p>
+<pre>
+2 3 1
+3 1 2
+2 1 4 3
+2 3 4 1
+2 4 1 3
+3 1 4 2
+3 4 1 2
+3 4 2 1
+4 1 2 3
+4 3 1 2
+4 3 2 1
+2 1 4 5 3
+2 1 5 3 4
+2 3 1 5 4
+2 3 4 5 1
+2 3 5 1 4
+2 4 1 5 3
+2 4 5 1 3
+2 4 5 3 1
+2 5 1 3 4
+2 5 4 1 3
+2 5 4 3 1
+3 1 2 5 4
+3 1 4 5 2
+3 1 5 2 4
+3 4 1 5 2
+3 4 2 5 1
+3 4 5 1 2
+3 4 5 2 1
+3 5 1 2 4
+3 5 2 1 4
+3 5 4 1 2
+3 5 4 2 1
+4 1 2 5 3
+4 1 5 2 3
+4 1 5 3 2
+4 3 1 5 2
+4 3 2 5 1
+4 3 5 1 2
+4 3 5 2 1
+4 5 1 2 3
+4 5 1 3 2
+4 5 2 1 3
+4 5 2 3 1
+5 1 2 3 4
+5 1 4 2 3
+5 1 4 3 2
+5 3 1 2 4
+5 3 2 1 4
+5 3 4 1 2
+5 3 4 2 1
+5 4 1 2 3
+5 4 1 3 2
+5 4 2 1 3
+5 4 2 3 1
+</pre>
+<hr>
+<h4>●モンモール数</h4>
+<p> 完全順列の総数を「モンモール数 (Montmort number)」といいます。モンモール数は次の漸化式で求めることができます。
+</p>
+<pre class="item">
+A1 = 0
+A2 = 1
+An = (n - 1) * (An-1 + An-2)  ; n &gt;= 3
+</pre>
+<p> BigInteger でモンモール数を求める関数は次のようになります。
+</p>
+<pre class="list">
+リスト : モンモール数
+
+using System;
+using System.Numerics;
+
+class Test {
+  static BigInteger MontmortNumber(int n) {
+    if (n == 1)
+      return 0;
+    else if (n == 2)
+      return 1;
+    else
+      return (n - 1) * (MontmortNumber(n - 1) + MontmortNumber(n - 2));
+  }
+  
+  // 別解
+  static BigInteger MontmortNumber2(int n) {
+    BigInteger a = 0, b = 1;
+    for (int i = 1; i &lt; n; i++) {
+      BigInteger c = a;
+      a = b;
+      b = (i + 1) * (b + c);
+    }
+    return a;
+  }
+  
+  static void Main() {
+    for (int i = 1; i &lt; 10; i++) {
+      Console.WriteLine("{0}", MontmortNumber(i));
+    }
+    for (int i = 1; i &lt;= 5; i++)
+      Console.WriteLine("{0}", MontmortNumber2(i* 10));
+  }
+}
+</pre>
+<pre>
+0
+1
+2
+9
+44
+265
+1854
+14833
+133496
+1334961
+895014631192902121
+97581073836835777732377428235481
+300158458444475693321518926221316715906770469041
+11188719610782480504630258070757734324011354208865721592720336801
+</pre>
+<p> 関数 MontmortNumber() は公式をそのままプログラムしただけです。二重再帰になっているので、実行速度はとても遅くなります。これを繰り返しに変換すると別解のようになります。考え方はフィボナッチ数列と同じです。変数 a に i 番目の値を、b に i + 1 番目の値を保存しておきます。すると、i + 2 番目の値は (i + 1) * (a + b) で計算することができます。あとは、b の値を a に、新しい値を b にセットして処理を繰り返すだけです。
+</p>
+<hr>
+<h4>●エラトステネスの篩</h4>
+<p> 素数を求める簡単で高速な方法を紹介しましょう。最初に、2 から N までの整数列を生成します。先頭の 2 は素数なので、この整数列から 2 で割り切れる整数を取り除き除きます。2 で割り切れる整数が取り除かれたので、残った要素の先頭が素数になります。先頭要素は 3 になるので、今度は 3 で割り切れる整数を取り除けばいいのです。このように、素数を見つけたらそれで割り切れる整数を取り除いていくアルゴリズムを「エラトステネスの篩 (ふるい) 」といいます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : エラトステネスの篩
+
+using System;
+
+class Test {
+  static void Sieve(int n) {
+    var primes = new bool [n / 2];   // false で初期化される
+    int x = 3;
+    Console.Write("2 ");
+    while (x * x &lt;= n) {
+      int y = (x - 3) / 2;
+      if (!primes[y]) {
+        Console.Write("{0} ", x);
+        y += x;
+        while (y &lt; primes.Length) {
+          primes[y] = true;
+          y += x;
+        }
+      }
+      x += 2;
+    }
+    while (x &lt;= n) {
+      int y = (x - 3) / 2;
+      if (!primes[y]) Console.Write("{0} ", x);
+      x += 2;
+    }
+    Console.WriteLine("");
+  }
+
+  static void Main() {
+    Sieve(1000);
+  }
+}
+</pre>
+<p> bool の配列 primes で奇数列 (3, 5, 7, ... ) を表します。false で素数を表し、素数でない場合は true に書き換えます。primes は false で初期化されるので、最初はすべての数が素数ということになります。
+</p>
+<p> 奇数を変数 x とし、それに対応する primes の添字を変数 y とすると、変数 x は 3, 5, 7, 9, ... に、それに対応する変数 y は 0, 1, 2, 3, ... になります。この場合、x の倍数に対応する y の値は y + x, y + x * 2, y + x * 3, ... になります。たとえば、3, 5, 7 の倍数は次のようになります。
+</p>
+<pre class="fig">
+x :  3  5  7  9 11 13 15 17 19 21 23 25
+y :  0  1  2  3  4  5  6  7  8  9 10 11
+--+-------------------------------------
+3 |  O        0        O        0
+5 |     0              0              0
+7 |        0                    0
+</pre>
+<p> プログラムは簡単です。最初の while ループで、x を √n まで +2 ずつ増やして素数かチェックします。primes の添字 y は (x - 3) / 2 で求めることができます。primes[y] が false ならば x は素数です。x の倍数を primes から削除します。それから、次の while ループで √n よりも大きい素数を求めます。
+</p>
+<pre>
+C&gt;sieve
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71 73 79 83 89 97 101 103 
+107 109 113 127 131 137 139 149 151 157 163 167 173 179 181 191 193 197 199 211 
+223 227 229 233 239 241 251 257 263 269 271 277 281 283 293 307 311 313 317 331 
+337 347 349 353 359 367 373 379 383 389 397 401 409 419 421 431 433 439 443 449 
+457 461 463 467 479 487 491 499 503 509 521 523 541 547 557 563 569 571 577 587 
+593 599 601 607 613 617 619 631 641 643 647 653 659 661 673 677 683 691 701 709 
+719 727 733 739 743 751 757 761 769 773 787 797 809 811 821 823 827 829 839 853 
+857 859 863 877 881 883 887 907 911 919 929 937 941 947 953 967 971 977 983 991 
+997
+</pre>
+<hr>
+<h4>●ハミング数</h4>
+<p> 7 以上の素数で割り切れない正の整数を「ハミング数 (Hamming Numbers)」といいます。ハミング数は素因子が 2, 3, 5 しかない自然数のことで、素因数分解したとき 2<sup>i</sup> * 3<sup>j</sup> * 5<sup>k</sup> (i, j, k &gt;= 0) の形式になります。たとえば、100 以下のハミング数は次のようになります。
+<pre class="item">
+1, 2, 3, 4, 5, 6, 8, 9, 10, 12, 15, 16, 18, 20, 24, 25, 27, 30, 32, 36, 40, 45, 48, 50, 
+54, 60, 64, 72, 75, 80, 81, 90, 96, 100
+</pre>
+<p> 今回はハミング数を求めるプログラムを作りましょう。一番簡単な方法は、1 から n までの整数列を生成して、そこからハミング数を取り出していくことです。これを C# でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : ハミング数を求める
+
+using System;
+using System.Linq;
+
+class Test {
+  static bool check(int n) {
+    while (n % 2 == 0) n /= 2;
+    while (n % 3 == 0) n /= 3;
+    while (n % 5 == 0) n /= 5;
+    return n == 1;
+  }
+
+  static void Main() {
+    foreach(int x in Enumerable.Range(1, 100).Where(check)) {
+      Console.Write("{0} ", x);
+    }
+    Console.WriteLine("");
+    for (int n = 100; n &lt;= 100000000; n *= 10) {
+      int x = Enumerable.Range(1, n).Where(check).Count();
+      Console.WriteLine("{0}, {1}", n, x);
+    }
+  }
+}
+</pre>
+<pre>
+C&gt;hamming
+1 2 3 4 5 6 8 9 10 12 15 16 18 20 24 25 27 30 32 36 40 45 48 50 54 60 64 72 75 80 81 90 96 100
+100, 34
+1000, 86
+10000, 175
+100000, 313
+1000000, 507
+10000000, 768
+100000000, 1105
+</pre>
+<p> 関数 check(n) は n がハミング数かチェックします。これは 2, 3, 5 だけで割り切れるか試しているだけです。プログラムはとても簡単ですが、引数 n の値が大きくなると時間がかかるようになります。n に比べてハミング数の個数は少ないようなので、式 2<sup>i</sup> * 3<sup>j</sup> * 5<sup>k</sup> (i, j, k &gt;= 0) を使ってハミング数を生成したほうがよさそうです。引数 n に対して i, j, k の上限値は log<sub>2</sub> n, log<sub>3</sub> n, log<sub>5</sub> n で求めることができます。たとえば、100000000 の場合は次のようになります。
+</p>
+<pre>
+i : 0 - 26
+j : 0 - 16
+k : 0 - 11
+</pre>
+<p> 全体で 27 * 17 * 12 = 5508 個しかありません。この中から 100000000 以下の数を選べばいいわけです。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ハミング数 (2)
+
+  // べき乗
+  static BigInteger Power(BigInteger x, int y) {
+    if (y == 0) {
+      return 1;
+    } else if (y % 2 == 1) {
+      return x * Power(x, y - 1);
+    } else {
+      BigInteger z = Power(x, y / 2);
+      return z * z;
+    }
+  }
+  
+  // べき乗の集合を生成する
+  static List&lt;BigInteger&gt; MakePowerList(BigInteger n, int m) {
+    var xs = new List&lt;BigInteger&gt;();
+    for (int i = 0; i &lt;= m; i++)
+      xs.Add(Power(n, i));
+    return xs;
+  }
+  
+  static List&lt;BigInteger&gt; hamming(long n) {
+    var zs = new List&lt;BigInteger&gt;();
+    foreach(BigInteger x in MakePowerList(2, (int)Math.Log(n, 2))) {
+      foreach(BigInteger y in MakePowerList(3, (int)Math.Log(n, 3))) {
+        foreach(BigInteger z in MakePowerList(5, (int)Math.Log(n, 5))) {
+          BigInteger m = x * y * z;
+          if (m &lt;= n) {
+            zs.Add(m);
+          }
+        }
+      }
+    }
+    return zs;
+  }
+</pre>
+<p> 2, 3, 5 のべき乗の集合を MakePowerList() で生成し、その要素を掛け合わせて、条件を満たす数値を選択していくだけです。実行結果は次のようになりました。
+<pre class="list">
+リスト : ハミング数の個数を求める
+
+  static void Main() {
+    for (long n = 100000000; n &lt;= 1000000000000; n *= 10) {
+      Console.WriteLine("{0}, {1}", n, hamming(n).Count());
+    }
+  }
+</pre>
+<pre>
+100000000, 1105
+1000000000, 1530
+10000000000, 2053
+100000000000, 2683
+1000000000000, 3429
+</pre>
+<p> この方法だと短時間で答えを求めることができます。
+</p>
+<hr>
+<h4>●カッコ列</h4>
+<p> カッコ列は ( と ) からなる列のことで、バランスが取れているカッコ列は、右カッコで閉じることができる、つまり右カッコに対応する左カッコがある状態のことをいいます。たとえば n = 1 の場合、( ) はバランスの取れたカッコ列ですが、) ( はバランスが取れていません。今回はカッコ列を生成する関数 Kakko() を作ります。
+</p>
+<pre class="list">
+リスト : カッコ列
+
+using System;
+
+class Test {
+  static void Kakko(int n, int x = 0, int y= 0, string a = "") {
+    if (x == n &amp;&amp; y == n) {
+      Console.WriteLine(a);
+    } else {
+      if (x &lt; n) Kakko(n, x + 1, y, a + "(");
+      if (y &lt; x) Kakko(n, x, y + 1, a + ")");
+    }
+  }
+
+  static void Main() {
+    Kakko(3);
+    Kakko(4);
+  }
+}
+</pre>
+<p> カッコ列の生成は簡単です。関数 Kakko() の引数 x が左カッコの個数、引数 y が右カッコの個数を表します。引数 a は累積変数でカッコ列を表す文字列です。
+</p>
+<p> バランスの取れたカッコ列の場合、x, y, n には y &lt;= x &lt;= n の関係が成り立ちます。x == y == n の場合、カッコ列がひとつ完成しました。WriteLine() でカッコ列 a を表示します。。そうでなければ、Kakko() を再帰呼び出しします。x &lt; n であれば左カッコを追加し、y &lt; x であれば右カッコを追加します。これでカッコ列を生成することができます。
+<pre>
+C&gt;kakko
+((()))
+(()())
+(())()
+()(())
+()()()
+(((())))
+((()()))
+((())())
+((()))()
+(()(()))
+(()()())
+(()())()
+(())(())
+(())()()
+()((()))
+()(()())
+()(())()
+()()(())
+()()()()
+</pre>
+<hr>
+<h4>●カッコ列の総数 (カタラン数)</h4>
+<p> <a href="http://ja.wikipedia.org/wiki/%E3%82%AB%E3%82%BF%E3%83%A9%E3%83%B3%E6%95%B0">カタラン数 - Wikipedia</a> によると、カッコ列の総数は「カタラン数 (Catalan number)」になるとのことです。カタラン数は次に示す公式で求めることができます。
+</p>
+<pre class="fig">
+         (2n)!
+Ｃn = ----------
+       (n+1)!n!
+</pre>
+<p> これをそのままプログラムしてもいいのですが、それではちょっと面白くないので別な方法でプログラムを作ってみましょう。カタラン数は次に示す経路図において、A から B までの最短距離の道順を求めるとき、対角線を超えないものの総数に一致します。
+</p>
+<pre class="fig">
+                    Ｂ                      Ｂ  
+  ┌─┬─┬─┬─┐      ┌─┬─┬─０─14    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ├─┼─０─５─14    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ├─０─２─５─９    
+  │  │  │  │  │      │  │  │  │  │    
+  ├─┼─┼─┼─┤      ０─１─２─３─４    
+  │  │  │  │  │      │  │  │  │  │    
+  └─┴─┴─┴─┘      １─１─１─１─１    
+Ａ                      Ａ                      
+
+            図 : 道順の総数の求め方
+</pre>
+<p> A からある地点にいたる最短距離の道順の総数は、左隣と真下の地点の値を足したものになります。一番下の地点は 1 で、対角線を越えた地点は 0 になります。あとは下から順番に足し算していけば、A から B までの道順の総数を求めることができます。上図の場合はカラタン数 Ｃ4 に相当し、その値は 14 となります。
+</p>
+<p> プログラムは配列を使うと簡単です。次の図を見てください。
+</p>
+<pre class="fig">
+0 : [1, 1, 1, 1, 1]
+
+1 : [1, 1, 1, 1, 1,]
+
+2 : [1, 1, 1+1=2, 2+1=3, 3+1=4]
+ => [1, 1, 2, 3, 4]
+
+3 : [1, 1, 2, 3+2=5, 5+4=9]
+ => [1, 1, 2, 5, 9]
+
+4 : [1, 1, 2, 5, 5+9=14]
+ => [1, 1, 2, 5, 14]
+</pre>
+<p> 上図は Ｃ<sub>n</sub> (n = 4) を求める場合です。大きさが n + 1, 要素の値が 1 のベクタを用意します。n = 0, 1 の場合は n 番目の要素をそのまま返します。n が 2 よりも大きい場合、変数 i を 2 に初期化して、i - 1 番目以降の要素の累積和を求めます。
+</p>
+<p> たとえば i = 2 の場合、2 番目の要素は 1 番目の要素と自分自身を加算した値 2 になります。3 番目の要素は 2 番目の要素と自分自身を足した値 3 になり、4 番目の要素は 3 + 1 = 4 になります。次に i を +1 して同じことを繰り返します。3 番目の要素は 2 + 3 = 5 になり、4 番目の要素は 5 + 4 = 9 になります。i = 4 のとき、4 番目の要素は 5 + 9 = 14 となり、Ｃ<sub>4</sub> の値を求めることができました。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : カッコ列の総数
+
+using System;
+using System.Numerics;
+
+class Test {
+  static BigInteger KakkoNum(int n) {
+    var table = new BigInteger [n + 1];
+    for (int i = 0; i &lt;= n; i++) table[i] = 1;
+    for (int i = 2; i &lt;= n; i++) {
+      for (int j = i; j &lt;= n; j++) {
+        table[j] += table[j - 1];
+      }
+    }
+    return table[n];
+  }
+  
+  static void Main() {
+    for (int i = 1; i &lt;= 10; i++)
+      Console.WriteLine("{0}", KakkoNum(i));
+    Console.WriteLine("{0}", KakkoNum(50));
+    Console.WriteLine("{0}", KakkoNum(100));
+  }
+}
+</pre>
+<pre>
+1
+2
+5
+14
+42
+132
+429
+1430
+4862
+16796
+1978261657756160653623774456
+896519947090131496687170070074100632420837521538745909320
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Ｃ＃</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

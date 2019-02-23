@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881769</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb37.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb39.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>●仮想計算機 COMETⅡの簡易シミュレータ (8)</h3>
+<p> <a href="../xyzzy_lisp.html#abclisp">Common Lisp 入門</a> の番外編です。今回は COMET2A 用の簡単な「連結リストライブラリ」を作ってみましょう。
+</p>
+
+<h4>●連結リストの構造</h4>
+<p> 連結リスト (Linked List) はデータを一方向 <a href="clispb38.html#note1">[*1]</a> につないだデータ構造です。基本的には Lisp / Scheme のリストと同じデータ構造ですが、拙作のページ <a href="../light/python05.html#chap11">Python 入門 第 5 回 連結リスト</a> や <a href="../light/abcruby10.html">Ruby 入門 第 10 回 連結リスト</a> で作成したプログラムのように、複数の要素を格納するデータ構造として使用することを目的とします。下図に連結リストの構造を示します。
+</p>
+
+<pre class="fig">
+(1)変数
+  ┌─┐    ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  
+  │・┼─→│10│・┼→│20│・┼→│30│／│ ／：終端(null : 0)
+  └─┘    └─┴─┘  └─┴─┘  └─┴─┘  
+
+(2)ヘッダセル
+  ┌─┬─┐    ┌─┬─┐  ┌─┬─┐  ┌─┬─┐  
+  │  │・┼─→│10│・┼→│20│・┼→│30│／│ ／：終端(null : 0)
+  └─┴─┘    └─┴─┘  └─┴─┘  └─┴─┘  
+
+        図 : 連結リストの構造
+</pre>
+
+<p> 連結リストはセル (cell) というデータをつなげて作ります。セルにはデータを格納する場所 (CAR) と、次のセルを指し示す場所 (CDR) から構成されます。上図でいうと、箱がひとつのセルを表していて、左側にデータを格納し、右側に次のセルへのアドレスを格納します。リストの終わりを示すため、最後のセルの右側には特別な値 (null : 0) を格納します。
+</p>
+
+<p> そして、図 (1) のように先頭セルへのアドレスを変数に格納しておけば、この変数を使って連結リストにアクセスすることができます。また、図 (2) のようにヘッダセルを用意する方法もあります。今回は (2) のようにヘッダセルを使ってプログラムを作ることにします。
+</p>
+
+<p> 連結リストの長所は、データの挿入や削除が簡単にできることです。配列でデータの削除や挿入を行う場合、要素を移動しなければいけませんが、連結リストはセルを付け替えるだけで実現できます。逆に、配列はどの要素にも一定の時間でアクセスすることができますが、連結リストはセルを順番にたどっていくため、後ろのデータになるほどアクセスに時間がかかります。これが連結リストの短所です。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 一方向につないだ連結リストを「片方向リスト (singly-linked list) 」といいます。これに対し、前後のセルをつないだ「双方向リスト (doubly-linked list) 」という連結リストもあります。
+</div>
+
+<h4>●連結リストを操作するサブルーチン</h4>
+<p> 連結リストを操作する基本的なサブルーチンを表に示します。
+</p>
+
+<table border=1>
+<caption>表 : 連結リスト用サブルーチン</caption>
+<thead>
+  <tr><th>サブルーチン</th><th> 機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>make-list</td><td>空の連結リストを生成する</td></tr>
+  <tr><td>destory-list ls</td><td>連結リスト ls を廃棄する</td></tr>
+  <tr><td>list-ref ls n</td><td>リスト ls の n 番目の要素を返す</td></tr>
+  <tr><td>list-set ls n x</td><td>リスト ls の n 番目の要素をデータ x に置き換える<br>置き換えられた要素を返す</td></tr>
+  <tr><td>list-insert ls n x</td><td>リスト ls の n 番目の位置にデータ x を追加する</td></tr>
+  <tr><td>list-delete ls n</td><td>リスト ls の n 番目の要素を削除する</td></tr>
+  <tr><td>list-clear ls</td><td>リスト ls を空にする</td></tr>
+  <tr><td>list-size ls</td><td>要素の個数を返す</td></tr>
+  <tr><td>list-empty</td><td>空リストであれば 1 を、そうでなければ 0 を返す</td></tr>
+  <tr><td>vector-&gt;list vec n</td><td>大きさ n のベクタ vec を連結リストに変換する</td></tr>
+</tbody>
+</table>
+
+<p> 引数は右側からスタックに積むことにします。つまり、左側の引数がスタックの低位アドレスに格納されます。要素の位置はベクタと同様に 0 から数えます。位置 n がリストの長さよりも大きい場合はエラー終了することにしましょう。
+</p>
+
+<h4>●セルのデータ構造</h4>
+<p> それではプログラムを作りましょう。まず最初に、セルを表すデータ構造を決めておきます。次の図を見てください。
+</p>
+<pre class="fig">
+ CELL + 0 [ data ] : CAR
+      + 1 [ adrs ] : CDR  size = 2 word
+
+ gr1 = CELL とすると
+
+ ld gr0 0 gr1 =&gt; data
+ ld gr0 1 gr1 =&gt; adrs
+
+    図 : セルのデータ構造
+</pre>
+<p> セルの大きさは 2 word とします。必要なメモリは malloc で取得します。先頭アドレスを CELL とすると (CELL + 0) 番地にデータを格納し、(CELL + 1) 番地に次のセルの先頭アドレスを格納します。CELL のアドレスを gr1 にセットすると、データは (ld gr0 0 gr1) で、次のセルのアドレスは (ld gr0 1 gr1) で gr0 に取り出すことができます。リストの終端は null (0) で表します。
+</p>
+
+<p> セルのたどり方は実に簡単です。次の図を見てください。
+</p>
+
+<pre class="fig">
+ cp1         cp2         cp3
+┌─┬─┐  ┌─┬─┐  ┌─┬─┐
+│10│・┼→│20│・┼→│30│・┼→
+└─┴─┘  └─┴─┘  └─┴─┘
+↑          ↑
+(1)         (2)
+
+(1) gr1 = cp1 : (ld gr1 1 gr1) =&gt; gr1 = cp2
+(1) gr1 = cp2 : (ld gr1 1 gr1) =&gt; gr1 = cp3
+
+        図 : セルのたどり方
+</pre>
+
+<p> セル cp1 の CDR にはセル cp2 のアドレスが格納されています。レジスタ gr1 が cp1 を指している場合、gr1 の値を (ld gr1 1 gr1) で更新すれば、gr1 の値はセル cp2 になります (1)。さらに gr1 の値を (ld gr1 1 gr1) で更新すれば、gr1 の値は cp3 になります (2)。
+</p>
+<h4>●セルの生成と廃棄</h4>
+<p> 次に、セルを生成するサブルーチン make-cell とセルを廃棄する delete-cell を作ります。
+</p>
+<pre class="list">
+リスト : セルの生成と廃棄
+
+; 新しいセルの生成
+; 入力 : +2) a データ
+;        +3) b セル or null
+; 出力 : gr0 新しいセル
+make-cell
+        (link gr7 0)
+        (push 2)                ; セルの大きさ
+        (call malloc)           ; new cell -&gt; gr0
+        (pop  gr1)              ; 引数を廃棄
+        (and  gr0 gr0)
+        (jze  make-cell-err)
+        (ld   gr1 2 gr7)
+        (st   gr1 0 gr0)        ; CAR をセット
+        (ld   gr1 3 gr7)
+        (st   gr1 1 gr0)        ; CDR をセット
+        (unlk gr7)
+        (ret)
+make-cell-err
+        (push list-error0)
+        (call write-line)
+        (halt)
+list-error0
+        (dc "make-cell : Out of Memory" 0)
+
+; セルを解放する
+; 入力 sp + 1) : セル
+; 出力 None
+delete-cell
+        (ld   gr0 1 sp)
+        (push 0 gr0)
+        (call free)
+        (pop  gr0)
+        (ret)
+</pre>
+<p> make-cell の引数は格納するデータと、後ろに連結するセルのアドレスです。Lisp の関数 cons と同じ働きをします。最初に、malloc で 2 word のメモリを取得します。そして、引数を取り出してセルの CAR と CDR にセットするだけです。malloc が 0 を返した場合はエラーメッセージを出力して halt で終了します。delete-cell も簡単です。引数のセルを取り出して、それを free で解放するだけです。
+</p>
+<p> write-line は文字列を出力するサブルーチンです。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 文字列の出力
+
+; 入力 +2) : バッファ, null (0) で終端していること
+; 出力 None
+write-line
+        (link gr7 0)
+        (push 0 gr2)
+        (ld   gr2 2 gr7)
+write-line-loop
+        (ld   gr0 0 gr2)
+        (jze  write-line-exit)
+        (push 0 gr0)
+        (call write-char)
+        (pop  gr0)
+        (lad  gr2 1 gr2)
+        (jump write-line-loop)
+write-line-exit
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+</pre>
+<p> データを順番に取り出して write-char で出力するだけです。これをライブラリ lib.cas に追加しておきます。
+</p>
+<h4>●リストの生成と廃棄</h4>
+<p> 次はリストを生成する make-list と、リストを廃棄する destroy-list を作ります。
+</p>
+<pre class="list">
+リスト : リストの生成と廃棄
+
+; リストの生成
+; 入力 : None
+; 出力 : gr0 ヘッダセル
+make-list
+        (lad  sp -2 sp)
+        (xor  gr0 gr0)
+        (st   gr0 0 sp)
+        (st   gr0 1 sp)
+        (call make-cell)
+        (lad  sp 2 sp)
+        (ret)
+
+; リストを廃棄する
+; 入力 +2) : ヘッダセル
+; 出力 None
+destroy-list
+        (link gr7 0)
+        (push 0 gr2)
+        (ld   gr1 2 gr7)        ; ヘッダセルを取得
+destroy-list-loop
+        (ld   gr2 1 gr1)        ; (CDR gr1) -&gt; gr2
+        (push 0 gr1)
+        (call delete-cell)      ; 不要なセル gr1 を回収
+        (pop  gr1)
+        (ld   gr1 gr2)
+        (jnz  destroy-list-loop)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+</pre>
+<p> リストの生成は簡単です。make-cell で新しいセルを取得し、それを返すだけです。このとき、CDR に 0 をセットすることで、空の連結リスト (ヘッダだけのリスト) を生成することができます。ヘッダの CAR にセットされる値は連結リストの要素数なので 0 に初期化します。
+</p>
+<p> destroy-list はセルを順番にたどり、free でセルを解放します。gr1 に解放するセルをセットし、次のセルを gr2 にセットします。delete-cell で gr1 のセルを解放したら、gr2 のセルを gr1 にセットします。このとき、gr1 が null (0) であれば処理を終了します。そうでなければ、destroy-list-loop にジャンプして処理を続けます。
+</p>
+<h4>●n 番目のセルを求める</h4>
+<p> 次に、作業用のサブルーチンとして n 番目のセルを求める処理を作ります。サブルーチン名は cell-ref としました。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : n 番目のセルを求める
+
+; 入力 : +2) ヘッダセル
+;      : +3) 位置 N
+; 出力 : gr0 セル
+cell-ref
+        (link gr7 0)
+        (ld   gr0 2 gr7)        ; ヘッダセル -> gr0
+        (lad  gr1 -1)           ; ヘッダセルからカウント
+cell-ref-loop
+        (cpl  gr1 3 gr7)
+        (jze  cell-ref-exit)    ; 該当セル
+        (ld   gr0 1 gr0)
+        (jze  cell-ref-err)     ; null チェック
+        (lad  gr1 1 gr1)
+        (jump cell-ref-loop)
+cell-ref-exit
+        (unlk gr7)
+        (ret)
+cell-ref-err
+        (push list-error1)
+        (call write-line)
+        (halt)
+list-error1
+        (dc "cell-ref : Out of range" 0)
+</pre>
+
+<p> cell-ref は N 番目のセルを返します。ヘッダセルを gr0 にセットし、現在の位置を gr1 で表します。最初はヘッダセルなので、gr1 は -1 に初期化します。gr1 が引数 N と等しい場合はセル gr0 を返します。そうでなければ、gr0 を次のセルへ更新して gr1 の値を +1 します。ここでリストの終端をチェックし、gr0 が 0 ならばエラーメッセージを出力して終了します。
+</p>
+
+<h4>●データの参照</h4>
+<p> 次は n 番目の要素を求めるサブルーチン list-ref を作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : n 番目の要素を求める
+
+; 入力 +2) : ヘッダセル
+;      +3) : 位置 N
+; 出力 gr0 : データ
+list-ref
+        (link gr7 0)
+        (lad  sp -2 sp)
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)
+        (ld   gr0 3 gr7)
+        (st   gr0 1 sp)
+        (call cell-ref)         ; -&gt; gr0 (セル)
+        (lad  sp 2 sp)
+        (ld   gr0 0 gr0)        ; (CAR gr0) -&gt; gr0
+        (unlk gr7)
+        (ret)
+</pre>
+<p> cell-ref を呼び出して n 番目のセルを求めます。そして、CAR に格納されているデータを取り出して返すだけです。
+</p>
+
+<h4>●データの更新</h4>
+<p> N 番目のデータを書き換えるサブルーチン list-set も簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ; N 番目の値を書き換える
+
+; 入力 +2) : ヘッダセル
+;      +3) : 位置
+;      +4) : 値
+; 出力 gr0 : 元の値
+list-set
+        (link gr7 0)
+        (push 0 gr2)
+        (lad  sp -2 sp)
+        (ld   gr0 2 gr7)        ; ヘッダセル
+        (st   gr0 0 sp)
+        (ld   gr0 3 gr7)        ; 位置
+        (st   gr0 1 sp)
+        (call cell-ref)         ; -&gt; gr0 (セル)
+        (lad  sp 2 sp)
+        (ld   gr1 gr0)
+        (ld   gr0 0 gr1)        ; 元の値 -&gt; gr0
+        (ld   gr2 4 gr7)
+        (st   gr2 0 gr1)        ; 値を書き換える
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+</pre>
+<p> cell-ref を呼び出して N 番目のセルを求めます。次に、セルの CAR から値を取り出して gr0 にセットします。これが返り値になります。それから引数の値を取り出して、セルの CAR にセットします。これでリストの N 番目の要素を書き換えることができます。
+</p>
+
+<h4>●データの挿入</h4>
+<p> 次は、データを挿入するサブルーチン list-insert を作りましょう。データの挿入はセルの CDR を書き換えることで実現できます。次の図を見てください。セル (1) とセル (2) の間に、セル (3) を挿入します。
+</p>
+
+<pre class="fig">
+ top         (1)                (2)
+┌─┐      ┌─┬─┐         ┌─┬─┐  ┌─┬─┐
+│  ┼──→│10│・┼─ X ─→│20│・┼→│30│／│
+└─┘      └─┴┼┘         └─┴─┘  └─┴─┘
+                  │   (3)      ↑
+                  │  ┌─┬─┐│
+                  └→│40│・┼┘
+                      └─┴─┘
+
+セル(1)とセル(2)の間にセル(3)を挿入する場合
+
+                図 : データの挿入
+</pre>
+
+<p> セル (1) の後ろにセル (3) を挿入する場合、セル (1) の CDR にはセル (2) へのアドレスがセットされているので、この値をセル (3) の CDR にセットします。これで、セル (3) とセル (2) がリンクされます。次に、セル (1) の CDR にセル (3) へのアドレスをセットします。これで、セル (1) とセル (2) の間に、セル (3) を挿入することができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの挿入
+
+; N 番目にデータを挿入する
+; 入力 +2) ヘッダセル
+;      +3) 位置 N
+;      +4) データ
+; 出力 : 無し
+list-insert
+        (link gr7 0)
+        (push 0 gr2)
+        (lad  sp -2 sp)
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)         ; ヘッダセル
+        (ld   gr0 3 gr7)        ; 位置 N
+        (lad  gr0 -1 gr0)
+        (st   gr0 1 sp)         ; N - 1
+        (call cell-ref)         ; -&gt; gr0 (セル)
+        (ld   gr2 gr0)          ; (N-1) -&gt; gr2
+        (ld   gr0 1 gr2)        ; (CDR gr2) -&gt; gr0 (N)
+        (st   gr0 1 sp)         ; (N) をセット
+        (ld   gr0 4 gr7)
+        (st   gr0 0 sp)         ; データ
+        (call make-cell)        ; -&gt; gr0 (NEW)
+        (st   gr0 1 gr2)        ; (N-1) -&gt; (NEW) -&gt; (N)
+        (ld   gr0 2 gr7)        ; ヘッダセル
+        (st   gr0 0 sp)
+        (call inc-size)         ; size += 1
+        (lad  sp 2 sp)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+</pre>
+
+<p> 連結リストにデータを挿入する場合、挿入する位置のひとつ手前のセルが必要になります。cell-ref で N - 1 番目のセルを求めます。セル (N-1) が見つかれば、その後ろに新しいセル (NEW) を挿入します。N が 0 の場合、cell-ref はヘッダセルを返すので、連結リストの先頭にデータが挿入されることになります。
+</p>
+
+<p> 新しいセルは make-cell で取得します。第 2 引数にセル (N-1) の CDR を指定することで、新しいセルの後ろにセル (N) を接続することができます。そして、(N-1) の CDR を新しいセル (NEW) に書き換えます。これで  (N-1) の後ろに (NEW) を挿入することができます。
+</p>
+
+<h4>●データの削除</h4>
+<p> 次は、データを削除するサブルーチン list-delete を作りましょう。データを削除する場合も、セルを付け替えるだけで済ますことができます。次の図を見てください。
+</p>
+
+<pre class="fig">
+ (1)           (2)         (3)
+┌─┬─┐    ┌─┬─┐  ┌─┬─┐  
+│10│・┼×→│20│・┼→│30│・┼→
+└─┴┼┘    └─┴─┘  └─┴─┘  
+      │                  ↑
+      └─────────┘
+
+        図 : データの削除:セル(2) を削除する場合
+</pre>
+
+<p> セル (1) の後ろにあるセル (2) を削除する場合、セル (1) の CDR をセル (3) へのアドレスに書き換えればいいのです。セル (3) はセル (2) の CDR から求めることができます。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの削除
+
+; 入力 : +2) ヘッダセル
+;      : +3) 位置 N
+; 出力 : None
+list-delete
+        (link gr7 0)
+        (push 0 gr2)
+        (lad  sp -2 sp)
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)         ; ヘッダセルセット
+        (ld   gr0 3 gr7)
+        (lad  gr0 -1 gr0)
+        (st   gr0 1 sp)         ; N - 1 をセット
+        (call cell-ref)         ; -&gt; gr0 セル
+        (lad  sp 2 sp)
+        (ld   gr1 gr0)          ; gr1 = (N-1)
+        (ld   gr2 1 gr1)        ; gr2 = (N)
+        (jze  list-delete-err)  ; 削除データ無し
+        (ld   gr0 1 gr2)        ; gr0 = (N+1)
+        (st   gr0 1 gr1)        ; (N-1) -&gt; (N+1)
+        (lad  sp -1 sp)
+        (st   gr2 0 sp)
+        (call delete-cell)      ; 不要なセルを回収
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)
+        (call dec-size)         ; size -= 1
+        (lad  sp 1 sp)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+list-delete-err
+        (push list-error2)
+        (call write-line)
+        (halt)
+list-error2
+        (dc "list-delete : Out of range" 0)
+</pre>
+
+<p> データを削除する場合も、削除する位置のひとつ手前のセルが必要になります。cell-ref で N - 1 番目のセルを求めます。セル (N-1) が見つかれば、(N-1) の後ろのセル (N) を削除します。
+</p>
+
+<p> セル (N-1) を gr1 にセットして、削除するセル (N) を (ld gr2 1 gr1) で求めます。gr2 が 0 ならば削除するセルがないので、エラーメッセージを出力して処理を終了します。そうでなければ、gr2 の後ろのセル (N+1) を (ld gr0 1 gr2) で求めます。あとは gr0 を gr1 の CDR にセットすれば、セル (N) を削除することができます。削除したセルは delete-cell でメモリを解放することをお忘れなく。
+</p>
+<h4>●データの変換</h4>
+<p> 次はベクタをリストに変換するサブルーチン vector-&gt;list を作ります。
+</p>
+<pre class="list">
+リスト : ベクタをリストに変換
+
+; 入力 +2) : ベクタ
+;      +3) : 個数
+; 出力 gr0 : リスト
+vector-&gt;list
+        (link gr7 0)
+        (push 0 gr2)
+        (push 0 gr3)
+        (call make-list)
+        (ld   gr3 gr0)          ; gr3 : 連結リスト
+        (ld   gr2 3 gr7)
+        (addl gr2 2 gr7)
+        (lad  gr2 -1 gr2)       ; 末尾の要素から挿入する
+vector-&gt;list-loop
+        (cpl  gr2 2 gr7)
+        (jmi  vector-&gt;list-exit)
+        (ld   gr0 0 gr2)
+        (lad  sp -3 sp)
+        (st   gr0 2 sp)
+        (st   gr3 0 sp)
+        (xor  gr0 gr0)
+        (st   gr0 1 sp)         ; 先頭に追加していく
+        (call list-insert)
+        (lad  sp 3 sp)
+        (lad  gr2 -1 gr2)
+        (jump vector-&gt;list-loop)
+vector-&gt;list-exit
+        (ld   gr0 gr3)
+        (pop  gr3)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+</pre>
+<p> 最初に make-list で空の連結リストを生成します。これを gr3 にセットします。gr1 にベクタの先頭アドレス、gr2 に末尾要素のアドレスをセットし、末尾から順番に要素を取り出して、list-insert で連結リストの先頭に追加していきます。
+</p>
+<p> データを連結リストの末尾へ追加する場合、セルをたどらなくてはならないので効率的ではありません。逆に、データを連結リストの先頭に追加するのはとても簡単です。最後に、gr3 を gr0 にセットして呼び出し元に戻ります。
+</p>
+
+<h4>●連結リストの表示</h4>
+<p> 最後に、連結リストを表示するサブルーチン print-list を作ります。
+</p>
+<pre class="list">
+リスト : 連結リストの表示
+
+; リストの要素にサブルーチンを適用する
+; 入力 +2) : サブルーチン
+;      +3) : ヘッダセル
+; 出力 None
+for-each
+        (link gr7 0)
+        (push 0 gr2)
+        (push 0 gr3)
+        (ld   gr2 2 gr7)        ; サブルーチン
+        (ld   gr3 3 gr7)        ; ヘッダセル
+        (ld   gr3 1 gr3)        ; 最初のセル
+for-each-loop
+        (jze  for-each-exit)
+        (ld   gr0 0 gr3)        ; 要素をセット
+        (push 0 gr0)
+        (call 0 gr2)            ; サブルーチンを呼び出す
+        (pop  gr0)
+        (ld   gr3 1 gr3)        ; 次のセル
+        (jump for-each-loop)
+for-each-exit
+        (pop  gr3)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+
+; 空白付き出力
+; 入力 +2) : 数値
+; 出力 None
+prints
+        (link gr7 0)
+        (lad  sp -1 sp)
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)
+        (call print)            ; 要素を出力
+        (lad  gr0 32)           ; 空白
+        (st   gr0 0 sp)
+        (call write-char)
+        (lad  sp 1 sp)
+        (unlk gr7)
+        (ret)
+
+; リストの表示
+; 入力 +2) : ヘッダセル
+print-list
+        (link gr7 0)
+        (lad  sp -2 sp)
+        (lad  gr0 prints)       ; 表示用関数
+        (st   gr0 0 sp)
+        (ld   gr0 2 gr7)        ; ヘッダセル
+        (st   gr0 1 sp)
+        (call for-each)
+        (lad  sp 2 sp)
+        (unlk gr7)
+        (ret)
+</pre>
+<p> for-each は引数にサブルーチンを受け取り、リストの要素をサブルーチンに渡して呼び出します。prints は引数を print で表示したあと、空白を出力します。print-list は表示用関数として prints を渡して for-each を呼び出すだけです。これで連結リストの要素を表示することができます。
+</p>
+<p> あとのサブルーチンは簡単なので説明は割愛いたします。詳細は <a href="clispb38.html#list1">プログラムリスト</a> をお読みください。
+</p>
+<h4>●実行例</h4>
+<p> それでは簡単な実行例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : 簡単なテスト
+
+list-test
+        (call initialize-heap)
+        (call print-free-block)
+        (lad  sp -2 sp)
+        (lad  gr0 data00)	; data00 を連結リストに変換
+        (st   gr0 0 sp)
+        (ld   gr0 len00)
+        (st   gr0 1 sp)
+        (call vector-&gt;list)	; -&gt; gr0
+        (ld   gr3 gr0)
+        (st   gr0 0 sp)
+        (call print-list)	; =&gt; 10 20 30 40 50 60 70 80 
+        (call newline)
+        (call list-size)	; -&gt; gr0
+        (st   gr0 0 sp)
+        (call print)		; =&gt; 8
+        (call newline)
+        (lad sp 2 sp)
+        ;
+        (xor  gr4 gr4)
+        (lad  gr2 8)
+list-test-loop
+        (cpl  gr4 gr2)
+        (jze  list-test-exit)
+        (lad  sp -3 sp)
+        (st   gr3 0 sp)
+        (st   gr4 1 sp)
+        (call list-ref)		; -&gt; gr0
+        (st   gr0 0 sp)
+        (call print)		; 要素を表示
+        (call newline)
+        (st   gr4 1 sp)
+        (st   gr3 0 sp)
+        (st   gr4 2 sp)
+        (call list-set)		; 要素を gr4 で書き換える
+        (lad  sp 3 sp)
+        (lad  gr4 1 gr4)
+        (jump list-test-loop)
+list-test-exit
+        (lad  sp -2 sp)
+        (st   gr3 0 sp)
+        (call print-list)	; =&gt; 0 1 2 3 4 5 6 7
+        (call newline)
+        (lad  gr0 7)
+        (st   gr0 1 sp)
+        (call list-delete)	; 7 番目の要素を削除
+        (call print-list)	; =&gt; 0 1 2 3 4 5 6
+        (call newline)
+        (call list-size)
+        (st   gr0 0 sp)
+        (call print)		; =&gt; 7
+        (call newline)
+        (st   gr3 0 sp)
+        (lad  gr0 3)
+        (st   gr0 1 sp)
+        (call list-delete)	; 3 番目の要素を削除
+        (call print-list)	; =&gt; 0 1 2 4 5 6
+        (call newline)
+        (call list-size)
+        (st   gr0 0 sp)
+        (call print)		; =&gt; 6
+        (call newline)
+        (st   gr3 0 sp)
+        (lad  gr0 0)
+        (st   gr0 1 sp)
+        (call list-delete)	; 先頭要素を削除
+        (call print-list)	; =&gt; 1 2 4 5 6
+        (call newline)
+        (call list-size)
+        (st   gr0 0 sp)
+        (call print)		; =&gt; 5
+        (call newline)
+        (call print-free-block)
+        (st   gr3 0 sp)
+        (call destroy-list)
+        (lad  sp 2 sp)
+        (call print-free-block)
+        (halt)
+len00   (dc 8)
+data00  (dc 10 20 30 40 50 60 70 80)
+
+
+; フリーブロックの表示
+print-free-block
+        (push 0 gr2)
+        (ld   gr2 heap-head)
+print-free-block-loop
+        (jze  print-free-block-exit)
+        (lad  sp -2 sp)
+        (st   gr2 0 sp)
+        (lad  gr0 16)
+        (st   gr0 1 sp)
+        (call printu)
+        (lad  gr0 32)
+        (st   gr0 0 sp)
+        (call write-char)
+        (ld   gr0 1 gr2)
+        (st   gr0 0 sp)
+        (call print)
+        (call newline)
+        (lad  sp 2 sp)
+        (ld   gr2 0 gr2)
+        (jump print-free-block-loop)
+print-free-block-exit
+        (pop  gr2)
+        (ret)
+</pre>
+<pre>
+* (asm-run "list.cas")
+43A 28131
+10 20 30 40 50 60 70 80
+8
+10
+20
+30
+40
+50
+60
+70
+80
+0 1 2 3 4 5 6 7
+0 1 2 3 4 5 6
+7
+0 1 2 4 5 6
+6
+1 2 4 5 6
+5
+43A 28115
+DFE8 2
+DFF8 2
+43A 28131
+NIL
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> ところで、今回のプログラムは malloc でセルを取得しているため、セルの大きさが 2 word であっても、実際に使用されるメモリの大きさは 4 word (2 unit) になります。セルのように大きさが等しいデータ構造を多数用いる場合、ひとつずつ malloc でメモリを取得するのは効率的ではありません。この場合、あらかじめ大きなメモリを malloc で取得しておいて、それを分割してセルに割り当てるとよいでしょう。
+</p>
+<p> また、不要になったメモリを自動的に回収するガベージコレクション (Garbage Collection : GC) があると便利です。GC がないプログラミング言語では、不要になったメモリは自動的に回収されないので、それを行うようにプログラムする必要があります。Lisp / Scheme のように GC があるプログラミング言語では、ゴミになったメモリは自動的に回収されるので、プログラマの負担はそれだけ軽くなります。 
+</p>
+<p> 今回はここまでです。次回はヘッダセルを使わずに Lisp / Scheme のような GC 機能付きの「連結リスト」の作成に挑戦してみましょう。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; list.cas : 簡単な連結リストライブラリ
+;
+;            Copyright (C) 2011 Makoto Hiroi
+;
+
+;;;
+;;; 内部で使用するサブルーチン
+;;;
+
+; 新しいセルの生成
+; 入力 : +2) a データ
+;        +3) b セル or null
+; 出力 : gr0 新しいセル
+make-cell
+        (link gr7 0)
+        (push 2)                ; セルの大きさ
+        (call malloc)           ; new cell -&gt; gr0
+        (pop  gr1)              ; 引数を廃棄
+        (and  gr0 gr0)
+        (jze  make-cell-err)
+        (ld   gr1 2 gr7)
+        (st   gr1 0 gr0)        ; CAR をセット
+        (ld   gr1 3 gr7)
+        (st   gr1 1 gr0)        ; CDR をセット
+        (unlk gr7)
+        (ret)
+make-cell-err
+        (push list-error0)
+        (call write-line)
+        (halt)
+list-error0
+        (dc "make-cell : Out of Memory" 0)
+
+; セルを解放する
+; 入力 sp + 1) : セル
+; 出力 None
+delete-cell
+        (ld   gr0 1 sp)
+        (push 0 gr0)
+        (call free)
+        (pop  gr0)
+        (ret)
+
+; N 番目のセルを求める
+; 入力 : +2) ヘッダセル
+;      : +3) 位置 N
+; 出力 : gr0 セル
+cell-ref
+        (link gr7 0)
+        (ld   gr0 2 gr7)        ; ヘッダセル -> gr0
+        (lad  gr1 -1)           ; ヘッダセルからカウント
+cell-ref-loop
+        (cpl  gr1 3 gr7)
+        (jze  cell-ref-exit)    ; 該当セル
+        (ld   gr0 1 gr0)
+        (jze  cell-ref-err)     ; null チェック
+        (lad  gr1 1 gr1)
+        (jump cell-ref-loop)
+cell-ref-exit
+        (unlk gr7)
+        (ret)
+cell-ref-err
+        (push list-error1)
+        (call write-line)
+        (halt)
+list-error1
+        (dc "cell-ref : Out of range" 0)
+
+; 要素数を +1 する
+; 入力 +2) : ヘッダセル
+inc-size
+        (link gr7 0)
+        (ld   gr1 2 gr7)
+        (ld   gr0 0 gr1)
+        (lad  gr0 1 gr0)
+        (st   gr0 0 gr1)
+        (unlk gr7)
+        (ret)
+
+; 要素数を -1 する
+; 入力 +2) : ヘッダセル
+dec-size
+        (link gr7 0)
+        (ld   gr1 2 gr7)
+        (ld   gr0 0 gr1)
+        (lad  gr0 -1 gr0)
+        (st   gr0 0 gr1)
+        (unlk gr7)
+        (ret)
+
+;;;
+;;; 連結リスト操作用サブルーチン
+;;;
+
+; リストの生成
+; 入力 : None
+; 出力 : gr0 ヘッダセル
+make-list
+        (lad  sp -2 sp)
+        (xor  gr0 gr0)
+        (st   gr0 0 sp)
+        (st   gr0 1 sp)
+        (call make-cell)
+        (lad  sp 2 sp)
+        (ret)
+
+; リストを廃棄する
+; 入力 +2) : ヘッダセル
+; 出力 None
+destroy-list
+        (link gr7 0)
+        (push 0 gr2)
+        (ld   gr1 2 gr7)        ; ヘッダセルを取得
+destroy-list-loop
+        (ld   gr2 1 gr1)        ; (CDR gr1) -&gt; gr2
+        (push 0 gr1)
+        (call delete-cell)      ; 不要なセル gr1 を回収
+        (pop  gr1)
+        (ld   gr1 gr2)
+        (jnz  destroy-list-loop)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+
+; N 番目の要素を返す
+; 入力 +2) : ヘッダセル
+;      +3) : 位置 N
+; 出力 gr0 : データ
+list-ref
+        (link gr7 0)
+        (lad  sp -2 sp)
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)
+        (ld   gr0 3 gr7)
+        (st   gr0 1 sp)
+        (call cell-ref)         ; -&gt; gr0 (セル)
+        (lad  sp 2 sp)
+        (ld   gr0 0 gr0)        ; (CAR gr0) -&gt; gr0
+        (unlk gr7)
+        (ret)
+
+
+; N 番目の値を書き換える
+; 入力 +2) : ヘッダセル
+;      +3) : 位置
+;      +4) : 値
+; 出力 gr0 : 元の値
+list-set
+        (link gr7 0)
+        (push 0 gr2)
+        (lad  sp -2 sp)
+        (ld   gr0 2 gr7)        ; ヘッダセル
+        (st   gr0 0 sp)
+        (ld   gr0 3 gr7)        ; 位置
+        (st   gr0 1 sp)
+        (call cell-ref)         ; -&gt; gr0 (セル)
+        (lad  sp 2 sp)
+        (ld   gr1 gr0)
+        (ld   gr0 0 gr1)        ; 元の値 -&gt; gr0
+        (ld   gr2 4 gr7)
+        (st   gr2 0 gr1)        ; 値を書き換える
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+
+; N 番目にデータを挿入する
+; 入力 +2) ヘッダセル
+;      +3) 位置 N
+;      +4) データ
+; 出力 : 無し
+list-insert
+        (link gr7 0)
+        (push 0 gr2)
+        (lad  sp -2 sp)
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)         ; ヘッダセル
+        (ld   gr0 3 gr7)        ; 位置 N
+        (lad  gr0 -1 gr0)
+        (st   gr0 1 sp)         ; N - 1
+        (call cell-ref)         ; -&gt; gr0 (セル)
+        (ld   gr2 gr0)          ; (N-1) -&gt; gr2
+        (ld   gr0 1 gr2)        ; (CDR gr2) -&gt; gr0 (N)
+        (st   gr0 1 sp)         ; (N) をセット
+        (ld   gr0 4 gr7)
+        (st   gr0 0 sp)         ; データ
+        (call make-cell)        ; -&gt; gr0 (NEW)
+        (st   gr0 1 gr2)        ; (N-1) -&gt; (NEW) -&gt; (N)
+        (ld   gr0 2 gr7)        ; ヘッダセル
+        (st   gr0 0 sp)
+        (call inc-size)         ; size += 1
+        (lad  sp 2 sp)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+
+; N 番目のセルを削除
+; 入力 : +2) ヘッダセル
+;      : +3) 位置 N
+; 出力 : None
+list-delete
+        (link gr7 0)
+        (push 0 gr2)
+        (lad  sp -2 sp)
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)         ; ヘッダセルセット
+        (ld   gr0 3 gr7)
+        (lad  gr0 -1 gr0)
+        (st   gr0 1 sp)         ; N - 1 をセット
+        (call cell-ref)         ; -&gt; gr0 セル
+        (lad  sp 2 sp)
+        (ld   gr1 gr0)          ; gr1 = (N-1)
+        (ld   gr2 1 gr1)        ; gr2 = (N)
+        (jze  list-delete-err)  ; 削除データ無し
+        (ld   gr0 1 gr2)        ; gr0 = (N+1)
+        (st   gr0 1 gr1)        ; (N-1) -&gt; (N+1)
+        (lad  sp -1 sp)
+        (st   gr2 0 sp)
+        (call delete-cell)      ; 不要なセルを回収
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)
+        (call dec-size)         ; size -= 1
+        (lad  sp 1 sp)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+list-delete-err
+        (push list-error2)
+        (call write-line)
+        (halt)
+list-error2
+        (dc "list-delete : Out of range" 0)
+
+; リストを空にする
+; 入力 +2) : ヘッダ
+; 出力 None
+list-clear
+        (link gr7 0)
+        (push 0 gr2)
+        (ld   gr2 2 gr7)
+        (ld   gr0 1 gr2)        ; (CDR gr2) -&gt; gr0
+        (jze  list-clear-exit)
+        (push 0 gr0)
+        (call destroy-list)     ; ヘッダセル以外のセルを回収
+        (pop  gr0)
+        (xor  gr0 gr0)
+        (st   gr0 1 gr2)        ; ヘッダセルの CDR を null で終端
+        (st   gr0 0 gr2)        ; size を 0 クリア
+list-clear-exit
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+
+; リストの長さを求める
+; 入力 sp + 1) : ヘッダセル
+; 出力 gr0 : 長さ
+list-size
+        (ld  gr0 1 sp)
+        (ld  gr0 0 gr0)
+        (ret)
+
+; リストは空か
+; 入力 sp +1) : ヘッダセル
+; 出力 gr0 : 0 空ではない, 1 空
+list-empty
+        (ld   gr0 1 sp)         ; ヘッダセル
+        (ld   gr0 0 gr0)        ; size
+        (jze  empty-list-true)
+        (xor  gr0 gr0)
+        (ret)
+empty-list-true
+        (lad  gr0 1)
+        (ret)
+
+; ベクタをリストに変換
+; 入力 +2) : ベクタ
+;      +3) : 個数
+vector-&gt;list
+        (link gr7 0)
+        (push 0 gr2)
+        (push 0 gr3)
+        (call make-list)
+        (ld   gr3 gr0)          ; gr3 : 連結リスト
+        (ld   gr2 3 gr7)
+        (addl gr2 2 gr7)
+        (lad  gr2 -1 gr2)       ; 末尾の要素から挿入する
+vector-&gt;list-loop
+        (cpl  gr2 2 gr7)
+        (jmi  vector-&gt;list-exit)
+        (ld   gr0 0 gr2)
+        (lad  sp -3 sp)
+        (st   gr0 2 sp)
+        (st   gr3 0 sp)
+        (xor  gr0 gr0)
+        (st   gr0 1 sp)         ; 先頭に追加していく
+        (call list-insert)
+        (lad  sp 3 sp)
+        (lad  gr2 -1 gr2)
+        (jump vector-&gt;list-loop)
+vector-&gt;list-exit
+        (ld   gr0 gr3)
+        (pop  gr3)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+
+; リストの要素にサブルーチンを適用する
+; 入力 +2) : サブルーチン
+;      +3) : ヘッダセル
+; 出力 None
+for-each
+        (link gr7 0)
+        (push 0 gr2)
+        (push 0 gr3)
+        (ld   gr2 2 gr7)        ; サブルーチン
+        (ld   gr3 3 gr7)        ; ヘッダセル
+        (ld   gr3 1 gr3)        ; 最初のセル
+for-each-loop
+        (jze  for-each-exit)
+        (ld   gr0 0 gr3)        ; 要素をセット
+        (push 0 gr0)
+        (call 0 gr2)            ; サブルーチンを呼び出す
+        (pop  gr0)
+        (ld   gr3 1 gr3)        ; 次のセル
+        (jump for-each-loop)
+for-each-exit
+        (pop  gr3)
+        (pop  gr2)
+        (unlk gr7)
+        (ret)
+
+; 空白付き出力
+; 入力 +2) : 数値
+; 出力 None
+prints
+        (link gr7 0)
+        (lad  sp -1 sp)
+        (ld   gr0 2 gr7)
+        (st   gr0 0 sp)
+        (call print)            ; 要素を出力
+        (lad  gr0 32)           ; 空白
+        (st   gr0 0 sp)
+        (call write-char)
+        (lad  sp 1 sp)
+        (unlk gr7)
+        (ret)
+
+; リストの表示
+; 入力 +2) : ヘッダセル
+print-list
+        (link gr7 0)
+        (lad  sp -2 sp)
+        (lad  gr0 prints)       ; 表示用関数
+        (st   gr0 0 sp)
+        (ld   gr0 2 gr7)        ; ヘッダセル
+        (st   gr0 1 sp)
+        (call for-each)
+        (lad  sp 2 sp)
+        (unlk gr7)
+        (ret)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb37.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb39.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

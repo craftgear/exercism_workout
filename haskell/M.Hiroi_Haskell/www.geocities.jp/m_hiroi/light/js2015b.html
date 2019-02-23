@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 ECMAScritp2015 超入門</title>
+  <meta name="description" content="JavaScript,ECMAScript2015,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881858</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page<br>
+<div class="small">
+http://www.geocities.jp/m_hiroi/<br>
+</div>
+<div class="ce">
+<h1>JavaScript Programming</h1>
+<h2>お気楽 ECMAScript2015 超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="js2015.html">ES2015</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3 id="chap09">クラス</h3>
+<p> ES2015 で導入された「クラス (class)」は新しい機能ではなく、プロトタイプベースのオブジェクト指向を使いやすくするための「糖衣構文」です。次の例を見てください。
+</p>
+<pre class="list">
+リスト : 今までのクラス定義
+
+function Foo(a) {
+  this.a = a;
+}
+
+Foo.prototype.get_a = function() { return this.a; }
+Foo.prototype.set_a = function(a) { this.a = a; }
+</pre>
+<pre>
+&gt; var obj = new Foo(10)
+undefined
+&gt; obj.get_a()
+10
+&gt; obj.set_a(100)
+undefined
+&gt; obj.get_a(100)
+100
+</pre>
+<p> このプログラムを ES2015 の class 文を使って書き直すと次のようになります。
+</p>
+<pre class="list">
+リスト : class 文によるクラス定義
+
+class Bar {
+  constructor(x) {
+    this._a = x;
+  }
+
+  get a() { return this._a; }
+  set a(x) { this._a = x; }
+}
+</pre>
+<pre>
+&gt; var obj1 = new Bar(123)
+undefined
+&gt; obj1.a
+123
+&gt; obj1.a = 456
+456
+&gt; obj1.a
+456
+</pre>
+<p> クラスを定義する場合、従来は function を使っていたので、関数定義と間違える恐れがありましたが、class 文を使うと一目瞭然でクラス定義だとわかります。コンストラクタ (constructor) は初期化を行う特別なメソッドです。複数のコンストラクタを定義することはできません。メソッド定義も ES2015 で導入されたプロパティを省略する書き方をすれば簡単です。もちろん、getter, setter も簡単に定義することができます。
+</p>
+<p> 簡単な例として、点を表す Point クラスを示します。
+</p>
+<pre class="list">
+リスト : Point クラス
+
+class Point {
+  constructor(x, y) {
+    this._x = x;
+    this._y = y;
+  }
+  get x() { return this._x; }
+  get y() { return this._y; }
+
+  distance(p) {
+    const dx = this.x - p.x;
+    const dy = this.y - p.y;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+}
+</pre>
+<pre>
+&gt; var p1 = new Point(0, 0)
+undefined
+&gt; var p2 = new Point(10, 10)
+undefined
+&gt; p1.distance(p2)
+14.142135623730951
+</pre>
+<h4>●スタティックメソッド</h4>
+<p> メソッドの前に static を付けると、スタティックメソッド (クラスメソッド) になります。クラスメソッドは object.method() の形式で呼び出すことはできません。class.method() の形式で呼び出してください。このとき、this の値は class になります。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : スタティックメソッド
+
+class Baz {
+  constructor(x) { this._a = x; }
+  get a() { return this._a; }
+  set a(x) { this._a = x; }
+
+  static get_baz() { return this.baz ? this.baz : 1; }
+  static set_baz(x) { this.baz = x; }
+}
+</pre>
+<pre>
+&gt; var obj = new Baz(123)
+undefined
+&gt; obj.get_baz()
+TypeError: obj.get_baz is not a function
+
+&gt; Baz.get_baz()
+1
+&gt; Baz.set_baz(2)
+undefined
+&gt; Baz.get_baz()
+2
+&gt; obj
+Baz { _a: 123 }
+&gt; Baz
+{ [Function: Baz] baz: 2 }
+</pre>
+<p> class 文の中で変数や定数を定義することはできません。また、prop: value のようにプロパティを定義することもできないようです。クラスメソッドは簡単に定義できますが、クラス変数の定義や初期化は簡単ではないようなので、getter の中でクラス変数が定義されていなければ、初期値を返すようにしてみました。たぶん、もっとよい方法があると思います。ご教示いただけると助かります。
+</p>
+<h4>●継承</h4>
+<p> ES2015 の場合、継承はキーワード extends を使って簡単に行うことができます。
+</p>
+<pre class="item">
+class ClassName extends SuperClassName { ... }
+</pre>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : 継承
+
+class Foo {
+  constructor(a, b) {
+    this._a = a;
+    this._b = b;
+  }
+  get a() { return this._a; }
+  set a(x) { this._a = x; }
+  get b() { return this._b; }
+  set b(x) { this._b = x; }
+  show(){
+    console.log(this._a);
+    console.log(this._b);
+  }
+}
+
+class Bar extends Foo {
+  constructor(a, b, c) {
+    super(a, b);
+    this._c = c;
+  }
+  get c() { return this._c; }
+  set c(x) { return this._c = x; }
+  show(){
+    super.show()
+    console.log(this._c);
+  }
+}
+</pre>
+<pre>
+&gt; var obj = new Foo(1, 2)
+undefined
+&gt; var obj1 = new Bar(10, 20, 30)
+undefined
+&gt; obj.a
+1
+&gt; obj.b
+2
+&gt; obj1.a
+10
+&gt; obj1.b
+20
+&gt; obj1.c
+30
+&gt; obj.show()
+1
+2
+undefined
+&gt; obj1.show()
+10
+20
+30
+undefined
+&gt; obj
+Foo { _a: 1, _b: 2 }
+&gt; obj1
+Bar { _a: 10, _b: 20, _c: 30 }
+</pre>
+<p> スーパークラスのメソッドを呼び出すには super を使います。
+<ol>
+  <li>super(引数, ...)
+  <li>super.method_name(引数, ...)
+</ol>
+<p> 1 はサブクラスのコンストラクタでスーパークラスのコンストラクタを呼び出す場合です。サブクラスのコンストラクタで this を使用する場合は、その前に super() で必ずスーパークラスのコンストラクタを呼び出してください。2 はスーパークラスのメソッドを呼び出す場合です。なお、スタティックメソッドでも super を使用することができます。
+</p>
+<h4>●クラス式</h4>
+<p> クラス式はクラスを定義するもう一つの方法です。
+</p>
+<pre class="item">
+var 変数名 = class [ClassName] [extends SuperClass] { ... }
+</pre>
+<p> クラス式はその値を変数に代入しておいて、new 変数名() でオブジェクトを生成することができます。クラス式はクラス名を省略することができます。クラス名を指定した場合、class 文と違って名前の有効範囲はそのクラスの中だけになります。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; var foo = class Foo {}
+undefined
+&gt; foo
+[Function: Foo]
+&gt; new foo()
+Foo {}
+&gt; new Foo()
+ReferenceError: Foo is not defined
+・・・省略・・・
+
+&gt; var bar = class {}
+undefined
+&gt; bar
+[Function: bar]
+&gt; new  bar()
+bar {}
+</pre>
+<p> class 式を使うと Mix-in も簡単に実現できます。
+</p>
+<pre>
+&gt; var oopsMixin = base =&gt; class extends base {
+... oops() { console.log("oops"); }
+... }
+undefined
+&gt; var piyopiyoMixin = base =&gt; class extends base {
+... piyopiyo() { console.log("piyopiyo"); }
+... }
+undefined
+&gt; class Foo {}
+[Function: Foo]
+&gt; var FooOops = oopsMixin(Foo)
+undefined
+&gt; var obj = new FooOops()
+undefined
+&gt; obj.oops()
+oops
+undefined
+&gt; var FooOopsPiyoPiyo = piyopiyoMixin(FooOops)
+undefined
+&gt; var obj1 = new FooOopsPiyoPiyo()
+undefined
+&gt; obj1.oops()
+oops
+undefined
+&gt; obj1.piyopiyo()
+piyopiyo
+undefined
+</pre>
+
+<hr>
+<h3 id="chap10">プロミス</h3>
+<h4>●コールバック関数</h4>
+<p> Web ブラウザなどの GUI アプリケーションは、ユーザーからの入力やシステムの状態変化など、あるイベントをきっかけに処理を行うイベントドリブン型のプログラムです。このようなプログラムは、一般に次のようなメインルーチンを持っています。
+</p>
+<ol>
+  <li>初期化
+  <li>イベントを取得する
+  <li>イベントの種類に応じて処理を振り分ける
+  <li>2 に戻る
+</ol>
+<p> 2 から 4 をイベントループと呼び、アプリケーションはユーザーからの入力などのイベントを待ちます。そして、3 の処理に対応する機能を「バインディング (binding)」といいます。バインディングは、ウィンドウでイベントが発生したときに、それに応じて実行するプログラムを設定します。このプログラムを「イベントハンドラ」とか「コールバック関数」と呼びます。
+</p>
+<p> 一般に、イベントは非同期に発生するので、それに対応するコールバック関数も非同期に実行されることになります。JavaScript はシングルスレッドのプログラミング言語なので、複数のプログラムを同時に実行することはできません。このため、Web ブラウザや Node.js などでは、イベントが発生したら対応するコールバック関数をすぐに実行するのではなく、いったんキュー (queue, 待ち行列) に登録しておいて、あとでキューからコールバック関数を取り出して順番に処理するようになっています。
+</p>
+<p> また、コールバック関数はイベントだけではなく、時間がかかる処理を実行するときにも使われます。たとえば、ファイル入出力や通信などの処理を終了まで待っていると、他の処理を実行することができなくなります。終了後に行うプログラムをコールバック関数として登録しておけば、終了を待たずに他の処理を実行することができます。
+</p>
+<p> 簡単な例を示しましょう。関数 setTimeout() を使うと、指定した時間後に登録した関数を実行することができます。
+</p>
+<pre class="item">
+setTimeout(callback, after [, args, ...])
+</pre>
+<p> 引数 callback は after msec 後に実行するコールバック関数です。callback に与える引数は after の後ろに指定することができます。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+&gt; function foo() {
+... console.log("foo start");
+... setTimeout(console.log, 2000, "oops!!")
+... setTimeout(console.log, 1000, "oops!")
+... console.log("foo end");
+... }
+undefined
+&gt; foo()
+foo start
+foo end
+undefined
+&gt; oops!
+oops!!
+</pre>
+<p> 関数 foo() の実行はすぐに終了しますが、1 秒後と 2 秒後に コールバック関数が実行されるので oops! と oops!! が表示されまます。setTimeout() は after 秒後に callback をキューに登録する処理を行います。foo() の処理を終了すると REPL に戻りますが、そこでキューの状態を監視していて、キューに callback が登録されているならば、それを順番に取り出して実行します。
+</p>
+<p> setTimeout() のほかにも、setInterval() や setImmediate() があります。
+</p>
+<pre class="item">
+setInterval(callback, msec [, args, ...])
+setImmediate(callback [, args, ...])
+</pre>
+<p> setInterval() は callback を msec 間隔で実行します。setImmediate() は callback をすぐにキューに登録します。なお、これらの関数は Node.js ではグローバルに定義されていますが、Web ブラウザの JavaScript では window オブジェクトのメソッドになっています。名前の前に window. を付けてください。
+</p>
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : setImmediate() の実行例
+
+function foo(n) {
+  if (n &gt; 0) {
+    console.log("foo" + n);
+    setImmediate(foo, n - 1);
+  }
+}
+
+function bar(n) {
+  if (n &gt; 0) {
+    console.log("bar" + n);
+    setImmediate(bar, n - 1);
+  }
+}
+
+foo(10);
+bar(8);
+</pre>
+<pre>
+C&gt;node test.js
+foo10
+bar8
+foo9
+bar7
+foo8
+bar6
+foo7
+bar5
+foo6
+bar4
+foo5
+bar3
+foo4
+bar2
+foo3
+bar1
+foo2
+foo1
+</pre>
+<p> 関数 foo() は "foo" + 引数 を n 回、bar() は "bar" + 引数 を n 回表示します。どちらの関数も setImmediate() で foo(n - 1), bar(n - 1) をコールバック関数として登録します。最初に foo(10), bar(8) を実行すると、キューには foo(9), bar(7) が登録されます。次に、キューから foo(9), bar(7) を取り出して実行すると、キューには foo(8), bar(6) が登録されます。このように、コールバック関数をキューに登録することで、n 回の繰り返しを相互に行わせることができます。
+</p>
+<h4>●コールバック関数の同期処理</h4>
+<p> 個々のコールバック関数は非同期に実行されるため、それを順番に実行 (同期処理) するのはけっこう面倒です。たとえば、foo(callback_a); bar(callback_b); baz(callback_c); と順番に並べても、コールバック関数が a, b, c の順番で実行されるとは限りません。次の例を見てください。
+</p>
+<pre class="list">
+リスト : コールバック関数の同期処理 (間違い版)
+
+function foo(func) {
+  setTimeout(func, 3000);
+}
+
+function bar(func) {
+  setTimeout(func, 1000);
+}
+
+function baz(func) {
+  setTimeout(func, 2000);
+}
+
+function callback_a() {
+  console.log("callback_a");
+}
+
+function callback_b() {
+  console.log("callback_b");
+}
+
+function callback_c() {
+  console.log("callback_c");
+}
+
+foo(callback_a);
+bar(callback_b);
+baz(callback_c);
+</pre>
+<pre>
+C&gt;node test1.js
+callback_b
+callback_c
+callback_a
+</pre>
+<p> このように、コールバック関数の起動タイミングは foo(), bar(), baz() で異なるため、単純に foo(), bar(), baz() を並べただけでは、コールバック関数の同期処理を行うことはできません。
+</p>
+<p> このような場合、コールバック関数を入れ子にするとうまくいきます。
+</p>
+<pre class="list">
+リスト : コールバック関数の同期処理 (入れ子バージョン)
+
+foo(() =&gt; {
+  callback_a();
+  bar(() =&gt; {
+    callback_b();
+    baz(() =&gt; {
+      callback_c();
+    });
+  });
+});
+</pre>
+<pre>
+C&gt;node test2.js
+callback_a
+callback_b
+callback_c
+</pre>
+<p> foo() に渡すアロー関数の中で callback_a() を実行し、それが終了してから bar() を呼び出します。次に、bar() に渡すアロー関数の中で callback_b() を実行し、それが終了したら baz() を呼び出します。最後に、bar() に渡すアロー関数の中で callback_c() を実行します。これで、コールバック関数を a, b, c の順番で実行することができます。
+</p>
+<p> ただし、この方法は同期させるコールバック関数の数に比例して入れ子が深くなるので、プログラムを記述するのが難しくなり、可読性も低下するという欠点があります。このような場合、ES2015 で導入された「プロミス (Promise)」を使うとプログラムをすっきり記述することができます。
+</p>
+<h4>●プロミス</h4>
+<p> 「プロミス (promise)」は、まだ計算を完了してはいないが、いずれ計算が完了することを表すオブジェクトです。
+</p>
+<pre class="item">
+new Promise(function) =&gt; promise_object  (pending 状態)
+</pre>
+<p> Promise() には関数 function を渡します。Promise() はまだ計算を完了していない promise_object を返します。これを pending 状態といいます。引数 function の仕様を示します。
+</p>
+<pre class="item">
+function(resolve, reject) { 処理; ... }
+成功ならば resolve() を呼ぶ (fulfilled 状態)
+失敗ならば reject() を呼ぶ  (rejected 状態)
+</pre>
+<p> 引数 resolve, reject は関数で、処理の中で resolve() を呼ぶと計算が完了したことになります。これを fulfilled 状態といいます。このとき、resolve() の引数に計算結果を渡します。reject() を呼ぶと計算が失敗したことになります。これを rejected 状態といいます。reject() の引数にはエラーの情報を渡します。
+</p>
+<p> Promise() を実行すると、引数の function はすぐに実行されることに注意してください。実際に非同期処理を行うには、function の中で非同期処理を行う関数、たとえば setTimeout() などを実行する必要があります。それに渡すコールバック関数の中で resolve() や reject() を呼び出します。
+</p>
+<p> promise_object の値を求めるにはメソッド then(), catch() を使います。
+</p>
+<pre class="item">
+then(onFulfilled [, onRejected])
+catch(onRejected)
+</pre>
+<p> 引数 onFulfilled は fulfilled 状態のときに実行される関数、onRejected は rejected 状態のときに実行される関数です。どちらの関数も引数はひとつで、resolve() または reject() の引数がそのまま渡されます。promise_object が pending 状態の場合、then() や catch() の実行は遅延されます。
+</p>
+<p> then() と catch() は promise_object を返します。コールバック関数で promise_object 以外の値を返した場合、その値をラップした promise_object が返されます。
+</p>
+<p> 簡単な実行例を示しましょう。
+<pre>
+&gt; function twice(x) {
+... console.log(x);
+... return x * 2;
+... }
+undefined
+&gt; Promise.resolve(1).then(twice).then(twice).then(twice).then(twice)
+Promise { &lt;pending&gt; }
+&gt; 1
+2
+4
+8
+</pre>
+<p> 関数 twice() は引数を表示して、それを 2 倍した値を返します。Promise.resolve(x) は値が x に確定した promise_object を返します。then() は promise_object を返すので、ドット ( . ) で連結していくことができます。then(twice) を連結していくことで、値が倍々されていきます。
+</p>
+<p> then() で onRejected を指定していない場合、rejected 状態の promise_object はスルーされます。次の例を見てください。
+</p>
+<pre>
+&gt; Promise.reject(0).then(twice).then(twice).then(twice).catch(console.log)
+Promise { &lt;pending&gt; }
+&gt; 0
+&gt; Promise.reject(0).then(twice).then(twice).then(twice, console.log)
+Promise { &lt;pending&gt; }
+&gt; 0
+</pre>
+<p> Promise.reject() は rejected 状態の promise_object を返します。引数は reject() と同じくエラーを表す情報です。最初の例では、then() に onRejected が指定されていないので全てスルーされ、最後の catch() でエラーが捕捉されます。次の例では、最後の then() で onRejected が指定されているので、そこでエラーが捕捉されます。
+</p>
+<p> コールバック関数の同期処理をプロミスを使って書き直すと次のようになります。
+</p>
+<pre class="list">
+リスト : コールバック関数の同期処理 (プロミスバージョン)
+
+function callback_a() {
+  console.log("callback_a");
+}
+
+function callback_b() {
+  console.log("callback_b");
+}
+
+function callback_c() {
+  console.log("callback_c");
+}
+
+function makePromise(func, d) {
+  return new Promise((resolve, reject) =&gt; {
+    setTimeout(() =&gt; { func(); resolve(d); }, d);
+  });
+}
+
+makePromise(callback_a, 3000)
+.then(x =&gt; makePromise(callback_b, 1000))
+.then(x =&gt; makePromise(callback_c, 2000));
+</pre>
+<pre>
+C&gt;node test3.js
+callback_a
+callback_b
+callback_c
+</pre>
+<p> 関数 makePromise() はプロミスを生成します。引数のアロー関数の中で setTimeout() を呼び出し、そのコールバック関数の中で func() と resolve() を呼び出します。これで、引数の d msec 後に関数 func を実行し、プロミスを fulfilled 状態に移行します。
+</p>
+<p> あとは、makePromise() によるプロミスの生成を then() でつなげばいいわけです。then() に渡すアロー関数の引数 x にはプロミスの値が渡されます。これでコールバック関数 a, b, c を順番に実行することができます。
+</p>
+<h4>●Promise.all() と Promise.race()</h4>
+<p> Promise.all(iterable) は引数 iterable の要素 (プロミス) がすべて成功したとき、Promise.all() も成功します。ひとつでも失敗すると、Promise.all() も失敗します。成功した場合、プロミスの値を格納した配列が Promise.all() の値になります。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; Promise.all([Promise.resolve(1), Promise.resolve(2), Promise.resolve(3)]).then(console.log)
+Promise { &lt;pending&gt; }
+&gt; [ 1, 2, 3 ]
+&gt; Promise.all([Promise.resolve(1), Promise.reject("oops"), Promise.resolve(3)]).then(console.log, console.log)
+Promise { &lt;pending&gt; }
+&gt; oops
+</pre>
+<p> Promise.race(iterable) は引数 iterable の要素 (プロミス) で最初に完了したプロミスの値で成功・失敗が決まります。
+</p>
+<pre>
+&gt; Promise.race([makePromise(callback_a, 3000), makePromise(callback_b, 1000)]).then(console.log)
+Promise { &lt;pending&gt; }
+> callback_b
+1000
+callback_a
+&gt; Promise.race([makePromise(callback_a, 3000), Promise.reject("oops")
+,makePromise(callback_b, 1000)]).then(console.log, console.log)
+Promise { &lt;pending&gt; }
+&gt; oops
+callback_b
+callback_a
+</pre>
+<p> Promise.race() の値が決定したとき、実行中のコールバック関数はそのまま最後まで実行されます。途中で停止しないことに注意してください。
+</p>
+<hr>
+<h3 id="chap11">プロキシ</h3>
+<p> 「プロキシ (Proxy)」は、ターゲットとなるオブジェクトの基本操作をトラップして、その動作をカスタマイズするために使用します。
+</p>
+<pre class="item">
+new Proxy(target, handler) =&gt; Proxy_object
+</pre>
+<p> 引数 target は操作をトラップするオブジェクト、handler はトラップしたメソッドを含むオブジェクトです。トラップできる基本操作と、それに対応するメソッドについては、リファレンスマニュアル <a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Reference/Global_Objects/Proxy">Proxy - JavaScript | MDN</a> や <a href="https://msdn.microsoft.com/ja-jp/library/dn911714(v=vs.94).aspx">Proxy オブジェクト (JavaScript)</a> をお読みください。
+</p>
+<p> 簡単な例として、プロパティのアクセスをトラップしてみましょう。プロパティの参照はメソッド get() で、更新はメソッド set() でトラップすることができます。
+</p>
+<pre class="item">
+get(target, prop, receiver)
+set(target, prop, value, receiver)
+</pre>
+<p> target はターゲットのオブジェクト、prop はプロパティ名、receiver はプロキシかそれを継承するオブジェクトです。引数 receiver は省略しても動作します。set() の引数 value はプロパティに書き込む値です。
+</p>
+<pre class="list">
+リスト : Proxy の使用例
+
+var obj = {a: 1, b: 2};
+var handler = {
+  get(target, name) {
+    console.log("get " + name);
+    return target[name];
+  },
+  set(target, name, value) {
+    console.log("set " + name);
+    target[name] = value;
+  }
+}
+
+var p = new Proxy(obj, handler);
+console.log(p.a);
+console.log(p.b);
+p.a = 10;
+p.b = 20;
+console.log(obj)
+</pre>
+<p> 変数 handler にメソッド get(), set() を格納したオブジェクトをセットします。トラップされるのは get() と set() だけで、他の基本操作はトラップされません。get() と set() はメッセージを表示したあと、本来の操作を行っています。
+</p>
+<p> そして、new Proxy(obj, handler) とすると、obj の操作をトラップする Proxy オブジェクト p を生成することができます。あとは、p.a, p.b とすると、トラップした get() が、p.a = 10, p.b = 20 とすると set() が実行されます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+C&gt;node test4.js
+get a
+1
+get b
+2
+set a
+set b
+{ a: 10, b: 20 }
+</pre>
+<p> このように、Proxy オブジェクトを介して他のオブジェクトの操作をトラップすることができます。
+</p>
+<h4>●Reflect</h4>
+<p> なお、オブジェクトの基本操作はクラス Reflect のスタティックメソッドとして定義されています。たとえば、プロパティをアクセスする基本操作は Reflect.get() と Reflect.set() になります。簡単な例を示しましょう。
+</p>
+<pre>
+&gt; var obj = {x: 123}
+undefined
+&gt; Reflect.get(obj, "x")
+123
+&gt; Reflect.set(obj, "x", 456)
+true
+&gt; obj
+{ x: 456 }
+</pre>
+<p> 詳しい説明はリファレンスマニュアル <a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Reference/Global_Objects/Reflect">Reflect - JavaScript | MDN</a> をお読みください。
+</p>
+<hr>
+<h3 id="chap12">セット (Set)</h3>
+<p> 「セット (Set)」は集合を表すコレクションです。Set は任意のデータ型を格納することができますが、同じ値のデータは一つだけしか格納できません。同値性 (等価性) については、<a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Equality_comparisons_and_when_to_use_them">等価性の比較とその使いどころ - JavaScript | MDN</a> をお読みくださいませ。
+</p>
+<pre class="item">
+new Set([iterable]) =&gt; Set_object
+</pre>
+<p> new Set() は空のセットを生成します。iterable オブジェクトが渡された場合、その要素がセットに追加されます。セットの要素数はプロパティ size に格納されています。
+</p>
+<p> 主なインスタンスメソッドを下表に示します。
+</p>
+<table border=1>
+<caption>表 : Set のインスタンスメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>add(item)</td><td>セットに item を追加する</td></tr>
+  <tr><td>clear()</td><td>セットを空にする</td></tr>
+  <tr><td>delete(item)</td><td>セットから item を削除する</td></tr>
+  <tr><td>forEach(func)</td><td>セットの要素に関数 func を適用する</td></tr>
+  <tr><td>has(item)</td><td>セットに item が含まれていれば真を返す</td></tr>
+  <tr><td>[@@iterator]()</td><td>要素を順番に取り出すイテレータ</td></tr>
+  <tr><td>keys()</td><td>同上</td></tr>
+  <tr><td>values()</td><td>同上</td></tr>
+  <tr><td>entries()</td><td>要素を配列 [item, item] に格納して取り出すイテレータ</td></tr>
+</tbody>
+</table>
+<p> セットの forEach() とイテレータは挿入された順番で要素にアクセスします。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+&gt; s = new Set()
+Set {}
+&gt; s.add(3)
+Set { 3 }
+&gt; s.add(2)
+Set { 3, 2 }
+&gt; s.add(1)
+Set { 3, 2, 1 }
+&gt; s.has(2)
+true
+&gt; s.has(4)
+false
+&gt; s.size
+3
+&gt; for (let x of s) console.log(x)
+3
+2
+1
+undefined
+&gt; s.delete(2)
+true
+&gt; s.has(2)
+false
+&gt; s
+Set { 3, 1 }
+&gt; s.add(1)
+Set { 3, 1 }
+&gt; s.add(2)
+Set { 3, 1, 2 }
+</pre>
+<p> forEach(func) の引数 func には、3 つの引数が渡されます。
+<pre class="item">
+func(value, key, obj)
+value : コレクションの値
+key   : コレクションのキー
+obj   : コレクション
+</pre>
+<p> セットの場合、value と key は同じになります。簡単な例を示します。
+</p>
+<pre>
+&gt; var s = new Set([1,2,3,4,5])
+undefined
+&gt; s.forEach((...args) =&gt; console.log(args))
+[ 1, 1, Set { 1, 2, 3, 4, 5 } ]
+[ 2, 2, Set { 1, 2, 3, 4, 5 } ]
+[ 3, 3, Set { 1, 2, 3, 4, 5 } ]
+[ 4, 4, Set { 1, 2, 3, 4, 5 } ]
+[ 5, 5, Set { 1, 2, 3, 4, 5 } ]
+undefined
+</pre>
+<p> values(), keys(), entries() はイテレータを返します。セットの場合、values() と keye() は同じになります。また、entries() はキーと値を配列に格納して返しますが、セットの場合、配列の要素は同じ値になります。
+</p>
+<pre>
+&gt; for (let x of s.values()) console.log(x)
+1
+2
+3
+4
+5
+undefined
+&gt; for (let x of s.keys()) console.log(x)
+1
+2
+3
+4
+5
+undefined
+&gt; for (let x of s.entries()) console.log(x)
+[ 1, 1 ]
+[ 2, 2 ]
+[ 3, 3 ]
+[ 4, 4 ]
+[ 5, 5 ]
+undefined
+</pre>
+<hr>
+<h3 id="chap13">マップ (Map)</h3>
+<p> 一般に、キーと値を関連付けて格納するデータ構造を「連想配列」といいます。連想配列は多くのプログラミング言語でサポートされていて、ハッシュ (hash), 辞書 (dictonary), マップ (map) などと呼ばれています。JavaScript の場合、連想配列はプロパティをキーとするオブジェクトで代用することができますが、ES2015 では新たなコレクションとして「マップ (Map)」が導入されました。
+</p>
+<p> マップの場合、キーと値は任意のデータ型を使うことができます。キーの同値性 (等価性) については、<a href="https://developer.mozilla.org/ja/docs/Web/JavaScript/Equality_comparisons_and_when_to_use_them">等価性の比較とその使いどころ - JavaScript | MDN</a> をお読みくださいませ。
+</p>
+<pre class="item">
+new Map([iterable]) =&gt; Map_object
+</pre>
+<p> new Map() は空のマップを生成します。iterable オブジェクトが渡された場合、その要素 (キーと値を組にした配列) がマップに追加されます。マップの要素数はプロパティ size に格納されています。
+</p>
+<p> 主なインスタンスメソッドを下表に示します。
+</p>
+<table border=1>
+<caption>表 : Map のインスタンスメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>set(key, value)</td><td>マップに key と value を追加する</td></tr>
+  <tr><td>get(key)</td><td>マップから key の値を求める</td></tr>
+  <tr><td>delete(key)</td><td>マップから key とその値を削除する</td></tr>
+  <tr><td>clear()</td><td>マップを空にする</td></tr>
+  <tr><td>forEach(func)</td><td>マップの要素に関数 func を適用する</td></tr>
+  <tr><td>has(key)</td><td>マップに key が含まれていれば真を返す</td></tr>
+  <tr><td>[@@iterator]()</td><td>要素を配列 [key, value] に格納して取り出すイテレータ</td></tr>
+  <tr><td>entries()</td><td>同上</td></tr>
+  <tr><td>keys()</td><td>キーを取り出すイテレータ</td></tr>
+  <tr><td>values()</td><td>値を取り出すイテレータ</td></tr>
+
+</tbody>
+</table>
+<p> マップの forEach() とイテレータは挿入された順番で要素にアクセスします。
+</p>
+<p> 簡単な使用例を示します。
+</p>
+<pre>
+&gt; var m = new Map()
+undefined
+&gt; m
+Map {}
+&gt; m.set("foo", 10)
+Map { 'foo' =&gt; 10 }
+&gt; m.set("bar", 20)
+Map { 'foo' =&gt; 10, 'bar' =&gt; 20 }
+&gt; m.set("baz", 30)
+Map { 'foo' =&gt; 10, 'bar' =&gt; 20, 'baz' =&gt; 30 }
+&gt; m.get("foo")
+10
+&gt; m.get("oops")
+undefined
+&gt; m.has("bar")
+true
+&gt; m.delete("bar")
+true
+&gt; m.has("bar")
+false
+&gt; m.size
+2
+&gt; for (let [k, v] of m) console.log(k, v)
+foo 10
+baz 30
+undefined
+</pre>
+<p> forEach(func) の引数 func には、3 つの引数が渡されます。
+<pre class="item">
+func(value, key, obj)
+value : コレクションの値
+key   : コレクションのキー
+obj   : コレクション
+</pre>
+<p> 簡単な例を示します。
+</p>
+<pre>
+&gt; var m = new Map([["foo", 10], ["bar", 20], ["baz", 30]])
+undefined
+&gt; m
+Map { 'foo' =&gt; 10, 'bar' =&gt; 20, 'baz' =&gt; 30 }
+&gt; m.forEach((...args) =&gt; console.log(args))
+[ 10, 'foo', Map { 'foo' =&gt; 10, 'bar' =&gt; 20, 'baz' =&gt; 30 } ]
+[ 20, 'bar', Map { 'foo' =&gt; 10, 'bar' =&gt; 20, 'baz' =&gt; 30 } ]
+[ 30, 'baz', Map { 'foo' =&gt; 10, 'bar' =&gt; 20, 'baz' =&gt; 30 } ]
+undefined
+</pre>
+<p> values(), keys(), entries() はイテレータを返します。
+</p>
+<pre>
+&gt; for (let x of m.keys()) console.log(x)
+foo
+bar
+baz
+undefined
+&gt; for (let x of m.values()) console.log(x)
+10
+20
+30
+undefined
+&gt; for (let x of m.entries()) console.log(x)
+[ 'foo', 10 ]
+[ 'bar', 20 ]
+[ 'baz', 30 ]
+undefined
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2017 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="javascript.html">JavaScript</a> | <a href="js2015.html">ES2015</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

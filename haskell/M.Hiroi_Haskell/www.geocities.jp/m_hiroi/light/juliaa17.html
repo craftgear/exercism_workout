@@ -1,0 +1,1699 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Julia プログラミング超入門</title>
+  <meta name="description" content="Julia 入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881804</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="ce">
+<h1>Julia Language Programming</h1>
+<h2>お気楽 Julia プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>Lisp ライクな連結リスト (mutable)</h3>
+<p> Lisp ライクで mutable な連結リスト (Mulist) です。拙作のページ <a href="juliaa07.html">連結リスト (immutable)</a> で作成した連結リスト (Imlist) は再帰定義を多用しているため、長いリストを扱うとスタックオーバーフローする危険性がありました。今回はデータ構造を mutable に変更し、一部関数を除いて再帰定義を繰り返しに変換しています。学習が目的のプログラムですが、興味のある方は試してみてください。
+</p>
+<h4>●コンスセルの書き換え</h4>
+<p> immutable な連結リスト Imlist との大きな違いは、コンスセル Cons を mutable にするところです。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : コンスセルの修正
+
+# コンスセル
+mutable struct Cons &lt;: List
+    car
+    cdr
+end
+
+# 書き換え
+setcar!(xs::Cons, x) = xs.car = x
+setcdr!(xs::Cons, x) = xs.cdr = x
+</pre>
+<p> 連結リストは複数のコンスセルを接続して構成されています。コンスセルにはデータを格納する car とコンスセルをつなぐ cdr という場所 (変数) があります。関数 car(), cdr() と区別するため、car 部と cdr 部と書くことにします。ここを直接書き換える関数 setcar!() と setcdr!() を定義します。
+<pre class="item">
+setcar!(cell, x)
+setcdr!(cell, x)
+</pre>
+<p> これらの関数は Lisp の rplaca, rplacd や scheme の set-car!, set-cdr! と同じ働きをします。setcar!(cell, x) はコンスセル cell の car 部を x に書き換えます。簡単な例を示しましょう。
+</p>
+<pre>
+julia&gt; z = list(1, 2, 3)
+(1 2 3)
+
+julia&gt; z
+(1 2 3)
+
+julia&gt; setcar!(z, 4)
+4
+
+julia&gt; z
+(4 2 3)
+</pre>
+<p> 変数 z にリスト (1 2 3) をセットします。setcar!() はコンスセルの car 部、この場合は (1 2 3) の先頭セルの car 部を 1 から 4 に書き換えます。リストの car 部を直接書き換えるので、変数 z の値も (4 2 3) になることに注意してください。次の図を見てください。
+<pre class="fig">
+          car 部を直接 4 に書き換える
+            │
+            ↓
+          ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+変数ｚ─→│・│・┼─→│・│・┼─→│・│／│
+          └┼┴─┘    └┼┴─┘    └┼┴─┘
+            ↓            ↓            ↓
+            １            ２            ３
+
+          ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+変数ｚ─→│・│・┼─→│・│・┼─→│・│／│
+          └┼┴─┘    └┼┴─┘    └┼┴─┘
+            ↓            ↓            ↓
+            ４            ２            ３
+
+    図 : setcar!() によるリストの破壊的修正
+</pre>
+<p> 上図に示すように、変数 z はリスト (1 2 3) を格納しています。setcar!() は変数 z が格納しているコンスセルの car 部を直接 4 に書き換えるので、変数 z の値も (4 2 3) になるのです。このように setcar!() には副作用があるので、immutable なリストに比べて使用には注意が必要です。
+</p>
+<p> setcdr!(cell, x) はコンスセル cell の cdr 部を x に書き換えます。簡単な例を示しましょう。
+</p>
+<pre>
+julia&gt; z = list(1, 2, 3)
+(1 2 3)
+
+julia&gt; z
+(1 2 3)
+
+julia&gt; setcdr!(z, 4)
+4
+
+julia&gt; z
+(1 . 4)
+</pre>
+<p>setcdr!() はコンスセルの cdr 部、この場合は (1 2 3) の先頭セルの cdr 部を 4 に書き換えます。次の図を見てください
+</p>
+<pre class="fig">
+               cdr 部を直接 4 に書き換える
+                │
+                ↓
+          ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+変数ｚ─→│・│・┼─→│・│・┼─→│・│／│
+          └┼┴─┘    └┼┴─┘    └┼┴─┘
+            ↓            ↓            ↓
+            １            ２            ３
+
+          ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+変数ｚ─→│・│・│    │・│・┼─→│・│／│
+          └┼┴┼┘    └┼┴─┘    └┼┴─┘
+            ↓  ↓        ↓            ↓
+            １  ４        ２            ３
+
+    図 : setcdr!() によるリストの破壊的修正
+</pre>
+<p> 上図に示すように、cdr 部にはコンスセルがつながっていますが、それを 4 に書き換えるのですから後ろのコンスセルは切断されて、変数 z の値は (1 . 4) になります。setcdr!() にも副作用があることに注意してください。
+</p>
+<h4>●リストの反転 (破壊的)</h4>
+<p> 今回のプログラムのポイントは、リストを生成する再帰関数を繰り返しに変換するとき、リストを破壊的に反転する関数 reverse!() を使用するところです。ここで reverse!() を動作を簡単に説明しましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+           A             B             C
+          ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+変数xs─→│ａ│・┼─→│ｂ│・┼─→│ｃ│・┼─→ ()
+          └─┴─┘    └─┴─┘    └─┴─┘
+                ↑
+変数ys─→ () ─┘書き換える
+
+    (1) セル A の cdr 部を書き換える
+
+           B             C
+          ┌─┬─┐    ┌─┬─┐
+変数xs─→│ｂ│・┼─→│ｃ│・┼─→ ()
+          └─┴─┘    └─┴─┘
+                ↑
+           A──┘書き換える
+          ┌─┬─┐
+変数ys─→│ａ│・┼─→ ()
+          └─┴─┘
+
+    (2) セル B の cdr 部を書き換える
+
+           C
+          ┌─┬─┐
+変数xs─→│ｃ│・┼─→ ()
+          └─┴─┘
+                ↑
+           B──┘書き換える
+          ┌─┬─┐    ┌─┬─┐
+変数ys─→│ｂ│・┼─→│ａ│・┼─→ ()
+          └─┴─┘    └─┴─┘
+
+    (3) セル C の cdr 部を書き換える
+
+変数xs ─→ ()
+
+           C             B             A
+          ┌─┬─┐    ┌─┬─┐    ┌─┬─┐
+変数ys─→│ｃ│・┼─→│ｂ│・┼─→│ａ│・┼─→ ()
+          └─┴─┘    └─┴─┘    └─┴─┘
+
+    (4) 完成
+
+                図 : reverse!() の動作
+</pre>
+<p> 変数 xs に格納されたリストを逆順にします。このとき、変数 ys に逆順のリストを保持します。考え方は簡単で、リストの先頭から要素を順番に取り出して、変数 ys のリストに追加していくところは reverse() と同じです。この操作をセルをつなぎかえることで行っているのが reverse!() です。つまり、セルごと要素を移動しているのです。
+</p>
+
+<p> これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : リストの反転 (破壊的操作)
+
+function reverse!(xs::List)
+    ys = nil
+    while !null(xs)
+        zs = cdr(xs)
+        setcdr!(xs, ys)
+        ys = xs
+        xs = zs
+    end
+    ys
+end
+</pre>
+<p> 引数 xs のリストを破壊的な操作で要素を逆順にします。変数 ys に逆順のリストを保持します。xs が空リストの場合は ys を返します。そうでなければ、xs の先頭のセルを r に追加します。
+</p>
+<p> まず、2 番目のセルを変数 zs にセットします。それから、先頭セルの cdr 部を ys に書き換えます。これで、ys の先頭にセルを移動することができます。そして、ys を xs に書き換えます。これで ys に逆順のリストがセットされます。最後に、xs を zs に書き換えるだけです。
+</p>
+<p> それでは簡単な例を示しましょう。
+</p>
+<pre>
+julia&gt; a = iota(1 : 9)
+(1 2 3 4 5 6 7 8 9)
+
+julia&gt; b = reverse!(a)
+(9 8 7 6 5 4 3 2 1)
+
+julia&gt; b
+(9 8 7 6 5 4 3 2 1)
+
+julia&gt; a
+(1)
+</pre>
+<p> reverse!() の返り値を代入した変数 b の値は逆順のリストになっています。ところが、変数 a の値は逆順のリストになっていません。reverse!() は変数 a のリストを破壊的に修正しますが、変数 a の値が逆順のリストになるわけではありません。これは Lisp の関数 nreverse や scheme の関数 reverse! と同じです。
+</p>
+<p> Common Lisp の場合、nreverse の実装方法は仕様で定められているわけではないので、リストを反転したあと必ずしも先頭のセルが末尾セルになるとは限りません。実際、CLISP という処理系で (nreverse a) を評価すると、変数 a の値は反転したリストになります。他の処理系、たとえば SBCL や Scheme の Gauche では、今回の reverse!() と同じ結果になります。ご注意くださいませ。
+</p>
+<h4>●Mulist での reverse!() の使い方</h4>
+<p> 連結リストは先頭にデータを追加したり、先頭からデータを取り除く操作は O(1) で行うことができます。たとえば、リストを反転する reverse() は簡単に繰り返しに変換できます。
+<pre class="list">
+リスト : リストの反転
+
+# 再帰版
+function reverse(xs::List, ys::List = nil)
+    if atom(xs)
+        ys
+    else
+        reverse(cdr(xs), cons(car(xs), ys))
+    end
+end
+
+# 繰り返し版
+function reverse(xs::List)
+    ys = nil
+    while consp(xs)
+        ys = cons(car(xs), ys)
+        xs = cdr(xs)
+    end
+    ys
+end
+</pre>
+<p> 再帰版は末尾再帰になっているので、末尾再帰最適化を行う処理系では繰り返しに変換されますが、Julia はまだサポートされていません。繰り返し版は xs の先頭から要素を取り出して、ys の先頭に追加していくだけです。では次に、リストをコピーする関数を繰り返しに変換することを考えてみましょう。
+</p>
+<pre class="list">
+リスト : リストのコピー (再帰版)
+
+function copylist(xs::List)
+    if atom(xs)
+        xs
+    else
+       cons(car(xs), copy(cdr(xs)))
+    end
+end
+</pre>
+<p> setcdr!() を使ってセルを後ろにつなげていく方法もありますが、けっこう面倒です。一番簡単な方法は reverse!() を使うことです。
+</p>
+<pre class="list">
+リスト : リストのコピー (2)
+
+copylist(xs::List) = reverse!(reverse(xs))
+</pre>
+<p> reverse(xs) で xs の逆順のリストを生成し、reverse!() でそれを破壊的に反転します。コンスセルの消費量は同じで、スタックオーバーフローも発生しません。そのかわり、reverse!() でコンスセルをつなぎかえていくので、実行時間は余分にかかることになります。ようするに、実行効率には目をつぶって堅牢性を優先しているわけです。Mulist ではこの方法を使って再帰呼び出しを繰り返しに修正しています。
+</p>
+<p> もう一つ、リストを連結するときにも reverse!() を使っています。
+</p>
+<pre class="list">
+リスト : リストの連結
+
+function append1(xs::List, ys::List)
+    if atom(xs)
+        ys
+    else
+        zs1 = reverse(xs)
+        zs2 = reverse!(zs1)
+        setcdr!(zs1, ys)
+        zs2
+    end
+end
+</pre>
+<p> 関数 append1() は xs と ys を連結します。reverse(xs) で xs を反転したリストを生成して、変数 zs1 にセットします。次に、reverse!(zs1) で zs1 を破壊的に反転して変数 zs2 にセットします。今回の reverse!() の動作では、変数 zs1 のセルは末尾セルになるので、setcdr!() で zs1 の cdr 部を ys に書き換えれば、xs と ys を連結した新しいリストを生成することができます。
+</p>
+<p> もちろん、これは reverse!() の動作に依存したプログラムなので、reverse!() を変更すると正常に動作しなくなる可能性があります。末尾のセルを求める関数 lastpair() を使って、zs = reverse!(reverse(xs)); setcdr!(lastpair(zs), ys); zs としたほうが素直なプログラムだと思いますが、今回はこの方法も使っています。興味のある方は <a href="juliaa17.html#list1">プログラムリスト</a> をお読みくださいませ。
+</p>
+<hr>
+<h4 id="spec">●連結リスト (mutable) の仕様</h4>
+<ul>
+  <li>モジュール名: Mulist
+  <li>データ型
+    <ul>
+      <li>List : 連結リスト (抽象型, 公開)
+      <li>Nil : 空リスト (非公開)
+      <li>Cons : コンスセル (非公開)
+    </ul>
+  <li>定数
+    <ul>
+      <li>nil : 空リスト
+    </ul>
+</ul>
+<pre>
+julia&gt; nil
+()
+</pre>
+<ul>
+  <li>基本関数
+    <ul>
+      <li>cons(xs, ys) : xs, ys をコンスセルに格納して返す
+      <li>car(xs) : リストの先頭要素を返す
+      <li>cdr(xs) : リストの先頭要素をを取り除いたリストを返す
+      <li>setcar!(xs, x) : コンスセルの car を x に書き換える
+      <li>setcdr!(xs, x) : コンスセルの cdr を x に書き換える
+    </ul>
+</ul>
+<pre>
+julia&gt; cons(1, 2)
+(1 . 2)
+
+julia&gt; xs = cons(1, cons(2, cons(3, nil)))
+(1 2 3)
+
+julia&gt; car(xs)
+1
+
+julia&gt; cdr(xs)
+(2 3)
+
+julia&gt; car(nil)
+()
+
+julia&gt; cdr(nil)
+()
+
+julia&gt; a = cons(1, 2)
+(1 . 2)
+
+julia&gt; setcar!(a, 10)
+10
+
+julia&gt; a
+(10 . 2)
+
+julia&gt; setcdr!(a, 20)
+20
+
+julia&gt; a
+(10 . 20)
+</pre>
+<ul>
+  <li>述語
+    <ul>
+      <li>null(xs) : xs が nil ならば true を返す
+      <li>consp(xs) : xs がコンスセル (Cons) ならば true を返す
+      <li>atom(xs) : xs がコンスセルでなければ true を返す
+      <li>listp(xs) : xs がコンスセルまたは空リストならば true を返す
+      <li>equal(xs, ys) : xs == ys またはリストが equal() を満たすならば true を返す
+      <li>iscircle(xs) : xs が循環リストならば true を返す
+    </ul>
+</ul>
+<pre>
+julia&gt; null(nil)
+true
+
+julia&gt; null(cons(1, nil))
+false
+
+julia&gt; consp(nil)
+false
+
+julia&gt; consp(cons(1, nil))
+true
+
+julia&gt; atom(1)
+true
+
+julia&gt; atom(cons(1, nil))
+false
+
+julia&gt; atom(nil)
+true
+
+julia&gt; listp(cons(1, nil))
+true
+
+julia&gt; listp(nil)
+true
+
+julia&gt; listp(1)
+false
+
+julia&gt; xs
+(1 2 3)
+
+julia&gt; equal(xs, cons(1, cons(2, cons(3, nil))))
+true
+
+julia&gt; equal(xs, cons(1, cons(2, nil)))
+false
+
+julia&gt; equal(xs, cons(1, cons(2, cons(4, nil))))
+false
+
+julia&gt; a = cons(1, nil)
+(1)
+
+julia&gt; iscircle(a)
+false
+
+julia&gt; setcdr!(a, a); nil   # 循環リストを表示すると無限ループになる
+()
+
+julia&gt; iscircle(a)
+true
+
+julia&gt; iscircle(cons(1, 2))
+false
+</pre>
+<ul>
+  <li>リストの生成
+    <ul>
+      <li>list(x...) : 引数をリストに格納して返す
+      <li>makelist(n, x) : 要素が x で長さが n のリストを生成する
+      <li>tabulate(f, r) : 範囲オブジェクト r の要素に関数 f を適用した結果をリストに格納して返す
+      <li>iota(r) : 範囲オブジェクト r の要素をリストに格納して返す
+      <li>tolist(xs) : コンテナ xs の要素をリストに格納して返す
+      <li>circularlist(x...) : 引数を無限に繰り返すリストを生成する
+    </ul>
+</ul>
+<pre>
+julia&gt; list("foo", "bar", "baz")
+(foo bar baz)
+
+julia&gt; makelist(10, 0)
+(0 0 0 0 0 0 0 0 0 0)
+
+julia&gt; tabulate(x -&gt; x * x, 1 : 10)
+(1 4 9 16 25 36 49 64 81 100)
+
+julia&gt; iota(1 : 2 : 10)
+(1 3 5 7 9)
+
+julia&gt; xs = [1, 2, 3, 4, 5]
+5-element Array{Int64,1}:
+ 1
+ 2
+ 3
+ 4
+ 5
+
+julia&gt; tolist(xs)
+(1 2 3 4 5)
+
+julia&gt; ys = circularlist(1,2,3); nil
+()
+
+julia&gt; iscircle(ys)
+true
+
+julia&gt; car(ys)
+1
+
+julia&gt; car(cdr(ys))
+2
+
+julia&gt; car(cdr(cdr(ys)))
+3
+
+julia&gt; car(cdr(cdr(cdr(ys))))
+1
+</pre>
+<ul>
+  <li>リストの参照
+    <ul>
+      <li>Julia に合わせて添字は 1 から始める
+      <li>リストはランダムアクセスできない (要素のアクセスは O(N) になる) ので、getindex() と lastindex() は実装しない
+      <li>first(xs) : car(xs) と同じ
+      <li>second(xs) : 2 番目の要素を返す
+      <li>third(xs) : 3 番目の要素を返す
+      <li>fourth(xs) : 4 番目の要素を返す
+      <li>fifth(xs) : 5 番目の要素を返す
+      <li>last(xs) : リストの最後の要素を返す
+      <li>lastpair(xs) : リストの最後のコンスセルを返す
+      <li>nth(xs, n) : リストの n 番目の要素を返す
+    </ul>
+</ul>
+<pre>
+julia&gt; xs = iota(0 : 9)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; first(xs)
+0
+
+julia&gt; second(xs)
+1
+
+julia&gt; third(xs)
+2
+
+julia&gt; fourth(xs)
+3
+
+julia&gt; fifth(xs)
+4
+
+julia&gt; last(xs)
+9
+
+julia&gt; lastpair(xs)
+(9)
+
+julia&gt; nth(xs, 1)
+0
+
+julia&gt; nth(xs, 2)
+1
+
+julia&gt; nth(xs, 10)
+9
+</pre>
+<ul>
+  <li>基本的なリスト操作
+    <ul>
+      <li>length(xs) : リスト xs の長さを求める
+      <li>append(xs...) : 引数のリストを連結したリストを返す
+      <li>append!(xs...) : append() の破壊的操作
+      <li>reverse(xs) : リスト xs を反転する
+      <li>reverse!(xs) : reverse() の破壊的操作
+      <li>take(xs, n) : リスト xs の先頭から n 個の要素を取り出す
+      <li>takewhile(pred, xs): リスト xs の先頭から関数 pred が真を返す間、それらの要素を取り出す
+      <li>drop(xs, n) : リスト xs の先頭から n 個の要素を取り除く
+      <li>dropwhile(pred, xs): リスト xs の先頭から関数 pred が真を返す間、それらの要素を取り除く
+      <li>flatten(xs) : リストの平坦化 (再帰定義)
+    </ul>
+</ul>
+<pre>
+julia&gt; xs
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; length(xs)
+10
+
+julia&gt; a = list(1, 2, 3); b = list(4, 5, 6); c = list(7, 8, 9)
+(7 8 9)
+
+julia&gt; append(a, b, c)
+(1 2 3 4 5 6 7 8 9)
+
+julia&gt; a
+(1 2 3)
+
+julia&gt; b
+(4 5 6)
+
+julia&gt; c
+(7 8 9)
+
+julia&gt; append!(a, b, c)
+(1 2 3 4 5 6 7 8 9)
+
+julia&gt; a
+(1 2 3 4 5 6 7 8 9)
+
+julia&gt; b
+(4 5 6 7 8 9)
+
+julia&gt; c
+(7 8 9)
+
+julia&gt; reverse(a)
+(9 8 7 6 5 4 3 2 1)
+
+julia&gt; a
+(1 2 3 4 5 6 7 8 9)
+
+julia&gt; b = reverse!(a)
+(9 8 7 6 5 4 3 2 1)
+
+julia&gt; a
+(1)
+
+julia&gt; b
+(9 8 7 6 5 4 3 2 1)
+
+julia&gt; take(xs, 5)
+(0 1 2 3 4)
+
+julia&gt; drop(xs, 5)
+(5 6 7 8 9)
+
+julia&gt; takewhile(x -&gt; x &lt; 5, xs)
+(0 1 2 3 4)
+
+julia&gt; dropwhile(x -&gt; x &lt; 5, xs)
+(5 6 7 8 9)
+
+julia&gt; ys = list(1, list(2, list(3, list(4, 5), 6), 7), 8)
+(1 (2 (3 (4 5) 6) 7) 8)
+
+julia&gt; flatten(ys)
+(1 2 3 4 5 6 7 8)
+</pre>
+<ul>
+  <li>リストの探索
+    <ul>
+      <li>member(x, xs, op = equal) : リスト xs から x と等しい要素を探す
+      <ul>
+        <li>比較にはデフォルトで関数 equal を使う
+        <li>見つけた場合、それ以降のリストを返す
+        <li>見つからない場合は nil を返す
+      </ul>
+      <li>member(f, xs) : member の高階関数版
+      <li>x in xs : リスト xs に  x と等しい要素があれば true を返す (in(x, xs) でも OK)
+      <li>findfirst(pred, xs) : pred(x) が真となる要素 x の位置を返す, 見つからない場合は nothing を返す
+      <li>findnext(pred, xs, i) : リスト xs の i 番目から探索する
+      <li>count(f, xs) : 関数 f が真を返す要素を数える (Julia の関数)
+    </ul>
+</ul>
+<pre>
+julia&gt; xs = list(1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5)
+(1 2 1 2 3 1 2 3 4 1 2 3 4 5)
+
+julia&gt; member(4, xs)
+(4 1 2 3 4 5)
+
+julia&gt; member(6, xs)
+()
+
+julia&gt; member(x -&gt; x % 3 == 0, xs)
+(3 1 2 3 4 1 2 3 4 5)
+
+julia&gt; member(x -&gt; x % 7 == 0, xs)
+()
+
+julia&gt; 1 in xs
+true
+
+julia&gt; 5 in xs
+true
+
+julia&gt; 0 in xs
+false
+
+julia&gt; findfirst(isequal(3), xs)
+5
+
+julia&gt; findfirst(isequal(6), xs)
+
+julia&gt; findnext(isequal(4), xs, 1)
+9
+
+julia&gt; findnext(isequal(4), xs, 10)
+13
+
+julia&gt; findnext(isequal(4), xs, 14)
+
+julia&gt; count(x -&gt; x == 1, xs)
+4
+
+julia&gt; count(x -&gt; x % 2 == 0, xs)
+6
+
+julia&gt; count(x -&gt; x == 7, xs)
+0
+</pre>
+<ul>
+  <li>高階関数
+    <ul>
+      <li>map(f, xs...) : マッピング
+      <li>filter(pred, xs) : xs の要素に関数 pred を適用し、真を返す要素をリストに格納して返す
+      <li>filter!(pred, xs) : filter() の破壊的操作
+      <li>remove(pred, xs) : xs の要素に関数 pred を適用し、真を返す要素をリストから削除する
+      <li>remove!(pred, xs) : remove() の破壊的操作
+      <li>foldl(f, xs, init) : リストの先頭から畳み込む
+      <li>foldr(f, xs, init) : リストの末尾から畳み込む
+      <li>unfold(cond, iter, seed, func = identity) : 逆畳み込み
+      <ul>
+        <li>cond : cond(seed) が真のとき終了
+        <li>iter : iter(seed) で次の seed を計算する
+        <li>seed : 値
+        <li>func : seed に適用する関数 (評価結果がリストに格納される)
+        <li>identity(x) は引数 x をそのまま返す (恒等関数)
+      </ul>
+      <li>foreach(f, xs) : リストの要素に関数 f を適用する
+    </ul>
+</ul>
+<pre>
+julia&gt; xs = tolist(0 : 9)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; map(x -&gt; x * x, xs)
+(0 1 4 9 16 25 36 49 64 81)
+
+julia&gt; map(+, list(1, 2, 3, 4), list(5, 6, 7, 8))
+(6 8 10 12)
+
+julia&gt; filter(x -&gt; x % 2 == 0, xs)
+(0 2 4 6 8)
+
+julia&gt; ys = tolist(0 : 9)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; zs = filter!(isodd, ys)
+(1 3 5 7 9)
+
+julia&gt; ys
+(0 1 3 5 7 9)
+
+julia&gt; zs
+(1 3 5 7 9)
+
+julia&gt; remove(x -&gt; x % 2 == 0, xs)
+(1 3 5 7 9)
+
+julia&gt; remove(isequal(5), xs)
+(0 1 2 3 4 6 7 8 9)
+
+julia&gt; ys = tolist(0 : 9)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; zs = remove!(iseven, ys)
+(1 3 5 7 9)
+
+julia&gt; ys
+(0 1 3 5 7 9)
+
+julia&gt; zs
+(1 3 5 7 9)
+
+julia&gt; foldl(+, xs, 0)
+45
+
+julia&gt; foldr(+, xs, 0)
+45
+
+julia&gt; foldl((x, y) -&gt; cons(y, x), xs, nil)
+(9 8 7 6 5 4 3 2 1 0)
+
+julia&gt; foldr(cons, xs, nil)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; unfold(x -&gt; x &gt; 10, x -&gt; x + 1, 1)
+(1 2 3 4 5 6 7 8 9 10)
+
+julia&gt; unfold(x -&gt; x &gt; 10, x -&gt; x + 1, 1, x -&gt; 2x)
+(2 4 6 8 10 12 14 16 18 20)
+
+julia&gt; foreach(println, xs)
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+</pre>
+<ul>
+  <li>イテレータ
+    <ul>
+       <li>イテレータを実装しているので、それを受け取る関数ならば、たいていの場合は動作する
+       <li>ただし、getindex() や lastindex() を実装していないので、それらを使用している関数は動作しない
+       <li>zip(iter...) : イテレータから要素を取り出し、それをタプルに格納して返す (返り値はイテレータ)
+       <li>enumerate(iter) : 添字と要素を返す (返り値はイテレータ)
+       <li>all(f, iter) : イテレータの要素に関数 f を適用し、結果がすべて真ならば真を返す
+       <li>any(f, iter) : イテレータの要素に関数 f を適用し、結果がすべて偽ならば偽を返す (ひとつでも真ならば真を返す)
+       <li>その他いろいろある
+    </ul>
+</ul>
+<pre>
+julia&gt; xs = iota(1 : 2 : 20)
+(1 3 5 7 9 11 13 15 17 19)
+
+julia&gt; for x = xs; print("$x "); end
+1 3 5 7 9 11 13 15 17 19
+julia&gt; for (i, x) = enumerate(xs); print("($i, $x)"); end
+(1, 1)(2, 3)(3, 5)(4, 7)(5, 9)(6, 11)(7, 13)(8, 15)(9, 17)(10, 19)
+julia&gt; for x = zip(list(1,2,3), list(4,5,6), list(7,8,9))
+       println(x)
+       end
+(1, 4, 7)
+(2, 5, 8)
+(3, 6, 9)
+
+julia&gt; map(tuple, list(1, 2, 3), list(4, 5, 6), list(7, 8, 9))
+((1, 4, 7) (2, 5, 8) (3, 6, 9))
+
+julia&gt; all(x -&gt; x % 2 == 0, list(2, 4, 6, 8, 10))
+true
+
+julia&gt; all(x -&gt; x % 2 == 0, list(2, 4, 6, 8, 10, 11))
+false
+
+julia&gt; any(x -&gt; x % 2 != 0, list(2, 4, 6, 8, 10, 11))
+true
+
+julia&gt; any(x -&gt; x % 2 != 0, list(2, 4, 6, 8, 10))
+false
+</pre>
+<ul>
+  <li>リストの置換
+    <ul>
+      <li>substitute(pred, y, xs) : リスト xs のトップレベルの要素で、関数 pred が真を返す要素を y に置換する
+      <li>substitute!(pred, y, xs) : substitute() の破壊的操作
+      <li>subst(pred, y, xs) : リスト xs を木とみなして、関数 pred が真を返す要素を y に置換する (再帰定義)
+      <li>subst!(pred, y, xs) : subst() の破壊的操作 (再帰定義)
+    </ul>
+</ul>
+<pre>
+julia&gt; xs = list(1, 2, 3, 4, 5)
+(1 2 3 4 5)
+
+julia&gt; substitute(iseven, 0, xs)
+(1 0 3 0 5)
+
+julia&gt; xs
+(1 2 3 4 5)
+
+julia&gt; ys = substitute!(iseven, 0, xs)
+(1 0 3 0 5)
+
+julia&gt; xs
+(1 0 3 0 5)
+
+julia&gt; ys
+(1 0 3 0 5)
+
+julia&gt; ys = list(1, list(2, list(3, list(4, 5), 6), 7), 8)
+(1 (2 (3 (4 5) 6) 7) 8)
+
+julia&gt; substitute(x -&gt; typeof(x) == Int &amp;&amp; x % 2 == 0, 0, ys)
+(1 (2 (3 (4 5) 6) 7) 0)
+
+julia&gt; subst(x -&gt; typeof(x) == Int &amp;&amp; x % 2 == 0, 0, ys)
+(1 (0 (3 (0 5) 0) 7) 0)
+
+julia&gt; ys
+(1 (2 (3 (4 5) 6) 7) 8)
+
+julia&gt; subst!(x -&gt; typeof(x) == Int &amp;&amp; x % 2 == 0, 0, ys)
+(1 (0 (3 (0 5) 0) 7) 0)
+
+julia&gt; ys
+(1 (0 (3 (0 5) 0) 7) 0)
+</pre>
+<ul>
+  <li>リストのマージとソート
+    <ul>
+      <li>merge(xs, ys, op = &lt;=) : リスト xs, ys を併合 (マージ) する
+      <li>merge!(xs, ys, op = &lt;=) : merge() の破壊的操作
+      <li>xs, ys は op の順序で整列済みであること
+      <li>mergesort(xs, op = &lt;=) : リスト xs をマージソートする
+      <li>mergesort!(xs, op = &lt;=) : mergesort() の破壊的操作
+    </ul>
+</ul>
+<pre>
+julia&gt; merge(list(1, 3, 5, 7, 9), list(2, 4, 6, 8, 10))
+(1 2 3 4 5 6 7 8 9 10)
+
+julia&gt; mergesort(list(5, 6, 4, 7, 3, 8, 2, 9, 1, 0))
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; mergesort(list(0, 1, 2, 3, 4, 5, 6, 7, 8, 9))
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; mergesort(list(9, 8, 7, 6, 5, 4, 3, 2, 1, 0))
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; a = list(1,3,5,7,9)
+(1 3 5 7 9)
+
+julia&gt; b = list(2,4,6,8,10)
+(2 4 6 8 10)
+
+julia&gt; merge!(a, b)
+(1 2 3 4 5 6 7 8 9 10)
+
+julia&gt; a
+(1 2 3 4 5 6 7 8 9 10)
+
+julia&gt; b
+(2 3 4 5 6 7 8 9 10)
+
+julia&gt; a = list(5,6,4,7,3,8,2,9,1,0)
+(5 6 4 7 3 8 2 9 1 0)
+
+julia&gt; mergesort!(a)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; a
+(5 6 7 8 9)
+
+julia&gt; a = list(0,1,2,3,4,5,6,7,8,9)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; mergesort!(a)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; a
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; a = list(9,8,7,6,5,4,3,2,1,0)
+(9 8 7 6 5 4 3 2 1 0)
+
+julia&gt; mergesort!(a)
+(0 1 2 3 4 5 6 7 8 9)
+
+julia&gt; a
+(9)
+</pre>
+<ul>
+  <li>連想リスト
+    <ul>
+      <li>acons(key, val, alist) : 連想リスト alist に (key . val) を追加
+      <li>assoc(key, alist) : 連想リスト alist から key を探す
+      <ul>
+        <li>見つけた場合は (key . val) を返す
+        <li>見つからない場合は false を返す
+      </ul>
+      <li>pairlis(keys, vals, alist = nil) : リスト keys, vals から連想リストを生成する
+    </ul>
+</ul>
+<pre>
+julia&gt; xs = pairlis(list(:a, :b, :c, :d), list(1, 2, 3, 4))
+((a . 1) (b . 2) (c . 3) (d . 4))
+
+julia&gt; assoc(:a, xs)
+(a . 1)
+
+julia&gt; assoc(:d, xs)
+(d . 4)
+
+julia&gt; assoc(:e, xs)
+false
+
+julia&gt; ys = acons(:e, 5, xs)
+((e . 5) (a . 1) (b . 2) (c . 3) (d . 4))
+
+julia&gt; assoc(:e, ys)
+(e . 5)
+</pre>
+<ul>
+  <li>集合演算
+    <ul>
+      <li>unique(xs) : xs から重複要素を取り除いたリストを返す
+      <li>union(xs, ys) : 和集合
+      <li>intersect(xs, ys) : 積集合
+      <li>difference(xs, ys) : 差集合
+      <li>issubset(xs, ys) : xs が ys の部分集合ならば真を返す
+      <li>product(xs...) : 直積集合
+    </ul>
+</ul>
+<pre>
+julia&gt; unique(list(1, 2, 1, 2, 3, 1, 2, 3, 4, 1, 2, 3, 4, 5))
+(1 2 3 4 5)
+
+julia&gt; xs = list(1, 2, 3, 4)
+(1 2 3 4)
+
+julia&gt; ys = list(3, 4, 5, 6)
+(3 4 5 6)
+
+julia&gt; union(xs, ys)
+(1 2 3 4 5 6)
+
+julia&gt; intersect(xs, ys)
+(3 4)
+
+julia&gt; difference(xs, ys)
+(1 2)
+
+julia&gt; issubset(list(1,2), xs)
+true
+
+julia&gt; issubset(list(1,5), xs)
+false
+
+julia&gt; issubset(nil, xs)
+true
+
+julia&gt; issubset(xs, xs)
+true
+
+julia&gt; product()
+(())
+
+julia&gt; product(list(1, 2, 3))
+((1) (2) (3))
+
+julia&gt; product(list(1, 2, 3), list(4, 5, 6))
+((1 4) (1 5) (1 6) (2 4) (2 5) (2 6) (3 4) (3 5) (3 6))
+
+julia&gt; product(list(1, 2, 3), list(4, 5, 6), list(7, 8, 9))
+((1 4 7) (1 4 8) (1 4 9) (1 5 7) (1 5 8) (1 5 9) (1 6 7) (1 6 8) (1 6 9)
+ (2 4 7) (2 4 8) (2 4 9) (2 5 7) (2 5 8) (2 5 9) (2 6 7) (2 6 8) (2 6 9)
+ (3 4 7) (3 4 8) (3 4 9) (3 5 7) (3 5 8) (3 5 9) (3 6 7) (3 6 8) (3 6 9))
+
+julia&gt; product(list(1, 2), list(3, 4), list(5, 6), list(7, 8))
+((1 3 5 7) (1 3 5 8) (1 3 6 7) (1 3 6 8) (1 4 5 7) (1 4 5 8) (1 4 6 7) (1 4 6 8) 
+ (2 3 5 7) (2 3 5 8) (2 3 6 7) (2 3 6 8) (2 4 5 7) (2 4 5 8) (2 4 6 7) (2 4 6 8))
+</pre>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+#
+# Mulist.jl : Lisp ライクで mutable な連結リスト
+#
+#             Copyright (C) 2018 Makoto Hiroi
+#
+module Mulist
+
+export List, nil, car, cdr, setcar!, setcdr!, cons, null, listp, consp, atom, equal
+export list, makelist, tabulate, iota, tolist, nth, second, third, fourth, fifth
+export lastpair, append, take, drop, takewhile, dropwhile, flatten, remove, remove!
+export unfold, member, mergesort, mergesort!, acons, assoc, pairlis, difference
+export substitute, subst, substitute!, subst!, iscircle, circularlist, product
+
+# 多重定義用
+import Base: show, iterate, first, last, length, append!, reverse, reverse!
+import Base: map, filter, filter!, foldl, foldr, foreach, in, findfirst
+import Base: findnext, merge, merge!, union, intersect, issubset, unique
+
+#
+# リストの定義
+#
+abstract type List end
+
+# 空リスト
+struct Nil &lt;: List
+end
+
+# 終端
+const nil = Nil()
+
+# コンスセル
+mutable struct Cons &lt;: List
+    car
+    cdr
+end
+
+#
+# 基本関数と述語
+#
+car(xs::Cons) = xs.car
+car(xs::Nil)  = nil
+cdr(xs::Cons) = xs.cdr
+cdr(xs::Nil)  = nil
+cons(x, y) = Cons(x, y)
+
+# 書き換え
+setcar!(xs::Cons, x) = xs.car = x
+setcdr!(xs::Cons, x) = xs.cdr = x
+
+# 述語
+null(xs)  = xs === nil
+atom(xs)  = typeof(xs) != Cons
+consp(xs) = typeof(xs) == Cons
+listp(xs) = null(xs) || consp(xs)
+
+# 等値の判定
+function equal(xs, ys)
+    while consp(xs) &amp;&amp; consp(ys)
+        if !equal(car(xs), car(ys)) return false end
+        xs = cdr(xs)
+        ys = cdr(ys)
+    end
+    xs == ys
+end
+
+# 循環リストの判定
+function iscircle(xs::List)
+    fast = xs
+    slow = xs
+    while true
+        fast = cdr(fast)
+        if atom(fast) return false end
+        fast = cdr(fast)
+        slow = cdr(slow)
+        if atom(fast)
+            return false
+        elseif fast === slow
+            return true
+        end
+    end
+end
+
+# 表示
+function print_list(io::IO, xs::List)
+    print(io, "(")
+    while consp(xs)
+        x = car(xs)
+        if consp(x)
+            print_list(io, x)
+        elseif null(x)
+            print(io, "()")
+        else
+            print(io, x)
+        end
+        xs = cdr(xs)
+        if consp(xs); print(io, " "); end
+    end
+    if !null(xs); print(io, " . $xs"); end
+    print(io, ")")
+end
+
+show(io::IO, xs::List) = print_list(io, xs)
+
+#
+# イテレータ
+#
+function iterate(xs::List, state = xs)
+    if null(state)
+        nothing
+    else
+        (car(state), cdr(state))
+    end
+end
+
+#
+# 参照
+#
+function nth(xs::List, n::Int)
+    while consp(xs) &amp;&amp; n &gt; 1
+        xs = cdr(xs)
+        n -= 1
+    end
+    if consp(xs)
+        car(xs)
+    else
+        throw(BoundsError(xs, n))
+    end
+end
+
+first(xs::Cons)  = xs.car
+second(xs::Cons) = xs.cdr.car
+third(xs::Cons)  = xs.cdr.cdr.car
+fourth(xs::Cons) = xs.cdr.cdr.cdr.car
+fifth(xs::Cons)  = xs.cdr.cdr.cdr.cdr.car
+
+# 末尾のセルを返す
+function lastpair(xs::Cons)
+    while consp(cdr(xs))
+        xs = cdr(xs)
+    end
+    xs
+end
+
+# 末尾の要素
+function last(xs::Cons)
+    car(lastpair(xs))
+end
+
+#
+# リストの生成
+#
+list(args...) = foldr(cons, args, init = nil)
+
+function makelist(n::Int, x)
+    xs = nil
+    for _ = 1 : n
+        xs = cons(x, xs)
+    end
+    xs
+end
+
+tabulate(f::Function, x::AbstractRange) = list(map(f, collect(x))...)
+
+iota(x::AbstractRange) = list(collect(x)...)
+
+tolist(xs) = list(xs...)
+
+# 循環リストの生成
+function circularlist(args...)
+    xs = foldr(cons, args, init = nil)
+    if consp(xs)
+        setcdr!(lastpair(xs), xs)
+    end
+    xs
+end
+
+#
+# 基本的なリスト操作
+#
+
+# リストの連結
+function append(xs::List...)
+    function append1(xs::List, ys::List)
+        if atom(xs)
+            ys
+        else
+            zs1 = reverse(xs)
+            zs2 = reverse!(zs1)
+            setcdr!(zs1, ys)
+            zs2
+        end
+    end
+    n = length(xs)
+    if n == 0
+        nil
+    elseif n == 1
+        xs[1]
+    else
+        foldr(append1, xs)   # 後ろからつなげていく
+    end
+end
+
+# 破壊的
+function append!(xs::List...)
+    function nconc(xs::List, ys::List)
+        if atom(xs)
+            ys
+        elseif atom(ys)
+            xs
+        else
+            setcdr!(lastpair(xs), ys)
+            xs
+        end
+    end
+    n = length(xs)
+    if n == 0
+        nil
+    elseif n == 1
+        xs[1]
+    else
+        foldr(nconc, xs)
+    end
+end
+
+# リストの反転
+function reverse(xs::List)
+    ys = nil
+    while consp(xs)
+        ys = cons(car(xs), ys)
+        xs = cdr(xs)
+    end
+    ys
+end
+
+# 破壊的
+function reverse!(xs::List)
+    ys = nil
+    while consp(xs)
+        zs = cdr(xs)
+        setcdr!(xs, ys)
+        ys = xs
+        xs = zs
+    end
+    ys
+end
+
+# リストの長さ
+function length(xs::List)
+    c = 0
+    while consp(xs)
+        c += 1
+        xs = cdr(xs)
+    end
+    c
+end
+
+# 先頭から要素を取り出す
+function take(xs::List, n::Int)
+    ys = nil
+    while !null(xs) &amp;&amp; n &gt; 0
+        ys = cons(car(xs), ys)
+        xs = cdr(xs)
+        n -= 1
+    end
+    reverse!(ys)
+end
+
+function takewhile(pred::Function, xs::List)
+    ys = nil
+    while consp(xs) &amp;&amp; pred(car(xs))
+        ys = cons(car(xs), ys)
+        xs = cdr(xs)
+    end
+    reverse!(ys)
+end
+
+# 先頭から要素を取り除く
+function drop(xs::List, n::Int)
+    while consp(xs) &amp;&amp; n &gt; 0
+        xs = cdr(xs)
+        n -= 1
+    end
+    xs
+end
+
+function dropwhile(pred::Function, xs::List)
+    while consp(xs) &amp;&amp; pred(car(xs))
+        xs = cdr(xs)
+    end
+    xs
+end
+
+# 平坦化
+function flatten(xs::List)
+    function flat(xs, a::List)
+        if null(xs)
+            a
+        elseif atom(xs)
+            cons(xs, a)
+        else
+            flat(car(xs), flat(cdr(xs), a))
+        end
+    end
+    flat(xs, nil)
+end
+
+#
+# 基本的な高階関数
+#
+
+# マッピング
+function map(f::Function, xs::List...)
+    ys = nil
+    while all(consp, xs)
+        ys = cons(f(map(car, xs)...), ys)
+        xs = map(cdr, xs)
+    end
+    reverse!(ys)
+end
+
+# フィルター
+function filter(pred::Function, xs::List)
+    ys = nil
+    for x = xs
+        if pred(x) ys = cons(x, ys) end
+    end
+    reverse!(ys)
+end
+
+function remove(pred::Function, xs::List)
+    ys = nil
+    for x = xs
+        if !pred(x) ys = cons(x, ys) end
+    end
+    reverse!(ys)
+end
+
+# 破壊的
+function filter!(pred::Function, xs::List)
+    xs = dropwhile(x -&gt; !pred(x), xs)
+    if null(xs) return nil end
+    ps = xs
+    qs = cdr(xs)
+    while consp(qs)
+        if pred(car(qs))
+            setcdr!(ps, qs)
+            ps = qs
+        end
+        qs = cdr(qs)
+    end
+    setcdr!(ps, nil)
+    xs
+end
+
+function remove!(pred::Function, xs::List)
+    xs = dropwhile(x -&gt; pred(x), xs)
+    if null(xs) return nil end
+    ps = xs
+    qs = cdr(xs)
+    while consp(qs)
+        if !pred(car(qs))
+            setcdr!(ps, qs)
+            ps = qs
+        end
+        qs = cdr(qs)
+    end
+    setcdr!(ps, nil)
+    xs
+end
+
+# 畳み込み
+function foldl(f::Function, xs::List, a)
+    while consp(xs)
+        a = f(a, car(xs))
+        xs = cdr(xs)
+    end
+    a
+end
+
+function foldr(f::Function, xs::List, a)
+    xs = reverse(xs)
+    while consp(xs)
+        a = f(car(xs), a)
+        xs = cdr(xs)
+    end
+    a
+end
+
+# 逆畳み込み
+function unfold(cond::Function, iter::Function, seed, func::Function = identity)
+    xs = nil
+    while !cond(seed)
+        xs = cons(func(seed), xs)
+        seed = iter(seed)
+    end
+    reverse!(xs)
+end
+
+# 巡回
+function foreach(f::Function, xs::List)
+    while consp(xs)
+        f(car(xs))
+        xs = cdr(xs)
+    end
+end
+
+#
+# 探索
+#
+function member(pred::Function, xs::List)
+    while consp(xs)
+        if pred(car(xs)) break end
+        xs = cdr(xs)
+    end
+    xs
+end
+
+function member(y, xs::List, op = equal)
+    while consp(xs)
+        if op(car(xs), y) break end
+        xs = cdr(xs)
+    end
+    xs
+end
+
+# とりあえず missing は考慮しない
+function in(x, xs::List)
+    !null(member(x, xs))
+end
+
+function findfirst(pred::Function, xs::List)
+    i = 1
+    while consp(xs)
+        if pred(car(xs))
+            return i
+        end
+        i += 1
+        xs = cdr(xs)
+    end
+    nothing
+end
+
+function findnext(pred::Function, xs::List, i::Int)
+    idx = findfirst(pred, drop(xs, i - 1))
+    if idx === nothing
+        nothing
+    else
+        idx + i - 1
+    end
+end
+
+#
+# 置換
+#
+function substitute(pred::Function, y, xs::List)
+    zs = nil
+    while consp(xs)
+        x = car(xs)
+        zs = cons(pred(x) ? y : x, zs)
+        xs = cdr(xs)
+    end
+    reverse!(zs)
+end
+
+# 木の置換
+function subst(pred::Function, y, xs)
+    if pred(xs)
+        y
+    elseif atom(xs)
+        xs
+    else
+        cons(subst(pred, y, car(xs)), subst(pred, y, cdr(xs)))
+    end
+end
+
+# 破壊的
+function substitute!(pred::Function, y, xs::List)
+    ys = xs
+    while consp(ys)
+        if pred(car(ys))
+            setcar!(ys, y)
+        end
+        ys = cdr(ys)
+    end
+    xs
+end
+
+function subst!(pred::Function, y, xs)
+    if pred(xs)
+        y
+    elseif atom(xs)
+        xs
+    else
+        setcar!(xs, subst!(pred, y, car(xs)))
+        setcdr!(xs, subst!(pred, y, cdr(xs)))
+        xs
+    end
+end
+
+#
+# マージとソート
+#
+
+# マージ
+function merge(xs::List, ys::List, f = &lt;=)
+    if null(xs) return ys end
+    if null(ys) return xs end
+    zs1 = nil
+    while !null(xs) &amp;&amp; !null(ys)
+        x = car(xs)
+        y = car(ys)
+        if f(x, y)
+            zs1 = cons(x, zs1)
+            xs = cdr(xs)
+        else
+            zs1 = cons(y, zs1)
+            ys = cdr(ys)
+        end
+    end
+    zs2 = reverse!(zs1)
+    setcdr!(zs1, null(xs) ? ys : xs)
+    zs2
+end
+
+# マージソート
+function mergesort(xs::List, f = &lt;=)
+    function sort(xs::List, n::Int)
+        if n == 1
+            list(car(xs))
+        elseif n == 2
+            x = car(xs)
+            y = car(cdr(xs))
+            f(x, y) ? list(x, y) : list(y, x)
+        else
+            m = div(n, 2)
+            merge(sort(xs, m), sort(drop(xs, m), n - m), f)
+        end
+    end
+    sort(xs, length(xs))
+end
+
+# 破壊的
+function merge!(xs::List, ys::List, f = &lt;=)
+    if null(xs) return ys end
+    if null(ys) return xs end
+    if f(car(xs), car(ys))
+        zs = xs
+        xs = cdr(xs)
+    else
+        zs = ys
+        ys = cdr(ys)
+    end
+    top = zs
+    while !null(xs) && !null(ys)
+        if f(car(xs), car(ys))
+            setcdr!(zs, xs)
+            zs = xs
+            xs = cdr(xs)
+        else
+            setcdr!(zs, ys)
+            zs = ys
+            ys = cdr(ys)
+        end
+    end
+    if atom(xs)
+        setcdr!(zs, ys)
+    else
+        setcdr!(zs, xs)
+    end
+    top
+end
+
+function mergesort!(xs::List, f = &lt;=)
+    function sort(xs::List, n::Int)
+        if n == 1
+            setcdr!(xs, nil)
+            xs
+        else
+            m = div(n, 2)
+            ys = drop(xs, m)
+            merge!(sort(xs, m), sort(ys, n - m), f)
+        end
+    end
+    sort(xs, length(xs))
+end
+
+#
+# 連想リスト
+#
+acons(key, val, alist::List) = cons(cons(key, val), alist)
+assoc(key, xs::List) = car(member(ys -&gt; equal(key, car(ys)), xs))
+
+function pairlis(xs::List, ys::List, zs = nil)
+    ps1 = nil
+    while consp(xs) &amp;&amp; consp(ys)
+        ps1 = cons(cons(car(xs), car(ys)), ps1)
+        xs = cdr(xs)
+        ys = cdr(ys)
+    end
+    if consp(ps1)
+        ps2 = reverse!(ps1)
+        setcdr!(ps1, zs)
+        ps2
+    else
+        zs
+    end
+end
+
+#
+# 集合演算
+#
+
+# 重複要素の削除
+function unique(xs::List)
+    ys = nil
+    while consp(xs)
+        x = car(xs)
+        if !(x in ys)
+            ys = cons(x, ys)
+        end
+        xs = cdr(xs)
+    end
+    reverse!(ys)
+end
+
+# 和集合
+function union(xs::List, ys::List)
+    if null(xs) return ys end
+    zs1 = nil
+    while consp(xs)
+        x = car(xs)
+        if !(x in ys)
+            zs1 = cons(x, zs1)
+        end
+        xs = cdr(xs)
+    end
+    zs2 = reverse!(zs1)
+    setcdr!(zs1, ys)
+    zs2
+end
+
+# 積集合
+function intersect(xs::List, ys::List)
+    zs = nil
+    while consp(xs)
+        x = car(xs)
+        if x in ys
+            zs = cons(x, zs)
+        end
+        xs = cdr(xs)
+    end
+    reverse!(zs)
+end
+
+# 差集合
+function difference(xs::List, ys::List)
+    zs = nil
+    while consp(xs)
+        x = car(xs)
+        if !(x in ys)
+            zs = cons(x, zs)
+        end
+        xs = cdr(xs)
+    end
+    reverse!(zs)
+end
+
+# 部分集合の判定
+function issubset(xs::List, ys::List)
+    while consp(xs)
+        if !(car(xs) in ys)
+            return false
+        end
+        xs = cdr(xs)
+    end
+    true
+end
+
+# 直積集合
+function product(args::List...)
+    if length(args) == 0
+        list(nil)
+    else
+        xs = map(x -&gt; list(x), args[end])
+        for i = length(args) - 1: -1 : 1
+            xs = append!(map(y -&gt; map(zs -&gt; cons(y, zs), xs), args[i])...)
+        end
+        xs
+    end
+end
+
+end
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,1190 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Julia プログラミング超入門</title>
+  <meta name="description" content="Julia 入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881803</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="ce">
+<h1>Julia Language Programming</h1>
+<h2>お気楽 Julia プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>Julia の基礎知識</h3>
+<h4 id="abc25">●@printf の使い方</h4>
+<ul>
+  <li>@printf と @sprntf はデータを整形して出力するためのマクロ
+  <li>ここでは基本的な使い方を簡単に説明する
+  <li>使用するときは using Printf が必要
+<pre class="item">
+@printf([io::IOStream], "format", args...)
+@sprintf("format", args...)
+</pre>
+  <li>Ｃ言語の書式付き出力関数 printf() と sprintf() とほぼ同じ
+  <li>@printf は io に出力する、省略すると stdout に出力する
+  <li>@sprintf は文字列を返す
+  <li>引数の文字列 format を書式文字列といい、出力に関する様々な指定を行う
+  <li>基本的に書式文字列はそのまま文字列として扱われる
+  <li>文字列の途中にパーセント % が表れると、その後ろの文字を変換指示子として解釈する
+  <li>そして、引数 args... に与えられたデータをその指示に従って整形する
+  <li>変換指示子の種類
+  <ul>
+    <li>d, i, o, u, x, X, 整数
+    <li>a, A, e, E, f, g, G, 浮動小数点数
+    <li>c, 文字
+    <li>s, 文字列 (それ以外のデータは文字列に変換して出力)
+    <li>%, % 
+  </ul>
+  <li>変換指示子の個数と引数 args... の個数が合わないとエラーになる
+  <li>% と変換指示子の間にオプションでいろいろな設定を行うことができる
+<pre class="item">
+%[フラグ][最小フィールド幅][精度][変換修飾子]変換指定子
+</pre>
+  <ul>
+    <li>フラグ (+, -, 空白文字, #, 0)
+    <li>最小フィールド幅 (10 進数字列, *)
+    <li>精度 (.10 進数字列, .*, .)
+    <li>変換修飾子 (通常 Julia では指定の必要はないと思われる)
+  </ul>
+  <li>これらのオプションは変換指示子によって動作が異なる場合がある
+  <li>オプションは省略することはできても順番を変更することはできない
+</ul>
+<ul>
+  <li>整数
+  <ul>
+    <li>d, i, 10 進符号付き整数
+    <li>u, 10 進無符号整数
+    <li>o, 8 進無符号整数
+    <li>x, X, 16 進無符号整数 (X は大文字で出力)
+    <li>フラグ
+    <ul>
+      <li>+, 符号 + を付ける
+      <li>-, フィールド内に左詰めする (デフォルトは右詰め)
+      <li>空白, 符号 + のかわりに空白を付ける
+      <li>#, 8 進数では 0, 16 進数では 0x, 0X を付ける
+      <li>0. 0 詰め (フィールドを 0 で埋める)
+    </ul>
+    <li>フィールド幅を指定しても、それを超えたら無視される
+    <li>2 進数で出力したい場合は関数 bitstring() を使う
+    <li>bitstring(n) は数値 n を 2 進数で表した文字列を返す
+  </ul>
+</ul>
+<pre>
+julia&gt; @printf "%d, %x, %o\n" 100 100 100
+100, 64, 144
+
+julia&gt; @printf "%#d, %#x, %#o\n" 100 100 100
+100, 0x64, 0144
+
+julia&gt; @printf "%d\n" big(2)^128
+340282366920938463463374607431768211456
+
+julia&gt; @printf "%#x\n" big(2)^128
+0x100000000000000000000000000000000
+
+julia&gt; @printf "[%d]\n" 10
+[10]
+
+julia&gt; @printf "[%4d]\n" 10
+[  10]
+
+julia&gt; @printf "[%4d]\n" 100000
+[100000]
+
+julia&gt; @printf "[%8d]\n" 123456
+[  123456]
+
+julia&gt; @printf "[%+8d]\n" 123456
+[ +123456]
+
+julia&gt; @printf "[%-8d]\n" 123456
+[123456  ]
+
+julia&gt; @printf "[%08d]\n" 123456
+[00123456]
+
+julia&gt; bitstring(Int8(123))
+"01111011"
+
+julia&gt; bitstring(Int8(123))
+"01111011"
+
+julia&gt; bitstring(Int16(123))
+"0000000001111011"
+
+julia&gt; bitstring(Int32(123))
+"00000000000000000000000001111011"
+
+julia&gt; bitstring(123)
+"0000000000000000000000000000000000000000000000000000000001111011"
+
+julia&gt; bitstring(1.2345)
+"0011111111110011110000001000001100010010011011101001011110001101"
+</pre>
+<ul>
+  <li>浮動小数点数
+  <ul>
+    <li>e, E<br>
+引数を [-]m.nnnne[+/-]xx の形式の 10 進数に変換する (E を指定すると e が大文字になる)
+    <li>f<br>
+引数を [-]mmm.nnnn の形式の 10 進数に変換する
+    <li>g, G<br>
+%e または %f の形式で、出力する文字数の短いほうを使う (%G は %E または %f の形式になる)
+  </ul>
+  <li>e, E, f の場合、小数点の右側に印字される桁数はデフォルトで 6 桁
+  <li>これを変更するには精度を使う
+  <li>たとえば、"%.14f" とすると小数点は 14 桁で表示される
+  <li>g, G の場合、有効桁数 (整数と小数部を合わせた桁数) になる
+  <li>フラグ # は無視される
+</ul>
+<pre>
+julia&gt; a = sqrt(12345678)
+3513.641700572214
+
+julia&gt; @printf "%e\n%f\n%g\n" a a a
+3.513642e+03
+3513.641701
+3513.64
+
+julia&gt; @printf "%.14e\n%.14f\n%.14g\n" a a a
+3.51364170057221e+03
+3513.64170057221418
+3513.6417005722
+
+julia&gt; @printf "[%20f]\n" a
+[         3513.641701]
+
+julia&gt; @printf "[%+20f]\n" a
+[        +3513.641701]
+
+julia&gt; @printf "[%-20f]\n" a
+[3513.641701         ]
+</pre>
+<ul>
+  <li>c 変換子は文字を、s 変換子は文字列を表示する
+  <li>どちらの変換子もフィールド幅や右詰めの指定ができる
+</ul>
+<pre>
+julia&gt; b = "hello, Julia!"
+"hello, Julia!"
+
+julia&gt; @printf "[%s]\n" b
+[hello, Julia!]
+
+julia&gt; @printf "[%20s]\n" b
+[       hello, Julia!]
+
+julia&gt; @printf "[%-20s]\n" b
+[hello, Julia!       ]
+
+julia&gt; @printf "[%c]\n" 'A'
+[A]
+
+julia&gt; @printf "[%20c]\n" 'A'
+[                   A]
+
+julia&gt; @printf "[%-20c]\n" 'A'
+[A                   ]
+</pre>
+<ul>
+  <li>このほかにも、書式付き出力関数にはいろいろな機能がある
+  <li>詳細はＣ言語のマニュアルを参照
+</ul>
+<h4 id="abc26">●文字列の操作</h4>
+<ul>
+  <li>文字列の要素は文字
+  <li>角カッコで文字にアクセスできる
+  <li>添字に範囲オブジェクトを指定すると、部分文字列を取り出すことができる
+  <li>ただし、添字はバイト単位での指定になる
+  <li>ASCII コード以外の場合、添字によっては StringIndexError が送出される
+  <li>イテレータで 1 文字ずつ取り出すことは可能
+  <li>length() は文字数を、sizeof() はバイト数を返す
+</ul>
+<pre>
+julia&gt; a = "hello, Julia!"
+"hello, Julia!"
+
+julia&gt; length(a)
+13
+
+julia&gt; sizeof(a)
+13
+
+julia&gt; a[1]
+'h': ASCII/Unicode U+0068 (category Ll: Letter, lowercase)
+
+julia&gt; a[end]
+'!': ASCII/Unicode U+0021 (category Po: Punctuation, other)
+
+julia&gt; a[end - 1]
+'a': ASCII/Unicode U+0061 (category Ll: Letter, lowercase)
+
+julia&gt; a[8 : end]
+"Julia!"
+
+julia&gt; b = "こんにちはジュリア"
+"こんにちはジュリア"
+
+julia&gt; length(b)
+9
+
+julia&gt; sizeof(b)
+27
+
+julia&gt; b[1]
+'こ': Unicode U+3053 (category Lo: Letter, other)
+
+julia&gt; b[end]
+'ア': Unicode U+30a2 (category Lo: Letter, other)
+
+julia&gt; b[2]
+ERROR: StringIndexError("こんにちはジュリア", 2)
+
+julia&gt; for c = b println(c) end
+こ
+ん
+に
+ち
+は
+ジ
+ュ
+リ
+ア
+</pre>
+
+<ul>
+  <li>string(args...), 引数を文字列に変換して連結する
+  <li>findfirst(pred, str), str の先頭から pred を満たす文字の検索
+  <li>findnext(pred, str, idx), str の idx 番目から検索
+  <ul>
+    <li>見つけた場合は添字を返す、見つからない場合は nothing
+  </ul>
+  <li>occursin(substr, str), 部分文字列 substr が文字列 str に含まれているか
+  <ul>
+    <li>含まれていれば true を、そうでなければ false を返す
+    <li>substr は文字でもよい
+  </ul>
+  <li>replace(str, pat =&gt; r, count=n), 文字列 str から pat を検索し、それを r に置き換える
+  <ul>
+    <li>count=n は置換回数で、省略すると pat と一致する部分文字列をすべて置換する
+  </ul>
+  <li>repeat(str, n), 文字列 str を n 回繰り返した文字列を生成する
+  <ul>
+    <li>演算子 ^ を使ってもできる (str ^ n)
+    <li>str は文字でも OK
+  </ul>
+  <li>join(strings, delm, [last]), 配列 strings に格納された文字列を区切り文字列 delm を挟んで連結する
+  <ul>
+    <li>last が指定されている場合、最後に last を連結する
+  </ul>
+  <li>split(str, delm; limit=0), 文字列 str を区切り文字列 delm で切り分ける
+  <ul>
+    <li>返り値は切り分けた文字列を格納した配列
+    <li>delm を省略すると空白文字で区切る
+    <li>limit は切り分ける個数を指定する (返り値の配列の要素数)
+    <li>1 を指定すると str を格納した配列が返される
+  </ul>
+</ul>
+<pre>
+julia&gt; string("foo", 123, "bar", 1.234)
+"foo123bar1.234"
+
+julia&gt; a
+"hello, Julia!"
+
+julia&gt; findfirst(isequal('l'), a)
+3
+
+julia&gt; findnext(isequal('l'), a, 4)
+4
+
+julia&gt; findnext(isequal('l'), a, 5)
+10
+
+julia&gt; findnext(isequal('l'), a, 11)
+
+julia&gt; occursin("Julia", a)
+true
+
+julia&gt; occursin("julia", a)
+false
+
+julia&gt; occursin('J', a)
+true
+
+julia&gt; occursin('j', a)
+false
+
+julia&gt; replace("foo bar baz foo bar baz oops", "foo" => "FOO")
+"FOO bar baz FOO bar baz oops"
+
+julia&gt; replace("foo bar baz foo bar baz oops", "foo" => "FOO", count=1)
+"FOO bar baz foo bar baz oops"
+
+julia&gt; repeat("hello ", 5)
+"hello hello hello hello hello "
+
+julia&gt; "oops! " ^ 10
+"oops! oops! oops! oops! oops! oops! oops! oops! oops! oops! "
+
+julia&gt; 'a' ^ 10
+"aaaaaaaaaa"
+
+julia&gt; join(["foo", "bar", "baz"], ", ")
+"foo, bar, baz"
+julia&gt; split("foo bar baz oops!")
+4-element Array{SubString{String},1}:
+ "foo"
+ "bar"
+ "baz"
+ "oops!"
+
+julia&gt; split("foo bar baz oops!", limit=1)
+1-element Array{SubString{String},1}:
+ "foo bar baz oops!"
+
+julia&gt; split("foo bar baz oops!", limit=2)
+2-element Array{SubString{String},1}:
+ "foo"
+ "bar baz oops!"
+
+julia&gt; split("foo bar baz oops!", limit=3)
+3-element Array{SubString{String},1}:
+ "foo"
+ "bar"
+ "baz oops!"
+
+julia&gt; split("foo, bar, baz, oops!", ", ")
+4-element Array{SubString{String},1}:
+ "foo"
+ "bar"
+ "baz"
+ "oops!"
+</pre>
+<ul>
+  <li>chomp(str), 文字列 str の末尾の改行文字を削除
+  <li>chop(str; head=0, tail=1), 文字列 str の末尾文字を削除
+  <ul>
+    <li>head に 1 以上の整数値を指定すると先頭から文字を削除する
+  </ul>
+  <li>strip(str, chars), 文字列の両端から指定した文字を削除する
+  <ul>
+    <li>chars は削除する文字を格納した配列
+    <li>指定した文字が続いていれば、それらをすべて削除する
+    <li>左側 (先頭) から削除する lstrip(), 右側 (末尾) から削除する rstrip() もある
+  </ul>
+  <li>lpad(str, n, p=' '), 文字列の先頭 (左側) に文字 p を n 個挿入する
+  <li>rpad(str, n, p=' '), 文字列の末尾 (右側) に文字 p を n 個追加する
+  <li>このほかにもいろいろな機能 (正規表現など) がある
+  <li>詳細はマニュアル <a href="https://docs.julialang.org/en/v1/manual/strings/">Strings</a> を参照
+</ul>
+<pre>
+julia&gt; a = "hello, world\n"
+"hello, world\n"
+
+julia&gt; b = chomp(a)
+"hello, world"
+
+julia&gt; chomp(b)
+"hello, world"
+
+julia&gt; chop(b)
+"hello, worl"
+
+julia&gt; chop(b, head=1)
+"ello, worl"
+
+julia&gt; chop(b, head=1, tail=2)
+"ello, wor"
+
+julia&gt; chop("あいうえお")
+"あいうえ"
+
+julia&gt; strip("  hello, Julia!  ", [' '])
+"hello, Julia!"
+
+julia&gt; strip("  hello, Julia!  ", [' ', 'h', '!'])
+"ello, Julia"
+
+julia&gt; rstrip("  hello, Julia!  ", [' ', 'h', '!'])
+"  hello, Julia"
+
+julia&gt; lstrip("  hello, Julia!  ", [' ', 'h', '!'])
+"ello, Julia!  "
+
+julia&gt; strip("あああいうえおおお", ['あ', 'お'])
+"いうえ"
+
+julia&gt; rstrip("あああいうえおおお", ['あ', 'お'])
+"あああいうえ"
+
+julia&gt; lstrip("あああいうえおおお", ['あ', 'お'])
+"いうえおおお"
+
+julia&gt; lpad("abc", 10)
+"       abc"
+
+julia&gt; lpad("abc", 10, 'x')
+"xxxxxxxabc"
+
+julia&gt; rpad("abc", 10)
+"abc       "
+
+julia&gt; rpad("abc", 10, 'x')
+"abcxxxxxxx"
+
+julia&gt; lpad("あいうえお", 10, 'か')
+"かかかかかあいうえお"
+
+julia&gt; rpad("あいうえお", 10, 'か')
+"あいうえおかかかかか"
+</pre>
+
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap">簡単なプログラム</h3>
+<h4 id="chap35">●ラテン方陣</h4>
+<p> 「ラテン方陣」は数独の枠の条件を無くした方陣です。ラテン方陣の定義を <a href="juliaa06.html#cite35">参考文献</a> より引用します。
+</p>
+<cite>
+<p>『ラテン方陣を一般的にいうなら、n 行 n 列の正方形の枡に n 種類の記号を n 個ずつ配列して、各行各列に記号の重複のないものを n 次のラテン方陣というのです。』
+</p>
+</cite>
+<p> このラテン方陣をパズルに応用したものが「ナンバープレース (数独)」というわけです。
+</p>
+<p> 簡単な例を示しましょう。3 次のラテン方陣は次に示す 12 通りになります。
+</p>
+<pre class="fig">
+ 0 1 2    0 1 2    0 2 1    0 2 1    1 0 2    1 0 2 
+ 1 2 0    2 0 1    1 0 2    2 1 0    0 2 1    2 1 0 
+ 2 0 1    1 2 0    2 1 0    1 0 2    2 1 0    0 2 1 
+ 標準形
+
+ 1 2 0    1 2 0    2 0 1    2 0 1    2 1 0    2 1 0 
+ 0 1 2    2 0 1    0 1 2    1 2 0    0 2 1    1 0 2 
+ 2 0 1    0 1 2    1 2 0    0 1 2    1 0 2    0 2 1 
+
+               図 : 3 次のラテン方陣
+</pre>
+<p> この中で、最初の行と列の要素を昇順に並べたものを「標準形」といいます。3 次のラテン方陣の場合、標準形は 1 種類しかありません。ラテン方陣は任意の行を交換する、または任意の列を交換してもラテン方陣になります。3 次のラテン方陣の場合、標準形から行または列を交換することで、残りの 11 種類のラテン方陣を生成することができます。
+</p>
+<p> 今回は標準形ラテン方陣の総数を求めるプログラムを作ります。
+</p>
+
+<pre class="list">
+リスト : ラテン方陣
+
+function check(mat, x, y, n, z)
+    for i = 1 : n
+        if mat[x, i] == z || mat[i, y] == z
+            return false
+        end
+    end
+    true
+end
+
+function solver_sub(mat, x, y, n)
+    global cnt
+    if &gt; n
+        cnt += 1
+    elseif x &gt; n
+        solver_sub(mat, 2, y + 1, n)
+    else
+        for z = 1 : n
+            if check(mat, x, y, n, z)
+                mat[x, y] = z
+                solver_sub(mat, x + 1, y, n)
+                mat[x, y] = 0
+            end
+        end
+    end
+end
+
+function solver(n)
+    global cnt = 0
+    mat = zeros(Int, n, n)
+    for i = 1 : n
+        mat[1, i] = i
+        mat[i, 1] = i
+    end
+    solver_sub(mat, 2, 2, n)
+    println(cnt)
+end
+
+for n = 3 : 7
+    @time solver(n)
+end
+</pre>
+<p> プログラムは簡単なので説明は割愛します。実行結果は次のようになりました。
+<pre>
+1
+  0.035106 seconds (42.55 k allocations: 2.114 MiB)
+4
+  0.000550 seconds (7 allocations: 384 bytes)
+56
+  0.000511 seconds (7 allocations: 512 bytes)
+9408
+  0.013739 seconds (8.91 k allocations: 139.609 KiB)
+16942080
+ 33.394497 seconds (16.94 M allocations: 258.509 MiB, 0.03% gc time)
+
+実行環境 : Julia ver 1.0, Windows 10, Intel Core i5-6200U 2.30GHz
+</pre>
+<p> 単純なプログラムなので実行時間は遅いですね。高次の標準形ラテン方陣の総数は、簡単に求めることができない非常にハードな問題だといわれています。興味のある方は挑戦してみてください。
+</p>
+<div class="note">
+<a name="cite35">-- 参考文献 --------</a><br>
+大村平, 『数理パズルのはなし』, 日科技連出版社, 1998
+</div>
+<hr>
+<h4 id="chap36">●三目並べ</h4>
+<p> 皆さんお馴染みのゲーム「三目並べ」で、両者が最善を尽くすと引き分けになることを示すプログラムです。詳しい説明は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/tictactoe.html">三目並べ</a> をお読みください。
+</p>
+<pre class="list">
+リスト : 三目並べ
+
+# 盤面
+# 1 2 3
+# 4 5 6
+# 7 8 9
+
+# 直線
+const line_table = [
+    [1, 2, 3], [4, 5, 6], [7, 8, 9], [1, 4, 7],
+    [2, 5, 8], [3, 6, 9], [1, 5, 9], [3, 5, 7]
+]
+
+# 盤面
+#  0 : 空き場所
+#  1 : ○
+# -1 : ×
+const MARU = 1
+const BATU = -1
+const board = [0,0,0, 0,0,0, 0,0,0]
+const SIZE = 9
+const MIN_VALUE = -2
+const MAX_VALUE = 2
+
+# ３つ並んだか？
+function check_line(x, y, z)
+    p = board[x]
+    if p == board[y] == board[z]
+        p
+    else
+        0
+    end
+end
+
+# 勝敗の判定
+function check_winner()
+    for line = line_table
+        r = check_line(line...)
+        if r != 0
+            return r
+        end
+    end
+    0
+end
+
+# 先手
+function think_maru(n)
+    value = MIN_VALUE
+    for i = 1 : SIZE
+        if board[i] != 0; continue; end
+        # MARU を書く
+        board[i] = MARU
+        # 勝敗の判定
+        v = check_winner();
+        # 決着していなければ相手の手番へ
+        if v == 0 &amp;&amp; n &lt; SIZE
+            v = think_batu(n + 1)
+        end
+        # ミニマックス
+        if v &gt; value; value = v; end
+        # 元に戻す
+        board[i] = 0
+    end
+    value
+end
+
+# 後手
+function think_batu(n)
+    value = MAX_VALUE
+    for i = 1 : SIZE
+        if board[i] != 0; continue; end
+        # BATU を書く
+        board[i] = BATU;
+        # 勝敗の判定
+        v = check_winner()
+        # 決着していなければ相手の手番へ */
+        if v == 0 &amp;&amp; n &lt; SIZE
+            v = think_maru(n + 1)
+        end
+        # ミニマックス
+        if v &lt; value; value = v; end
+        # 元に戻す
+        board[i] = 0
+    end
+    value
+end
+
+function solver()
+    for i in 1 : SIZE
+        # 初手
+        board[i] = MARU
+        # 相手の手番
+        v = think_batu(2)
+        # 結果
+        println("pos = $i, value = $v")
+        # 元に戻す
+        board[i] = 0
+    end
+end
+
+@time solver()
+</pre>
+<pre>
+pos = 1, value = 0
+pos = 2, value = 0
+pos = 3, value = 0
+pos = 4, value = 0
+pos = 5, value = 0
+pos = 6, value = 0
+pos = 7, value = 0
+pos = 8, value = 0
+pos = 9, value = 0
+  0.339987 seconds (85.27 k allocations: 4.440 MiB)
+
+実行環境 : Julia ver 1.0, Windows 10, Intel Core i5-6200U 2.30GHz
+</pre>
+<p> ところで、ルールを 3 つ並んだほうが負けに変更すると、初手が中央以外は後手必勝になります。プログラムの修正は関数 check_line() の返り値 r を -r に変更するだけです。
+</p>
+<pre>
+pos = 1, value = -1
+pos = 2, value = -1
+pos = 3, value = -1
+pos = 4, value = -1
+pos = 5, value = 0
+pos = 6, value = -1
+pos = 7, value = -1
+pos = 8, value = -1
+pos = 9, value = -1
+  0.356113 seconds (85.52 k allocations: 4.459 MiB)
+</pre>
+<hr>
+<h4 id="chap37">●分割数</h4>
+<p> 整数 n を 1 以上の自然数の和で表すことを考えます。これを「整数の分割」といいます。整数を分割するとき、同じ自然数を何回使ってもかまいませんが、並べる順序が違うだけのものは同じ分割とします。そして、分割の仕方の総数を「分割数」といいます。詳しい説明は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/partition.html">分割数</a> をお読みください。
+</p>
+
+<h4>●分割数の求め方</h4>
+<p> 整数 n を k 以下の整数で分割する総数を求める関数を p(n, k) とすると、p(n, k) は次のように定義することができます。
+</p>
+<pre class="item">
+p(n, k) = 1                          ; n = 0 または k = 1
+p(n, k) = 0                          ; n &lt; 0 または k &lt; 1
+p(n, k) = p(n - k, k) + p(n, k - 1)
+</pre>
+<p> たとえば、p(6, 6) は次のように計算することができます。
+</p>
+<pre class="fig">
+p(6, 6) =&gt; p(0, 6) + p(6, 5)
+        =&gt; 1 + p(1, 5) + p(6, 4)
+        =&gt; 1 +    1    + p(2, 4) + p(6, 3)
+        =&gt; 1 + 1 + 2 + 7
+        =&gt; 11
+
+p(2, 4) =&gt; p(-2, 4) + p(2, 3)
+        =&gt;    0     + p(-1, 3) + p(2, 2)
+        =&gt;    0     +    0     + p(0, 2) + p(2, 1)
+        =&gt; 0 + 0 + 1 + 1
+        =&gt; 2
+
+p(6, 3) =&gt; p(3, 3) + p(6, 2)
+        =&gt; p(0, 3) + p(3, 2) + p(4, 2) + p(6, 1)
+        =&gt;    1    + p(1, 2) + p(3, 1) + p(2, 2) + p(4, 1) + 1
+        =&gt;    1    +    1    +    1    + p(0, 2) + p(2, 1) + 1 + 1
+        =&gt; 1 + 1 + 1 + 1 + 1 + 1 + 1
+        =&gt; 7
+</pre>
+<p> 分割数を求める関数を partition_number() とすると、関数 p(n, k) を使って次のようにプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 分割数
+
+function part_num(n, k)
+    if n == 1 || k == 1
+        1
+    elseif n &lt; 0 || k &lt; 1
+        0
+    else
+        part_num(n - k, k) + part_num(n, k - 1)
+    end
+end
+
+partition_number(n) = part_num(n, n)
+
+@time println(partition_number(40))
+@time println(partition_number(60))
+@time println(partition_number(80))
+</pre>
+<pre>
+37338
+  0.050017 seconds (51.30 k allocations: 2.661 MiB)
+966467
+  0.008124 seconds (13 allocations: 384 bytes)
+15796476
+  0.123561 seconds (13 allocations: 384 bytes)
+
+実行環境 : Julia ver 1.0, Windows 10, Intel Core i5-6200U 2.30GHz
+</pre>
+<p> 関数 part_num は p(n, k) の定義をそのままプログラムしただけです。ただし、このプログラムは二重再帰で何度も同じ値を求めているため実行速度はとても遅くなります。関数 part_num() をメモ化すると高速化することができますが、大きな値を計算すると Julia のスタックがオーバーフローしてしまいます。
+</p>
+<h4>●動的計画法による高速化</h4>
+<p> 動的計画法を使うと、大きな値でも高速に計算することができます。次の図を見てください。
+</p>
+<pre class="fig">
+k 
+1 : [1,  1,  1,  1,  1,  1,  1] 
+
+2 : [1,  1,  1+1=2, 1+1=2, 2+1=3, 2+1=3, 3+1=4]
+ =&gt; [1,  1,  2,  2,  3,  3,  4]
+
+3:  [1,  1,  2,  1+2=3, 1+3=4, 2+3=5, 3+4=7]
+ =&gt; [1,  1,  2,  3,  4,  5,  7]
+
+4:  [1,  1,  2,  3,  1+4=4, 1+5=6, 2+7=9]
+ =&gt; [1,  1,  2,  3,  5,  6,  9
+
+5:  [1,  1,  2,  3,  5,  1+6=7, 1+9=10]
+ =&gt; [1,  1,  2,  3,  5,  7,  10]
+
+6:  [1,  1,  2,  3,  5,  7,  10+1=11]
+ =&gt; [1,  1,  2,  3,  5,  7,  11]
+</pre>
+<p> 最初に大きさ n + 1 のベクタを用意します。上図ではベクタの添字が 0 から始まることに注意してください。ベクタの添字が n を表していて、p(n, 1) から順番に値を求めていきます。p(n, 1) の値は 1 ですから、ベクタの要素は 1 に初期化します。次に、p(n, 2) の値を求めます。定義により p(n, 2) = p(n - 2, 2) + p(n, 1) なので、2 番目以降の要素に n - 2 番目の要素を加算すれば求めることができます。あとは、k の値をひとつずつ増やして同様の計算を行えば p(n, n) の値を求めることができます。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 分割数 (動的計画法)
+
+function partition_number2(n)
+    table = fill(big(1), n + 1)
+    for k = 2 : n, m = k : n
+        table[m + 1] += table[m - k + 1]
+    end
+    table[n + 1]
+end
+
+@time println(partition_number2(1000))
+@time println(partition_number2(2000))
+@time println(partition_number2(4000))
+</pre>
+<p> Julia の配列は添字が 1 から始まるので、配列にアクセスするときは +1 していることに注意してください。あとは説明をそのままプログラムしただけなので、とくに難しいところはないと思います。
+</p>
+<p> それでは実際に試してみましょう。1000, 2000, 4000 の分割数を求めてみました。
+</p>
+<pre>
+24061467864032622473692149727991
+  0.215217 seconds (1.68 M allocations: 35.519 MiB)
+4720819175619413888601432406799959512200344166
+  0.620280 seconds (6.00 M allocations: 112.827 MiB, 22.07% gc time)
+1024150064776551375119256307915896842122498030313150910234889093895
+  2.371797 seconds (23.99 M allocations: 501.862 MiB, 21.42% gc time)
+</pre>
+<p> 動的計画法の効果はとても高いですね。ですが、Puzzle DE Programming で使ったプログラミング言語 PyPy より遅くなりました。Julia は多倍長整数 (BigInt) の計算がちょっと苦手なのかもしれません。
+</p>
+<h4>●さらなる高速化</h4>
+<p> ところで、数がもっと大きくなると動的計画法を使ったプログラムでも遅くなります。<a href="juliaa06.html#cite37">参考 URL 1</a> によると、次の漸化式を使うと分割数を高速に求めることができるそうです。
+</p>
+<pre class="item">
+p(k) = p(k - 1) + p(k - 2) - p(k - 5) - p(k - 7) + p(k - 12) + p(k - 15) - p(k - 22) - ...
+</pre>
+<p> 漸化式の説明を <a href="juliaa06.html#cite37">参考 URL 1</a> より引用します。
+</p>
+<p> <cite>『ここで p(0) = 1 および負の整数 k に対して p(k) = 0 とし、和は (1/2)n(3n - 1) の形（ただし n は正または負の整数全体を走る）の一般五角数全体にわたってとるものとする（順に n = 1, -1, 2, -2, 3, -3, 4, -4 ..., とすると、値として 1, 2, 5, 7, 12, 15, 22, 26, 35, 40, 51, ... が得られる）。和における符号は交互に +, +, -, -, +, +, ... と続く。』</cite>
+</p>
+
+<p> 分割数 p(k) は k - 1 以下の分割数がわかれば求めることができます。この漸化式も動的計画法を使えば簡単にプログラムできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 分割数 (オイラーの五角数定理)
+
+# 五角数
+pentagon(n) = div(n * (3 * n - 1), 2)
+
+function partition_number3(n)
+    p = zeros(BigInt, n + 1)
+    p[1] = big(1)
+    for i = 1 : n
+        j = 1
+        s = 1
+        while true
+            k = pentagon(j)
+            if i &lt; k break end
+            p[i + 1] += p[i - k + 1] * s
+            k = pentagon(-j)
+            if i &lt; k break end
+            p[i + 1] += p[i - k + 1] * s
+            j += 1
+            s *= -1
+        end
+    end
+    p[n + 1]
+end
+
+@time println(partition_number3(5000))
+@time println(partition_number3(10000))
+@time println(partition_number3(20000))
+</pre>
+<p> 配列 p は分割数 p(k) を記憶するために使います。配列の添字は 1 から始まるので、p をアクセスするときは添字を +1 していることに注意してください。p[1] を 1 に初期化したあと、for ループで 1 から n までの分割数を順番に求めていきます。あとは、漸化式をそのままプログラムするだけです。変数 s は符号 (+. -) を表していて、j が奇数のとき s は 1 になり、j が偶数のときは -1 になります。
+</p>
+<p> それでは実際に 5000, 10000, 20000 の分割数を求めてみましょう。
+</p>
+<pre>
+169820168825442121851975101689306431361757683049829233322203824652329144349
+  0.446795 seconds (3.27 M allocations: 73.178 MiB, 15.94% gc time)
+36167251325636293988820471890953695495016030339315650422081868605887952568754066420592310556052906916435144
+  0.932969 seconds (8.63 M allocations: 191.943 MiB, 23.35% gc time)
+2521148138125296979166195332304704522813289496018115934368503141080342844238015649566239707316898243691923247893519
+94903016411826230578166735959242113097
+  2.741862 seconds (24.48 M allocations: 617.404 MiB, 21.67% gc time)
+</pre>
+<p> このように、20000 の分割数でも 3 秒未満で求めることができます。
+</p>
+<h4>●分割の仕方の列挙</h4>
+<p> 最後に整数の分割の仕方を列挙するプログラムを示します。
+</p>
+<pre class="list">
+リスト : 整数の分割
+
+function part_int_sub(f, n, k, a)
+    if n == 0
+        f(a)
+    elseif n == 1
+        push!(a, 1)
+        f(a)
+        pop!(a)
+    elseif k == 1
+        for _ in 1 : n; push!(a, 1); end
+        f(a)
+        for _ in 1 : n; pop!(a); end
+    else
+        if n &gt;= k
+            push!(a, k)
+            part_int_sub(f, n - k, k, a)
+            pop!(a)
+        end
+        part_int_sub(f, n, k - 1, a)
+    end
+end
+
+partition_of_int(f, n) = part_int_sub(f, n, n, Int[])
+
+partition_of_int(println, 5)
+partition_of_int(println, 6)
+partition_of_int(println, 7)
+</pre>
+<p> 基本的な考え方は partition_number() と同じです。関数 part_int_sub() は選んだ数値を累積変数 a の配列に格納していくだけです。n が 0 の場合は f(a) を評価し、n が 1 の場合は a に [1] を追加してから f(a) を評価します。k が 1 の場合は n 個の 1 を a に追加してから f(a) を評価します。
+</p>
+<p> 5, 6, 7 の分割の仕方は次のようになります。
+</p>
+<pre>
+[5]
+[4, 1]
+[3, 2]
+[3, 1, 1]
+[2, 2, 1]
+[2, 1, 1, 1]
+[1, 1, 1, 1, 1]
+[6]
+[5, 1]
+[4, 2]
+[4, 1, 1]
+[3, 3]
+[3, 2, 1]
+[3, 1, 1, 1]
+[2, 2, 2]
+[2, 2, 1, 1]
+[2, 1, 1, 1, 1]
+[1, 1, 1, 1, 1, 1]
+[7]
+[6, 1]
+[5, 2]
+[5, 1, 1]
+[4, 3]
+[4, 2, 1]
+[4, 1, 1, 1]
+[3, 3, 1]
+[3, 2, 2]
+[3, 2, 1, 1]
+[3, 1, 1, 1, 1]
+[2, 2, 2, 1]
+[2, 2, 1, 1, 1]
+[2, 1, 1, 1, 1, 1]
+[1, 1, 1, 1, 1, 1, 1]
+</pre>
+<h4 id="cite37">●参考 URL</h4>
+<ol>
+  <li><a href="https://ja.wikipedia.org/wiki/%E5%88%86%E5%89%B2%E6%95%B0">分割数 - Wikipedia</a>
+  <li><a href="https://ja.wikipedia.org/wiki/%E8%87%AA%E7%84%B6%E6%95%B0%E3%81%AE%E5%88%86%E5%89%B2">自然数の分割 - Wikipedia</a>
+  <li><a href="http://d.hatena.ne.jp/inamori/20121216/p1">分割数 - 桃の天然水<a/>, (inamori さん)
+</ol>
+<hr>
+<h4 id="chap38">●集合の分割 (1)</h4>
+<p> 配列で表した集合 ls を分割することを考えます。たとえば、集合 [1, 2, 3] は次のように分割することができます。
+</p>
+<pre class="item">
+1 分割 : [[1, 2, 3]]
+2 分割 : [[1, 2], [3]], [[1, 3], [2]], [[1], [2, 3]]
+3 分割 ; [[1], [2], [3]]
+</pre>
+<p> このように、分割した集合 xs は元の集合 ls の部分集合になります。分割した部分集合の積は空集合になり、分割した部分集合のすべての和を求めると元の集合になります。今回は分割の仕方をすべて求める関数 parititon_of_set() を作ります。
+</p>
+<p> 集合を分割するアルゴリズムは簡単です。たとえば、n -1 個の要素 x1, ..., xn-1 を持つ集合を分割したところ、i 個の部分集合 S1, ..., Si が生成されたとしましょう。ここに、n 番目の要素 xn を追加すると、要素が n 個の集合を分割することができます。
+</p>
+<p> 新しい要素を追加する場合は次に示す手順で行います。
+</p>
+<ol>
+  <li>部分集合 S<sub>k</sub> (k = 1 から i まで) に要素 xn を追加する
+  <li>新しい部分集合 S<sub>i+1</sub> (要素が xn だけの集合) を生成する
+</ol>
+<p>簡単な例を示しましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+[] ─ [[1]] ─┬─ [[1, 2]] ─┬─ [[1, 2, 3]]
+              │              │
+              │              └─ [[1, 2], [3]]
+              │
+              └─ [[1], [2]] ─┬─ [[1, 3] [2]]
+                                │
+                                ├─ [[1,], [2, 3]]
+                                │
+                                └─ [[1], [2], [3]]
+
+        図 : 集合 [1, 2, 3] を分割する
+</pre>
+<p> 部分集合を格納する配列を用意します。最初、部分集合は空集合なので空の配列に初期化します。次に、要素 1 を追加します。部分集合は空なので、手順 1 は適用できません。手順 2 を適用して新しい部分集合 [1] を追加します。
+</p>
+
+<p> 次に要素 2 を追加します。[[1]] に 手順 1 を適用すると、部分集合 [1] に要素を追加して [[1, 2]] になります。手順 2 を適用すると、新しい部分集合 [2] を追加して [[1], [2]] になります。最後に 3 を追加します。[[1, 2]] に手順 1 を適用すると [[1, 2, 3]] に、手順 2 を適用すると [[1, 2], [3]] になります。[[1], [2]] に手順 1 を適用すると [[1, 3] [2]] と [[1], [2, 3]] になり、手順 2 を適用すると [[1], [2], [3]] になります。
+</p>
+
+<p> このように、簡単な方法で集合を分割することができます。実際にプログラムを作る場合、上図を木と考えて、深さ優先で木をたどると簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 集合の分割
+
+function part_sub(f, ls, a)
+    if length(ls) == 0
+        f(a)
+    else
+        for i = 1 : length(a)
+            push!(a[i], ls[1])
+            part_sub(f, ls[2:end], a)
+            pop!(a[i])
+        end
+        push!(a, [ls[1]])
+        part_sub(f, ls[2:end], a)
+        pop!(a)
+    end
+end
+
+partition_of_set(f, ls) = part_sub(f, ls[2:end], [[ls[1]]])
+
+partition_of_set(println, [1, 2, 3])
+println("")
+partition_of_set(println, [1, 2, 3, 4])
+</pre>
+<p> 実際の処理は関数 part_sub() で行います。生成した部分集合は累積変数 a に格納します。ls が空の配列の場合、追加する要素がなくなったので f(a) を評価します。要素がある場合、i 番目の部分集合に要素 ls[1] を追加して、part_sub() を再帰呼び出しします。すべての部分集合に要素を追加したら、ls[1] を要素として持つ部分集合を生成して累積変数 a に追加します。
+</p>
+<pre>
+Array{Int64,1}[[1, 2, 3]]
+Array{Int64,1}[[1, 2], [3]]
+Array{Int64,1}[[1, 3], [2]]
+Array{Int64,1}[[1], [2, 3]]
+Array{Int64,1}[[1], [2], [3]]
+
+Array{Int64,1}[[1, 2, 3, 4]]
+Array{Int64,1}[[1, 2, 3], [4]]
+Array{Int64,1}[[1, 2, 4], [3]]
+Array{Int64,1}[[1, 2], [3, 4]]
+Array{Int64,1}[[1, 2], [3], [4]]
+Array{Int64,1}[[1, 3, 4], [2]]
+Array{Int64,1}[[1, 3], [2, 4]]
+Array{Int64,1}[[1, 3], [2], [4]]
+Array{Int64,1}[[1, 4], [2, 3]]
+Array{Int64,1}[[1], [2, 3, 4]]
+Array{Int64,1}[[1], [2, 3], [4]]
+Array{Int64,1}[[1, 4], [2], [3]]
+Array{Int64,1}[[1], [2, 4], [3]]
+Array{Int64,1}[[1], [2], [3, 4]]
+Array{Int64,1}[[1], [2], [3], [4]]
+</pre>
+<hr>
+<h4 id="chap39">●集合の分割 (2)</h4>
+<p> k 個の要素をもつ集合 ls を要素数が等しい m 個の部分集合に分割することを考えます。部分集合の要素数 n は k / m になります。今回は分割の仕方をすべて求める高階関数 group_partition() を作ります。
+</p>
+<pre class="list">
+リスト : 集合の分割 (2)
+
+function group_part_sub(f, ls, n, m, a)
+    if length(ls) == 0
+        f(a)
+    else
+        for i = 1 : length(a)
+            if length(a[i]) &lt; n
+                push!(a[i], ls[1])
+                group_part_sub(f, ls[2:end], n, m, a)
+                pop!(a[i])
+            end
+        end
+        if length(a) &lt; m
+            push!(a, [ls[1]])
+            group_part_sub(f, ls[2:end], n, m, a)
+            pop!(a)
+        end
+    end
+end
+
+group_partition(f, n, m, ls) = group_part_sub(f, ls[2:end], n, m, [[ls[1]]])
+
+group_partition(println, 2, 2, [1,2,3,4])
+group_partition(println, 2, 3, [1,2,3,4,5,6])
+</pre>
+<p> group_partition() は partition_of_set() を改造するだけで簡単に作成することができます。生成する部分集合の大きさを n に、部分集合の個数を m に制限するだけです。i 番目の部分集合に要素を追加する場合、length(a[i]) が n 未満であることをチェックします。新しい部分集合を追加する場合、length(a) が m 未満であることをチェックします。これで集合をグループに分けることができます。
+</p>
+<pre>
+Array{Int64,1}[[1, 2], [3, 4]]
+Array{Int64,1}[[1, 3], [2, 4]]
+Array{Int64,1}[[1, 4], [2, 3]]
+Array{Int64,1}[[1, 2], [3, 4], [5, 6]]
+Array{Int64,1}[[1, 2], [3, 5], [4, 6]]
+Array{Int64,1}[[1, 2], [3, 6], [4, 5]]
+Array{Int64,1}[[1, 3], [2, 4], [5, 6]]
+Array{Int64,1}[[1, 3], [2, 5], [4, 6]]
+Array{Int64,1}[[1, 3], [2, 6], [4, 5]]
+Array{Int64,1}[[1, 4], [2, 3], [5, 6]]
+Array{Int64,1}[[1, 5], [2, 3], [4, 6]]
+Array{Int64,1}[[1, 6], [2, 3], [4, 5]]
+Array{Int64,1}[[1, 4], [2, 5], [3, 6]]
+Array{Int64,1}[[1, 4], [2, 6], [3, 5]]
+Array{Int64,1}[[1, 5], [2, 4], [3, 6]]
+Array{Int64,1}[[1, 6], [2, 4], [3, 5]]
+Array{Int64,1}[[1, 5], [2, 6], [3, 4]]
+Array{Int64,1}[[1, 6], [2, 5], [3, 4]]
+</pre>
+<hr>
+<h4 id="chap40">●カークマンの 15 人の女生徒</h4>
+<div class="question">
+<b>[問題]</b>
+<p> 15 人の女生徒が毎日 3 人ずつ 5 組に分かれて散歩をするとき、1 週間 (7 日) のうちに、どの女生徒も他のすべての女生徒と 1 回ずつ同じ組になるような組み合わせを作ってください。
+</p>
+<p>出典 : 大村平 (著), 『数理パズルの話』, 日科技連出版社, 1998
+</p>
+</div>
+<p> 「カークマンの 15 人の女生徒」の解法プログラムは group_partition() を改造することで簡単に作成することができます。
+</p>
+<pre class="list">
+リスト : カークマンの 15 人の女生徒
+
+const check_table = Vector{Int}[
+    [], [], [], [], [],
+    [], [], [], [], [],
+    [], [], [], [], [],
+]
+
+function check_student(xs, y)
+    for x = xs
+        if y in check_table[x]; return false; end
+    end
+    true
+end
+
+function add_student(xs, y)
+    for x = xs
+        push!(check_table[x], y)
+        push!(check_table[y], x)
+    end
+end
+
+function del_student(xs, y)
+    for x = xs
+        pop!(check_table[x])
+        pop!(check_table[y])
+    end
+end
+
+function kirakman_sub(ls, a, b)
+    if length(ls) == 0
+        push!(b, a)
+        if length(b) == 7
+            println(b)
+            throw("found!!!")
+        else
+            kirakman_sub(collect(2:15), [[1]], b)
+        end
+        pop!(b)
+    else
+        for i = 1 : length(a)
+            if length(a[i]) &lt; 3 &amp;&amp; check_student(a[i], ls[1])
+                add_student(a[i], ls[1])
+                push!(a[i], ls[1])
+                kirakman_sub(ls[2:end], a, b)
+                pop!(a[i])
+                del_student(a[i], ls[1])
+            end
+        end
+        if length(a) &lt; 5
+            push!(a, [ls[1]])
+            kirakman_sub(ls[2:end], a, b)
+            pop!(a)
+        end
+    end
+end
+
+function kirkman()
+    try
+        kirakman_sub(collect(2:15), [[1]], Vector{Vector{Int}}[])
+    catch e
+        println(e)
+    end
+end
+
+@time kirkman()
+</pre>
+<pre>
+Array{Array{Int64,1},1}[
+[[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12], [13, 14, 15]], 
+[[1, 4, 7], [2, 5, 10], [3, 6, 13], [8, 11, 14], [9, 12, 15]], 
+[[1, 5, 14], [2, 4, 15], [3, 8, 12], [6, 9, 11], [7, 10, 13]], 
+[[1, 9, 13], [2, 7, 12], [3, 4, 11], [5, 8, 15], [6, 10, 14]], 
+[[1, 8, 10], [2, 11, 13], [3, 5, 9], [4, 12, 14], [6, 7, 15]], 
+[[1, 6, 12], [2, 9, 14], [3, 10, 15], [4, 8, 13], [5, 7, 11]], 
+[[1, 11, 15], [2, 6, 8], [3, 7, 14], [4, 9, 10], [5, 12, 13]]]
+found!!!
+  6.841130 seconds (34.98 M allocations: 3.657 GiB, 2.76% gc time)
+
+実行環境 : Julia ver 1.0, Windows 10, Intel Core i5-6200U 2.30GHz
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016-2018 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Light</a> | <a href="julia.html">Julia</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

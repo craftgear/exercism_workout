@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 CLOS プログラミング入門</title>
+  <meta name="description" content="Common Lisp,Common Lisp Object System,CLOS,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881772</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>お気楽 CLOS プログラミング入門</h2>
+<div class="small">
+[ <a href="clisp03.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | <a href="clisp05.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>●継承 (2)</h3>
+<p> 今回は継承の簡単な例題として、前々回作成した双方向リスト dlist を継承して、格納する要素数を制限する双方向リスト fixed-dlist というクラスを作ってみましょう。そのあとで基本的なデータ構造である「スタック (stack) 」、「キュー (queue) 」、「ディーキュー (deque) 」を作成します。
+</p>
+
+<h4>●制限付き双方向リスト</h4>
+<p> 制限付き双方向リストクラス fixed-dist は指定した上限値までしか要素を格納できません。dlist で要素を追加するメソッドは dlist-insert で、削除するメソッドは dlist-delete です。この 2 つのメソッドをオーバーライドすることで、fixed-dlist の機能を実現することができます。リスト 1 を見てください。
+</p>
+
+<pre class="list">
+リスト 1 : 制限付き双方向リスト
+
+;;; 制限付き双方向リスト
+(defclass fixed-dlist (dlist)
+  ((limit :accessor dlist-limit :initform 8 :initarg :limit)
+   (size  :accessor dlist-size  :initform 0 :initarg :size)))
+
+; データの挿入
+(defmethod dlist-insert ((d fixed-dlist) (n integer) value)
+  (cond ((not (dlist-fullp d))
+         (prog1 (call-next-method)
+                (incf (dlist-size d))))
+        (t (error "fixed-dlist: size over~%"))))
+
+; データの削除
+(defmethod dlist-delete ((d fixed-dlist) (n integer))
+  (prog1 (call-next-method)
+         (decf (dlist-size d))))
+</pre>
+
+<p> クラス fixed-dlist は dlist を継承するので、クラス名の後のカッコで dlist を指定します。スロット limit は要素数の上限値を表し、スロット size は双方向リストに格納されている要素数を表します。なお、make-instance で fixed-dlist のインスタンスを生成するとき、スーパークラス dlist のスロットもきちんと初期化されます。
+</p>
+
+<p> dlist-insert は limit と size を比較して、size が limit よりも小さい場合はデータを挿入します。call-next-method でスーパークラスの dlist-insert を呼び出し、その後で size の値を +1 します。dlist-delete の場合、スーパークラスの dlist-delete! を呼び出してから size の値を -1 します。
+</p>
+
+<p> このほかに、dlist-length と dlist-clear をオーバーライドし、dlist-fullp と list-to-fixed-dlist を新しく作ります。
+</p>
+<pre class="list">
+リスト 2 : 制限付き双方向リスト (2)
+
+; 双方向リストの要素数を求める
+(defmethod dlist-length ((d fixed-dlist))
+  (dlist-size d))
+
+; 双方向リストを空にする
+(defmethod dlist-clear ((d fixed-dlist))
+  (call-next-method)
+  (setf (dlist-size d) 0))
+
+; 満杯か？
+(defmethod dlist-fullp ((d dlist))
+  (= (dlist-limit d) (dlist-size d)))
+
+; リストを制限付き双方向リストに変換
+(defmethod list-to-fixed-dlist ((xs list))
+  (let ((d (make-instance 'fixed-dlist :limit (length xs))))
+    (dolist (x xs d) (dlist-insert d -1 x))))
+
+; 表示
+(defmethod print-object ((x fixed-dlist) stream)
+  (format stream "#&lt;fixed-dlist: ~D ~S&gt;" (dlist-size x) (dlist-to-list x)))
+</pre>
+<p> 要素の個数を求める dlist-length はスロット size の値を返すだけです。dlist-clear は dlist のメソッドを呼び出してから、size の値を 0 にします。dlist-fullp は双方向リストが満杯ならば t を返します。list-to-fixed-dlist はリスト xs を制限付き双方向リストに変換します。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+
+<pre>
+&gt; (setq a (make-instance 'fixed-dlist))
+#&lt;fixed-dlist: 0 NIL&gt;
+&gt; (setq a (make-instance 'fixed-dlist :limit 5))
+#&lt;fixed-dlist: 0 NIL&gt;
+&gt; (dlist-emptyp a)
+T
+&gt; (dlist-fullp a)
+NIL
+&gt; (dotimes (x 5) (dlist-insert a 0 x))
+NIL
+&gt; a
+#&lt;fixed-dlist: 5 (4 3 2 1 0)&gt;
+&gt; (dlist-emptyp a)
+NIL
+&gt; (dlist-fullp a)
+T
+&gt; (dlist-insert a 0 10)
+
+*** - fixed-dlist: size over
+&gt; (dotimes (x 5) (format t "~D " (dlist-delete a 0)))
+4 3 2 1 0
+NIL
+&gt; (dlist-emptyp a)
+T
+&gt; (dlist-fullp a)
+NIL
+</pre>
+
+<p> このように dlist を継承することで、fixed-dlist を簡単にプログラムすることができます。
+</p>
+
+<h4>●継承は is-a 関係を表す</h4>
+<p> 今まで説明したように、オブジェクトは関数とデータをひとつにまとめたものです。オブジェクト指向プログラミングはこのオブジェクトを部品として扱います。実際には、クラス単位でプログラムを作るので、クラス間の関係がとても重要になります。ここで、クラス間の関係 is-a と has-a を簡単に説明します。
+</p>
+
+<p> is-a 関係は X is a Y. の略で、「X は Y の一種である」という意味になります。X がサブクラスで Y をスーパークラスと考えると、is-a 関係は継承で表すことができます。たとえば、fixed-dlist は格納する要素数に制限がありますが双方向リストの一種であることは明らかです。fixed-dlist クラスは dlist クラスを継承することで簡単に実装できましたが、それは双方向リストとの間に is-a 関係があるからです。
+</p>
+
+<p> has-a 関係は X has a Y. の略で、「X は Y を持っている」という意味です。たとえば、車にはエンジンやタイヤがありますが、車とエンジンやタイヤに成り立つ関係が has-a です。車はエンジンやタイヤがないと走ることができません。このように、has-a 関係は「X が成立するのに欠かせない要素が Y である」という関係を表しています。
+</p>
+
+<p> has-a 関係のほかに、is-implemented-using という関係があります。これは X is implemented using Y. の略で、「X は Y を使って実装される」という意味です。たとえばスタックの場合、配列でもリストでも実装することが可能です。つまり、Y の種類によらず X を実現できる関係が is-implemented-using 関係なのです。
+</p>
+
+<p> 一般に、has-a 関係や is-implemented-using 関係は、クラス X のスロット (インスタンス変数) にクラス Y のインスタンス（オブジェクト）を格納することで表します。これを「X は Y を包含している」といいます。そして、これらの関係を表すのに継承を使ってはいけない、ということに注意してください。
+</p>
+
+<p> たとえば、双方向リストを継承してスタックを作ることを考えてみましょう。PUSH は双方向リストの先頭にデータを追加することで、POP は双方向リストの先頭からデータを取り出すことで簡単に実現できます。しかし、双方向リストを継承すると、ほかの操作も可能になります。スタックの途中にデータを追加したり、途中からデータを取り出すなど、スタックを破壊する危険な操作が可能になってしまいます。
+</p>
+
+<p> また、クラスの関係を考えた場合、スタックと双方向リストには is-a 関係は成り立ちません。ところが、継承を使うとデータ型も引き継がれるため、プログラムの上でもスタックは双方向リストの一種になってしまいます。継承は強力な機能ですが万能ではありません。クラス間の関係を考えて、適切に使うことが大切です。 
+</p>
+
+<h4>●スタックの実装</h4>
+<p> それでは、実際に双方向リストを使ってスタックを実装してみましょう。クラス名は &lt;stack&gt; とし、表 1 に示すメソッドを定義します。プログラムはリスト 3 のようになります。
+</p>
+<table border=1>
+<caption>表 1 : スタックのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>stack-push s x </td><td>スタック s にデータを追加する</td></tr>
+  <tr><td>stack-pop s </td><td>スタック s からデータを取り出す</td></tr>
+  <tr><td>stack-peek s </td><td>スタック s の先頭データを求める</td></tr>
+  <tr><td>stack-clear s </td><td>スタック s を空にする</td></tr>
+  <tr><td>stack-length s </td><td>スタック s に格納されている要素数を返す</td></tr>
+  <tr><td>stack-emptyp s</td><td>スタック s が空ならば t を返す</td></tr>
+</tbody>
+</table>
+<pre class="list">
+リスト 3 : スタック
+
+; クラス定義
+(defclass stack ()
+  ((top :accessor stack-top :initform (make-instance 'dlist))))
+
+; データの追加
+(defmethod stack-push ((s stack) value)
+  (dlist-insert (stack-top s) 0 value))
+
+; データの取り出し
+(defmethod stack-pop ((s stack))
+  (dlist-delete (stack-top s) 0))
+
+; 先頭データの参照
+(defmethod stack-peek ((s stack))
+  (dlist-ref (stack-top s) 0))
+
+; 要素数を求める
+(defmethod stack-length ((s stack)) (dlist-length (stack-top s)))
+
+; スタックを空にする
+(defmethod stack-clear ((s stack)) (dlist-clear (stack-top s)))
+
+; スタックは空か？
+(defmethod stack-emptyp ((s stack)) (dlist-emptyp (stack-top s)))
+</pre>
+<p> stack のスロット top に dlist のインスタンスをセットします。stack の操作は、このインスタンスに dlist のメソッドを適用することで実現します。
+</p>
+<p> メソッド stack-push はスタックにデータ x を追加します。これは双方向リストの先頭に x を追加すればいいので、(dlist-insert (stack-top s) 0 x) を呼び出すだけです。メソッド stack-pop は双方向リストの先頭の要素を削除してそれを返せばよいので、(dlist-delete (stack-top s) 0) を呼び出すだけです。stack-peek は双方向リストの先頭データを返せばいいので、(dlist-ref (stack-top s) 0) を呼び出すだけです。後のメソッドも dlist の適切なメソッドを呼び出すだけです。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+
+<pre>
+&gt; (setq a (make-instance 'stack))
+#&lt;STACK #x102D5E71&gt;
+&gt; (dotimes (x 8) (stack-push a x))
+NIL
+&gt; (stack-emptyp a)
+NIL
+&gt; (stack-length a)
+8
+&gt; (stack-peek a)
+7
+&gt; (dotimes (x 8) (format t "~D " (stack-pop a)))
+7 6 5 4 3 2 1 0
+NIL
+&gt; (stack-emptyp a)
+T
+&gt; (stack-length a)
+0
+</pre>
+
+<p> スタックに 0 から 7 まで stack-push で格納し stack-pop でデータを取り出すと 7, 6, 5, 4, 3, 2, 1, 0 になります。このように、スタックは後から入れたデータが先に取り出されます。
+</p>
+
+<h4>●キューの実装</h4>
+<p> 次は、双方向リスト dlist を使ってキューを作ってみましょう。定義するメソッドを表 2 に、プログラムをリスト 4 に示します。
+</p>
+
+<table border=1>
+<caption>表 2 : キューのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>enqueue q x</td><td>キュー q にデータを追加する</td></tr>
+  <tr><td>dequeue q </td><td>キュー q からデータを取り出す</td></tr>
+  <tr><td>queue-peek q </td><td>キュー q の先頭データを求める</td></tr>
+  <tr><td>queue-clear q </td><td>キュー q を空にする</td></tr>
+  <tr><td>queue-length q </td><td>キュー q に格納されている要素数を返す</td></tr>
+  <tr><td>queue-emptyp q </td><td>キュー q が空ならば t を返す</td></tr>
+</tbody>
+</table>
+<pre class="list">
+リスト 4 : キュー
+
+; クラス定義
+(defclass queue ()
+  ((top :accessor queue-top :initform (make-instance 'dlist))))
+
+; データの追加
+(defmethod enqueue ((q queue) value)
+  (dlist-insert (queue-top q) -1 value))
+
+; データの取り出し
+(defmethod dequeue ((q queue))
+  (dlist-delete (queue-top q) 0))
+
+; 先頭データを求める
+(defmethod queue-peek ((q queue))
+  (dlist-ref (queue-top q) 0))
+
+; 要素数を求める
+(defmethod queue-length ((q queue)) (dlist-length (queue-top q)))
+
+; キューを空にする
+(defmethod queue-clear ((q queue)) (dlist-clear (queue-top q)))
+
+; キューは空か？
+(defmethod queue-emptyp ((q queue)) (dlist-emptyp (queue-top q)))
+</pre>
+<p> queue のスロット top に dlist のインスタンスをセットします。queue の操作は、このインスタンスに dlist のメソッドを適用することで実現します。
+</p>
+<p> メソッド enqueue はキューにデータ x を追加します。これは双方向リストの最後尾に x を追加すればいいので、(dlist-insert (queue-top q) -1 x) を呼び出すだけです。メソッド dequeue は双方向リストの先頭の要素を削除してそれを返せばよいので、(dlist-delete (queue-top q) 0) を呼び出すだけです。メソッド queue-peek は先頭データを返せばいいので、(dlist-ref (queue-top q) 0) を呼び出すだけです。あとのメソッドも dlist の適切なメソッドを呼び出すだけです。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+
+<pre>
+&gt; (setq a (make-instance 'queue))
+#&lt;QUEUE #x100E5921&gt;
+&gt; (dotimes (x 8) (enqueue a x))
+NIL
+&gt; (queue-emptyp a)
+NIL
+&gt; (queue-length a)
+8
+&gt; (queue-peek a)
+0
+&gt; (dotimes (x 8) (format t "~D " (dequeue a)))
+0 1 2 3 4 5 6 7
+NIL
+&gt; (queue-emptyp a)
+T
+&gt; (queue-length a)
+0
+</pre>
+
+<p> キューに 0 から 4 まで enqueue で格納して、dequeue でデータを取り出すと 0, 1, 2, 3, 4, 5, 6, 7 になります。スタックとは逆に、キューはデータを入れた順番にデータが取り出されます。
+</p>
+
+<h4>●ディーキューの実装</h4>
+<p> 最後に、「ディーキュー : deque (double ended queue) 」というデータ構造を双方向リストを使って実装しましょう。ディーキューは「両端キュー」のことで、「デック」と呼ばれることもあります。キューの場合、データの追加は最後尾に、データの取り出しは先頭に対してのみ行えます。これに対しディーキューは、先頭および最後尾のどちらでもデータの追加と取り出しが行えるデータ構造です。ディーキューは双方向リストを使うと簡単に実現できます。
+</p>
+
+<p> 最初に作成するメソッドを表 3 に示します。データを追加するメソッドには push を、取り出すメソッドには pop を付けました。
+</p>
+
+<table border=1>
+<caption>表 3 : ディーキューのメソッド</caption>
+<thead>
+  <tr><th>メソッド</th><th>機能</th></tr>
+</thead>
+<tbody>
+  <tr><td>push-front d x</td><td>ディーキュー d の先頭にデータを追加する</td></tr>
+  <tr><td>push-back d x</td><td>ディーキュー d の末尾にデータを追加する</td></tr>
+  <tr><td>pop-front d </td><td>ディーキュー d の先頭からデータを取り出す</td></tr>
+  <tr><td>pop-back d </td><td>ディーキュー d の末尾からデータを取り出す</td></tr>
+  <tr><td>peek-front d </td><td>ディーキュー d の末尾にあるデータを求める</td></tr>
+  <tr><td>peek-back d </td><td>ディーキュー d の先頭にあるデータを求める</td></tr>
+  <tr><td>deque-clear d </td><td>ディーキュー d を空にする</td></tr>
+  <tr><td>deque-length d </td><td>ディーキュー d に格納されている要素数を返す</td></tr>
+  <tr><td>deque-emptyp d </td><td>ディーキュー d が空ならば #t を返す</td></tr>
+</tbody>
+</table>
+<p> プログラムはリスト 5 のようになります。
+</p>
+<pre class="list">
+リスト 5 : ディーキュー
+
+; クラス定義
+(defclass deque ()
+  ((top :accessor deque-top :initform (make-instance 'dlist))))
+
+; データの追加
+(defmethod push-front ((d deque) value)
+  (dlist-insert (deque-top d) 0 value))
+
+(defmethod push-back ((d deque) value)
+  (dlist-insert (deque-top d) -1 value))
+
+; データの取り出し
+(defmethod pop-front ((d deque))
+  (dlist-delete (deque-top d) 0))
+
+(defmethod pop-back ((d deque))
+  (dlist-delete (deque-top d) -1))
+
+; データの参照
+(defmethod peek-front ((d deque))
+  (dlist-ref (deque-top d) 0))
+
+(defmethod peek-back ((d deque))
+  (dlist-ref (deque-top d) -1))
+
+; 要素数を求める
+(defmethod deque-length ((q deque)) (dlist-length (deque-top q)))
+
+; ディーキューを空にする
+(defmethod deque-clear ((q deque)) (dlist-clear (deque-top q)))
+
+; ディーキューは空か？
+(defmethod deque-emptyp ((q deque)) (dlist-emptyp (deque-top q)))
+</pre>
+<p> スタックとキューのプログラムとあまり変わりがないので、詳しい説明は不要でしょう。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+&gt; (setq a (make-instance 'deque))
+#&lt;DEQUE #x102489E5&gt;
+&gt; (dotimes (x 5) (push-front a x))
+NIL
+&gt; (peek-front a)
+4
+&gt; (peek-back a)
+0
+&gt; (pop-front a)
+4
+&gt; (pop-back a)
+0
+&gt; (deque-length a)
+3
+&gt; (dotimes (x 3) (format t "~D " (pop-front a)))
+3 2 1
+NIL
+&gt; (deque-emptyp a)
+T
+&gt; (deque-length a)
+0
+</pre>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+;
+; dlist.l : 双方向リスト
+;
+;           Copyright (C) 2010 Makoto Hiroi
+;
+; 修正 2010/09/19
+;
+;   1. パッケージ名を "DLIST" に変更
+;   2. defpackage に (:use "COMMON-LISP") を追加
+;   3. :export の指定を文字列に変更
+;
+(provide "DLIST")
+(defpackage "DLIST"
+  (:use "COMMON-LISP")
+  (:export "DLIST" "DLIST-REF" "DLIST-SET" "DLIST-INSERT" "DLIST-DELETE"
+           "DLIST-FOLD" "DLIST-LENGTH" "DLIST-CLEAR" "DLIST-EMPTYP"
+           "LIST-TO-DLIST" "DLIST-TO-LIST" "DLIST-FOR-EACH" "PRINT-OBJECT"
+   ))
+
+(in-package "DLIST")
+
+; メソッドの宣言
+(defgeneric dlist-ref (d n))
+(defgeneric dlist-set (d n value))
+(defgeneric dlist-insert (d n value))
+(defgeneric dlist-delete (d n))
+(defgeneric dlist-fold (d func init &amp;key from-end))
+(defgeneric dlist-length (d))
+(defgeneric dlist-clear (d))
+(defgeneric dlist-emptyp (d))
+(defgeneric list-to-dlist (ls))
+(defgeneric dlist-to-list (d))
+(defgeneric dlist-for-each (d func &amp;key from-end))
+
+;;; セルの定義
+(defclass cell ()
+  ((item :accessor cell-item :initform nil :initarg :item)
+   (next :accessor cell-next :initform nil :initarg :next)
+   (prev :accessor cell-prev :initform nil :initarg :prev)))
+
+; 空リストの生成
+(defun make-empty ()
+  (let ((cp (make-instance 'cell)))
+    (setf (cell-next cp) cp
+          (cell-prev cp) cp)
+    cp))
+
+;;; 双方向リストクラスの定義
+(defclass dlist ()
+  ((top :accessor dlist-top :initform (make-empty))))
+
+; n 番目のセルを求める (操作用関数)
+(defun cell-nth (d n next)
+  (do ((i -1 (1+ i))
+       (cp (dlist-top d) (funcall next cp)))
+      ((= i n) cp)
+    (if (and (&lt;= 0 i) (eq (dlist-top d) cp))
+        (error "cell-nth --- oops!"))))
+
+; 参照
+(defmethod dlist-ref ((d dlist) (n integer))
+  (cell-item
+    (if (minusp n)
+        (cell-nth d (abs (1+ n)) #'cell-prev)
+      (cell-nth d n #'cell-next))))
+
+; 書き換え
+(defmethod dlist-set ((d dlist) (n integer) value)
+  (setf (cell-item (if (minusp n)
+                       (cell-nth d (abs (1+ n)) #'cell-prev)
+                     (cell-nth d n #'cell-next)))
+        value))
+
+; 挿入
+(defmethod dlist-insert ((d dlist) (n integer) value)
+  (labels ((cell-insert (n next)
+             (let* ((p (cell-nth d (- n 1) next))
+                    (q (funcall next p))
+                    (cp (make-instance 'cell :item value)))
+               (if (eq #'cell-next next)
+                   (setf (cell-next cp) q
+                         (cell-prev cp) p
+                         (cell-prev q) cp
+                         (cell-next p) cp)
+                 (setf (cell-prev cp) q
+                       (cell-next cp) p
+                       (cell-next q) cp
+                       (cell-prev p) cp)))))
+    (if (minusp n)
+        (cell-insert (abs (1+ n)) #'cell-prev)
+      (cell-insert n #'cell-next))))
+
+; 削除
+(defmethod dlist-delete ((d dlist) (n integer))
+  (labels ((cell-delete (n next prev)
+             (let* ((cp (cell-nth d n next))
+                    (p (funcall prev cp))
+                    (q (funcall next cp)))
+               (if (eq next #'cell-next)
+                   (setf (cell-next p) q
+                         (cell-prev q) p)
+                 (setf (cell-prev p) q
+                       (cell-next q) p))
+               (cell-item cp))))
+    (if (minusp n)
+        (cell-delete (abs (1+ n)) #'cell-prev #'cell-next)
+      (cell-delete n #'cell-next #'cell-prev))))
+
+
+; 畳み込み
+(defmethod dlist-fold ((d dlist) func init &amp;key from-end)
+  (let ((next (if from-end #'cell-prev #'cell-next)))
+    (do ((cp (funcall next (dlist-top d)) (funcall next cp))
+         (a init))
+        ((eq cp (dlist-top d)) a)
+      (setq a (if (eq next #'cell-prev)
+                  (funcall func (cell-item cp) a)
+                (funcall func a (cell-item cp)))))))
+
+; サイズ
+(defmethod dlist-length ((d dlist))
+  (dlist-fold d #'(lambda (x y) (1+ x)) 0))
+
+; クリア
+(defmethod dlist-clear ((d dlist))
+  (let ((cp (dlist-top d)))
+    (setf (cell-next cp) cp
+          (cell-prev cp) cp)))
+
+; 空リストか？
+(defmethod dlist-emptyp ((d dlist))
+  (let ((cp (dlist-top d)))
+    (eq cp (cell-next cp))))
+
+; リストを双方向リストに変換
+(defmethod list-to-dlist ((xs list))
+  (let ((d (make-instance 'dlist)))
+    (dolist (x xs d)
+      (dlist-insert d -1 x))))
+
+; 双方向リストをリストに変換
+(defmethod dlist-to-list ((d dlist))
+  (dlist-fold d
+              #'(lambda (x y) (cons x y))
+              nil
+              :from-end t))
+
+; 巡回
+(defmethod dlist-for-each ((d dlist) func &amp;key from-end)
+  (if from-end
+      (dlist-fold d #'(lambda (x y) (funcall func x)) nil :from-end t)
+    (dlist-fold d #'(lambda (x y) (funcall func y)) nil)))
+
+; 表示
+(defmethod print-object ((x dlist) stream)
+  (format stream "#&lt;dlist: ~S&gt;" (dlist-to-list x)))
+</pre>
+<pre class="list">
+;
+; dlist1.l : 双方向リスト
+;
+;            Copyright (C) 2010 Makoto Hiroi
+;
+(require :dlist "dlist")     ; 修正 2010/09/19
+(use-package :dlist)         ; パッケージ名をキーワードで指定
+
+;;; 制限付き双方向リスト
+(defclass fixed-dlist (dlist)
+  ((limit :accessor dlist-limit :initform 8 :initarg :limit)
+   (size  :accessor dlist-size  :initform 0 :initarg :size)))
+
+; 満杯か
+(defmethod dlist-fullp ((d dlist))
+  (= (dlist-limit d) (dlist-size d)))
+
+; データ変換
+(defmethod list-to-fixed-dlist ((xs list))
+  (let ((d (make-instance 'fixed-dlist :limit (length xs))))
+    (dolist (x xs d) (dlist-insert d -1 x))))
+
+; データの挿入
+(defmethod dlist-insert ((d fixed-dlist) (n integer) value)
+  (cond ((not (dlist-fullp d))
+         (prog1 (call-next-method)
+                (incf (dlist-size d))))
+        (t (error "fixed-dlist: size over~%"))))
+
+; データの削除
+(defmethod dlist-delete ((d fixed-dlist) (n integer))
+  (prog1 (call-next-method)
+         (decf (dlist-size d))))
+
+; 空にする
+(defmethod dlist-clear ((d fixed-dlist))
+  (call-next-method)
+  (setf (dlist-size d) 0))
+
+; 要素数を求める
+(defmethod dlist-length ((d fixed-dlist))
+  (dlist-size d))
+
+; 表示
+(defmethod print-object ((x fixed-dlist) stream)
+  (format stream "#&lt;fixed-dlist: ~D ~S&gt;" (dlist-size x) (dlist-to-list x)))
+
+; ===============================================
+
+;;; スタック
+(defclass stack ()
+  ((top :accessor stack-top :initform (make-instance 'dlist))))
+
+; データの追加
+(defmethod stack-push ((s stack) value)
+  (dlist-insert (stack-top s) 0 value))
+
+; データの取り出し
+(defmethod stack-pop ((s stack))
+  (dlist-delete (stack-top s) 0))
+
+; 先頭データの参照
+(defmethod stack-peek ((s stack))
+  (dlist-ref (stack-top s) 0))
+
+; 要素数を求める
+(defmethod stack-length ((s stack)) (dlist-length (stack-top s)))
+
+; スタックを空にする
+(defmethod stack-clear ((s stack)) (dlist-clear (stack-top s)))
+
+; スタックは空か？
+(defmethod stack-emptyp ((s stack)) (dlist-emptyp (stack-top s)))
+
+; ===============================================
+
+;;; キュー
+(defclass queue ()
+  ((top :accessor queue-top :initform (make-instance 'dlist))))
+
+; データの追加
+(defmethod enqueue ((q queue) value)
+  (dlist-insert (queue-top q) -1 value))
+
+; データの取り出し
+(defmethod dequeue ((q queue))
+  (dlist-delete (queue-top q) 0))
+
+; 先頭データの参照
+(defmethod queue-peek ((q queue))
+  (dlist-ref (queue-top q) 0))
+
+; キューの要素数を求める
+(defmethod queue-length ((q queue)) (dlist-length (queue-top q)))
+
+; キューを空にする
+(defmethod queue-clear ((q queue)) (dlist-clear (queue-top q)))
+
+; キューは空か
+(defmethod queue-emptyp ((q queue)) (dlist-emptyp (queue-top q)))
+
+; ===============================================
+
+;;; ディーキュー
+(defclass deque ()
+  ((top :accessor deque-top :initform (make-instance 'dlist))))
+
+; データの追加
+(defmethod push-front ((d deque) value)
+  (dlist-insert (deque-top d) 0 value))
+
+(defmethod push-back ((d deque) value)
+  (dlist-insert (deque-top d) -1 value))
+
+; データの取り出し
+(defmethod pop-front ((d deque))
+  (dlist-delete (deque-top d) 0))
+
+(defmethod pop-back ((d deque))
+  (dlist-delete (deque-top d) -1))
+
+; データの参照
+(defmethod peek-front ((d deque))
+  (dlist-ref (deque-top d) 0))
+
+(defmethod peek-back ((d deque))
+  (dlist-ref (deque-top d) -1))
+
+; ディーキューの要素数を求める
+(defmethod deque-length ((q deque)) (dlist-length (deque-top q)))
+
+; ディーキューを空にする
+(defmethod deque-clear ((q deque)) (dlist-clear (deque-top q)))
+
+; ディーキューは空か？
+(defmethod deque-emptyp ((q deque)) (dlist-emptyp (deque-top q)))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2003-2010 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clisp03.html">PrevPage</a> | <a href="index.html#clos">CLOS</a> | <a href="clisp05.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881782</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm17.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm21.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>継続と継続渡しスタイル</h3>
+<p> 今回は「継続 (continuation) 」と「継続渡しスタイル (Continuation Passing Style : CPS) 」という手法について説明します。Scheme には「継続」という他の言語 <sup><a href="abcscm20.html#note1">[*1]</a></sup> にはない強力な機能がありますが、使いこなすのはちょっと難しいといわれています。CPS はクロージャを使った汎用的な方法で、クロージャがあるプログラミング言語であれば、CPS でプログラムを作成することができます。
+</p>
+<p> CPS も慣れるまでちょっと苦労しますが、継続よりはわかりやすいと思います。そのあとで、Scheme の継続について説明します。なお、継続渡しスタイルのドキュメントは拙作のページ <a href="ocaml25.html">OCaml 入門: 継続渡しスタイル</a> を Scheme 用に加筆・修正したものです。内容は重複していますが、ご了承くださいませ。
+</p>
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> 実は Ruby にも「継続」があります。
+</div>
+<h4>●継続とは？</h4>
+<p> 最初に継続について簡単に説明します。継続は「次に行われる計算」のことです。たとえば、次のプログラムを例に考えてみましょう。
+</p>
+
+<pre class="list">
+リスト : 逐次実行
+
+(define (foo) (display "foo"))
+(define (bar) (display "bar"))
+(define (baz) (display "baz"))
+
+(define (test) (foo) (bar) (baz))
+</pre>
+<pre>
+gosh&gt; (test)
+foobarbaz#&lt;undef&gt;
+</pre>
+
+<p> 関数 test は関数 foo, bar, baz を順番に呼び出します。foo の次に実行される処理は bar, baz の関数呼び出しです。この処理が foo を呼び出したあとの「継続」になります。同様に、bar のあとに実行されるのは baz の呼び出しで、この処理がこの時点での「継続」になります。また、baz を呼び出したあと、test の中では次に実行する処理はありませんが、test は関数呼び出しされているので、関数呼び出しから元に戻る処理が baz を呼び出したあとの「継続」になります。
+</p>
+
+<p> このように、あるプログラムを実行しているとき、そのプログラムを終了するまでには「次に実行する処理 (計算) 」が必ず存在します。一般に、この処理 (計算) のことを「継続」といいます。Scheme の場合、次の計算を続行するための情報を取り出して、それを保存することができます。Scheme では、この保存した情報を「継続」といって、通常のデータ型と同様に取り扱うことができます。つまり、継続を変数に代入したり関数の引数に渡すことができるのです。継続を使うとプログラムの実行を途中で中断し、あとからそこに戻ってプログラムの実行を再開することができます。
+</p>
+
+<h4>●継続渡しスタイルとは？</h4>
+<p> 一般のプログラミング言語では、Scheme のように継続を取り出して保存することはできません。そこで、継続 (次に行う処理) を関数 (クロージャ) で表して、それを引数に渡して実行することにします。これを「継続渡しスタイル (CPS) 」といいます。たとえば、次の例を見てください。
+</p>
+
+<pre class="list">
+リスト : 継続渡しスタイル
+
+(define (test-cps cont)
+  (foo) (bar) (cont))
+</pre>
+<pre>
+gosh&gt; (test-cps baz)
+foobarbaz#&lt;undef&gt;
+</pre>
+
+<p> 関数 test-cps は foo, bar を呼び出したあと、引数 cont に渡された処理 (継続) を実行します。関数 baz を渡せば foo, bar, baz と表示されますし、他の処理を渡せばそれを実行することができます。
+</p>
+
+<p> もう一つ簡単な例を示しましょう。継続に値を渡して処理を行うこともできます。
+</p>
+<pre>
+gosh&gt; (define (add-cps x y cont) (cont (+ x y)))
+add-cps
+gosh&gt; (add-cps 1 2 (lambda (x) x))
+3
+gosh&gt; (add-cps 1 2 (lambda (x) (display x) (newline)))
+3
+#&lt;undef&gt;
+</pre>
+
+<p> 関数 add-cps は引数 a と b を加算して、その結果を継続 cont に渡します。cont に (lambda (x) x) を渡せば、計算結果を返すことができます。また、cont で (display x) を呼び出せば、計算結果を表示することができます。
+</p>
+<h4>●再帰呼び出しと継続渡しスタイル</h4>
+<p> CPS を使うと再帰呼び出しを末尾再帰に変換することができます。たとえば、階乗の計算を CPS でプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : 階乗の計算 (CPS)
+
+(define (fact-cps n cont)
+  (if (zero? n)
+      (cont 1)
+    (fact-cps (- n 1) (lambda (x) (cont (* n x))))))
+</pre>
+
+<p> 引数 cont が継続を表します。n が 0 のときは、cont に階乗の値 1 を渡します。それ以外の場合は、階乗の計算を継続の処理にまかせて fact-cps を再帰呼び出します。ここで、fact-cps の呼び出しは末尾再帰になることに注意してください。
+</p>
+<p> 継続の処理 (lambda (x) (cont (* n x))) では、継続の引数 x と fact-cps の引数 n を掛け算して、その結果を cont に渡します。たとえば、(fact-cps 3 (lambda (x) x)) の呼び出しを図に示すと、次のようになります。
+</p>
+<pre class="fig">
+   (fact 3 (lambda (x) x)) ==&gt; (fact 3 cont0) とする
+=&gt; (fact 2 (lambda (x) (cont0 (* 3 x)))) ==&gt; (fact 2 cont1) とする
+=&gt; (fact 1 (lambda (x) (cont1 (* 2 x)))) ==&gt; (fact 1 cont2) とする
+=&gt; (fact 0 (lambda (x) (cont2 (* 1 x)))) ==&gt; (fact 0 cont3) とする
+=&gt; (cont3 1)
+
+継続の評価
+
+(cont3 1)
+=&gt; ((lambda (x) (cont2 (* 1 x)))) 1)
+=&gt; (cont2 (* 1 1))
+=&gt; ((lambda (x) (cont1 (* 2 x)))) 1)
+=&gt; (cont1 (* 2 1))
+=&gt; ((lambda (x) (cont0 (* 3 x)))) 2)
+=&gt; (cont0 (* 3 2))
+=&gt; ((lambda (x) x) 6)
+=&gt; 6
+
+                    図 1 : fact-cps の実行
+</pre>
+<p> このように、継続の中で階乗の式が組み立てられていきます。そして、n が 0 のとき継続 cont に引数 1 を渡して評価すると、今まで組み立てられた式が評価されて階乗の値を求めることができます。つまり、n の階乗を求めるとき、継続を表すラムダ式の引数 x には n - 1 の階乗の値が渡されていくわけです。そして、最後に継続 (lambda (x) x) に n の階乗の値が渡されるので、階乗の値を返すことができます。
+</p>
+
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+gosh&gt; (dotimes (x 15) (fact-cps x (lambda (x) (display x) (newline))))
+1
+1
+2
+6
+24
+120
+720
+5040
+40320
+362880
+3628800
+39916800
+479001600
+6227020800
+87178291200
+#t
+</pre>
+
+<h4>●二重再帰と継続渡しスタイル</h4>
+<p> 次はフィボナッチ数列を求める関数を CPS で作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : フィボナッチ関数
+
+; 二重再帰
+(define (fibo n)
+  (if (or (= n 0) (= n 1))
+      1
+    (+ (fibo (- n 1)) (fibo (- n 2)))))
+
+; CPS
+(define (fibo-cps n cont)
+  (if (or (= n 0) (= n 1))
+      (cont 1)
+    (fibo-cps (- n 1)
+              (lambda (x) (fibo-cps (- n 2)
+                                    (lambda (y) (cont (+ x y))))))))
+</pre>
+<p> 関数 fibo-cps は、引数 n が 0 または 1 のとき (cont 1) を評価します。それ以外の場合は fibo-cps を再帰呼び出しします。n - 1 の値が求まると、その値はラムダ式の引数 x に渡されます。この中で、今度は n - 2 の値を求めます。すると、その値はラムダ式の引数 y に渡されます。したがって、fibo-cps n の値は x + y で求めることができます。この値を fibo-cps n の継続 cont に渡せばいいわけです。
+</p>
+
+<p> fibo-cps の実行を図に示すと、次のようになります。
+</p>
+<pre class="fig">
+f(5) ┬ f(4) ┬ f(3) ┬ f(2) ┬ f(1)
+     │      │      │      │
+    cont    cont    cont    cont
+     │      │      │      └ f(0)
+     │      │      └ f(1)
+     │      └ f(2) ┬ f(1)
+     │              │
+     │             cont
+     │              └ f(0)
+     │
+     └ f(3) ┬ f(2) ┬ f(1)
+             │      │
+            cont    cont
+             │      └ f(0)
+             └ f(1)
+
+    図 2 : fibo-cps の実行
+</pre>
+<p> cont は継続を表します。fibo-cps は末尾再帰になっているので、n - 1 の値を求めるために左から右へ処理が進みます。このとき、n - 2 の値を求める継続 cont が生成されていくことに注意してください。そして、f(1) の実行が終了すると継続が評価され、n - 2 の値が求められます。すると、2 番目の継続が評価されて n - 1 の値 x と n - 2 の値 y を加算して、その値を継続 cont に渡します。こうして、次々と継続が評価されてフィボナッチ関数の値を求めることができます。
+</p>
+
+<p> それでは実際に実行してみましょう。
+</p>
+<pre>
+gosh&gt; (dotimes (x 20) (fibo-cps x (lambda (x) (display x) (newline))))
+1
+1
+2
+3
+5
+8
+13
+21
+34
+55
+89
+144
+233
+377
+610
+987
+1597
+2584
+4181
+6765
+#t
+</pre>
+<p> ところで、fibo-cps は末尾再帰になっていますが、関数の呼び出し回数は二重再帰の場合と同じです。したがって、実行速度は二重再帰の場合とほとんどかわりません。また、二重再帰の場合は関数呼び出しによりスタックが消費されますが、CPS の場合はクロージャが生成されるのでメモリ (ヒープ領域) が消費されます。このように、再帰呼び出しを CPS に変換したからといって、効率の良いプログラムになるとは限りません。ご注意くださいませ。
+</p>
+
+<h4>●CPS の便利な使い方</h4>
+<p> 階乗やフィボナッチ関数の場合、CPS に変換するメリットはほとんどありませんが、場合によっては CPS に変換した方が簡単にプログラムできることもあります。たとえば、リストを平坦化する関数 flatten で、リストの要素に空リストが含まれていたら空リストを返すようにプログラムすることを考えてみましょう。
+</p>
+<p> まず最初に flatten について簡単に説明します。入れ子になっているリストの中から要素を取り出して、それを一つのリストにまとめます。これを「リストの平坦化」といいます。
+</p>
+
+<p> リストの平坦化は、二重再帰を使うと簡単にプログラムできます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : リストの平坦化
+
+(define (flatten ls)
+  (cond ((null? ls) '())
+        ((not (pair? ls)) (list ls))
+        (else (append (flatten (car ls)) (flatten (cdr ls))))))
+</pre>
+
+<p> 引数のリスト ls が空リストであれば nil を返します。ls がアトムであれば、それをリストに格納して返します。ls がリストの場合は、リストの先頭の要素を平坦化し、残りの要素を平坦化して、その結果を append で結合します。ここで、(append nil ls) と (append ls nil) は ls になることに注意してください。したがって、リスト ls の要素に空リストがあっても、それが返り値のリストに含まれることはありません。
+</p>
+
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+gosh&gt; (flatten '(a b (c d (e . f) g) h))
+(a b c d e f g h)
+gosh&gt; (flatten '(a b (c d () (e . f) g) h))
+(a b c d e f g h)
+</pre>
+<p> 2 番目の例のように、flatten は空リストを取り除く動作になります。それでは、リストの要素に空リストがあれば、空リストを返すように flatten を修正してみましょう。つまり、2 番目の例で flatten の返り値は () になります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : リストの平坦化の修正 (間違い)
+
+(defun flatten1 (ls)
+  (cond ((null ls) nil)
+        ((atom ls) (list ls))
+        ((null (car ls)) nil)
+        (t (append (flatten1 (car ls)) (flatten1 (cdr ls))))))
+</pre>
+<p> 関数 flatten1 は (car ls) が空リストならば空リストを返していますが、これでは正常に動作しません。実際に試してみると次のようになります。
+</p>
+<pre>
+gosh&gt; (flatten1 '(a b (c d () (e . f) g) h))
+(a b c d h)
+</pre>
+<p> この場合、空リストを返したいのですが、その前の要素 c, d を連結したリストを返し、その後の処理も行っています。空リストを見つける前にリストの連結処理を行っているので、空リストを見つけたらその処理を破棄し、その後の処理も行わないようにしないといけないのです。
+</p>
+
+<p> このような場合、CPS を使うと簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : リストの平坦化 (CPS)
+
+; flatten の CPS 化
+(define (flatten-cps ls cont)
+  (cond ((null? ls) (cont '()))
+        ((not (pair? ls)) (cont (list ls)))
+        (else (flatten-cps (car ls)
+                           (lambda (x)
+                             (flatten-cps (cdr ls)
+                                          (lambda (y) (cont (append x y)))))))))
+
+; flatten1 の CPS 化
+(define (flatten-cps1 ls cont)
+  (cond ((null? ls) (cont '()))
+        ((not (pair? ls)) (cont (list ls)))
+        ((null? (car ls)) '())
+        (else (flatten-cps1 (car ls)
+                            (lambda (x)
+                              (flatten-cps1 (cdr ls)
+                                            (lambda (y) (cont (append x y)))))))))
+</pre>
+<p> flatten を CPS に変換するのは簡単です。ls が空リストまたはアトムの場合は継続 cont を評価します。次に、flatten-cps を再帰呼び出して CAR 部のリストを平坦化します。その結果は継続の引数 x に渡されます。その継続の中で flatten-cps を呼び出して CDR 部のリストを平坦化し、その結果を継続の引数 y に渡します。その中で (append x y) を評価し、連結したリストを継続 cont に渡して評価すればいいわけです。
+</p>
+
+<p> flatten-cps1 も簡単です。ls が空リストまたはアトムの場合は継続 cont を評価するところは同じです。もしも、リストの途中で空リストを見つけた場合は、空リストをそのまま返します。この場合、継続 cont は評価されないので、リストの連結処理は行われず、空リストをそのまま返すことができます。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (flatten-cps '(a b (c d (e . f) g) h) (lambda (x) x))
+(a b c d e f g h)
+gosh&gt; (flatten-cps '(a b (c d () (e . f) g) h) (lambda (x) x))
+(a b c d e f g h)
+gosh&gt; (flatten-cps1 '(a b (c d (e . f) g) h) (lambda (x) x))
+(a b c d e f g h)
+gosh&gt; (flatten-cps1 '(a b (c d () (e . f) g) h) (lambda (x) x))
+()
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●継続</h4>
+<p> 次は Scheme の「継続 (continuation) 」について説明します。Scheme は関数 call-with-current-continuation を使って「継続」を取り出すことができます。多くの Scheme 処理系では call/cc という省略形を使うことができます。もちろん、Gauche でも call/cc が使えます。
+</p>
+
+<p> call/cc は高階関数です。call/cc に渡される関数は引数がひとつで、その引数に call/cc が取り出した継続が渡されます。call/cc はその関数を評価し、その結果が call/cc の返り値になります。
+</p>
+<p> Scheme の仕様書 (R5RS) によると、継続は引数を一つ取る関数で表されます。引数を渡して継続を評価すると、今までの処理を破棄して、call/cc で取り出された残りの計算 (継続) を実行します。このとき、継続に渡した引数が call/cc の返り値になります。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; (call/cc (lambda (cont) cont))
+#&lt;subr continuation&gt;
+gosh&gt; (+ 1 (* 2 (call/cc (lambda (cont) 3))))
+7
+gosh&gt; (+ 1 (* 2 (call/cc (lambda (cont) (cont 4) 3))))
+9
+</pre>
+<p> 最初の例では、ラムダ式の引数 cont に継続が渡されます。ラムダ式は cont をそのまま返しているので、call/cc の返り値は取り出された継続になります。Gauche の場合、継続は #&lt;subr continuation&gt; と表記され、継続は関数であることがわかります。
+</p>
+
+<p> 次の例を見てください。call/cc によって取り出される継続は、call/cc の返り値を 2 倍して、その結果に 1 を加えるという処理になります。call/cc の返り値を X とすると、継続は (+ 1 (* 2 X)) という S 式で表すことができます。ラムダ式では継続を評価せずに 3 をそのまま返しているので、(+ 1 (* 2 3)) をそのまま計算して値は 7 になります。
+</p>
+
+<p> 最後の例では、ラムダ式の中で (cont 4) を評価しています。継続を評価しているので、現在の処理を破棄して、取り出した継続 (+ 1 (* 2 X)) を評価します。したがって、ラムダ式で (cont 4) の後ろにある 3 を返す処理は実行されません。X の値は継続の引数 4 になるので、(+ 1 (* 2 4)) を評価して値は 9 になります。
+</p>
+
+<p> 継続を変数に保存しておいて、あとから実行することもできます。次の例を見てくください。
+</p>
+<pre>
+gosh&gt; (define *cont* #f)
+*cont*
+gosh&gt; (+ 1 (* 2 (call/cc (lambda (cont) (set! *cont* cont) 3))))
+7
+gosh&gt; (*cont* 10)
+21
+gosh&gt; (*cont* 100)
+201
+</pre>
+<p> ラムダ式の中で取り出した継続を大域変数 *cont* に保存します。継続で行う処理は (+ 1 (* 2 X)) なので、(*cont* 10) は (+ 1 (* 2 10)) を評価して値は 21 になります。同様に、(*cont* 100) は (+ 1 (* 2 100)) を評価して値は 201 になります。
+</p>
+
+<h4>●大域脱出</h4>
+<p> 継続を使うと、評価中の関数からほかの関数へ制御を移すことができます。これを「大域脱出 (global exit) 」といいます。また、繰り返しを中断したり、再帰呼び出しの深いところからいっきに脱出するときにも継続を使うことができます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; (define (bar1 cont) (display "call bar1\n"))
+bar1
+gosh&gt; (define (bar2 cont) (cont #f))
+bar2
+gosh&gt; (define (bar3 cont) (display "call bar3\n"))
+bar3
+gosh&gt; (define (test cont) (bar1 cont) (bar2 cont) (bar3 cont))
+test
+gosh&gt; (call/cc (lambda (cont) (test cont)))
+call bar1
+#f
+</pre>
+<p> この様子を図に示すと、次のようになります。
+</p>
+
+<pre class="fig">
+ ┌──────┐
+ │   call/cc  │←──┐
+ └──────┘      │
+        ↓             │
+ ┌──────┐      │
+ │    foo     │──┐│
+ └──────┘    ││
+       ↓↑          ↓│
+ ┌──────┐  ┌ bar2 ───┐
+ │    bar1    │  │ (cont #f)  │
+ └──────┘  └──────┘
+
+        図 2 : 大域脱出
+</pre>
+<p> 通常の関数呼び出しでは、呼び出し元の関数に制御が戻ります。ところが bar2 で (cont #f) が評価されると、call/cc で取り出した継続に制御が移るので、呼び出し元の関数 foo を飛び越すことができるのです。その結果、call/cc の返り値は #f になります。このように、継続を使って関数を飛び越えて制御を移すことができます。
+</p>
+
+<h4>●繰り返しの中断</h4>
+<p> 繰り返しの中断も簡単です。たとえば、Common Lisp では do, dotimes, dolist などの繰り返しは return で処理を中断することができますが、Gauche ではそれができません。この場合、次のように call/cc を使うと簡単に実現できます。
+</p>
+<pre>
+gosh&gt; (call/cc (lambda (return)
+(dotimes (x 10) (if (&lt; 5 x) (return #f) (print x)))))
+0
+1
+2
+3
+4
+5
+#f
+</pre>
+<p> このように、return に格納された継続を評価すれば、dotimes の繰り返しを途中で中断することができます。また、二重ループからの脱出も簡単です。簡単な例を示します。
+</p>
+<pre>
+gosh&gt; (call/cc (lambda (break)
+(dotimes (x 5)
+(dotimes (y 5) (if (&lt; 5 (+ x y)) (break #f) (print (cons x y)))))))
+(0 . 0)
+(0 . 1)
+(0 . 2)
+(0 . 3)
+(0 . 4)
+(1 . 0)
+(1 . 1)
+(1 . 2)
+(1 . 3)
+(1 . 4)
+(2 . 0)
+(2 . 1)
+(2 . 2)
+(2 . 3)
+#f
+</pre>
+<p> 高階関数の処理を途中で中断することも簡単にできます。たとえば、リストの要素をチェックし、不適当な要素を見つけた場合は空リストを返すマップ関数 map-check を作ってみましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 高階関数の処理を中断する
+
+(define (map-check fn chk ls)
+  (call/cc
+    (lambda (return)
+      (map (lambda (x) (if (chk x) (return '()) (fn x))) ls))))
+</pre>
+<p> 要素をチェックする述語は引数 chk に渡します。chk が真を返す場合は継続 return を評価して空リストを返します。簡単な実行例を示します。
+</p>
+<pre>
+gosh&gt; (map-check (lambda (x) (* x x)) negative? '(1 2 3 4 5))
+(1 4 9 16 25)
+gosh&gt; (map-check (lambda (x) (* x x)) negative? '(1 2 -3 4 5))
+()
+</pre>
+
+<h4>●再帰呼び出しからの脱出</h4>
+<p> 再帰呼び出しから脱出することも継続を使えば簡単です。リストの平坦化で作成した flatten1-cps を継続を使って書き直してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 再帰呼び出しから脱出する
+
+(define (flatten2 ls)
+  (define (flatten-sub ls cont)
+    (cond ((null? ls) '())
+          ((not (pair? ls)) (list ls))
+          ((null? (car ls)) (cont '()))
+          (else (append (flatten-sub (car ls) cont)
+                        (flatten-sub (cdr ls) cont)))))
+  (call/cc (lambda (cont) (flatten-sub ls cont))))
+</pre>
+<p> 関数 flatten2 は局所関数 flatten-sub を呼び出します。このとき、継続 cont を取り出して flatten-sub に渡します。flatten-sub は空リストを見つけたら継続 cont を評価します。すると、再帰呼び出しの処理は破棄されて flatten2 の処理に戻り、cont に渡した空リストが返り値となります。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (flatten2 '(a (b (c (d . e) f) g)))
+(a b c d e f g)
+gosh&gt; (flatten2 '(a (b (c () (d . e) f) g)))
+()
+</pre>
+
+<h4>●letrec</h4>
+<p> 今までのプログラムは局所的な関数を define で定義しましたが、Scheme には局所的な関数を定義するシンタックス形式 letrec が用意されています。letrec の構文を下図に示します。
+</p>
+<pre class="fig">
+  (letrec
+    ((var1 value1)
+     (var2 value2)
+     .....)
+    body)
+
+図 : letrec の構文
+</pre>
+<p> letrec は let と同じ構文ですが、変数名 var を値 value の中で参照できるところが異なります。したがって、変数 var の値 value がラムダ式の場合、その中で自分自身を呼び出すことができる、つまり再帰定義が可能というわけです。
+</p>
+<p> 簡単な例としてリストを平坦化する関数 flatten2 を letrec を使って書き直してみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : リストの平坦化 (継続版)
+
+(define (flatten3 ls)
+  (call/cc
+    (lambda (cont)
+      (letrec ((flatten-sub
+                (lambda (ls)
+                  (cond ((null? ls) '())
+                        ((not (pair? ls)) (list ls))
+                        ((null? (car ls)) (cont '()))
+                        (else (append (flatten-sub (car ls))
+                                      (flatten-sub (cdr ls))))))))
+        (flatten-sub ls)))))
+</pre>
+<p> 関数の中で define を使う場合、その関数の先頭で定義しないといけませんが、letrec を使うと call/cc に渡す関数の内部で flatten-sub を定義することができます。こうすると flatten-sub から継続 cont を参照できるので、flatten-sub の引数に cont を渡さなくても大丈夫です。
+</p>
+
+<h4>●イテレータ</h4>
+<p> 複数の要素を格納するデータ構造を「コレクション (collection) 」とか「コンテナ (container) 」と呼びます。そして、コレクションの要素を順番にアクセスするための機能を「イテレータ (iterator) 」と呼びます。イテレータは日本語で「反復子」と呼ばれることもあります。
+</p>
+
+<p> Scheme などの関数型言語は、高階関数を使ってコレクションの要素にアクセスすることができます。ここでは、コレクションから要素を一つずつ順番に取り出していく関数を考えることにします。たとえば、リストのトップレベルの要素を一つずつ取り出していく関数は、クロージャを使って簡単に実現することができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : リストのイテレータ
+
+(define (make-iter-list ls)
+  (let ((ls ls))
+    (lambda ()
+      (cond ((pair? ls)
+             (begin0 
+               (car ls)
+               (set! ls (cdr ls))))
+            (else '())))))
+</pre>
+
+<p> 関数 make-iter-list はクロージャを返します。このクロージャを評価すると、リストの要素を順番に取り出して返します。処理内容は簡単で、リストの先頭を ls に保持し、(car ls) で要素を取り出したら、(cdr ls) で先頭の要素を取り除きます。begin0 は引数の S 式を順番に評価しますが、最初に評価した S 式の値が begin0 の返り値となります。これでクロージャを評価するたびに、リストの要素を一つずつ取り出していくことができます。
+</p>
+<p> それでは実行例を示します。
+</p>
+<pre>
+gosh&gt; (define a (make-iter-list '(1 2 3 4 5)))
+a
+gosh&gt; (a)
+1
+gosh&gt; (a)
+2
+gosh&gt; (a)
+3
+gosh&gt; (a)
+4
+gosh&gt; (a)
+5
+gosh&gt; (a)
+()
+</pre>
+
+<p> このように、トップレベルの要素を取り出していくだけならば簡単なのですが、リストを「木」として扱うとなると、プログラムはとたんに難しくなります。高階関数であれば、次のようになるでしょう。
+</p>
+<pre class="list">
+リスト : 木の高階関数
+
+(define (for-each-tree fn ls)
+  (let loop ((ls ls))
+    (cond ((null? ls) '())
+          ((pair? ls)
+           (loop (car ls))
+           (loop (cdr ls)))
+          (else (fn ls)))))
+</pre>
+<p> 関数 for-each-tree はリストの要素に関数 fn を適用します。fn を適用するだけなので、名前付き let を使って二重再帰しています。簡単な実行例を示しましょう。
+</p>
+<pre>
+gosh&gt; (for-each-tree (lambda (x) (display x) (newline)) '(a (b (c (d . e) f) g)))
+a
+b
+c
+d
+e
+f
+g
+()
+</pre>
+<p> 最後の空リストは for-each-tree の返り値です。
+</p>
+<p> このような木構造のイテレータを作る場合、木をたどってきた経路をクロージャに保存しておいて、再帰定義を使わずにプログラムを作ります。ところが、継続を使うと経路を保存しておく必要はありません。継続で再帰呼び出しを中断して要素を返し、次にイテレータを評価したとき、継続で保存した処理を再開すればいいのです。
+</p>
+
+<p> そうはいっても、実際に継続を使ったプログラムを作るのはけっこう大変です。ここは <a href="http://www.sampou.org/scheme/t-y-scheme/">独習 Scheme 三週間</a> <a href="http://www.sampou.org/scheme/t-y-scheme/t-y-scheme-Z-H-15.html#node_sec_13.3">13.3  ツリーマッチング</a> を参考にプログラムを作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 木のイテレータ
+
+(define (make-iter-tree ls)
+  (letrec ((iter (lambda (return)
+                   (let loop ((ls ls))
+                     (cond ((null? ls) '())
+                           ((pair? ls)
+                            (loop (car ls))
+                            (loop (cdr ls)))
+                           (else
+                            (set! return   ; 脱出先の継続を書き換える
+                              (call/cc 
+                                (lambda (cont)
+                                  (set! iter cont)  ; 継続の書き換え
+                                  (return ls)))))))
+                   ; 終了する場合も継続で脱出する
+                   (return '()))))
+    (lambda ()
+      (call/cc
+        (lambda (cont) (iter cont))))))
+</pre>
+<p> 関数 make-iter-tree はクロージャを返します。クロージャの中では継続 cont を取り出して局所関数 iter を呼び出します。iter の引数 return が脱出先の継続となり、継続の引数がクロージャを評価したときの返り値となります。
+</p>
+<p> iter でリストの要素を返す場合、まず call/cc で継続 cont を取り出します。そして、それを iter にセットします。次にクロージャを評価するとき、iter にセットした継続が評価されるので、中断した処理を再開することができます。それから、脱出先の継続 return を評価してリストの要素を返します。
+</p>
+<p> 次に、処理を再開したとき、脱出先の継続 return の値を書き換えることに注意してください。この値を書き換えないと、最初にクロージャを呼び出したところまで戻ってしまいます。たとえば、次のプログラムは無限ループになります。
+</p>
+<pre>
+gosh&gt; (let ((a (make-iter-tree '(1 2 3)))) (a) (a))
+^C
+</pre>
+<p> return の値を書き換えないと、二番目の (a) を呼び出したあと最初に (a) を呼び出したときの脱出先に戻るため、二番目の (a) が何度も呼び出されることになるのです。同様に、処理が終了した場合も継続 return で脱出してください。そうしないと、関数呼び出しが終了して呼び出し元に戻る、つまり最初にイテレータを呼び出したところまで戻ってしまうのです。たとえば、次のプログラムは無限ループになります。
+</p>
+<pre>
+gosh&gt; (let ((a (make-iter-tree '(1 2 3)))) (a) (a) (a) (a))
+^C
+</pre>
+<p> 最後の (a) でリストの要素がなくなって空リストを返すのですが、最初に呼び出した (a) の返り値となるため無限ループになってしまいます。処理が終了したあと、必ず継続を使って脱出してください。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (let ((a (make-iter-tree '(a (b (c (d . e) f) g)))))
+(dotimes (x 8) (print (a))))
+a
+b
+c
+d
+e
+f
+g
+()
+#t
+</pre>
+<p> 最後の #t は dotimes の返り値です。print は引数を画面に表示したあと改行を行う関数です。正常に動作していますね。
+</p>
+
+<h4>●イテレータを生成する関数</h4>
+<p> ところで、イテレータを作るためにわざわざ新しい関数を作るのは面倒ですね。高階関数からイテレータを生成する関数があると便利です。実は、イテレータを生成する関数も作ることができます。Shiro Kawai さんの <a href="http://practical-scheme.net/index-j.html">Practical Scheme</a> <a href="http://practical-scheme.net/wiliki/wiliki.cgi">WiLiKi</a> にある <a href="http://practical-scheme.net/wiliki/wiliki.cgi?Scheme%3agenerator%E3%81%A8do%E3%81%A8while">Scheme:generatorとdoとwhile</a> を参考にプログラムを作ってみましょう。
+</p>
+<p> 関数名は make-iter とします。簡単な使用例を示します。
+</p>
+<pre>
+gosh&gt; (define a (make-iter for-each-tree '(a (b (c (d . e) f) g))))
+a
+gosh&gt; (a)
+a
+gosh&gt; (a)
+b
+gosh&gt; (a)
+c
+gosh&gt; (a)
+d
+gosh&gt; (a)
+e
+gosh&gt; (a)
+f
+gosh&gt; (a)
+g
+gosh&gt; (a)
+#f
+</pre>
+<p> make-iter に渡す高階関数は、第 1 引数に関数を受け取ります。make-iter は高階関数を呼び出すとき、第 1 引数に関数を渡します。この関数の中で継続を使ってイテレータを実現します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : イテレータを生成する関数
+
+(define (make-iter proc . args)
+  (letrec ((iter
+            (lambda (return)
+              (apply 
+                proc
+                (lambda (x)             ; 高階関数に渡す関数の本体
+                  (set! return          ; 脱出先継続の書き換え
+                   (call/cc
+                    (lambda (cont)
+                      (set! iter cont)  ; 継続の書き換え
+                      (return x)))))
+                args)
+              ; 終了後は継続 return で脱出
+              (return #f))))
+    (lambda ()
+      (call/cc
+        (lambda (cont) (iter cont))))))
+</pre>
+<p> make-iter の引数 proc が高階関数、args が proc に渡す引数です。局所関数 iter で proc を呼び出します。proc に渡す関数の本体はラムダ式です。proc でこのラムダ式を呼び出すと、継続 cont を取り出して iter にセットし、継続 return を評価して脱出します。これでラムダ式の引数 x がイテレータの返り値になります。
+</p>
+<p> 次にイテレータを評価すると、iter にセットされた継続が評価され、ラムダ式の処理が終了して呼び出し元の proc に戻ります。つまり、proc の処理が再開されるというわけです。これでイテレータを実現することができます。
+</p>
+
+<p> 簡単な例として、順列を生成するイテレータを作っていましょう。この場合は値を生成するので「ジェネレータ (generator) 」といったほうがよいかもしれません。順列の生成については、拙作のページ <a href="abcscm11.html">順列と組み合わせ</a> をお読みください。プログラムリストを再掲します。
+</p>
+
+<pre class="list">
+リスト : 順列の生成
+
+(use srfi-1)
+
+; 引数 x と等しい要素を削除
+(define (remove-item x ls)
+    (remove (lambda (a) (equal? a x)) ls))
+
+; 順列の生成
+(define (permutations func ls)
+    (define (perm ls a)
+        (if (null? ls)
+            (func (reverse a))
+            (for-each
+                (lambda (n)
+                    (perm (remove-item n ls) (cons n a)))
+                ls)))
+    (perm ls '()))
+</pre>
+<p> permutations は高階関数で第 1 引数に関数を受け取るので、このまま make-iter に渡すことができます。それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (define perm-gen (make-iter permutations '(1 2 3)))
+perm-gen
+gosh&gt; (dotimes (x 7) (print (perm-gen)))
+(1 2 3)
+(1 3 2)
+(2 1 3)
+(2 3 1)
+(3 1 2)
+(3 2 1)
+#f
+#t
+</pre>
+<p> 正常に動作していますね。
+</p>
+<hr>
+<h4 id="appendix">●追記(2011/01/23)：高階関数と継続渡しスタイル</h4>
+<p> <a href="http://practical-scheme.net/wiliki/wiliki.cgi">WiLiKi</a> の <a href="http://practical-scheme.net/wiliki/wiliki.cgi?sasagawa">sasagawa さん</a> のページに継続渡しスタイル (CPS) に関する興味深い話題がありましたので、M.Hiroi も試してみました。高階関数 map を CPS 形式でプログラムすることを考えます。関数とひとつのリストを受け取る関数 map1 は、CPS でなければ次のように簡単にプログラムできます。
+</p>
+<pre class="list">
+リスト : マップ関数 (1)
+
+(define (map1 fn ls)
+  (if (null? ls)
+      '()
+    (cons (fn (car ls)) (map1 fn (cdr ls)))))
+</pre>
+<p> これを CPS に変換します。引数 fn に渡される関数も CPS 形式で書かれていて、継続は第一引数に渡されるものとします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : マップ関数 (2)
+
+(define (map1/cps cont fn ls)
+  (if (null? ls)
+      (cont '())
+    (map1/cps (lambda (x)
+                (fn (lambda (y) (cont (cons y x))) (car ls)))
+              fn
+              (cdr ls))))
+</pre>
+<p> ポイントは関数 fn に渡す継続 (ラムダ式) です。map1/cps の返り値は継続の引数 x に、関数 fn の返り値は継続の引数 y に渡されます。あとは y と x を cons して、それを継続 cont に渡すだけです。
+</p>
+<p> 関数 fn を呼び出すとき、次に示すようにプログラムすると、継続は正常に動作しません。
+</p>
+<pre class="list">
+リスト : マップ関数 (3)
+
+(define (map1/cps- cont fn ls)
+  (if (null? ls)
+      (cont '())
+    (map1/cps- (lambda (x)
+                 (cont (cons (fn (lambda (y) y) (car ls)) x)))
+               fn
+               (cdr ls))))
+</pre>
+<p> fn を呼び出すとき、継続に (lambda (y) y) を渡しています。これでも fn の返り値を求めることができますが、map1/cps に渡された継続ではありません。継続 cont はここで途切れてしまうので、継続は期待した動作になりません。
+</p>
+<p> たとえば、高階関数の処理を中断することを考えてみましょう。
+</p>
+<pre class="list">
+リスト : 高階関数からの脱出 (1)
+
+(define (foo ls)
+  (call/cc
+    (lambda (cont)
+      (map (lambda (x)
+             (if (negative? x) (cont '()) (+ x x)))
+           ls))))
+</pre>
+<p> 関数 foo は要素が数値のリスト ls を受け取り、要素を 2 倍したリストを返します。このとき、要素が負の場合は処理を中断して空リストを返します。このよな処理は Scheme の継続を使うと簡単に実現できます。
+</p>
+<p> 実行例を示します。
+</p>
+<pre>
+gosh&gt; (foo '(1 2 3 4 5))
+(2 4 6 8 10)
+gosh&gt; (foo '(1 2 3 -4 5))
+()
+</pre>
+<p> map1/cps でも簡単にプログラムすることができます。
+</p>
+<pre class="list">
+リスト : 高階関数からの脱出 (2)
+
+(define (foo+ ls)
+  (map1/cps
+    (lambda (x) x)
+    (lambda (cont x)
+      (if (negative? x)
+          '()
+        (cont (+ x x))))
+    ls))
+</pre>
+<p> CPS の場合、処理を継続する場合は cont を呼び出し、処理を中断するときは値を返すだけで実現できます。関数 foo+ は foo と同じ実行結果になります。ところが、map1/cps を map1/cps- に変えると正常に動作しません。プログラムと実行結果を示します。
+</p>
+<pre class="list">
+リスト : 高階関数からの脱出 (3)
+
+(define (foo- ls)
+  (map1/cps-
+    (lambda (x) x)
+    (lambda (cont x)
+      (if (negative? x)
+          '()
+        (cont (+ x x))))
+    ls))
+</pre>
+<pre>
+gosh&gt; (foo- '(1 2 3 4 5))
+(2 4 6 8 10)
+gosh&gt; (foo- '(1 2 3 -4 5))
+(2 4 6 () 10)
+</pre>
+<p> fn を呼び出すとき継続が途切れるため、高階関数の処理から脱出することができません。この場合、fn の返り値が空リストになり、それがリストに格納されることになります。
+</p>
+
+<p> 複数のリストを受け付けるマップ関数の CPS 版はちょっと複雑になります。CPS 形式ではないマップ関数 mapn は次のようになります。拙作のページ <a href="abcscm25.html">便利なリスト操作関数</a> より再掲します。
+</p>
+
+<pre class="list">
+リスト : マップ関数 (4)
+
+(define (mapn fn . args)
+  (if (member '() args)
+      '()
+    (cons (apply fn (map1 car args))
+          (apply mapn fn (map1 cdr args)))))
+</pre>
+<p> (map1 car args) で先頭要素を取り出して fn に渡します。そして、(map1 cdr args) で先頭要素を取り除き、それを mapn に渡して再帰呼び出しします。どちらも apply を使って関数を呼び出すところがポイントです。
+</p>
+<p> mapn を CPS に変換する場合、関数 fn に継続を渡すことを主な目的とすると、map1 を CPS に変換する必要はほとんどないでしょう。この場合、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : マップ関数 (5)
+
+(define (mapn/cps1 cont fn . args)
+  (if (member '() args)
+      (cont '())
+    (apply
+      mapn/cps1
+      (lambda (x)
+        (apply
+          fn
+          (lambda (y) (cont (cons y x)))
+          (map1 car args)))
+      fn
+      (map1 cdr args))))
+</pre>
+<p> mapn/csp1 の返り値は継続の引数 x に、関数 fn の返り値は継続の引数 y に渡されます。あとは (cons y x) の結果を継続 cont に渡すだけです。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+gosh&gt; (define (+/cps cont . args) (cont (apply + args)))
+|+/cps|
+gosh&gt; (+/cps (lambda (x) x) 1 2 3 4 5)
+15
+gosh&gt; (mapn/cps (lambda (x) x) +/cps '(1 2 3) '(4 5 6) '(7 8 9))
+(12 15 18)
+</pre>
+<p> もちろん、途中で処理を中断することもできます。
+</p>
+<pre class="list">
+リスト : 高階関数からの脱出 (4)
+
+(define (foon ls)
+  (mapn/cps
+    (lambda (x) x)
+    (lambda (cont x)
+      (if (negative? x)
+	  '()
+	(cont (+ x x))))
+    ls))
+</pre>
+<pre>
+gosh&gt; (foon '(1 2 3 4 5))
+(2 4 6 8 10)
+gosh&gt; (foon '(1 2 -3 4 5))
+()
+</pre>
+<p> map1 も CPS に変換したい場合、プログラムはけっこう複雑になります。
+</p>
+<pre class="list">
+リスト : マップ関数 (6)
+
+(define (car/cps cc ls) (cc (car ls)))
+(define (cdr/cps cc ls) (cc (cdr ls)))
+
+(define (mapn/cps1 cc fn . args)
+  (if (member '() args)
+      (cc '())
+    (map1/cps
+      (lambda (x)
+        (apply
+          mapn/cps1
+            (lambda (y)
+              (map1/cps
+                (lambda (z)
+                  (apply fn
+                         (lambda (a)
+                           (cc (cons a y)))
+                         z))
+                car/cps
+                args))
+            fn
+            x))
+      cdr/cps
+      args)))
+</pre>
+<p> 継続の引数 x に先頭要素を取り除いたリスト、引数 z に各リストの先頭要素が渡されます。mapn/cps1 の返り値が引数 y に、fn の返り値が引数 a に渡されるので、あとは (cons a y) の結果を継続 cont に渡すだけです。これで mapn/cps1 の動作は mapn/cps と同じになります。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009-2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm17.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm21.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

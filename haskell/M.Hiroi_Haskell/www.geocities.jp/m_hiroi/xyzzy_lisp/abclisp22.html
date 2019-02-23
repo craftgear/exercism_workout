@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門</title>
+  <meta name="description" content="xyzzy,xyzzy Lisp,Common Lisp,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881766</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>xyzzy Lisp Programming</h1>
+<h2>Common Lisp 入門</h2>
+<div class="small">
+[ <a href="abclisp21.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp23.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap37">記号のパターンマッチング (1)</h3>
+<p> Lisp はリスト処理が得意なプログラミング言語ですが、もうひとつの得意分野に「記号処理」があります。今回は記号処理の例題として Lisp の教科書では定番となっている、<b>記号のパターンマッチング</b>というプログラムを説明します。そして、パターンマッチングの応用例として、簡単なエキスパートシステムを作成しましょう。
+</p>
+<p> エキスパートシステムとは、専門家の知識をコンピュータに記憶しておき、それを使って問題を解決する、あるいは問題解決のための手助けを行うように作られたシステムです。ここで作成するプログラムは、このような難しいシステムではありません。「パターンマッチングとバックトラックを組み合わせることでデータの中から解答を導き出す」という簡単なものです。
+</p>
+<p> 実をいうと、パターンマッチングとバックトラックを機能に持つプログラミング言語に Prolog があります。簡単なシステムといっても、作成するプログラムは Prolog とよく似た動作をさせることが可能です。Prolog の詳しい説明は、拙作のページ <a href="../prolog/index.html">Prolog Programming</a> をお読みください。
+</p>
+<hr>
+<h4>●パターンマッチング</h4>
+<p> パターンマッチング (pattern matching) は「型合わせ」という検索方法のひとつです。たとえば、「太郎はコーヒーが好き」、「太郎はココアが好き」、「花子は紅茶が好き」というデータを、次のようなリストで表すことにします。
+</p>
+<pre class="item">
+(太郎 好き コーヒー)
+(太郎 好き ココア)
+(花子 好き 紅茶)
+</pre>
+<p> パターンマッチングは、このようなデータから情報を抽出するために使われます。データと同様にパターンもリストで表すのですが、リストの中にパターン変数 (pattern variable) を使うことができるのが特徴です。パターン変数は、いろいろな表現方法があるのですが、ここでは ? で始まるシンボル <SUP><a href="abclisp22.html#note1">[*1]</a></SUP> と定義します。パターン変数を含む例を次に示します。
+</p>
+<pre class="item">
+(太郎 好き ?x)
+(太郎 ?y コーヒー)
+(花子 ?x ?y)
+(花子 ?z ?z)
+</pre>
+<p> パターン中にパターン変数を含まない場合は equal によるリストの比較と同じ動作になります。したがって、(太郎 好き コーヒー) というパターンはデータ (太郎 好き コーヒー) と一致しますが、データ (太郎 好き ココア) とは一致しません。
+</p>
+<p> パターン中にパターン変数を含んでいる場合、パターン中で最初に出現するパターン変数はワイルドカードのように働きます。たとえば、(太郎 好き ?x) というパターンと (太郎 好き コーヒー) というデータをマッチングさせてみましょう。この場合、各要素を比較していくと、「太郎」と「好き」は一致しますが、最後の要素 ?x と「コーヒー」が残ります。
+</p>
+
+<pre class="fig">
+  (太郎 好き コーヒー)
+    ↑   ↑    ↑
+    ○   ○    ○
+    ↓   ↓    ↓
+  (太郎 好き   ?x)    ?x = コーヒー  
+
+図 1 : パターン変数の動作（その１）
+</pre>
+
+<p> ?x はパターン変数ですが、このパターンの中で最初に現れたので、?x と「コーヒー」は一致するのです。したがって、(太郎 好き ?x) と (太郎 好きコーヒー) は一致します。同様に、(太郎 好き ?x) と (太郎 好き ココア) も一致します。
+</p>
+
+<pre class="fig">
+  (太郎 好き コーヒー)
+    ↑   ↑    ↑
+    ○   ○    ○
+    ↓   ↓    ↓
+  (太郎  ?y  コーヒー)   ?y = 好き
+
+  (太郎 好き コーヒー)
+    ↑   ↑    ↑
+    ○   ○    ×
+    ↓   ↓    ↓
+  (太郎  ?y  ココア)
+
+  ?y = 好き だが最後で不一致となる  
+
+図 2 : パターン変数の動作（その２）
+</pre>
+
+<p> パターン変数はパターン中のどこに現れてもかまいません。(太郎 ?y コーヒー) と (太郎 好き コーヒー) は ?y が「好き」と一致するので、マッチングは成功します。(太郎 好き ココア) とマッチングさせると、?y は「好き」と一致するのですが、「コーヒー」と「ココア」は一致しないので失敗します。
+</p>
+
+<pre class="fig">
+  (花子 好き 紅茶)
+    ↑   ↑    ↑
+    ○   ○    ○
+    ↓   ↓    ↓
+  (太郎  ?x    ?y)   ?x = 好き, ?y = 紅茶  
+
+    図 3 : パターン変数の動作（その３）
+</pre>
+
+<p> また、パターン変数は複数使ってもかまいません。(花子 ?x ?y) はパターン変数 ?x と ?y がありますね。これと (花子 好き 紅茶) をマッチングさせてみます。すると、?x は「好き」、?y は「紅茶」と一致するので、マッチングは成功します。
+</p>
+
+<pre class="fig">
+  (花子 好き 紅茶)
+    ↑   ↑    ↑
+    ○   ○    ×
+    ↓   ↓    ↓
+  (太郎  ?x    ?x)
+
+  ?x = 好き だか「紅茶」と ?x の値「好き」は一致しない  
+
+        図 4 : パターン変数の動作（その４）
+</pre>
+<p> 今度は、(花子 ?x ?x) を考えてみます。同じパターン変数 ?x が 2 回使われていますね。データと一致したパターン変数は、その後パターンの中では一致したデータとして扱われます。(花子 好き 紅茶) とマッチングさせると、最初の ?x は「好き」と一致します。2 番目の ?x は「紅茶」と比較することになりますが、?x は既に「好き」と一致しているので「好き」と「紅茶」を比較することになるのです。したがって、マッチングは失敗します。
+</p>
+<p> (花子 ?x ?x) は (花子 好き 好き) とか (花子 紅茶 紅茶) のようなデータと一致しますが、この場合はデータに意味がありませんね。
+</p>
+<div class="note">
+-- <a name="note1">note</a> --------<br>
+[*1] このほかに、(? x) のように第 1 要素が ? のリストでパターン変数を表す方法もあります。また、Common Lisp のシンボルは英大文字小文字を区別しませんが、シンボルの英大小文字を区別する Lisp 処理系では、英大文字で始まるシンボルをパターン変数と定義することもできます。
+</div>
+<h4>●パターン変数は連想リストで管理する</h4>
+<p> Lisp の用語では、変数に値を与えることを<b>束縛 (binding)</b> といいます。また、値が与えられていない、未束縛の変数を<b>自由変数</b>と呼びます。パターン変数の場合、最初は自由変数であり、データとマッチングしたときに束縛されます。つまり、自由変数であればどんなデータとも一致しますが、束縛されていれば、その値を取り出してデータと比較することになります。パターンマッチングを実現する場合、この変数束縛の管理方法がポイントになります。
+</p>
+<p> まず、オーソドックスに連想リストを使ってパターンマッチングを実現してみましょう。関数名は match とします。match は再帰を使ってリストを分解し、要素同士を比較していきます。match はマッチングに成功した場合、パターン変数とその値を格納する連想リストを返します。今後、この連想リストのことを「束縛リスト」と呼ぶことにします。次の例を見てください。
+</p>
+<pre>
+(match '(太郎 好き ?x) '(太郎 好き コーヒー) nil)
+=&gt; ((?x . コーヒー))
+
+(match '(太郎 ?y コーヒー) '(太郎 好き コーヒー) nil)
+=&gt; ((?y . 好き))
+
+(match '(花子 ?x ?y) '(花子 好き 紅茶) nil)
+=&gt; ((?y . 紅茶) (?x . 好き))
+</pre>
+
+<p> 関数 match は 1 番目の引数にパターンを、2 番目の引数にデータを、3 番目の引数に束縛リストを受け取ります。データにはパターン変数が含まれていないことに注意してください。
+</p>
+<p> 最初は、どのパターン変数にも値は入っていないので、引数には nil を渡します。match はパターン変数がなくても、マッチングが成功したときは nil を返します。
+</p>
+<pre>
+(match '(太郎 好き コーヒー) '(太郎 好き コーヒー) nil)
+=&gt; nil
+
+(match '(花子 好き 紅茶) '(花子 好き 紅茶) nil)
+=&gt; nil
+</pre>
+<p> nil は失敗を表すことが普通ですが、この場合は束縛リストが空であることを表します。このため、マッチングが失敗した場合は、シンボル fail を返すことにします。
+</p>
+<pre>
+(match '(太郎 ?y コーヒー) '(太郎 好き ココア) nil)
+=&gt; fail
+
+(match '(花子 ?x ?x) '(花子 好き 紅茶) nil)
+=&gt; fail
+</pre>
+<p> match を作る前に、パターン変数を管理するための関数を作っておきましょう。まず、要素がパターン変数であるかチェックする関数 variablep です。
+</p>
+<pre class="list">
+List 1 : 要素はパターン変数か
+
+(defun variablep (pattern)
+  (and (symbolp pattern)
+       (char= #\? (char (string pattern) 0))))
+</pre>
+<p> 最初に、述語 symbolp で pattern がシンボルであることを確認します。次に、関数 string でシンボルを文字列に変換して、関数 char で先頭文字を取り出します。そして、述語 char= で文字が #\? であることをチェックします。
+</p>
+<p> 次は、束縛リストにデータを追加する add-binding を作ります。
+</p>
+
+<pre class="list">
+List 2 : 束縛リストに追加する
+
+(defun add-binding (var value binding)
+  (cons (cons var value) binding))
+</pre>
+<p> これも簡単ですね。引数 var に変数名、value に値、binding に束縛リストを受け取ります。まず cons で var と value をドット対にまとめ、それを cons で binding の先頭に追加します。返り値はパターン変数を追加した束縛リストになります。
+</p>
+
+<h4>●match の実装</h4>
+<p> それでは match を作ります。リスト操作の基本である car と cdr でリストを分解して要素を比較していきます。ここで肩慣らしに、リストが等しいかチェックする述語 equal-list を作ってみましょう。簡単のため、アトムの判定は述語 eql を使うことにします。再帰定義に慣れていればすぐに作れると思います。
+</p>
+<p> 考え方は簡単です。2 つの引数がアトムであれば eql で比較すればいいですね。リスト同士であればリストの car を比較します。このとき、リストの要素がリストの場合もあるので eql で比較することはできません。ここは再帰の出番ですね。equal-list を呼び出して比較すればいいわけです。その結果が等しい場合はリストの cdr を比較します。ここでも equal-list を呼び出します。2 つの引数がアトムでもなくリストでもない場合は、不一致と判定すればいいでしょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 3 : リストが等しいか
+
+(defun equal-list (list1 list2)
+  (cond ((and (atom list1) (atom list2))
+         (eql list1 list2))
+        ((and (consp list1) (consp list2))
+         (if (equal-list (car list1) (car list2))
+             (equal-list (cdr list1) (cdr list2))))
+        (t nil)))
+</pre>
+
+<p> 述語 atom でアトムのチェック、述語 consp でリストのチェックを行います。述語 listp は nil でも真と判定するため、ここでは consp を使っています。引数 list1 と list2 がリストの場合、リストの先頭要素を car で取り出して equal-list を再帰呼び出しします。その結果が真であれば、残りのリストを equal-list でチェックします。
+</p>
+<p> match の場合も基本的な考え方は equal-list と同じです。ここにパターン変数の処理を付け加えればいいわけです。パターン変数とのマッチングは関数 match-variable で行い、リストの比較は関数 match-pieces で行うことにすると、プログラムは次のようになります。
+</p>
+
+<pre class="list">
+List 4 : パターンマッチング
+
+(defun match (pattern datum binding)
+  (cond ((variablep pattern)
+         (match-variable pattern datum binding))
+        ((and (atom pattern) (atom datum))
+         (match-atoms pattern datum binding))
+        ((and (consp pattern) (consp datum))
+         (match-pieces pattern datum binding))
+        (t 'fail)))
+</pre>
+
+<p> パターン変数はシンボルなので atom で判定すると真になってしまいます。このため、最初に variablep で引数 pattern がパターン変数かチェックしています。pattern と datum がアトムであれば equal で比較します。この処理は match-atoms で行います。pattern と datum がリストであれば、match-pieces でチェックを行います。ここで match が再帰呼び出しされます。それ以外の場合は fail を返します。
+</p>
+<p> まず簡単な match-atoms から見ていきましょう。
+</p>
+
+<pre class="list">
+List 5 : アトム同士のマッチング
+
+(defun match-atoms (pattern datum binding)
+  (if (equal pattern datum) binding 'fail))
+</pre>
+
+<p> pattern と datum を述語 equal で比較します。等しい場合は連想リスト binding を返し、そうでなければ fail を返します。
+</p>
+<p> 次は、パターン変数とのマッチングを調べる match-variable です。
+</p>
+
+<pre class="list">
+List 6 : パターン変数とのマッチング
+
+(defun match-variable (var datum binding)
+  (let ((value (assoc var binding)))
+    (if value
+        (match (cdr value) datum binding)
+        (add-binding var datum binding))))
+</pre>
+
+<p> まず、束縛リスト binding からパターン変数 var を assoc で検索します。assoc は発見したらドット対を返すので、それを value にセットします。パターン変数が見つかれば、その値を使って再度マッチングを試みます。これは match を再帰呼び出しすればいいですね。値は (cdr value) で取り出すことができます。パターン変数が binding に無い場合は、そのパターン変数はまだ束縛されていません。そこで、add-binding を呼び出して binding にパターン変数と値を登録します。
+</p>
+<p> 次はリストのマッチングを行う match-pieces です。
+</p>
+
+<pre class="list">
+List 7 : リストのマッチング
+
+(defun match-pieces (pattern datum binding)
+  (let ((result (match (car pattern) (car datum) binding)))
+    (if (eq result 'fail)
+        'fail
+        (match (cdr pattern) (cdr datum) result))))
+</pre>
+
+<p> リストを car と cdr で分解してマッチングしていきます。まず pattern と datum の要素を car で取り出して、match を再帰呼び出しします。結果は result にセットします。マッチングに失敗したら fail を返します。マッチングに成功したら、残りのリストを match で調べます。このとき、束縛リストは binding ではなく result を使うことがポイントです。最初に呼び出した match により、新しいパターン変数が追加されているかもしれないからです。
+</p>
+<p> これでプログラムは完成です。実際にプログラムを動かして、いろいろ試してみてくださいね。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+;
+; match.l : 記号のパターンマッチング
+;
+;           Copyright (C) 2003 Makoto Hiroi
+;
+
+;
+; 要素はパターン変数か
+; 
+(defun variablep (pattern)
+  (and (symbolp pattern)
+       (char= #\? (char (string pattern) 0))))
+
+;
+; 変数束縛に追加する
+;
+(defun add-binding (var value binding)
+  (cons (cons var value) binding))
+
+;
+; パターンマッチング : datum に変数は無し
+;
+(defun match (pattern datum binding)
+  (cond ((variablep pattern)
+         (match-variable pattern datum binding))
+        ((and (atom pattern) (atom datum))
+         (match-atoms pattern datum binding))
+        ((and (consp pattern) (consp datum))
+         (match-pieces pattern datum binding))
+        (t 'fail)))
+
+;
+; 変数とのマッチング
+;
+(defun match-variable (var datum binding)
+  (let ((value (assoc var binding)))
+    (if value
+        ; 値を使ってもう一度チェック
+        (match (cdr value) datum binding)
+        ; 変数束縛に追加する
+        (add-binding var datum binding))))
+
+;
+; アトム同士のマッチング
+;
+(defun match-atoms (pattern datum binding)
+  (if (equal pattern datum) binding 'fail))
+
+;
+; リスト同士のマッチング
+;
+(defun match-pieces (pattern datum binding)
+  (let ((result (match (car pattern) (car datum) binding)))
+    (if (eq result 'fail)
+        'fail
+        (match (cdr pattern) (cdr datum) result))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2000-2003 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abclisp21.html">PrevPage</a> | <a href="../xyzzy_lisp.html">xyzzy Lisp</a> | <a href="abclisp23.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

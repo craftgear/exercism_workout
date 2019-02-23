@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881791</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell28.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell30.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">モナド変換子</h3>
+<p> 今回は「モナド変換子 (monad transformer) 」について説明します。バインド演算子 (&gt;&gt;=) や do 構文は、同じ文脈 (モナド) でなければ処理を連結することはできません。たとえば、I/O アクションで得られた値を Maybe の Just で包んで返すとか、Maybe の文脈で I/O アクションを行うことはできません。
+</p>
+<pre>
+Prelude&gt; do {a &lt;- getLine; Just a}
+=&gt; エラー
+
+Prelude&gt; Just 10 &gt;&gt;= \x -&gt; print x
+=&gt; エラー
+</pre>
+<p> このような場合、Maybe モナドと IO モナドの両方を扱うことができるモナドがあると便利です。Haskell の場合、「モナド変換子」を使うと二つのモナドを合成することができます。
+</p>
+
+<h4>●モナド変換子とは？</h4>
+<p> モナド変換子は、あるモナド m を受け取って新しいモナドを返す型構築子のことです。たとえば、Maybe a に対応するモナド変換子 MaybeT を考えてみましょう。データ型は MaybeT m a で、m が合成するモナドを表します。モナド変換子 MaybeT を使うと、Maybe モナドと IO モナドを合成した新しいモナド (MaybeT IO) を作ることができ、その文脈の中で I/O アクションを実行することができます。
+</p>
+<pre>
+*Main&gt; runMaybeT $ do {a &lt;- lift(getLine); return a}
+hello, world
+Just "hello, world"
+*Main&gt; runMaybeT $ return 10 &gt;&gt;= \x -&gt; lift(print x)
+10
+Just ()
+</pre>
+<p> Maybe のモナド変換子 MaebeT は Haskell の標準ライブラリに含まれていませんが、他の基本的なモナド (Either, List, Writer, Reader, State など) には対応するモナド変換子 (ErrorT, ListT, WriterT, ReaderT, StateT など) が標準ライブラリに用意されています。
+</p>
+
+<h4>●モナド変換子 MaybeT</h4>
+<p> それでは例題として、Maybe のモナド変換子 MaybeT を実際に作ってみましょう。なお、MaybeT のプログラムは <a href="haskell29.html#cite">参考 URL 3</a> を参考にさせていただきました。作者様に感謝いたします。
+</p>
+
+<p> モナド変換子 MaybeT は次のように定義することができます。
+</p>
+<pre class="item">
+newtype MaybeT m a = MaybeT {runMaybeT :: m (Maybe a)}
+</pre>
+<p> m はモナド変換子 MaybeT が受け取るモナドです。MaybeT m a は m の中に Maybe a を格納するデータ構造、つまりモナド m で Maybe を包み込む形式になります。簡単に言えば、モナドを入れ子にするわけです。
+</p>
+<p> 次は、MaybeT をモナドのインスタンスにします。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : MaybeT の定義
+
+instance Monad m =&gt; Monad (MaybeT m) where
+  return x = MaybeT $ return (Just x)
+  m &gt;&gt;= k  = MaybeT $ do a &lt;- runMaybeT m
+                         case a of
+                           Nothing -&gt; return Nothing
+                           Just v  -&gt; runMaybeT (k v)
+  fail _   = MaybeT $ return Nothing
+</pre>
+<p> MaybeT は Maybe をモナド m で包んだものです。Maybe の return x は Just x なので、MaybeT の return x は Just x をモナド m で包めばよいことになります。右辺の return はモナド m の return のことで、右辺の文脈はモナド m であることに注意してください。
+</p>
+<p> 次はバインド演算子を定義します。runMaybeT で MaybeT の値を取り出して、do 構文の &lt;- でモナド m の中身を取り出します。ここでも do 構文の文脈はモナド m であることに注意して下さい。
+</p>
+<p> 変数 a のデータ型は Maybe になるので、case で処理を振り分けます。Nothing であれば return Nothing を返します。Just v であれば値 v を関数 k に適用します。これで入れ子になったモナドから値を取り出して、それを関数 k に渡すことができます。k の返り値のデータ型は MaybeT なので、この値をそのまま返すと MaybeT が入れ子になり、型の不一致でエラーになります。そこで、runMaybeT で MaybeT から値を取り出しています。
+</p>
+<p> fail は引数を無視して Nothing をモナド m に包んで返すだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; runMaybeT $ (return 1 :: MaybeT [] Int)
+[Just 1]
+*Main&gt; runMaybeT $ (return 1 :: MaybeT [] Int) &gt;&gt;= \x -&gt; return (x * 2)
+[Just 2]
+*Main&gt; runMaybeT $ (fail "" :: MaybeT [] Int)
+[Nothing]
+*Main&gt; runMaybeT $ (fail "" :: MaybeT [] Int) &gt;&gt;= \x -&gt; return (x * 2)
+[Nothing]
+
+*Main&gt; runMaybeT $ (return 1 :: MaybeT IO Int)
+Just 1
+*Main&gt; runMaybeT $ (return 1 :: MaybeT IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+Just 2
+*Main&gt; runMaybeT $ (fail "" :: MaybeT IO Int)
+Nothing
+*Main&gt; runMaybeT $ (fail "" :: MaybeT IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+Nothing
+</pre>
+<p> MaybeT [ ] Int はリストの中に Maybe Int が格納されます。MaybeT IO Int は IO モナドの中に Maybe Int が格納されます。どちらの場合も、バインド演算子 (&gt;&gt;=) は Maybe の中のデータを取り出して、それを次の関数に渡します。Maybe が Nothing であれば、それ以降の処理も Nothing になります。
+</p>
+
+<h4>●Functor の定義</h4>
+<p> MaybeT は Functor のインスタンスにすることもできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : Functor の定義
+
+instance Monad m =&gt; Functor (MaybeT m) where
+  fmap f x = MaybeT $ do a &lt;- runMaybeT x
+                         case a of
+                           Nothing -&gt; return Nothing
+                           Just y  -&gt; return (Just (f y))
+</pre>
+<p> fmap は MaybeT が格納している値に関数 f を適用します。最初に、runMaybeT で x から値を取り出して変数 a にセットし、case で処理を振り分けます。あとは、Maybe の Functor と同じ考え方です。a が Noting であれば、Nothing をモナド m に包んで返します。Just y であれば、値 y に関数 f を適用して、その返り値を Just とモナド m に包んで返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runMaybeT $ fmap (*2) (return 1 :: MaybeT [] Int)
+[Just 2]
+*Main&gt; runMaybeT $ fmap (*2) (return 1 :: MaybeT IO Int)
+Just 2
+*Main&gt; runMaybeT $ fmap (*2) (return 1 :: MaybeT Maybe Int)
+Just (Just 2)
+*Main&gt; runMaybeT $ fmap (*2) (fail "" :: MaybeT [] Int)
+[Nothing]
+*Main&gt; runMaybeT $ fmap (*2) (fail "" :: MaybeT IO Int)
+Nothing
+*Main&gt; runMaybeT $ fmap (*2) (fail "" :: MaybeT Maybe Int)
+Just Nothing
+</pre>
+<p> fmap は MaybeT の値に関数 f を適用して、その結果を MaybeT に格納して返していることがわかります。
+</p>
+
+<h4>●lift 関数</h4>
+<p> MaybeT を使うと Maybe とモナド m を合成することができますが、生成されるモナドは MaybeT m という型になるので、モナド m のモナド関数を MaybeT m の文脈でそのまま使うことはできません。次の例を見てください。
+</p>
+<pre>
+*Main&gt; (return 1 :: MaybeT IO Int) &gt;&gt;= \x -&gt; print x
+=&gt; エラー
+</pre>
+<p> print x の返り値の型は IO () です。バインド演算子の文脈は MaybeT IO なので、型が不一致になるためエラーとなります。この場合、print を MaybeT IO に持ち上げる処理が必要になります。この処理を関数 lift で行います。
+</p>
+<p> lift はモジュール Control.Monad.Trans のクラス MonadTrans に定義されています。
+</p>
+<pre class="list">
+リスト : MonadTrans クラスの定義
+
+class MonadTrans t where
+  lift :: (Monad m) =&gt; m a -&gt; t m a
+</pre>
+<p> t はモナド変換子、m はモナドです。lift は m a を受け取って、t m a を返します。モナド m の処理を t m という合成したモナドに持ち上げていることがわかります。
+</p>
+<p> それでは、MaybeT の lift 関数を作りましょう。
+</p>
+<pre class="list">
+リスト : MaybeT の lift 関数
+
+instance MonadTrans MaybeT where
+  lift m = MaybeT $ m &gt;&gt;= (\x -&gt; return (Just x))
+</pre>
+<p> lift の引数 m はモナドです。バインド演算子でモナドから値を取り出し、その値を Just と return で包めばいいわけです。ラムダ式の代わりに関数合成を使って m &gt;&gt;= return . Just としてもかまいません。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runMaybeT $ (return 1 :: MaybeT IO Int) &gt;&gt;= lift . print
+1
+Just ()
+*Main&gt; runMaybeT $ (return 1 :: MaybeT IO Int) &gt;&gt;= \x -&gt; do {lift(print x); return (x * 2)}
+1
+Just 2
+</pre>
+<p> 最初の例は print の返り値が IO () なので、ユニット () が IO と Just に格納されて返されます。次の例は do 構文の中で x の値を print で表示しています。このように、モナド変換子を使って IO モナドを合成すると、計算途中の変数値を表示することができます。
+</p>
+
+<p> なお、I/O アクションを持ち上げる専用の関数 liftIO がモジュール Control.Monad.IO.Class に用意されています。
+</p>
+<pre class="list">
+リスト : liftIO の定義
+
+class (Monad m) =&gt; MonadIO m where
+  liftIO :: IO a -&gt; m a
+
+instance MonadIO IO where
+  liftIO = id
+
+instance MonadIO m =&gt; MonadIO (MaybeT m) where
+  liftIO = lift . liftIO
+</pre>
+<p> M.Hiroi は勉強不足でよくわかりませんが、IO モナドに限定することで、コンパイルする時に最適化が行われる (期待できる) のかもしれません。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runMaybeT $ (return 1 :: MaybeT IO Int) &gt;&gt;= liftIO . print
+1
+Just ()
+*Main&gt; runMaybeT $ (return 1 :: MaybeT IO Int) &gt;&gt;= \x -&gt; do {liftIO(print x); return (x * 2)}
+1
+Just 2
+</pre>
+<p> lift のかわりに liftIO を使っただけなので、結果は lift と同じになります。
+</p>
+
+<p> なお、<a href="haskell29.html#cite">参考 URL 2</a> によると、<cite>『liftメソッドの定義は、モナド変換子則（monad transformer law）と呼ばれる以下の二つの法則を満たすように定義される必要があります。』</cite> とのことです。
+</p>
+<ol>
+  <li>lift . return == return
+  <li>lift (m &gt;&gt;= k) == lift m &gt;&gt;= (lift . k)
+</ol>
+
+<h4>●MonadPlus の定義</h4>
+<p> モナド変換子は MonadPlus のインスタンスに設定しておくと便利なことがあります。この場合、二通りの方法が考えられます。ひとつはモナド変換子 t の元になるモナドの MonadPlus に合わせる方法、もう一つはモナド変換子 t の引数に与えられるモナド m の MonadPlus に合わせる方法です。MaybeT m でいえば、Maybe の MonadPlus に従うか、モナド m の MonadPlus に従うかということです。
+</p>
+<p> 一般に、モナドは失敗系 (Maybe, Either, List) と状態系 (Writer, Reader, State, IO) の二つに大別することができます。Haskell の標準ライブラリにあるモナド変換子のソースをみると、失敗系のモナド変換子の MonadPlus は元になるモナドに、状態系の場合は引数として与えられるモナドにあわせているようです。
+</p>
+<p> MaybeT は失敗系のモナド変換子なので、MoandPlus のプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : MonadPlus の定義
+
+instance Monad m =&gt; MonadPlus (MaybeT m) where
+  mzero       = MaybeT $ return Nothing
+  x `mplus` y = MaybeT $ do a &lt;- runMaybeT x
+                            case a of
+                              Nothing -&gt; runMaybeT y
+                              Just _  -&gt; return a
+</pre>
+<p> 動作は Maybe の MonadPlus とほぼ同じです。mzero は Nothing をモナド m に包んで返します。mplus も Maybe とほぼ同じで、左辺が Just であればその値を返し、Nothing であれば右辺の値を返します。これで mplus は Maybe のそれと同様の動作になります。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runMaybeT $ (return 1 :: MaybeT [] Int) `mplus` return 2
+[Just 1]
+*Main&gt; runMaybeT $ (mzero :: MaybeT [] Int) `mplus` return 2
+[Just 2]
+*Main&gt; runMaybeT $ (mzero :: MaybeT [] Int) `mplus` mzero
+[Nothing]
+</pre>
+
+<h4>●MaybeT の簡単な例題</h4>
+<p> それでは、MaybeT を使った簡単なプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : MaybeT の例題
+
+type MaybeIO a = MaybeT IO a
+
+getWord :: MaybeIO String
+getWord = do
+  lift(putStr "Input&gt; ")
+  a &lt;- lift (getLine)
+  when (a == "") (fail "")
+  return a
+
+test01 :: MaybeIO String
+test01 = do
+  a &lt;- getWord
+  b &lt;- getWord
+  return (a ++ b)
+
+test01' :: IO ()
+test01' = do
+  a &lt;- runMaybeT test01
+  case a of
+    Nothing -&gt; return ()
+    Just s  -&gt; do {putStrLn s; test01'}
+
+test02 :: MaybeIO String
+test02 = getWord `mplus` getWord `mplus` getWord
+</pre>
+<p> 最初に type で MaybeT IO a に MaybeIO a という別名をつけます。関数 getWord は getLine で標準入力から 1 行読み込み、それを MaybeIO に格納して返します。ただし、空文字列の場合は fail を呼び出して失敗します。
+</p>
+<p> test01 は getWord で標準入力から 2 行読み込み、それらを連結した文字列を返します。test01' は test01 を繰り返し呼び出します。test01 が失敗したら繰り返しを終了します。runMaybeT test01 でモナドから値を取り出します。このデータ型は Maybe なので、case で場合分けします。Nothing であれば return () を返し、そうでなければ文字列 s を表示して test01' を再帰呼び出しするだけです。
+</p>
+<p> test02 は mplus のテストです。getWord を 3 回呼び出しますが、そのうちの 1 回でも入力があれば、その値を返します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; runMaybeT getWord
+Input&gt; hello, world
+Just "hello, world"
+*Main&gt; runMaybeT test01
+Input&gt; hello,
+Input&gt; world
+Just "hello, world"
+*Main&gt; runMaybeT getWord
+Input&gt;
+Nothing
+*Main&gt; runMaybeT test01
+Input&gt; hello,
+Input&gt;
+Nothing
+*Main&gt; test01'
+Input&gt; hello,
+Input&gt; world
+hello, world
+Input&gt; foo bar 
+Input&gt; baz
+foo bar baz
+Input&gt;
+*Main&gt;
+
+*Main&gt; runMaybeT test02
+Input&gt; hello, world
+Just "hello, world"
+*Main&gt; runMaybeT test02
+Input&gt; 
+Input&gt; hello, world
+Just "hello, world"
+*Main&gt; runMaybeT test02
+Input&gt; 
+Input&gt; 
+Input&gt; hello, world
+Just "hello, world"
+*Main&gt; runMaybeT test02
+Input&gt; 
+Input&gt; 
+Input&gt; 
+Nothing
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●ErrorT の使い方</h4>
+<p> 次は Either モナドのモナド変換子 ErrorT を説明します。ErrorT はモジュール Control.Monad.Error に定義されています。データ型は ErrorT e m a で、e は Either の Left に格納されるデータ型を表していて、クラス Error のインスタンスでなければいけません。String は Error のインスタンスなので、String を指定すると簡単です。m がモナド、a は Either の Right に格納されるデータ型を表します。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+Prelude&gt; :m Control.Monad.Error
+Prelude Control.Monad.Error&gt; runErrorT (return 1 :: ErrorT String [] Int)
+[Right 1]
+Prelude Control.Monad.Error&gt; runErrorT $ (return 1 :: ErrorT String [] Int) &gt;&gt;= \x -&gt; return (x * 2)
+[Right 2]
+
+Prelude Control.Monad.Error&gt; runErrorT (return 1 :: ErrorT String IO Int)
+Right 1
+Prelude Control.Monad.Error&gt; runErrorT $ (return 1 :: ErrorT String IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+Right 2
+
+Prelude Control.Monad.Error&gt; runErrorT $ (fail "oops" :: ErrorT String IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+Left "oops"
+Prelude Control.Monad.Error&gt; runErrorT $ (fail "oops" :: ErrorT String [] Int) &gt;&gt;= \x -&gt; return (x * 2)
+[Left "oops"]
+
+Prelude Control.Monad.Error&gt; runErrorT $ (return 1 :: ErrorT String Maybe Int) `mplus` (return 2)
+Just (Right 1)
+Prelude Control.Monad.Error&gt; runErrorT $ (mzero :: ErrorT String Maybe Int) `mplus` (return 2)
+Just (Right 2)
+Prelude Control.Monad.Error&gt; runErrorT $ (mzero :: ErrorT String Maybe Int) `mplus` mzero
+Just (Left "")
+
+Prelude Control.Monad.Error&gt; runErrorT $ (return 1 :: ErrorT String [] Int) `mplus` (return 2)
+[Right 1]
+Prelude Control.Monad.Error&gt; runErrorT $ (mzero :: ErrorT String [] Int) `mplus` (return 2)
+[Right 2]
+Prelude Control.Monad.Error&gt; runErrorT $ (mzero :: ErrorT String [] Int) `mplus` mzero
+[Left ""]
+</pre>
+<p> MaybeT と違って ErrorT はエラー情報を伝えることができます。
+</p>
+<h4>●自分で ErrorT を作る</h4>
+<p> それでは Haskell のお勉強ということで、あえてモナド変換子 ErrorT を自作してみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ErrorT の定義
+
+newtype ErrorT e m a = ErrorT {runErrorT :: m (Either e a)} 
+
+instance (Error e, Monad m) =&gt; Monad (ErrorT e m) where
+  return x = ErrorT $ return (Right x)
+  m &gt;&gt;= k  = ErrorT $ do x &lt;- runErrorT m
+                         case x of
+                           Left y  -&gt; return (Left y)
+                           Right y -&gt; runErrorT (k y)
+  fail s   = ErrorT $ return (Left (strMsg s))
+</pre>
+<p> Error は Either の Left に格納するデータ型を表します。String は Error のインスタンスに設定されているので、ErrorT の e には String を指定すると簡単です。String の場合、noMsg は空文字列、strMsg は恒等関数 id になります。
+</p>
+
+<p> return x は x を Right に格納し、それを return でモナドに包んで返します。バインド演算子は、最初に runErrorT m でモナド m の値を取り出して x にセットします。x が Left y の場合は、それを return でモナドに包んで返します。Right の場合は値 y を取り出て関数 k に渡します。k の返り値は ErrorT なので、runErrorT で値を取り出して返します。fail は strMsg で文字列 s を Error 型に変換して Left に格納してモナドに包んで返します。
+</p>
+<p> それでは簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runErrorT $ (return 1 :: ErrorT String [] Int)
+[Right 1]
+*Main&gt; runErrorT $ (return 1 :: ErrorT String [] Int) &gt;&gt;= \x -&gt; return (x * 2)
+[Right 2]
+*Main&gt; runErrorT $ (return 1 :: ErrorT String IO Int)
+Right 1
+*Main&gt; runErrorT $ (return 1 :: ErrorT String IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+Right 2
+*Main&gt; runErrorT $ (fail "oops" :: ErrorT String [] Int) &gt;&gt;= \x -&gt; return (x * 2)
+[Left "oops"]
+*Main&gt; runErrorT $ (fail "oops" :: ErrorT String IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+Left "oops"
+</pre>
+
+<h4>●ErrorT の Functor</h4>
+<p> ErrorT の Functor は MaybeT のそれとほとんど同じです。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ErrorT の Functor
+
+instance (Error e, Monad m) =&gt; Functor (ErrorT e m) where
+  fmap f x = ErrorT $ do a &lt;- runErrorT x
+                         case a of
+                           Left y  -&gt; return (Left y)
+                           Right y -&gt; return (Right (f y))
+</pre>
+<p> fmap は ErrorT が格納している値に関数 f を適用します。最初に、runErrorT で x から値を取り出して変数 a にセットします。a のデータ型は Either になるので、case で処理を振り分けます。あとは、Either の Functor と同じ考え方です。a が Left y であれば、Left y をモナド m に包んで返します。Right y であれば、値 y に関数 f を適用して、その返り値を Right とモナド m に包んで返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runErrorT $ fmap (*2) (return 1 :: ErrorT String [] Int)
+[Right 2]
+*Main&gt; runErrorT $ fmap (*2) (return 1 :: ErrorT String IO Int)
+Right 2
+*Main&gt; runErrorT $ fmap (*2) (fail "oops" :: ErrorT String [] Int)
+[Left "oops"]
+*Main&gt; runErrorT $ fmap (*2) (fail "oops" :: ErrorT String IO Int)
+Left "oops"
+</pre>
+<h4>●ErrorT の lift 関数と MonadPlus</h4>
+<p> ErrorT の lift と MonadPlus も MaybeT のそれとほとんど同じです。
+</p>
+<pre class="list">
+リスト : ErrorT の lift と MonadPlus
+
+instance MonadTrans (ErrorT e) where
+  lift m = ErrorT $ m &gt;&gt;= (\x -&gt; return (Right x))
+
+instance (Error e, Monad m) =&gt; MonadPlus (ErrorT e m) where
+  mzero       = ErrorT $ return (Left noMsg)
+  m `mplus` k = ErrorT $ do a &lt;- runErrorT m
+                            case a of
+                              Left  _ -&gt; runErrorT k
+                              Right _ -&gt; return a
+</pre>
+<p> lift の引数 m はモナドです。バインド演算子でモナドから値を取り出し、その値を Right と return で包めばいいわけです。MonadPlus の動作は Maybe の MonadPlus とほぼ同じです。mzero は Left noMsg をモナド m に包んで返します。mplus は、左辺が Right であればその値を返し、Left であれば右辺の値を返します。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runErrorT $ (return 1 :: ErrorT String IO Int) &gt;&gt;= \x -&gt; do {lift(print x); return (x * 2)}
+1
+Right 2
+*Main&gt; runErrorT $ (return 1 :: ErrorT String IO Int) &gt;&gt;= \x -&gt; do {liftIO(print x); return (x * 2)}
+1
+Right 2
+
+*Main&gt; runErrorT $ (return 1 :: ErrorT String IO Int) `mplus` (return 2)
+Right 1
+*Main&gt; runErrorT $ (mzero :: ErrorT String IO Int) `mplus` (return 2)
+Right 2
+*Main&gt; runErrorT $ (mzero :: ErrorT String IO Int) `mplus` mzero
+Left ""
+</pre>
+<h4>●ErrorT の簡単な例題</h4>
+<p> それでは ErrorT の簡単な例題として、MaybeT の例題を ErrorT で書き直してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ErrorT の簡単な例題
+
+import Control.Monad.Error
+
+type ErrorIO a = ErrorT String IO a
+
+getWord' :: ErrorIO String
+getWord' = do
+  lift(putStr "Input&gt; ")
+  a &lt;- lift (getLine)
+  when (a == "") (fail "empty string")
+  return a
+
+test03 :: ErrorIO String
+test03 = do
+  a &lt;- getWord'
+  b &lt;- getWord'
+  return (a ++ b)
+
+test03' :: IO ()
+test03' = do
+  a &lt;- runErrorT test03
+  case a of
+    Left s  -&gt; putStrLn s
+    Right s -&gt; do {putStrLn s; test03'}
+
+test04 :: ErrorIO String
+test04 = getWord' `mplus` getWord' `mplus` getWord'
+</pre>
+<p> 最初に type で ErrorT String IO a に ErrorIO a という別名をつけます。関数 getWord' は getLine で標準入力から 1 行読み込み、それを ErrorIO に格納して返します。ただし、空文字列の場合は fail を呼び出して失敗します。このとき、文字列 "empty string" を渡します。
+</p>
+
+<p> test03 は getWord' で標準入力から 2 行読み込み、それらを連結した文字列を返します。test03' は test03 を繰り返し呼び出します。test03 が失敗したら繰り返しを終了します。runErrorT test03 でモナドから値を取り出し、case で場合分けします。Left s であれば文字列 s を putStrLn で表示します。そうでなければ Right の文字列 s を表示して test03' を再帰呼び出しするだけです。
+</p>
+<p> test04 は mplus のテストです。getWord' を 3 回呼び出しますが、そのうちの 1 回でも入力があれば、その値を返します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; runErrorT getWord'
+Input&gt; hello, world
+Right "hello, world"
+*Main&gt; runErrorT getWord'
+Input&gt;
+Left "empty string"
+*Main&gt; runErrorT test03
+Input&gt; hello,
+Input&gt; world
+Right "hello, world"
+*Main&gt; runErrorT test03
+Input&gt; hello,
+Input&gt;
+Left "empty string"
+*Main&gt; runErrorT test03
+Input&gt;
+Left "empty string"
+*Main&gt; runErrorT test03
+Input&gt;
+Left "empty string"
+
+*Main&gt; test03'
+Input&gt; hello,
+Input&gt; world
+hello, world
+Input&gt; foo bar
+Input&gt; baz
+foo bar baz
+Input&gt;
+empty string
+
+*Main&gt; runErrorT test04
+Input&gt; hello, wordl
+Right "hello, wordl"
+*Main&gt; runErrorT test04
+Input&gt;
+Input&gt; hello, world
+Right "hello, world"
+*Main&gt; runErrorT test04
+Input&gt;
+Input&gt;
+Input&gt; hello, world
+Right "hello, world"
+*Main&gt; runErrorT test04
+Input&gt;
+Input&gt;
+Input&gt;
+Left "empty string"
+</pre>
+
+<h4>●ListT の使い方</h4>
+<p> 次はリストのモナド変換子 ListT を説明します。ListT はモジュール Control.Monad.List に定義されています。データ型は ListT m a で、m がモナドを、a がリストに格納されるデータ型を表します。
+</p>
+<p> 簡単な例を示します。
+</p>
+<pre>
+Prelude&gt; :m Control.Monad.List
+Prelude Control.Monad.List&gt; runListT (return 1 :: ListT Maybe Int)
+Just [1]
+Prelude Control.Monad.List&gt; runListT $ (return 1 :: ListT Maybe Int) &gt;&gt;= \x -&gt; return (x * 2)
+Just [2]
+
+Prelude Control.Monad.List&gt; runListT (return 1 :: ListT IO Int)
+[1]
+Prelude Control.Monad.List&gt; runListT $ (return 1 :: ListT IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+[2]
+
+Prelude Control.Monad.List&gt; runListT $ (fail "" :: ListT Maybe Int) &gt;&gt;= \x -&gt; return (x * 2)
+Just []
+Prelude Control.Monad.List&gt; runListT $ (fail "" :: ListT [] Int) &gt;&gt;= \x -&gt; return (x * 2)
+[[]]
+
+Prelude Control.Monad.List&gt; runListT $ (return 1 :: ListT [] Int) `mplus` (return 2)
+[[1,2]]
+Prelude Control.Monad.List&gt; runListT $ (mzero :: ListT [] Int) `mplus` (return 2)
+[[2]]
+Prelude Control.Monad.List&gt; runListT $ (mzero :: ListT [] Int) `mplus` mzero
+[[]]
+
+Prelude Control.Monad.List&gt; runListT $ (return 1 :: ListT Maybe Int) `mplus` (return 2)
+Just [1,2]
+Prelude Control.Monad.List&gt; runListT $ (mzero :: ListT Maybe Int) `mplus` (return 2)
+Just [2]
+Prelude Control.Monad.List&gt; runListT $ (mzero :: ListT Maybe Int) `mplus` mzero
+Just []
+</pre>
+
+<h4>●自分で ListT を作る</h4>
+<p> それでは Haskell のお勉強ということで、あえて ListT を自分で作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ListT の定義
+
+newtype ListT m a = ListT {runListT :: m [a]}
+
+instance Monad m =&gt; Monad (ListT m) where
+  return x = ListT $ return [x]
+  m &gt;&gt;= k  = ListT $ do xs &lt;- runListT m
+                        ys &lt;- mapM (runListT . k) xs
+                        return (concat ys)
+  fail _   = ListT $ return []
+</pre>
+<p> return x は x をリストに格納して、それを return でモナドに包んで返します。バインド演算子は、最初にモナド m から値 xs を取り出します。xs はリストになることに注意してください。そして、リストの各要素に対して関数 k を適用します。このとき、ListT から値を取り出すため、runList と k を関数合成していることに注意してください。runListT . k の返り値はモナドになるので、mapM を使って m [...] に変換します。さらに、&lt;- でモナドからリストを取り出して ys にセットします。あとは、concat でリストを平坦化してモナドに包んで返します。fail は引数を無視して、空リストをモナドに包んで返すだけです。
+</p>
+
+<p> 簡単な実行例を示します。
+</p>
+
+<pre>
+*Main&gt; runListT $ (return 1 :: ListT IO Int)
+[1]
+*Main&gt; runListT $ (return 1 :: ListT IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+[2]
+*Main&gt; runListT $ (fail "" :: ListT IO Int) &gt;&gt;= \x -&gt; return (x * 2)
+[]
+*Main&gt; runListT $ (return 1 :: ListT Maybe Int)
+Just [1]
+*Main&gt; runListT $ (return 1 :: ListT Maybe Int) &gt;&gt;= \x -&gt; return (x * 2)
+Just [2]
+*Main&gt; runListT $ (fail "" :: ListT Maybe Int) &gt;&gt;= \x -&gt; return (x * 2)
+Just []
+</pre>
+
+<h4>●ListT の Functor</h4>
+<p> ListT の Functor は簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 
+
+instance Monad m =&gt; Functor (ListT m) where
+  fmap f x = ListT $ do xs &lt;- runListT x
+                        return (map f xs)
+</pre>
+<p> xs &lt;- runListT x でモナドからリストを取り出し、map f xs の返り値をモナドに包んで返すだけです。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runListT $ fmap (*2) (ListT (Just [1,2,3,4,5]))
+Just [2,4,6,8,10]
+*Main&gt; runListT $ fmap (*2) (ListT (Just []))
+Just []
+</pre>
+<h4>●ListT の lift 関数と MonadPlus</h4>
+<p> ListT の lift と MonadPlus も簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ListT の lift 関数と MonadPlus
+
+instance MonadTrans ListT where
+  lift m = ListT $ m &gt;&gt;= (\x -&gt; return [x])
+
+instance Monad m =&gt; MonadPlus (ListT m) where
+  mzero       = ListT $ return []
+  x `mplus` y = ListT $ do a &lt;- runListT x
+                           b &lt;- runListT y
+                           return (a ++ b)
+</pre>
+<p> lift の引数 m はモナドです。バインド演算子でモナドから値を取り出し、その値を リストと return で包めばいいわけです。MonadPlus の動作はリストの MonadPlus とほぼ同じです。mzero は空リストをモナド m に包んで返します。mplus は、左辺と右辺のリストを取り出し、それを演算子 ++ で結合してモナドに包んで返します。これでリストモナドの MonadPlus と同様の動作になります。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runListT $ (return 1 :: ListT IO Int) &gt;&gt;= \x -&gt; do {lift(print x); return (x * 2)}
+1
+[2]
+
+*Main&gt; runListT $ (return 1 :: ListT IO Int) `mplus` (return 2)
+[1,2]
+*Main&gt; runListT $ (return 1 :: ListT IO Int) `mplus` mzero
+[1]
+*Main&gt; runListT $ (mzero :: ListT IO Int) `mplus` mzero
+[]
+
+*Main&gt; runListT $ (return 1 :: ListT Maybe Int) `mplus` (return 2)
+Just [1,2]
+*Main&gt; runListT $ (return 1 :: ListT Maybe Int) `mplus` mzero
+Just [1]
+*Main&gt; runListT $ (mzero :: ListT Maybe Int) `mplus` mzero
+Just []
+</pre>
+
+<h4>●ListT の簡単な例題</h4>
+<p> それでは ListT の簡単な例題として、MaybeT の例題を ListT で書き直してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ListT の簡単な例題
+
+import Control.Monad.List
+
+type ListIO a = ListT IO a
+
+getWord'' :: ListIO String
+getWord'' = do
+  lift(putStr "Input&gt; ")
+  a &lt;- lift (getLine)
+  when (a == "") (fail "")
+  return a
+
+test05 :: ListIO String
+test05 = do
+  a &lt;- getWord''
+  b &lt;- getWord''
+  return (a ++ b)
+
+test05' :: IO ()
+test05' = do
+  a &lt;- runListT test05
+  case a of
+    []  -&gt; return ()
+    [s] -&gt; do {putStrLn s; test05'}
+
+
+test06 :: ListIO String
+test06 = getWord'' `mplus` getWord'' `mplus` getWord''
+</pre>
+<p> 最初に type で ListT IO a に ListIO a という別名をつけます。関数 getWord'' は getLine で標準入力から 1 行読み込み、それを ListIO に格納して返します。ただし、空文字列の場合は fail を呼び出して失敗します。
+</p>
+<p> test05 は getWord'' で標準入力から 2 行読み込み、それらを連結した文字列を返します。test05' は test05 を繰り返し呼び出します。test05 が失敗したら繰り返しを終了します。runListT test05 でモナドから値を取り出して、case で場合分けします。空リスト [ ]  であれば return () を返し、そうでなければ文字列 s を表示して test05' を再帰呼び出しするだけです。
+</p>
+<p> test06 は mplus のテストです。getWord'' を 3 回呼び出しますが、3 回の入力をリストにまとめて返します。失敗した場合、返り値は空リストなので、それはリストに含まれません。
+</p>
+<pre>
+Input&gt; hello, world
+["hello, world"]
+*Main&gt; runListT getWord''
+Input&gt;
+[]
+*Main&gt; runListT test05
+Input&gt; hello, 
+Input&gt; world
+["hello, world"]
+*Main&gt; runListT test05
+Input&gt;
+[]
+
+*Main&gt; test05'
+Input&gt; hello,
+Input&gt; world
+hello, world
+Input&gt; foo bar
+Input&gt; baz
+foo bar baz
+Input&gt;
+*Main&gt; 
+
+*Main&gt; runListT test06
+Input&gt; oops
+Input&gt; oops
+Input&gt; oops
+["oops","oops","oops"]
+*Main&gt; runListT test06
+Input&gt; oops
+Input&gt;
+Input&gt; oops
+["oops","oops"]
+*Main&gt; runListT test06
+Input&gt;
+Input&gt;
+Input&gt;
+[]
+</pre>
+
+<h4>●Identity モナド</h4>
+<p> モジュール Control.Monad.Identity に定義されている Identity モナド (恒等モナド) を使うと、モナド変換子から元のモナドを生成することができます。Identity モナド は次のように定義されています。
+</p>
+<pre class="list">
+リスト : 恒等モナド
+
+newtype Identity a = Identity {runIdentity :: a}
+
+instance Monad Identity where
+  return x = Identity x
+  m &gt;&gt;= k  = k (runIdentity m)
+</pre>
+<p> return x は x をデータ構築子 Identity に格納するだけ、バインド演算子は runIdentity m でデータを取り出して、その値に関数 k を適用するだけです。
+</p>
+
+<p> 簡単な例を示しましょう。Maybe と同じ動作をする Maybe' を定義します。
+</p>
+<pre class="list">
+リスト : Maybe' の定義
+
+type Maybe' a = MaybeT Identity a
+runMaybe' = runIdentity . runMaybeT
+</pre>
+<p> type で MaybeT Identity a の別名 Maybe' を定義します。runMaybe' は MaybeT の中にある Identity の値を取り出すので、関数合成して runIdentity . runMaybeT となります。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; runMaybe' $ fmap (*2) (return 1)
+Just 2
+*Main&gt; runMaybe' $ return 1
+Just 1
+*Main&gt; runMaybe' $ return 1 &gt;&gt;= \x -&gt; return (x * 2)
+Just 2
+*Main&gt; runMaybe' $ fail "" &gt;&gt;= \x -&gt; return (x * 2)
+Nothing
+*Main&gt; runMaybe' $ fmap (*2) (return 10)
+Just 20
+*Main&gt; runMaybe' $ fmap (*2) (fail "")
+Nothing
+*Main> runMaybe' $ return 1 `mplus` return 2
+Just 1
+*Main> runMaybe' $ mzero `mplus` return 2
+Just 2
+*Main> runMaybe' $ mzero `mplus` mzero
+Nothing
+</pre>
+<p> Maybe' は Maybe と同じ動作になっていることがわかると思います。
+</p>
+<p> 今回はここまでです。次回は状態系のモナド変換子 WriteT, ReaderT, StateT について説明します。
+</p>
+<h4 id="cite">●参考 URL</h4>
+<ol>
+  <li><a href="http://www.sampou.org/">WWW.SAMPOU.ORG</a>, <a href="http://www.sampou.org/haskell/a-a-monads/html/">モナドのすべて</a>
+  <li><a href="http://itpro.nikkeibp.co.jp/article/COLUMN/20060915/248215/?ST=ittrend">本物のプログラムは Haskell を使う</a>, <a href="http://itpro.nikkeibp.co.jp/article/COLUMN/20071204/288630/?ST=ittrend">第 15 回 Haskellでのデバッグのコツをつかむ</a>
+  <li><a href="http://hackage.haskell.org/packages/archive/MaybeT/0.1.2/doc/html/Control-Monad-Maybe.html">Control.Monad.Maybe</a>
+</OL>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell28.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell30.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

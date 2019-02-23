@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Ruby プログラミング入門</title>
+  <meta name="description" content="Ruby,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881801</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>お気楽 Ruby プログラミング入門</h1>
+<h2>番外編 継続 (continuation)</h2>
+<div class="small">
+[ <a href="abcruby15.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby17.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> <a href="ruby.html#ruby_abc">お気楽 Ruby プログラミング入門</a> の番外編です。前回は「継続渡しスタイル」について説明しました。今回は Ruby の「継続 (continuation) 」について説明します。
+</p>
+<p> なお、本ドキュメントは拙作のページ <a href="../func/abcscm20.html">Scheme 入門: 継続と継続渡しスタイル</a> を Ruby 用に加筆・修正したものです。内容は重複していますが、ご了承くださいませ。
+</p>
+
+<h4>●Ruby の継続</h4>
+<p> Ruby は callcc を使って「継続」を取り出すことができます。
+</p>
+<pre class="item">
+callcc {|cont| ... }
+callcc do |cont| ... end
+</pre>
+<p> callcc はブロック付きメソッドです。callcc に渡されるブロックは引数がひとつで、その引数 cont に callcc が取り出した継続が渡されます。callcc はブロックを実行し、その結果が callcc の返り値になります。
+</p>
+<p> Ruby の場合、継続はクラス Continuation のインスタンスです。Continuation のメソッド call で継続を実行すると、今までの処理を破棄して、callcc で取り出された残りの計算 (継続) を実行します。このとき、call に渡した引数が callcc の返り値になります。メソッド call は任意の個数の引数を受け取ることができます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+irb&gt; require 'continuation'
+=&gt; true
+irb&gt; callcc {|cont| cont}
+=&gt; #&lt;Continuation: ... &gt;
+irb&gt; 1 + 2 * callcc {|cont| 3}
+=&gt; 7
+irb&gt; 1 + 2 * callcc {|cont| cont.call(4); 3}
+=&gt; 9
+</pre>
+<p> callcc のブロック引数 cont に継続が渡されます。最初の例では cont をそのまま返しているので、callcc の返り値は取り出された継続になります。Ruby の場合、継続はクラス Continuation のインスタンスであることがわかります。
+</p>
+
+<p> 次の例を見てください。callcc によって取り出される継続 cont は、callcc の返り値を 2 倍して、その結果に 1 を加えるという処理になります。callcc の返り値を X とすると、継続は 1 + 2 * X という式で表すことができます。ブロックでは継続を実行せずに 3 をそのまま返しているので、1 + 2 * X をそのまま計算して値は 7 になります。
+</p>
+
+<p> 最後の例では、ブロックの中で cont.call(4) を実行しています。継続を評価しているので、現在の処理を破棄して、取り出した継続 1 + 2 * X を実行します。したがって、ブロックで call.cont(4) の後ろにある 3 を返す処理は実行されません。X の値は cont.call の引数 4 になるので、1 + 2 * 4 を評価して値は 9 になります。
+</p>
+
+<p> 継続を変数に保存しておいて、あとから実行することもできます。次の例を見てくください。
+</p>
+<pre>
+irb&gt; $cont = nil
+=&gt; nil
+irb&gt; 1 + 2 * callcc {|cont| $cont = cont; 3}
+=&gt; 7
+irb&gt; $cont.call(10)
+=&gt; 21
+irb&gt; $cont.call(100)
+=&gt; 201
+</pre>
+<p> ブロックの中で取り出した継続 cont をグローバル変数 $cont にセットします。保存された継続 $cont で行う処理は 1 + 2 * X です。$cont.call(10) は 1 + 2 * 10 を計算して値は 21 になります。同様に、$cont.call(100) は 1 + 2 * 100 を計算して値は 201 になります。
+</p>
+
+<h4>●大域脱出</h4>
+<p> 継続を使うと、評価中の関数からほかの関数へ制御を移す「大域脱出 (global exit) 」を行うことができます。また、繰り返しを中断したり、再帰呼び出しの深いところからいっきに脱出するときにも継続を使うことができます。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : 大域脱出
+
+def bar1(cont)
+  print "call bar1\n"
+end
+
+def bar2(cont)
+  cont.call(false)
+end
+
+def bar3(cont)
+  print "call bar3\n"
+end
+
+def foo(cont)
+  bar1(cont)
+  bar2(cont)
+  bar3(cont)
+end
+</pre>
+<pre>
+irb&gt; callcc {|cont| foo(cont)}
+call bar1
+=&gt; false
+</pre>
+<p> この様子を図に示すと、次のようになります。
+</p>
+
+<pre class="fig">
+ ┌──────┐
+ │   call/cc  │←──┐
+ └──────┘      │
+        ↓             │
+ ┌──────┐      │
+ │    foo     │──┐│
+ └──────┘    ││
+       ↓↑          ↓│
+ ┌──────┐  ┌ bar2 ─────┐
+ │    bar1    │  │cont.call(false)│
+ └──────┘  └────────┘
+
+        図 : 大域脱出
+</pre>
+<p> 通常の関数呼び出しでは、呼び出し元の関数に制御が戻ります。ところが bar2 で cont.call(false) が実行されると、callcc で取り出した継続に制御が移るので、呼び出し元の関数 foo を飛び越すことができるのです。その結果、callcc の返り値は false になります。このように、継続を使って関数を飛び越えて制御を移すことができます。
+</p>
+
+<h4>●繰り返しの中断</h4>
+<p> 繰り返しの中断も簡単です。Ruby の場合、繰り返しからの脱出は break で簡単にできますが、次のように callcc でも脱出することができます。
+</p>
+<pre class="list">
+リスト : 繰り返しからの脱出
+
+callcc {|exit|
+  10.times do |x|
+    if x &gt; 5
+      exit.call(false)
+    else
+      print x, "\n"
+    end
+  end
+}
+</pre>
+<pre>
+0
+1
+2
+3
+4
+5
+=&gt; false
+</pre>
+<p> このように、exit に格納された継続を評価すれば、繰り返しの途中で中断することができます。また、二重ループからの脱出も簡単です。簡単な例を示します。
+</p>
+<pre class="list">
+リスト : 二重ループからの脱出
+
+callcc {|exit|
+  5.times do |x|
+    5.times do |y|
+      if x + y &gt; 5
+        exit.call(false)
+      else
+        print [x, y], "\n"
+      end
+    end
+  end
+}
+</pre>
+<pre>
+[0, 0]
+[0, 1]
+[0, 2]
+[0, 3]
+[0, 4]
+[1, 0]
+[1, 1]
+[1, 2]
+[1, 3]
+[1, 4]
+[2, 0]
+[2, 1]
+[2, 2]
+[2, 3]
+=&gt; false
+</pre>
+<p> 高階関数の処理を途中で中断することも簡単にできます。たとえば、配列の要素をチェックし、不適当な要素を見つけた場合は空の配列を返すマップ関数 map_check を作ってみましょう。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 高階関数の処理を中断する
+
+def map(a)
+  b = []
+  for x in a
+    b.push(yield(x))
+  end
+  b
+end
+
+def map_check(pred, a)
+  callcc {|exit|
+    map(a) do |x|
+      exit.call([]) if pred.call(x)
+      yield x
+    end
+  }
+end
+</pre>
+<p> 要素をチェックする述語は引数 pred に渡します。pred が真を返す場合は継続 exit を実行して [ ] を返します。簡単な実行例を示します。
+</p>
+<pre>
+irb&gt; map_check(proc {|x| x &lt; 0}, [1, 2, 3, 4, 5]) do |x| x * x end
+=&gt; [1, 4, 9, 16, 25]
+irb&gt; map_check(proc {|x| x &lt; 0}, [1, 2, -3, 4, 5]) do |x| x * x end
+[]
+</pre>
+
+<h4>●再帰呼び出しからの脱出</h4>
+<p> 再帰呼び出しから脱出することも継続を使えば簡単です。配列の平坦化で作成した関数 flatten を継続を使って書き直してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 再帰呼び出しから脱出する
+
+def flatten_sub(a, cont)
+  if a == []
+    []
+  elsif not a.instance_of?(Array)
+    [a]
+  elsif a[0] == []
+    cont.call([])
+  else
+    flatten_sub(a[0], cont) + flatten_sub(a[1..-1], cont)
+  end
+end
+
+def flatten(a)
+  callcc {|cont|
+    flatten_sub(a, cont)
+  }
+end
+</pre>
+<p> flatten は関数 flatten_sub を呼び出します。このとき、継続 cont を取り出して flatten_sub に渡します。flatten_sub は空の配列を見つけたら継続 cont を実行します。すると、再帰呼び出しの処理は破棄されて flatten の処理に戻り、cont に渡した空リストが返り値となります。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+irb&gt; flatten([1, 2, [3, 4, [5, 6], 7, 8], 9])
+=&gt; [1, 2, 3, 4, 5, 6, 7, 8, 9]
+irb&gt; flatten([1, 2, [3, 4, [5, [], 6], 7, 8], 9])
+=&gt; []
+</pre>
+
+<h4>●ジェネレータの作成</h4>
+<p> 複数の要素を格納するデータ構造を「コレクション (collection) 」とか「コンテナ (container) 」と呼びます。Ruby の場合、配列やハッシュなどがありますが、これらのクラスにはメソッド each() が定義されていて、コレクションの要素を順番に取り出して引数のブロックに渡します。継続とメソッド each() を組み合わせると、ジェネレータを簡単に作ることができます。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ジェネレータ
+
+require 'continuation'
+
+class MyGenerator
+  def initialize(coll)
+    @resume = proc {|ret|
+      coll.each do |x|
+        ret = callcc {|cont|
+          @resume = cont
+          ret.call(x)
+        }
+      end
+      ret.call(false)
+    }
+  end
+  
+  def next
+    callcc {|ret|
+      @resume.call(ret)
+    }
+  end
+end
+</pre>
+<p> クラス名は MyGenerator としました。initialize() の引数 coll はコレクションクラスです。インスタンス変数 @resume は実行を再開するための継続を保持します。最初、継続は存在しないので手続きオブジェクトをセットします。手続きオブジェクトと継続 @resume は引数に脱出先の継続 ret を受け取ります。この継続 ret を使って要素を返します。
+</p>
+
+<p> コレクションの要素を取り出すメソッドが next() です。next() は callcc で脱出用の継続 ret を取り出し、それを @resume に渡して呼び出します。最初、@resume には手続きオブジェクトがセットされています。ここで coll のメソッド each が実行され、脱出先の継続は手続きオブジェクトの引数 ret に保持されます。
+</p>
+
+<p> コレクションの要素を返す場合、まず callcc で継続 cont を取り出します。そして、それを @resume にセットします。次に @resume を実行すると、中断した処理を再開することができます。それから、脱出先の継続 ret に要素 x を渡して実行します。これで next() の返り値はコレクションの要素になります。
+</p>
+
+<p> 処理を再開する場合も、継続 @resume に継続 ret を渡します。この値が each() 内で実行された callcc の返り値になります。ここで、手続きオブジェクトの引数 ret の値を callcc の返り値で書き換えることに注意してください。この値を書き換えないと、最初にメソッド next() を呼び出したところまで処理が戻ってしまいます。たとえば、次のプログラムは無限ループになります。
+</p>
+<pre class="list">
+g = MyGenerator.new([1, 2, 3])
+g.next
+g.next
+</pre>
+<p> ret の値を書き換えないと、二番目の g.next を呼び出したあと最初に g.next を呼び出したときの脱出先に戻るため、二番目の g.next が何度も呼び出されることになるのです。同様に、each() が終了した場合も継続 ret で脱出してください。そうしないと、関数呼び出しが終了して呼び出し元に戻る、つまり最初にイテレータを呼び出したところまで戻ってしまうのです。たとえば、次のプログラムは無限ループになります。
+</p>
+<pre class="list">
+g = MyGenerator.new([1, 2, 3])
+g.next
+g.next
+g.next
+g.next
+</pre>
+<p> 最後の g.next で配列の要素がなくなって each() の返り値をそのまま返すのですが、それが最初に呼び出した g.next の返り値となるため無限ループになってしまいます。処理が終了したあと、必ず継続を使って脱出してください。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre class="list">
+リスト : ジェネレータの簡単なテスト
+
+g = MyGenerator.new([1, 2, 3, 4, 5])
+6.times do
+  print g.next, "\n"
+end
+</pre>
+<pre>
+1
+2
+3
+4
+5
+false
+</pre>
+<p> 正常に動作していますね。
+</p>
+<h4>●高階関数をジェネレータに変換</h4>
+<p> each() メソッドがない場合でも、コレクションを巡回する高階関数があればジェネレータに変換することができます。たとえば、配列を「木」とみなして巡回する高階関数 for_each_tree は次のように定義できます。
+</p>
+
+<pre class="list">
+リスト : 木の巡回
+
+def for_each_tree(a, &amp;fn)
+  if a == []
+    nil
+  elsif not a.instance_of?(Array)
+    fn.call(a)
+  else
+    for_each_tree(a[0], &amp;fn)
+    for_each_tree(a[1..-1], &amp;fn)
+  end
+end
+</pre>
+<p> 前回作成したプログラムとは違って、関数をブロックで渡しています。また、a が [ ] の場合は nil を返します。これで for_each_tree の返り値は nil になります。あとの処理は前回と同じです。
+</p>
+<p> このような高階関数をジェネレータに変換する場合も、継続を使うと簡単にできます。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : ジェネレータ (2)
+
+class MyGenerator
+  def initialize(func, *args)
+    @resume = proc {|ret|
+      __send__(func, *args) do |x|
+        ret = callcc {|cont|
+          @resume = cont
+          ret.call(x)
+        }
+      end
+      ret.call(false)
+    }
+  end
+  
+  def next
+    callcc {|ret|
+      @resume.call(ret)
+    }
+  end
+end
+</pre>
+<p> initialize の引数 func が高階関数の名前、args が func に渡す引数です。@resume に手続きオブジェクトをセットし、その中でメソッド __send__ を使って func を呼び出します。そして、func に渡すブロックの中で継続 cont を取り出して @resume にセットし、継続 ret を使ってブロックの引数 x を返します。
+</p>
+
+<p> 次に @resume を実行すると、@resume にセットされた継続が実行されます。そして、ブロックの処理が終了して、呼び出し元の関数 func に戻ります。つまり、func の処理が再開されるというわけです。このように高階関数に渡すブロックの中で継続を操作するところがポイントです。これでジェネレータを実現することができます。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre class="list">
+リスト : ジェネレータの簡単なテスト (2)
+
+g = MyGenerator.new(:for_each_tree, [1, 2, [3, 4, [5, 6], 7], 8])
+while a = g.next
+  print a, "\n"
+end
+</pre>
+<pre>
+1
+2
+3
+4
+5
+6
+7
+8
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> もうひとつ簡単な例として、順列を生成するジェネレータを作ってみましょう。順列を生成する処理を高階関数でプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 順列の生成
+
+def permutations(n, m, a = [], &amp;fn)
+  if a.size == m
+    yield a
+  else
+    for x in 1 .. n
+      unless a.member?(x)
+        a &lt;&lt; x
+        permutations(n, m, a, &amp;fn)
+        a.pop
+      end
+    end
+  end
+end
+</pre>
+<p> permutations は 1 から n までの数値から m 個を選ぶ順列を生成します。この関数も MyGenerator でジェネレータに変換することができます。簡単な実行例を示します。
+</p>
+<pre class="list">
+リスト : 順列の生成 (テスト)
+
+g = MyGenerator.new(:permutations, 4, 4)
+while a = g.next
+  print a, "\n"
+end
+</pre>
+<pre>
+[1, 2, 3, 4]
+[1, 2, 4, 3]
+[1, 3, 2, 4]
+[1, 3, 4, 2]
+[1, 4, 2, 3]
+[1, 4, 3, 2]
+[2, 1, 3, 4]
+[2, 1, 4, 3]
+[2, 3, 1, 4]
+[2, 3, 4, 1]
+[2, 4, 1, 3]
+[2, 4, 3, 1]
+[3, 1, 2, 4]
+[3, 1, 4, 2]
+[3, 2, 1, 4]
+[3, 2, 4, 1]
+[3, 4, 1, 2]
+[3, 4, 2, 1]
+[4, 1, 2, 3]
+[4, 1, 3, 2]
+[4, 2, 1, 3]
+[4, 2, 3, 1]
+[4, 3, 1, 2]
+[4, 3, 2, 1]
+</pre>
+<h4>●コルーチン</h4>
+<p> ジェネレータは next() が呼び出されるたびに中断していたプログラムの実行を再開し、次の要素を呼び出した側に返してプログラムの実行を中断します。これをさらに一般化して、複数のプログラム間で実行の中断や再開を相互に行わせることができます。このようなプログラムのことを「コルーチン (co-routine) 」といいます。Ruby では、ver 1.9 から 導入された Fiber (ファイバー) という機能がコルーチンに相当します。
+</p>
+
+<p> サブルーチン (sub-routine) は call してから return するまで途中で処理を中断することはできませんが、コルーチンは途中で処理を中断し、そこから実行を再開することができます。また、コルーチンを使うと複数のプログラムを (擬似的に) 並行に動作させることができます。この動作は「スレッド (thread) 」とよく似ています。Ruby にはスレッドを扱うクラス Thread が標準で用意されています。
+</p>
+
+<p> Ruby は一定時間毎に実行するスレッドを強制的に切り替えます。このとき、スレッドのスケジューリングは Ruby が行います。これを「プリエンプティブ (preemptive) 」といいます。コルーチンの場合、プログラムの実行は一定時間ごとに切り替わるものではなく、プログラム自身が実行を中断しないといけません。ファイバーの場合も Ruby がスケジューリングを行うことはありません。これを「ノンプリエンプティブ (nonpreemptive) 」といいます。
+</p>
+
+<p> コルーチンで複数のプログラムを並行に動作させるには、あるプログラムだけを優先的に実行するのではなく、他のプログラムが実行できるよう自主的に処理を中断する、といった協調的な動作を行わせる必要があります。そのかわり、スレッドと違って排他制御といった面倒な処理を考える必要がなく、スレッドのような切り替え時のオーバーヘッドも少ないことから、スレッドよりも動作が軽くて扱いやすいといわれています。Ruby のリファレンスではファイバーのことを「ノンプリエンプティブな軽量スレッド」と記述されています。
+</p>
+
+<h4>●ファイバーの動作</h4>
+<p> コルーチンは継続を使って実装することができます。Ruby の Fiber を参考にプログラムを作ってみましょう。まずは Fiber の動作を簡単に説明します。
+</p>
+<p> Ruby は Fiber クラスでファイバーを操作します。ファイバーには親子関係があり、ファイバー A からファイバー B を呼び出した場合、A が親で B が子になります。このように主従関係を持つコルーチンを「セミコルーチン (semi-coroutine) 」といいます。ファイバーの親子関係は木構造と考えることができます。子のファイバーは親または祖先のファイバーを呼び出すことはできません。Ruby の場合はエラーになります。
+</p>
+
+<p> 新しいファイバーは Fiber.new { ... } で生成します。プログラムはブロックで渡します。ファイバーを実行 (または再開) するにはメソッド resume を使います。resume を呼び出したほうが親、呼び出されたほうが子になります。子ファイバーの中でクラスメソッド Fiber.yield を実行すると、そこでプログラムの実行を中断して親ファイバーに戻ります。このとき、yield の引数が親ファイバーで呼び出した reusme の返り値になります。
+</p>
+
+<p> なお、Fiber はメソッド resume に引数を渡して実行を再開すると、それが Fiber.yield の返り値となります。今回はプログラムを簡単にするため、resume の引数はなしとします。また、スレッドのことも考慮しないことにします。ご注意くださいませ。
+</p>
+
+<p> 簡単な例を示しましょう。ファイバーを使うとジェネレータを簡単に作ることができます。たとえば、高階関数をジェネレータに変換する関数は次のようになります。
+</p>
+<pre class="list">
+リスト : ジェネレータ (3)
+
+def make_generator(func, *args)
+  Fiber.new {
+    __send__(func, *args) do |x|
+      Fiber.yield(x)
+    end
+  }
+end
+</pre>
+<p> 高階関数 func に渡すブロックの中で、Fiber.yield を使って要素 x を返すだけです。これで、高い階段関数をジェネレータに変換することができます。
+</p>
+<p> 簡単な実行例を示しましょう。
+</p>
+<pre>
+irb&gt; g = make_generator(:for_each_tree, [1,2,[3,4,[5,6],7],8])
+=&gt; #&lt;Fiber: ... &gt;
+irb&gt; 9.times do
+irb&gt; print g.resume, "\n"
+irb&gt; end
+1
+2
+3
+4
+5
+6
+7
+8
+
+</pre>
+<p> Fiber はブロックの実行が終了した場合、ブロックの返り値が Fiber.yield に渡されます。for_each_tree の場合、返り値の nil がジェネレータが返す最後の値となります。そのあと、resume を実行すると dead fiber called というエラーが送出されます。簡単な例を示します。
+</p>
+<pre>
+irb&gt; a = Fiber.new { 1 }
+=&gt; #&lt;Fiber: ... &gt;
+irb&gt; a.resume
+=&gt; 1
+irb&gt; a.resume
+FiberError: dead fiber called
+</pre>
+<h4>●ツリーマッチング</h4>
+<p> make_generator を使うと、2 つの木を比較する関数 same_fringe? を簡単に作ることができます。同じ葉を同じ並びで持つ場合、same_fringe? は true を返します。次の例を見てください。
+</p>
+<pre class="item">
+same_fringe?([1, 2, [3], 4], [1, 2, [3, 4]]) =&gt; t
+same_fringe?([1, 2, [3], 4], [1, 2, [4], 3]) =&gt; false
+</pre>
+<p> 最初の例の場合、木の構造は違いますが、要素はどちらの木も 1, 2, 3, 4 の順番で並んでいるので、same_fringe? は true を返します。次の例では、木の構造は同じですが、 3 と 4 の順番が逆になっています。この場合、same_fringe? は false を返します。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ツリーマッチング
+
+def same_fringe?(a1, a2)
+  g1 = make_generator(:for_each_tree, a1)
+  g2 = make_generator(:for_each_tree, a2)
+  loop do
+    x = g1.resume
+    y = g2.resume
+    if x != y
+      return false
+    elsif x == nil
+      return true
+    end
+  end
+end
+</pre>
+<p> make_generator で引数 a1, a2 のジェネレータ g1, g2 を生成します。あとは loop の中で要素を順番に取り出し、値が異なれば false を返し、等しい値でそれが nil であれば true を返します。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+irb&gt; same_fringe?([1,2,[3,4],5], [1,2,[3],4,5])
+=&gt; true
+irb&gt; same_fringe?([1,2,[3,4],5], [1,2,[4,3],5])
+=&gt; false
+</pre>
+<p> 正常に動作していますね。 
+</p>
+<h4>●コルーチンの作成</h4>
+<p> それでは継続を使って Fiber と同じような機能を持つコルーチンを作りましょう。クラス名は MyFiber としました。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : コルーチン
+
+require 'continuation'
+
+# エラー定義
+class MyFiberError &lt; StandardError
+end
+
+class MyFiber
+  # クラス変数
+  @@ret = :root
+
+  # 初期化
+  def initialize()
+    @save_ret = nil
+    @resume = proc {
+      result = yield
+      @@ret.call(nil, result)
+    }
+  end
+  
+  # クラスメソッド
+  def MyFiber.yield(val)
+    callcc {|cont|
+      @@ret.call(cont, val)
+    }
+  end
+  
+  # インスタンスメソッド
+  def resume
+    if @save_ret
+      raise MyFiberError, "double resume"
+    elsif @resume == nil
+      raise MyFiberError, "dead fiber called"
+    else
+      @resume, v = callcc {|ret|
+        @save_ret = @@ret
+        @@ret = ret
+        @resume.call
+      }
+      @@ret = @save_ret
+      @save_ret = nil
+      v
+    end
+  end
+end
+</pre>
+<p> 基本的な考え方はジェネレータと同じですが、脱出先の継続をクラス変数 @@ret に格納するところがポイントになります。インスタンス変数 @resume に実行を再開するための継続を保持します。最初、継続は存在しないので手続きオブジェクトをセットします。ジェネレータと違って、脱出先の継続を引数には受け取りません。
+</p>
+<p> 手続きオブジェクトの中でブロックを yield で実行し、その結果を result にセットします。そして、@@ret.call で親ファイバーから呼び出されたメソッド resume に戻ります。このとき、最初の引数が実行を再開するための継続、2 番目の引数が親ファイバーに渡す値になります。ブロックの実行を終了したので、1 番目の引数には nil を渡します。クラスメソッド Fiber.yield は簡単です。実行を再開するための継続 cont を取り出して、@@ret.call に渡して呼び出すだけです。
+</p>
+<p> メソッド resume でファイバーの実行を再開するとき、インスタンス変数 @save_ret に @@ret の値を退避します。ファイバーの呼び出しは木構造の関係になるので、スタックで管理することができます。resume で実行を再開するときに @@ret を書き換え、実行を中断するときに元の値に戻すことで、スタックと同じ動作になります。
+</p>
+<p> @save_ret は nil に初期化されているので、@save_ret が nil でなければ実行を中断していない (親ファイバーに値を返していない) ファイバーであることがわかります。resume を実行するとき、@save_ret が nil でなければエラー double resume を送出します。また、@resume が nil の場合はブロックの実行が終了しているので、エラー dead fiber called を送出します。
+</p>
+<p> 実行を再開できる場合、まず callcc で継続 cont を取り出し、@@ret を @save_ret に退避してから cont を @@ret にセットします。そして、@resume.call で @resume に格納されている継続を実行します。その返り値を @resume と v で受け取って、@@ret と @save_ret の値を元に戻します。最後に v を返します。これで親ファイバーに値 v を返すことができます。
+</p>
+
+<p> それでは簡単な例を示しましょう。順列を生成するジェネレータは make_generator を使わなくても、ファイバーで直接プログラムすることができます。これは拙作のページ Python 入門 第 4 回 <a href="python04.html#chap25">ジェネレータ関数の再帰定義</a> と同様のプログラムになります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 順列の生成
+
+def gen_perm(n, m)
+  MyFiber.new do
+    if m == 0
+      MyFiber.yield([])
+    else
+      g = gen_perm(n, m - 1)
+      while x = g.resume
+        for y in 1 .. n
+          next if x.member?(y)
+          MyFiber.yield(x + [y])
+        end
+      end
+    end
+    nil
+  end
+end
+</pre>
+<p> 関数 gen_perm() は順列を生成するファイバーを返します。m が 0 の場合、要素の選択が終わったので MyFiber.yield で [ ] を返します。そうでなければ、gen_perm() を呼び出して新しいファイバー g を生成します。そして、while 文でその要素 (順列を格納した配列) を取り出して x にセットし、それに含まれていない数字 y を選びます。あとは MyFiber.yield で y を追加した配列 x + [y] を返します。これで順列を生成することができます。 
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre class="list">
+リスト : 順列の生成 (テスト)
+
+perm = gen_perm(3, 3)
+while a = perm.resume
+  print a, "\n"
+end
+</pre>
+<pre>
+[1, 2, 3]
+[1, 3, 2]
+[2, 1, 3]
+[2, 3, 1]
+[3, 1, 2]
+[3, 2, 1]
+</pre>
+<h4>●エラトステネスの篩</h4>
+<p> 最後にファイバーを使って素数を求めるプログラムを作ってみましょう。考え方は簡単です。最初に、2 から始まる整数列を生成するファイバーを用意します。この場合、ファイバーを「遅延ストリーム」として使います。2 は素数なので、この整数列から 2 で割り切れる整数を取り除き除きます。ここでもファイバーを使って、入力ストリームから 2 で割り切れる整数を取り除いたストリームを返すフィルターを作ります。
+</p>
+
+<p> 2 で割り切れる整数が取り除かれたので、次の要素は 3 になります。今度は 3 で割り切れる整数を取り除けばいいのです。これもフィルターを使えば簡単です。このとき、入力用のストリームは 2 で割り切れる整数が取り除かれています。したがって、このストリームに対して 3 で割り切れる整数を取り除くようにフィルターを設定すればいいわけです。
+</p>
+
+<p> このように、素数を見つけたらそれで割り切れる整数を取り除いていくアルゴリズムを「エラトステネスの篩」といいます。ようするに、2 から始まる整数ストリームに対して、見つけた素数 2, 3, 5, 7, 11, ... を順番にフィルターで設定して素数でない整数をふるい落としていくわけです。 
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : エラトステネスの篩
+
+# n から始まる整数列
+def integers(n)
+  MyFiber.new do
+    while true
+      MyFiber.yield(n)
+      n += 1
+    end
+  end
+end
+
+# フィルター
+def filter(src)
+  MyFiber.new do
+    while m = src.resume
+      MyFiber.yield(m) if yield(m)
+    end
+  end
+end
+
+def sieve(x)
+  nums = integers(2)
+  x.times do
+    n = nums.resume
+    print n, " "
+    nums = filter(nums) do |x| x % n != 0 end
+  end
+end
+</pre>
+<p> 関数 integers は n から始まる整数列を生成するストリームです。このような遅延ストリームはファイバーを使って簡単に作ることができます。関数 filter はブロックで渡された述語が偽を返す要素をストリーム src から取り除きます。src から要素を取り出して m にセットします。yield(m) でブロックに m を渡して実行し、その返り値が真であれば Fiber.yield(m) で親ファイバーに m を返します。これで述語が偽を返す要素を取り除くことができます。
+</p>
+<p> 素数を求める関数 sieve も簡単です。引数 x は求める素数の個数です。最初に、2 から始まる整数列を integers で生成して変数 nums に セットします。このストリーム nums の先頭要素が素数になります。nums.resume でストリームから素数を取り出して n にセットします。次に n を表示して、n で割り切れる整数を取り除くフィルターを生成して nums にセットします。つまり、x 個の素数を求めるために、x 個のフィルターをストリームに重ねていくわけです。
+</p>
+<p> それでは実際に sieve(100) を実行してみましょう。
+</p>
+<pre>
+2 3 5 7 11 13 17 19 23 29 31 37 41 43 47 53 59 61 67 71
+73 79 83 89 97 101 103 107 109 113 127 131 137 139 149 151 157 163 167 173
+179 181 191 193 197 199 211 223 227 229 233 239 241 251 257 263 269 271 277 281
+283 293 307 311 313 317 331 337 347 349 353 359 367 373 379 383 389 397 401 409
+419 421 431 433 439 443 449 457 461 463 467 479 487 491 499 503 509 521 523 541
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> ところで、MyFiber の動作は相当に遅いです。組み込みの Fiber を使ったほうが高速に動作します。もともと遅延ストリームを使った「エラトステネスの篩」はけっこう時間がかかるものですが、それを差し引いても MyFiber は遅いですね。Ruby の継続が重い処理であることがよくわかりました。
+</p>
+<p> 今回はここまでです。次回は継続を使って非決定性オペレータ amb を作ってみましょう。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcruby15.html">PrevPage</a> | <a href="ruby.html#ruby_abc">R u b y</a> | <a href="abcruby17.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

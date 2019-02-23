@@ -1,0 +1,776 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Go 言語プログラミング入門</title>
+  <meta name="description" content="Go,Golang,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881804</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Go Language Programming</h1>
+<h2>お気楽 Go 言語プログラミング入門</h2>
+<div class="small">
+[ PrevPage | <a href="index.html">Golang</a> | <a href="abcgo02.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>Go 言語の基礎知識 (1)</h3>
+<p> プログラミング言語を手続き型言語、関数型言語、論理型言語の 3 つに分類するならば、Go 言語はＣ言語と同じく手続き型のプログラミング言語になります。プログラムの実行を制御する「文」、データを格納する「変数」、決められた処理を行う「関数」があります。Go 言語はＣ++や Java とは違って、クラスや継承といったオブジェクト指向機能はありませんが、構造体 (structure)、メソッド (method)、インターフェース (interface) という機能を使ってオブジェクト指向プログラミングができるようになっています。また、goroutine と channel による平行プログラミングをサポートし、関数型言語でお馴染みの機能である「クロージャ (closure) 」も用意されています。
+</p>
+
+<p> Go 言語にはいろいろなデータが用意されています。データの種類を「データ型 (Data type) 」とか単に「型 (type) 」と呼びます。Go 言語はいろいろな型とそれを操作する関数やメソッドがライブラリに用意されています。数、配列、文字列などの基本的な型をはじめ、配列を柔軟に操作するためのスライス (slice)、キーと値を関連付ける連想配列 (map) などといった高水準な型が用意されています。
+</p>
+
+<p> Go 言語のプログラムで使用される変数や関数などの名前には、英数字とアンダースコア _ が使えます。英大文字と英小文字は区別されるので、FOO と Foo と foo は異なる名前と判断されます。コメントはＣ++と同じで、/* と */ で囲むか // から行末までになります。Go 言語は文字コードに UTF-8 を使用します。UTF-8 以外の文字コードを使うと、コメントでもコンパイルエラーになります。ご注意ください。
+</p>
+
+<h4>●こんにちは Go 言語</h4>
+<p> それでは皆さんお馴染みの hello, world を表示するプログラムを作ってみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : hello.go
+
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("hello, world")
+}
+</pre>
+<p> Go 言語のプログラムは「パッケージ (package) 」で構成されています。プログラムを書くときは、そのプログラムが属するパッケージを package 文で宣言します。ここでは、パッケージ名に main を指定します。Go 言語の場合、main パッケージ内にある main 関数からプログラムの実行を開始します。main パッケージがない、または main パッケージ内に main 関数がないとエラーになります。
+</p>
+<p> import 文はプログラムで使用するパッケージを文字列で指定します。Go 言語の標準ライブラリはパッケージ単位で構成されています。文字列はダブルクオート " で囲んで表します。ここでは fmt パッケージをインポートします。fmt パッケージにはデータを整形して出力する関数が用意されています。パッケージ内の関数は "パッケージ名" + ドット ( . ) + "関数名" で呼び出すことができます。
+</p>
+<p> 関数は func 文で定義します。詳しい説明はあとで行いますが、ここでは main 関数を定義しています。関数名の後ろのカッコ ( ) には関数に渡すデータ (引数) を記述します。引数がない場合は ( ) と書きます。関数の本体は { } の中に記述します。この中で fmt パッケージに定義されている関数 Println を呼び出します。Println はデータを画面へ出力して改行します。ここでは文字列 "hello, world" を出力します。
+</p>
+
+<p> プログラムのコンパイルは go build で行います。Windows の場合、コマンドプロンプトで go build hello.go と入力すると、hello.go がコンパイルされて hello.exe という実行形式ファイルが作成されます。それでは実行してみましょう。
+</p>
+<pre>
+C&gt;go build hello.go
+
+C&gt;hello
+hello, world
+</pre>
+<p> また、build のかわりに run を指定すると、実行形式ファイルを作成せずに、hello.go をコンパイルしてすぐに実行します。
+</p>
+<pre>
+C&gt;go run hello.go
+hello, world
+</pre>
+
+<h4>●Go 言語の数値</h4>
+<p> Go 言語は標準で整数、浮動小数点数、複素数を使うことができます。下表に数値の種類を示します。
+</p>
+<table border=1>
+<caption>表 : Go 言語の数値</caption>
+<thead>
+  <tr><th>型名</th><th>範囲</th></tr>
+</thead>
+<tbody>
+  <tr><td>int8</td><td>-128 ～ 127 (8 bit)</td></tr>
+  <tr><td>int16</td><td>-32768 ～ 32767 (16 bit)</td></tr>
+  <tr><td>int32</td><td>-2147483648 ～ 2147483647 (32 bit)</td></tr>
+  <tr><td>int64</td><td>-9223372036854775808 ～ 9223372036854775807 (64 bit)</td></tr>
+  <tr><td>int</td><td>32 bit 処理系ならば int32, 64 bit 処理系ならば int64</td></tr>
+  <tr><td>uint8</td><td>0 ～ 255 (8 bit)</td></tr>
+  <tr><td>byte</td><td>uint8 の別名</td></tr>
+  <tr><td>uint16</td><td>0 ～ 65535 (16 bit)</td></tr>
+  <tr><td>uint32</td><td>0 ～ 4294967295 (32 bit)</td></tr>
+  <tr><td>uint64</td><td>0 ～ 18446744073709551615 (64 bit)</td></tr>
+  <tr><td>uint</td><td>32 bit 処理系ならば uint32, 64 bit 処理系ならば uint64</td></tr>
+  <tr><td>float32</td><td>±1.1754944E-38 ～ 3.4028235E+38 (32 bit 単精度)</td></tr>
+  <tr><td>float64</td><td>±2.22507E-308 ～ 1.79769E+308 (64 bit 倍精度)</td></tr>
+  <tr><td>complex64</td><td>float32 の実数部と虚数部を持つ複素数</td></tr>
+  <tr><td>complex128</td><td>float64 の実数部と虚数部を持つ複素数</td></tr>
+</tbody>
+</table>
+<p> 整数は 10 進数で表しますが、先頭に 0 を付けると 8 進数、0x または 0X を付けると 16 進数で表すことができます。
+</p>
+<p> Go 言語の場合、異なる型の計算はコンパイルエラーになります。整数同士の計算、たとえば int と int64 の計算も明示的に型変換する必要があります。数値の型変換は "型(数値)" で行うことができます。たとえば、float64(1234) は float64 型の 1234.0 に、int(123.456) は int 型の 123 になります。
+</p>
+
+<p> さっそく簡単な例を示しましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 数と四則演算 (sample01.go)
+
+package main
+
+import "fmt"
+
+var a int = 10
+var b int = 20
+var c float64 = 1.234
+var d float64 = 5.678
+
+func main() {
+    fmt.Println(a + b)
+    fmt.Println(a - b)
+    fmt.Println(c * d)
+    fmt.Println(c / d)
+}
+</pre>
+
+<pre>
+C&gt;go run sample01.go
+30
+-10
+7.006652
+0.2173300457907714
+</pre>
+
+<p> Go 言語はあらかじめ使用する変数とその型を宣言する必要があります。変数の定義は次のように行います。
+</p>
+<pre class="item">
+var 変数名1, 変数名2, ..., 変数n 型
+var 変数名1, 変数名2, ..., 変数n [型] = 初期値1, 初期値2, ..., 初期値n
+</pre>
+<p> 変数の定義は var 文で行います。var の後ろに変数を表す名前を書いて、その後ろに型を指定します。変数名と型の順番は、Ｃ言語や Java などとは逆になることに注意してください。同じ型であれば、名前をカンマ ( , ) で区切って複数の変数を定義することができます。このとき、同時に初期値をセットすることができます。これを変数の初期化といいます。また、変数に値をセットすることを「代入」といい、代入には = を使います。
+</p>
+<p> 初期値が指定されている場合は型の指定を省略することができます。var 文の後ろにカッコを付けると、その中で複数の変数をまとめて定義することができます。簡単な例を示します。
+</p>
+<pre class="list">
+リスト : 変数の定義
+
+var (
+    a, b = 10, 20
+    c, d = 1.234, 5.678
+)
+</pre>
+<p> 数値は関数 fmt.Println または fmt.Print を使って表示することができます。データを出力したあと、Println は改行しますが Print は改行しません。変数 a, b には整数を、変数 c, d には浮動小数点数を代入します。そして、演算結果を Println で表示します。
+</p>
+<p> Go 言語の主な算術演算子を下表に示します。
+</p>
+<table border=1>
+<caption>表 : 算術演算子</caption>
+<thead>
+  <tr><th>演算子</th><th>操作</th></tr>
+</thead>
+<tbody>
+  <tr><td>-x     </td><td> x の符号を反転</td></tr>
+  <tr><td>x + y  </td><td> x と y の和</td></tr>
+  <tr><td>x - y  </td><td> x と y の差</td></tr>
+  <tr><td>x * y  </td><td> x と y の積 </td></tr>
+  <tr><td>x / y  </td><td> x と y の商</td></tr>
+  <tr><td>x % y  </td><td> x と y の剰余</td></tr>
+</tbody>
+</table>
+
+<h4>●局所変数と大域変数</h4>
+<p> 変数は関数の中でも定義することができます。これを「ローカル変数 (local variable) 」もしくは「局所変数」といいます。関数の外で定義されている変数を「グローバル変数 (golbal variable)」もしくは「大域変数」といいます。局所変数は定義されている関数の中だけしかアクセスできませんが、グローバル変数は、同じファイル内で定義されている関数であれば、どこからでもアクセスすることができます。詳細は関数の回で説明します。
+</p>
+
+<p> 変数 a, b, c, d を関数内で定義すると次のようになります。
+</p>
+<pre class="list">
+リスト : 局所変数の定義 (1)
+
+func main() {
+    var a = 10
+    var b = 20
+    var c = 1.234
+    var d = 5.678
+    fmt.Println(a + b)
+    fmt.Println(a - b)
+    fmt.Println(c * d)
+    fmt.Println(c / d)
+}
+</pre>
+<p> 局所変数に限り、次のように := を使って定義することができます。
+</p>
+<pre class="item">
+変数名1, 変数名2, ..., 変数名n := 初期値1, 初期値2, ..., 初期値n
+</pre>
+<pre class="list">
+リスト : 局所変数の定義 (2)
+
+func main() {
+    a, b := 10, 20
+    c, d := 1.234, 5.678
+    fmt.Println(a + b)
+    fmt.Println(a - b)
+    fmt.Println(c * d)
+    fmt.Println(c / d)
+}
+</pre>
+<p> Go 言語は := をよく使うので覚えておいてください。
+</p>
+
+<h4>●文字列</h4>
+<p> 文字列 (string) はダブルクオート " で囲んで表します。Go 言語の文字列は byte の配列と同じように扱うことができますが、文字列の内容を変更することはできません。簡単な例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : 文字列 (sample02.go)
+
+package main
+
+import "fmt"
+
+func main () {
+    a, b := "abcd", "efgh"  // var a, b string = "abcd", "efgh"
+    c := a + b              // var c string = a + b
+    fmt.Println(a)
+    fmt.Println(b)
+    fmt.Println(c)
+}
+</pre>
+<pre>
+C&gt;go run sample02.go
+abcd
+efgh
+abcdefgh
+</pre>
+
+<p> 文字列を表す型は string です。変数 a と b に文字列をセットします。文字列は演算子 + を使って連結することができます。この場合、変数 c には "abcd" と "efgh" を連結した新しい文字列 "abcdefgh" がセットされます。
+</p>
+
+<p> 文字列には「エスケープシーケンス」を含めることができます。これは、画面に表示することができない文字を表すのに用いられる方法です。よく使われる記号に改行を表す \n とタブを表す \t があります。
+</p>
+
+<h4>●if 文</h4>
+<p> Go 言語の制御構造はＣ言語や Java のそれと似ていますが、すこし変わったところもあります。まず最初に if 文から説明しましょう。if 文は「条件分岐」を行います。簡単にいうと「もしも～～ならば○○をせよ」という動作です。下図を見てください。
+</p>
+
+<pre class="fig">
+      ↓                        ↓
+┌─────┐No          ┌─────┐No
+│  条  件  │─┐        │  条  件  │─────┐
+└─────┘  │        └─────┘          │
+      ↓Yes     │              ↓Yes             ↓
+┌─────┐  │        ┌─────┐    ┌─────┐
+│  処理Ａ  │  │        │  処理Ａ  │    │  処理Ｂ  │
+└─────┘  │        └─────┘    └─────┘
+      │        │              │                │
+      ├←───┘              ├←───────┘
+      ↓                        ↓
+
+     (1)                        (2)
+
+             図 : if 文の動作
+</pre>
+
+<p> 図 (1) では、「もしも条件を満たすならば、処理 A を実行する」となります。この場合、条件が成立しない場合は何も処理を実行しませんが、図 (2) のように、条件が成立しない場合でも処理を実行させることができます。(2) の場合では、「もしも条件を満たすならば、処理 A を実行し、そうでなければ処理 B を実行する」となります。すなわち、条件によって処理 A か処理 B のどちらかが実行されることになります。
+</p>
+
+<p> 一般に、プログラミング言語では、条件が成立することを「真 (true)」といい、条件が不成立のことを「偽 (false) 」といいます。実際のプログラムでは真偽を表すデータが必要になります。Go 言語の場合、真偽を表す型 bool が用意されていて、真を true で、偽を false で表します。Ｃ言語のように偽を 0 で表し、それ以外の値を真とすることはできません。ご注意ください。
+</p>
+
+<p> 下図に if 文の構文を示します。
+</p>
+
+<pre class="fig">
+if test {
+    処理A
+    処理B
+    処理C
+} else {
+    処理D
+    処理E
+    処理F
+}
+
+図 : if の構文 (1)
+</pre>
+
+<p> 条件部 test を実行し、その結果が真であれば、処理 A から処理 C を実行します。Go 言語の場合、test を ( ) で囲む必要はありません。{ } で囲まれた部分を「ブロック」と呼び、ここに複数の処理を書くことができます。test の結果が偽であれば、else から始まるブロックで書かれている処理 D から処理 F を実行します。 else ブロックは省略することができます。
+</p>
+
+<p> もう少し複雑な使い方を紹介しましょう。
+</p>
+
+<pre class="fig">
+if testA{
+    処理A
+} else {
+    if testB {
+        処理B
+    } else {
+        処理C
+    }
+}
+
+図 : if 文の入れ子
+</pre>
+<pre class="fig">
+      ↓
+┌─────┐No
+│  testA   │─────┐
+└─────┘          │
+      ↓Yes             ↓
+      │          ┌─────┐No
+      │          │  testB   │─────┐
+      │          └─────┘          │
+      │                ↓Yes             ↓
+┌─────┐    ┌─────┐    ┌─────┐
+│  処理Ａ  │    │  処理Ｂ  │    │  処理Ｃ  │
+└─────┘    └─────┘    └─────┘
+      │                │                │
+      ↓                ↓                ↓
+      ├────────┴────────┘
+      ↓
+
+         図 : if 文の入れ子の動作
+</pre>
+
+<p> testA が偽の場合は else 節を実行します。else 節は if 文なので、条件 testB を実行します。この結果が真であれば処理 B を実行します。そうでなければ、else 節の処理 C を実行します。この処理は下図のように書き換えることができます。
+</p>
+
+<pre class="fig">
+if testA {
+    処理A
+} else if testB {
+    処理B
+} else {
+    処理C
+}
+
+図 : if の構文 (2)
+</pre>
+
+<p> Ｃ言語や Java と同様に eles if を使って if 文を連結することができます。testA が偽の場合は、次の else if の条件 testB を実行します。この結果が真であれば処理 B を実行します。そうでなければ、else 節の処理 C を実行します。なお、else if はいくつでも繋げることができます。
+</p>
+
+<p> このほかに、Go 言語の if 文は条件式の前に処理を書くことができます。
+</p>
+<pre class="item">
+if 処理; 条件式 { ... } else { ... }
+</pre>
+<p> 処理と条件式の間はセミコロン ( ; ) で区切ります。条件式を評価する前に処理が実行されます。if 文の中でしか使わない局所変数を定義するときに便利です。
+</p>
+<pre class="list">
+リスト : if 文の構文 (3)
+
+if i := 0; i == 0 {
+    fmt.Println("zero")
+} else {
+    fmt.Println("not zero")
+}
+</pre>
+<p> 変数 i は 0 に初期化されるので、このプログラムを実行すると "zero" が表示されます。i を 1 に初期化すると、"not zero" が表示されます。
+</p>
+
+<h4>●比較演算子と論理演算子</h4>
+<p> Go 言語には下表に示す比較演算子が用意されています。
+</p>
+
+<table border=1>
+<caption>表 : 比較演算子</caption>
+<thead>
+  <tr><th>演算子</th><th>意味</th></tr>
+</thead>
+<tbody>
+  <tr><td> ==      </td><td>等しい</td></tr>
+  <tr><td> != </td><td>等しくない</td></tr>
+  <tr><td> &lt;       </td><td>より小さい</td></tr>
+  <tr><td> &gt;       </td><td>より大きい</td></tr>
+  <tr><td> &lt;=      </td><td>より小さいか等しい</td></tr>
+  <tr><td> &gt;=      </td><td>より大きいか等しい</td></tr>
+</tbody>
+</table>
+
+<p> Ｃ言語や Java の比較演算子と同じです。また、次に示す論理演算子があります。
+</p>
+
+<table border=1>
+<caption>表 : 論理演算子</caption>
+<thead>
+  <tr><th>操作</th><th>意味</th></tr>
+</thead>
+<tbody>
+  <tr><td>!x   </td><td>x の否定（真偽の反転）</td></tr>
+  <tr><td>x &amp;&amp; y </td><td>x が真かつ y が真ならば真</td></tr>
+  <tr><td>x || y  </td><td>x が真まはた y が真ならば真</td></tr>
+</tbody>
+</table>
+<p> Ｃ言語とは異なり、x, y は bool 型のデータでなければいけません。&amp;&amp; は左項が偽ならば右項を評価せずに偽を返します。|| は左項が真ならば右項を評価せずに左項の値を返します。このため、&amp;&amp; と || は「短絡演算子」と呼ばれることもあります。
+</p>
+
+<h4>●for 文による繰り返し (1)</h4>
+<p> 繰り返しは同じ処理を何度も実行することです。Go 言語で繰り返しを行う構文は for 文しかありません。他の言語では単純な繰り返しを行う構文として while 文がありますが、Go 言語には while 文がありません。そのかわり、for 文で代用するようになっています。
+</p>
+<p> 一般に、プログラミング言語の while 文は、条件が真のあいだブロックに書かれている処理を繰り返し実行します。Go 言語の場合は for 文を次のように使います。
+</p>
+
+<pre class="fig">
+for 条件部 {
+    処理A
+    処理B
+    処理C
+}
+
+図 : for 文の構文 (1)
+</pre>
+<pre class="fig">
+              ↓
+              ├←─────┐
+  false ┌─────┐      │
+┌───│  条件部  │      │
+│      └─────┘      │
+│            ↓true        │
+│      ┌─────┐      │
+│      │  処理Ａ  │      │
+│      └─────┘      │
+│            ↓            │
+│      ┌─────┐      │
+│      │  処理Ｂ  │      │
+│      └─────┘      │
+│            ↓            │
+│      ┌─────┐      │
+│      │  処理Ｃ  │      │
+│      └─────┘      │
+│            ↓            │
+│            └──────┘
+└──────┐
+              ↓
+
+     図 : for 文の動作 (1)
+</pre>
+
+<p> 上図を見ればおわかりのように、この for 文の使い方はいたって単純です。この動作はＣ言語や Java の while 文と同じです。
+</p>
+
+<p> 簡単な例を示しましょう。hello, world を 10 回表示するプログラムを作ります。
+</p>
+
+<pre class="list">
+リスト : hello. wolrd の表示 (sample03.go)
+
+package main
+
+import "fmt"
+
+func main() {
+    i := 0
+    for i &lt; 10 {
+        fmt.Println("hello, world")
+        i += 1
+    }
+}
+</pre>
+
+<pre>
+C&gt;go run sample03.go
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+</pre>
+<p> 変数 i を 0 に初期化し、i の値が 10 よりも小さいあいだ処理を繰り返します。Ｃ言語や Java と同様に、i += 1 は i = i + 1 と同じ意味です。このほかに、-=, *=, /=, %= などがあります。i の値はブロックを実行するたびに +1 されていくので、i が 10 になった時点で繰り返しを終了します。
+</p>
+<p> ところで、i += 1, i -= 1 は i++, i-- と書くことができます。Ｃ言語や Java とは異なり、Go 言語の ++ と -- は演算子ではありません。++i や --i と書くことはできません。また、i++ の結果を変数に代入することもできません。
+</p>
+
+<p> 簡単な例として、1 から 10000 までの総和を求めてみましょう。
+</p>
+<pre class="list">
+リスト : 1 から 10000 までの総和 (sample04.go)
+
+package main
+
+import "fmt"
+
+func main() {
+    i, sum := 1, 0
+    for i &lt;= 10000 {
+        sum += i
+        i++
+    }
+    fmt.Println(sum)
+}
+</pre>
+<pre>
+C&gt;go run sample04.go
+50005000
+</pre>
+<p> 変数 i を 1 に、総和を表す変数 sum を 0 に初期化します。for 文で i の値を sum に加えてから、i の値を +1 します。Ｃ言語や Java のように、この処理を sum += i++ と書くことはできません。ご注意くださいませ。
+</p>
+
+<h4>●for 文による繰り返し (2)</h4>
+<p> 次は、for 文本来の使い方を説明します。Go 言語の for 文はＣ言語や Java のそれとよく似ていますが、ちょっと異なるところもあります。次の図を見てください。
+</p>
+<pre class="fig">
+for 初期化; 条件部; 更新処理 {
+    処理A
+     ...
+    処理Z
+}
+
+図 : for 文の構文 (2)
+</pre>
+<pre class="fig">
+                ↓
+          ┌─────┐
+          │  初期化  │
+          └─────┘
+                ├←─────┐
+    false ┌─────┐      │
+  ┌───│  条件部  │      │
+  │      └─────┘      │
+  │            ↓true        │
+  │      ┌─────┐      │
+  │      │  処理Ａ  │      │
+  │      └─────┘      │
+  │            ・            │
+  │            ・            │
+  │      ┌─────┐      │
+  │      │  処理Ｚ  │      │
+  │      └─────┘      │
+  │            ↓            │
+  │      ┌─────┐      │
+  │      │ 更新処理 │      │
+  │      └─────┘      │
+  │            └──────┘
+  └──────┐
+                ↓
+
+        図 : for 文の動作 (2)
+</pre>
+
+<p> for 文の特徴は、いちばん最初に行われる初期化と、繰り返すたびに行われる更新処理があることです。上図を見ればおわかりのように、初期化はただ一度しか行われず、更新処理はブロックの処理を実行してから行われます。Go 言語の場合、初期化; 条件部; 更新処理 の部分をカッコで囲む必要はありません。
+</p>
+<p> 簡単な使用例を示しましょう。
+</p>
+
+<pre class="list">
+リスト : for 文の使用例 (sample05.go)
+
+package main
+
+import "fmt"
+
+func main() {
+    for i := 0; i &lt; 10; i++ {
+        fmt.Println("hello, world")
+    }
+}
+</pre>
+<pre>
+C&gt;go run sample05.go
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+hello, world
+</pre>
+<p> まず、i := 0 で変数 i を 0 に初期化します。Go 言語の場合、初期化処理で変数を定義することができます。この処理は for 文が始まるときに一度だけ実行されます。次に条件部 i &lt; 10 がチェックされます。i は 0 ですから条件を満たしますね。そこで、ブロックの処理が行われ、Println により hello, world が表示されます。
+</p>
+<p> 次に、更新処理 i++ が行われます。変数 i の値を +1 したら、条件部のチェックを行います。あとは、条件部が成立しているあいだ、ブロックの処理と更新処理を繰り返します。結局、i の値は 10 になるので、条件部が不成立となり繰り返しを終了します。したがって、このプログラムを実行すると hello, world が 10 回表示されます。
+</p>
+
+<h4>●繰り返しの制御</h4>
+<p> for 文は break 文によって繰り返しを脱出することができます。contiune 文は繰り返しの先頭に戻ります。break 文と continue 文の動作を下図に示します。
+</p>
+<pre class="fig">
+//
+// break と continue
+//
+for testA { ←────────┐
+    処理A                     │
+    if testB { continue } ──┘
+    処理B
+    if testC { break } ───┐
+    処理C                    │
+}                            │
+ ←─────────────┘
+処理D
+
+図 : break 文と continue 文の動作
+</pre>
+<p> testB が真で continue 文が実行されると、それ以降の処理を実行せずに条件部のチェックが行われます。つまり、処理B, testC, 処理C は実行されません。更新処理がある for 文で continue 文が実行されると、それ以降の処理は実行されずに更新処理が実行されます。
+</p>
+
+<p> testC が真で break 文が実行されると、それ以降の処理を実行せずに for 文の繰り返しを脱出します。上図では、break 文で for 文の繰り返しを脱出すると、for 文の次の処理D が実行されます。
+</p>
+
+<h4>●FizzBuzz 問題</h4>
+<p> それでは、簡単な例題として FizzBuzz 問題を Go 言語で解いてみましょう。FizzBuzz 問題は 1 から 100 までの値を表示するとき、3 の倍数のときは Fizz を、5 の倍数ときは Buzz を表示するというものです。FizzBuzz 問題の詳細については <a href="http://ja.wikipedia.org/wiki/Fizz_Buzz">Fizz Buzz - Wikipedia</a> をお読みください。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : FizzBuzz 問題 (fizzbuzz.go)
+
+package main
+
+import "fmt"
+
+func main() {
+    for i := 1; i &lt;= 100; i++ {
+        if i % 3 == 0 &amp;&amp i % 5 == 0 {
+            fmt.Print("FizzBuzz")
+        } else if i % 3 == 0 {
+            fmt.Print("Fizz")
+        } else if i % 5 == 0 {
+            fmt.Print("Buzz")
+        } else {
+            fmt.Print(i)
+        }
+        fmt.Print(" ")
+    }
+}
+</pre>
+<pre>
+C&gt;go run fizzbuzz.go
+1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz 16 17 Fizz 19 Buzz Fizz
+22 23 Fizz Buzz 26 Fizz 28 29 FizzBuzz 31 32 Fizz 34 Buzz Fizz 37 38 Fizz Buzz
+41 Fizz 43 44 FizzBuzz 46 47 Fizz 49 Buzz Fizz 52 53 Fizz Buzz 56 Fizz 58 59 
+FizzBuzz 61 62 Fizz 64 Buzz Fizz 67 68 Fizz Buzz 71 Fizz 73 74 FizzBuzz 76 77 Fizz
+79 Buzz Fizz 82 83 Fizz Buzz 86 Fizz 88 89 FizzBuzz 91 92 Fizz 94 Buzz Fizz 97
+98 Fizz Buzz
+</pre>
+<p> 変数 i を 1 に初期化し、for 文の中で 1 ずつ増やしていきます。最初の if 文で、i が 3 の倍数でかつ 5 の倍数かチェックします。この処理は 15 の倍数をチェックすることと同じなので、条件文を i % 15 == 0 としてもかまいません。そうでなければ、次の else if で i が 3 の倍数かチェックし、次の else if で i が 5 の倍数かチェックします。どの条件も該当しない場合は最後の else 節で i をそのまま出力します。
+</p>
+
+<h4>●switch 文</h4>
+<p> 値を比較して条件分岐を行う場合、if 文よりも switch 文を使ったほうが簡単になることがあります。Go 言語の switch 文はＣ言語や Java よりも柔軟です。switch 文の基本的な構文を示します。
+</p>
+
+<pre class="fig">
+  switch 式 {
+  case A:
+    処理A1
+    処理A2
+    処理A3
+  case B:
+    処理B1
+    処理B2
+    処理B3
+  case C:
+    処理C1
+    処理C2
+    処理C3
+  default:
+    処理Z1
+    処理Z2
+    処理Z3
+  }
+
+  図 : case の構文
+</pre>
+
+<p> switch 文は最初に式を評価します。そのあとに複数の case 節が続きます。Go 言語の場合、case の後ろには定数だけではなく式を指定することができます。そして、式の評価結果と case の式の評価結果を比較します。
+</p>
+
+<p> 式の評価結果と等しい値を見つけた場合、その case 節以降の処理を順番に実行します。Ｃ言語や Java と違って break 文は必要ありません。そうでなければ、次の case 節に移ります。たとえば、式 A の評価結果と等しくない場合、次の節に移り式 B をチェックします。
+</p>
+
+<p> もしも、等しい値が見つからない場合は default 節が実行されます。なお、default 節は省略することができます。switch 文の動作を下図に示します。
+</p>
+
+<pre class="fig">
+     評価結果
+        ↓
+  ┌─────┐Yes ┌────┐          ┌────┐
+  │A の評価値│─→│処理Ａ１│→・・・→│処理Ａ３│─→┐
+  └─────┘    └────┘          └────┘    │
+        ↓ No                                             │
+  ┌─────┐Yes ┌────┐          ┌────┐    │
+  │B の評価値│─→│処理Ｂ１│→・・・→│処理Ｂ３│─→┤
+  └─────┘    └────┘          └────┘    │
+        ↓ No                                             │
+  ┌─────┐Yes ┌────┐          ┌────┐    │
+  │C の評価値│─→│処理Ｃ１│→・・・→│処理Ｃ３│─→┤
+  └─────┘    └────┘          └────┘    │
+        ↓ No                                             │
+  ┌─────┐    ┌────┐          ┌────┐    │
+  │ default  │─→│処理Ｚ１│→・・・→│処理Ｚ３│─→┤
+  └─────┘    └────┘          └────┘    │
+                                                          │
+                                                          ↓
+
+        図 : switch 文の流れ図
+</pre>
+<p> 簡単な例を示します。switch 文を使って FizzBuzz 問題を解いてみましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : FizzBuzz 問題 (2)
+
+package main
+
+import "fmt"
+
+func main() {
+    for i := 1; i &lt;= 100; i++ {
+        switch i % 15 {
+        case 0: fmt.Print("FizzBuzz")
+        case 3, 6, 9, 12: fmt.Print("Fizz")
+        case 5, 10: fmt.Print("Buzz")
+        default: fmt.Print(i)
+        }
+        fmt.Print(" ")
+    }
+}
+</pre>
+
+<pre>
+C&gt;go run fizzbuzz1.go
+1 2 Fizz 4 Buzz Fizz 7 8 Fizz Buzz 11 Fizz 13 14 FizzBuzz 16 17 Fizz 19 Buzz Fizz
+22 23 Fizz Buzz 26 Fizz 28 29 FizzBuzz 31 32 Fizz 34 Buzz Fizz 37 38 Fizz Buzz
+41 Fizz 43 44 FizzBuzz 46 47 Fizz 49 Buzz Fizz 52 53 Fizz Buzz 56 Fizz 58 59
+FizzBuzz 61 62 Fizz 64 Buzz Fizz 67 68 Fizz Buzz 71 Fizz 73 74 FizzBuzz 76 77 Fizz
+79 Buzz Fizz 82 83 Fizz Buzz 86 Fizz 88 89 FizzBuzz 91 92 Fizz 94 Buzz Fizz 97
+98 Fizz Buzz
+</pre>
+
+<p> switch 文で i % 15 を求めます。0 であれば 15 で割り切れるので、FizzBuzz を表示します。3, 6, 9, 12 であれば、3 の倍数なので Fizz と表示します。このように複数の値 (式) をカンマで区切って設定してもかまいません。5, 10 であれば 5 の倍数なので Buzz と表示します。それ以外の数値は default で i を表示します。
+</p>
+<p> このプログラムは次のように書き直すことができます。
+</p>
+<pre class="list">
+リスト :  FizzBuzz 問題 (3)
+
+package main
+
+import "fmt"
+
+func main() {
+    for i := 1; i &lt;= 100; i++ {
+        switch {
+        case i % 15 == 0: fmt.Print("FizzBuzz")
+        case i % 3  == 0: fmt.Print("Fizz")
+        case i % 5  == 0: fmt.Print("Buzz")
+        default: fmt.Print(i)
+        }
+        fmt.Print(" ")
+    }
+}
+</pre>
+<p> switch 文の式が省略さている、または true の場合、case 節の式を評価して、結果が true の節を選択します。Go 言語の場合、if - else if のかわりに switch 文を使うことが多いようです。
+</p>
+
+<p> 今回はここまでです。次回は配列を中心に Go 言語の基本的な機能について説明します。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2014 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ PrevPage | <a href="index.html">Golang</a> | <a href="abcgo02.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

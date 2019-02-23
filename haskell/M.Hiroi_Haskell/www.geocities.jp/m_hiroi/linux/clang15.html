@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ言語プログラミング超入門</title>
+  <meta name="description" content="Ｃ言語,Ｃ言語入門,Linux Programming">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881809</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ言語プログラミング超入門</h2>
+<div class="small">
+[ <a href="clang14.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang16.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>ソート (2)</h3>
+<p> <a href="clang07.html">ソート</a> の続きです。今回はヒープソートとマージソートという高速なソートアルゴリズムを説明します。それから、連結リストのソートについて説明します。
+</p>
+<h4>●ヒープソート</h4>
+<p> ヒープ (heap) は <a href="clang14.html">前回</a> 説明したデータ構造です。実は、このヒープを使ったソートも優秀なアルゴリズムの一つです。実行時間は N * log<sub>2</sub> N に比例しますが、平均するとクイックソートよりも遅くなります。しかし、クイックソートとは違って、データの種類によって性能が劣化することはありません。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<PRE class="list">
+リスト : ヒープソート
+
+void heap_sort(double *buff, int size)
+{
+  for (int i = size / 2 - 1; i &gt;= 0; i--) {
+    int c, n = i;
+    double x = buff[n];
+    while ((c = 2 * n + 1) &lt; size) {
+      if (c + 1 &lt; size &amp;&amp; buff[c] &lt; buff[c + 1]) c++;
+      if (x &gt;= buff[c]) break;
+      buff[n] = buff[c];
+      n = c;
+    }
+    buff[n] = x;
+  }
+  for (int i = size - 1; i &gt;= 0; i--) {
+    int c, n = 0;
+    double x = buff[i];
+    buff[i] = buff[0];
+    while ((c = 2 * n + 1) &lt; i) {
+      if (c + 1 &lt; i &amp;&amp; buff[c] &lt; buff[c + 1]) c++;
+      if (x &gt;= buff[c]) break;
+      buff[n] = buff[c];
+      n = c;
+    }
+    buff[n] = x;
+  }
+}
+</pre>
+<p> 前半部分でヒープを構築します。親子関係が <A href="clang13.html">前回</A> の説明と逆になっていることに注意してください。つまり、親が子より大きいという関係を満たすようにヒープを構築します。したがって、配列の先頭 (buff[0]) が最大値になります。
+</p>
+<p> 後半部分で、最大値を取り出してヒープを再構築します。配列の先頭には最大値がセットされているので、これを配列の最後尾のデータと交換します。あとは、そのデータを除いた範囲でヒープを再構築すれば、その次に大きいデータを求めることができます。これを繰り返すことで、大きいデータが配列の後ろから整列していくことになります。
+</p>
+<p> 最初の for ループで、配列の前半部分のデータを後ろから順番に取り出します。次の while ループで、親子関係を満たすように修正します。変数 n が親の位置を、変数 c が子の位置を示します。次に、後半の for ループで、最大値 buff[0] と最後尾のデータ buff[i] を交換します。そして、while ループでヒープの再構築を行います。あとはヒープのプログラムとほとんど同じですが、ヒープを再構築する範囲が変数 i で管理されていて、その値は一つずつ減っていくことに注意してください。
+</p>
+<ul>
+  <li><a href="clang15.html#list1">プログラムリスト１</a>
+</ul>
+<h4>●実行結果 (1)</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+  表 : heap sort の結果 (単位 : 秒)
+
+  個数    乱数   昇順   逆順   山型
+-------------------------------------
+1000000 : 0.198  0.091  0.101  0.118
+2000000 : 0.507  0.197  0.217  0.256
+4000000 : 1.267  0.428  0.469  0.555
+8000000 : 3.038  0.923  0.985  1.191
+
+実行環境 : Lubuntu 14.10 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> このように、ヒープソートはどのデータに対しても、そこそこの速度でソートすることができます。ただし、実行時間はクイックソートだけではなくシェルソートやコムソートよりも遅くなってしまいました。ヒープソートの処理内容は他のソートアルゴリズムよりも複雑なので、時間がかかるのは仕方がないのかもしれません。また、M.Hiroi のコーディングに何か問題があるのかもしれません。お気づきの点がありましたら、ご教示お願いいたします。
+</p>
+
+<h4>●マージとは？</h4>
+<p> 「マージ（併合 : merge）」とはソート済みの複数の列を一つの列にまとめる操作のことです。このマージを使ったソートを「マージソート (merge sort) 」といいます。最初にマージについて簡単に説明します。次の図を見てください。
+</p>
+<pre class="fig">
+      ┌─ (1, 3, 5)  ; リスト a 
+ () ←┤
+      └─ (2, 4, 6)  ; リスト b 
+
+    小さい方をセットする
+
+       ┌─ (3, 5)    ; リスト a 
+ (1) ←┘
+            (2, 4, 6) ; リスト b 
+
+    1 をセットする
+
+               (3, 5) ; リスト a 
+ (1, 2) ←┐
+          └─ (4, 6) ; リスト b 
+
+    2 をセットする
+
+ データがなくなるまで繰り返す
+
+    図 : マージの考え方
+</pre>
+<p> 2 つのリスト a と b があります。これらのリストはソート済みとしましょう。これらのリストをソート済みのリストにまとめることを考えます。 a と b はソート済みなので先頭のデータがいちばん小さな値です。したがって、上図のように先頭のデータを比較し、小さい方のデータを取り出して順番に並べていけば、ソート済みのリストにまとめることができます。途中でどちらかのリストが空になったら、残ったリストのデータをそのまま追加します。
+
+<h4>●マージソートの原理</h4>
+<p> 当たり前だと思われるでしょうが、これが「マージソート (merge sort) 」の原理です。次の図を見てください。
+</p>
+<pre class="fig">
+  9 5 3 7 6 4 2 8  最初の状態
+
+ |5 9|3 7|4 6|2 8| 長さ２の列に併合
+
+ |3 5 7 9|2 4 6 8| 長さ４の列に併合 
+
+  2 3 4 5 6 7 8 9  ソート終了
+
+        図 : マージソート
+</pre>
+<p> マージをソートに応用する場合、最初は各要素をソート済みの配列として考えます。この状態で隣の配列とマージを行い、長さ 2 の配列を作ります。次に、この配列に対して再度マージを行い、長さ 4 の配列を作ります。このように順番にマージしていくと、最後には一つの配列にマージされソートが完了します。
+</p>
+<h4>●マージソートのプログラム</h4>
+<p> それではプログラムを作りましょう。配列の長さを 1, 2, 4, 8, ... と増やしていくよりも、再帰的に考えた方が簡単です。マージは 2 つの列を一つの列にまとめる操作です。そこで、まずソートする配列を 2 つに分けて、前半部分をソートします。次に後半部分をソートして、その結果をマージすればいいわけです。
+</p>
+<p> では、どうやってソートするのかというと、再帰呼び出しするのです。そうすると、どんどん配列を 2 つに割っていくことになり、最後にデータが一つとなります。それはソート済みの配列と考えることができるので、再帰呼び出しを終了してマージ処理に移ることができます。あとはデータを順番にマージしていってソートが完了します。
+</p>
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : マージソート
+
+// 挿入ソート
+void insert_sort(double *buff, int low, int high)
+{
+  for (int i = low + 1; i &lt;= high; i++) {
+    int j;
+    double temp = buff[i];
+    for (j = i - 1; j &gt;= low &amp;&amp; temp &lt; buff[j]; j--) {
+      buff[j + 1] = buff[j];
+    }
+    buff[j + 1] = temp;
+  }
+}
+
+// マージソート
+#define LIMIT 32
+
+void merge_sort_sub(double *buff, int low, int high)
+{
+  if (high - low &lt;= LIMIT) {
+    insert_sort(buff, low, high);
+  } else {
+    int mid = low + (high - low) / 2;
+    merge_sort_sub(buff, low, mid);
+    merge_sort_sub(buff, mid + 1, high);
+    int p = 0;
+    int i = low;
+    while (i &lt;= mid) work[p++] = buff[i++];
+    i = mid + 1;
+    int j = 0;
+    int k = low;
+    while (i &lt;= high &amp;&amp; j &lt; p) {
+      if (work[j] &lt;= buff[i]) {
+        buff[k++] = work[j++];
+      } else {
+        buff[k++] = buff[i++];
+      }
+    }
+    while (j &lt; p) buff[k++] = work[j++];
+  }
+}
+
+void merge_sort(double *buff, int size)
+{
+  merge_sort_sub(buff, 0, size - 1);
+}
+</pre>
+<p> 最初に区間の幅が LIMIT 以下になったかチェックします。そうであれば、挿入ソート (insert_sort) に切り替えてソートします。この方が少しですが速くなります。これが再帰呼び出しの停止条件になります。区間の幅が LIMIT よりも大きい場合はマージソートを行います。
+</p>
+<p> まず列の中央を求めて変数 mid にセットします。最初に前半部、それから後半部をマージソートします。これは merge_sort を再帰呼び出しするだけです。再帰呼び出しから戻ってくると、配列の前半部分と後半部分はソートされているのでマージ処理を行います。
+</p>
+<p> まず前半部分を作業領域 work に退避します。work はグローバル変数として定義します。work の大きさはソートする配列の半分で十分です。たとえば、前半部分のデータよりも後半部分のデータがすべて小さいとします。この場合、後半部分のデータが先頭から順番にセットされ、その後ろに退避した前半部分のデータがセットされます。逆に、前半部分のデータがすべて小さければ、後半部分のデータは移動する必要はないので、work に退避した前半部分のデータを元に戻すことになります。
+</p>
+<p> 次の while ループで、前半部分もしくは後半部分どちらかにデータがある間、データの比較と移動を繰り返し行います。前半部分と後半部分を先頭から順番に比較し、小さい方を区間の先頭から順番にセットしていきます。後半部分のデータが先になくなって、作業領域 work にデータが残っている場合は、最後の while ループでデータを後ろに追加します。
+</p>
+<ul>
+  <li><a href="clang15.html#list2">プログラムリスト２</a>
+</ul>
+<h4>●実行結果 (2)</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+  表 : merge sort の結果 (単位 : 秒)
+
+  個数    乱数   昇順   逆順   山型
+-------------------------------------
+1000000 : 0.114  0.018  0.043  0.031
+2000000 : 0.244  0.043  0.095  0.070
+4000000 : 0.523  0.099  0.202  0.151
+8000000 : 1.106  0.201  0.435  0.332
+
+実行環境 : Lubuntu 14.10 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> マージソートの実行時間は、要素数を N とすると平均して N * log<sub>2</sub> N に比例します。マージソートはクイックソートと同様に高速なアルゴリズムですが、実際にプログラムを作って比較してみるとクイックソートの方が高速です。しかし、マージソートは配列を単純に二分割していくため、クイックソートと違ってデータの種類によって性能が劣化することはありません。ヒープソートと同様に、どのようなデータに対しても力を発揮してくれるわけです。ただし、ヒープソートとは違って作業領域が必要になります。
+</p>
+<p> なお、マージソートは連結リストのソートや外部ソートに適したアルゴリズムです。連結リストのソートはあとで説明します。
+</p>
+<h4>●マージソートの改良</h4>
+<p> マージソートは配列 buff の大きさを N とすると、大きさが N / 2 の作業用領域 work を必要としました。ここで、作業領域 work の大きさを配列 buff と同じ N にすることを考えます。この場合、最初に buff を work にコピーしておいて、再帰のたびに buff と work を交互に入れ換えることで、マージソートの実行速度を改善することができます。
+</p>
+<p> なお、この方法は <a href="http://www.moon.sannet.ne.jp/okahisa/sort/sort.html">C++によるソート(sort)のページ</a> <a href="http://www.moon.sannet.ne.jp/okahisa/sort/node18.html">修正マージソート</a> を参考にさせていただきました。有益な情報を公開されている作者様に感謝いたします。
+</p>
+<p> プログラムは次のようになります。
+<pre class="list">
+リスト : マージソート (改良版)
+
+void msort(double *a, double *b, int low, int high)
+{
+  if (high - low &lt;= LIMIT) {
+    insert_sort(b, low, high);
+  } else {
+    int mid = low + (high - low) / 2;
+    msort(b, a, low, mid);
+    msort(b, a, mid + 1, high);
+    int i = low;
+    int j = mid + 1;
+    int k = low;
+    while (i &lt;= mid &amp;&amp; j &lt;= high) {
+      if (a[i] &lt;= a[j])
+	b[k++] = a[i++];
+      else
+	b[k++] = a[j++];
+    }
+    while (i &lt;= mid) b[k++] = a[i++];
+    while (j &lt;= high) b[k++] = a[j++];
+  }
+}
+
+void merge_sort1(double *buff, int size)
+{
+  for (int i = 0; i &lt; size; i++) work[i] = buff[i];
+  msort(work, buff, 0, size - 1);
+}
+</pre>
+<p> merge_sort1 は buff を配列 work にコピーしてから関数 msort を呼び出してマージソートします。msort(a, b, low, high) は、配列 b の区間 (low, high) を二分割してソートします。msort を再帰呼び出しするとき、引数 a, b を逆にすることに注意してください。二つの区間をソートしたあと、二つの区間をマージした結果は配列 a の区間 (low, high) にセットします。改良前の merge_sort では、あらかじめ buff の前半部分を work に退避していましたが、buff を work にコピーしておいて、buff と work を交互に切り替えることで、buff の前半部分を work に退避する処理が不要になります。
+</p>
+<ul>
+  <li><a href="clang15.html#list2">プログラムリスト２</a>
+</ul>
+<h4>●実行結果 (3)</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+  表 : merge sort (修正版) の結果 (単位 : 秒)
+
+  個数    乱数   昇順   逆順   山型
+-------------------------------------
+1000000 : 0.108  0.027  0.038  0.031
+2000000 : 0.224  0.057  0.083  0.069
+4000000 : 0.479  0.118  0.174  0.147
+8000000 : 1.000  0.254  0.371  0.313
+
+実行環境 : Lubuntu 14.10 on VirtualBox, Core i7-2670QM 2.20GHz
+</pre>
+<p> 結果を見ればお分かりのように、昇順データ以外では改良版のほうが速くなりました。改良の効果は十分に出ていると思います。メモリを多く使用することになりますが、このような簡単な方法でマージソートを改良できるとは驚きました。
+</p>
+<h4>●連結リストのソート</h4>
+<p> 次は連結リストのソートについて説明します。連結リストはセルを一方向につなげたデータ構造なので、配列のようにランダムアクセスすることはできません。このため、クイックソートのように配列を直接書き換えるアルゴリズムを、そのまま連結リストに適用することはできませんが、枢軸を基準にリストを二分割していくことで、連結リストでもクイックソートすることができます。
+</p>
+<h4>●クイックソート</h4>
+<p> 基本的な考え方は簡単です。クイックソートは枢軸を基準にして、要素をそれより大きいものと小さいものの 2 つに分割していくことでソートを行います。枢軸は要素の中から適当な値を選んでいいのですが、連結リストの場合は任意の箇所を簡単に選ぶことができません。この場合は、いちばん簡単に求めることができる先頭の要素を枢軸とします。
+</p>
+<p> 次に連結リストを 2 つに分けます。このとき、セルを繋ぎ直していくことで、新しいセルを生成しなくても、連結リストを二分割することができます。そして、それらの連結リストを再帰呼び出しして同様にソートします。最後に、その結果を枢軸を挟んで結合します。これを図に表すと次のようになります。
+</p>
+<pre class="fig">
+         5 3 7 6 9 8 1 2 4
+
+          5 を枢軸に分割
+
+    (3, 1, 2, 4)  5  (7, 6, 9, 8)
+
+    3を枢軸に分割    7を枢軸に分割
+
+ (1, 2)  3  (4) | 5 | (6)  7  (9, 8) 
+
+  ・・・分割を繰り返していく・・・ 
+
+  図 : 連結リストのクイックソート
+</pre>
+<p> このように連結リストを分割していくと、最後は空リストになります。ここが再帰の停止条件になります。あとは分割した連結リストを結合すればいいわけです。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> 最初にセルを定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : セルの定義
+
+typedef struct cell {
+  double item;
+  struct cell *next;
+} Cell;
+
+// セルの生成
+Cell *make_cell(double x, Cell *next)
+{
+  Cell *cp = malloc(sizeof(Cell));
+  if (cp != NULL) {
+    cp-&gt;item = x;
+    cp-&gt;next = next;
+  }
+  return cp;
+}
+</pre>
+<p> 構造体 Cell のメンバ変数 item が格納する要素で、今回は浮動小数点数 (double) としました。メンバ変数 next が次のセルへのポインタです。新しいセルは関数 make_cell で生成します。
+</p>
+<p> クイックソートのプログラムは次のようになります。
+</p>
+<PRE class="list">
+リスト : クイックソート
+
+// リストの分割
+void partition(Cell *xs, Cell **small, Cell **big)
+{
+  double pivot = xs-&gt;item;
+  xs = xs-&gt;next;
+  while (xs != NULL) {
+    Cell *ys = xs-&gt;next;
+    if (xs-&gt;item &lt; pivot) {
+      xs-&gt;next = *small;
+      *small = xs;
+    } else {
+      xs-&gt;next = *big;
+      *big = xs;
+    }
+    xs = ys;
+  }
+}
+
+// リストの連結
+Cell *nconc(Cell *xs, Cell *ys)
+{
+  Cell *cp = xs;
+  if (cp == NULL) return ys;
+  // 末尾のセル
+  while (cp-&gt;next != NULL) cp = cp-&gt;next;
+  cp-&gt;next = ys;
+  return xs;
+}
+
+// クイックソート
+Cell *quick_sort(Cell *top)
+{
+  if (top == NULL || top-&gt;next == NULL) return top;
+  Cell *small = NULL;
+  Cell *big = NULL;
+  partition(top, &amp;small, &amp;big);
+  small = quick_sort(small);
+  big = quick_sort(big);
+  top-&gt;next = big;
+  return nconc(small, top);
+}
+</pre>
+<p> 関数 quick_sort の引数 top が空リスト (NULL) か、要素が一つしかない (too-&gt;next == NULL) の場合は、top をそのまま返します。これが再帰呼び出しの停止条件になります。リストの分割は関数 partition で行います。枢軸未満のデータはリスト small に、枢軸以上のデータはリスト big に格納します。リストを分割したら、それぞれのリストを quick_sort でソートします。それから、枢軸の後ろに big を接続して、関数 nconc で small と top を連結します。
+</p>
+<p> 関数 partition は xs の先頭要素を枢軸とし、xs-&gt;next からのリストを二分割します。while ループの中で、xs-&gt;next を変数 ys に退避します。そして、xs-&gt;item が枢軸 pivot よりも小さい場合、*small の先頭にセル xs を追加します。これは xs-&gt;next に *small をセットして、*small の値を xs に更新するだけです。ここで xs-&gt;next を書き換えるので、あらかじめ値を ys に退避しています。要素が枢軸以上であれば、同様に xs を *big に追加します。ループの最後で、xs を ys に更新します。これで、次のセルに進むことができます。
+</p>
+<p> 関数 nconc は引数 xs と ys を連結します。xs が NULL の場合は ys をそのまま返します。次に、xs を変数 cp にセットして、while ループで末尾のセルを求めます。あとは、末尾のセルの後ろ (cp-&gt;next) に ys を接続して xs を返すだけです。
+</p>
+
+<h4>●実行結果 (4)</h4>
+<p> プログラムはこれで完成です。さっそく実行してみましょう。
+</p>
+<pre class="list">
+リスト : 簡単なテスト
+
+int main(void)
+{
+  double a[10] = {5,6,4,7,3,8,2,9,1,0};
+  Cell *cp = NULL;
+  for (int i = 0; i &lt; 10; i++) {
+    cp = make_cell(a[i], cp);
+  }
+  print_cell(cp);
+  cp = quick_sort(cp);
+  print_cell(cp);
+
+  for (int i = 1000000; i &lt;= 8000000; i *= 2) {
+    cp = make_random(i);
+    clock_t s = clock();
+    cp = quick_sort(cp);
+    printf("%d : %.3f\n", i, (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(cp);
+  }
+  return 0;
+}
+</pre>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./listsort
+0 1 9 2 8 3 7 4 6 5 
+0 1 2 3 4 5 6 7 8 9 
+1000000 : 0.711
+2000000 : 1.778
+4000000 : 4.069
+8000000 : 11.735
+</pre>
+<p> クイックソートは高速なアルゴリズムですが、枢軸の選び方によっては遅いソートと同じになってしまいます。今回のように、リストの先頭要素を枢軸として選ぶ場合、リストの要素が昇順または降順に並んでいると最悪の結果になります。このため、クイックソートをプログラムする場合、枢軸の選び方を工夫するのが一般的です。
+</p>
+<p> ただし、要素を数個選んで中間の値を枢軸とする方法は、連結リストに不向きであることに注意してください。たとえば、要素が 1000 個ある場合、配列であれば 0, 500, 999 番目の要素を取り出すのは簡単ですが、連結リストでは要素数が多くなるほど、後ろの要素を取り出すのに時間がかかるようになります。先頭から 3 つの要素を取り出して枢軸を選んだとしても、降順または昇順に並んだデータには効果が無いのは明らかです。クイックソートは配列に向いているソートアルゴリズムといえます。
+</p>
+<h4>●リストのマージ</h4>
+<p> 次は、クイックソートと同様に高速なアルゴリズムであるマージソートを取り上げます。マージソートの場合、連結リストを直接書き換えながらソートすることができます。さっそくプログラムを示しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 連結リストのマージソート
+
+// リストのマージ
+Cell *merge_list(Cell *xs, Cell *ys)
+{
+  Cell head;
+  Cell *cp = &amp;head;
+  while (xs != NULL &amp;&amp; ys != NULL) {
+    if (xs-&gt;item &lt;= ys-&gt;item) {
+      cp-&gt;next = xs;
+      cp = xs;
+      xs = xs-&gt;next;
+    } else {
+      cp-&gt;next = ys;
+      cp = ys;
+      ys = ys-&gt;next;
+    }
+  }
+  if (xs != NULL)
+    cp-&gt;next = xs;
+  else
+    cp-&gt;next = ys;
+  return head.next;
+}
+</pre>
+<p> 関数 merge_list が連結リストをマージ (併合) する関数で、ソート済みの連結リスト xs と ys を一つの連結リストにまとめます。この関数は連結リストを破壊的に修正してマージします。最初に連結リストのヘッダ head を用意します。このあとに、連結リストをつないでいきます。変数 cp は最後尾のセルを示します。
+</p>
+<p> マージ処理はとても簡単です。while ループで xs と ys にデータがある間、2 つのデータ xs-&gt;item, y-&gt;item を比較し、小さいほうのセルを cp の後ろ (cp-&gt;next) につなげます。そして、cp の値をつなげたセルに更新して、次のセルへ進めます。while ループが終了して、xs に連結リストが残っていれば、それを cp の後ろにつなげます。xs が空リストであれば ys に残っている連結リストをつなげます。最後に、return でマージしたリスト head.next を返します。
+</p>
+<h4>●マージソート</h4>
+<pre class="list">
+リスト : 連結リストのマージソート
+
+Cell *merge_sort(Cell *cp, int n)
+{
+  if (n == 1) {
+    cp-&gt;next = NULL;
+    return cp;
+  } else {
+    int m = n / 2;
+    Cell *xs = cp;
+    for (int i = 0; i &lt; m; i++) xs = xs-&gt;next;
+    return merge_list(merge_sort(cp, m), merge_sort(xs, n - m));
+  }
+}
+</pre>
+
+<p> マージソートは関数 merge_sort で行います。cp がソートする連結リスト、n が連結リストの長さを表します。merge_sort は連結リストを分割する処理で、新しい連結リストを作らないことに注意してください。次の図を見てください。
+</p>
+<pre class="fig">
+  引数 x
+   ｜
+   ｜←──── 長さ n ───→｜
+ （１, ２, ３, ４, ５, ６, ７, ８）   
+   ｜←  n/2 →｜  ｜←  m ─→｜
+   ｜              ｜    m = (n - n/2)
+  引数 x          引数 y
+
+        図 : 連結リストの分割
+</pre>
+<p> merge_sort はソートする連結リストの範囲を開始位置と長さで表しています。上図の連結リストを二分割する場合、前半部分は x と n / 2 で表し、後半部分を y と (n - n / 2) で表します。y は連結リストを n / 2 回たどれば求めることができます。
+</p>
+<p> n が 1 になったら x-&gt;next を NULL に書き換えます。これが再帰の停止条件で、要素数が一つの連結リスト、つまりソート済みの連結リストを返すことになります。n が 1 よりも大きい場合は、連結リストを二分割して merge_sort を再帰呼び出しし、その結果を merge_list でマージすればいいわけです。
+</p>
+
+<h4>●実行結果 (5)</h4>
+<p> それでは実行結果を示します。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/clang$ ./listsort 
+0 1 9 2 8 3 7 4 6 5 
+0 1 2 3 4 5 6 7 8 9 
+1000000 : 0.368
+2000000 : 0.875
+4000000 : 2.023
+8000000 : 4.709
+</pre>
+<p> クイックソートよりもマージソートのほうが速くなりました。連結リストのソートはクイックソートよりもマージソートのほうが適していることがわかります。
+</p>
+<p> なお、これらの結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+リスト : ヒープソート (heapsort.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;time.h&gt;
+
+#define N 8000000
+
+double buff[N];
+
+bool check(int size)
+{
+  for (int i = 1; i &lt; size; i++) {
+    if (buff[i - 1] &gt; buff[i]) {
+      printf("sort error\n");
+      return false;
+    }
+  }
+  return true;
+}
+
+// データの作成
+
+// Fisher-Yates shuffle アルゴリズム
+void shuffle(double *buff, int size)
+{
+  for (int i = size - 1; i &gt; 0; i--) {
+    int j = rand() % (i + 1);
+    int tmp = buff[i];
+    buff[i] = buff[j];
+    buff[j] = tmp;
+  }
+}
+
+void make_sequence(int size)
+{
+  for (int i = 0; i &lt; size; i++) buff[i] = i;
+}
+
+void make_reverse(int size)
+{
+  for (int i = 0, j = size - 1; i &lt; size; i++, j--)
+    buff[i] = j;
+}
+
+void make_yama(int size)
+{
+  int j = 0;
+  for (int i = 0; i &lt; size / 2; i++, j += 2)
+    buff[i] = j;
+  j--;
+  for (int i = size / 2; i &lt; size; i++, j -= 2)
+    buff[i] = j;
+}
+
+// ヒープソート
+void heap_sort(double *buff, int size)
+{
+  for (int i = size / 2 - 1; i &gt;= 0; i--) {
+    int c, n = i;
+    double x = buff[n];
+    while ((c = 2 * n + 1) &lt; size) {
+      if (c + 1 &lt; size &amp;;&amp;; buff[c] &lt; buff[c + 1]) c++;
+      if (x &gt;= buff[c]) break;
+      buff[n] = buff[c];
+      n = c;
+    }
+    buff[n] = x;
+  }
+  for (int i = size - 1; i &gt;= 0; i--) {
+    int c, n = 0;
+    double x = buff[i];
+    buff[i] = buff[0];
+    while ((c = 2 * n + 1) &lt; i) {
+      if (c + 1 &lt; i &amp;;&amp;; buff[c] &lt; buff[c + 1]) c++;
+      if (x &gt;= buff[c]) break;
+      buff[n] = buff[c];
+      n = c;
+    }
+    buff[n] = x;
+  }
+}
+
+void test(void (*func)(double *, int))
+{
+  for (int i = 1000000; i &lt;= N; i *= 2) {
+    clock_t s;
+    printf("----- shuffle %d ------\n", i);
+    make_sequence(i);
+    shuffle(buff, i);
+    s = clock();
+    func(buff, i);
+    printf("%.3f\n", (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(i);
+    printf("----- sequence %d ------\n", i);
+    make_sequence(i);
+    s = clock();
+    func(buff, i);
+    printf("%.3f\n", (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(i);
+    printf("----- reverse %d ------\n", i);
+    make_reverse(i);
+    s = clock();
+    func(buff, i);
+    printf("%.3f\n", (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(i);
+    printf("----- yama %d ------\n", i);
+    make_yama(i);
+    s = clock();
+    func(buff, i);
+    printf("%.3f\n", (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(i);
+  }
+}
+
+int main(void)
+{
+  test(heap_sort);
+  return 0;
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+リスト : マージソート (mergesort.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;time.h&gt;
+
+#define N 8000000
+
+double buff[N];
+double work[N];
+
+bool check(int size)
+{
+  for (int i = 1; i &lt; size; i++) {
+    if (buff[i - 1] &gt; buff[i]) {
+      printf("sort error\n");
+      return false;
+    }
+  }
+  return true;
+}
+
+// データの作成
+
+// Fisher-Yates shuffle アルゴリズム
+void shuffle(double *buff, int size)
+{
+  for (int i = size - 1; i &gt; 0; i--) {
+    int j = rand() % (i + 1);
+    int tmp = buff[i];
+    buff[i] = buff[j];
+    buff[j] = tmp;
+  }
+}
+
+void make_sequence(int size)
+{
+  for (int i = 0; i &lt; size; i++) buff[i] = i;
+}
+
+void make_reverse(int size)
+{
+  for (int i = 0, j = size - 1; i &lt; size; i++, j--)
+    buff[i] = j;
+}
+
+void make_yama(int size)
+{
+  int j = 0;
+  for (int i = 0; i &lt; size / 2; i++, j += 2)
+    buff[i] = j;
+  j--;
+  for (int i = size / 2; i &lt; size; i++, j -= 2)
+    buff[i] = j;
+}
+
+/* 挿入ソート */
+void insert_sort(double *buff, int low, int high)
+{
+  for (int i = low + 1; i &lt;= high; i++) {
+    int j;
+    double temp = buff[i];
+    for (j = i - 1; j &gt;= low &amp;&amp; temp &lt; buff[j]; j--) {
+      buff[j + 1] = buff[j];
+    }
+    buff[j + 1] = temp;
+  }
+}
+
+/* マージソート */
+#define LIMIT 32
+
+void merge_sort_sub(double *buff, int low, int high)
+{
+  if (high - low &lt;= LIMIT) {
+    insert_sort(buff, low, high);
+  } else {
+    int mid = low + (high - low) / 2;
+    merge_sort_sub(buff, low, mid);
+    merge_sort_sub(buff, mid + 1, high);
+    int p = 0;
+    int i = low;
+    while (i &lt;= mid) work[p++] = buff[i++];
+    i = mid + 1;
+    int j = 0;
+    int k = low;
+    while (i &lt;= high &amp;&amp; j &lt; p) {
+      if (work[j] &lt;= buff[i]) {
+        buff[k++] = work[j++];
+      } else {
+        buff[k++] = buff[i++];
+      }
+    }
+    while (j &lt; p) buff[k++] = work[j++];
+  }
+}
+
+void merge_sort(double *buff, int size)
+{
+  merge_sort_sub(buff, 0, size - 1);
+}
+
+// 改良版
+void msort(double *a, double *b, int low, int high)
+{
+  if (high - low &lt;= LIMIT) {
+    insert_sort(b, low, high);
+  } else {
+    int mid = low + (high - low) / 2;
+    msort(b, a, low, mid);
+    msort(b, a, mid + 1, high);
+    int i = low;
+    int j = mid + 1;
+    int k = low;
+    while (i &lt;= mid &amp;&amp; j &lt;= high) {
+      if (a[i] &lt;= a[j])
+	b[k++] = a[i++];
+      else
+	b[k++] = a[j++];
+    }
+    while (i &lt;= mid) b[k++] = a[i++];
+    while (j &lt;= high) b[k++] = a[j++];
+  }
+}
+
+void merge_sort1(double *buff, int size)
+{
+  for (int i = 0; i &lt; size; i++) work[i] = buff[i];
+  msort(work, buff, 0, size - 1);
+}
+
+void test(void (*func)(double *, int))
+{
+  for (int i = 1000000; i &lt;= N; i *= 2) {
+    clock_t s;
+    printf("----- shuffle %d ------\n", i);
+    make_sequence(i);
+    shuffle(buff, i);
+    s = clock();
+    func(buff, i);
+    printf("%.3f\n", (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(i);
+    printf("----- sequence %d ------\n", i);
+    make_sequence(i);
+    s = clock();
+    func(buff, i);
+    printf("%.3f\n", (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(i);
+    printf("----- reverse %d ------\n", i);
+    make_reverse(i);
+    s = clock();
+    func(buff, i);
+    printf("%.3f\n", (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(i);
+    printf("----- yama %d ------\n", i);
+    make_yama(i);
+    s = clock();
+    func(buff, i);
+    printf("%.3f\n", (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(i);
+  }
+}
+
+int main(void)
+{
+  test(merge_sort1);
+  return 0;
+}
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+リスト : 連結リストのソート (listsort.c)
+
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;stdbool.h&gt;
+#include &lt;time.h&gt;
+
+// セル
+typedef struct cell {
+  double item;
+  struct cell *next;
+} Cell;
+
+Cell *make_cell(double x, Cell *next)
+{
+  Cell *cp = malloc(sizeof(Cell));
+  if (cp != NULL) {
+    cp-&gt;item = x;
+    cp-&gt;next = next;
+  }
+  return cp;
+}
+
+// 乱数データの生成
+Cell *make_random(int n)
+{
+  Cell *cp = NULL;
+  while (n-- &gt; 0)
+    cp = make_cell(rand(), cp);
+  return cp;
+}
+
+// クイックソート
+Cell *quick_sort(Cell *top)
+{
+  if (top == NULL || top-&gt;next == NULL) return top;
+  Cell *big = NULL;
+  Cell *small = NULL;
+  Cell *xs = top-&gt;next;
+  while (xs != NULL) {
+    Cell *ys = xs-&gt;next;
+    if (xs-&gt;item &lt; top-&gt;item) {
+      xs-&gt;next = small;
+      small = xs;
+    } else {
+      xs-&gt;next = big;
+      big = xs;
+    }
+    xs = ys;
+  }
+  big = quick_sort(big);
+  small = quick_sort(small);
+  if (small == NULL) {
+    top-&gt;next = big;
+    return top;
+  } else {
+    for (xs = small; xs-&gt;next != NULL; xs = xs-&gt;next);
+    xs-&gt;next = top;
+    top-&gt;next = big;
+    return small;
+  }
+}
+
+void print_cell(Cell *cp)
+{
+  for (; cp != NULL; cp = cp-&gt;next) 
+    printf("%.0f ", cp-&gt;item);
+  printf("\n");
+}
+
+bool check(Cell *cp)
+{
+  for ( ; cp-&gt;next != NULL; cp = cp-&gt;next) { 
+    if (cp-&gt;item &gt; cp-&gt;next-&gt;item) {
+      fprintf(stderr, "sort error\n");
+      return false;
+    }
+  }
+  return true;
+}
+
+// リストのマージ
+Cell *merge_list(Cell *xs, Cell *ys)
+{
+  Cell head;
+  Cell *cp = &amp;head;
+  while (xs != NULL &amp;&amp; ys != NULL) {
+    if (xs-&gt;item &lt;= ys-&gt;item) {
+      cp-&gt;next = xs;
+      cp = xs;
+      xs = xs-&gt;next;
+    } else {
+      cp-&gt;next = ys;
+      cp = ys;
+      ys = ys-&gt;next;
+    }
+  }
+  if (xs != NULL)
+    cp-&gt;next = xs;
+  else if (ys != NULL)
+    cp-&gt;next = ys;
+  return head.next;
+}
+
+// マージソート
+Cell *merge_sort(Cell *cp, int n)
+{
+  if (n == 1) {
+    cp-&gt;next = NULL;
+    return cp;
+  } else {
+    int m = n / 2;
+    Cell *xs = cp;
+    for (int i = 0; i &lt; m; i++) xs = xs-&gt;next;
+    return merge_list(merge_sort(cp, m), merge_sort(xs, n - m));
+  }
+}
+
+int main(void)
+{
+  double a[10] = {5,6,4,7,3,8,2,9,1,0};
+  Cell *cp = NULL;
+  for (int i = 0; i &lt; 10; i++) {
+    cp = make_cell(a[i], cp);
+  }
+  print_cell(cp);
+  cp = merge_sort(cp, 10);
+  print_cell(cp);
+
+  for (int i = 1000000; i &lt;= 8000000; i *= 2) {
+    cp = make_random(i);
+    clock_t s = clock();
+    cp = merge_sort(cp, i);
+    printf("%d : %.3f\n", i, (double)(clock() - s) / CLOCKS_PER_SEC);
+    check(cp);
+  }
+
+  return 0;
+}
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="clang14.html">PrevPage</a> | <a href="clang.html">Clang</a> | <a href="clang16.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

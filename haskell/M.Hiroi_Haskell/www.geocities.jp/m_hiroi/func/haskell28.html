@@ -1,0 +1,676 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881791</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell27.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell29.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">電卓プログラムの作成 (2)</h3>
+<p> 前回は四則演算を行う簡単な電卓プログラムを作りました。今回は電卓プログラムに変数と組み込み関数の機能を追加してみましょう。
+</p>
+<p> なお、このドキュメントは拙作のページ Scheme 入門 <a href="abcscm51.html">電卓プログラムの作成 (2)</a> を Haskell 向けに書き直したものです。内容は重複していますが、あしからずご了承くださいませ。
+</p>
+
+<h4>●変数の文法</h4>
+<p> 前回作成した電卓は、計算結果を表示したあとそれを保持していないので、計算結果を再利用することができません。一般の電卓のように、計算結果を記憶しておくメモリ機能があると便利です。この機能を「変数 (variable) 」として実現することにします。プログラミング言語で言えば、大域変数 (グローバル変数) と同じ機能になります。
+</p>
+
+<p> 変数を実装するのであれば、変数に値を代入する操作が必要になります。文法に「文」を定義する、つまり「代入文」を追加する方法もありますが、今回は簡単な電卓プログラムなので、代入演算子 "=" を用意して式の中で処理することにしましょう。代入演算子は右辺の式の値を左辺の変数に代入するので、文法は次のように表すことができます。
+</p>
+
+<pre class="item">
+[EBNF]
+  式   = 代入式 | 式１.
+代入式 = 変数, "=", 式.
+ 式１  = 項, { ("+" | "-"), 項 }.
+  項   = 因子, { ("*" | "/"), 因子 }.
+ 因子  = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数.
+ 変数  = 識別子
+
+[注意] 数値と識別子の定義は省略
+</pre>
+
+<p> 演算子 = は他の演算子と違って右結合になることに注意してください。このため、他の演算子よりも優先順位を低くし、右辺の式の評価を優先して行います。そして、その結果を変数にセットします。文法では、式を 代入式 | 式１ に変更し、代入式で演算子 = の処理を行います。式１は今までの式の定義と同じです。これで演算子 = の優先順位を低くすることができます。あとは代入式の処理で、右辺の式を先に評価して、その結果を変数にセットすればいいわけです。
+</p>
+
+<p> それから、因子に「変数」を追加します。変数の定義は「識別子」とし、識別子は先頭文字がアルファベットで、それ以降の文字はアルファベットだけではなく数字 (0 - 9) を含んでいてもかまいません。Scheme 入門で作成したプログラムと違って、今回のプログラムは構文木を組み立ててからそれを評価するので、構文解析の段階では変数をそのまま返すだけで OK です。
+</p>
+
+<h4>●組み込み関数の文法</h4>
+<p> 次は文法に組み込み関数を追加しましょう。関数の処理は「因子」に追加します。
+</p>
+
+<pre class="item">
+[EBNF]
+  式   = 代入式 | 式１.
+代入式 = 変数, "=", 式.
+ 式１  = 項, { ("+" | "-"), 項 }.
+  項   = 因子, { ("*" | "/"), 因子 }.
+ 因子  = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数 | 関数, "(", 引数リスト, ")".
+ 変数  = 識別子
+ 関数  = 識別子
+
+引数リスト = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+
+<p> 関数の名前は識別子とし、そのあとに引数をカッコで囲んで渡します。カッコの中は「引数リスト」として定義します。これは「式」をカンマで区切って並べたもので、一般的な手続き型言語の関数呼び出しと同じ形式になります。
+</p>
+<p> ただし、変数と関数は同じ識別子なので、このままでは区別することができません。この場合、簡単な方法が 2 つあります。ひとつは関数として登録されている識別子を関数とする方法、もうひとつは次のトークンが左カッコ (Lpar) であれば関数とする方法です。今回は前者の方法を採用することにしましょう。
+</p>
+
+<h4>●変数と組み込み関数の定義</h4>
+<p> それではプログラムを作ります。最初に、変数と組み込み関数を表すデータ型を定義します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : データ型の定義
+
+-- トークンの定義
+data Token = Number Value           -- 数値
+           | Ident String           -- 識別子
+           | Add | Sub | Mul | Div  -- 演算子
+           | Assign                 -- 代入演算子
+           | Lpar | Rpar            -- カッコ
+           | Semic                  -- セミコロン
+           | Comma                  -- カンマ
+           | Eof                    -- ファイルの終了
+           | Others Char            -- その他
+  deriving (Show, Eq)
+
+-- 組み込み関数の定義
+data Func = F1  (Double -&gt; Double)
+          | F2  (Double -&gt; Double -&gt; Double)
+          | Fi1 (Double -&gt; Integer)
+
+-- 構文木の定義
+data Expr = Num Value
+          | Var String
+          | Op1 (Value -&gt; Value) Expr
+          | Op2 (Value -&gt; Value -&gt; Value) Expr Expr
+          | Agn Expr Expr
+          | App Func [Expr]
+</pre>
+<p> Token に代入演算子 = を表す Assign、識別子を表す Ident、カンマ ( , ) を表す Comma を追加します。関数を表すデータ型が Func です。引数がひとつの関数を F1 で、引数が二つの関数を F2 で表します。今回はもうひとつ種類を追加して、実数を受け取って整数を返す関数を Fi1 で表します。構文木 Expr には変数を表す Var String、変数の代入処理を表す Agn Expr Expr、関数呼び出しを表す App Func [Expr] を追加します。関数の引数は [Expr] に格納します。
+</p>
+
+<p> 組み込み関数は大域変数 funcTable に連想リストの形式で格納します。
+</p>
+<pre class="list">
+リスト : 組み込み関数の定義
+
+funcTable :: [(String, Func)]
+funcTable = [("sqrt", F1 sqrt),
+             ("sin",  F1 sin),
+             ("cos",  F1 cos),
+             ("tan",  F1 tan),
+             ("asin", F1 asin),
+             ("acos", F1 acos),
+             ("atan", F1 atan),
+             ("exp",  F1 exp),
+             ("pow",  F2 (**)),
+             ("log",  F1 log),
+             ("sinh", F1 sinh),
+             ("cosh", F1 cosh),
+             ("tanh", F1 tanh),
+             ("floor",   Fi1 floor),
+             ("ceiling", Fi1 ceiling),
+             ("round",   Fi1 round),
+             ("truncate",Fi1 truncate)]
+</pre>
+
+<h4>●字句解析</h4>
+<p> 次は関数 getToken を修正します。
+</p>
+<pre class="list">
+リスト : 字句解析の修正
+
+-- トークンをひとつ取り出す
+getToken :: String -&gt; Lexer
+getToken [] = (Eof, "")
+getToken (x:xs)
+  | isSpace x = getToken xs
+  | isAlpha x = let (name, ys) = span isAlphaNum (x:xs)
+                in (Ident name, ys)
+  | isDigit x = let (s, ys@(y:_)) = span isDigit (x:xs)
+                in if y == '.' || y == 'e' || y == 'E'
+                   then case reads (x:xs) of
+                          [] -&gt; error "not number"  -- ありえないエラー
+                          [(y', ys')] -&gt; (Number (REAL y'), ys')
+                   else (Number (INT (read s)), ys)
+  | otherwise =
+      case x of
+        '=' -&gt; (Assign, xs)
+        '+' -&gt; (Add, xs)
+        '-' -&gt; (Sub, xs)
+        '*' -&gt; (Mul, xs)
+        '/' -&gt; (Div, xs)
+        '(' -&gt; (Lpar, xs)
+        ')' -&gt; (Rpar, xs)
+        ';' -&gt; (Semic, xs)
+        ',' -&gt; (Comma, xs)
+        _   -&gt; (Others x, xs)
+</pre>
+<p> 記号 x がアルファベットか関数 isAlpha でチェックします。そうであれば関数 span isAlphaNum で識別子を取り出して、Ident に格納して返します。あとは、代入演算子 = とカンマ "," が入力された場合、それを表すトークン Assign と Comma を 返します。
+</p>
+
+<h4>●構文解析</h4>
+<p> 次は構文解析を修正します。まず最初に、代入演算子の処理を expr に追加します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : expr の修正
+
+-- 式１
+expr1 :: [Token] -&gt; Calc (Expr, [Token])
+expr1 xs = term xs &gt;&gt;= expr_sub
+  where
+    opList = [(Add, add), (Sub, sub)]
+    expr_sub zs@(e, y:ys) =
+      case lookup y opList of
+        Nothing -&gt; return zs
+        Just op -&gt; term ys &gt;&gt;= \(e', ys') -&gt; expr_sub (Op2 op e e', ys')
+
+-- 式
+expr :: [Token] -&gt; Calc (Expr, [Token])
+expr xs = expr1 xs &gt;&gt;= expr_sub
+  where
+    expr_sub (e, Assign:xs) =
+      case e of
+        Var _ -&gt; expr xs &gt;&gt;= \(e', ys) -&gt; return (Agn e e', ys)
+        _     -&gt; calcError "invalid assign form"
+    expr_sub xs = return xs
+</pre>
+<p> 演算子 +, - の処理は関数 expr1 で行い、演算子 = の処理を expr で行います。expr は最初に expr1 を評価して、その返り値を局所変数 expr_sub に渡します。先頭のトークンが Assign の場合は代入式の処理を行います。構文木 e の値をチェックして、変数を表す Var でなければエラーを返します。変数の場合、expr を呼び出して右辺の式を評価し、その返り値 e' と変数 e を Agn にセットします。expr1 は今までの expr と同じです。
+</p>
+
+<p> 次は関数 factor を修正します。
+</p>
+<pre class="list">
+リスト : 因子の修正
+
+-- 因子
+factor :: [Token] -&gt; Calc (Expr, [Token])
+factor (Number x : xs) = return (Num x, xs)
+factor (Lpar : xs) = expr xs &gt;&gt;= \(e, y:ys) -&gt;
+                       case y of
+                         Rpar -&gt; return (e, ys)
+                         _    -&gt; calcError "')' expected"
+factor (Sub : xs) = expr xs &gt;&gt;= \(e, ys) -&gt; return (Op1 neg e, ys)
+factor (Add : xs) = expr xs
+factor (Eof : xs) = calcError "end of file"
+factor (Ident name : xs) =
+  case lookup name funcTable of
+    Nothing -&gt; return (Var name, xs)
+    Just fn -&gt; getArgs xs &gt;&gt;= \(args, ys) -&gt;
+                 if length args &lt; argsNum fn
+                   then calcError "not enough arguments"
+                   else return (App fn args, ys)
+                   where argsNum fn = case fn of
+                                       (F1 _)  -&gt; 1
+                                       (F2 _)  -&gt; 2
+                                       (Fi1 _) -&gt; 1
+factor (x :_ ) = calcError ("unexpected token: " ++ show x)
+
+-- 引数の取得
+getArgs :: [Token] -&gt; Calc ([Expr], [Token])
+getArgs (Lpar : xs) = iter xs []
+  where
+    iter (Rpar : xs) a = return (reverse a, xs)
+    iter xs a = expr xs &gt;&gt;= \(e, y:ys) -&gt;
+      case y of
+        Comma -&gt; iter ys (e:a)
+        Rpar  -&gt; return (reverse (e:a), ys)
+        _     -&gt; calcError ("unexpected token in argument list: " ++ show y)
+getArgs _ = calcError "'(' expected"
+</pre>
+<p> 先頭のトークンが Ident の場合、変数または関数呼び出しの処理を行います。最初に lookup name funcTable を呼び出して、識別子 name が組み込み関数かチェックします。そうであれば、組み込み関数を呼び出す App を生成します。まず関数 getArgs で引数を取り出して、引数の個数をチェックしてから、App fn args を返します。引数の個数が多い場合は無視することにします。関数でなければ変数なので Var name を返します。
+</p>
+
+<p> getArgs はカンマで区切られた式を expr で評価して構文木を組み立て、それをリストに格納して返します。最初に左カッコ (Lpar) があることを確認します。そうでなければエラーを返します。次に、expr を評価したあと、case で先頭のトークンをチェックします。右カッコ (Rpar) であれば、引数 v を累積変数 a に追加して、reverse で反転して返します。カンマ (Comma) であれば、まだ引数があるので次の式を評価します。それ以外のトークンの場合、式に誤りがあるのでエラーを返します。
+</p>
+
+<h4>●構文木の評価</h4>
+<p> 次は構文木を評価する関数 evalExpr を修正します。
+</p>
+<pre class="list">
+リスト : 式の計算
+
+-- 環境の定義
+type Env    = [(String, Value)]
+
+-- 構文木の評価
+evalExpr :: Expr -&gt; Env -&gt; Calc (Value, Env)
+evalExpr (Num x) env = return (x, env)
+evalExpr (Var x) env = 
+  case lookup x env of
+    Nothing -&gt; calcError ("unbound variable: " ++ x)
+    Just v  -&gt; return (v, env)
+evalExpr (Agn (Var name) e) env = do
+  (v, env') &lt;- evalExpr e env
+  return (v, (name, v):env')
+evalExpr (Op1 op e) env = do
+  (v, env') &lt;- evalExpr e env
+  return (op v, env')
+evalExpr (Op2 op e1 e2) env = do
+  (v1, env1) &lt;- evalExpr e1 env
+  (v2, env2) &lt;- evalExpr e2 env1
+  return (op v1 v2, env2)
+evalExpr (App fn args) env = do
+  (v1, env1) &lt;- evalExpr (args !! 0) env
+  case fn of
+    F1 f -&gt; return (REAL (f (toREAL v1)), env1)
+    F2 f -&gt; do (v2, env2) &lt;- evalExpr (args !! 1) env1
+               return (REAL (f (toREAL v1) (toREAL v2)), env2)
+    Fi1 f -&gt; return (INT (f (toREAL v1)), env1)
+
+toREAL :: Value -&gt; Double
+toREAL (INT x)  = fromIntegral x
+toREAL (REAL x) = x
+</pre>
+<p> 変数の値は連想リスト [(String, Value)] で保持します。これを「環境 (environment) 」と呼ぶことにします。プログラムでは type で Env という別名をつけています。evalExpr は Expr と Env を受け取って Calc (Value, Env) を返します。evalExpr を評価すると、変数の代入操作によって Env の値が変化することがあるので、新しい環境を返すことに注意してください。
+</p>
+
+<p> 最初に、変数 Var x の値を求める処理を追加します。lookup x env で連想リスト env から x の値を求めます。見つからない場合、その変数は未束縛なのでエラー "unbound variable" を返します。見つけた場合は値 v と環境 env をタプルに格納して Either モナドに包んで返します。
+</p>
+<p> 次に、Agn の処理を追加します。Var から変数名 name を取り出し、構文木 e を環境 env のもとで評価します。返り値は値 v と新しい環境 env' なので、(name, v) を新しい環境 env' の先頭に追加して返します。lookup は連想リストの中から最初に見つけた値を返すので、変数の更新処理はこれでも正常に動作します。ただし、同じ変数を何度も更新すると連想リストが長くなるという欠点があります。まあ、今回は簡単な電卓プログラムなので、これで十分だと思います。興味のある方は、同じ変数名があるときは新しい値に置き換えるようにプログラムを改造してみてください。
+</p>
+<p> 最後に、関数を呼び出す App の処理を追加します。最初に args の先頭要素を evalExpr で評価します。関数 fn の引数が一つの場合は、実引数 v1 を関数 toREAL で Double に変換してから fn を評価します。引数が 2 つの場合は、第 2 要素を evalExpr で評価して、実引数 v1 と v2 を Double に変換してから fn に渡します。
+</p>
+
+<p> ところで、evalExpr の処理は State モナドを利用できる典型的なパターンです。ところが、do 構文やバインド演算子は同じ文脈でなければ処理を連結することができません。つまり、異なるモナドを同時に使用することはできないのです。このような場合、エラーを返す Either モナドと State モナドの機能を併せ持つ新しいモナドを作ることができると便利です。Haskell には二つのモナドを合成して新しいモナドを生成する機能が用意されています。これを「モナド変換子 (monad transformer) 」といいます。
+</p>
+
+<p> モナド変換子はちょっと複雑なので、詳しい説明は次回以降で行う予定です。そのあと、あらためて電卓プログラムを見直してみましょう。
+</p>
+
+<h4>●式の入力と評価</h4>
+<p> 最後に式を入力して評価する処理を修正します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 式の入力と評価
+
+toplevel :: String -&gt; Env -&gt; IO ()
+toplevel xs env = do
+  putStr "Calc&gt; "
+  let (ys, xs') = lexer xs
+  case expression ys of
+    Left mes -&gt; do putStrLn mes
+                   toplevel xs' env
+    Right (e, _) -&gt; 
+      case evalExpr e env of
+        Left mes -&gt; do putStrLn mes
+                       toplevel xs' env
+        Right (v, env') -&gt; do case v of
+                                INT x  -&gt; print x
+                                REAL x -&gt; print x
+                              toplevel xs' env'
+
+main :: IO ()
+main = do
+  xs &lt;- hGetContents stdin
+  toplevel xs []
+</pre>
+<p> 関数 toplevel の引数は文字列 xs だけではなく環境 env を渡します。main から呼び出すとき、環境 env の値を空リストにしているので、変数は何も定義されていない状態です。toplevel で evalExpr を呼び出すときは環境 env を渡します。評価結果が正常な場合、新しい環境 env' を toplevel に渡して再帰呼び出しすることに注意してください。
+</p>
+
+<h4>●実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; :main
+Calc&gt; a = 10;
+10
+Calc&gt; a;
+10
+Calc&gt; a * 10;
+100
+Calc&gt; (b = 20) * 10;
+200
+Calc&gt; b;
+20
+Calc&gt; x = y = z = 0;
+0
+Calc&gt; x;
+0
+Calc&gt; y;
+0
+Calc&gt; z;
+0
+Calc&gt; p = p + 1;
+unbound variable: p
+Calc&gt; q = 1;
+1
+Calc&gt; q = q + 1;
+2
+Calc&gt; q;
+2
+</pre>
+<p> 変数に値を代入すると、その値を使って式を評価することができます。また、式の中に演算子 = が入っていても、その式を評価することができます。x = y = z = 0; のように、多重代入することも可能です。ただし、新しい変数 p で p = p + 1; のようなことはできません。q = 1; を評価したあとならば、既に変数 q は定義されているので、q = q + 1; は評価することができます。
+</p>
+<p> 次は組み込み関数を実行してみましょう。
+</p>
+<pre>
+Calc&gt; sqrt(2);
+1.4142135623730951
+Calc&gt; pow(2,32);
+4.294967296e9
+Calc&gt; pi = asin(0.5) * 6;
+3.1415926535897936
+Calc&gt; sin(0);
+0.0
+Calc&gt; sin(pi/2);
+1.0
+Calc&gt; sin(pi);
+-3.216285744678249e-16
+Calc&gt; c = sqrt(3);
+1.7320508075688772
+Calc&gt; floor(c);
+1
+Calc&gt; ceiling(c);
+2
+Calc&gt; round(c);
+2
+Calc&gt; truncate(c);
+1
+</pre>
+<p> 正常に動作していますね。
+</p>
+
+<h4>●参考文献</h4>
+<ol>
+  <li>松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li>水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li>松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li>高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li>久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+--
+-- calc1.hs : 電卓プログラム
+--
+--            Copyright (C) 2013 Makoto Hiroi
+--
+import Data.Char
+import Control.Monad.Instances
+import System.IO
+
+-- 値
+data Value = INT Integer | REAL Double deriving (Show, Eq)
+
+-- トークンの定義
+data Token = Number Value           -- 数値
+           | Ident String           -- 識別子
+           | Add | Sub | Mul | Div  -- 演算子
+           | Assign                 -- 代入演算子
+           | Lpar | Rpar            -- カッコ
+           | Semic                  -- セミコロン
+           | Comma                  -- カンマ
+           | Eof                    -- ファイルの終了
+           | Others Char            -- その他
+  deriving (Show, Eq)
+
+-- 組み込み関数の定義
+data Func = F1  (Double -&gt; Double)
+          | F2  (Double -&gt; Double -&gt; Double)
+          | Fi1 (Double -&gt; Integer)
+
+-- 構文木の定義
+data Expr = Num Value
+          | Var String
+          | Op1 (Value -&gt; Value) Expr
+          | Op2 (Value -&gt; Value -&gt; Value) Expr Expr
+          | Agn Expr Expr
+          | App Func [Expr]
+
+-- 型の定義
+type Lexer  = (Token, String)
+type Calc a = Either String a
+type Env    = [(String, Value)]
+
+-- エラー
+calcError :: String -&gt; Calc a
+calcError s = Left s
+
+-- 関数の定義
+funcTable :: [(String, Func)]
+funcTable = [("sqrt", F1 sqrt),
+             ("sin",  F1 sin),
+             ("cos",  F1 cos),
+             ("tan",  F1 tan),
+             ("asin", F1 asin),
+             ("acos", F1 acos),
+             ("atan", F1 atan),
+             ("exp",  F1 exp),
+             ("pow",  F2 (**)),
+             ("log",  F1 log),
+             ("sinh", F1 sinh),
+             ("cosh", F1 cosh),
+             ("tanh", F1 tanh),
+             ("floor",   Fi1 floor),
+             ("ceiling", Fi1 ceiling),
+             ("round",   Fi1 round),
+             ("truncate",Fi1 truncate)]
+
+-- トークンをひとつ取り出す
+getToken :: String -&gt; Lexer
+getToken [] = (Eof, "")
+getToken (x:xs)
+  | isSpace x = getToken xs
+  | isAlpha x = let (name, ys) = span isAlphaNum (x:xs)
+                in (Ident name, ys)
+  | isDigit x = let (s, ys@(y:_)) = span isDigit (x:xs)
+                in if y == '.' || y == 'e' || y == 'E'
+                   then case reads (x:xs) of
+                          [] -&gt; error "not number"  -- ありえないエラー
+                          [(y', ys')] -&gt; (Number (REAL y'), ys')
+                   else (Number (INT (read s)), ys)
+  | otherwise =
+      case x of
+        '=' -&gt; (Assign, xs)
+        '+' -&gt; (Add, xs)
+        '-' -&gt; (Sub, xs)
+        '*' -&gt; (Mul, xs)
+        '/' -&gt; (Div, xs)
+        '(' -&gt; (Lpar, xs)
+        ')' -&gt; (Rpar, xs)
+        ';' -&gt; (Semic, xs)
+        ',' -&gt; (Comma, xs)
+        _   -&gt; (Others x, xs)
+
+-- 文字列をトークンリストに変換する
+lexer :: String -&gt; ([Token], String)
+lexer xs =
+  let (t, ys) = getToken xs
+  in case t of 
+      Semic -&gt; ([Semic], ys)
+      Eof   -&gt; ([Eof], ys)
+      _     -&gt; let (ts, zs) = lexer ys
+               in (t:ts, zs)
+
+-- 算術演算
+neg :: Value -&gt; Value
+neg (INT x)  = INT  (- x)
+neg (REAL x) = REAL (- x)
+
+add :: Value -&gt; Value -&gt; Value
+add (INT x)  (INT y)  = INT (x + y)
+add (REAL x) (REAL y) = REAL (x + y)
+add (INT x)  (REAL y) = REAL (fromIntegral x + y)
+add (REAL x) (INT y)  = REAL (x + fromIntegral y)
+
+sub :: Value -&gt; Value -&gt; Value
+sub (INT x)  (INT y)  = INT (x - y)
+sub (REAL x) (REAL y) = REAL (x - y)
+sub (INT x)  (REAL y) = REAL (fromIntegral x - y)
+sub (REAL x) (INT y)  = REAL (x - fromIntegral y)
+
+mul :: Value -&gt; Value -&gt; Value
+mul (INT x)  (INT y)  = INT (x * y)
+mul (REAL x) (REAL y) = REAL (x * y)
+mul (INT x)  (REAL y) = REAL (fromIntegral x * y)
+mul (REAL x) (INT y)  = REAL (x * fromIntegral y)
+
+div' :: Value -&gt; Value -&gt; Value
+div' (INT x)  (INT y)  = INT  (x `div` y)
+div' (REAL x) (REAL y) = REAL (x / y)
+div' (INT x)  (REAL y) = REAL (fromIntegral x / y)
+div' (REAL x) (INT y)  = REAL (x / fromIntegral y)
+
+--
+-- 構文解析
+--
+
+-- 因子
+factor :: [Token] -&gt; Calc (Expr, [Token])
+factor (Number x : xs) = return (Num x, xs)
+factor (Lpar : xs) = expr xs &gt;&gt;= \(e, y:ys) -&gt;
+                       case y of
+                         Rpar -&gt; return (e, ys)
+                         _    -&gt; calcError "')' expected"
+factor (Sub : xs) = expr xs &gt;&gt;= \(e, ys) -&gt; return (Op1 neg e, ys)
+factor (Add : xs) = expr xs
+factor (Eof : xs) = calcError "end of file"
+factor (Ident name : xs) =
+  case lookup name funcTable of
+    Nothing -&gt; return (Var name, xs)
+    Just fn -&gt; getArgs xs &gt;&gt;= \(args, ys) -&gt;
+                 if length args &lt; argsNum fn
+                   then calcError "not enough arguments"
+                   else return (App fn args, ys)
+                   where argsNum fn = case fn of
+                                       (F1 _)  -&gt; 1
+                                       (F2 _)  -&gt; 2
+                                       (Fi1 _) -&gt; 1
+factor (x :_ ) = calcError ("unexpected token: " ++ show x)
+
+-- 引数の取得
+getArgs :: [Token] -&gt; Calc ([Expr], [Token])
+getArgs (Lpar : xs) = iter xs []
+  where
+    iter (Rpar : xs) a = return (reverse a, xs)
+    iter xs a = expr xs &gt;&gt;= \(e, y:ys) -&gt;
+      case y of
+        Comma -&gt; iter ys (e:a)
+        Rpar  -&gt; return (reverse (e:a), ys)
+        _     -&gt; calcError ("unexpected token in argument list: " ++ show y)
+getArgs _ = calcError "'(' expected"
+
+-- 項
+term :: [Token] -&gt; Calc (Expr, [Token])
+term xs = factor xs &gt;&gt;= term_sub
+  where
+    opList = [(Mul, mul), (Div, div')]
+    term_sub zs@(e, y:ys) =
+      case lookup y opList of
+        Nothing -&gt; return zs
+        Just op -&gt; factor ys &gt;&gt;= \(e', ys') -&gt; term_sub (Op2 op e e', ys')
+
+-- 式１
+expr1 :: [Token] -&gt; Calc (Expr, [Token])
+expr1 xs = term xs &gt;&gt;= expr_sub
+  where
+    opList = [(Add, add), (Sub, sub)]
+    expr_sub zs@(e, y:ys) =
+      case lookup y opList of
+        Nothing -&gt; return zs
+        Just op -&gt; term ys &gt;&gt;= \(e', ys') -&gt; expr_sub (Op2 op e e', ys')
+
+-- 式
+expr :: [Token] -&gt; Calc (Expr, [Token])
+expr xs = expr1 xs &gt;&gt;= expr_sub
+  where
+    expr_sub (e, Assign:xs) =
+      case e of
+        Var _ -&gt; expr xs &gt;&gt;= \(e', ys) -&gt; return (Agn e e', ys)
+        _     -&gt; calcError "invalid assign form"
+    expr_sub xs = return xs
+
+expression :: [Token] -&gt; Calc (Expr, [Token])
+expression xs = expr xs &gt;&gt;= \(e, y:ys) -&gt;
+  case y of
+    Semic -&gt; return (e, ys)
+    _     -&gt; calcError "expression error"
+
+
+-- 構文木の評価
+evalExpr :: Expr -&gt; Env -&gt; Calc (Value, Env)
+evalExpr (Num x) env = return (x, env)
+evalExpr (Var x) env = 
+  case lookup x env of
+    Nothing -&gt; calcError ("unbound variable: " ++ x)
+    Just v  -&gt; return (v, env)
+evalExpr (Agn (Var name) e) env = do
+  (v, env') &lt;- evalExpr e env
+  return (v, (name, v):env')
+evalExpr (Op1 op e) env = do
+  (v, env') &lt;- evalExpr e env
+  return (op v, env')
+evalExpr (Op2 op e1 e2) env = do
+  (v1, env1) &lt;- evalExpr e1 env
+  (v2, env2) &lt;- evalExpr e2 env1
+  return (op v1 v2, env2)
+evalExpr (App fn args) env = do
+  (v1, env1) &lt;- evalExpr (args !! 0) env
+  case fn of
+    F1 f -&gt; return (REAL (f (toREAL v1)), env1)
+    F2 f -&gt; do (v2, env2) &lt;- evalExpr (args !! 1) env1
+               return (REAL (f (toREAL v1) (toREAL v2)), env2)
+    Fi1 f -&gt; return (INT (f (toREAL v1)), env1)
+
+toREAL :: Value -&gt; Double
+toREAL (INT x)  = fromIntegral x
+toREAL (REAL x) = x
+
+--
+toplevel :: String -&gt; Env -&gt; IO ()
+toplevel xs env = do
+  putStr "Calc&gt; "
+  let (ys, xs') = lexer xs
+  case expression ys of
+    Left mes -&gt; do putStrLn mes
+                   toplevel xs' env
+    Right (e, _) -&gt; 
+      case evalExpr e env of
+        Left mes -&gt; do putStrLn mes
+                       toplevel xs' env
+        Right (v, env') -&gt; do case v of
+                                INT x  -&gt; print x
+                                REAL x -&gt; print x
+                              toplevel xs' env'
+
+main :: IO ()
+main = do
+  xs &lt;- hGetContents stdin
+  toplevel xs []
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell27.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell29.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

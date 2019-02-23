@@ -1,0 +1,881 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 連長圧縮</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881794</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>連長圧縮 (run length encoding)</h2>
+<div class="small">
+[ <a href="pyalgo28.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo30.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> データ圧縮のお話です。ファイルの圧縮ツールといえば zip が標準ツールとして一般に使用されています。このほかに、日本では LHA を使うことも多く、UNIX 系の OS では gzip がよく使われています。最近は、拡張子が bz2 というファイルもよく見かけるようになりました。このファイルは bzip2 というツールで圧縮されていて、一般的なファイルでは zip, LHA, gzip よりも圧縮率が高くなります。
+</p>
+
+<p> また、データ圧縮はファイルだけに用いられるものではありません。MP3 は代表的な音声圧縮方式ですし、静止画像の圧縮には PNG や JPEG がよく使われています。PNG は「可逆圧縮」といって、圧縮したデータから元のデータを完全に復元できる方式です。ところが、MP3 や JPEG は「非可逆圧縮」といって、復元したデータは元のデータとはわずかながら異なっていますが、データをより小さく圧縮できる方式です。
+</p>
+
+<p> 画像や音声は非可逆圧縮を使うことも可能ですが、テキストファイルや実行形式ファイルは可逆圧縮でないと役には立ちません。今回は、この「可逆圧縮」アルゴリズムの中から、「連長圧縮 (run length encoding : ランレングス符号化) 」という簡単なアルゴリズムを取り上げます。一般に、ランレングスで圧縮できるのは白黒画像など同じデータが続くもので、テキストファイルの圧縮には向いていません。ところが、他の圧縮方式とランレングスを組み合わせることで、圧縮率を改善できる場合があります。
+</p>
+
+<p> 特に、ブロックソート法 (BlockSorting) と組み合わせると、ランレングスは高い効果を発揮することがあります。ブロックソート法は 1994 年に M. Burrows と D. J. Wheeler が提案した方法で、Burrows-Wheeler Transform (BWT) と呼ばれることもあります。ブロックソート法はデータを圧縮するのではなく、データを圧縮しやすい形に変換するだけの操作です。そして、ほかの方法でいっきに圧縮するわけです。圧縮ツール bzip2 はブロックソート法を使って高い圧縮率を実現しています。
+</p>
+
+<p> 今回はランレングスについて説明し、実際にプログラムを作ってみましょう。
+</p>
+
+<h4>●ランレングスとは？</h4>
+<p> ランレングスとは「連続して現れるものの長さ」という意味で、データ内で同じ値が並んでいる場合はその値と個数で符号化する方法のことを、「ランレングス圧縮」または「ランレングス符号化」といいます。
+</p>
+
+<p> ここで用語について整理しておきましょう。<a href="pyalgo29.html#cite">参考文献 [29-1]</a> に従って、文字のことを「記号 (symbol) 」、記号を表すためのコードを「符号語」、符号語のビット長を「符号長」と呼ぶことにします。また、記号を符号語に変換する操作が「符号化」で、逆の操作が「複号」になります。
+</p>
+
+<p> ランレングスはとても簡単な符号化方式ですが、それでもいくつかの方法が考えられます。いちばん簡単な方法は、データの値とデータの個数で表す方法です。たとえば、次の文字列を考えてみましょう。
+</p>
+<pre class="fig">
+文字列  abccddeeeeffffgggggggghhhhhhhh  (30)
+</pre>
+<p> 同じ文字が連続して並んでいますね。これを文字と個数で表すと、次のようになります。
+</p>
+<pre class="fig">
+=&gt;  a1b1c2d2e4f4g8h8  (16)
+</pre>
+<p> 元データ 30 文字を 16 文字で表すことができます。また、復号も簡単にできることはすぐにわかると思います。このように、ランレングスはとても単純な方法ですが、画像データには大きな効果を発揮する場合があります。たとえば、白黒の画像ではデータが 2 種類しかないので、最初のデータが白か黒のどちらであるか区別できれば、あとは個数だけの情報でデータを圧縮することができます。
+</p>
+<p> ところが、通常のテキストファイルでは、同じ文字が続くことはあまりないので、この方法ではほとんど効果がありません。たとえば、先ほどの文字列の前半 4 文字に注目してください。
+</p>
+<pre class="fig">
+abccdd (6) =&gt; a1b1c2d2 (8)
+</pre>
+<p> ランレングスを使うと、6 文字のデータが 8 文字に増えてしまいます。これではデータを圧縮するどころか、かえって膨らませることになってしまいます。もしも、同じデータが一つも連続していない場合、たとえば "abcdefgh" をランレングスで符号化すると、"a1b1c1d1e1f1g1h1" のようにデータ数は 2 倍にまで増えてしまうのです。
+</p>
+
+<h4>●ランレングスの開始記号と PackBits</h4>
+<p> そこで、すべてのデータをランレングスで符号化するのではなく、データが連続しているところだけを符号化することにしましょう。これは、ランレングスの開始記号を定義することで実現することができます。開始記号は、バイトで表す方法とビットで表す方法の 2 通りがあります。たとえば、開始記号を ff (16 進数) とすると、符号は「ff + 値 + 個数」で表すことができます。
+</p>
+
+<p> ただし、問題点が一つあります。それは、データに開始記号が含まれている場合です。復号するときに、ff がランレングスの開始を表すのか、それともデータなのか区別することができなくなってしまうのです。この場合はしかたがないので、データ ff が一つしかなくてもランレングスで符号化することにします。つまり、ff は [ff, ff, 01] の 3 バイトで表すのです。これで問題なく復号できるのですが、開始記号が多数含まれているデータを符号化すると、逆にサイズが増加してしまうこともあります。
+</p>
+
+<p> ランレングスの開始記号をビットで表す場合、バイトの上位 1 ビットを使い、残りの 7 ビットでデータの個数を表します。開始記号をバイトで表す場合、符号化には 3 バイト必要になりますが、この方法では 2 バイトで済みます。逆に、データの個数は 0 から 127 まで、一つ下駄をはかせても 1 から 128 までに制限されます。128 より長いデータの場合、128 個ずつ分割して符号化することになるので、圧縮効率は悪くなります。
+</p>
+
+<p> また、128 (0x80) より大きなデータはランレングスの開始記号とみなされるので、特別扱いする必要があります。これらのデータは、一つしかなくてもランレングスで符号化することになりますが、128 以上のデータが頻繁に出現する場合は、データを圧縮するどころか膨らませる結果になるでしょう。
+</p>
+
+<p> この問題点を改良した方法が PackBits です。PackBits は、Macintosh の TIFF や MacPaint などで使われている方法です。上位 1 ビットをランレングスの開始記号に使うことは同じですが、ランレングスで符号化しない部分の処理が工夫されています。次の図を見てください。
+</p>
+
+<pre class="fig">
+
+データ：  80 80 80    81 82 83 84 85   86 86 86 86 86   87 88 89  (16 進数) 
+          --------   ----------------  --------------  ----------
+ 符号 ：   -2, 80    4,81,82,83,84,85      -4, 86      2,87,88,89 
+
+
+                図 : PackBits による符号化
+</pre>
+
+<p> ランレングスで符号化する部分は負の値（上位ビットが 1）で表します。2 個以上のデータを符号化するので、データの長さは一つ下駄をはかせて、2 から 128 を -1 から -127 で表します。最初のデータ 80 は 3 つ並んでいるので、-2, 80 と符号化されます。
+</p>
+<p> PackBits は同じ値が連続していない場合でも、連続していないデータの個数を最初に書き込みます。個々の値をランレングスで符号化するのではなく、連続していないデータの個数を示して、あとはそのままデータを書き込むのです。この場合、上位ビットは 0 にします。とりうる値は 0 から 127 になりますが、一つ下駄をはかせるので 1 から 128 個までのデータを書き込むことができます。したがって、81, 82, 83, 84, 85 は 4, 81, 82, 83, 84, 85 と符号化されます。
+</p>
+
+<p> この結果、データは -2, 80, 4, 81, 82, 83, 84, 85, -4, 86, 2, 87, 88, 89 と符号化されます。16 バイトが 14 バイトになっただけですが、連続していないデータを個別にランレングスで符号化すると、20 バイトにもなってしまいます。PackBits の効果は十分に出ていますね。
+</p>
+
+<p> それからもう一つ PackBits よりも簡単な方法があります。それは「同じデータが数個以上続いていたらランレングスで符号化する」という方法です。たとえば、同じデータが 3 つ以上続いていたら符号化することにしましょう。すると、データが "aaaaa" の場合は [a, a, a, 2] と表すことができます。逆に、"aaa" は [a, a, a, 0] と符号化されるので、1 バイト増えることになります。ですが、連続していないデータをランレングスで符号化することはないので、単純なランレングスよりもデータが膨らむ危険性は小さくなります。今回はこの方法でプログラムを作りましょう。
+</p>
+
+<h4>●ランレングスの実装</h4>
+<p> データ圧縮のプログラムを作成する場合、バイト単位 (0 - 255) で入出力を行ったほうが便利です。Python (ver 2.4.2) の場合、ファイルの入出力を文字列で行う関数は標準で用意されていますが、バイト単位で入出力を行う関数は用意されていません。そこで、関数 getc, putc を次のように定義します。
+</p>
+<pre class="list">
+リスト : バイト単位の入出力
+
+def getc(f):
+    c = f.read(1)
+    if c == '': return None
+    return ord(c)
+
+def putc(f, x):
+    f.write(chr(x &amp; 0xff))
+</pre>
+<p> 関数 getc, putc の引数 f はファイルオブジェクトです。getc は f から 1 バイト読み込みます。関数 read は文字列を返すので、それを関数 ord で数値に変換します。ファイルが終了した場合、read は空文字列を返します。この場合、getc は None を返すことにします。putc は引数 x を関数 chr で文字に変換して関数 write でファイルに書き込みます。
+</p>
+
+<p> ランレングスのプログラムはとても簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ランレングス符号化
+
+# 定数
+MAX_LEN = 255
+MIN_LEN = 3
+
+def run_length_encode(fin, fout, n):
+    c = getc(fin)
+    while c is not None:
+        num = 1
+        while num &lt; MAX_LEN + n:
+            c1 = getc(fin)
+            if c != c1: break
+            num += 1
+        if num &gt;= n:
+            for _ in xrange(n): putc(fout, c)
+            putc(fout, num - n)
+        else:
+            for _ in xrange(len): putc(fout, c)
+        if num == MAX_LEN + n:
+            c = getc(fin)
+        else:
+            c = c1
+</pre>
+
+<p> 関数 run_length_encode の引数 fin が入力ファイルオブジェクト、fout が出力ファイルオブジェクト、n がランレングス符号化を開始する記号数です。最初の while ループで、ファイルが終了するまで処理を繰り返します。そして、次の while ループで連続している記号をカウントします。このとき、個数 num が MAX_LEN (255) + n より大きくならないように注意してください。それよりも大きくなると、記号の個数を 1 バイトで表現できなくなります。
+</p>
+<p> num が n 以上の場合はランレングスで符号化します。記号 c を n 個出力して、そのあとで個数 (num - n) を出力します。書き込む個数は num - n になることに注意してください。num が n 未満の場合はランレングスで符号化しないので、c を num 個出力します。num が最大長 (MAX_LEN + n) の場合、次の記号を読み込んで c にセットします。そうでなければ、c1 を c にセットします。
+</p>
+
+<p> 復号のプログラムも簡単です。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : ランレングス復号
+
+def run_length_decode(fin, fout, n):
+    c = getc(fin)
+    while c is not None:
+        num = 1
+        while num &lt; n:
+            c1 = getc(fin)
+            if c1 != c: break
+            num += 1
+        if num == n:
+            num += getc(fin)
+            c1 = getc(fin)
+        for _ in xrange(len): putc(fout, c)
+        c = c1
+</pre>
+<p> 2 番目の while ループで連続している記号をカウントします。それが n と等しい場合、次の 1 バイトが連長を表しています。num に getc(fin) の値を足して、c1 に次の記号をセットします。そして、記号 c を fout に num 個書き込みます。
+</p>
+
+<p> 最後にメインルーチンを作ります。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : メインルーチン
+
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+</pre>
+<p> 符号化と復号はオプション -e と -d で指定することにします。符号化する場合は -e オプションを、復号する場合は -d オプションを指定します。引数解析はモジュール getopt で行います。getopt の説明は拙作のページ <a href="python04.html#chap16">お気楽 Python プログラミング入門第 4 回</a> をお読みください。-e または -E が指定されていれば、eflag を True にセットします。-d または -D が指定されていれば、dflag を True にセットします。
+</p>
+<p> eflag と dflag が両方 True の場合は option error を送出します。次に、eflag が True の場合は符号化処理を encode_file で行います。args[0] が入力ファイル名、args[1] が出力ファイル名で符号化したデータを格納します。dflag が True の場合は復号処理を decode_file で行います。args[0] が入力ファイル名、args[1] が出力ファイル名で復号したデータを格納します。
+</p>
+
+<p> それから、ファイルをオープンするときは、バイナリモードを指定することをお忘れなく。あとのプログラムは簡単なので説明は割愛いたします。詳細は <a href="pyalgo29.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+<h4>●実行結果</h4>
+<p> それでは、実際に <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されているテストデータ <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> を圧縮してみましょう。
+</p>
+<pre>
+      表 : ランレングス符号化の実行結果
+
+  # RLE   : 単純なランレングス (n = 1)
+  # RLE-3 : 3 文字続いたらランレングス (n = 3)
+
+  ファイル名      サイズ      RLE       RLE-3
+  ---------------------------------------------
+  alice29.txt    152,089    289,852    150,130
+  asyoulik.txt   125,179    243,066    125,114
+  cp.html         24,603     46,474     24,722
+  fields.c        11,150     19,838     11,176
+  grammar.lsp      3,721      6,622      3,710
+  kennedy.xls  1,029,744  1,731,778  1,032,453
+  lcet10.txt     426,754    804,622    415,099
+  plrabn12.txt   481,861    944,618    481,221
+  ptt5           513,216    152,564    116,342
+  sum             38,240     58,594     35,772
+  xargs.1          4,227      8,294      4,227
+  ---------------------------------------------
+  合計         2,810,784  4,306,322  2,399,966
+</pre>
+<p> RLE は run_length_encode の引数 n を 1 に設定した場合で、記号と個数で符号化する単純なランレングスになります。RLE-3 は同じ記号が 3 回続いたらランレングスで符号化します。RLE はほとんどのファイルでサイズが大幅に増加しています。ptt5 は 0 が長く続くデータで、RLE でも圧縮することができました。
+</p>
+<p> RLE-3 は RLE に比べて、ファイルが膨らんだとしても、その増加量は少なくなりました。データが膨らむ危険性は RLE よりも RLE-3 の方が少ないことがわかります。また、ptt5 は RLE よりも高い圧縮率になりました。簡単な方法ですが、けっこう効果があるようです。
+</p>
+<hr>
+<h4>●Switched Run Length Encoding</h4>
+<p> 次は Switched Run Length Encoding (SRLE) というランレングスを紹介します。SRLE は PackBits のようにランレングスとそうでない部分に分けて符号化します。SRLE の特徴は、2 つの部分を区別するためのフラグをデータに追加するのではなく、LITERAL と FILL という 2 つのモードを使って管理するところです。次の例を見てください。
+</p>
+<pre class="fig">
+(1) LITERAL : a b c d e e e e f f f f f f f =&gt; 5 a b c d e
+              -----------
+                  記号が連続しているところを探す
+
+(2) FILL    : a b c d e e e e f f f f f f f =&gt; 5 a b c d e 3
+                        -----
+                        記号 e の数を数える
+
+(3) LITERAL : a b c d e e e e f f f f f f f =&gt; 5 a b c d e 3 1 f
+                              ---
+                              記号が連続しているところを探す
+
+(4) FILL    : a b c d e e e e f f f f f f f =&gt; 5 a b c d e 3 1 f 6
+                                -----------
+                                記号 f の数を数える
+
+
+                図 : SRLE の符号化 (1)
+</pre>
+
+<p> モードは最初 LITERAL です。LITERAL は記号が不連続でそのまま出力するモードです。LITERAL モードでは、記号が連続しているところを探し、そこまでの個数と記号列をそのまま出力します。(1) では e が連続しているので、a b c d e までの 5 文字を出力します。a b c d の 4 文字ではないことに注意してください
+</p>
+<p> 次に、モードを FILL に切り替えます。FILL は同じ記号が続くことを表すモードです。このとき、連続する記号は LITERAL モードで最後に出力した記号になります。(2) では e が 4 文字続いていますが、LITERAL モードで最初の e が出力されているので、残りの e を数えて 3 を出力します。そして、モードを LITERAL に切り替えます。
+</p>
+<p> (3) では f が続いているので、LITERAL モードの出力は f の 1 文字だけになります。そして、FILL モードに切り替えて、残りの f を数えて 6 を出力します。このように、モードを切り替えることから Switched Run Length Encoding と呼ばれています。
+</p>
+
+<p> SRLE は連長を 1 バイトで表すので、最長は 255 になります。それでは、255 より長い場合はどうなるのでしょう。次の例を見てください。
+</p>
+<pre class="fig">
+(1) LITERAL : a a ... a a a ... a a b ... =&gt; 1 a
+                --------- --------- 
+                 255 個    255 個
+
+(2) FILL    : a a ... a a a ... a a b ... =&gt; 1 a 255
+                --------- --------- 
+                 255 個    255 個
+
+(3) FILL    : a a ... a a a ... a a b ... =&gt; 1 a 255 255
+                          --------- 
+                           255 個
+
+(4) FILL    : a a ... a a a ... a a b ... =&gt; 1 a 255 255 0
+                                    -
+                                    a は 0 個
+
+
+                図 : SRLE の符号化 (2)
+</pre>
+<p> a が 511 個続いている記号列を符号化してみましょう。最初は LITERAL モードなので、(1) のように 1 a を出力します。次に、(2) の FILL モードで 255 を出力します。そして、ここが SRLE のポイントで、連長が最長の 255 のときにはモードを切り替えません。つまり、そのまま FILL モードを続けるのです。したがって、(3) のように a の個数 255 を出力します。このように、255 より長い記号列でも効率よく符号化できるのが SRLE の長所です。
+</p>
+<p> (3) でも長さが 255 なので、モードは FILL のままです。ところが、(4) のように次の記号は b ですね。この場合は a の個数が 0 ということで、0 を出力して LITERAL モードへ切り替えます。
+</p>
+<p> LITERAL モードの場合でも同じです。出力した記号が 255 個であれば、モードを FILL に切り替えず LITERAL モードをそのまま続けます。PackBits の連長は最長で 128 なので、PackBits よりもデータが膨らむ危険性は小さくなると思います。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それでは実際に Switched Run Length Encoding (SRLE) のプログラムを作りましょう。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : Switched Run Length Encoding (符号化)
+
+# 定数
+MAX_LEN = 255
+LITERAL = 1
+FILL    = 0
+
+# 符号化
+def run_length_encode(fin, fout):
+    mode = LITERAL
+    c = getc(fin)
+    while c is not None:
+        if mode == LITERAL:
+            buff = []
+            buff.append(c)
+            while len(buff) &lt; MAX_LEN:
+                c1 = getc(fin)
+                if c == c1 or c1 is None: break
+                buff.append(c1)
+                c = c1
+            putc(fout, len(buff))
+            for x in buff: putc(fout, x)
+            if len(buff) == MAX_LEN:
+                c = getc(fin)
+            else:
+                mode = FILL
+                c = c1
+                count = 1
+        else:
+            while count &lt; MAX_LEN:
+                c1 = getc(fin)
+                if c != c1: break
+                count += 1
+            putc(fout, count)
+            if count == MAX_LEN:
+                count = 0
+            else:
+                mode = LITERAL
+                c = c1
+</pre>
+<p> 基本的には通常のランレングスと同じですが、モードを切り替える処理がポイントになります。run_length_enconde が符号化、run_length_decode が復号を行います。どちらの関数も引数 fin が入力ファイル、fout が出力ファイルを表します。モードは変数 mode で表し、どちらの関数も最初は LITERAL モードです。
+</p>
+<p> 符号化の場合、LITERAL モードのときは記号が連続しているところを探します。このとき、連続していない記号をバッファ buff にセットし、buff の大きさが MAX_LEN (255) を越えないことをチェックします。c と c1 が同じ記号、またはファイルが終了したら while ループを終了します。
+</p>
+<p> それから、buff の大きさを fout へ出力し、そのあとで buff の記号を出力します。もしも、記号数が MAX_LEN の場合はモードを変更しません。次の記号を読み込んで c にセットします。そうでなければ、モードを FILL に変更します。c1 を c にセットして count を 1 に設定します。
+</p>
+<p> FILL モードのときは、連続している c の個数を数えます。このときも、記号の個数 count が MAX_LEN を超えないことをチェックします。そして、count だけを out へ出力します。最後に count をチェックして、MAX_LEN ならばモードは変更しません。count を 0 に初期化します。そうでなければ、モードを LITERAL に切り替えます。
+</p>
+
+<p> 次は復号を行う関数 run_length_decode を作ります。
+</p>
+<pre class="list">
+リスト : Switched Run Length Encoding (復号)
+
+def run_length_decode(fin, fout):
+    mode = LITERAL
+    while True:
+        num = getc(fin)
+        if num is None: break
+        if mode == LITERAL:
+            for _ in xrange(len):
+                c = getc(fin)
+                putc(fout, c)
+            if num &lt; MAX_LEN: mode = FILL
+        else:
+            for _ in xrange(len): putc(fout, c)
+            if num &lt; MAX_LEN: mode = LITERAL
+</pre>
+
+<p> 復号はとても簡単です。個数 num をリードして、モードが LITERAL であれば、num 個の記号を読み込んでそのまま出力します。FILL モードであれば、直前に出力した記号 c を num 個出力します。最後に num が MAX_LEN でなければモードを切り替えます。
+</p>
+
+<ul>
+  <li><a href="pyalgo29.html#list2">プログラムリスト２</a>
+</ul>
+<h4>●実行結果</h4>
+<p> それでは、実際にファイルを圧縮してみましょう。テストデータは <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されている <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> です。
+</p>
+<pre>
+    表 : Switched Run Length Encoding の実行結果
+
+  # RLE   : 単純なランレングス (n = 1)
+  # RLE-3 : 3 文字続いたらランレングス (n = 3)
+  # SRLE  : Switched Run Length Encoding
+
+  ファイル名      サイズ      RLE       RLE-3      SRLE
+  --------------------------------------------------------
+  alice29.txt    152,089    289,852    150,130    154,236
+  asyoulik.txt   125,179    243,066    125,114    128,227
+  cp.html         24,603     46,474     24,722     25,600
+  fields.c        11,150     19,838     11,176     11,334
+  grammar.lsp      3,721      6,622      3,710      3,790
+  kennedy.xls  1,029,744  1,731,778  1,032,453  1,186,806
+  lcet10.txt     426,754    804,622    415,099    422,092
+  plrabn12.txt   481,861    944,618    481,221    490,117
+  ptt5           513,216    152,564    116,342    107,932
+  sum             38,240     58,594     35,772     35,743
+  xargs.1          4,227      8,294      4,227      4,308
+  --------------------------------------------------------
+  合計         2,810,784  4,306,322  2,399,966  2,570,185
+</pre>
+<p> SRLE は RLE よりもデータが膨らむことはありませんが、RLE-3 よりも少しサイズが増えるようです。そのかわり、ptt5 の圧縮率は RLE-3 よりも高くなりました。今回のテスト結果だけで断言することはできませんが、ランレングス向きのデータでは、RLE-3 よりも SRLE の方が効率的に符号化できるのかもしれません。興味のある方は、ほかのデータで試してみてください。
+</p>
+<hr>
+<h4>●Zero Length Encoding</h4>
+<p> 記号 0 をランレングスで符号化する方法を「ゼロランレングス」といいます。ゼロランレングスは他の圧縮法、たとえばブロックソート法と組み合わせると、圧縮率が向上する場合があります。Zero Lenght Encoding はゼロランレングスの一種ですが、0 と 1 を使って記号 0 の個数を 2 進数で表すところがポイントです。つまり、1 bit を 1 byte で表して、数値を 0 と 1 の記号列で表すのです。0 と 1 を使って数値を表すので、ほかの記号も変換が必要になります。これはあとで説明します。
+</p>
+
+<p> 正の整数を 2 進数で表す場合、最上位ビットは常に 1 なるので省略することが可能です。Zero Lenght Encoding では、個数 N に 1 を加えて最上位以外のビットを出力しています。たとえば、1 から 10 までの変換結果を下図に示します。
+</p>
+<pre class="fig">
+ 1 =&gt;  2 (10)   =&gt; 0
+ 2 =&gt;  3 (11)   =&gt; 1
+ 3 =&gt;  4 (100)  =&gt; 0 0
+ 4 =&gt;  5 (101)  =&gt; 0 1 
+ 5 =&gt;  6 (110)  =&gt; 1 0
+ 6 =&gt;  7 (111)  =&gt; 1 1
+ 7 =&gt;  8 (1000) =&gt; 0 0 0
+ 8 =&gt;  9 (1001) =&gt; 0 0 1
+ 9 =&gt; 10 (1010) =&gt; 0 1 0
+10 =&gt; 11 (1011) =&gt; 0 1 1
+
+
+    図 : 整数値の変換
+</pre>
+<p> 0 と 1 を連長の符号に使うため、ほかの記号は次のように変換します。
+</p>
+<pre class="fig">
+0x01 - 0xFD =&gt; +1 (0x02 - 0xFE)
+0xFE        =&gt; 0xFF, 0x00
+0xFF        =&gt; 0xFF, 0x01
+
+
+    図 : ほかの記号の変換
+</pre>
+<p> これで、記号 0 をランレングスで符号化することができます。
+</p>
+<h4>●プログラムの作成</h4>
+<p> プログラムは簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : Zero Length Encoding (符号化)
+
+def run_length_encode(fin, fout):
+    c = getc(fin)
+    while c is not None:
+        if c == 0:
+            count = 0
+            while c == 0:
+                count += 1
+                c = getc(fin)
+            count += 1
+            while count != 1:
+                putc(fout, count &amp; 1)
+                count &gt;&gt;= 1
+        else:
+            if c == 0xfe:
+                putc(fout, 0xff)
+                putc(fout, 0)
+            elif c == 0xff:
+                putc(fout, 0xff)
+                putc(fout, 1)
+            else:
+                putc(fout, c + 1)
+            c = getc(fin)
+</pre>
+<p> 関数 run_length_encode のポイントは、記号 0 の個数を数えてその値を符号化するところです。この処理は個数 count を +1 して、下位ビットから順番に出力するだけです。count が 1 になったら while ループを終了するので、最上位ビットは出力されません。
+</p>
+<p> 次は復号です。
+</p>
+<pre class="list">
+リスト : Zero Length Encoding (復号)
+
+def run_length_decode(fin, fout):
+    c = getc(fin)
+    buff = []
+    while c is not None:
+        if c &lt;= 1:
+            count = 1
+            buff.append(c)
+            while True:
+                c = getc(fin)
+                if c is None or c &gt; 1: break
+                buff.append(c)
+            while len(buff) &gt; 0:
+                count = (count &lt;&lt; 1) + buff.pop()
+            for _ in xrange(count - 1): putc(fout, 0)
+        else:
+            if c == 0xff:
+                c = getc(fin)
+                if c == 0:
+                    putc(fout, 0xfe)
+                else:
+                    putc(fout, 0xff)
+            else:
+                putc(fout, c - 1)
+            c = getc(fin)
+</pre>
+<p> 関数 run_length_decode は、記号 0 と 1 の記号列を数値に変換して 0 を出力するところがポイントです。符号化のときは下位ビットから順番に出力しているので、まず最初に 0 と 1 の記号列を配列 buff に格納します。そして、後ろからデータを読み込んで数値に変換します。
+</p>
+<ul>
+  <li><a href="pyalgo29.html#list3">プログラムリスト３</a>
+</ul>
+<h4>●実行結果</h4>
+<p> それでは実行結果を示します。テストデータは <a href="http://corpus.canterbury.ac.nz/">Canterbury Corpus</a> で配布されている  <a href="http://corpus.canterbury.ac.nz/descriptions/#cantrbry">The Canterbury Corpus</a> です。
+</p>
+<pre>
+        表 : Zero Length Encoding の実行結果
+
+  # RLE   : 単純なランレングス
+  # RLE-3 : 3 文字続いたらランレングス
+  # SRLE  : Switched RunLength Encoding
+  # ZLE   : Zero Length Encoding
+
+  ファイル名      サイズ      RLE       RLE-3      SRLE        ZLE
+  -------------------------------------------------------------------
+  alice29.txt    152,089    289,852    150,130    154,236    152,089
+  asyoulik.txt   125,179    243,066    125,114    128,227    125,179
+  cp.html         24,603     46,474     24,722     25,600     24,603
+  fields.c        11,150     19,838     11,176     11,334     11,150
+  grammar.lsp      3,721      6,622      3,710      3,790      3,721
+  kennedy.xls  1,029,744  1,731,778  1,032,453  1,186,806    948,310
+  lcet10.txt     426,754    804,622    415,099    422,092    426,754
+  plrabn12.txt   481,861    944,618    481,221    490,117    481,861
+  ptt5           513,216    152,564    116,342    107,932    125,729
+  sum             38,240     58,594     35,772     35,743     32,376
+  xargs.1          4,227      8,294      4,227      4,308      4,227
+  -------------------------------------------------------------------
+  合計         2,810,784  4,306,322  2,399,966  2,570,185  2,335,999
+</pre>
+<p> ZLE は記号 0 を含まないデータには何も効果がありません。英文テキストファイルの場合、記号 0xfe, 0xff は含まれていないので、ファイルサイズが増えることもありません。記号 0 を多く含むバイナリファイルの場合、ファイルを圧縮することができます。ptt5 のように記号 0 が連続するデータでは、RLE よりも高い圧縮率になりますが、RLE-3 や SRLE よりも圧縮率は悪くなりました。RLE-3 や SRLE は 0 以外の記号も符号化するので、その差が現れたのかもしれません。
+</p>
+<p> ZLE は特殊なランレングスなので、単体で使うことはほとんどないと思います。ZLE はブロックソート法など他の方法と組み合わせることで効果を発揮します。今回のテストだけで ZLE を評価することはできないでしょう。
+</p>
+<hr>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li>植松友彦, 『文書データ圧縮アルゴリズム入門』, ＣＱ出版社, 1994
+  <li>Stephan T. Lavavej, <a href="http://nuwen.net/bwtzip.html">bwtzip - nuwen.net</a>
+</ol>
+<p> Switched Run Length Encoding と Zero Length Encoding は、Stephan T. Lavavej さんのプログラムを参考にさせていただきました。Stephan T. Lavavej さんに感謝いたします。
+</p>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+# coding: utf-8
+#
+# rle.py : ランレングス符号化
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt
+
+# バイト単位の入出力
+def getc(f):
+    c = f.read(1)
+    if c == '': return None
+    return ord(c)
+
+def putc(f, x):
+    f.write(chr(x &amp; 0xff))
+
+# 定数
+MAX_LEN = 255
+MIN_LEN = 3
+
+# ランレングス符号化
+def run_length_encode(fin, fout, n):
+    c = getc(fin)
+    while c is not None:
+        num = 1
+        while num &lt; MAX_LEN + n:
+            c1 = getc(fin)
+            if c != c1: break
+            num += 1
+        if num &gt;= n:
+            for _ in xrange(n): putc(fout, c)
+            putc(fout, num - n)
+        else:
+            for _ in xrange(len): putc(fout, c)
+        if num == MAX_LEN + n:
+            c = getc(fin)
+        else:
+            c = c1
+
+# ランレングス復号
+def run_length_decode(fin, fout, n):
+    c = getc(fin)
+    while c is not None:
+        num = 1
+        while num &lt; n:
+            c1 = getc(fin)
+            if c1 != c: break
+            num += 1
+        if num == n:
+            num += getc(fin)
+            c1 = getc(fin)
+        for _ in xrange(len): putc(fout, c)
+        c = c1
+
+# 符号化
+def encode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    run_length_encode(infile, outfile, MIN_LEN)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    run_length_decode(infile, outfile, MIN_LEN)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+# coding: utf-8
+#
+# srle.py : Switched Run Length Encoding
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt
+
+# バイト単位の入出力
+def getc(f):
+    c = f.read(1)
+    if c == '': return None
+    return ord(c)
+
+def putc(f, x):
+    f.write(chr(x &amp; 0xff))
+
+# 定数
+MAX_LEN = 255
+LITERAL = 1
+FILL    = 0
+
+# SRLE 符号化
+def run_length_encode(fin, fout):
+    mode = LITERAL
+    c = getc(fin)
+    while c is not None:
+        if mode == LITERAL:
+            buff = []
+            buff.append(c)
+            while len(buff) &lt; MAX_LEN:
+                c1 = getc(fin)
+                if c == c1 or c1 is None: break
+                buff.append(c1)
+                c = c1
+            putc(fout, len(buff))
+            for x in buff: putc(fout, x)
+            if len(buff) == MAX_LEN:
+                c = getc(fin)
+            else:
+                mode = FILL
+                c = c1
+                count = 1
+        else:
+            while count &lt; MAX_LEN:
+                c1 = getc(fin)
+                if c != c1: break
+                count += 1
+            putc(fout, count)
+            if count == MAX_LEN:
+                count = 0
+            else:
+                mode = LITERAL
+                c = c1
+
+# SRLE 復号
+def run_length_decode(fin, fout):
+    mode = LITERAL
+    while True:
+        num = getc(fin)
+        if num is None: break
+        if mode == LITERAL:
+            for _ in xrange(len):
+                c = getc(fin)
+                putc(fout, c)
+            if num &lt; MAX_LEN: mode = FILL
+        else:
+            for _ in xrange(len): putc(fout, c)
+            if num &lt; MAX_LEN: mode = LITERAL
+
+
+# 符号化
+def encode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    run_length_encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    run_length_decode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+# coding: utf-8
+#
+# zle.py : Zero Length Encoding
+#
+#          Copyright (C) 2007 Makoto Hiroi
+#
+import time, sys, getopt
+
+# バイト単位の入出力
+def getc(f):
+    c = f.read(1)
+    if c == '': return None
+    return ord(c)
+
+def putc(f, x):
+    f.write(chr(x &amp; 0xff))
+
+# ZLE 符号化
+def run_length_encode(fin, fout):
+    c = getc(fin)
+    while c is not None:
+        if c == 0:
+            count = 0
+            while c == 0:
+                count += 1
+                c = getc(fin)
+            count += 1
+            while count != 1:
+                putc(fout, count &amp; 1)
+                count &gt;&gt;= 1
+        else:
+            if c == 0xfe:
+                putc(fout, 0xff)
+                putc(fout, 0)
+            elif c == 0xff:
+                putc(fout, 0xff)
+                putc(fout, 1)
+            else:
+                putc(fout, c + 1)
+            c = getc(fin)
+
+# ZLE 復号
+def run_length_decode(fin, fout):
+    c = getc(fin)
+    buff = []
+    while c is not None:
+        if c &lt;= 1:
+            count = 1
+            buff.append(c)
+            while True:
+                c = getc(fin)
+                if c is None or c &gt; 1: break
+                buff.append(c)
+            while len(buff) &gt; 0:
+                count = (count &lt;&lt; 1) + buff.pop()
+            for _ in xrange(count - 1): putc(fout, 0)
+        else:
+            if c == 0xff:
+                c = getc(fin)
+                if c == 0:
+                    putc(fout, 0xfe)
+                else:
+                    putc(fout, 0xff)
+            else:
+                putc(fout, c - 1)
+            c = getc(fin)
+
+# 符号化
+def encode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    run_length_encode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+# 復号
+def decode_file(name1, name2):
+    infile = open(name1, "rb")
+    outfile = open(name2, "wb")
+    run_length_decode(infile, outfile)
+    infile.close()
+    outfile.close()
+
+#
+def main():
+    eflag = False
+    dflag = False
+    opts, args = getopt.getopt(sys.argv[1:], 'ed')
+    for x, y in opts:
+        if x == '-e' or x == '-E':
+            eflag = True
+        elif x == '-d' or x == '-D':
+            dflag = True
+    if eflag and dflag:
+        print 'option error'
+    elif eflag:
+        encode_file(args[0], args[1])
+    elif dflag:
+        decode_file(args[0], args[1])
+    else:
+        print 'option error'
+
+#
+s = time.clock()
+main()
+e = time.clock()
+print "%.3f" % (e - s)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2007 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo28.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo30.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

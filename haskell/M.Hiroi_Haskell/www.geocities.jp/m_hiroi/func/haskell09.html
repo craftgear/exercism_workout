@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Haskell プログラミング入門</title>
+  <meta name="description" content="Haskell,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881789</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Haskell プログラミング入門</h2>
+<div class="small">
+[ <a href="haskell08.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell10.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3 id="chap01">簡単な入出力処理</h3>
+<p> 今回は Haskell の入出力処理について説明します。Haskell は純粋な関数型言語なので、入出力などのように副作用を含む処理の取り扱いは、他のプログラミング言語とは大きく異なります。Haskell はプログラムを「純粋な世界」と「副作用のある世界」の 2 つに分離します。純粋な世界から副作用のある世界の処理を呼び出すことはできません。逆に、副作用のある世界から純粋な世界にある関数を呼び出すことはできます。
+</p>
+<p> 副作用のある世界でプログラムを作る場合、Haskell でも手続き型言語のようなプログラミングスタイルにならざるをえません。このような副作用のある世界を Haskell は「IO モナド (IO Monad) 」を使って操作します。
+</p>
+
+<h4>●標準入出力</h4>
+<p> まずは最初に、文字列を標準出力（画面）に表示してみましょう。次の例を見てください。
+</p>
+<pre>
+Prelude&gt; putStr "Hello, World!\n"
+Hello, World!
+Prelude&gt; putStrLn "Hello, World!"
+Hello, World!
+Prelude&gt; :t putStr
+putStr :: String -&gt; IO ()
+Prelude&gt; :t putStrLn
+putStrLn :: String -&gt; IO ()
+</pre>
+<p> putStr, putStrLn は画面に文字列を出力する「副作用 (side effect) 」が目的の関数です。hello, world は出力結果であり、関数の返り値ではありません。関数の型を見てください。どちらの関数も String を受け取り、返り値の型が IO () になっています。"IO データ型" は「I/O アクション」を表していて、副作用を伴う何かしらの処理を行って、必要であれば何かしらの結果を返します。putStr, putStrLn の返り値は空のタプル () を格納した I/O アクションで、() をユニット (unit) といいます。unit 型のデータは () しかありません。unit は何も値がない (空の値である) ことを表すために用いられます。
+</p>
+
+<p> putStr, putStrLn で表示できるデータは文字列だけですが、関数 print を使うと型クラス Show のインスタンスであれば何でも表示することができます。
+</p>
+<pre>
+Prelude&gt; :t print
+print :: Show a =&gt; a -&gt; IO ()
+Prelude&gt; print 1
+1
+Prelude&gt; print 1.234
+1.234
+Prelude&gt; print "hello, world"
+"hello, world"
+Prelude&gt; print [1,2,3,4,5]
+[1,2,3,4,5]
+Prelude&gt; print ('a', 'c')
+('a','c')
+</pre>
+<p> ghci の対話モードは print を使ってデータを表示しています。
+</p>
+
+<p> 次は端末 (標準入力) からデータを読み込む関数 getLine を説明します。
+</p>
+<pre>
+Prelude&gt; :t getLine
+getLine :: IO String
+Prelude&gt; getLine
+foo bar baz          &lt;--- 入力
+"foo bar baz"
+</pre>
+<p> getLine は標準入力から 1 行読み込み、それを文字列にして返します。ここで、getLine が返す型は IO String であることに注意してください。インタプリタ ghci では文字列をそのまま表示しているように見えますが、これは対話モードでの動作であり、putStr で getLine の返り値を表示しようとしてもエラーになります。
+</p>
+<pre>
+Prelude&gt; putStr getLine
+=&gt; エラー
+</pre>
+<p> また、IO は I/O アクションを表すデータ型なので、データ構築子がわかればパターンマッチングで格納されているデータを取り出すことができるのですが、IO 型のデータ構築子は「非公開」となっています。私たちが勝手にその中のデータを取り出すことはできないのです。I/O アクションからデータを取り出す方法はあとで説明します。
+</p>
+
+<p> 関数 readLn を使うと、指定した型のデータを読み込むことができます。
+</p>
+<pre>
+Prelude&gt; :t readLn
+readLn :: Read a =&gt; IO a
+Prelude&gt; readLn :: IO Integer
+1234567890
+1234567890
+Prelude&gt; readLn :: IO Double
+1.2345
+1.2345
+Prelude&gt; readLn :: IO String
+"abcdefg"
+"abcdefg"
+Prelude&gt; readLn :: IO [Int]
+[1,2,3,4,5]
+[1,2,3,4,5]
+</pre>
+<p> readLn のデータ型は IO a なので、型の指定は "IO データ型" となります。
+</p>
+
+<h4>●do 構文</h4>
+<p> I/O アクションからデータを取り出す簡単な方法は「do 構文」を使うことです。次の例を見てください。
+</p>
+<pre>
+Prelude&gt; do {a &lt;- getLine; putStrLn a}
+hello, world!    &lt;-- 入力
+hello, world!    &lt;-- 出力
+Prelude&gt; :t do {a &lt;- getLine; putStrLn a}
+do {a &lt;- getLine; putStrLn a} :: IO ()
+</pre>
+<p> do 構文は複数の I/O アクションまたは式を順番に実行していきます。do はレイアウトを使用することができます。矢印 &lt;- は I/O アクションから値を取り出す構文です。getLine で取得した IO String の String を取り出して変数 a にセットします。a は局所変数として扱われ、有効範囲は do 構文の中だけです。a の型は String になるので、a をそのまま putStrLn に渡して文字列を表示することができます。
+</p>
+<p> do 構文の返り値は最後に実行した I/O アクションの値になります。do 構文は I/O アクションをまとめたものになるので、do 構文 <sup><a href="haskell09.html#note1">[*1]</a></sup> も I/O アクションのひとつとして扱われます。したがって、do 構文の型も "IO データ型" になります。
+</p>
+
+<p> それでは簡単な例題として、入力をそのままエコーバックする関数 echo を作ってみましょう。プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : echo
+
+echo :: IO ()
+echo = do
+  a &lt;- getLine
+  if a == "" then return ()
+  else do putStrLn a
+          echo
+</pre>
+
+<p> getLine で標準入力から 1 行読み込み、その値を変数 a に束縛します。a が空文字列 "" でなければ、do の中で putStrLn を呼び出して a を画面に出力し、echo を再帰呼び出しします。このように、do は入れ子にすることができます。また、if の中に do を入れてもかまいません。ただし、then 節と else 節の返り値は同じデータ型、つまり IO () でなければいけません。
+</p>
+
+<p> 空文字列の場合は echo を終了します。return はデータ型にデータを格納して返す関数です。この場合、return () は I/O アクションの中で呼び出されているので IO () を返します。return の詳しい説明は「モナド (Monad) 」のところで行う予定です。他のプログラミング言語の場合、return は関数を終了して呼び出し元に値を返す働きをしますが、Haskell の return はまったく異なる働きをすることに注意してください。
+</p>
+<p> 簡単な実行例を示します。
+</p>
+<pre>
+*Main&gt; echo
+abcd          &lt;-- 入力
+abcd
+efgh          &lt;-- 入力
+efgh
+foo bar baz   &lt;-- 入力
+foo bar baz
+              &lt;-- 入力 (リターンキーのみ)
+*Main&gt;
+</pre>
+<p> 最後にリターンキーだけを入力すると、getLine は空文字列を返すので、echo を終了することができます。
+</p>
+
+<div class="note">
+-- note --------<br>
+<a name="note1">[*1]</a> do 構文は「モナド (Monad) 」の構文糖衣です。getLine で得た文字列を putStr で表示する場合、モナドの演算子 &gt;&gt;= を使って行うことができます。
+<pre>
+Prelude&gt; getLine &gt;&gt;= putStrLn
+hello, world    &lt;-- 入力
+hello, world    &lt;-- 出力
+Prelude&gt;
+</pre>
+do 構文は I/O アクション専用の構文ではありません。Haskell のモナドは型クラスのひとつであり、モナドのインスタンスであれば do 構文を使用することができます。
+</div>
+<h4>●do の中で let を使う</h4>
+<p> do 構文の中で let を使って局所変数を定義することができます。
+</p>
+<pre class="item">
+let 変数１ = 式１
+    変数２ = 式２
+     　・・・・
+    変数Ｎ = 式Ｎ
+</pre>
+<p>これは ghci の対話モードで変数を定義する場合と同じです。簡単な例を示しましょう。
+</p>
+<pre class="list">
+リスト : 四則演算
+
+calc :: IO ()
+calc = do
+  putStr "Input Integer1 &gt; "
+  x &lt;- readLn :: IO Integer
+  putStr "Input Integer2 &gt; "
+  y &lt;- readLn :: IO Integer
+  let a = x + y
+      b = x - y
+      c = x * y
+      d = x `div` y
+      n1 = show x
+      n2 = show y
+  putStrLn (n1 ++ "+" ++ n2 ++ "=" ++ show a)
+  putStrLn (n1 ++ "-" ++ n2 ++ "=" ++ show b)
+  putStrLn (n1 ++ "*" ++ n2 ++ "=" ++ show c)
+  putStrLn (n1 ++ "/" ++ n2 ++ "=" ++ show d)
+</pre>
+<p> 標準入力から整数値を 2 つ読み込み、四則演算の結果を表示します。readLn は IO Integer なので、IO から整数値を取り出すために &lt;- を使います。四則演算の結果は let で定義した変数 a, b, c, d に格納します。あとは putStrLn で結果を表示するだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; calc
+Input Integer1 &gt; 12345
+Input Integer2 &gt; 6789
+12345+6789=19134
+12345-6789=5556
+12345*6789=83810205
+12345/6789=1
+</pre>
+<h4>●関数 main</h4>
+<p> ところで、ghci の対話モードは「副作用のある世界」なので、putStrLn, getLine, echo など副作用のある関数を呼び出すことが可能です。プログラムをコンパイルする場合は、関数 main から副作用のある関数を呼び出します。main は副作用のある処理を呼び出すことができる唯一の関数です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : echo (echo1.hs)
+
+echo :: IO ()
+echo = do
+  a &lt;- getLine
+  if a == "" then return ()
+  else do putStrLn a
+          echo
+
+main :: IO ()
+main = echo
+
+-- 別解
+main :: IO ()
+main = do
+  a &lt;- getLine
+  if a == "" then return ()
+  else do putStrLn a
+          main
+</pre>
+<p> Haskell の場合、コンパイルしたプログラムは関数 main から実行が開始されます。main も I/O アクションを行う関数なので、副作用をともなう関数 echo を呼び出すことができます。また、別解のように main の中で getLine, putStrLn を呼び出すこともできますし、main を再帰呼び出しすることもできます。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+C&gt;ghc echo1.hs
+[1 of 1] Compiling Main             ( echo1.hs, echo1.o )
+Linking echo1.exe ...
+
+C&gt;echo1
+foo bar baz    &lt;-- 入力
+foo bar baz
+hello, world   &lt;-- 入力
+hello, world
+               &lt;-- 入力 (リターンキーのみ)
+
+C&gt;
+</pre>
+
+<h4>●I/O アクションとマップ関数</h4>
+<p> I/O アクションを行う関数は通常の関数から呼び出すことはできません。高階関数の場合、たとえば map print [1 .. 10] としても、データが表示されることはなく I/O アクションを格納したリストが返ってきます。
+</p>
+<pre>
+Prelude&gt; map print [1..10]
+
+<interactive>:8:1:
+    No instance for (Show (IO ()))
+
+  ・・・ 省略 ・・・
+</pre>
+<p> I/O アクションを表すデータは Show のインスタンスではないので画面に表示できません。この場合、sequence という関数を使うとリストに格納された I/O アクションを実行することができます。
+</p>
+<pre>
+Prelude&gt; :t sequence
+sequence :: Monad m =&gt; [m a] -&gt; m [a]
+Prelude&gt; :t map print
+map print :: Show a =&gt; [a] -&gt; [IO ()]
+Prelude&gt; :t sequence . map print
+sequence . map print :: Show a =&gt; [a] -&gt; IO [()]
+Prelude&gt; sequence $ map print [1..10]
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+[(),(),(),(),(),(),(),(),(),()]
+</pre>
+<p> sequence は I/O アクション専用の関数ではなく「モナド (Monad) 」のインスタンスであれば適用することができます。I/O アクションもモナドのひとつです。print の返り値は IO () なので、sequence は IO に格納されている ( ) を取り出して、それをリストに格納して返します。
+</p>
+
+<p> 実際は sequence よりも mapM という関数を使うと便利です。
+</p>
+<pre>
+Prelude&gt; :t mapM
+mapM :: Monad m =&gt; (a -&gt; m b) -&gt; [a] -&gt; m [b]
+Prelude&gt; :t mapM print
+mapM print :: Show a =&gt; [a] -&gt; IO [()]
+Prelude&gt; mapM print [1..10]
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+[(),(),(),(),(),(),(),(),(),()]
+</pre>
+<p> このように、sequence と map を組み合わせた処理を mapM だけで行うことができます。
+</p>
+<p> 返り値が不要な場合は関数 mapM_ を使います。
+</p>
+<pre>
+Prelude&gt; :t mapM_
+mapM_ :: Monad m =&gt; (a -&gt; m b) -&gt; [a] -&gt; m ()
+Prelude&gt; :t mapM_ print
+mapM_ print :: Show a =&gt; [a] -&gt; IO ()
+Prelude&gt; mapM_ print [1..10]
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+</pre>
+<p> このほかにも、Haskell には便利な関数が多数用意されていますが、モナドと関連があるので、ここでまでにしておきましょう。モナドを勉強するときに再度取り上げることにします。
+</p>
+</section>
+<hr>
+<section class="contents">
+<h3 id="chap02">経路の探索</h3>
+<p> 今回は、地図上の A 地点から B 地点までの道順を求める、といった「経路の探索」と呼ばれる問題を取り上げます。「探索」にはいろいろな種類があります。「8 クイーン」 のようなパズルの解法も、あらゆる可能性の中から正解に行き着く手順を探すことですから、探索の一つと考えることができます。そして、探索でよく用いられる最も基本的な方法が「バックトラック」なのです。もちろん、経路の探索もバックトラックで解くことができます。
+</p>
+
+<p> このほかに、もう一つ基本的な方法として「幅優先探索」があります。バックトラックの場合、失敗したら後戻りして別の道を選び直しますが、幅優先探索の場合は、全ての経路について並行に探索を進めていきます。今回は、この 2 つの方法で問題を解いてみましょう。
+</p>
+
+<h4>●グラフの表現方法</h4>
+<p> 簡単な例題として、次に示す経路を考えてみます。
+</p>
+
+<pre class="fig">
+    Ｂ------Ｄ------Ｆ
+  ／│      │          
+Ａ  │      │          
+  ＼│      │          
+    Ｃ------Ｅ------Ｇ
+
+      図 :経路図
+</pre>
+
+<p> 点とそれを接続する線からなる図形を「グラフ (graph) 」といいます。点のことを「頂点 (vertex) 」とか「節 (node) 」と呼び、線のことを「辺 (edge) 」とか「弧 (arc) 」と呼びます。グラフには 2 種類あって、辺に向きがないものを「無向グラフ」といい、向きがあるものを「有向グラフ」といいます。有向グラフは一方通行の道と考えるとわかりやすいでしょう。上図ではアルファベットで頂点を表しています。今回は経路をグラフで表していますが、このほかにもいろいろな問題をグラフで表現することができます。
+</p>
+
+<p> グラフをプログラムする場合、よく使われる方法が「隣接行列」と「隣接リスト」です。隣接行列は 2 次元配列で頂点の連結を表す方法です。頂点が N 個ある場合、隣接行列は N 行 N 列の行列で表すことができます。上図を隣接行列で表すと、次のようになります。
+</p>
+
+<pre class="fig">
+   | A B C D E F G
+  -+--------------  
+  A| 0 1 1 0 0 0 0
+  B| 1 0 1 1 0 0 0
+  C| 1 1 0 0 1 0 0
+  D| 0 1 0 0 1 1 0
+  E| 0 0 1 1 0 0 1
+  F| 0 0 0 1 0 0 0
+  G| 0 0 0 0 1 0 0
+
+    図 :隣接行列
+</pre>
+
+<p> A に接続している頂点は B と C なので、A 行の B と C に 1 をセットし、接続していない頂点には 0 をセットします。経路が一方通行ではない無向グラフの場合は、A 列の B と C にも 1 がセットされます。
+</p>
+
+<p> 隣接行列の欠点は、辺の数が少ない場合でも N 行 N 列の行列が必要になることです。つまり、ほとんどの要素が 0 になってしまい、メモリを浪費してしまうのです。この欠点を補う方法に隣接リストがあります。これは、つながっている頂点を格納する方法です。次の図を見てください。
+</p>
+
+<pre class="fig">
+  A =&gt; [B, C]
+  B =&gt; [A, C, D]  
+  C =&gt; [A, B, E]
+  D =&gt; [B, E, F]
+  E =&gt; [C, D, G]
+  F =&gt; [D]
+  G =&gt; [E]
+
+  図 : 隣接リスト
+</pre>
+
+<p> 上図は、頂点とそこに接続されている頂点を =&gt; と [ ] で表しています。これを Haskell で表すと、次のようになります。
+</p>
+
+<pre class="list">
+リスト : 隣接リスト
+
+adjacent :: [[Int]]
+adjacent =
+  [[1, 2],     -- A
+   [0, 2, 3],  -- B
+   [0, 1, 4],  -- C
+   [1, 4, 5],  -- D
+   [2, 3, 6],  -- E
+   [3],        -- F
+   [4]]        -- G
+</pre>
+
+<p> 頂点 A から G を数値 0 から 6 に対応させるところがポイントです。すると、隣接リスト adjacent のデータ型は [[Int]] で表すことができます。
+</p>
+
+<p> ところで、隣接リストにも欠点があります。たとえば、E と G が接続しているか調べるには、データを順番に調べていくしか方法がありません。このため、接続の判定に時間がかかることがあるのです。まあ、頂点に接続されている辺の数が少なければ、処理速度が極端に遅くなることはないでしょう。
+</p>
+
+<h4>●深さ優先探索の動作</h4>
+<p> それでは、隣接リストを使って A から G までの経路をバックトラックで求めてみましょう。バックトラックの実装にはスタックを使うと簡単です。また、明示的にスタックを使わなくても再帰呼び出しで簡単に実装することもできます。
+</p>
+
+<p> 経路は頂点を並べたリストで表すことにします。バックトラックによる経路の探索は下図のような動作になります。
+</p>
+<pre class="fig">
+  (1)     ───── STACK  ─────┐
+    ┌── [A]                        │
+    │    ──────────────┘
+    │
+    └─→ スタックからデータを取り出す
+
+  (2)     ───── STACK  ─────┐
+  ┌──→                            │
+  │      ──────────────┘
+  │
+  ├─── [A,B]  [A] の経路を進め
+  └─── [A,C]  スタックに追加する
+
+  (3)     ───── STACK  ─────┐
+   ┌── [A,C] [A,B]                 │
+   │     ──────────────┘
+   │
+   └─→ [A,C] の経路を進めスタックに追加
+   ┌── [A,C,B] [A,C,E]
+   │
+   │     ───── STACK  ─────┐
+   └─→ [A,B]                       │
+          ──────────────┘
+
+  (4)     ───── STACK  ─────┐
+    ┌── [A,C,E] [A,C,B] [A,B]      │
+    │    ──────────────┘
+    │
+    └─→ スタックに経路がある間繰り返す 
+    ┌── [A,C,E,D] [A,C,E,G]
+    │
+    │     ───── STACK  ─────┐
+    └─→ [A,C,B] [A,B]               │
+           ──────────────┘
+
+        図 : 深さ優先探索とスタックの動作
+</pre>
+<p> 最初、スタックに出発点を格納した経路 [A] を入れます。次に、スタックから経路を一つ取り出します (1)。そして、経路 [A] を一つ進めた経路 [A,B], [A,C] を作成し、それをスタックに追加します (2)。ここでスタックには経路 [A,B], [A,C] が格納されます。同様にスタックからデータを取り出して経路を一つ進めます、取り出した経路が [A,C] とすると、一つ進めた経路は [A,C,B], [A,C,E] で、これをスタックに追加します (3)。あとは同様に、スタックからデータを取り出して経路を一つ進めます (4)。これをゴールに到達するか、スタックが空になるまで繰り返します。
+</p>
+
+<p> ここで、スタックから取り出した経路を順番に並べてみましょう。
+</p>
+<pre class="fig">
+[A] =&gt; [A, C] =&gt; [A, C, E] =&gt; ...
+</pre>
+<p> ひとつの経路を延ばして探索をすすめていることがわかります。このように、スタックを使って探索を行うと、経路を先へ先へ進めるので、「縦形探索」とか「深さ優先探索」と呼ばれています。
+</p>
+
+<p> バックトラックも簡単です。次の図を見てください。
+</p>
+<pre class="fig">
+
+          ───── STACK  ─────┐
+    ┌── [A,C,E,D] [A,C,B] [A,B]    │
+    │    ──────────────┘
+    │
+    └─→ [A,C,E,G] 行き止まり
+    │
+    │     次のデータを取り出す
+    └─→ [A,C,E,D]
+
+    [A] =&gt; [A,C] =&gt; [A,C,E] =&gt; [A,C,E,G] 行き止まり
+                            =&gt; [A,C,E,D] バックトラック
+
+        図 : バックトラックの動作
+</pre>
+<p> 行き止まりになったら、その経路を捨ててスタックから新しい経路を取り出します。たとえば、[A,C,E,G] は行き止まりなので、スタックから [A,C,E,D] を取り出します。この動作は [A,C,E,G] から [A,C,E] に戻って [A,C,E,D] に進む動作に対応します。スタックは後入れ先出し (LIFO) のデータ構造です。スタックの中には通ってきた経路が格納されているので、スタックから経路を取り出せばバックトラック (後戻り) することができるわけです。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作ります。最初に経路を表すデータ構造を決めておきましょう。次の図を見てください。
+</p>
+
+<pre class="fig">
+  A - B - D      ─→  [0, 1. 3]    ==&gt; [3, 1, 0]
+
+  A - B - C - E  ─→  [0, 1, 2, 4] ==&gt; [4, 2, 1, 0]  
+
+                               逆順で管理する
+
+                図 : 経路の表し方
+</pre>
+<p> 経路はリストに頂点を格納して表すことにします。リストの最後尾にデータを追加するのは面倒なので、経路は上図のように逆順で管理することにします。
+</p>
+
+<p> 求めた経路を画面に出力する場合、プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 深さ優先探索 (1)
+
+import Stack
+
+-- 次の頂点へ進む
+nextPath :: [Int] -&gt; [[Int]]
+nextPath path@(x:xs) = [y:path | y &lt;- adjacent !! x, y `notElem` xs]
+
+-- 深さ優先探索
+dfs :: Int -&gt; Int -&gt; IO ()
+dfs start goal = iter (singleton [start]) where
+  iter s
+    | isEmptyStack s = return ()
+    | otherwise =
+        let (path, s1) = pop s
+        in if head path == goal then do
+             print (reverse path)
+             iter s1
+           else iter $ foldl push s1 $ nextPath path
+</pre>
+
+<p> モジュール Stack は拙作のページ <a href="haskell08.html">モジュール</a> で作成した Stack.hs です。関数 nextPath は隣接リスト adjacent から x の隣にある頂点 y を選んで新しい経路を生成します。このとき、経路に含まれている頂点を選んではいけません。そうしないと、同じ道をぐるぐると回る巡回経路が発生し、ゴールまでたどり着くことができなくなります。これをリスト内包表記の条件式 y `notElem` xs でチェックしています。
+</p>
+<p> 関数 dfs は深さ優先探索で start から goal までの経路を求めます。実際の処理は局所関数 iter で行います。iter には経路を格納したスタックを渡します。最初は出発点だけを格納した経路 [start] をスタックに積みます。そして、スタックにデータがある間、スタックから経路を取り出して探索を行います。
+</p>
+<p> スタックにデータがある場合、pop でデータを取り出して、path と s1 に経路とスタックをセットします。path の先頭要素が goal と等しい場合、経路をひとつ見つけたので print で表示します。経路は逆順になっているので reverse で反転します。ここで探索を終了することもできますが、iter s1 を呼び出してバックトラックすることで全ての経路を見つけることができます。パズルの解法で解の総数を求める場合、全ての解をもれなく探索する必要があります。バックトラックを使えば、このような要求も満たすことができます。
+</p>
+<p> goal に到達していない場合は新しい経路を nextPath で生成して、それをスタックに積んで iter を再帰呼び出しします。新しい経路をスタックに積む操作は畳み込み foldl を使えば簡単です。最後に、スタックが空になったら return で IO () を生成して返します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; dfs 0 6
+[0,2,4,6]
+[0,2,1,3,4,6]
+[0,1,3,4,6]
+[0,1,2,4,6]
+*Main&gt; dfs 6 0
+[6,4,3,1,2,0]
+[6,4,3,1,0]
+[6,4,2,1,0]
+[6,4,2,0]
+</pre>
+<p> 4 通りの経路を見つけることができました。結果を見てもわかるように、最初に見つかる経路が最短経路とは限りません。最短経路を求めるのに適したアルゴリズムが「幅優先探索」です。
+</p>
+
+<p> ところで、見つけた経路をリストに格納して返すことも簡単です。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 深さ優先探索 (2)
+
+-- リストに格納する
+dfs' :: Int -&gt; Int -&gt; [[Int]]
+dfs' start goal = iter (singleton [start]) where
+  iter s
+    | isEmptyStack s = []
+    | otherwise =
+        let (path, s1) = pop s
+        in if head path == goal then reverse path : iter s1
+           else iter $ foldl push s1 $ nextPath path
+</pre>
+<p> スタックが空になったら空リスト [ ] を返します。そして、経路を一つ見つけたら、reverse で反転してから、iter の返り値のリストに追加します。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; dfs' 0 6
+[[0,2,4,6],[0,2,1,3,4,6],[0,1,3,4,6],[0,1,2,4,6]]
+*Main&gt; dfs' 6 0
+[[6,4,3,1,2,0],[6,4,3,1,0],[6,4,2,1,0],[6,4,2,0]]
+</pre>
+<p> なお、スタックを使わなくても演算子 ++ で深さ優先探索を実装することもできます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 深さ優先探索 (3)
+
+dfs'' :: Int -&gt; Int -&gt; [[Int]]
+dfs'' start goal = iter [[start]] where
+  iter [] = []
+  iter (path:xs)
+    | head path == goal = reverse path : iter xs
+    | otherwise         = iter (nextPath path ++ xs)
+</pre>
+<p> 局所関数 iter の引数がスタックのかわりになるリストです。引数が空リストの場合は空リストを返します。そうでなければ、先頭から経路 path を取り出して、ゴールに到達したかチェックします。ゴールに到達していない場合は、nextPath で新しい経路を生成し、それを演算子 ++ で xs の前に追加します。これで深さ優先探索として動作します。
+</p>
+
+<h4>●再帰呼び出しによる実装</h4>
+<p> 次はスタックを使わずに再帰呼び出しでバックトラックを実装してみましょう。バックトラックを再帰呼び出しで実装する場合、経路を「進む」ことを再帰呼び出しに対応させるのがポイントです。たとえば、経路を探索する関数を search としましょう。search は引数として現在地点の頂点を受け取ることにします。最初は search(A) と呼び出します。そして、A から B へ進むには search(B) と呼び出します。これで B へ進むことができます。
+</p>
+<p> それでは、A に戻るにはどうしたらいいのでしょう。search(B) は search(A) から呼び出されたので、search(B) の実行を終了すれば、呼び出し元である search(A) に戻ることができます。つまり、関数の実行を終了すれば、一つ手前の地点にバックトラックできるのです。このように再帰呼び出しを使うと、進むことと戻ることを関数呼び出しで簡単に実現することができます。
+</p>
+
+<p> たとえば、経路の探索を行う関数 search を次のように定義します。
+</p>
+<pre class="item">
+search :: Int -&gt; [Int] -&gt; IO ()
+</pre>
+<p> search の第 1 引数がゴール、第 2 引数が経路を表すリストです。リストの先頭要素が現在地点の頂点になります。search は現在地点に隣接している頂点を一つ選び、経路を進めていきます。A から Gまでの経路を求めるには、次のように呼び出します。
+</p>
+<pre class="item">
+-- A から G までの経路を求める
+search 6 [0]
+</pre>
+<p> search は出発点 A をリストにセットし、A に接続されている頂点を選びます。隣接リストから順番に選ぶことにすると、次の頂点は B となります。B へ進むためには、次のように search を再帰呼び出しします。
+</p>
+<pre class="item">
+-- B へ進む時の再帰呼び出し
+search 6 [1, 0]
+</pre>
+
+<p> この関数の実行を終了すると、呼び出し元の関数である頂点 A の処理に戻ります。これをプログラムすると次のようになります。
+</p>
+
+<pre class="list">
+リスト : 深さ優先探索 (4)
+
+dfs1 :: Int -&gt; Int -&gt; IO ()
+dfs1 start goal = search [start] where
+  search path@(x:xs)
+    | x == goal = print (reverse path)
+    | otherwise = mapM_ search $ nextPath path
+</pre>
+<p> 局所関数 search を見てください。最初に、現在地点 x がゴール goal かチェックします。これが再帰呼び出しの停止条件になります。ゴールしたら print で経路を表示します。
+</p>
+<p> ゴールしていない場合は、nexPath で次の頂点を選択して新しい経路を生成します。あとは、それを search に渡して再帰呼び出しします。search は I/O アクションの関数になるので、search を実行するため関数 mapM_ を使っています。たとえば、nextPath が生成したリストが [path1, path2] とすると、最初に path1 に対して探索が行われ、バックトラックする (再帰呼び出しから戻ってくる) と次の経路 path2 に対して探索が行われます。
+</p>
+
+<p> 求めた経路をリストに格納するプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 深さ優先探索 (5)
+
+-- 結果をリストに格納する
+dfs1' :: Int -&gt; Int -&gt; [[Int]]
+dfs1' start goal = search [] [start] where
+  search ys path@(x:xs)
+    | x == goal = reverse path : ys
+    | otherwise = foldl search ys $ nextPath path
+</pre>
+<p> 局所関数 search の第 1 引数を累積変数として使います。経路をひとつ見つけたら累積変数 ys に追加して返します。そうでなければ、nextPath で新しい経路を作って、それを search に渡して再帰呼び出しします。累積変数 ys には新しい経路が追加されることがあるので、更新された累積変数を search が受け取れるように畳み込み foldl を使っています。
+</p>
+
+<p> まだ説明していませんが「リストモナド」を使うと上記プログラムはもっとわかりやすくなります。ご参考までにプログラムを示します。
+</p>
+<pre class="list">
+リスト : 深さ優先探索 (6)
+
+import Control.Monad
+
+-- リストモナド
+dfs1'' :: Int -&gt; Int -&gt; [[Int]]
+dfs1'' start goal = search [start] where
+  search path@(x:xs)
+    | x == goal = return (reverse path)
+    | otherwise = do
+        y &lt;- (adjacent !! x)
+        guard(y `notElem` xs)
+        search (y:path)
+</pre>
+
+<h4>●幅優先探索</h4>
+<p> バックトラックによる探索は「深さ優先探索」や「縦形探索」とも呼ばれるように、一つの経路を先へ先へと進めていきます。このため最初に見つかる経路が最短経路であるとは限りません。幅優先探索は全ての経路について平行に探索を進めていくため、最初に見つかる経路が最短経路となります。
+</p>
+<p> それでは、同じ経路図を使って幅優先探索を具体的に説明しましょう。幅優先探索の様子を下図に示します。
+</p>
+
+<pre class="fig">
+    [A] ─┬─ [A,B] ─┬─ [A,B,C]  ・・・・
+          │           └─ [A,B,D] ─┬─ [A,B,D,F] 行き止まり  
+          │                          └─ [A,B,D,E]
+          └─ [A,C] ─┬─ [A,C,B]  ・・・・
+                       └─ [A,C,E] ─┬─ [A,C,E,G] GOAL
+                                      └─ [A,C,E,D] 
+
+（出発点）    （２節点）  （３節点）      （４節点）
+
+                      図 : 幅優先探索
+</pre>
+<p> まず、出発点 A から一つ進んだ経路 (2 節点) を全て求めます。この場合は、[A, B] と [A, C] の 2 つあり、これを全て記憶しておきます。次に、これらの経路から一つ進めた経路 (3 節点) を全て求めます。経路 [A, B] は [A, B, C] と [A, B, D] へ進めることができますね。ほかの経路 [A, C] も同様に進めて、全ての経路を記憶します。あとはこの作業をゴールに達するまで繰り返せばいいのです。
+</p>
+<p> 上図では、4 節点の経路 [A, C, E, G] でゴールに達していることがわかります。このように幅優先探索では、最初に見つかった経路が最短距離 (または最小手数) となるのです。この性質は、全ての経路を平行に進めていく探索順序から考えれば当然のことといえるでしょう。このことからバックトラックの縦形探索に対して、幅優先探索は「横形探索」と呼ばれます。このあとも探索を繰り返せば全ての経路を求めることができます。
+</p>
+<p>  完成までの最小手数を求めるパズルを解く場合、幅優先探索を使ってみるといいでしょう。ただし、探索を進めるにしたがって、記憶しておかなければならないデータの総数が爆発的に増加する、つまりメモリを大量消費することに注意してください。
+</p>
+<p> 上図の場合ではメモリを大量消費することはありませんが、問題によってはマシンに搭載されているメモリが不足するため、幅優先探索を実行できない場合もあるでしょう。したがって、幅優先探索を使う場合は、メモリの消費量を抑える工夫も必要になります。
+</p>
+
+<h4>●経路の管理</h4>
+<p> 経路の管理はキューを使うと簡単です。幅優先探索でのキューの動作を下図に示します。
+</p>
+
+<pre class="fig">
+  (1)     ───── QUEUE  ──────
+    ┌── [A]
+    │    ───────────────
+    │
+    └─→ キューからデータを取り出す
+
+  (2)     ───── QUEUE  ──────
+                                      ←─┐
+          ───────────────  │
+                                          │
+          [A] の経路を進め    [A,B] ───┤
+          キューに追加する    [A,C] ───┘
+
+   (3)     ───── QUEUE  ──────
+    ┌── [A,B] [A,C]                  ←─┐
+    │    ───────────────    │
+    │                                      │
+    └─→ [A,B] の経路を進めキューに追加   │
+           [A,B,C] [A,B,D]  ────────┘
+
+  (4)     ───── QUEUE  ──────
+    ┌── [A,C] [A,B,C] [A,B,D]        ←─┐
+    │    ───────────────    │
+    │                                      │
+    └─→ キューに経路がある間繰り返す ──┘  
+
+        図 : 幅優先探索とキューの動作
+</pre>
+
+<p> 最初は、(1) のように出発点をキューにセットしておきます。次に、キューから経路を取り出し、(2) のように経路 [A] を一つ進めて、経路 [A, B] [A, C] を作り、それをキューに追加します。(3) では、経路 [A, B] を取り出して、一つ進めた経路 [A, B, C] と [A, B, D] をキューに追加します。あとはキューに経路がある間、処理を繰り返せばいいわけです。
+</p>
+
+<p> キューは先入れ先出し (FIFO) の性質を持つデータ構造です。距離の短い経路から順番に処理されるため、幅優先探索として機能するわけです。
+</p>
+
+<h4>●プログラムの作成</h4>
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 幅優先探索
+
+import Queue
+
+bfs start goal = iter (singleton [start]) where
+  iter q
+    | isEmptyQueue q = return ()
+    | otherwise =
+        let (path, q1) = dequeue q
+        in if head path == goal then do
+             print (reverse path)
+             iter q1
+           else iter $ foldl enqueue q1 $ nextPath path
+
+-- リストに格納する
+bfs' :: Int -&gt; Int -&gt; [[Int]]
+bfs' start goal = iter (singleton [start]) where
+  iter q
+    | isEmptyQueue q = []
+    | otherwise =
+        let (path, q1) = dequeue q
+        in if head path == goal then reverse path : iter q1
+           else iter $ foldl enqueue q1 $ nextPath path
+</pre>
+<p> モジュール Queue は拙作のページ <a href="haskell08.html">モジュール</a> で作成した Queue.hs です。プログラムは深さ優先探索を行う関数 dfs のスタックをキューに変更しただけで、あとの処理はほとんど同じです。これで幅優先で経路の探索が行われます。見つけた経路をリストに格納して返す関数 bfs' も同様です。
+</p>
+
+<p> それでは実行してみましょう。
+</p>
+<pre>
+*Main&gt; bfs 0 6
+[0,2,4,6]
+[0,1,2,4,6]
+[0,1,3,4,6]
+[0,2,1,3,4,6]
+*Main&gt; bfs 6 0
+[6,4,2,0]
+[6,4,2,1,0]
+[6,4,3,1,0]
+[6,4,3,1,2,0]
+*Main&gt; bfs' 0 6
+[[0,2,4,6],[0,1,2,4,6],[0,1,3,4,6],[0,2,1,3,4,6]]
+*Main&gt; bfs' 6 0
+[[6,4,2,0],[6,4,2,1,0],[6,4,3,1,0],[6,4,3,1,2,0]]
+</pre>
+<p> 結果を見ればおわかりのように、最初に見つかる経路が最短で、最後に見つかる経路が最長となります。当然ですが、経路の総数は 4 通りとなります。
+</p>
+
+<p> この程度の問題であれば、わざわざキューを使わなくても演算子 ++ で幅優先探索を実装することができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 幅優先探索 (2)
+
+bfs'' :: Int -&gt; Int -&gt; [[Int]]
+bfs'' start goal = iter [[start]] where
+  iter [] = []
+  iter (path:q)
+    | head path == goal = reverse path : iter q
+    | otherwise         = iter (q ++ nextPath path)
+</pre>
+<p> 局所関数 iter の引数がキューのかわりになるリストです。引数が空リストの場合は空リストを返します。そうでなければ、先頭から経路 path を取り出して、ゴールに到達したかチェックします。ゴールに到達していない場合は、nextPath で新しい経路を生成し、それを演算子 ++ で q の後ろに連結します。これで幅優先探索として動作します。
+</p>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2013 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="haskell08.html">PrevPage</a> | <a href="haskell.html">Haskell</a> | <a href="haskell10.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

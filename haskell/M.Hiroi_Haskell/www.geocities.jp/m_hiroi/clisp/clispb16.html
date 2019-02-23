@@ -1,0 +1,963 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Common Lisp 入門 : 番外編</title>
+  <meta name="description" content="Common Lisp, Common Lisp 入門, 番外編">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881768</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Common Lisp Programming</h1>
+<h2>Common Lisp 入門：番外編</h2>
+<div class="small">
+[ <a href="clispb15.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb17.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>Common Lisp で作る micro Scheme コンパイラ</h3>
+<p> 今回は micro Scheme のコンパイラバージョンを Common Lisp で作ってみましょう。一般に、コンパイラの作成はとても難しいと思われていますが、小さな Lisp 処理系のコンパイラであれば、それほど難しいことではありません。特に、仮想マシン上で動作する小さな Lisp 処理系の場合、思っているよりも簡単にコンパイラを作成することができます。今回は SECD マシンという仮想マシン上で動作するコードを生成し、そのコードを Common Lisp で実行することにします。
+</p>
+<p> なお、このドキュメントは拙作のページ <a href="../func/scheme.html">お気楽 Scheme プログラミング入門</a> <a href="../func/abcscm33.html">micro Scheme コンパイラの作成</a> のプログラムを Common Lisp で書き直したものです。内容は重複しますが、あしからずご了承くださいませ。
+</p>
+
+<h4>●SECD 仮想マシン</h4>
+<p> SECD マシンは 1963年 に Peter J. Landin が設計した仮想マシンで、もともとは「ラムダ計算 (lambda calculus) 」で用いられるラムダ式を評価するためのものです。ラムダ計算は、文字λを使って関数を表す「λ記法」という表記法を用いた抽象的な計算モデルで、1930 年代に A. Church によって考案されました。ラムダ計算は Lisp, Scheme, ML, Haskell など多くの関数型言語の基礎理論として、大きな役割を果たしています。
+</p>
+
+<p> 実際に SECD マシンをベースにした処理系には、1980 年に Peter Henderson が作成した Lispkit Lisp があります。SECD マシンの実装については、Skelet 氏の <a href="http://skelet.ludost.net/sec/index.html">SECD Mania</a> が参考になります。実用的な処理系では、PalmOS で動作する <a href="http://www.lispme.de/lispme/index_en.html">LispMe</a> (Scheme) があります。日本では、森脇淳氏と林祥一氏による SECDR-Scheme がとても参考になります。SECDR-Scheme は <a href="http://lily.fan.gr.jp/~kmd/adhoc/view.rhtml?n=SECDR-Scheme_woyomu">adhoc &gt; memo &gt; SECDR-Scheme を読む</a> からダウンロードすることができます。
+</p>
+
+<p> SECD マシンは S, E, C, D という 4 つのレジスタ (変数) を持った仮想マシンです。
+</p>
+<ul>
+  <li>S (Stack) : スタック
+  <li>E (Environment) : 環境
+  <li>C (Code) : 実行するコード
+  <li>D (Dump) : ダンプ (他のレジスタの値を一時的に保存する)
+</ul>
+<p> これらのレジスタはリストを保持します。スタックは値を一時的に保存するために使われます。たとえば、1 + 2 を計算する場合、数値 1 と 2 をスタックに追加します。次に、加算処理を行いますが、スタックから数値 1 と 2 を取り出して 1 + 2 を計算し、その値 3 をスタックに追加します。
+</p>
+<p> このように、スタックを使って計算を行う機械を「スタックマシン (stack machine) 」といいます。SECD 仮想マシンはスタックマシンの一種になります。スタックマシンをベースにしたプログラミング言語では Forth が有名です。また、Java の仮想マシンもスタックマシンをベースにしています。
+</p>
+<p> 実行する仮想マシンの命令は C レジスタのリストに格納されていて、それを先頭から順番に取り出して、その命令を実行します。局所変数の値は E レジスタのリストから求めます。D レジスタは条件分岐と関数呼び出しを行うとき、その後の処理を継続するため S, E. C レジスタの値を保存するために使用します。
+</p>
+
+<h4>●SECD 仮想マシンの命令</h4>
+<p> 今回作成する SECD 仮想マシンの命令と機能概要を下表に示します。
+</p>
+
+<table border=1>
+<caption>表 : SECD 仮想マシンの命令</caption>
+<thead>
+  <tr><th>命令</th><th>機能概要</th></tr>
+</thead>
+<tbody>
+  <tr><td>ld (i . j)</td><td>E レジスタの i 番目のフレームの j 番目の要素をスタックに積む</td></tr>
+  <tr><td>ldc const</td><td>定数 const をスタックに積む</td></tr>
+  <tr><td>ldg sym</td><td>大域変数 sym の値をスタックに積む </td></tr>
+  <tr><td>ldf code</td><td>code からクロージャを生成してスタックに積む</td></tr>
+  <tr><td>args n</td><td>スタックから n 個の値を取り出してリストに格納し、そのリストをスタックに積む</td></tr>
+  <tr><td>app</td><td>スタックに積まれているクロージャと引数リストを取り出して関数呼び出しを行う</td></tr>
+  <tr><td>rtn</td><td>関数呼び出しから戻る</td></tr>
+  <tr><td>sel ct cf</td><td>スタックトップの値が真ならば ct を実行する。偽ならば cf を実行する</td></tr>
+  <tr><td>join</td><td>条件分岐から合流する </td></tr>
+  <tr><td>pop</td><td>スタックトップの値を取り除く</td></tr>
+  <tr><td>def sym</td><td>スタックトップの値を大域変数 sym にセットする</td></tr>
+  <tr><td>stop</td><td>仮想マシンの実行を停止する</td></tr>
+</tbody>
+</table>
+<p> これらの命令は Henderson の SECD マシンを参考にしていますが、まったく同じではありません。micro Scheme の仕様にあわせて、新しい命令を追加したり不要な命令を削除しています。なお、今回作成する micro Scheme の仕様は、拙作のページ <a href="clispb12.html">Common Lisp で作る micro Scheme</a> で作成したインタプリタと同じです。また、今回のプログラムでもエラーチェックはほとんど行っていません。あしからずご了承ください。
+</p>
+<p> 命令の動作は 4 つのレジスタ (S, E, C, D) の状態遷移で表すことができます。ここで、各命令の動作について詳しく説明することにしましょう。各レジスタの値はドットリストで表すことにします。
+</p>
+<h4>●ld</h4>
+<p> ld はレジスタ E から局所変数の値 v を求めてスタックに積む命令です。
+</p>
+<pre class="item">
+s e (ld (i . j) . c) d =&gt; (v . s) e c d
+v = (get-lvar e i j)
+</pre>
+<p> ld の次の命令はドットペア (i . j) で、局所変数の位置を i と j で表しています。今回のプログラムでは関数 get-lvar で局所変数の値を求めます。
+</p>
+<p> micro Scheme の場合、局所変数はラムダ式で定義されます。局所変数はラムダ式ごとにリストにまとめて環境にセットします。これをフレームといいます。i がフレームの位置、j がフレームの中の変数の位置を表します。
+</p>
+<p> 簡単な例を示しましょう。次の図を見てください。
+</p>
+<pre class="item">
+(1) ((lambda (a b) ...) 1 2)
+    E: ((1 2))
+(2) ((lambda (a b c) ((lambda (d e) ...) 4 5)) 1 2 3)
+    E: ((4 5) (1 2 3))
+</pre>
+<p> (1) の場合、フレームは一つしかありません。変数 a の位置は (0 . 0) で値は 1 になり、b の位置は (0 . 1) で値は 2 になります。(2) の場合、フレームは 2 つあります。この場合、各変数の位置と値は次のようになります。
+</p>
+<pre class="item">
+a : (1 . 0), 値 = 1
+b : (1 . 1), 値 = 2
+c : (1 . 2), 値 = 3
+d : (0 . 0), 値 = 4
+e : (0 . 1), 値 = 5
+</pre>
+<p> 局所変数の位置はコンパイルの時に求めます。
+</p>
+<h4>●ldc と ldg</h4>
+<p> ldc は定数 const をスタックに、ldg は大域変数 sym の値をスタックに積む命令です。
+</p>
+<pre class="item">
+s e (ldc const . c) d =&gt; (const . s) e c d
+</pre>
+<pre class="item">
+s e (ldg sym . c) d =&gt; (v . s) e c d
+v = (get-gvar sym)
+</pre>
+<p> micro Scheme の場合、自己評価フォームまたはクオート (quote) の引数を定数として扱います。大域変数 sym の値は関数 get-gvar で求めます。
+</p>
+<h4>●ldf と args</h4>
+<p> ldf はクロージャを生成して、それをスタックに積む命令です。
+</p>
+<pre class="item">
+s e (ldf code . c) d =&gt; ((closure code e) . s) e c d
+</pre>
+<p> 具体的に説明すると、ldf はラムダ式 (lambda (a ...) body ...) を処理する命令です。ldf の次の命令 code は、ラムダ式の本体 (body ...) をコンパイルしたものです。それと環境 e をリストに格納してクロージャを生成します。今回のプログラムではリストの先頭にタグ closure を付加して、それがクロージャであることを表しています。
+</p>
+<p> args はスタックから n 個の値を取り出してリストに格納して、それをスタックに積む命令です。
+</p>
+<pre class="item">
+(v1 ... vn . s) e (args n . c) d =&gt; (vs . s) e c d
+vs = (list v1 ... vn)
+</pre>
+<p> 関数を呼び出すとき引数を評価しますが、その返り値はスタックに格納されます。たとえば、n 個の引数がある場合、スタックには v1 から vn までの値が格納されています。それをスタックから取り出してリスト vs に格納し、それをスタックに積むのが args の役目です。このあと、関数 (closure または primitive) をスタックに積み、app という命令で関数を呼び出します。
+</p>
+<h4>●app と rtn</h4>
+<p> app はスタックに積まれた関数と引数のリストを取り出して、その関数を呼び出す命令です。
+</p>
+<pre class="item">
+((closure code env) vs . s) e (app . c) d =&gt; () (vs . env) code ((s e c) . d)
+</pre>
+<pre class="item">
+((primitive #&lt;func&gt;) vs . s) e (app . c) d =&gt; (v . s) e c d
+v = (apply #&lt;func&gt; vs)
+</pre>
+<p> 関数がクロージャ (closure) の場合、クロージャ内のコード code を環境 (vs . env) の元で実行します。env はクロージャに保存されている環境で、vs が関数の引数を格納したリストです。そして、呼び出し元の実行環境、つまり関数呼び出しから戻ってきた後に実行する処理 (継続) をダンプに保存します。これは s, e, c を保存すれば OK です。
+</p>
+<p> 関数が primitive の場合、#&lt;func&gt; は Common Lisp の関数なので、apply で関数を呼び出して、その返り値 v をスタックに追加するだけです。
+</p>
+
+<p> rtn はクロージャの呼び出しから戻るための命令です。
+</p>
+<pre class="item">
+(v . s) e (rtn . c) ((s' e' c') . d) =&gt; (v . s') e' c' d
+</pre>
+<p> クロージャの返り値 v はスタックに保存されています。それを取り出して、ダンプに保存されているスタック s' に追加します。そして、ダンプに保存されている環境 e' とコード c' を元に戻します。
+</p>
+
+<h4>●sel と join</h4>
+<p> sel と join はシンタックス形式 if を実現するための命令です。
+</p>
+
+<pre class="item">
+(v . s) e (sel ct cf . c) d = v (真) =&gt; s e ct (c . d)
+                            = v (偽) =&gt; s e cf (c . d)
+</pre>
+<pre class="item">
+s e (join . ()) (c . d) =&gt; s e c d
+</pre>
+
+<p> sel の次に then 節のコード ct があり、その次に else 節のコード cf があります。スタックトップの値 v が真 (not false) の場合は ct を実行します。偽 (false) の場合は cf を実行します。このとき、if のあとに実行する命令 c をダンプに保存します。app と違って s と e を保存する必要はありません。ct と cf の最後は必ず join 命令で終了します。join 命令はダンプに保存されている命令 c を取り出し、if のあとの命令を実行します。
+</p>
+
+<h4>●その他</h4>
+<p> pop はスタックトップの値を取り除く命令です。
+</p>
+<pre class="item">
+(v . s) e (pop . c) d =&gt; s e c d
+</pre>
+<p> def はシンタックス形式 define を実現するための命令です。
+</p>
+<pre class="item">
+(v . s) e (def sym . c) d =&gt; (sym . s) e c d
+</pre>
+<p> def は大域変数 sym をスタックトップの値 v に束縛します。
+</p>
+<p> stop は仮想マシンの実行を停止する命令です。
+</p>
+<pre class="item">
+(v . s) e (stop . c) d =&gt; 仮想マシン vm を停止して v を返す
+</pre>
+<p> 仮想マシンを関数 vm とすると、vm は stop を実行するとスタックトップの値 v を返します。
+</p>
+<h4>●コンパイラの作成</h4>
+<p> それでは micro Scheme のコンパイラを作りましょう。コンパイラの構成はインタプリタとほとんど同じです。インタプリタは与えられた S 式をその場で評価しますが、コンパイラは S 式を仮想マシンの命令 (プログラム) に翻訳するだけです。そして、翻訳されたプログラムを仮想マシンで実行するわけです。
+</p>
+
+<p> プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : micro Scheme コンパイラ
+
+; S 式をコンパイルする
+(defun compile-expr (expr)
+  (comp expr '() '(stop)))
+
+; コンパイル本体
+(defun comp (expr env code)
+  (cond ((self-evaluation-p expr)
+         (list* 'ldc expr code))
+        ((symbolp expr)
+         (let ((pos (location expr env)))
+           (if pos
+               ; 局所変数
+               (list* 'ld pos code)
+             ; 大域変数
+             (list* 'ldg expr code))))
+        ((eq (car expr) 'quote)
+         (list* 'ldc (cadr expr) code))
+        ((eq (car expr) 'if)
+         (let ((t-clause (comp (caddr expr) env '(join)))
+               (f-clause
+                (if (null (cdddr expr))
+                    (list 'ldc '*undef* 'join)
+                  (comp (cadddr expr) env '(join)))))
+           (comp (cadr expr) env (list* 'sel t-clause f-clause code))))
+        ((eq (car expr) 'lambda)
+         (let ((body (comp-body (cddr expr) (cons (cadr expr) env) '(rtn))))
+           (list* 'ldf body code)))
+        ((eq (car expr) 'define)
+         (comp (caddr expr) env (list* 'def (cadr expr) code)))
+        (t  ; 関数呼び出し
+         (complis (cdr expr)
+                  env
+                  (list* 'args
+                         (length (cdr expr))
+                         (comp (car expr) env (cons 'app code)))))))
+</pre>
+
+<p> 関数 compile-expr は S 式 expr をコンパイルして、その結果を返します。実際の処理は関数 comp で行います。引数 expr がコンパイルする S 式、env が局所変数の環境、code がコンパイルされたコードです。S 式の末尾からコンパイルしていくことに注意してください。
+</p>
+<p> expr が自己評価フォームの場合、expr をそのままスタックに積みます。命令は (ldc expr) になります。それを code の先頭に追加します。関数 list* は list とよく似ていますが、複数の要素が与えられた場合はドットリストになります。簡単な実行例を示しましょう。
+</p>
+<pre>
+&gt; (list* 1)
+1
+&gt; (list* 1 2)
+(1 . 2)
+&gt; (list* 1 2 3)
+(1 2 . 3)
+</pre>
+<p> expr がシンボルの場合、関数 location で環境 env に expr があるか探索します。見つかった場合、location はフレームの位置と変数の位置を格納したドットペアを返します。expr は局所変数なので、生成するコードは (list* 'ld pos code) となります。見つからない場合は大域変数なので、コードは (list* 'ldg expr code) となります。
+</p>
+<p> expr がリストで先頭要素が quote の場合は、2 番目の要素を定数として扱います。コードは (list* 'ldc (cadr expr) code) になります。
+</p>
+<p> expr の先頭要素が if の場合、最初に then 節と else 節をコンパイルします。このとき、最後の命令は必ず join に設定します。else 節がない場合は *undef* を返すので、コードは (list* 'ldc '*undef* 'join) になります。あとは、コード (list* 'sel t-clause f-clause code) を生成し、そこに test 節を評価するコードを追加します。これは (cadr expr) を comp でコンパイルするだけです。
+</p>
+<p> expr の先頭要素が lambda の場合はクロージャを生成します。最初にラムダ式の本体を comp でコンパイルして、生成されたコードを body にセットします。このとき、ラムダ式の仮引数を環境 env に追加します。クロージャは関数呼び出しされるので、最後の命令は rtn になることに注意してください。あとは、コード (list* 'ldf body code) を生成するだけです。
+</p>
+<p> expr の先頭要素が define の場合は、2 番目の要素を大域変数として設定します。コード (list* 'def (cadr expr) code) を生成し、そこに 3 番目の要素 (caddr expr) を評価するコードを追加します。これは (caddr expr) を comp でコンパイルするだけです。
+</p>
+
+<p> 最後の t 節は関数呼び出しのコードを生成します。関数 complis は引数を評価するコードを生成します。評価結果はスタックに積まれるので、args でスタックの値をリストに格納するコードが必要になります。そして、先頭要素 (car expr) を評価するコードを comp で生成し、それを app で関数呼び出しします。
+</p>
+
+<h4>●引数とラムダ式本体の評価</h4>
+<p> 引数を評価するコードを生成する関数 complis は簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 引数を評価するコードを生成
+
+(defun complis (expr env code)
+  (if (null expr)
+      code
+    (comp (car expr) env (complis (cdr expr) env code))))
+</pre>
+<p> コンパイルは後ろから行いますが、生成されるコードは引数を先頭から順番に評価していきます。そして、その結果はスタックに積まれます。
+</p>
+
+<p> ラムダ式本体のコンパイルも簡単です。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ラムダ式本体のコンパイル
+
+(defun comp-body (body env code)
+  (if (null (cdr body))
+      (comp (car body) env code)
+    (comp (car body)
+          env
+          (list* 'pop
+                 (comp-body (cdr body) env code)))))
+</pre>
+<p> ラムダ式の本体は複数の S 式を定義することができます。それを順番に評価していき、最後に評価した S 式の結果がラムダ式の返り値になります。各々の S 式は comp でコンパイルするだけですが、スタックに積まれた返り値を取り除くため、その後ろに命令 pop を追加します。最後尾の S 式をコンパイルするとき、その後ろに pop を追加する必要はありません。
+</p>
+
+<h4>●局所変数の位置を求める</h4>
+<p> 局所変数はフレームの位置とフレーム内の要素の位置で表します。簡単な例を示しましょう。次の図を見てください。
+</p>
+<pre class="item">
+(1) ((lambda (a b) ...) 1 2)
+    env: ((a b))
+(2) ((lambda (a b c) ((lambda (d e) ...) 4 5)) 1 2 3)
+    env: ((d e) (a b c))
+</pre>
+<p> (1) の場合、フレームは一つしかありません。変数 a の位置は (0 . 0) となり、b の位置は (0 . 1) になります。(2) の場合、フレームは 2 つあります。この場合、各変数の位置は次のようになります。
+</p>
+<pre class="item">
+a : (1 . 0)
+b : (1 . 1)
+c : (1 . 2)
+d : (0 . 0)
+e : (0 . 1)
+</pre>
+
+<p> プログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : 局所変数の位置を求める
+
+; 変数の位置を求める
+(defun position-var (sym ls)
+  (labels ((iter (i ls)
+             (cond ((null ls) nil)
+                   ((symbolp ls)
+                    (if (eq sym ls) (- (1+ i)) nil))
+                   ((eq sym (car ls)) i)
+                   (t (iter (1+ i) (cdr ls))))))
+    (iter 0 ls)))
+
+; フレームと変数の位置を求める
+(defun location (sym ls)
+  (labels ((iter (i ls)
+             (if (null ls)
+                 nil
+               (let ((j (position-var sym (car ls))))
+                 (if j
+                     (cons i j)
+                   (iter (1+ i) (cdr ls)))))))
+    (iter 0 ls)))
+</pre>
+
+<p> 関数 position-var はフレーム内の変数の位置を求めます。局所関数 iter で先頭から順番に要素を比較します。見つからない場合は nil を返します。ls がドットリストの場合、最後のシンボルは可変個の引数を表しています。これを負の整数で表すことにします。簡単な例を示しましょう。
+</p>
+<pre class="item">
+(1) (lambda x ...)
+    x : (0 . -1)
+(2) (lambda (a . x) ...)
+    a : (0 . 0)
+    x : (0 . -2)
+(3) (lambda (a b c . x) ...)
+    a : (0 . 0)
+    b : (0 . 1)
+    c : (0 . 2)
+    x : (0 . -4)
+</pre>
+<p> このように、可変個引数の位置は - (仮引数の総数) になります。
+</p>
+<p> 関数 location は position-var を呼び出して i 番目のフレームに変数 sym があるか調べます。見つけた場合は (i . j) を返します。見つからない場合は次のフレームを探します。全てのフレームを探しても見つからない場合は nil を返します。
+</p>
+
+<h4>●簡単なコンパイラのテスト</h4>
+<p> それでは、実際にコンパイルしてみましょう。自己評価フォームと quote は ldc 命令にコンパイルされます。
+</p>
+<pre>
+&gt; (compile-expr 1)
+(LDC 1 STOP)
+&gt; (compile-expr '(quote a))
+(LDC A STOP)
+</pre>
+<p> if は sel と join 命令にコンパイルされます。
+</p>
+<pre>
+&gt; (compile-expr '(if true 'a 'b))
+(LDG TRUE SEL (LDC A JOIN) (LDC B JOIN) STOP)
+&gt; (compile-expr '(if false 'a))
+(LDG FALSE SEL (LDC A JOIN) (LDC *UNDEF* JOIN) STOP)
+</pre>
+<p> ラムダ式は ldf に、局所変数のアクセスは ld にコンパイルされます。
+</p>
+<pre>
+&gt; (compile-expr '(lambda (x) x))
+(LDF (LD (0 . 0) RTN) STOP)
+&gt; (compile-expr '(lambda () 1 2 3 4 5))
+(LDF (LDC 1 POP LDC 2 POP LDC 3 POP LDC 4 POP LDC 5 RTN) STOP)
+</pre>
+<p> ラムダ式本体も正しくコンパイルされています。
+</p>
+
+<p> 関数呼び出しは args と app 命令にコンパイルされます。
+</p>
+<pre>
+&gt; (compile-expr '(car '(a b c)))
+(LDC (A B C) ARGS 1 LDG CAR APP STOP)
+&gt; (compile-expr '((lambda (x) x) 'a))
+(LDC A ARGS 1 LDF (LD (0 . 0) RTN) APP STOP)
+&gt; (compile-expr '((lambda (x y) (cons x y)) 'a 'b))
+(LDC A LDC B ARGS 2 LDF (LD (0 . 0) LD (0 . 1) ARGS 2 LDG CONS APP RTN) APP STOP)
+</pre>
+<p> (car '(a b c)) の car は大域変数として扱われるので、大域変数の値を求める命令 ldg にコンパイルされます。ラムダ式を呼び出す場合は、ldf でクロージャを生成してから、それを呼び出します。関数を呼び出す前に引数が評価されて、その結果がスタックに積まれることに注意してください。それを args 命令でリストに格納します。
+</p>
+<p> define は def 命令にコンパイルされます。
+</p>
+<pre>
+&gt; (compile-expr '(define a 'b))
+(LDC B DEF A STOP)
+&gt; (compile-expr '(define list (lambda x x)))
+(LDF (LD (0 . -1) RTN) DEF LIST STOP)
+</pre>
+<p> define と lambda を組み合わせることで関数を定義することができます。
+</p>
+<h4>●仮想マシンの作成</h4>
+<p> 次は仮想マシンを作ります。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 仮想マシン
+
+(defun vm (s e c d)
+  (loop
+    (case (pop c)
+      ((ld)
+       (let ((pos (pop c)))
+         (push (get-lvar e (car pos) (cdr pos)) s)))
+      ((ldc)
+       (push (pop c) s))
+      ((ldg)
+       (push (get-gvar (pop c)) s))
+      ((ldf)
+       (push (list 'closure (pop c) e) s))
+      ((app)
+       (let ((clo (pop s)) (lvar (pop s)))
+         (if (eq (car clo) 'primitive)
+             (push (apply (cadr clo) lvar) s)
+           (progn
+             (push (list s e c) d)
+             (setq s nil
+                   e (cons lvar (caddr clo))
+                   c (cadr clo))))))
+      ((rtn)
+       (let ((save (pop d)))
+         (setq s (cons (car s) (car save))
+               e (cadr save)
+               c (caddr save))))
+      ((sel)
+       (let ((t-clause (pop c))
+             (e-clause (pop c)))
+         (push c d)
+         (setq c (if (eq (pop s) 'false) e-clause t-clause))))
+      ((join)
+       (setq c (pop d)))
+      ((pop) (pop s))
+      ((args)
+       (let ((a nil))
+         (dotimes (n (pop c) (push a s))
+           (push (pop s) a))))
+      ((def)
+       (let ((sym (pop c)))
+         (push (cons sym (pop s)) *global-environment*)
+         (push sym s)))
+      ((stop) (return (car s)))
+      (t (error "unknown opcode")))))
+</pre>
+<p> 仮想マシン (関数 vm) は SECD 仮想マシンの命令で説明した動作をそのままプログラムしただけです。大域変数は連想リストで表して、変数 *global-environment* に格納します。各々の命令のプログラムは簡単なので説明は割愛いたします。プログラムリストをお読みくださいませ。
+</p>
+
+<p> 局所変数の値を求める関数 get-lvar は次のようになります。
+</p>
+<pre class="list">
+リスト : 局所変数のアクセス
+
+; 局所変数の値を求める
+(defun get-lvar (e i j)
+  (if (&lt;= 0 j)
+      (nth j (nth i e))
+    (nthcdr (- (1+ j)) (nth i e))))
+</pre>
+<p> 引数 e が環境で、引数 i がフレームの位置、j がフレーム内の変数の位置です。j が 0 以上の場合、通常の引数にアクセスします。(nth j (nth i e)) で i 番目のフレームの j 番目の要素の値を返します。そうでなければ可変個引数なので、nth でフレームを取り出し、nthcdr で先頭から - (j + 1) 個の要素を取り除きます。つまり、通常の引数の個数だけ要素を取り除くわけです。あとはそれをそのまま返すだけです。
+</p>
+<p> 大域変数の値を求める関数 get-gvar も簡単です。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 大域変数のアクセス
+
+(defun get-gvar (sym)
+  (let ((val (assoc sym *global-environment*)))
+    (if val
+        (cdr val)
+      (error "unbound variable: ~S~%" sym))))
+</pre>
+<p> assoc で *global-environment* から sym を探索します。見つけた場合は cdr で値を取り出して返します。見つからない場合は error でエラーを送出します。
+</p>
+
+<h4>●read-eval-print-loop</h4>
+<p> 最後に read - eval - print - loop (REPL) を作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : read-eval-print-loop
+
+; 大域変数
+(setq *global-environment*
+      (list
+       (cons 'true  'true)
+       (cons 'false 'false)
+       (cons 'nil   'nil)
+       (cons 'quit  'quit)
+       (list 'car   'primitive #'(lambda (x)
+                                   (if (null x)
+                                       (error "type error -- car: NIL")
+                                     (car x))))
+       (list 'cdr   'primitive #'(lambda (x)
+                                   (if (null x)
+                                       (error "type error -- cdr: NIL")
+                                     (cdr x))))
+       (list 'cons  'primitive #'cons)
+       (list 'eq?   'primitive #'(lambda (x y) (if (eq x y) 'true 'false)))
+       (list 'pair? 'primitive #'(lambda (x) (if (consp x) 'true 'false)))
+       ))
+
+;;; read-eval-print-loop
+(defun repl (&amp;rest file-list)
+  (dolist (file file-list)
+    (with-open-file (in file :direction :input)
+      (do ((output t))
+          ((eq output nil) (terpri))
+        (setf output (vm '() '() (compile-expr (read in nil)) '()))
+        (print output))))
+  ;
+  (do ((output nil))
+      ((eq output 'quit))
+    (princ "&gt;&gt;&gt; ")
+    (force-output)
+    (let ((expr (compile-expr (read))))
+      ; (print expr)
+      (setf output (vm '() '() expr '())))
+    (princ output)
+    (terpri)))
+</pre>
+<p> REPL は拙作のページ <a href="clispb12.html">Common Lisp で作る micro Scheme</a> で作成したインタプリタとほぼ同じです。ただし、read で S 式を読み込んだあと、compile-expr で S 式をコンパイルしてから vm で実行します。
+</p>
+
+<h4>●簡単な実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (quote a)
+A
+&gt;&gt;&gt; 'a
+A
+&gt;&gt;&gt; (if true 'a 'b)
+A
+&gt;&gt;&gt; (if false 'a 'b)
+B
+&gt;&gt;&gt; (car '(a b c))
+A
+&gt;&gt;&gt; (cdr '(a b c))
+(B C)
+&gt;&gt;&gt; (cons 'a 'b)
+(A . B)
+&gt;&gt;&gt; (eq? 'a 'a)
+TRUE
+&gt;&gt;&gt; (eq? 'a 'b)
+FALSE
+&gt;&gt;&gt; (pair? '(a b c))
+TRUE
+&gt;&gt;&gt; (pair? 'a)
+FALSE
+</pre>
+<p> quote, if, car, cdr, cons, eq?, pair? は正常に動作していますね。次は lambda と define を試してみます。
+</p>
+
+<pre>
+&gt;&gt;&gt; (define a 'b)
+A
+&gt;&gt;&gt; a
+B
+&gt;&gt;&gt; (lambda (x) x)
+(CLOSURE (LD (0 . 0) RTN) NIL)
+&gt;&gt;&gt; ((lambda (x) x) 'a)
+A
+&gt;&gt;&gt; (define list (lambda x x))
+LIST
+&gt;&gt;&gt; (list 'a 'b 'c 'd 'e)
+(A B C D E)
+</pre>
+<p> define で変数 a を定義して、その値を求めることができます。lambda はクロージャを生成し、ラムダ式で関数呼び出しも可能です。そして、define と lambda を使って関数を定義することができます。
+</p>
+<h4>●レキシカルスコープとクロージャの動作</h4>
+<p> 次は、レキシカルスコープとクロージャが正常に動作するか試してみましょう。
+</p>
+<pre>
+&gt;&gt;&gt; (define x 'a)
+X
+&gt;&gt;&gt; x
+A
+&gt;&gt;&gt; (define foo (lambda () x))
+FOO
+&gt;&gt;&gt; (foo)
+A
+&gt;&gt;&gt; (define bar (lambda (x) (foo)))
+BAR
+&gt;&gt;&gt; (bar 'b)
+A
+</pre>
+<p> まず最初に大域変数 x を a に初期化します。次に、関数 foo を定義します。foo の引数はないので、x は大域変数を参照します。したがって、foo を評価すると返り値は a になります。次に、関数 bar から foo を呼び出します。bar は引数 x を受け取ります。(bar 'b) を評価すると a が返ってきます。確かにレキシカルスコープになっています。
+</p>
+<p> foo と bar の値を表示すると次のようになります。
+</p>
+<pre>
+&gt;&gt;&gt; foo
+(CLOSURE (LDG X RTN) NIL)
+&gt;&gt;&gt; bar
+(CLOSURE (ARGS 0 LDG FOO APP RTN) NIL)
+</pre>
+<p> どちらの関数も環境が空リストになっています。(bar 'b) を評価するとき、この環境に (x . b) が追加されます。そして、(foo) を呼び出しますが、foo に引数はないので、環境は空リストのままです。したがって、(foo) の返り値は大域変数の値 a になるのです。
+</p>
+<p> 今度はクロージャの動作を確かめます。
+</p>
+<pre>
+&gt;&gt;&gt; (define baz (lambda (x) (lambda (y) (cons x y))))
+BAZ
+&gt;&gt;&gt; (define baz-a (baz 'a))
+BAZ-A
+&gt;&gt;&gt; (baz-a 'b)
+(A . B)
+&gt;&gt;&gt; (baz-a 'c)
+(A . C)
+</pre>
+<p> 関数 baz はクロージャを生成して返します。このとき、baz の引数 x の値が保存されます。(baz 'a) の返り値を baz-a にセットすると、baz-a は a と baz-a の引数を組にしたものを返す関数となります。したがって、(baz-a 'b) は (a . b) を、(baz-a 'c) は (a . c) を返します。クロージャも正常に動作していますね。
+</p>
+<p> baz と baz-a の値を表示すると、次のようになります。
+</p>
+<pre>
+&gt;&gt;&gt; baz
+(CLOSURE (LDF (LD (1 . 0) LD (0 . 0) ARGS 2 LDG CONS APP RTN) RTN) NIL)
+&gt;&gt;&gt; baz-a
+(CLOSURE (LD (1 . 0) LD (0 . 0) ARGS 2 LDG CONS APP RTN) ((A)))
+</pre>
+<p> baz の環境は空リストですが、baz-a の環境は ((A)) となります。(baz-a 'b) を評価するとき、クロージャの環境に (B) が追加され ((B) (A)) になります。その下で (cons x y) が評価されるので、x の値は a で y の値が b になるのです。
+</p>
+
+<h4>●再帰定義とリスト操作</h4>
+<p> define で定義する関数は再帰呼び出しが可能です。簡単なリスト操作関数を再帰定義で作ってみました。プログラムリストと実行結果を示します。
+</p>
+
+<pre class="list">
+リスト : append と reverse
+
+; 空リストか
+(define null? (lambda (x) (eq? x '())))
+
+; 否定
+(define not (lambda (x) (if (eq? x false) true false)))
+
+; リストの結合
+(define append
+  (lambda (xs ys)
+    (if (null? xs)
+        ys
+      (cons (car xs) (append (cdr xs) ys)))))
+
+; リストの反転
+(define reverse
+  (lambda (ls)
+    (if (null? ls)
+        '()
+      (append (reverse (cdr ls)) (list (car ls))))))
+</pre>
+<pre>
+&gt;&gt;&gt; (append '(a b c) '(d e f))
+(A B C D E F)
+&gt;&gt;&gt; (append '((a b) (c d)) '(e f g))
+((A B) (C D) E F G)
+&gt;&gt;&gt; (reverse '(a b c d e))
+(E D C B A)
+&gt;&gt;&gt; (reverse '((a b) c (d e)))
+((D E) C (A B))
+</pre>
+<pre class="list">
+リスト : 探索
+
+; リストの探索
+(define memq
+  (lambda (x ls)
+    (if (null? ls)
+        false
+        (if (eq? x (car ls))
+            ls
+          (memq x (cdr ls))))))
+
+; 連想リストの探索
+(define assq
+  (lambda (x ls)
+    (if (null? ls)
+        false
+      (if (eq? x (car (car ls)))
+          (car ls)
+        (assq x (cdr ls))))))
+</pre>
+<pre>
+&gt;&gt;&gt; (memq 'a '(a b c d e))
+(A B C D E)
+&gt;&gt;&gt; (memq 'c '(a b c d e))
+(C D E)
+&gt;&gt;&gt; (memq 'f '(a b c d e))
+FALSE
+&gt;&gt;&gt; (assq 'a '((a 1) (b 2) (c 3) (d 4) (e 5)))
+(A 1)
+&gt;&gt;&gt; (assq 'e '((a 1) (b 2) (c 3) (d 4) (e 5)))
+(E 5)
+&gt;&gt;&gt; (assq 'f '((a 1) (b 2) (c 3) (d 4) (e 5)))
+FALSE
+</pre>
+<pre class="list">
+リスト : 高階関数
+
+; マッピング
+(define map
+  (lambda (fn ls)
+    (if (null? ls)
+        '()
+      (cons (fn (car ls)) (map fn (cdr ls))))))
+
+; フィルター
+(define filter
+  (lambda (fn ls)
+    (if (null? ls)
+        '()
+      (if (fn (car ls))
+          (cons (car ls) (filter fn (cdr ls)))
+        (filter fn (cdr ls))))))
+
+; 畳み込み
+(define fold-right
+  (lambda (fn a ls)
+    (if (null? ls)
+        a
+      (fn (car ls) (fold-right fn a (cdr ls))))))
+
+(define fold-left
+  (lambda (fn a ls)
+    (if (null? ls)
+        a
+      (fold-left fn (fn a (car ls)) (cdr ls)))))
+</pre>
+<pre>
+&gt;&gt;&gt; (map car '((a 1) (b 2) (c 3) (d 4) (e 5)))
+(A B C D E)
+&gt;&gt;&gt; (map cdr '((a 1) (b 2) (c 3) (d 4) (e 5)))
+((1) (2) (3) (4) (5))
+&gt;&gt;&gt; (map (lambda (x) (cons x x)) '(a b c d e))
+((A . A) (B . B) (C . C) (D . D) (E . E))
+&gt;&gt;&gt; (filter (lambda (x) (not (eq? x 'a))) '(a b c a b c a b c))
+(B C B C B C)
+&gt;&gt;&gt; (fold-left cons '() '(a b c d e))
+(((((NIL . A) . B) . C) . D) . E)
+&gt;&gt;&gt; (fold-right cons '() '(a b c d e))
+(A B C D E)
+</pre>
+<p> 今回はここまでです。次回は micro Scheme に伝統的なマクロを追加してみましょう。
+</p>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+;
+; secd.l : SECD 仮想マシンによる Scheme コンパイラ
+;
+;          Copyright (C) 2009 Makoto Hiroi
+;
+
+; 大域変数
+(defvar *global-environment* nil)
+
+; 変数の位置を求める
+(defun position-var (sym ls)
+  (labels ((iter (i ls)
+             (cond ((null ls) nil)
+                   ((symbolp ls)
+                    (if (eq sym ls) (- (1+ i)) nil))
+                   ((eq sym (car ls)) i)
+                   (t (iter (1+ i) (cdr ls))))))
+    (iter 0 ls)))
+
+; フレームと変数の位置を求める
+(defun location (sym ls)
+  (labels ((iter (i ls)
+             (if (null ls)
+                 nil
+               (let ((j (position-var sym (car ls))))
+                 (if j
+                     (cons i j)
+                   (iter (1+ i) (cdr ls)))))))
+    (iter 0 ls)))
+
+; 自己評価フォームか
+(defun self-evaluation-p (expr)
+  (and (atom expr) (not (symbolp expr))))
+
+; S 式をコンパイルする
+(defun compile-expr (expr)
+  (comp expr '() '(stop)))
+
+; コンパイル本体
+(defun comp (expr env code)
+  (cond ((self-evaluation-p expr)
+         (list* 'ldc expr code))
+        ((symbolp expr)
+         (let ((pos (location expr env)))
+           (if pos
+               ; 局所変数
+               (list* 'ld pos code)
+             ; 大域変数
+             (list* 'ldg expr code))))
+        ((eq (car expr) 'quote)
+         (list* 'ldc (cadr expr) code))
+        ((eq (car expr) 'if)
+         (let ((t-clause (comp (caddr expr) env '(join)))
+               (f-clause
+                (if (null (cdddr expr))
+                    (list 'ldc '*undef* 'join)
+                  (comp (cadddr expr) env '(join)))))
+           (comp (cadr expr) env (list* 'sel t-clause f-clause code))))
+        ((eq (car expr) 'lambda)
+         (let ((body (comp-body (cddr expr) (cons (cadr expr) env) '(rtn))))
+           (list* 'ldf body code)))
+        ((eq (car expr) 'define)
+         (comp (caddr expr) env (list* 'def (cadr expr) code)))
+        (t  ; 関数呼び出し
+         (complis (cdr expr)
+                  env
+                  (list* 'args
+                         (length (cdr expr))
+                         (comp (car expr) env (cons 'app code)))))))
+
+; body のコンパイル
+(defun comp-body (body env code)
+  (if (null (cdr body))
+      (comp (car body) env code)
+    (comp (car body)
+          env
+          (list* 'pop
+                 (comp-body (cdr body) env code)))))
+
+; 引数を評価するコードを生成する
+(defun complis (expr env code)
+  (if (null expr)
+      code
+    (comp (car expr) env (complis (cdr expr) env code))))
+
+;;; 仮想マシン
+
+; 局所変数の値を求める
+(defun get-lvar (e i j)
+  (if (&lt;= 0 j)
+      (nth j (nth i e))
+    (nthcdr (- (1+ j)) (nth i e))))
+
+; 大域変数の値を求める
+(defun get-gvar (sym)
+  (let ((val (assoc sym *global-environment*)))
+    (if val
+        (cdr val)
+      (error "unbound variable: ~S~%" sym))))
+
+; 仮想マシンでコードを実行する
+(defun vm (s e c d)
+  (loop
+    (case (pop c)
+      ((ld)
+       (let ((pos (pop c)))
+         (push (get-lvar e (car pos) (cdr pos)) s)))
+      ((ldc)
+       (push (pop c) s))
+      ((ldg)
+       (push (get-gvar (pop c)) s))
+      ((ldf)
+       (push (list 'closure (pop c) e) s))
+      ((app)
+       (let ((clo (pop s)) (lvar (pop s)))
+         (if (eq (car clo) 'primitive)
+             (push (apply (cadr clo) lvar) s)
+           (progn
+             (push (list s e c) d)
+             (setq s nil
+                   e (cons lvar (caddr clo))
+                   c (cadr clo))))))
+      ((rtn)
+       (let ((save (pop d)))
+         (setq s (cons (car s) (car save))
+               e (cadr save)
+               c (caddr save))))
+      ((sel)
+       (let ((t-clause (pop c))
+             (e-clause (pop c)))
+         (push c d)
+         (setq c (if (eq (pop s) 'false) e-clause t-clause))))
+      ((join)
+       (setq c (pop d)))
+      ((pop) (pop s))
+      ((args)
+       (let ((a nil))
+         (dotimes (n (pop c) (push a s))
+           (push (pop s) a))))
+      ((def)
+       (let ((sym (pop c)))
+         (push (cons sym (pop s)) *global-environment*)
+         (push sym s)))
+      ((stop) (return (car s)))
+      (t (error "unknown opcode")))))
+
+; 大域変数
+(setq *global-environment*
+      (list
+       (cons 'true  'true)
+       (cons 'false 'false)
+       (cons 'nil   'nil)
+       (cons 'quit  'quit)
+       (list 'car   'primitive #'(lambda (x)
+                                   (if (null x)
+                                       (error "type error -- car: NIL")
+                                     (car x))))
+       (list 'cdr   'primitive #'(lambda (x)
+                                   (if (null x)
+                                       (error "type error -- cdr: NIL")
+                                     (cdr x))))
+       (list 'cons  'primitive #'cons)
+       (list 'eq?   'primitive #'(lambda (x y) (if (eq x y) 'true 'false)))
+       (list 'pair? 'primitive #'(lambda (x) (if (consp x) 'true 'false)))
+       ))
+
+;;; read-eval-print-loop
+(defun repl (&amp;rest file-list)
+  (dolist (file file-list)
+    (with-open-file (in file :direction :input)
+      (do ((output t))
+          ((eq output nil) (terpri))
+        (setf output (vm '() '() (compile-expr (read in nil)) '()))
+        (print output))))
+  ;
+  (do ((output nil))
+      ((eq output 'quit))
+    (princ "&gt;&gt;&gt; ")
+    (force-output)
+    (let ((expr (compile-expr (read))))
+      ; (print expr)
+      (setf output (vm '() '() expr '())))
+    (princ output)
+    (terpri)))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="ce">
+<div class="small">
+<hr>
+[ <a href="clispb15.html">PrevPage</a> | <a href="index.html">Common Lisp</a> | <a href="clispb17.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

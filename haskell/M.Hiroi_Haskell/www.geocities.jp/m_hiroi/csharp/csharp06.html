@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ＃プログラミング超入門</title>
+  <meta name="description" content="C#,C#入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881817</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>C# Programming</h1>
+<h2>お気楽Ｃ＃プログラミング超入門</h2>
+</div>
+<div class="small">
+[ <a href="../index.html">Home</a> | <a href="index.html">Ｃ＃</a> ]
+<hr>
+</div>
+<section class="contents">
+<h3>関数で遊ぼう</h3>
+<p> 今回はラムダ式とクロージャの基本について説明し、それを使っていろいろなプログラムを作ってみましょう。
+</p>
+<h4>●レキシカルスコープ</h4>
+<p> まず最初に、局所変数の規則についてもう少し詳しく説明します。変数 x を表示する関数 Foo() を定義します。
+</p>
+<pre class="list">
+リスト : レキシカルスコープ (lambda01.cs)
+
+using System;
+
+class Test {
+  static int x = 10;
+
+  static void Foo() {
+    Console.WriteLine("{0}", x);
+  }
+
+  static void Foo1() {
+    int x = 100;
+    Console.WriteLine("local var x = {0}", x);
+    Foo();
+  }
+
+  static void Main() {
+    Foo();
+    Foo1();
+  }
+}
+</pre>
+<p> 関数 Foo() には変数 x を定義していないので、Foo() を実行した場合はクラス Test の static なフィールド変数の値を探しにいきます。それでは Foo1() という関数から Foo() を呼び出す場合を考えてみましょう。Foo1() には局所変数 x を定義します。この場合、Foo() はどちらの値を表示するのでしょうか。実際に試してみましょう。
+</p>
+<pre>
+C&gt;lambda01
+10
+local var x = 100
+10
+</pre>
+<p> static なフィールド変数の値を表示しました。このように、Foo1() で定義した局所変数 x は、Foo() からアクセスすることはできません。次の図を見てください。
+</p>
+<pre class="fig">
+ ┌─────── Class Test ───────┐ 
+ │                                        │
+ │             static int x ←────┐  │
+ │                                    │  │
+ │  ┌→┌─ 関数 Foo ──────┐  │  │
+ │  │  │            ┌─────┼─┘  │
+ │  │  │   WriteLine(x);        │      │
+ │  │  └────────────┘      │
+ │  │  ┌─ 関数 Foo1  ─────┐      │
+ │  │  │                        │      │
+ │  │  │   int x = 100;         │      │
+ │  └─┼─ foo();               │      │
+ │      └────────────┘      │
+ │                                        │
+ └────────────────────┘
+
+           図 : レキシカルスコープ
+</pre>
+<p> 図では、変数の有効範囲を枠で表しています。Foo1() で定義した局所変数 x は、関数 Foo1() の枠の中でのみ有効です。もしも、この枠で変数が見つからない場合は、ひとつ外側の枠を調べます。この場合、関数定義の枠しかないので、ここで変数が見つからない場合は static なフィールド変数を調べます。
+</p>
+<p> Foo() は関数定義の枠しかありません。そこに変数 x が定義されていないので、static なフィールド変数を調べることになるのです。このように、Foo() から Foo1() の枠を超えて局所変数 x にアクセスすることはできないのです。これを「レキシカルスコープ (lexical scope)」といいます。レキシカルには文脈上いう意味があり、変数が定義されている範囲内 (枠内) でないと、その変数にアクセスすることはできません。
+</p>
+<h4>●ラムダ式と局所変数</h4>
+<p> それでは、ラムダ式の場合はどうでしょうか。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 配列の要素を n 倍する
+
+  // マッピング
+  static int[] Map(Func&lt;int, int&gt; func, int[] xs) {
+    var ys = new int [xs.Length];
+    for (int i = 0; i &lt; xs.Length; i++)
+      ys[i] = func(xs[i]);
+    return ys;
+  }
+
+  static int[] TimesElement(int n, int[] xs) {
+    return Map(x =&gt; x * n, xs);
+  }
+</pre>
+<p> Map() に渡すラムダ式の仮引数は x だけですから、変数 n は static なフィールド変数をアクセスすると思われるかもしれません。ところが、変数 n は関数 TimesElement() の引数 n をアクセスするのです。次の図を見てください。
+</p>
+<pre class="fig">
+┌─────── Class Test ──────┐ 
+│                                      │
+│    ┌─ TimesElement(n, xs)──┐    │
+│    │                ↑        │    │
+│    │                └──┐  │    │
+│    │  ┌──lambda: x ─┐│  │    │
+│    │  │            ↑  ││  │    │
+│    │  │      ┌──┘  ││  │    │
+│    │  │      x * n     ││  │    │
+│    │  │          └──┼┘  │    │
+│    │  └────────┘    │    │
+│    └─────────────┘    │
+│                                      │
+└───────────────────┘
+
+        図 : 匿名関数の変数
+</pre>
+<p> ポイントは、ラムダ式が TimesElement() 内で定義されているところです。変数 n は関数の引数として定義されていて、その有効範囲は関数の終わりまでです。ラムダ式はその範囲内に定義されているため、変数 n にアクセスすることができるのです。つまり、関数内で定義されたラムダ式は、そのとき有効な局所変数にアクセスすることができるのです。
+</p>
+<h4>●クロージャ</h4>
+<p> 次は、関数型言語でよく用いられるテクニックを紹介しましょう。Lisp などの関数型言語では、関数を生成する関数を簡単に作ることができます。このとき使われる機能が「クロージャ (closure)」です。クロージャは評価する関数と参照可能な局所変数をまとめたものです。クロージャは関数のように実行することができますが、クロージャを生成するときに参照可能な局所変数を保存するところが異なります。参照可能な局所変数の集合を「環境」と呼ぶことがあります。
+</p>
+<p> C# でクロージャを生成するにはラムダ式を使います。たとえば、「引数を n 倍する関数」を生成する関数は、次のようになります。
+</p>
+<pre class="list">
+リスト : クロージャの使用例 (lambda02.cs)
+
+using System;
+
+class Test {
+  static Func&lt;int, int&gt; Foo(int n) {
+    return x =&gt; n * x;
+  }
+
+  static void Main() {
+    var foo10 = Foo(10);
+    var foo20 = Foo(20);
+    Console.WriteLine("{0}", foo10(1));
+    Console.WriteLine("{0}", foo20(10));
+  }
+}
+</pre>
+<pre>
+C&gt;lambda02
+10
+200
+</pre>
+<p> 関数 Foo() は引数を n 倍する関数を生成します。関数を返すので、返り値の型は生成する関数の型 Func&lt;int, int&gt; になります。変数 foo10 に Foo(10) の返り値をセットします。すると、foo10 は引数を 10 倍する関数として使うことができます。同様に、変数 foo20 に Foo(20) の返り値をセットすると、foo20 は引数を 20 倍する関数になります。
+</p>
+<p> ラムダ式で関数を生成するとき、評価する関数のほかに、そのとき参照可能な局所変数、つまり「環境」もいっしょに保存されます。この場合、参照可能な局所変数は Foo() の引数 n です。そして、クロージャを実行するときは、保存されている局所変数にアクセスすることができるのです。
+</p>
+
+<p> Foo(10) を実行してクロージャを生成するとき、定義されている局所変数は n で、その値は 10 です。この値がクロージャに保存されているので、foo10 の関数は引数を 10 倍した結果を返します。foo(20) を評価すると n の値は 20 で、それがクロージャに保存されているので、foo20 の関数は引数を 20 倍した結果を返すのです。
+</p>
+
+<h4>●カリー化関数</h4>
+<p> C# の場合、関数をデータ型の一つとして扱うことができるので、関数の返り値として関数を返すことができます。この「関数を返す関数」を使うと、関数の引数が一つでも複数の引数を処理することができます。このような関数を「カリー化関数 (curried function)」といいます。
+</p>
+<p> たとえば、(x, y) =&gt; x + y をカリー化関数にする場合、引数 x を受け取ると「引数 y を受け取って x + y を計算する関数」を返し、その関数に引数 y を渡せば x + y を計算することができます。C# では、無名関数を使って次のように定義することができます。
+</p>
+<pre>
+csharp> Func&lt;int,Func&lt;int,int&gt;&gt; foo = x =&gt; y =&gt; x + y;
+csharp>
+</pre>
+<p> 無名関数を定義する =&gt; は右結合なので、x =&gt; y =&gt; x + y は x =&gt; (y =&gt; x + y) と同じになります。これで引数をひとつ受け取ったら、関数 y =&gt; x + y を返すことができます。もちろん、引数を 2 つ与えれば、それらを加算した結果を返します。つまり、最初の引数を受け取って関数を生成し、その関数を 2 番目の引数に適用する、という動作になります。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+csharp> var foo1 = foo(1);
+csharp> foo1(2);
+3
+csharp> foo(10)(20);
+30
+</pre>
+<p> 引数を一つだけ渡すと「引数 y を受け取って x + y を計算する関数」を返します。返り値を変数 foo1 にセットして、foo1(2) を呼び出せば 1 + 2 = 3 を計算することができます。もちろん、引数を 2 つ渡すと、それらを足し算した値を返します。foo(10) の返り値は関数なので、2 番目の引数を渡すときは foo(10)(20) のようにカッコを続けることに注意してください。
+</p>
+<p> もうひとつ簡単な例を紹介しましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : カリー化関数 (lambda03.cs)
+
+using System;
+
+class Test {
+  static Func&lt;int[], int[]&gt; Map(Func&lt;int, int&gt; func) {
+    return xs =&gt; {
+      var ys = new int [xs.Length];
+      for (int i = 0; i &lt; xs.Length; i++)
+        ys[i] = func(xs[i]);
+      return ys;
+    };
+  }
+
+  static int square(int x) { return x * x; }
+  static int cube(int x) { return x * x * x; }
+
+  static void Main() {
+    var a = new int[] {1,2,3,4,5,6,7,8};
+    var squareAry = Map(square);
+    var cubeAry = Map(cube);
+    foreach(int x in squareAry(a)) {
+      Console.Write("{0} ", x);
+    }
+    Console.WriteLine("");
+    foreach(int x in cubeAry(a)) {
+      Console.Write("{0} ", x);
+    }
+    Console.WriteLine("");
+    foreach(int x in Map(square)(a)) {
+      Console.Write("{0} ", x);
+    }
+    Console.WriteLine("");
+    foreach(int x in Map(cube)(a)) {
+      Console.Write("{0} ", x);
+    }
+    Console.WriteLine("");
+  }
+}
+</pre>
+<pre>
+C&lt;lambda03
+1 4 9 16 25 36 49 64
+1 8 27 64 125 216 343 512
+1 4 9 16 25 36 49 64
+1 8 27 64 125 216 343 512
+</pre>
+<p> このプログラムは関数 Map() を 1 引数の関数に直したものです。Map() は関数 func を受け取り、その func を呼び出して配列を操作する関数を返します。これでもマッピングの動作ができるのです。
+</p>
+<p> 1, 2 番目の例は Map() で生成した関数を変数 squareAry と cubeAry にセットし、それから squareAry と cubeAry を関数呼び出しします。次の例は、Map() の返り値を直接関数呼び出ししています。カッコが多くなりますが、2 引数の Map() と同じように呼び出すことができます。これでも配列の要素を 2 乗、3 乗することができます。
+</p>
+<p> 3, 4 番目の例は、最初の引数を受け取って新しい関数を生成して返し、その関数に次の引数を適用して値を求めるという動作になります。このように、関数の引数がひとつでも、「関数を返す関数」を使うことで、複数の引数を処理することができます。
+</p>
+
+<p> 関数型言語には、カリー化関数をサポートしているプログラミング言語、たとえば Haskell や ML (SML/NJ, OCaml) などがあります。これらのプログラミング言語では、高階関数はカリー化関数として定義されています。また、関数を合成して新しい関数を作ることも簡単にできます。
+</p>
+
+<h4>●ジェネレータ</h4>
+<p> 次は、クロージャの応用例として「ジェネレータ (generator)」を取り上げます。ジェネレータは呼び出されるたびに新しい値を生成します。C# には「イテレータ (yield return)」があるので、このような用途にクロージャを使うことはほとんどないと思いますが、クロージャのお勉強ということで、あえてプログラムを作ってみましょう。
+</p>
+<p> 簡単な例題として、フィボナッチ数列 (0, 1, 1, 2, 3, 5, 8, ...) を発生するジェネレータを作ってみます。まず最初に、ジェネレータを作る関数を定義します。
+</p>
+<pre class="list">
+リスト : ジェネレータ生成 (1)
+
+using System;
+
+class Test {
+  static Func&lt;long&gt; MakeGenFibo() {
+    long a = 0, b = 1;
+    return () =&gt; {
+      long c = a;
+      a = b;
+      b += c;
+      return c;
+    };
+  }
+
+  static void Main() {
+    var fibo1 = MakeGenFibo();
+    for (int i = 0; i &lt; 20; i++)
+      Console.Write("{0} ", fibo1());
+    Console.WriteLine("");
+    var fibo2 = MakeGenFibo();
+    for (int i = 0; i &lt; 25; i++)
+      Console.Write("{0} ", fibo2());
+  }
+}
+</pre>
+<pre>
+C&gt;genfibo
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 28657 46368
+</pre>
+<p> MakeGenFibo() で作成したクロージャを変数 fibo1 にセットし、fibo1() で呼び出します。0, 1, 1, 2, 3, 5, ... とフィボナッチ数列を生成していますね。新しいクロージャを変数 fibo2 にセットし、このクロージャを評価すれば、新しいフィボナッチ数列が生成されます。
+</p>
+<p> クロージャで保存される環境は、MakeGenFibo() 内の局所変数 a, b です。これらの変数はクロージャを生成するときに初期化されることに注意してください。環境はクロージャによって異なります。fibo1 のクロージャが評価されると、そのクロージャの環境が更新されるのであって、ほかのクロージャに影響を与えることはありません。
+</p>
+<p> したがって、あるジェネレータが発生するフィボナッチ数列が、ほかのジェネレータに影響を与えることはないのです。あとは必要な数だけジェネレータを MakeGenFibo() で作り、生成したクロージャを変数に格納しておけばいいわけです。
+</p>
+<h4>●ジェネレータをリセットする</h4>
+<p> 次はフィボナッチ数列を最初に戻す、つまり、ジェネレータをリセットすることを考えましょう。この場合、クロージャ内の変数を書き換えるしか方法はありません。そこで、クロージャに引数を与えて、Value ならばフィボナッチ数列を発生させる、Reset ならばリセットするようにしましょう。数列を発生させる処理とリセットする処理をラムダ式で作成し、それを MakeGenFibo() 内の局所変数に格納しておけば、その処理を呼び出すことができます。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : ジェネレータ生成 (2)
+
+using System;
+
+class Test {
+  enum Fibo { Value, Reset };
+  
+  static Func&lt;Fibo, long&gt; MakeGenFibo() {
+    long a = 0, b = 1;
+    Func&lt;long&gt; fiboValue = () =&gt; {
+      long c = a;
+      a = b;
+      b += c;
+      return c;
+    };
+    Func&lt;long&gt; fiboReset = () =&gt; {
+      a = 0;
+      b = 1;
+      return 0;
+    };
+    return x =&gt; {
+      if (x == Fibo.Value)
+        return fiboValue();
+      else
+        return fiboReset();
+    };
+  }
+
+  static void Main() {
+    var fibo1 = MakeGenFibo();
+    for (int i = 0; i &lt; 20; i++)
+      Console.Write("{0} ", fibo1(Fibo.Value));
+    Console.WriteLine("");
+    fibo1(Fibo.Reset);
+    for (int i = 0; i &lt; 25; i++)
+      Console.Write("{0} ", fibo1(Fibo.Value));
+  }
+}
+</pre>
+<p> 局所変数 fiboReset にジェネレータをリセットする処理を、fiboValue にフィボナッチ数列を発生する処理をセットします。ジェネレータ本体の処理は、引数が Fibo.Reset ならば fibReset() を、Fibo.Value ならば fiboValue() を呼び出すだけです。
+</p>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+C&gt;genfibo
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181
+0 1 1 2 3 5 8 13 21 34 55 89 144 233 377 610 987 1597 2584 4181 6765 10946 17711 28657 46368
+</pre>
+<p> 正常に動作していますね。
+</p>
+<p> クロージャは少し難しいかもしれませんが、便利で面白い機能だと思っています。C# は手続き型のプログラミング言語なので、クロージャを使う機会は少ないと思いますが、興味のある方はいろいろと試してみてください。 また、関数を扱うことは、やっぱり関数型言語の方が優れています。クロージャの話に興味をもたれた方は、ぜひ関数型言語 (Lisp, ML, Haskell など) にも挑戦してみてください。
+</p>
+
+<h4>●クロージャによる連結リストの実装</h4>
+<p> クロージャをサポートしているプログラミング言語では、効率を考慮しないでよければ、クロージャを使って「連結リスト」を実装しすることができます。連結リストの操作関数 cons(), car(), cdr() には次の関係が成り立ちます。
+</p>
+<pre class="item">
+x == car(cons(x, y)) =&gt; true
+y == cdr(cons(x, y)) =&gt; true
+</pre>
+<p> ここで cons(x, y) で生成したオブジェクトがセルではない場合を考えてみましょう。もし、そのオブジェクトに car() を適用すれば cons() の第 1 引数 x を返し、cdr() を適用すれば第 2 引数を返すことができれば、セルと同じことが実現できます。
+</p>
+<p> そこで、cons() はセルではなくクロージャを返すことにしましょう。クロージャは引数 x, y の値を保持することができます。そして、このクロージャは引数に関数を受け取ることにします。あとは、この関数に引数 x, y を渡して評価すれば car() と cdr() を実現することができます。C# で cons(), car(), cdr() をプログラムすると次のようになります。
+</p>
+<pre class="list">
+リスト : クロージャによる連結リスト
+
+class Test {
+  static Func&lt;Func&lt;object, object, object&gt;, object&gt; Cons(object x, object y) {
+    return z =&gt; z(x, y);
+  }
+
+  static object Car(object z) {
+    var zz = (Func&lt;Func&lt;object, object, object&gt;, object&gt;)z;
+    return zz((x, y) =&gt; x);
+  }
+
+  static object Cdr(object z) {
+    var zz = (Func&lt;Func&lt;object, object, object&gt;, object&gt;)z;
+    return zz((x, y) =&gt; y);
+  }
+
+  static void Main() {
+    var a = Cons(1, 0);
+    var b = Cons(2, a);
+    Console.WriteLine("{0}", Car(a));
+    Console.WriteLine("{0}", Car(b));
+    Console.WriteLine("{0}", Cdr(a));
+  }
+}
+</pre>
+<p> 関数 Cons() はクロージャを返します。このクロージャは引数 z に関数を受け取り、その関数に x, y を渡して評価します。したがって、返り値のデータ型は Func&lt;Func&lt;object, object, object&gt;, object&gt; になります。Car() は引数 z をクロージャに型変換して、ラムダ式 (x, y) =&gt; x を渡します。返り値は第 1 引数の x です。これで Lisp / Scheme の car と同じ動作になります。同様に、Cdr() はクロージャに渡したラムダ式の第 2 引数 y を返すだけです。これで Lisp / Scheme の cdr と同じ動作になります。
+</p>
+<p> それでは実際に試してみましょう。
+</p>
+<pre>
+1
+2
+0
+</pre>
+<p> このように、クロージャを使って連結リストを作成することができます。ご参考までに簡単なリスト操作関数を下記リストに示します。
+</p>
+<pre class="list">
+リスト : クロージャによる連結リストの実装
+
+using System;
+
+class Test {
+  static Func&lt;Func&lt;object, object, object&gt;, object&gt; Cons(object x, object y) {
+    return z =&gt; z(x, y);
+  }
+
+  static object Car(object z) {
+    var zz = (Func&lt;Func&lt;object, object, object&gt;, object&gt;)z;
+    return zz((x, y) =&gt; x);
+  }
+
+  static object Cdr(object z) {
+    var zz = (Func&lt;Func&lt;object, object, object&gt;, object&gt;)z;
+    return zz((x, y) =&gt; y);
+  }
+
+  // 空リスト
+  static readonly object nil = Cons(null, null);
+
+  // 述語
+  static bool Null(object x) {
+    return x == nil;
+  }
+  static bool Consp(object x) {
+    return x != nil &amp;&amp; x is Delegate;
+  }
+  static bool Listp(object x) {
+    return Null(x) || Consp(x);
+  }
+  static bool Atom(object x) {
+    return !Consp(x);
+  }
+
+  // 表示
+  static void PrintList(object xs) {
+    Console.Write("(");
+    while (Consp(xs)) {
+      if (Listp(Car(xs)))
+        PrintList(Car(xs));
+      else
+        Console.Write("{0}", Car(xs));
+      if (Consp(Cdr(xs))) Console.Write(" ");
+      xs = Cdr(xs);
+    }
+    if (!Null(xs)) Console.Write(" . {0}", xs);
+    Console.Write(")");
+  }
+
+  // リストの生成
+  static object List(params object[] args) {
+    var xs = nil;
+    for (int i = args.Length - 1; i &gt;= 0; i--) {
+      xs = Cons(args[i], xs);
+    }
+    return xs;
+  }
+
+  // リストの連結
+  static object Append(object xs, object ys) {
+    if (Null(xs))
+      return ys;
+    else
+      return Cons(Car(xs), Append(Cdr(xs), ys));
+  }
+
+  // マッピング
+  static object Map(Func&lt;object, object&gt; func, object xs) {
+    if (Null(xs))
+      return nil;
+    else
+      return Cons(func(Car(xs)), Map(func, Cdr(xs)));
+  }
+
+  // フィルター
+  static object Filter(Func&lt;object, bool&gt; pred, object xs) {
+    if (Null(xs))
+      return nil;
+    else if (pred(Car(xs)))
+      return Cons(Car(xs), Filter(pred, Cdr(xs)));
+    else
+      return Filter(pred, Cdr(xs));
+  }
+
+  // 畳み込み
+  static object FoldLeft(Func&lt;object, object, object&gt; func, object a, object xs) {
+    while (!Null(xs)) {
+      a = func(a, Car(xs));
+      xs = Cdr(xs);
+    }
+    return a;
+  }
+  
+  static object FoldRight(Func&lt;object, object, object&gt; func, object a, object xs) {
+    if (Null(xs))
+      return a;
+    else
+      return func(Car(xs), FoldRight(func, a, Cdr(xs)));
+  }
+
+  // 改行
+  static void NewLine() {
+    Console.WriteLine("");
+  }
+  
+  static void Main() {
+    var a = Cons(1, 0);
+    var b = Cons(2, a);
+    Console.WriteLine("{0}", Car(a));
+    Console.WriteLine("{0}", Car(b));
+    Console.WriteLine("{0}", Cdr(a));
+    PrintList(b);
+    NewLine();
+    var c = List(1,2,3,4,5,6,7,8);
+    PrintList(c);
+    NewLine();
+    var d = List(11,12,13,14,15);
+    PrintList(Append(c, d));
+    NewLine();
+    PrintList(Map(n =&gt; (int)n * 10, c));
+    NewLine();
+    PrintList(Filter(n =&gt; (int)n % 2 == 0, c));
+    NewLine();
+    Console.WriteLine("{0}", FoldLeft((sum, n) =&gt; (int)sum + (int)n, 0, c));
+    Console.WriteLine("{0}", FoldLeft((n, sum) =&gt; (int)sum + (int)n, 0, c));
+  }
+}
+</pre>
+<pre>
+C&gt;lambdalist
+1
+2
+0
+(2 1 . 0)
+(1 2 3 4 5 6 7 8)
+(1 2 3 4 5 6 7 8 11 12 13 14 15)
+(10 20 30 40 50 60 70 80)
+(2 4 6 8)
+36
+36
+</pre>
+
+<h4>●チャーチ数</h4>
+<p> 「ラムダ計算 (lambda calculus)」は、文字λを使って関数を表す「λ記法」という表記法を用いた抽象的な計算モデルで、1930 年代に A. Church 氏によって考案されました。ラムダ計算は Lisp, Scheme, ML, Haskell など多くの関数型言語の基礎理論として、大きな役割を果たしています。ラムダ計算とか計算モデルというと難しい話のように思われるかもしれませんが、Lisp / Scheme や C# の「ラムダ式」の考え方がラムダ計算の基本なのです。
+</p>
+<p> 純粋なラムダ計算の定義はとても単純です。ラムダ計算で扱う式は、次に示す 3 通りしかありません。
+</p>
+<ul>
+  <li>変数<br>
+      x, y, z, ...
+  <li>関数抽象 (λ抽象)<br>
+      λx.M (λの後ろの x が仮引数、ドット ( . ) の後ろの M が関数本体)
+  <li>関数適用<br>
+      (M<sub>1</sub>M<sub>2</sub>)
+</ul>
+<p> 関数抽象は関数定義、関数適用は関数呼び出し、変数は関数の仮引数のことと考えてください。つまり、純粋なラムダ計算には関数しかないのです。したがって、ラムダ計算では数を表すのにも関数を使います。これを「チャーチ数 (Church numerals)」と呼びます。
+</p>
+<p> ラムダ計算とラムダ式はまったく同じではありせんが、今回は難しいことを考えずに C# のラムダ式を使って「チャーチ数」を試してみましょう。
+</p>
+<h4>●チャーチ数の基本</h4>
+<p> チャーチ数は関数 f と x を受け取り、x に f を適用した回数で数 (自然数) を表します。たとえば、自然数 n は f(f(f(...(f(x)) ...))) のように f を n 回呼び出すことで表します。簡単な例を示しましょう。
+</p>
+<pre>
+csharp> Func&lt;Func&lt;int,int&gt;, Func&lt;int,int&gt;&gt; zero = f =&gt; x =&gt; x;
+csharp> Func&lt;Func&lt;int,int&gt;, Func&lt;int,int&gt;&gt; one = f =&gt; x =&gt; f(x);
+csharp> Func&lt;Func&lt;int,int&gt;, Func&lt;int,int&gt;&gt; two = f =&gt; x =&gt; f(f(x));
+csharp> Func&lt;Func&lt;int,int&gt;, Func&lt;int,int&gt;&gt; three = f =&gt; x =&gt; f(f(f(x)));
+</pre>
+<p> 変数 zero に格納された関数は、引数 f を受け取ったら関数 x =&gt; x を返す関数に、引数 f と x を 2 つ受け取ったら x をそのまま返す関数になります。このとき、x に f を適用していないことに注意してください。これで 0 を表すことができます。
+</p>
+<p> 同様に、one は f を 1 回適用しているので 1 を、two は 2 回適用しているので 2 を、three は 3 回適用しているので 3 を表すことができます。そうはいっても、このままではよくわからないので、実際に引数として関数 n =&gt; n + 1 と 0 を渡して実行してみましょう。実行結果は次のようになります。
+</p>
+<pre>
+csharp> zero(n =&gt; n + 1)(0);
+0
+csharp> one(n =&gt; n + 1)(0);
+1
+csharp> two(n =&gt; n + 1)(0);
+2
+csharp> three(n =&gt; n + 1)(0);
+3
+</pre>
+<p> n =&gt; n + 1 は引数 n に 1 を加算するので、もう一つの引数に 0 を渡せば n =&gt; n + 1 を適用した回数、つまりチャーチ数を C# の数に変換することができます。
+</p>
+<p> ところで、汎用デリゲート Func を使うとデータ型の指定が面倒ですね。この場合、デリゲートでデータ型を指定すると簡単です。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : チャーチ数
+
+class Test {
+  delegate int fn(int n);
+  delegate fn num(fn z);
+  
+  static void Main() {
+    num zero  = f =&gt; x =&gt; x;
+    num one   = f =&gt; x =&gt; f(x);
+    num two   = f =&gt; x =&gt; f(f(x));
+    num three = f =&gt; x =&gt; f(f(f(x)));
+  
+    Console.WriteLine("{0}", zero(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", one(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", two(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", three(n =&gt; n + 1)(0));
+  }
+}
+</pre>
+<p> fn は引数が int で返り値が int の関数を表します。num はチャーチ数を表す型で、引数に fn を受け取って、返り値に fn を返します。この返り値の関数に数値を渡すと、具体的な数値を求めることができます。
+</p>
+<h4>●足し算</h4>
+<p> 次は数 n に 1 を加える succ(n)(f)(x) を定義してみましょう。このとき、n はチャーチ数であることに注意してください。デリゲートの定義は次のようになります。
+</p>
+<pre class="item">
+delegate num op1(num z);
+</pre>
+<p> 型 op1 が表す関数は、引数にチャーチ数を受け取りチャーチ数を返すことを表しています。op1 は単項演算子を表していると考えてください。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : チャーチ数に 1 を加える
+
+op1 succ  = n =&gt; f =&gt; x =&gt; f(n(f)(x));
+</pre>
+n(f)(x) は数 n を表しているので、それに関数 f を再度適用すれば、n に 1 を加えることができます。
+</p>
+<pre class="item">
+succ(zero)(n =&gt; n + 1)(0) =&gt; 1
+succ(one)(n =&gt; n + 1)(0) =&gt; 2
+succ(two)(n =&gt; n + 1)(0)) =&gt; 3
+succ(three)(n =&gt; n + 1)(0) =&gt; 4
+</pre>
+<p> このように、succ でチャーチ数 zero, one, two, three に 1 を加算することができます。
+</p>
+<p> 次は 2 つのチャーチ数 m, n を足し算する plus(n)(m)(f)(x) を作りましょう。デリゲートの定義は次のようになります。
+</p>
+<pre class="item">
+delegate op1 op2(num z);
+</pre>
+<p> 型 op2 が表す関数は、引数にチャーチ数を受け取り op1 型の関数を返すことを表しています。この返り値の関数にチャーチ数を渡すと、2 つのチャーチ数を足し算することができます。op2 は二項演算子を表していると考えてください。プログラムは次のようになります。
+</p>
+<pre class="list">
+op2 plus  = n =&gt; m =&gt; f =&gt; x =&gt; m(f)(n(f)(x));
+</pre>
+<p> この場合、n(f)(x) で n を表すチャーチ数になるので、この結果に m(f) を適用すれば m + n を実現することができます。
+</p>
+<pre class="item">
+plus(zero)(zero)(n =&gt; n + 1)(0) =&gt; 0
+plus(zero)(one)(n =&gt; n + 1)(0)  =&gt; 1
+plus(one)(two)(n =&gt; n + 1)(0)   =&gt; 3
+plus(two)(three)(n =&gt; n + 1)(0) =&gt; 5
+</pre>
+<h4>●掛け算</h4>
+<p> 次はチャーチ数 m と n を掛け算する mult(n)(m)(f)(x) を定義してみましょう。m * n は n を m 回足し算すればいいので、関数 n(f) を m に渡して m(n(f))(x) とするだけです。プログラムは次のようになります。
+<pre class="item">
+op2 mult  = n =&gt; m =&gt; f =&gt; x =&gt; m(n(f))(x);
+</pre>
+<pre class="item">
+mult(zero)(zero)(n =&gt; n + 1)(0) =&gt; 0
+mult(zero)(one)(n =&gt; n + 1)(0)  =&gt; 0
+mult(one)(two)(n =&gt; n + 1)(0)   =&gt; 2
+mult(two)(three)(n =&gt; n + 1)(0) =&gt; 6
+</pre>
+<p> このように、チャーチ数の足し算と掛け算は簡単なのですが、引き算はとても難しくなります。本稿の範囲を超える (M.Hiroi が理解できない) ので、チャーチ数はここまでにしておきましょう。興味のある方は調べてみてください。
+</p>
+
+<h4>●参考文献, URL</h4>
+<ol>
+  <li>Ravi Sethi (著), 神林靖 (訳), 『プログラミング言語の概念と構造』,アジソンウェスレイ, 1995
+  <li><a href="http://www.kb.ecei.tohoku.ac.jp/~sumii/class/keisanki-software-kougaku-2005/lambda.pdf">ラムダ計算入門 (PDF)</a>, (住井英二郎さん)
+  <li><a href="https://ja.wikipedia.org/wiki/%E3%83%A9%E3%83%A0%E3%83%80%E8%A8%88%E7%AE%97">ラムダ計算 - Wikipedia</a>
+</ol>
+<hr>
+<h4>●プログラムリスト</h4>
+<pre class="list">
+//
+// church.cs : チャーチ数
+//
+//             Copyright (C) 2016 Makoto Hiroi
+//
+using System;
+
+class Test {
+  delegate int fn(int n);
+  delegate fn num(fn z);
+  delegate num op1(num z);
+  delegate op1 op2(num z);
+  
+  static void Main() {
+    num zero  = f =&gt; x =&gt; x;
+    num one   = f =&gt; x =&gt; f(x);
+    num two   = f =&gt; x =&gt; f(f(x));
+    num three = f =&gt; x =&gt; f(f(f(x)));
+    op1 succ  = n =&gt; f =&gt; x =&gt; f(n(f)(x));
+    op2 plus  = n =&gt; m =&gt; f =&gt; x =&gt; m(f)(n(f)(x));
+    op2 mult  = n =&gt; m =&gt; f =&gt; x =&gt; m(n(f))(x);
+  
+    Console.WriteLine("{0}", zero(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", one(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", two(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", three(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", succ(zero)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", succ(one)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", succ(two)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", succ(three)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", plus(zero)(zero)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", plus(zero)(one)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", plus(one)(two)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", plus(two)(three)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", mult(zero)(zero)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", mult(zero)(one)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", mult(one)(two)(n =&gt; n + 1)(0));
+    Console.WriteLine("{0}", mult(two)(three)(n =&gt; n + 1)(0));
+  }
+}
+</pre>
+<pre>
+C&gt;church
+0
+1
+2
+3
+1
+2
+3
+4
+0
+1
+3
+5
+0
+0
+2
+6
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2016 Makoto Hiroi<br>All rights reserved.</b>
+</div>
+<div class="small">
+<hr>
+[ <a href="../index.html">Home</a> | <a href="index.html">Ｃ＃</a> ]
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

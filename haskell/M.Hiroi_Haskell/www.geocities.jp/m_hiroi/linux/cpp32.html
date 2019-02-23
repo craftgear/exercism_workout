@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽Ｃ++プログラミング超入門</title>
+  <meta name="description" content="Ｃ++,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881813</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Linux Programming</h1>
+<h2>お気楽Ｃ++プログラミング超入門</h2>
+<div class="small">
+[ <a href="cpp31.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp33.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>スライドパズル</h3>
+<p> 今回は基本的な探索手法である「幅優先探索」を使って 15 パズルで有名なスライドパズルを解いてみましょう。なお、幅優先探索の基本は拙作のページ <A href="cpp23.html">経路の探索</A> で説明しています。基本的なことは、そのページをお読みください。
+</p>
+<h4>●パズルの説明</h4>
+<p> <a href="cpp32.html#cite">参考文献 1</a> によると、15 パズルはアメリカのサム・ロイドが 1870 年代に考案したパズルで、彼はパズルの神様と呼ばれるほど有名なパズル作家だそうです。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┬─┐  
+  │１│２│３│４│
+  ├─┼─┼─┼─┤
+  │５│６│７│８│
+  ├─┼─┼─┼─┤
+  │９│10│11│12│
+  ├─┼─┼─┼─┤
+  │13│14│15│  │
+  └─┴─┴─┴─┘
+
+   図 : 15 パズル
+</pre>
+<p> 15 パズルは上図に示すように、1 から 15 までの駒を並べるパズルです。駒の動かし方は、1 回に 1 個の駒を空いている隣の場所に滑らせる、というものです。駒を跳び越したり持ち上げたりすることはできません。
+</p>
+<p> 15 パズルの場合、駒の配置は空き場所がどこでもいいことにすると、16! (約 2e13) 通りもあります。実際には、15 パズルの性質からその半分になるのですが、それでもパソコンで扱うにはあまりにも大きすぎる数です。そこで、盤面を一回り小さくした、1 から 8 までの数字を並べる「8 パズル」を考えることにします。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐      ┌─┬─┬─┐
+  │１│２│３│      │１│２│３│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │４│５│６│      │４│５│６│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │７│８│  │      │８│７│  │
+  └─┴─┴─┘      └─┴─┴─┘
+  （１）完成形      （２）不可能な局面  
+
+
+            図 : 8 パズル
+</pre>
+<p> 15 パズルは 4 行 4 列の盤ですが、8 パズルは 3 行 3 列と盤を小さくしたパズルです。8 パズルの場合、駒の配置は空き場所がどこでもいいことにすると、9! =  362880 通りあります。15 パズルや 8 パズルの場合、<a href="cpp32.html#cite">参考文献 2</a> によると <cite>『適当な 2 つの駒をつまみ上げて交換する動作を偶数回行った局面にしか移行できない』</cite> とのことです。
+</p>
+<p> 上図 (2) は 7 と 8 を入れ替えただけの配置です。この場合、交換の回数が奇数回のため完成形に到達することができない、つまり解くことができないのです。このような性質を「偶奇性（パリティ）」といいます。詳しい説明は拙作のページ <a href="../puzzle/index.html">Puzzle DE Programming</a> <a href="../puzzle/parity.html">偶奇性（パリティ）のお話</a> をお読みください。8 パズルの場合、完成形に到達する局面の総数は 9! / 2 = 181440 個となります。
+</p>
+<h4>●データ構造の定義</h4>
+<p> それでは、プログラムを作りましょう。下図に示すスタートから完成形 (ゴール) に到達するまでの最短手数を幅優先探索で求めます。
+<PRE class="fig">
+  ┌─┬─┬─┐    ┌─┬─┬─┐
+  │８│６│７│    │１│２│３│
+  ├─┼─┼─┤    ├─┼─┼─┤
+  │２│５│４│    │４│５│６│
+  ├─┼─┼─┤    ├─┼─┼─┤
+  │３│  │１│    │７│８│  │
+  └─┴─┴─┘    └─┴─┴─┘
+     スタート           ゴール
+
+
+          図 : 8 パズル
+</pre>
+<p> 8 パズルの盤面は STL の固定長配列 array&lt;int, 9&gt; を使って表します。盤面の位置と配列の添字の対応は下図を見てください。
+</p>
+<pre class="fig">
+  ┌─┬─┬─┐      ┌─┬─┬─┐
+  │１│２│３│      │０│１│２│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │４│５│６│      │３│４│５│
+  ├─┼─┼─┤      ├─┼─┼─┤
+  │７│８│  │      │６│７│８│
+  └─┴─┴─┘      └─┴─┴─┘
+
+ 盤面:[1, 2, 3,      盤面と配列の対応
+       4, 5, 6,
+       7, 8, 0]
+
+
+         図 : 8 パズルの盤面
+</pre>
+
+<p> 隣接リストの定義は次のようになります。
+</p>
+<pre class="list">
+リスト : 隣接リスト
+
+vector&lt;vector&lt;int&gt;&gt; adjacent = {
+  {1, 3},       // 0
+  {0, 2, 4},    // 1
+  {1, 5},       // 2
+  {0, 4, 6},    // 3
+  {1, 3, 5, 7}, // 4
+  {2, 4, 8},    // 5
+  {3, 7},       // 6
+  {4, 6, 8},    // 7
+  {5, 7}        // 8
+};
+</pre>
+<p> 次は局面を表す構造体を定義します。
+</p>
+<pre class="list">
+リスト : 局面の定義
+
+// 盤面
+typedef array&lt;int, 9&gt; Board;
+
+// 局面
+struct State {
+  Board board;
+  int   space;
+  int   prev;
+  State(Board&amp; b, int s, int p) : board(b), space(s), prev(p) {}
+};
+</pre>
+<p> typedef で array&lt;int, 9&gt; に別名 Board を付けます。局面を表す構造体の名前は State としました。State は vector に格納し、それをキューとして使います。board は盤面、space は空き場所の位置、prev は 1 手前の局面への添字を格納します。ゴールに到達したら、prev をたどって手順を表示します。
+</p>
+
+<h4>●同一局面のチェック</h4>
+<p> 同一局面のチェックには unordered_map を使います。ハッシュ関数は前回作成したものと同じです。
+</p>
+<pre class="list">
+リスト : ハッシュ関数の定義
+
+template&lt;&gt;
+struct hash&lt;Board&gt; {
+  size_t operator()(const Board&amp; b) const {
+    size_t val = 0;
+    for (auto x : b) val = (val &lt;&lt; 3) ^ x;
+    return val;
+  }
+};
+</pre>
+
+<h4>●幅優先探索による解法</h4>
+<p> それでは幅優先探索のプログラムを作りましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 幅優先探索
+
+void bfs(Board&amp; start, Board&amp; goal)
+{
+  vector&lt;State&gt; vec;
+  unordered_map&lt;Board, bool&gt; check;
+  vec.reserve(181440);  // 9! / 2
+  int front = 0;
+  vec.emplace_back(start, position(start, SPACE), -1);
+  check[start] = true;
+  while (front &lt; check.size()) {
+    int s = vec[front].space;
+    for (auto x : adjacent[s]) {
+      Board b = vec[front].board;
+      b[s] = b[x];
+      b[x] = SPACE;
+      if (!check[b]) {
+        vec.emplace_back(b, x, front);
+        check[b] = true;
+        if (b == goal) {
+          print_answer(vec, vec.size() - 1);
+          return;
+        }
+      }
+    }
+    front++;
+  }
+}
+</pre>
+<p> 関数 bfs() の引数 start がスタートの盤面、goal がゴールの盤面です。vec が局面を格納するベクタで、これをキューとして使います。check が同一局面をチェックするためのマップです。キューの先頭位置は変数 front で表します。局面の追加は emplace_back() を使うと簡単です。最初に、start の局面を vec に追加して、check[start] に true をセットします。あとは while ループで、ゴール (goal) に到達するまで探索を繰り返します。キューが空になり while ループが終了する場合、start は goal に到達できない、つまり解くことができなかったことになります。
+</p>
+<p> まず最初に、変数 s に空き場所の位置をセットします。そして、範囲 for 文で隣接リストから隣の位置を取り出して変数 x にセットします。局面の board を変数 b にコピーして、b[s] に b[x] をセットし、b[x] に SPACE (空き場所) をセットします。これで駒を動かして新しい盤面を作ることができます。
+</p>
+<p> check[b] が false ならば今までに出現していない局面です。emplace_back() で vec に局面を追加して、check[b] に true をセットします。そして、b が goal と等しいかチェックします。そうであれば、パズルを解くことができたので、関数 print_answer() で手順を表示して、return で探索処理を終了します。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="cpp32.html#list1">プログラムリスト１</a> をお読みください。
+</p>
+<h4>●実行結果</h4>
+<p> これでプログラムは完成です。それでは実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp/eight$ ./a.out 
+8 6 7 2 5 4 3 0 1 
+8 6 7 2 0 4 3 5 1 
+8 0 7 2 6 4 3 5 1 
+0 8 7 2 6 4 3 5 1 
+2 8 7 0 6 4 3 5 1 
+2 8 7 3 6 4 0 5 1 
+2 8 7 3 6 4 5 0 1 
+2 8 7 3 6 4 5 1 0 
+2 8 7 3 6 0 5 1 4 
+2 8 0 3 6 7 5 1 4 
+2 0 8 3 6 7 5 1 4 
+2 6 8 3 0 7 5 1 4 
+2 6 8 0 3 7 5 1 4 
+2 6 8 5 3 7 0 1 4 
+2 6 8 5 3 7 1 0 4 
+2 6 8 5 3 7 1 4 0 
+2 6 8 5 3 0 1 4 7 
+2 6 0 5 3 8 1 4 7 
+2 0 6 5 3 8 1 4 7 
+2 3 6 5 0 8 1 4 7 
+2 3 6 0 5 8 1 4 7 
+2 3 6 1 5 8 0 4 7 
+2 3 6 1 5 8 4 0 7 
+2 3 6 1 5 8 4 7 0 
+2 3 6 1 5 0 4 7 8 
+2 3 0 1 5 6 4 7 8 
+2 0 3 1 5 6 4 7 8 
+0 2 3 1 5 6 4 7 8 
+1 2 3 0 5 6 4 7 8 
+1 2 3 4 5 6 0 7 8 
+1 2 3 4 5 6 7 0 8 
+1 2 3 4 5 6 7 8 0 
+</pre>
+<p> 31 手で解くことができました。生成した局面は全部で 181440 通りで、実行時間は 0.14 秒かかりました。今回は同一局面のチェックに unordered_map (ハッシュ法) を使っているので高速に解くことができました。 map (平衡二分木) を使うと実行時間は遅くなると思います。興味のある方は試してみてください。
+</p>
+<p> 8 パズルの場合、最長手数は 31 手で、下図に示す 2 通りの局面があります。スタートの局面はその一つです。
+</p>
+<pre class="fig">
+┌─┬─┬─┐    ┌─┬─┬─┐
+│８│６│７│    │６│４│７│
+├─┼─┼─┤    ├─┼─┼─┤
+│２│５│４│    │８│５│  │
+├─┼─┼─┤    ├─┼─┼─┤
+│３│  │１│    │３│２│１│
+└─┴─┴─┘    └─┴─┴─┘
+
+    図 : 31 手で解ける局面
+</pre>
+<p> 最長手数の局面は、幅優先探索を使って求めることができます。これはあとで試してみましょう。
+</p>
+<h4>●双方向探索</h4>
+<p> ところで、今回の 8 パズルのようにゴールの状態が明確な場合、スタートから探索するだけではなくゴールからも探索を行うことで、幅優先探索を高速化することができます。これを「双方向探索 (bi-directional search) 」といいます。
+</p>
+<p> その理由を説明するために、簡単なシミュレーションをしてみましょう。たとえば、1 手進むたびに 3 つの局面が生成され、5 手で解けると仮定します。すると、n 手目で生成される局面は 3 の n 乗個になるので、初期状態から単純に探索すると、生成される局面の総数は、3 + 9 + 27 + 81 + 243 = 363 個となります。
+</p>
+<p> これに対し、初期状態と終了状態から同時に探索を始めた場合、お互い 3 手まで探索した時点で同じ局面に到達する、つまり、解を見つけることができます。この場合、生成される局面の総数は 3 手目までの局面数を 2 倍した 78 個となります。
+</p>
+<p> 生成される局面数はぐっと少なくなりますね。局面数が減少すると同一局面の探索処理に有利なだけではなく、「キューからデータを取り出して新しい局面を作る」という根本的な処理のループ回数を減らすことになるので、処理速度は大幅に向上するのです。
+</p>
+<p> それではプログラムを作りましょう。単純に考えると、2 つの探索処理を交互に行うことになりますが、そうするとプログラムの大幅な修正が必要になります。ここは、探索方向を示すフラグを用意することで、一つのキューだけで処理することにしましょう。局面を表す State に方向を格納するメンバ変数 dir を追加します。
+</p>
+<PRE class="list">
+リスト : 局面の定義 (双方向からの探索)
+
+// 方向
+const int B = 1;
+const int F = 2;
+
+// 局面
+struct State {
+  Board board;
+  int   space;
+  int   prev;
+  int   dir;
+  State(Board&amp; b, int s, int p, int d)
+    : board(b), space(s), prev(p), dir(d) {}
+};
+</pre>
+
+<p> スタートからの探索を F で、ゴールからの探索を B で表ます。双方向探索のプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : 双方向探索
+
+// 幅優先探索
+void bfs(Board&amp; start, Board&amp; goal)
+{
+  vector&lt;State&gt; vec;
+  unordered_map&lt;Board, int&gt; check;
+  vec.reserve(181440);  // 9! / 2
+  int front = 0;
+  vec.emplace_back(start, position(start, SPACE), -1, F);
+  check[start] = 0;
+  vec.emplace_back(goal, position(goal, SPACE), -1, B);
+  check[goal] = 1;
+  while (front &lt; check.size()) {
+    int s = vec[front].space;
+    for (auto x : adjacent[s]) {
+      Board b = vec[front].board;
+      b[s] = b[x];
+      b[x] = SPACE;
+      auto iter = check.find(b);
+      if (iter == check.end()) {
+        vec.emplace_back(b, x, front, vec[front].dir);
+        check[b] = vec.size() - 1;
+      } else if (vec[iter-&gt;second].dir != vec[front].dir) {
+        print_answer(vec, front, iter-&gt;second);
+        return;
+      }
+    }
+    front++;
+  }
+}
+</pre>
+
+<p> スタートとゴールの局面を生成してキュー (vec) にセットします。同一局面を見つけたとき、その探索方向 (dir) を求める必要があるので、unoredered_map は盤面と添字 (int) を格納することにします。check[start] には 0 を。check[goal] には 1 をセットします。
+<p> 駒の移動と局面の生成処理は幅優先探索と同じです。check.find() で同一局面をチェックします。見つけた場合、vec[iter-&gt;second].dir と vec[front].dir の値が異なっていれば解を見つけることができました。print_answer() で手順を表示して return で処理を終了します。同じ探索方向であれば、キューへの追加は行いません。
+</p>
+<p> あとのプログラムなので説明は割愛いたします。詳細は <A href="cpp32.html#list2">プログラムリスト２</A> をお読みください。
+</p>
+<p> さっそく実行してみると、生成された局面数は 16088 個で、実行時間は約 0.04 秒でした。局面数は約 1 / 11 になり、実行時間も 3 倍以上高速になりました。
+</p>
+<h4>●最長手数の求め方</h4>
+<p> 最後に最長手数の局面を求めてみましょう。最長手数の求め方ですが、181440 通りの配置の最短手数がすべてわかれば、最長の手数となる配置を求めることができます。しかし、この方法では時間がとてもかかりそうです。そこで、完成形から始めていちばん長い手数の局面を生成することにします。
+</p>
+<p> まず、完成形から駒を動かして 1 手で到達する局面をすべて作ります。次に、これらの局面から駒を動かして新しい局面を作れば、完成形から 2 手で到達する局面となります。このように、手数を 1 手ずつ伸ばしていき、新しい局面が生成できなくなった時点での手数が求める最長手数となります。この処理は幅優先探索を使えばぴったりです。
+</p>
+<p> このプログラムの目的は、いちばん長い手数となる配置を求めることなので、その手順を表示することは行いません。このため、一つ前の局面を格納するインスタンス変数 prev は削除します。そのかわり、その局面までの手数を格納するメンバ変数 move を用意します。一つ前の局面の手数を move から求め、それに 1 を足せば現在の局面の手数となります。
+</p>
+<h4>●プログラムの作成</h4>
+<p> それではプログラムを作ります。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 8 パズルの最長手数を求める
+
+// 幅優先探索
+void bfs(Board&amp; goal)
+{
+  vector&lt;State&gt; vec;
+  unordered_map&lt;Board, bool&gt; check;
+  vec.reserve(181440);  // 9! / 2
+  int front = 0;
+  vec.emplace_back(goal, position(goal, SPACE), 0);
+  check[goal] = true;
+  while (front &lt; check.size()) {
+    int s = vec[front].space;
+    int m = vec[front].move;
+    for (auto x : adjacent[s]) {
+      Board b = vec[front].board;
+      b[s] = b[x];
+      b[x] = SPACE;
+      if (!check[b]) {
+        vec.emplace_back(b, x, m + 1);
+        check[b] = true;
+      }
+    }
+    front++;
+  }
+  print_answer(vec);
+}
+</pre>
+
+<p> 関数 bfs() には goal をチェックする処理がないことに注意してください。生成できる局面がなくなるまで、つまりキューにデータがなくなるまで処理を繰り返します。1 手前の局面 vec[front] の手数 move を変数 m にセットします。emplace_back() で新しい局面を vec に追加するとき、最後の引数に m + 1 を渡します。while ループを終了したあと、関数 print_answer() で最長手数の局面を表示します。vec の末尾が最長手数の局面になるので、vec の末尾から最長手数と同じ手数の局面を取り出して表示するだけです。
+</p>
+<p> あとのプログラムは簡単なので説明は割愛します。詳細は <a href="cpp32.html#list3">プログラムリスト３</a> をお読みください。
+</p>
+<h4>●実行結果 (2)</h4>
+<p>これでプログラムは完成です。さっそく実行してみましょう。
+</p>
+<pre>
+mhiroi@mhiroi-VirtualBox:~/cpp/eight$ ./a.out 
+31, 8 6 7 2 5 4 3 0 1 
+31, 6 4 7 8 5 0 3 2 1 
+</pre>
+<P> 最長手数は 31 手で、その配置は全部で 2 通りになります。実行時間は約 0.14 秒になりました。
+</p>
+<p> 今回はここまでです。次回は「反復深化」を使ってスライドパズルを解いてみましょう。
+</p>
+<h4><A name="cite">●参考文献</A></h4>
+<ol>
+  <li>井上うさぎ, 『世界のパズル百科イラストパズルワンダーランド』, 東京堂出版, 1997
+  <li>三木太郎, 『特集コンピュータパズルへの招待 スライディングブロック編』, C MAGAZINE 1996 年 2 月号, ソフトバンク
+  <li>高橋謙一郎, 『特集 悩めるプログラマに効くアルゴリズム』, C MAGAZINE 2000 年 11 月号, ソフトバンク
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+//
+// eight.cpp : ８パズルの解法
+//
+//             Copyright (C) 2015 Makoto Hiroi
+//
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;array&gt;
+#include &lt;unordered_map&gt;
+using namespace std;
+
+// 隣接リスト
+vector&lt;vector&lt;int&gt;&gt; adjacent = {
+  {1, 3},       // 0
+  {0, 2, 4},    // 1
+  {1, 5},       // 2
+  {0, 4, 6},    // 3
+  {1, 3, 5, 7}, // 4
+  {2, 4, 8},    // 5
+  {3, 7},       // 6
+  {4, 6, 8},    // 7
+  {5, 7}        // 8
+};
+
+// 盤面
+typedef array&lt;int, 9&gt; Board;
+
+// ハッシュ関数
+template&lt;&gt;
+struct hash&lt;Board&gt; {
+  size_t operator()(const Board&amp; b) const {
+    size_t val = 0;
+    for (auto x : b) val = (val &lt;&lt; 3) ^ x;
+    return val;
+  }
+};
+
+// 空白
+const int SPACE = 0;
+
+// 探索
+int position(const Board&amp; b, int n)
+{
+  int i = 0;
+  for (auto x : b) {
+    if (x == n) return i;
+    i++;
+  }
+  return -1;
+}
+
+// 局面
+struct State {
+  Board board;
+  int   space;
+  int   prev;
+  State(Board&amp; b, int s, int p) : board(b), space(s), prev(p) {}
+};
+
+// 手順の表示
+void print_answer(const vector&lt;State&gt;&amp; v, int n)
+{
+  if (n &gt; 0) print_answer(v, v[n].prev);
+  for (auto x : v[n].board) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+
+// 幅優先探索
+void bfs(Board&amp; start, Board&amp; goal)
+{
+  vector&lt;State&gt; vec;
+  unordered_map&lt;Board, bool&gt; check;
+  vec.reserve(181440);  // 9! / 2
+  int front = 0;
+  vec.emplace_back(start, position(start, SPACE), -1);
+  check[start] = true;
+  while (front &lt; check.size()) {
+    int s = vec[front].space;
+    for (auto x : adjacent[s]) {
+      Board b = vec[front].board;
+      b[s] = b[x];
+      b[x] = SPACE;
+      if (!check[b]) {
+        vec.emplace_back(b, x, front);
+        check[b] = true;
+        if (b == goal) {
+          print_answer(vec, vec.size() - 1);
+          return;
+        }
+      }
+    }
+    front++;
+  }
+}
+
+int main()
+{
+  Board start = {8, 6, 7, 2, 5, 4, 3, 0, 1};
+  Board goal = {1, 2, 3, 4, 5, 6, 7, 8, 0};
+  bfs(start, goal);
+}
+</pre>
+<hr>
+<h4 id="list2">●プログラムリスト２</h4>
+<pre class="list">
+//
+// eight_bi.cpp : ８パズルの解法 (双方向探索)
+//
+//                Copyright (C) 2015 Makoto Hiroi
+//
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;array&gt;
+#include &lt;unordered_map&gt;
+using namespace std;
+
+// 隣接リスト
+vector&lt;vector&lt;int&gt;&gt; adjacent = {
+  {1, 3},       // 0
+  {0, 2, 4},    // 1
+  {1, 5},       // 2
+  {0, 4, 6},    // 3
+  {1, 3, 5, 7}, // 4
+  {2, 4, 8},    // 5
+  {3, 7},       // 6
+  {4, 6, 8},    // 7
+  {5, 7}        // 8
+};
+
+// 盤面
+typedef array&lt;int, 9&gt; Board;
+
+// ハッシュ関数
+template&lt;&gt;
+struct hash&lt;Board&gt; {
+  size_t operator()(const Board&amp; b) const {
+    size_t val = 0;
+    for (auto x : b) val = (val &lt;&lt; 3) ^ x;
+    return val;
+  }
+};
+
+// 空白
+const int SPACE = 0;
+
+// 探索
+int position(const Board&amp; b, int n)
+{
+  int i = 0;
+  for (auto x : b) {
+    if (x == n) return i;
+    i++;
+  }
+  return -1;
+}
+
+// 方向
+const int B = 1;
+const int F = 2;
+
+// 局面
+struct State {
+  Board board;
+  int   space;
+  int   prev;
+  int   dir;
+  State(Board&amp; b, int s, int p, int d)
+    : board(b), space(s), prev(p), dir(d) {}
+};
+
+// 手順の表示
+void print_answer_f(const vector&lt;State&gt;&amp; v, int n)
+{
+  if (n &gt; 0) print_answer_f(v, v[n].prev);
+  for (auto x : v[n].board) cout &lt;&lt; x &lt;&lt; " ";
+  cout &lt;&lt; endl;
+}
+
+void print_answer_b(const vector&lt;State&gt;&amp; v, int n)
+{
+  while (n &gt; 0) {
+    for (auto x : v[n].board) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+    n = v[n].prev;
+  }
+}
+
+void print_answer(const vector&lt;State&gt;&amp; v, int n, int m)
+{
+  if (v[n].dir == F) {
+    print_answer_f(v, n);
+    print_answer_b(v, m);
+  } else {
+    print_answer_f(v, m);
+    print_answer_b(v, n);
+  }
+}
+
+// 幅優先探索
+void bfs(Board&amp; start, Board&amp; goal)
+{
+  vector&lt;State&gt; vec;
+  unordered_map&lt;Board, int&gt; check;
+  vec.reserve(181440);  // 9! / 2
+  int front = 0;
+  vec.emplace_back(start, position(start, SPACE), -1, F);
+  check[start] = 0;
+  vec.emplace_back(goal, position(goal, SPACE), -1, B);
+  check[goal] = 1;
+  while (front &lt; check.size()) {
+    int s = vec[front].space;
+    for (auto x : adjacent[s]) {
+      Board b = vec[front].board;
+      b[s] = b[x];
+      b[x] = SPACE;
+      auto iter = check.find(b);
+      if (iter == check.end()) {
+        vec.emplace_back(b, x, front, vec[front].dir);
+        check[b] = vec.size() - 1;
+      } else if (vec[iter-&gt;second].dir != vec[front].dir) {
+        print_answer(vec, front, iter-&gt;second);
+        return;
+      }
+    }
+    front++;
+  }
+}
+
+int main()
+{
+  Board start = {8, 6, 7, 2, 5, 4, 3, 0, 1};
+  Board goal = {1, 2, 3, 4, 5, 6, 7, 8, 0};
+  bfs(start, goal);
+}
+</pre>
+<hr>
+<h4 id="list3">●プログラムリスト３</h4>
+<pre class="list">
+//
+// eight_max.cpp : ８パズルの解法 (最長手数)
+//
+//                 Copyright (C) 2015 Makoto Hiroi
+//
+#include &lt;iostream&gt;
+#include &lt;vector&gt;
+#include &lt;array&gt;
+#include &lt;unordered_map&gt;
+using namespace std;
+
+// 隣接リスト
+vector&lt;vector&lt;int&gt;&gt; adjacent = {
+  {1, 3},       // 0
+  {0, 2, 4},    // 1
+  {1, 5},       // 2
+  {0, 4, 6},    // 3
+  {1, 3, 5, 7}, // 4
+  {2, 4, 8},    // 5
+  {3, 7},       // 6
+  {4, 6, 8},    // 7
+  {5, 7}        // 8
+};
+
+// 盤面
+typedef array&lt;int, 9&gt; Board;
+
+// ハッシュ関数
+template&lt;&gt;
+struct hash&lt;Board&gt; {
+  size_t operator()(const Board&amp; b) const {
+    size_t val = 0;
+    for (auto x : b) val = (val &lt;&lt; 3) ^ x;
+    return val;
+  }
+};
+
+// 空白
+const int SPACE = 0;
+
+// 探索
+int position(const Board&amp; b, int n)
+{
+  int i = 0;
+  for (auto x : b) {
+    if (x == n) return i;
+    i++;
+  }
+  return -1;
+}
+
+// 局面
+struct State {
+  Board board;
+  int   space;
+  int   move;
+  State(Board&amp; b, int s, int m) : board(b), space(s), move(m) {}
+};
+
+// 最長手数の局面を表示
+void print_answer(vector&lt;State&gt;&amp; v)
+{
+  int m = v.back().move;
+  while (m == v.back().move) {
+    cout &lt;&lt; m &lt;&lt; ", ";
+    for (auto x : v.back().board) cout &lt;&lt; x &lt;&lt; " ";
+    cout &lt;&lt; endl;
+    v.pop_back();
+  }
+}
+
+// 幅優先探索
+void bfs(Board&amp; goal)
+{
+  vector&lt;State&gt; vec;
+  unordered_map&lt;Board, bool&gt; check;
+  vec.reserve(181440);  // 9! / 2
+  int front = 0;
+  vec.emplace_back(goal, position(goal, SPACE), 0);
+  check[goal] = true;
+  while (front &lt; check.size()) {
+    int s = vec[front].space;
+    int m = vec[front].move;
+    for (auto x : adjacent[s]) {
+      Board b = vec[front].board;
+      b[s] = b[x];
+      b[x] = SPACE;
+      if (!check[b]) {
+        vec.emplace_back(b, x, m + 1);
+        check[b] = true;
+      }
+    }
+    front++;
+  }
+  print_answer(vec);
+}
+
+int main()
+{
+  Board goal = {1, 2, 3, 4, 5, 6, 7, 8, 0};
+  bfs(goal);
+}
+</pre>
+
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2015 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="cpp31.html">PrevPage</a> | <a href="cpp.html">Ｃ++</a> | <a href="cpp33.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

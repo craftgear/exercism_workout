@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Algorithms with Python / 赤黒木 (red-black tree)</title>
+  <meta name="description" content="Python,アルゴリズム,データ構造,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881798</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Algorithms with Python</h1>
+<h2>赤黒木 (red-black tree) [3]</h2>
+<div class="small">
+[ <a href="pyalgo53.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo55.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>はじめに</h3>
+<p> 赤黒木のお話です。一般に、赤黒木は 2-3-4 木という多分木の動作を二分木で実現したものです。このほかに、2-3 木をベースにした赤黒木を考えることができます。2008 年に Robert Sedgewick が発表した <cite>"Left-Leaning Red Black Trees"</cite> <a href="pyalgo54.html#cite">参考文献, URL 1</a> によると、赤節の位置を限定することで、赤黒木を簡単にプログラムすることができるそうです。そこで、今回は実際に Left-Leaning Red Black Tree (LLRB 木) を作成してみましょう。
+</p>
+
+<h4>●2-3 木をベースにした赤黒木の条件</h4>
+<p> 2-3 木をベースにした赤黒木は、次の条件を満たす「二分木」になります。
+</p>
+<ol>
+  <li>各節は赤または黒に区分される。
+  <li>ある節が赤ならばその子は必ず黒である。
+  <li>黒節の子は左右どちらかが赤節か、または両方とも黒節である。
+  <li>ルートから葉までの黒節の個数を「黒高さ」という。赤黒木はどの経路でも黒高さが同じになる。
+  <li>ルートの節は黒である。
+</ol>
+
+<p> 赤黒木との違いは 3 番目だけです。つまり、左右の子が (黒, 黒), (黒, 赤), (赤, 黒) にはなるが (赤, 赤) にはならないということです。赤黒木は「2-3-4 木」という多分木の動作を二分木で実現したものです。2-3-4 木は最小で 2 つ、最大で 4 つの子を持ちます。2-3-4 木の節を赤節と黒節で表したものが赤黒木です。対応関係を図で表すと、次のようになります。
+</p>
+<pre class="fig">
+   ┌─┐
+   │Ａ│            <font color="black">●</font> Ａ
+   └─┘          ／  ＼
+   ／  ＼
+
+    (a) 子が 2 つの節
+
+ ┌─┬─┐
+ │Ａ│Ｂ│       <font color="black">●</font> Ａ           <font color="black">●</font> Ｂ
+ └─┴─┘     ／  ＼          ／  ＼
+   ／│＼             <font color="red">■</font> Ｂ   <font color="red">■</font> Ａ
+                    ／  ＼  ／  ＼
+
+                 (b-1)          (b-2)
+
+    (b) 子が 3 つの節
+
+ ┌─┬─┬─┐            <font color="black">●</font> Ｂ
+ │Ａ│Ｂ│Ｃ│          ／  ＼
+ └─┴─┴─┘        <font color="red">■</font> Ａ   <font color="red">■</font> Ｃ
+   ／ ││ ＼        ／  ＼  ／  ＼
+
+    (c) 子が 4 つの節
+
+        図 : 2-3-4 木と赤黒木の関係
+</pre>
+<p> 2-3 木の動作を二分木で実現する場合、上図 (c) の状態は存在しません。このことを 3 番目の条件である「黒節の子は左右どちらかが赤節か、または両方とも黒節である。」で表しています。
+</p>
+<h4>●Left-Leaning Red Black Tree の条件</h4>
+<p> そして、子を 3 つ持つ (b) の状態を (b-2) だけに限定するのが "Left-Leaning Red Black Trees" の方法です。(b) の状態を限定する方法は前回作成した <a href="pyalgo53.html">AA 木</a> と同じです。AA 木は木のレベル (黒の高さ) を使ってバランスをチェックしましたが、LLRB 木は赤黒木なので、節の色を赤と黒に塗り分けてバランスをチェックします。なお、赤節の位置は AA 木と逆になるので注意してください。
+</p>
+<h4>●データの挿入</h4>
+<p> データを挿入するプログラムは次のようになります。
+</p>
+
+<pre class="list">
+リスト : データの挿入
+
+# 右回転
+def rotate_right(node):
+    lnode = node.left
+    node.left = lnode.right
+    lnode.right = node
+    lnode.color = node.color
+    node.color = RED
+    return lnode
+
+# 左回転
+def rotate_left(node):
+    rnode = node.right
+    node.right = rnode.left
+    rnode.left = node
+    rnode.color = node.color
+    node.color = RED
+    return rnode
+
+# 4 node の分割
+def split(node):
+    node.color = RED
+    node.left.color = BLACK
+    node.right.color = BLACK
+
+# 挿入
+def insert(node, x):
+    if node is null: return Node(x)
+    if x &lt; node.data:
+        node.left = insert(node.left, x)
+    elif x &gt; node.data:
+        node.right = insert(node.right, x)
+    # skew
+    if node.right.color == RED:
+        node = rotate_left(node)
+    # split
+    if node.left.color == RED and node.left.left.color == RED:
+        node = rotate_right(node)
+        split(node)
+    return node
+</pre>
+<p> <a href="pyalgo16.html">赤黒木 [1]</a> と同じく、回転操作で節の色を塗り替えています。右回転するときは、左の子 lnode の色は node の色になり、node の色が赤になります。左回転するときは、右の子 rnode の色は node の色になり、node の色が赤になります。関数 split は子を 4 つ持つ節 (4 node) を分割します。左右の子の色を黒に、自分の色を赤に塗り替えて、node の親節で修正を行います。
+</p>
+<p> 関数 insert も簡単です。node の右の子が赤ならば、左回転で赤節を右の子へ移動します。これは AA 木の skew と同じ操作になります。そして、左の子で赤節が 2 つ続いている場合は、右回転すると子を 4 つ持つ節になるので、それを split で分割します。これは AA 木の split と同じ操作になります。
+</p>
+
+<p> このように、データの挿入処理は AA 木と同様に驚くほど簡単に行うことができます。なお、LLRB 木のルートは黒節になるので、insert でデータを挿入したあと、ルートの色を黒 (BLACK) にセットしてください。
+</p>
+
+<h4>●データ挿入のテスト</h4>
+<p> それでは、ここでデータ挿入のテストを行ってみましょう。テストプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データ挿入の簡単なテスト
+
+# 木の表示
+def print_node(node, n):
+    color = ('B', 'R')
+    if node is not null:
+        print_node(node.left, n + 1)
+        print '    ' * n, color[node.color], node.data
+        print_node(node.right, n + 1)
+
+# LLRB 木の条件を満たしているか
+def check_llrb23tree(node):
+    if node is not null:
+        if node.color == RED:
+            if node.left.color == RED or node.right.color == RED:
+                raise 'llrb23 error1'
+        else:
+            if node.right.color == RED:
+                raise 'llrb23 error2'
+        a = check_llrb23tree(node.left)
+        b = check_llrb23tree(node.right)
+        if a != b: raise 'llrb23 error3'
+        if node.color == BLACK: a += 1
+        return a
+    return 0
+
+# test
+if __name__ == '__main__':
+    import random
+    root = make_null()
+    buff = range(8)
+    print 'insert test'
+    for x in buff:
+        print '----- insert', x
+        root, _ = insert(root, x)
+        root.color = BLACK
+        print_node(root, 0)
+        check_llrb23tree(root)
+</pre>
+<p> print_node は LLRB 木を表示する関数です。黒節は B を、赤節は R をつけて表しています。終端は None ではなく null なので、node と null を比較していることに注意してください。
+</p>
+<p> 関数 check_llrb23tree は LLRB 木の条件をチェックする関数です。node が赤節の場合、その子が赤節であればエラーを送出します。node が黒節の場合、右の子が赤節の場合もエラーを送出します。check_llrb23tree の返り値は黒高さです。左右の部分木の黒高さを求め、それが等しくない場合はエラーを送出します。
+</p>
+<p> テストは 0 から 7 までの整数値を順番に LLRB 木に挿入します。実行結果は次のようになります。
+</p>
+<pre>
+insert test
+----- insert 0
+ B 0
+----- insert 1
+     R 0
+ B 1
+----- insert 2
+     B 0
+ B 1
+     B 2
+----- insert 3
+     B 0
+ B 1
+         R 2
+     B 3
+----- insert 4
+         B 0
+     R 1
+         B 2
+ B 3
+     B 4
+----- insert 5
+         B 0
+     R 1
+         B 2
+ B 3
+         R 4
+     B 5
+----- insert 6
+         B 0
+     B 1
+         B 2
+ B 3
+         B 4
+     B 5
+         B 6
+----- insert 7
+         B 0
+     B 1
+         B 2
+ B 3
+         B 4
+     B 5
+             R 6
+         B 7
+</pre>
+<p> どの経路でも黒高さが同じになっていることがすぐにわかると思います。また、赤節は黒節の左側にしか存在しません。これが LLRB 木の特徴です。なお、木の高さは AA 木と同じくらいになります。ソート済みデータでは、昇順と逆順の木の高さは AA 木と反対になります。
+</p>
+
+<h4>●データの削除</h4>
+<p> データの削除は AA 木のように簡単ではありません。Robert Sedgewick が <cite>"Left-Leaning Red Black Trees"</cite> <a href="pyalgo54.html#cite">参考文献, URL 1</a> で示したデータ削除のプログラムは簡単なように見えますが、とてもトリッキーなコードです。削除するデータを探すとき、データを簡単に削除できるように木を操作しておき、データを削除したあとで元に戻す処理を行っています。このため、データの削除には時間がかかることになります。実際に試してみたところ、AA 木の削除処理よりも倍近く時間がかかりました。そこで、今回は <a href="pyalgo17.html">赤黒木 [2]</a> のように場合わけを行って木のバランスを修正することにします。
+</p>
+
+<h4>●バランスの修正</h4>
+<p> 通常の赤黒木で左部分木の黒高さが一つ低くなった場合、次に示す 9 通りのパターンがあります。
+</p>
+
+<pre class="fig">
+      <font color="black">●</font>Ｙ              <font color="red">■</font>                <font color="black">●</font>          
+    ／  ＼            ／  ＼            ／  ＼        
+  <font color="black">●</font>Ｘ    <font color="black">●</font>Ｚ      <font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="red">■</font>      
+        ／  ＼            ／  ＼            ／  ＼    
+      <font color="black">●</font>Ａ    <font color="black">●</font>Ｂ      <font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="black">●</font>  
+
+    （１）            （２）            （３）
+
+      <font color="black">●</font>                <font color="black">●</font>                <font color="black">●</font>          
+    ／  ＼            ／  ＼            ／  ＼        
+  <font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="black">●</font>      
+        ／  ＼            ／  ＼            ／  ＼    
+      <font color="red">■</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="red">■</font>        <font color="red">■</font>      <font color="red">■</font>
+
+    （４）            （５）            （６）
+
+      <font color="red">■</font>                <font color="red">■</font>                <font color="red">■</font>
+    ／  ＼            ／  ＼            ／  ＼        
+  <font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="black">●</font>      
+        ／  ＼            ／  ＼            ／  ＼    
+      <font color="red">■</font>      <font color="black">●</font>        <font color="black">●</font>      <font color="red">■</font>        <font color="red">■</font>      <font color="red">■</font>  
+
+    （７）            （８）            （９）
+
+                <font color="red">■</font>：赤節点, <font color="black">●</font>：黒節点
+
+        図 : 左部分木の黒高さが -1 になる場合
+</pre>
+
+<p> このうち、LLRB 木で必要になるパターンは (1), (2), (4), (7) の 4 通りあります。右部分木の高さが -1 になる場合は、上図の左右を反転して右の子が赤になるパターンを取り除くと、(1), (2), (3), (5), (8) の 5 通りがあります。この中で (3) の場合がちょっと厄介ですが、あとのパターンは通常の赤黒木と同じ方法でバランスを修正することができます。
+</p>
+
+<h4>●データ削除のプログラム</h4>
+<p> それでは、データを削除する関数 delete を作成します。プログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データの削除
+
+# 最小値を探す
+def search_min(node):
+    while node.left is not null: node = node.left
+    return node.data
+
+# 削除
+def delete(node, x):
+    if node is null: return node, True
+    if x == node.data:
+        if node.left is null and node.right is null:
+            return null, node.color == RED
+        elif node.right is null:
+            node.left.color = BLACK
+            return node.left, True
+        else:
+            node.data = search_min(node.right)
+            node.right, flag = delete(node.right, node.data)
+            return balance_right(node, flag)
+    elif x &lt; node.data:
+        node.left, flag = delete(node.left, x)
+        return balance_left(node, flag)
+    else:
+        node.right, flag = delete(node.right, x)
+        return balance_right(node, flag)
+</pre>
+
+<p> 関数 delete は木 node から x と等しいデータを削除します。delete は x を削除した部分木とフラグを返します。フラグが True の場合、バランスを修正する必要はありません。False の場合は木のバランスを修正します。
+</p>
+
+<p> x と等しいデータが見つかった場合は左右の子の有無をチェックします。node が葉の場合は null を返します。このとき、node が赤節ならば木のバランスを修正する必要はありませんが、黒節の場合は修正する必要があります。
+</p>
+
+<p> 子が一つしかない場合は、node が黒節で左の子が赤節になります。LLRB 木の条件により、右の子 (赤節) が一つしかない場合はありえません。子の色を黒に塗り替えてから返します。この場合、木のバランスを修正する必要はありません。子が二つある場合は、右部分木の最小値と置き換えてから、右部分木の最小値を削除します。右部分木からデータを削除したあと、関数 balance_right で木のバランスを修正します。
+</p>
+
+<p> あとは、左部分木をたどったら関数 balance_left で木のバランスを修正し、右部分木をたどったら balance_right で木のバランスを修正します。なお、LLRB 木のルートは黒節になるので、delete でデータを削除したあと、ルートの色を黒 (BLACK) にセットしてください。
+</p>
+
+<h4>●左部分木の修正</h4>
+<p> 最初に左部分木の修正から説明します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 左部分木の修正
+
+def balance_left(node, flag):
+    if not flag:
+        if node.right.left.color == BLACK:
+            node = rotate_left(node)
+            if node.color == RED:
+                node.color = BLACK　　# (2)
+            else:
+                return node, False    # (1)
+        else:
+            # (4), (7)
+            node.right = rotate_right(node.right)
+            node = rotate_left(node)
+            node.left.color = BLACK
+            node.right.color = BLACK
+    return node, True
+</pre>
+<p> 関数 balance_left の引数 node が修正する部分木、flag が True の場合は修正する必要がない場合です。左部分木を修正する場合、(3) のパターンがないので、node.right.left.color が黒であれば (1), (2) のパターンで、そうでなければ (4), (7) のパターンになります。修正方法は <a href="pyalgo17.html">赤黒木 [2]</a> と同じです。
+</p>
+
+<h4>●右部分木の修正</h4>
+<p> 次は右部分木の修正を説明します。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : 右部分木の修正
+
+def balance_right(node, flag):
+    if flag: return node, flag
+    if node.left.left.color == BLACK:
+        if node.left.color == BLACK:
+            node.left.color = RED
+            if node.color == RED:
+                node.color = BLACK    # (2)
+            else:
+                return node, False    # (1)
+        else:
+            # (3)
+            if node.left.right.left.color == BLACK:
+                node = rotate_right(node)
+                node.right.color = BLACK
+                node.right.left.color = RED
+            else:
+                node.left = rotate_left(node.left)
+                node = rotate_right(node)
+                node.right.color = BLACK
+                node.left.right.color = BLACK
+    else:
+        # (5), (8)
+        node = rotate_right(node)
+        node.left.color = BLACK
+        node.right.color = BLACK
+    return node, True
+</pre>
+<p> パターンの場合分けと (1), (2), (5), (8) の修正方法は <a href="pyalgo17.html">赤黒木 [2]</a> と同じです。問題は (3) の場合です。次の図を見てください。
+</p>
+<pre class="fig">
+        <font color="black">●</font>Ｙ                <font color="black">●</font>Ｘ                     <font color="black">●</font>Ｘ
+      ／  ＼              ／  ＼                   ／  ＼
+    <font color="red">■</font>Ｘ    <font color="black">●</font>Ｚ        <font color="black">●</font>Ａ    <font color="red">■</font>Ｙ             <font color="black">●</font>Ａ    <font color="black">●</font>Ｙ
+  ／  ＼          =&gt;          ／  ＼       =&gt;          ／  ＼
+<font color="black">●</font>Ａ    <font color="black">●</font>Ｂ    右回転      <font color="black">●</font>Ｂ    <font color="black">●</font>Ｚ 塗り替え    <font color="red">■</font>Ｂ    <font color="black">●</font>Ｚ
+      ／  ＼              ／  ＼                   ／  ＼
+    <font color="black">●</font>Ｃ    <font color="black">●</font>Ｄ        <font color="black">●</font>Ｃ    <font color="black">●</font>Ｄ             <font color="black">●</font>Ｃ    <font color="black">●</font>Ｄ
+
+(a)
+
+        <font color="black">●</font>Ｙ                      <font color="black">●</font>Ｙ                    <font color="black">●</font>Ｂ
+      ／  ＼                    ／  ＼        =&gt;        ／  ＼
+    <font color="red">■</font>Ｘ    <font color="black">●</font>Ｚ              <font color="red">■</font>Ｂ    <font color="black">●</font>Ｚ  右回転    <font color="red">■</font>Ｘ    <font color="red">■</font>Ｙ
+  ／  ＼          =&gt;        ／                      ／  ＼      ＼
+<font color="black">●</font>Ａ    <font color="black">●</font>Ｂ    左回転    <font color="red">■</font>Ｘ                    <font color="black">●</font>Ａ    <font color="red">■</font>Ｃ    <font color="black">●</font>Ｚ
+      ／                ／  ＼
+    <font color="red">■</font>Ｃ              <font color="black">●</font>Ａ    <font color="red">■</font>Ｃ               C, Y を黒に塗り替える
+
+(b)
+
+                図 : 右部分木パターン (3) の修正
+</pre>
+<p> 赤節が右の子にならないようにバランスを修正します。上図 (1) のように節 C が黒節ならば、節 Y を右回転して Y を黒に B を赤に塗り替えます。(2) のように C が赤節の場合は、節 X を左回転してから Y を右回転します。そして、C, Y を黒に塗り替えます。これで木のバランスを修正することができます。
+</p>
+<h4>●データ削除のテスト</h4>
+<p> それでは、ここでデータ削除のテストを行ってみましょう。テストプログラムは次のようになります。
+</p>
+<pre class="list">
+リスト : データ削除の簡単なテスト
+
+# 木の表示
+def print_node(node, n):
+    color = ('B', 'R')
+    if node is not null:
+        print_node(node.left, n + 1)
+        print '    ' * n, color[node.color], node.data
+        print_node(node.right, n + 1)
+
+# LLRB 木の条件を満たしているか
+def check_llrb23tree(node):
+    if node is not null:
+        if node.color == RED:
+            if node.left.color == RED or node.right.color == RED:
+                raise 'llrb23 error1'
+        else:
+            if node.right.color == RED:
+                raise 'llrb23 error2'
+        a = check_llrb23tree(node.left)
+        b = check_llrb23tree(node.right)
+        if a != b: raise 'llrb23 error3'
+        if node.color == BLACK: a += 1
+        return a
+    return 0
+
+# test
+if __name__ == '__main__':
+    import random, time
+    root = make_null()
+    buff = range(8)
+    print 'insert test'
+    for x in buff:
+        root = insert(root, x)
+        root.color = BLACK
+                check_llrb23tree(root)
+    print 'delete test'
+    print_node(root, 0)
+    for x in buff:
+        print '----- delete ', x
+        root, _ = delete(root, x)
+        root.color = BLACK
+        print_node(root, 0)
+        check_llrb23tree(root)
+</pre>
+<p> 実行結果を示します。
+</p>
+<pre>
+         B 0
+     B 1
+         B 2
+ B 3
+         B 4
+     B 5
+             R 6
+         B 7
+delete test
+----- delete  0
+             R 1
+         B 2
+     R 3
+         B 4
+ B 5
+         R 6
+     B 7
+----- delete  1
+         B 2
+     R 3
+         B 4
+ B 5
+         R 6
+     B 7
+----- delete  2
+         R 3
+     B 4
+ B 5
+         R 6
+     B 7
+----- delete  3
+     B 4
+ B 5
+         R 6
+     B 7
+----- delete  4
+     B 5
+ B 6
+     B 7
+----- delete  5
+     R 6
+ B 7
+----- delete  6
+ B 7
+----- delete  7
+</pre>
+<p> このように、データを削除しても LLRB 木のバランスが大きく崩れることはありません。
+</p>
+<h4>●LLRB23tree クラスの作成</h4>
+<p> 最後に LLRB 木を表すクラスを作成します。次のリストを見てください。
+</p>
+<pre class="list">
+# coding: utf-8
+#
+# 11rb23tree.py : left-leaning red black tree (2-3 木をベース)
+#
+#                 Copyright (C) 2009 Makoto Hiroi
+#
+import llrb23node
+
+# 赤黒木
+class LLRB23tree:
+    def __init__(self):
+        self.root = llrb23node.make_null()
+
+    # 探索
+    def search(self, x):
+        return llrb23node.search(self.root, x)
+
+    # 挿入
+    def insert(self, x):
+        self.root = llrb23node.insert(self.root, x)
+        self.root.color = llrb23node.BLACK
+
+    # 削除
+    def delete(self, x):
+        self.root, _ = llrb23node.delete(self.root, x)
+        self.root.color = llrb23node.BLACK
+
+    # 巡回
+    def traverse(self):
+        for x in llrb23node.traverse(self.root):
+            yield x
+
+    # 表示
+    def __str__(self):
+        if self.root is llrb23node.null: return 'LLRB23tree()'
+        buff = 'LLRB23tree('
+        for x in llrb23node.traverse(self.root):
+            buff += '%s, ' % x
+        buff = buff.rstrip(',  ')
+        buff += ')'
+        return buff
+
+# テスト
+if __name__ == '__main__':
+    import random
+    tree = LLRB23tree()
+    data = [random.randint(0, 100) for x in range(10)]
+    print data
+    print tree
+    for x in data: tree.insert(x)
+    print tree
+    for x in data:
+        print 'search', x, tree.search(x)
+        print 'delete', x
+        tree.delete(x)
+        print 'search', x, tree.search(x)
+        print tree
+</pre>
+<p> クラス名は LLRB23tree としました。LLRB23tree のメソッドはモジュール llrb23node の操作関数を呼び出すだけです。メソッド __init__ で root を初期化するとき、モジュール llrb23node の関数 make_null を呼び出して、終端オブジェクトを設定することに注意してください。あとは、とくに難しいところはないでしょう。
+</p>
+<p> それでは、テストの実行結果を示します。
+</p>
+<pre>
+[67, 52, 76, 1, 59, 39, 31, 20, 99, 13]
+LLRB23tree()
+LLRB23tree(1, 13, 20, 31, 39, 52, 59, 67, 76, 99)
+search 67 True
+delete 67
+search 67 False
+LLRB23tree(1, 13, 20, 31, 39, 52, 59, 76, 99)
+search 52 True
+delete 52
+search 52 False
+LLRB23tree(1, 13, 20, 31, 39, 59, 76, 99)
+search 76 True
+delete 76
+search 76 False
+LLRB23tree(1, 13, 20, 31, 39, 59, 99)
+search 1 True
+delete 1
+search 1 False
+LLRB23tree(13, 20, 31, 39, 59, 99)
+search 59 True
+delete 59
+search 59 False
+LLRB23tree(13, 20, 31, 39, 99)
+search 39 True
+delete 39
+search 39 False
+LLRB23tree(13, 20, 31, 99)
+search 31 True
+delete 31
+search 31 False
+LLRB23tree(13, 20, 99)
+search 20 True
+delete 20
+search 20 False
+LLRB23tree(13, 99)
+search 99 True
+delete 99
+search 99 False
+LLRB23tree(13)
+search 13 True
+delete 13
+search 13 False
+LLRB23tree()
+</pre>
+
+<h4>●LLRB 木の評価</h4>
+<p> それでは、赤黒木、AA 木、LLRB 木の性能を比較してみましょう。次のリストを見てください。
+</p>
+<pre class="list">
+リスト : LLRB 木、AA 木、赤黒木のテスト
+
+from llrb23tree import *
+from rbtree import *
+from aatree import *
+import time, random
+
+def insert_test(tree, buff):
+    s = time.clock()
+    for x in buff:
+        tree.insert(x)
+    e = time.clock()
+    return e - s
+
+def search_test(tree, buff):
+    s = time.clock()
+    for x in buff:
+        tree.search(x)
+    e = time.clock()
+    return e - s
+
+def delete_test(tree, buff):
+    s = time.clock()
+    for x in buff:
+        tree.delete(x)
+    e = time.clock()
+    return e - s
+
+for x in [1000, 2000, 4000, 8000, 16000]:
+    buff = range(x)
+    random.shuffle(buff)
+    print x,
+    for tree in [RBtree, AAtree, LLRB23tree]:
+        a = tree()
+        print '%.3f' % insert_test(a, buff),
+        print '%.3f' % search_test(a, buff),
+        print '%.3f' % delete_test(a, buff),
+    print
+</pre>
+<p> 関数 shuffle でデータをかきまぜます。そして、木にデータを挿入する (insert_test)、データを探索する (search_test)、データを削除する (delete_test) 時間を計測します。結果は次のようになりました。
+</p>
+<pre>
+        表 : 実行結果 (単位 : 秒)
+
+      :   red-black tree    :      AA tree        :     LLRB tree
+ 個数 : 挿入   探索   削除  : 挿入   探索   削除  : 挿入   探索   削除
+-----------------------------------------------------------------------
+ 1000 : 0.019  0.005  0.016 : 0.027  0.006  0.022 : 0.019  0.005  0.016
+ 2000 : 0.040  0.012  0.035 : 0.056  0.012  0.048 : 0.040  0.012  0.036
+ 4000 : 0.086  0.026  0.075 : 0.121  0.026  0.103 : 0.088  0.026  0.078
+ 8000 : 0.189  0.058  0.167 : 0.279  0.060  0.230 : 0.194  0.059  0.176
+16000 : 0.425  0.136  0.378 : 0.618  0.140  0.519 : 0.441  0.140  0.394
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<div class="note">
+[<a href="pyalgo54.html#update">改訂</a> 2010/10/10]
+</div>
+<p> データの挿入と削除は AA 木より速くなりましたが、赤黒木よりちょっとだけ遅くなりました。それでも、簡単な実装方法でここまで速いとは驚きました。データの探索は赤黒木と大きな差はありません。なお、LLRB 木のデータ挿入処理において、赤黒木と同様にプログラムすると、赤黒木と同じくらいの速度になります。興味のある方は <a href="pyalgo54.html#list1">プログラムリスト</a> の関数 insert1 をお読みください。
+</p>
+
+<p> 次はソート済みのデータで試してみましょう。実行結果は次のようになりました。
+</p>
+<pre>
+        表 : ソート済みデータの実行結果 (単位 : 秒)
+
+  (a) 昇順
+
+      :  red-black tree     :      AA tree        :      LLRB tree
+ 個数 : 挿入   探索   削除  : 挿入   探索   削除  : 挿入   探索   削除
+-----------------------------------------------------------------------
+ 1000 : 0.028  0.005  0.015 : 0.033  0.005  0.021 : 0.020  0.005  0.019
+ 2000 : 0.061  0.012  0.032 : 0.070  0.012  0.044 : 0.044  0.011  0.041
+ 4000 : 0.136  0.026  0.070 : 0.155  0.026  0.097 : 0.096  0.026  0.092
+ 8000 : 0.295  0.056  0.151 : 0.335  0.056  0.204 : 0.201  0.054  0.200
+16000 : 0.631  0.117  0.320 : 0.723  0.119  0.437 : 0.429  0.115  0.434
+
+  (b) 逆順
+
+      :  red-black tree     :      AA tree        :      LLRB tree
+ 個数 : 挿入   探索   削除  : 挿入   探索   削除  : 挿入   探索   削除
+-----------------------------------------------------------------------
+ 1000 : 0.026  0.005  0.014 : 0.026  0.005  0.025 : 0.021  0.005  0.014
+ 2000 : 0.056  0.012  0.031 : 0.054  0.011  0.054 : 0.047  0.012  0.030
+ 4000 : 0.124  0.026  0.068 : 0.117  0.025  0.119 : 0.102  0.026  0.065
+ 8000 : 0.269  0.056  0.148 : 0.252  0.054  0.258 : 0.221  0.056  0.142
+16000 : 0.580  0.119  0.317 : 0.543  0.116  0.553 : 0.475  0.118  0.306
+
+実行環境 : Windows XP, celeron 1.40 GHz, Python 2.7
+</pre>
+<DIV class="note">
+-- <a name="update">改訂</a> --------<BR>
+2010/10/10 Python のバージョンを 2.5.2 から 2.7 に変更して実行時間を計測
+</DIV>
+<p> ソート済みデータの場合、LLRB 木は昇順でデータの削除に時間がかかり、逆順ではデータの挿入に時間がかかります。当然ですが、AA 木とは逆の結果になりました。データの挿入は赤黒木よりも速いので、ソート済みのデータを扱う場合は LLRB 木の方が適しているのかもしれません。
+</p>
+
+<p> なお、これらの結果は M.Hiroi のコーディング、実行したマシン、プログラミング言語などの環境に大きく依存しています。また、これらの環境だけではなく、データの種類によっても実行時間はかなり左右されます。興味のある方は、いろいろなデータをご自分の環境で試してみてください。
+</p>
+<h4 id="cite">●参考文献, URL</h4>
+<ol>
+  <li><a href="http://www.cs.princeton.edu/~rs/">Robert Sedgewick</a>, <a href="http://www.cs.princeton.edu/~rs/talks/LLRB/LLRB.pdf">"Left-Leaning Red Black Trees" (PDF)</a>
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト</h4>
+<pre class="list">
+# coding: utf-8
+#
+# llrbnode23.py : Left-Leaning Red Black Tree 用操作関数
+#                 (2-3 木バージョン)
+#
+#                 Copyright (C) 2009 Makoto Hiroi
+#
+
+# 終端
+null = None
+
+# 色
+BLACK = 0
+RED = 1
+
+# 節
+class Node:
+    def __init__(self, x, color = RED):
+        self.data = x
+        self.color = color
+        self.left = null
+        self.right = null
+
+# 終端の設定
+def make_null():
+    global null
+    if null is None:
+        null = Node(None, BLACK)
+        null.left = None
+        null.right = None
+    return null
+
+# 右回転
+def rotate_right(node):
+    lnode = node.left
+    node.left = lnode.right
+    lnode.right = node
+    lnode.color = node.color
+    node.color = RED
+    return lnode
+
+# 左回転
+def rotate_left(node):
+    rnode = node.right
+    node.right = rnode.left
+    rnode.left = node
+    rnode.color = node.color
+    node.color = RED
+    return rnode
+
+#
+# データの探索
+#
+def search(node, x):
+    while node is not null:
+        if x == node.data: return True
+        elif x &lt; node.data:
+            node = node.left
+        else:
+            node = node.right
+    return False
+
+#
+# データの挿入
+#
+
+# 4 node の分割
+def split(node):
+    node.color = RED
+    node.left.color = BLACK
+    node.right.color = BLACK
+
+# 挿入
+def insert(node, x):
+    if node is null: return Node(x)
+    if x &lt; node.data:
+        node.left = insert(node.left, x)
+    elif x &gt; node.data:
+        node.right = insert(node.right, x)
+    # skew
+    if node.right.color == RED:
+        node = rotate_left(node)
+    # split
+    if node.left.color == RED and node.left.left.color == RED:
+        node = rotate_right(node)
+        split(node)
+    return node
+
+# 左部分木の修正
+def balance_insert_left(node, flag):
+    if not flag:
+        if node.color == BLACK:
+            if node.left.left.color == RED:
+                # 赤が 2 つ続く
+                node = rotate_right(node)
+                split(node)
+            else:
+                # 赤一つならば終了
+                flag = True
+    return node, flag
+
+# 右部分木の修正
+def balance_insert_right(node, flag):
+    if not flag:
+        if node.color == BLACK:
+            if node.left.color == RED:
+                # 4node になるので分割
+                split(node)
+            else:
+                # 回転して終了
+                node = rotate_left(node)
+                flag = True
+        else:
+            # 右の赤を左に移す
+            node = rotate_left(node)
+    return node, flag
+
+# 高速版
+def insert1(node, x):
+    if node is null: return Node(x), False
+    if x &lt; node.data:
+        node.left, flag = insert1(node.left, x)
+        return balance_insert_left(node, flag)
+    elif x &gt; node.data:
+        node.right, flag = insert1(node.right, x)
+        return balance_insert_right(node, flag)
+    return node, True
+
+#
+# データの削除
+#
+
+# 右部分木の修正
+def balance_right(node, flag):
+    if flag: return node, flag
+    if node.left.left.color == BLACK:
+        if node.left.color == BLACK:
+            # (1), (2)
+            node.left.color = RED
+            if node.color == RED:
+                node.color = BLACK
+            else:
+                return node, False
+        else:
+            # (3)
+            if node.left.right.left.color == BLACK:
+                node = rotate_right(node)
+                node.right.color = BLACK
+                node.right.left.color = RED
+            else:
+                node.left = rotate_left(node.left)
+                node = rotate_right(node)
+                node.right.color = BLACK
+                node.left.right.color = BLACK
+    else:
+        # (5), (8)
+        node = rotate_right(node)
+        node.left.color = BLACK
+        node.right.color = BLACK
+    return node, True
+
+# 左部分木の修正
+def balance_left(node, flag):
+    if not flag:
+        if node.right.left.color == BLACK:
+            # (1), (2)
+            node = rotate_left(node)
+            if node.color == RED:
+                node.color = BLACK
+            else:
+                return node, False
+        else:
+            # (4), (7)
+            node.right = rotate_right(node.right)
+            node = rotate_left(node)
+            node.left.color = BLACK
+            node.right.color = BLACK
+    return node, True
+
+# 最小値を探す
+def search_min(node):
+    while node.left is not null: node = node.left
+    return node.data
+
+# 削除
+def delete(node, x):
+    if node is null: return node, True
+    if x == node.data:
+        if node.left is null and node.right is null:
+            return null, node.color == RED
+        elif node.right is null:
+            node.left.color = BLACK
+            return node.left, True
+        else:
+            node.data = search_min(node.right)
+            node.right, flag = delete(node.right, node.data)
+            return balance_right(node, flag)
+    elif x &lt; node.data:
+        node.left, flag = delete(node.left, x)
+        return balance_left(node, flag)
+    else:
+        node.right, flag = delete(node.right, x)
+        return balance_right(node, flag)
+
+#
+# 巡回
+#
+def traverse(node):
+    if node is not null:
+        for x in traverse(node.left):
+            yield x
+        yield node.data
+        for x in traverse(node.right):
+            yield x
+
+# 木の表示
+def print_node(node, x):
+    if node is not null:
+        print_node(node.left, x + 1)
+        print "    " * x, node.color, node.data
+        print_node(node.right, x + 1)
+
+# LLRB 木の条件を満たしているか
+def check_llrb23tree(node):
+    if node is not null:
+        if node.color == RED:
+            if node.left.color == RED or node.right.color == RED:
+                raise 'llrb23 error1'
+        else:
+            if node.right.color == RED:
+                raise 'llrb23 error2'
+        a = check_llrb23tree(node.left)
+        b = check_llrb23tree(node.right)
+        if a != b: raise 'llrb23 error3'
+        if node.color == BLACK: a += 1
+        return a
+    return 0
+
+# test
+if __name__ == '__main__':
+    import random, time
+    root = make_null()
+    buff = range(1000)
+    random.shuffle(buff)
+    print 'insert test'
+    for x in buff:
+        root = insert(root, x)
+        root.color = BLACK
+        check_llrb23tree(root)
+    random.shuffle(buff)
+    print 'search test'
+    for x in buff:
+        if not search(root, x):
+            raise 'llrb search error'
+    print 'delete test'
+    for x in buff:
+        root, _ = delete(root, x)
+        root.color = BLACK
+        check_llrb23tree(root)
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2009-2010 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="pyalgo53.html">PrevPage</a> | <a href="index.html#python_algo">Python</a> | <a href="pyalgo55.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>

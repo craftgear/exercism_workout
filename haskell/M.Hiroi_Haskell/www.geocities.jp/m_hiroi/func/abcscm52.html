@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>お気楽 Scheme プログラミング入門</title>
+  <meta name="description" content="Lisp,Scheme,入門">
+  <link rel="stylesheet" type="text/css" href="../home_styles.css">
+</head>
+<body><!-- geoguide start --><div align=center><script language="javascript">var jps=382116062;var jpt=1550881784</script><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/gg.js"></script></div><!-- geoguide end -->
+M.Hiroi's Home Page
+<div class="small">
+http://www.geocities.jp/m_hiroi/
+</div>
+<div class="ce">
+<h1>Functional Programming</h1>
+<h2>お気楽 Scheme プログラミング入門</h2>
+<div class="small">
+[ <a href="abcscm51.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm53.html">NextPage</a> ]
+<hr>
+</div>
+</div>
+<section class="contents">
+<h3>電卓プログラムの作成 (3)</h3>
+<p> 今回は電卓プログラムに関数を定義する機能を追加してみましょう。
+</p>
+
+<h4>●文法の変更</h4>
+<p> 関数を定義するために、文法を次のように修正します。
+</p>
+<pre class="item">
+[EBNF]
+   文    = 関数定義 | 式.
+関数定義 = "def", 関数, "(", [仮引数リスト], ")", 式, "end".
+   式    = 代入式 | 式１.
+ 代入式  = 変数, "=", 式.
+  式１   = 項, { ("+" | "-"), 項 }.
+   項    = 因子, { ("*" | "/"), 因子 }.
+  因子   = 数値 | ("+" | "-"), 因子 | "(", 式, ")" | 変数 | 関数, "(", [引数リスト], ")".
+  変数   = 識別子
+  関数   = 識別子
+
+仮引数リスト = 変数, { ",", 変数 }.
+引数リスト   = 式, { ",", 式 }.
+
+[注意] 数値と識別子の定義は省略
+</pre>
+<p> ユーザーが関数を定義するときは def ... end で行います。関数本体は関数名のあとの左カッコから入力の終わり (セミコロン) までを文字列に変換し、ペア (関数名 . 文字列) にまとめて大域変数 *function* に格納することにします。関数を実行する場合、そのつど文字列に字句解析と構文解析を適用することになります。このため、プログラムは少し複雑になります。なお、字句解析と構文解析の処理を分離して、字句解析の結果をリストに格納しておくと、プログラムはもっと簡単になります。これは回を改めて試してみましょう。
+</p>
+
+<h4>●文字列ポート</h4>
+<p> 文字列からの入力は Gauche で用意されている「文字列ポート」を使うと簡単です。関数を実行するときは、関数本体から文字列ポートを生成し、入力をそれに切り替えればいいわけです。文字列ポートからの入力は次の関数を使うと簡単です。
+</p>
+<pre class="item">
+call-with-input-string string proc
+</pre>
+<p> call-with-input-string は string を内容とする入力文字列ポートを作成し、それを proc に渡して評価します。簡単な実行例を示しましょう。
+</p>
+<pre>
+gosh> (call-with-input-string "abc 100 def 200"
+  (lambda (in)
+    (let loop ((c (read in)))
+      (cond ((not (eof-object? c))
+             (print c)
+             (loop (read in)))))))
+abc
+100
+def
+200
+#&lt;undef&gt;
+</pre>
+<p> 文字列ポートの内容は文字列 "abc 100 def 200" になります。生成された文字列ポートはラムダ式の引数 in に渡されます。(read in) を評価すると、最初にシンボル abc が読み込まれ、次に整数値 100 が読み込まれます。あとは同様に def と 200 が読み込まれます。最後にポートの終了を表す eof オブジェクトが返されるので、入力処理を終了します。
+</p>
+<p> なお、文字列ポート詳しい説明は <a href="http://practical-scheme.net/gauche/man/gauche-refj_58.html#g_t_00e6_0096_0087_00e5_00ad_0097_00e5_0088_0097_00e3_0083_009d_00e3_0083_00bc_00e3_0083_0088">Gauche ユーザリファレンス 6.20.5 文字列ポート</a> をお読みください。
+</p>
+
+<h4>●字句解析</h4>
+<p> それではプログラムを作りましょう。最初に、記号の入力処理を修正します。
+</p>
+<pre class="list">
+リスト : 記号の読み込み
+
+; 入力ポート
+(define *input* (standard-input-port))
+
+; 記号の読み込み
+(define (nextch)
+  (set! *ch* (read-char *input*))
+  (when (eof-object? *ch*)
+    (set! *ch* #\null)))
+</pre>
+<p> 入力ポートを切り替えるため、大域変数 *input* にセットされているポートから記号を読み込むように修正します。*input* は (standard-input-port) の返り値 (標準入力) で初期化します。あとは nextch で read-char を評価するとき、入力ポートに *input* を指定するだけです。
+</p>
+<p> 次はトークンを切り分ける関数 get-token を修正します。
+</p>
+<pre class="list">
+リスト : トークンの切り分け
+
+(define (get-token)
+  ; 空白文字の読み飛ばし
+  (while (char-whitespace? (getch))
+    (nextch))
+  (cond ((char-numeric? (getch))
+         (set! *token* 'number)
+         (set! *value* (get-number)))
+        ((char-alphabetic? (getch))
+         (set! *value* (get-ident))
+         (case *value*
+           ((def)
+            (set! *token* 'def))
+           ((end)
+            (set! *token* 'end))
+           (else
+            (set! *token* 'ident))))
+        (else
+         (case (getch)
+          ((#\=)
+           (set! *token* '=)
+           (nextch))
+
+          ・・・省略・・・
+
+          (else
+           (set! *token* 'others))))))
+</pre>
+<p> 識別子を取得するとき、get-ident の返り値が def ならば *token* にシンボル def を、end ならば *token* にシンボル end をセットします。それ以外の場合は、今までと同じくシンボル ident を *token* にセットします。
+</p>
+
+<h4>●構文解析</h4>
+<p> 次は構文解析の処理を修正します。関数 factor でユーザー定義関数を呼び出す処理を追加します。
+</p>
+<pre class="list">
+リスト : 因子の処理
+
+(define (factor)
+  (case *token*
+    ((lpar)
+     (get-token)
+     (let ((val (expression)))
+       (if (eq? *token* 'rpar)
+           (get-token)
+         (error "')' expected"))
+       val))
+    ((number)
+     (begin0 *value* (get-token)))
+    ((+)
+     ; 単項演算子
+     (get-token)
+     (eval-var (factor)))
+    ((-)
+     ; 単項演算子
+     (get-token)
+     (- (eval-var (factor))))
+    ((ident)
+     (let ((func (lookup-function *value*)))
+       (cond (func
+              ; 関数呼び出し
+              (get-token)
+              (if (eq? *token* 'lpar)
+                  (if (string? (cdr func))
+                      (call-usrfunc (cdr func))
+                    (apply (cdr func) (get-argument)))
+                (error "'(' expected")))
+             (else
+              ; 変数
+              (begin0 *value* (get-token))))))
+    (else
+     (error "unexpected token" *token*))))
+</pre>
+<p> lookup-function で関数を求めて、その値を変数 func にセットします。関数の本体 (cdr func) が文字列であれば、それはユーザーが定義した関数です。call-usrfunc を呼び出して、(cdr func) を実行します。(cdr func) が文字列でなければ、組み込み関数を呼び出します。
+</p>
+
+<h4>●ユーザー関数の評価</h4>
+<p> 次はユーザーが定義した関数を評価する call-usrfunc を作ります。
+</p>
+<pre class="list">
+リスト : ユーザー関数の評価
+
+(define (call-usrfunc buff)
+  (let ((args (get-argument)))   ; 実引数の取得
+    (call-with-input-string buff
+      (lambda (in)
+        (let ((save-port  *input*)
+              (save-ch    *ch*)
+              (save-token *token*)
+              (save-value *value*)
+              (save-var   *variable*))
+          (set! *input* in)
+          (nextch)
+          (add-binding (get-parameter) args)
+          (unwind-protect
+            ; 本体の評価
+            (begin0
+              (eval-var (expression))
+              (unless (eq? *token* 'end)
+                (error "end expected")))
+            (begin
+              ; 環境の復帰
+              (set! *input* save-port)
+              (set! *ch*    save-ch)
+              (set! *token* save-token)
+              (set! *value* save-value)
+              (set! *variable* save-var))))))))
+</pre>
+<p> 最初に get-argument で実引数を取得してから、call-with-input-string で文字列ポートを生成し、ラムダ式の中で入力ポート *input* を文字列ポート in に切り替えます。関数の実行が終了したら、入力ポート *input* だけではなく大域変数 *ch*, *token*, *value*, *variable* の値も元に戻す必要があります。このため、これらの値を局所変数に退避しています。
+</p>
+<p> その次に *input* の値をポート in に書き換えて、nextch で 1 記号先読みを行います。そして、関数 add-binding で変数束縛を行います。仮引数は get-parameter で取得します。変数束縛はペア (変数名 . 値) を *variable* の先頭に追加するだけです。この場合、引数の有効範囲はダイナミックスコープになります。それから expression を呼び出して関数本体の式を評価します。ここで、エラーが送出された場合でも、入力ポートや大域変数の値を元に戻さなければいけないことに注意してください。この処理は unwind-protect を使うと簡単です。
+</p>
+
+<pre class="item">
+unwind-protect body cleanup
+</pre>
+<p> unwind-protect は body を評価し、そのあとで cleanup を評価します。body の評価中にエラーで処理が中断されても、cleanup は必ず評価されます。
+</p>
+<p> もともと unwind-protect は Common Lisp の関数 (スペシャルフォーム) で、エラー以外の理由で脱出する場合でも cleanup は評価されます。ところが、Gauche の unwind-protect は例外 (エラー) による脱出のみ cleanup が評価されます。ご注意ください。
+</p>
+
+<p> 簡単な例を示しましょう。
+</p>
+<pre>
+gosh&gt; (unwind-protect (print "oops") (print "cleanup"))
+oops
+cleanup
+#&lt;undef&gt;
+gosh&gt; (unwind-protect (begin (error "oops") (print "oops")) (print "cleanup"))
+cleanup
+*** ERROR: oops
+</pre>
+<p> body の S 式 (print "oops") を評価したあと、cleanup の S 式 (print "cleanup") が評価されていることがわかります。unwind-protect は body の評価結果をそのまま返します。次の例では body の中で (error "oops") が評価され、unwind-protect を脱出してエラーメッセージが表示されます。このとき、(print "cleanup") が評価されるので、エラーメッセージの前に cleanup が表示されます。
+</p>
+
+<p> call-usrfunc の説明に戻ります。unwind-protect の body は (begin0 (expression) ...) です。正常に終了した場合、expression の評価結果が call-usrfunc の返り値になります。expression を評価したら *token* をチェックします。end で終了していない場合はエラーを送出します。そのあと、cleanup の処理で大域変数の値を元に戻します。
+</p>
+
+<h4>●引数の処理</h4>
+<p> 次は実引数を取得する関数 get-argument を修正します。
+</p>
+
+<pre class="list">
+リスト : 実引数の取得
+
+(define (get-argument)
+  (get-token)
+  (if (eq? *token* 'rpar)
+      ; 引数なし
+      (begin (get-token) '())
+    (let loop ((a '()))
+      (let ((val (eval-var (expression))))
+        (case *token*
+          ((rpar)
+           (get-token)
+           (reverse (cons val a)))
+          ((comma)
+           (get-token)
+           (loop (cons val a)))
+          (else
+           (error "unexpected token in argument list" *token*)))))))
+</pre>
+<p> ユーザー関数は引数がない場合も定義できるので、"(" ")" だけのときは空リストを返すように修正します。あとの処理は今までと同じです。
+</p>
+<p> 次は仮引数を取得する関数 get-parameter を作ります。
+</p>
+<pre class="list">
+リスト : 仮引数の取得
+
+(define (get-parameter)
+  (get-token)
+  (unless (eq? *token* 'lpar)
+    (error "'(' expected"))
+  (get-token)
+  (let loop ((a '()))
+    (let ((val *value*))
+      (case *token*
+        ((rpar)
+         (get-token)
+         (reverse a))
+        ((ident)
+         (let ((val *value*))
+           (get-token)
+           (loop (cons val a))))
+        ((comma)
+         (get-token)
+         (loop a))
+        (else
+         (error "unexpected token in parameter list" *token*))))))
+</pre>
+<p> get-token で文字列ポートよりトークンを取り出し、それが左カッコ (lpar) であることをチェックします。それから、get-token で次のトークンを取り出し、識別子 ident であれば *value* の値を累積変数 a に追加します。右カッコ (rpar) の場合は累積変数 a を reverse で反転して返します。カンマ "," の場合はスキップするだけです。それ以外の場合はエラーを送出します。
+</p>
+
+<p> 次は変数束縛を行う関数 add-binding を作ります。
+</p>
+<pre class="list">
+リスト : 変数束縛
+
+(define (add-binding pars args)
+  (let loop ((pars pars) (args args))
+    (cond ((and (pair? pars) (pair? args))
+           (push! *variable* (cons (car pars) (car args)))
+           (loop (cdr pars) (cdr args)))
+          ((and (pair? pars) (null? args))
+           (push! *variable* (cons (car pars) 0))
+           (loop (cdr pars) args)))))
+</pre>
+
+<p> 変数束縛は、仮引数のリスト pars と実引数のリスト args の要素を取り出してペアを生成し、それを push! で大域変数 *variable* に追加していくだけです。関数の実行が終了すると、*variable* の値は元に戻されるので、追加された変数束縛は削除されることになります。なお、pars の個数が args よりも多い場合、仮引数の値を 0 に初期化して実行することにします。args の個数が pars よりも多い場合、余った実引数は捨てることにしましょう。
+</p>
+
+<h4>●関数定義</h4>
+<p> 最後に関数を定義する処理を toplevel に追加します。次のリストを見てください。
+</p>
+
+<pre class="list">
+リスト : 式の入力と評価
+
+(define (toplevel)
+  (cond ((eq? *token* 'def)
+         ; 関数定義
+         (get-token)
+         (unless (eq? *token* 'ident)
+           (error "invalid def form"))
+         (let ((name *value*))
+           (push! *function* (cons name (get-usrfunc)))
+           (display-value name)))
+        (else
+         ; 式
+         (let ((val (eval-var (expression))))
+           (if (eq? *token* 'semic)
+               (display-value val)
+             (error "invalid token:" *token*)))))
+  (display "Calc&gt; ")
+  (flush))
+</pre>
+<p> *token* がシンボル def であれば関数定義文です。get-token で次のトークンを求め、それが ident でなければエラーを送出します。シンボルの場合は *value* に格納されたシンボルが関数名 name になります。あとは、関数本体を get-usrfunc で取り出して、name と関数本体 (文字列) をペアに格納して *function* にセットします。
+</p>
+
+<p> 関数 get-usrfunc は次のようになります。
+</p>
+<pre class="list">
+リスト : ユーザー定義関数の本体を取得
+
+(define (get-usrfunc)
+  (let loop ((a '()))
+    (if (eqv? (getch) #\;)
+        (begin0 (list-&gt;string (reverse (cons (getch) a)))
+                (nextch))
+      (loop (begin0 (cons (getch) a)
+                    (nextch))))))
+</pre>
+<p> セミコロンまで記号を読み込み、それを関数 list-&gt;string で文字列に変換するだけです。
+</p>
+<h4>●実行例</h4>
+<p> それでは実行してみましょう。
+</p>
+<pre>
+gosh&gt; (calc)
+Calc&gt; def square(x) x * x end;
+=&gt; square
+Calc&gt; square(10);
+=&gt; 100
+Calc&gt; square(1.234);
+=&gt; 1.522756
+Calc&gt; square(square(10));
+=&gt; 10000
+Calc&gt; def add(x, y, z) x + y + z end;
+=&gt; add
+Calc&gt; add(1, 2, 3);
+=&gt; 6
+Calc&gt; add(1, 2, 3, 4);
+=&gt; 6
+Calc&gt; add(1);
+=&gt; 1
+Calc&gt; add(square(2), square(5), square(8));
+=&gt; 93
+</pre>
+<p> square は引数 x を 2 乗する関数です。square の引数で square を呼び出すこともできます。add は引数 x, y, z を足し算します。引数を 4 つ与えると、余分な引数は捨てられるので、合計値は 1 + 2 + 3 = 6 になります。また、実引数が少ない add(1) の場合、y と z は 0 に初期化されるので、返り値は 1 になります。add の引数で square や他の組み込み関数を呼び出すこともできます。
+</p>
+
+<p> もうひとつ簡単な実行例を示しましょう。引数の有効範囲がダイナミックスコープになることを確認します。
+</p>
+<pre>
+Calc&gt; a = 10;
+=&gt; 10
+Calc&gt; def foo() a end;
+=&gt; foo
+Calc&gt; foo();
+=&gt; 10
+Calc&gt; def bar(a) foo() end;
+=&gt; bar
+Calc&gt; bar(100);
+=&gt; 100
+Calc&gt; a;
+=&gt; 10
+</pre>
+<p> 変数 a に 10 をセットします。関数 foo は a の値を返しますが、仮引数に a はないので、foo() を実行すると大域変数の値 10 を返します。関数 bar は仮引数 a に値を受け取り、関数 foo を呼び出します。ダイナミックスコープの場合、foo は関数 bar の引数 a にアクセスできるので、bar(100) を実行すると foo() は 100 を返すことになります。したがって、bar の返り値は 100 になります。もちろん、大域変数 a の値は 10 のままです。
+</p>
+<p> 今回はここまでです。次回は電卓プログラムに論理演算子、比較演算子、条件分岐の機能を追加してみましょう。
+</p>
+<h4>●参考文献</h4>
+<ol>
+  <li>松田晋, 『実践アルゴリズム戦略 解法のテクニック 再帰降下型構文解析』, C MAGAZINE 1992 年 9 月号, ソフトバンク
+  <li>水野順, 『スクリプト言語を作ろう』, C MAGAZINE 2000 年 5 月号, ソフトバンク
+  <li>松浦健一郎, 『コンパイラの作成』, C MAGAZINE 2003 年 1 月号, ソフトバンク
+  <li>高田昌之, 『インタプリタ進化論』, ＣＱ出版社, 1992
+  <li>久野靖, 『言語プロセッサ』, 丸善株式会社, 1993
+</ol>
+<hr>
+<h4 id="list1">●プログラムリスト１</h4>
+<pre class="list">
+;
+; calc2.scm : 電卓プログラム
+;
+;             Copyright (C) 2011 Makoto Hiroi
+;
+; 関数定義の追加
+;
+
+;;;
+;;; 大域変数
+;;;
+(define *ch*    #f)
+(define *token* #f)
+(define *value* #f)
+(define *input* (standard-input-port))
+
+;;;
+;;; 関数
+;;;
+(define *function*
+  `((exp  . ,exp)
+    (log  . ,log)
+    (sin  . ,sin)
+    (cos  . ,cos)
+    (tan  . ,tan)
+    (asin . ,asin)
+    (acos . ,acos)
+    (atan . ,atan)
+    (sqrt . ,sqrt)
+    (expt . ,expt)))
+
+; 関数を求める
+(define (lookup-function name)
+  (assoc name *function*))
+
+;;;
+;;; 変数
+;;;
+(define *variable* '())
+
+; 変数の値を求める
+(define (lookup-variable var)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (cdr cp)
+      (error "unbound variable:" var))))
+
+; 変数の値を更新する
+(define (update-variable var val)
+  (let ((cp (assoc var *variable*)))
+    (if cp
+        (set-cdr! cp val)
+      (push! *variable* (cons var val)))))
+
+;;;
+;;; 入力処理
+;;;
+
+; 記号の読み込み
+(define (nextch)
+  (set! *ch* (read-char *input*))
+  (when (eof-object? *ch*)
+    (set! *ch* #\null)))
+
+; 先読み記号の取得
+(define (getch) *ch*)
+
+; 数値
+(define (get-number)
+  (let ((buff '()))
+    ; 整数を buff に格納
+    (define (get-numeric)
+      (while (char-numeric? (getch))
+        (push! buff (getch))
+        (nextch)))
+    ; 整数部
+    (get-numeric)
+    (case (getch)
+      ((#\.)
+       ; 小数部
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)
+       (case (getch)
+         ((#\d #\D #\e #\E)
+          ; 指数部
+          (push! buff (getch))
+          (nextch)
+          (when (or (eqv? (getch) #\+)
+                    (eqv? (getch) #\-))
+            (push! buff (getch))
+            (nextch))
+          ; 指数の数字
+          (get-numeric))))
+      ((#\/)
+       ; 分数
+       (push! buff (getch))
+       (nextch)
+       (get-numeric)))
+    (string-&gt;number (list-&gt;string (reverse buff)))))
+
+; 識別子
+(define (get-ident)
+  (let loop ((a '()))
+    (if (not (char-alphabetic? (getch)))
+        (string-&gt;symbol (list-&gt;string (reverse a)))
+      (loop (begin0 (cons (getch) a) (nextch))))))
+
+; トークンの切り分け
+(define (get-token)
+  ; 空白文字の読み飛ばし
+  (while (char-whitespace? (getch))
+    (nextch))
+  (cond ((char-numeric? (getch))
+         (set! *token* 'number)
+         (set! *value* (get-number)))
+        ((char-alphabetic? (getch))
+         (set! *value* (get-ident))
+         (case *value*
+           ((def)
+            (set! *token* 'def))
+           ((end)
+            (set! *token* 'end))
+           (else
+            (set! *token* 'ident))))
+        (else
+         (case (getch)
+          ((#\=)
+           (set! *token* '=)
+           (nextch))
+          ((#\+)
+           (set! *token* '+)
+           (nextch))
+          ((#\-)
+           (set! *token* '-)
+           (nextch))
+          ((#\*)
+           (set! *token* '*)
+           (nextch))
+          ((#\/)
+           (set! *token* '/)
+           (nextch))
+          ((#\()
+           (set! *token* 'lpar)
+           (nextch))
+          ((#\))
+           (set! *token* 'rpar)
+           (nextch))
+          ((#\,)
+           (set! *token* 'comma)
+           (nextch))
+          ((#\;)
+           (set! *token* 'semic)
+           (nextch))
+          ((#\null)
+           (set! *token* 'eof))
+          (else
+           (set! *token* 'others))))))
+
+;;;
+;;; 式の評価
+;;;
+
+; 変数の評価
+(define (eval-var var)
+  (if (number? var)
+      var
+    (lookup-variable var)))
+
+; 演算子の評価
+(define (eval-op op var1 var2)
+  (op (eval-var var1) (eval-var var2)))
+
+; 式
+(define (expression)
+  (let ((val (expr1)))
+    (case *token*
+      ((=)
+       ; 代入式の処理
+       (unless (symbol? val)
+         (error "invalid = form"))
+       (get-token)
+       (let ((val1 (eval-var (expression))))
+         (update-variable val val1)
+         val1))
+      (else val))))
+
+(define (expr1)
+  (let loop ((val (term)))
+    (case *token*
+      ((+)
+       (get-token)
+       (loop (eval-op + val (term))))
+      ((-)
+       (get-token)
+       (loop (eval-op - val (term))))
+      (else val))))
+
+; 項
+(define (term)
+  (let loop ((val (factor)))
+    (case *token*
+      ((*)
+       (get-token)
+       (loop (eval-op * val (factor))))
+      ((/)
+       (get-token)
+       (loop (eval-op / val (factor))))
+      (else val))))
+
+; 実引数の取得
+(define (get-argument)
+  (get-token)
+  (if (eq? *token* 'rpar)
+      ; 引数無し
+      (begin (get-token) '())
+    (let loop ((a '()))
+      (let ((val (eval-var (expression))))
+        (case *token*
+          ((rpar)
+           (get-token)
+           (reverse (cons val a)))
+          ((comma)
+           (get-token)
+           (loop (cons val a)))
+          (else
+           (error "unexpected token in argument list" *token*)))))))
+
+; 仮引数の取得
+(define (get-parameter)
+  (get-token)
+  (unless (eq? *token* 'lpar)
+    (error "'(' expected"))
+  (get-token)
+  (let loop ((a '()))
+    (let ((val *value*))
+      (case *token*
+        ((rpar)
+         (get-token)
+         (reverse a))
+        ((ident)
+         (let ((val *value*))
+           (get-token)
+           (loop (cons val a))))
+        ((comma)
+         (get-token)
+         (loop a))
+        (else
+         (error "unexpected token in parameter list" *token*))))))
+
+; 変数束縛
+(define (add-binding pars args)
+  (let loop ((pars pars) (args args))
+    (cond ((and (pair? pars) (pair? args))
+           (push! *variable* (cons (car pars) (car args)))
+           (loop (cdr pars) (cdr args)))
+          ((and (pair? pars) (null? args))
+           (push! *variable* (cons (car pars) 0))
+           (loop (cdr pars) args)))))
+
+; ユーザー関数の呼び出し
+(define (call-usrfunc buff)
+  (let ((args (get-argument)))   ; 実引数の取得
+    (call-with-input-string buff
+      (lambda (in)
+        (let ((save-port  *input*)
+              (save-ch    *ch*)
+              (save-token *token*)
+              (save-value *value*)
+              (save-var   *variable*))
+          (set! *input* in)
+          (nextch)
+          (add-binding (get-parameter) args)
+          (unwind-protect
+            ; 本体の評価
+            (begin0
+              (eval-var (expression))
+              (unless (eq? *token* 'end)
+                (error "end expected")))
+            (begin
+              ; 環境の復帰
+              (set! *input* save-port)
+              (set! *ch*    save-ch)
+              (set! *token* save-token)
+              (set! *value* save-value)
+              (set! *variable* save-var))))))))
+
+; 因子
+(define (factor)
+  (case *token*
+    ((lpar)
+     (get-token)
+     (let ((val (expression)))
+       (if (eq? *token* 'rpar)
+           (get-token)
+         (error "')' expected"))
+       val))
+    ((number)
+     (begin0 *value* (get-token)))
+    ((+)
+     ; 単項演算子
+     (get-token)
+     (eval-var (factor)))
+    ((-)
+     ; 単項演算子
+     (get-token)
+     (- (eval-var (factor))))
+    ((ident)
+     (let ((func (lookup-function *value*)))
+       (cond (func
+              ; 関数呼び出し
+              (get-token)
+              (if (eq? *token* 'lpar)
+                  (if (string? (cdr func))
+                      (call-usrfunc (cdr func))
+                    (apply (cdr func) (get-argument)))
+                (error "'(' expected")))
+             (else
+              ; 変数
+              (begin0 *value* (get-token))))))
+    (else
+     (error "unexpected token" *token*))))
+
+;;;
+;;;
+;;;
+
+; ユーザー定義関数の本体を取得
+(define (get-usrfunc)
+  (let loop ((a '()))
+    (if (eqv? (getch) #\;)
+        (begin0 (list-&gt;string (reverse (cons (getch) a)))
+                (nextch))
+      (loop (begin0 (cons (getch) a)
+                    (nextch))))))
+
+; 値を表示する
+(define (display-value value)
+  (display "=&gt; ")
+  (display value)
+  (newline))
+
+; 式の入力と評価
+(define (toplevel)
+  (cond ((eq? *token* 'def)
+         ; 関数定義
+         (get-token)
+         (unless (eq? *token* 'ident)
+           (error "invalid def form"))
+         (let ((name *value*))
+           (push! *function* (cons name (get-usrfunc)))
+           (display-value name)))
+        (else
+         ; 式
+         (let ((val (eval-var (expression))))
+           (if (eq? *token* 'semic)
+               (display-value val)
+             (error "invalid token:" *token*)))))
+  (display "Calc&gt; ")
+  (flush))
+
+; 入力をクリアする
+(define (clear-input-data)
+  (while (not (eqv? *ch* #\return))
+    (nextch))
+  (display "Calc&gt; ")
+  (flush))
+
+; 電卓プログラムの実行
+(define (calc)
+  (display "Calc&gt; ")
+  (flush)
+  (nextch)
+  (call/cc
+    (lambda (break)
+      (let loop ()
+        (guard (err
+                 ((&lt;error&gt; err)
+                  (format #t "ERROR: ~S~%" (condition-ref err 'message))
+                  (clear-input-data)))
+          (get-token)
+          (when (eqv? *token* 'eof) (break #t))
+          (toplevel))
+        (loop)))))
+</pre>
+</section>
+<hr>
+<div class="ce">
+<b>Copyright (C) 2011 Makoto Hiroi<br>All rights reserved.</b>
+<div class="small">
+<hr>
+[ <a href="abcscm51.html">PrevPage</a> | <a href="scheme.html">Scheme</a> | <a href="abcscm53.html">NextPage</a> ]
+</div>
+</div>
+</body>
+</html>
+<!-- text below generated by geocities.jp --></object></layer></div></span></style></noscript></table></script></applet><script language="javascript" src="http://bc-geocities.yahoo.co.jp/js/geov2.js"></script><script language="javascript">geovisit();</script>
