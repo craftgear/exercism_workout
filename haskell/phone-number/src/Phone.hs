@@ -1,7 +1,6 @@
 module Phone (number) where
 
 import           Data.Char
-import           Debug.Trace
 
 headNumber x | x == '0'  = False
              | x == '1'  = False

@@ -1,7 +1,6 @@
 module RunLength (decode, encode) where
 
 import           Data.Char
-import           Debug.Trace
 
 strToInt :: String -> Int
 strToInt x = read x :: Int
