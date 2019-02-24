@@ -8,12 +8,9 @@ function hasFactor(x, y) {
 }
 
 function isLeapYear(year) {
-  if (hasFactor(year, 4)) {
-    if (hasFactor(year, 100)) {
-      return hasFactor(year, 400);
-    } else {
-      return true;
-    }
+  var match = hasFactor(year, 4);
+  if (match && (hasFactor(year, 400) || !hasFactor(year, 100))) {
+    return true;
   } else {
     return false;
   }
