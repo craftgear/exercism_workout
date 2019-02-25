@@ -1,4 +1,4 @@
-// I don't get why I need to re-declare planet type here again when I have it in the SpaceAge.rei file.
+/* I don't get why I need to re-declare planet type here again when I have it in the SpaceAge.rei file. */
 type planet =
   | Mercury
   | Venus
