@@ -1,6 +1,6 @@
 let wordCount = phrase =>
   phrase
-  |> Js.String.splitByRe([%bs.re "/,|\'\\s|\\s\'|\\s/"])
+  |> Js.String.splitByRe([%bs.re "/,|'\\s|\\s'|\\s/"])
   |> Array.to_list
   |> List.filter(x => Js.String.trim(x) != "")
   |> List.map(x =>
