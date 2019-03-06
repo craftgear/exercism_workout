@@ -12,6 +12,7 @@ module ComplexNumbers
  complex) where
 
 import           Prelude hiding (abs, div, exp)
+import qualified Prelude as P
 
 -- Data definition -------------------------------------------------------------
 data Complex a = Complex a a deriving(Eq, Show)
@@ -27,26 +28,27 @@ conjugate :: Num a => Complex a -> Complex a
 conjugate (Complex x y) = Complex x (-y)
 
 abs :: Floating a => Complex a -> a
-abs = error "You need to implement this function"
+abs (Complex x y) = sqrt (x ^ 2 + y ^ 2)
 
 real :: Num a => Complex a -> a
-real = error "You need to implement this function"
+real (Complex x y) = x
 
 imaginary :: Num a => Complex a -> a
-imaginary = error "You need to implement this function"
+imaginary (Complex x y) = y
 
 exp :: Floating a => Complex a -> Complex a
-exp = error "You need to implement this function"
+exp (Complex x y) = Complex (cos y * P.exp x) (sin y * P.exp x)
 
 -- binary operators ------------------------------------------------------------
 mul :: Num a => Complex a -> Complex a -> Complex a
-mul = error "You need to implement this function"
+mul (Complex x y) (Complex a b) = Complex (x * a - y * b) (x * b + y * a)
 
 add :: Num a => Complex a -> Complex a -> Complex a
-add = error "You need to implement this function"
+add (Complex x y) (Complex a b) = Complex (x + a) (y + b)
 
 sub :: Num a => Complex a -> Complex a -> Complex a
-sub = error "You need to implement this function"
+sub (Complex x y) (Complex a b) = Complex (x - a) (y - b)
 
 div :: Fractional a => Complex a -> Complex a -> Complex a
-div = error "You need to implement this function"
+div (Complex x y) (Complex a b) = Complex ((x * a + y * b) / (a ^ 2 + b ^ 2))
+                                          ((y * a - x * b) / (a ^ 2 + b ^ 2))
