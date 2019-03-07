@@ -22,6 +22,6 @@ response Yell         = "Whoa, chill out!"
 response Question     = "Sure."
 response Other        = "Whatever."
 
--- composition (.) :: (b->a) -> (a->b) -> a -> b
+-- composition (.) :: (b->a) -> (a->b) -> b -> b
 responseFor :: String -> String
 responseFor = response . classify
