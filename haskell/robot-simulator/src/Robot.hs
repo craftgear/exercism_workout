@@ -24,14 +24,33 @@ coordinates (Robot p b) = p
 mkRobot :: Bearing -> (Integer, Integer) -> Robot
 mkRobot direction coordinates = Robot coordinates direction
 
-turnLeft :: Robot -> Bearing -> Robot
-turnLeft = error "hoge"
+turnLeft b = case b of
+  North -> West
+  East  -> North
+  South -> East
+  West  -> South
 
-turnRight :: Robot -> Bearing -> Robot
-turnRight = error "hoge"
+turnRight b = case b of
+  North -> East
+  East  -> South
+  South -> West
+  West  -> North
 
-advance :: Robot -> (Integer, Integer) -> Robot
-advance = error "hoge"
+turn :: Robot -> Char -> Robot
+turn (Robot p b) newB = case newB of
+  'L' -> Robot p (turnLeft b)
+  'R' -> Robot p (turnRight b)
+  _   -> Robot p b
+
+advance :: Robot -> Robot
+advance (Robot (x, y) b) = case b of
+  North -> Robot (x, y + 1) b
+  East  -> Robot (x + 1, y) b
+  South -> Robot (x, y - 1) b
+  West  -> Robot (x - 1, y) b
 
 move :: Robot -> String -> Robot
-move robot instructions = error "hoge"
+move robot instructions = foldl foldFn robot instructions
+ where
+  foldFn robot instruction | instruction == 'A' = advance robot
+                           | otherwise          = turn robot instruction
