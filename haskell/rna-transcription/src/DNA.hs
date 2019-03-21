@@ -1,23 +1,14 @@
 module DNA (toRNA) where
 
-isDNA :: String -> Bool
-isDNA xs = 'U' `elem` xs
-
 toRNA :: String -> Either Char String
-toRNA xs = if isDNA xs then Left 'U' else isInvalid $ translated
-  where translated = foldr translate "" xs
+toRNA xs = foldr translate (Right "") xs
 
-isInvalid :: String -> Either Char String
-isInvalid xs = case 'X' `elem` xs of
-  True  -> Left 'X'
-  False -> Right xs
-
-translate :: Char -> String -> String
+{- I don't come up with a solution without recursion. -}
+{- Is there any way to eliminate recursion?  -}
+translate :: Char -> Either Char String -> Either Char String
 translate x accum = case x of
-  'C'       -> 'G' : accum
-  'G'       -> 'C' : accum
-  'T'       -> 'A' : accum
-  'A'       -> 'U' : accum
-  otherwise -> "X"
-
-
+  'C'       -> fmap (\xs -> 'G' : xs) accum
+  'G'       -> fmap (\xs -> 'C' : xs) accum
+  'T'       -> fmap (\xs -> 'A' : xs) accum
+  'A'       -> fmap (\xs -> 'U' : xs) accum
+  otherwise -> Left x
