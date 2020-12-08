@@ -1,50 +1,32 @@
 #[derive(Debug, PartialEq)]
 pub struct Clock {
-    hours: i32,
     minutes: i32,
 }
 
+const HOURS_IN_DAY: i32 = 24;
+const MINS_IN_HOUR: i32 = 60;
+
 impl Clock {
     pub fn new(hours: i32, minutes: i32) -> Clock {
-        let hours = if minutes % 60 == 0 {
-            hours + (minutes / 60)
-        } else if minutes > 0 {
-            hours + minutes / 60
-        } else {
-            hours + (minutes / 60) - 1
-        };
-
-        let h = if hours % 24 == 0 {
-            0
-        } else if hours > 24 {
-            hours % 24
-        } else if hours < 0 {
-            hours % 24 + 24
-        } else {
-            hours
-        };
-
-        let m = if minutes % 60 == 0 {
-            0
-        } else if minutes > 60 {
-            minutes % 60
-        } else if minutes < 0 {
-            minutes % 60 + 60
-        } else {
-            minutes
-        };
-
         Clock {
-            hours: h,
-            minutes: m,
+            minutes: (hours * MINS_IN_HOUR + minutes).rem_euclid(MINS_IN_HOUR * HOURS_IN_DAY),
         }
     }
 
     pub fn add_minutes(&mut self, minutes: i32) -> Self {
-        Clock::new(self.hours, self.minutes + minutes)
+        Clock::new(0, self.minutes + minutes)
     }
+}
 
-    pub fn to_string(&self) -> String {
-        String::from(format!("{:02}:{:02}", self.hours, self.minutes))
+impl ToString for Clock {
+    fn to_string(&self) -> String {
+        let hours = self.minutes.div_euclid(MINS_IN_HOUR);
+        let minutes = self.minutes.rem_euclid(MINS_IN_HOUR);
+
+        let h = if hours == HOURS_IN_DAY { 0 } else { hours };
+
+        let m = if minutes == MINS_IN_HOUR { 0 } else { minutes };
+
+        String::from(format!("{:02}:{:02}", h, m))
     }
 }

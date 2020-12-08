@@ -114,9 +114,9 @@ fn test_zero_hour_and_negative_minutes() {
     assert_eq!(Clock::new(0, -22).to_string(), "23:38");
 }
 
-//
-// Clock Math
-//
+// //
+// // Clock Math
+// //
 
 #[test]
 fn test_add_minutes() {
