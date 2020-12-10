@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter, Result};
+
 #[derive(Debug, PartialEq)]
 pub struct Clock {
     minutes: i32,
@@ -18,15 +20,27 @@ impl Clock {
     }
 }
 
-impl ToString for Clock {
-    fn to_string(&self) -> String {
+// impl ToString for Clock {
+//     fn to_string(&self) -> String {
+//         let hours = self.minutes.div_euclid(MINS_IN_HOUR);
+//         let minutes = self.minutes.rem_euclid(MINS_IN_HOUR);
+
+//         let h = if hours == HOURS_IN_DAY { 0 } else { hours };
+
+//         let m = if minutes == MINS_IN_HOUR { 0 } else { minutes };
+
+//         String::from(format!("{:02}:{:02}", h, m))
+//     }
+// }
+
+impl Display for Clock {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         let hours = self.minutes.div_euclid(MINS_IN_HOUR);
         let minutes = self.minutes.rem_euclid(MINS_IN_HOUR);
 
         let h = if hours == HOURS_IN_DAY { 0 } else { hours };
 
         let m = if minutes == MINS_IN_HOUR { 0 } else { minutes };
-
-        String::from(format!("{:02}:{:02}", h, m))
+        write!(f, "{:02}:{:02}", h, m)
     }
 }
